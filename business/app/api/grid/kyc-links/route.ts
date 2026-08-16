@@ -11,7 +11,7 @@ import {
   gridBusinessKybStatus,
   syncGridBusinessKybToSupabase,
 } from "@/lib/grid/sync-kyb"
-import { formatGridApiError } from "@/lib/grid/format-grid-api-error"
+import { formatHostedKybStartError } from "@/lib/grid/format-grid-api-error"
 import { requireAuth, requireGridEnv, resolveGridBusinessContextAsync } from "../_helpers"
 
 export async function POST(request: Request) {
@@ -92,7 +92,8 @@ export async function POST(request: Request) {
       expiresAt: link.expiresAt ?? null,
     })
   } catch (e: unknown) {
-    const msg = formatGridApiError(e)
+    const msg = formatHostedKybStartError(e)
+    console.warn("[grid/kyc-links] hosted KYB start failed:", msg, e)
     return NextResponse.json({ error: msg, code: "GRID_KYB_START_FAILED" }, { status: 400 })
   }
 }

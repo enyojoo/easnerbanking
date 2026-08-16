@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type Stripe from "stripe"
 import { getStripe } from "../client"
+import {
+  clearStaleConnectAccountRow,
+  isStripeConnectAccountInaccessibleError,
+} from "./account-access"
 import { syncConnectAccountRow } from "./sync-account-from-stripe"
 import type { BusinessStripeConnectAccountRow } from "./types"
 
@@ -142,10 +146,19 @@ export async function ensureConnectAccountLinked(
     .maybeSingle()
 
   if (existing?.stripe_account_id) {
-    return syncConnectAccountRow(admin, {
-      businessId,
-      stripeAccountId: String(existing.stripe_account_id),
-    })
+    try {
+      return await syncConnectAccountRow(admin, {
+        businessId,
+        stripeAccountId: String(existing.stripe_account_id),
+      })
+    } catch (e) {
+      if (!isStripeConnectAccountInaccessibleError(e)) throw e
+      console.warn(
+        "[stripe-connect] stored account is inaccessible; clearing so the business can reconnect",
+        existing.stripe_account_id,
+      )
+      await clearStaleConnectAccountRow(admin, businessId)
+    }
   }
 
   const discovered = await discoverStripeConnectAccountId(businessId)

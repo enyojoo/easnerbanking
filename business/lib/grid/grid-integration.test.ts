@@ -19,6 +19,7 @@ import {
   isGridShellBusinessTaxId,
 } from "@/lib/grid/business-kyc-metadata"
 import { buildGridIdempotencyKey } from "@/lib/grid/idempotency"
+import { formatHostedKybStartError } from "@/lib/grid/format-grid-api-error"
 import { resolvePrimaryPayoutProvider } from "@easner/shared"
 
 describe("gridDiscoverySupportsCorridor", () => {
@@ -229,7 +230,7 @@ describe("gridBusinessKyb stub resync", () => {
   it("builds a scrub patch that clears Grid create stubs", () => {
     const patch = buildGridBusinessInfoScrubPatch({ platformCustomerId, profile })
     expect(patch.legalName).toBe("Fruitful Africa Limited")
-    expect(patch.taxId).toBeNull()
+    expect(patch.taxId).toBeUndefined()
     expect(patch.country).toBeNull()
     expect(patch.incorporatedOn).toBeNull()
   })
@@ -435,5 +436,21 @@ describe("hosted KYB resume safety", () => {
         inFlightContext,
       ),
     ).toBe(false)
+  })
+})
+
+describe("formatHostedKybStartError", () => {
+  it("maps missing terms to a retryable user message", () => {
+    expect(formatHostedKybStartError(new Error("grid_end_user_terms_required"))).toBe(
+      "Please accept the latest terms, then try verification again.",
+    )
+  })
+
+  it("keeps the missing-country message", () => {
+    expect(
+      formatHostedKybStartError(
+        new Error("Add your country of registration in Settings before starting verification."),
+      ),
+    ).toContain("country of registration")
   })
 })

@@ -319,14 +319,17 @@ export function buildGridBusinessInfoResyncPatch(input: {
   return (payload.businessInfo ?? {}) as Record<string, unknown>
 }
 
-/** Explicitly clear Grid create stubs that block hosted KYB link creation. */
+/**
+ * Clear country/incorporation stubs that make Grid reject hosted KYB when taxId is not real.
+ * Do not send `taxId: null` — Grid PATCH rejects a null taxId and that used to trigger
+ * delete+recreate, which wiped in-progress and not-started customers.
+ */
 export function buildGridBusinessInfoScrubPatch(input: {
   platformCustomerId: string
   profile: GridBusinessProfile
 }): Record<string, unknown> {
   return {
     ...buildGridBusinessInfoResyncPatch(input),
-    taxId: null,
     country: null,
     incorporatedOn: null,
   }

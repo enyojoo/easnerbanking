@@ -13,7 +13,7 @@ import {
   normalizeStoredBusinessTaxId,
   type GridBusinessProfile,
 } from "./business-kyc-metadata"
-import { buildGridBusinessProfileShell } from "./business-profile-shell"
+import { buildGridBusinessProfileShell, resolveBusinessCountryIso2 } from "./business-profile-shell"
 import { gridPlatformCustomerIdFromBusinessId } from "./customer-id"
 import {
   customerNeedsEndUserTermsConsentPatch,
@@ -211,61 +211,16 @@ function readGridBusinessTaxId(customer: GridCustomer & Record<string, unknown>)
   return typeof raw === "string" && raw.trim() ? raw.trim() : null
 }
 
-function canSafelyRecreateGridBusinessCustomer(
-  customer: GridCustomer,
-  context: { platformCustomerId: string; profile: GridBusinessProfile },
-): boolean {
-  if (
-    gridCustomerHasHostedKybInFlight(customer as GridCustomer & Record<string, unknown>, context)
-  ) {
-    return false
-  }
-  const status = String(customer.kybStatus ?? customer.kycStatus ?? "")
-    .trim()
-    .toUpperCase()
-  return status !== "APPROVED" && status !== "REJECTED"
-}
-
-function gridBusinessKybStubStillPresent(input: {
-  customer: GridCustomer
-  platformCustomerId: string
-  profile: GridBusinessProfile
-}): boolean {
-  const customerRecord = input.customer as GridCustomer & Record<string, unknown>
-  return gridBusinessKybStubFieldsNeedResync({
-    customer: customerRecord,
-    platformCustomerId: input.platformCustomerId,
-    profile: input.profile,
-  })
-}
-
-async function deleteGridBusinessCustomerForRecreate(input: {
-  admin: SupabaseClient
-  businessId: string
-  customerId: string
-}): Promise<void> {
-  await gridFetch({
-    method: "DELETE",
-    path: `/customers/${encodeURIComponent(input.customerId)}`,
-  }).catch((e) => {
-    if (e instanceof GridHttpError && e.status === 404) return
-    throw e
-  })
-  await clearStoredGridCustomerId(input.admin, input.businessId)
-}
-
 /**
- * Repair historic Grid stubs (null taxId, shell taxId) before hosted KYB link creation.
- * Falls back to delete + recreate when PATCH cannot clear invalid taxId.
+ * Repair historic Grid stubs (shell taxId + country/incorporation) before hosted KYB.
+ * Never delete/recreate — that wiped not-started and in-progress Grid customers.
  */
 async function scrubGridBusinessKybStubFieldsIfNeeded(input: {
-  admin: SupabaseClient
-  businessId: string
   customerId: string
   customer: GridCustomer
   profile: GridBusinessProfile
   platformCustomerId: string
-}): Promise<GridCustomer | "recreate"> {
+}): Promise<GridCustomer> {
   const customerRecord = input.customer as GridCustomer & Record<string, unknown>
   const inFlightContext = {
     platformCustomerId: input.platformCustomerId,
@@ -296,7 +251,6 @@ async function scrubGridBusinessKybStubFieldsIfNeeded(input: {
       profile: input.profile,
     })
 
-  let patched = input.customer
   const businessInfo = needsScrubPatch
     ? buildGridBusinessInfoScrubPatch({
         platformCustomerId: input.platformCustomerId,
@@ -307,35 +261,14 @@ async function scrubGridBusinessKybStubFieldsIfNeeded(input: {
         profile: input.profile,
       })
   try {
-    patched = await gridFetch<GridCustomer>({
+    return await gridFetch<GridCustomer>({
       method: "PATCH",
       path: `/customers/${encodeURIComponent(input.customerId)}`,
       json: gridBusinessCustomerUpdatePayload({ businessInfo }),
     })
   } catch {
-    patched = input.customer
+    return input.customer
   }
-
-  if (
-    !gridBusinessKybStubStillPresent({
-      customer: patched,
-      platformCustomerId: input.platformCustomerId,
-      profile: input.profile,
-    })
-  ) {
-    return patched
-  }
-
-  if (!canSafelyRecreateGridBusinessCustomer(patched, inFlightContext)) {
-    return patched
-  }
-
-  await deleteGridBusinessCustomerForRecreate({
-    admin: input.admin,
-    businessId: input.businessId,
-    customerId: input.customerId,
-  })
-  return "recreate"
 }
 
 /** Push the org's real tax id to Grid when create used a shell / stale value. */
@@ -445,7 +378,7 @@ async function finalizeGridBusinessCustomer(input: {
   ownerUserId: string
   contact: GridBusinessKybContact
   storedId?: string | null
-}): Promise<{ customerId: string; customer: GridCustomer } | "recreate"> {
+}): Promise<{ customerId: string; customer: GridCustomer }> {
   let customer = await syncEndUserTermsConsentIfNeeded({
     admin: input.admin,
     customerId: input.customerId,
@@ -453,16 +386,12 @@ async function finalizeGridBusinessCustomer(input: {
     consent: input.consent,
     ownerUserId: input.ownerUserId,
   })
-  const scrubbed = await scrubGridBusinessKybStubFieldsIfNeeded({
-    admin: input.admin,
-    businessId: input.businessId,
+  customer = await scrubGridBusinessKybStubFieldsIfNeeded({
     customerId: input.customerId,
     customer,
     profile: input.profile,
     platformCustomerId: input.platformCustomerId,
   })
-  if (scrubbed === "recreate") return "recreate"
-  customer = scrubbed
   customer = await syncGridBusinessTaxIdIfNeeded({
     customerId: input.customerId,
     customer,
@@ -515,7 +444,7 @@ export async function ensureGridBusinessCustomer(input: {
   )
 
   const stored = await readStoredGridCustomerId(input.admin, input.businessId)
-  let forceCreate = false
+  let storedMissingOnGrid = false
 
   if (stored) {
     const customerId = normalizeGridCustomerId(stored)
@@ -536,37 +465,34 @@ export async function ensureGridBusinessCustomer(input: {
         contact,
         storedId: stored,
       })
-      if (finalized !== "recreate") {
-        return { customerId: finalized.customerId, platformCustomerId, customer: finalized.customer }
-      }
-      forceCreate = true
-    } else {
-      await clearStoredGridCustomerId(input.admin, input.businessId)
-      forceCreate = true
+      return { customerId: finalized.customerId, platformCustomerId, customer: finalized.customer }
     }
+    await clearStoredGridCustomerId(input.admin, input.businessId)
+    storedMissingOnGrid = true
   }
 
-  if (!forceCreate) {
-    const existing = await findGridCustomerByPlatformId(platformCustomerId).catch(() => null)
-    if (existing?.id) {
-      const customerId = normalizeGridCustomerId(existing.id)
-      await persistGridCustomerId(input.admin, input.businessId, customerId)
-      const finalized = await finalizeGridBusinessCustomer({
-        admin: input.admin,
-        businessId: input.businessId,
-        customerId,
-        customer: existing,
-        profile,
-        platformCustomerId,
-        consent,
-        ownerUserId,
-        contact,
-      })
-      if (finalized !== "recreate") {
-        return { customerId: finalized.customerId, platformCustomerId, customer: finalized.customer }
-      }
-      forceCreate = true
-    }
+  const existing = await findGridCustomerByPlatformId(platformCustomerId).catch(() => null)
+  if (existing?.id) {
+    const customerId = normalizeGridCustomerId(existing.id)
+    await persistGridCustomerId(input.admin, input.businessId, customerId)
+    const finalized = await finalizeGridBusinessCustomer({
+      admin: input.admin,
+      businessId: input.businessId,
+      customerId,
+      customer: existing,
+      profile,
+      platformCustomerId,
+      consent,
+      ownerUserId,
+      contact,
+    })
+    return { customerId: finalized.customerId, platformCustomerId, customer: finalized.customer }
+  }
+
+  if (!resolveBusinessCountryIso2(profile.country)) {
+    throw new Error(
+      "Add your country of registration in Settings before starting verification.",
+    )
   }
 
   const payload = {
@@ -581,7 +507,10 @@ export async function ensureGridBusinessCustomer(input: {
     method: "POST",
     path: "/customers",
     json: payload,
-    idempotencyKey: forceCreate ? `${platformCustomerId}:hosted-kyb-v2` : platformCustomerId,
+    // Bump the key after a stored id 404 so Grid does not replay a deleted customer.
+    idempotencyKey: storedMissingOnGrid
+      ? `${platformCustomerId}:hosted-kyb-v3`
+      : platformCustomerId,
   })
 
   const customerId = normalizeGridCustomerId(String(created.id ?? ""))
@@ -598,8 +527,5 @@ export async function ensureGridBusinessCustomer(input: {
     ownerUserId,
     contact,
   })
-  if (finalized === "recreate") {
-    throw new Error("Grid business customer could not be finalized after create")
-  }
   return { customerId: finalized.customerId, platformCustomerId, customer: finalized.customer }
 }

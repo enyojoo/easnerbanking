@@ -6,6 +6,10 @@ import {
   resolveConnectReadyForCheckout,
   runConnectAccountSyncPipeline,
 } from "@/lib/stripe/connect"
+import {
+  clearStaleConnectAccountRow,
+  isStripeConnectAccountInaccessibleError,
+} from "@/lib/stripe/connect/account-access"
 import { isStripeInvoicePaymentsEnabled } from "@/lib/stripe/config"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
@@ -45,7 +49,15 @@ export async function GET(request: Request) {
         stripeAccountId: row.stripe_account_id,
       })
     } catch (e) {
-      console.warn("[stripe-connect] status sync failed:", e)
+      if (isStripeConnectAccountInaccessibleError(e)) {
+        console.warn(
+          "[stripe-connect] status sync found inaccessible account; clearing",
+          row.stripe_account_id,
+        )
+        await clearStaleConnectAccountRow(admin, ctx.businessId)
+      } else {
+        console.warn("[stripe-connect] status sync failed:", e)
+      }
     }
   }
 
