@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
-import { gridFetch, GridHttpError } from "./http"
+import { gridFetch } from "./http"
+import {
+  findGridCustomerByPlatformId,
+  isGridCustomerNotFoundError,
+  requireExistingGridCustomer,
+} from "./find-grid-customer"
 import {
   buildGridBusinessCustomerPayload,
   buildGridBusinessInfoResyncPatch,
@@ -106,23 +111,7 @@ async function clearStoredGridCustomerId(
 }
 
 async function verifyGridCustomerExists(customerId: string): Promise<boolean> {
-  try {
-    await gridFetch({ method: "GET", path: `/customers/${encodeURIComponent(customerId)}` })
-    return true
-  } catch (e) {
-    if (e instanceof GridHttpError && e.status === 404) return false
-    throw e
-  }
-}
-
-async function findGridCustomerByPlatformId(platformCustomerId: string): Promise<GridCustomer | null> {
-  const qs = new URLSearchParams({ platformCustomerId })
-  const res = await gridFetch<{ data?: GridCustomer[] }>({
-    method: "GET",
-    path: `/customers?${qs.toString()}`,
-  })
-  const row = (res.data ?? [])[0]
-  return row?.id ? row : null
+  return Boolean(await requireExistingGridCustomer(customerId))
 }
 
 export async function loadGridBusinessProfile(
@@ -471,7 +460,10 @@ export async function ensureGridBusinessCustomer(input: {
     storedMissingOnGrid = true
   }
 
-  const existing = await findGridCustomerByPlatformId(platformCustomerId).catch(() => null)
+  const existing = await findGridCustomerByPlatformId(platformCustomerId).catch((e) => {
+    console.warn("[grid] list customers by platformCustomerId failed:", e)
+    return null
+  })
   if (existing?.id) {
     const customerId = normalizeGridCustomerId(existing.id)
     await persistGridCustomerId(input.admin, input.businessId, customerId)
@@ -503,24 +495,39 @@ export async function ensureGridBusinessCustomer(input: {
     }),
     endUserTermsConsent: consent,
   }
-  const created = await gridFetch<GridCustomer>({
-    method: "POST",
-    path: "/customers",
-    json: payload,
-    // Bump the key after a stored id 404 so Grid does not replay a deleted customer.
-    idempotencyKey: storedMissingOnGrid
-      ? `${platformCustomerId}:hosted-kyb-v3`
-      : platformCustomerId,
-  })
+
+  const createWithKey = (idempotencyKey: string) =>
+    gridFetch<GridCustomer>({
+      method: "POST",
+      path: "/customers",
+      json: payload,
+      idempotencyKey,
+    })
+
+  let created: GridCustomer
+  try {
+    created = await createWithKey(
+      storedMissingOnGrid ? `${platformCustomerId}:hosted-kyb-v4` : platformCustomerId,
+    )
+  } catch (e) {
+    if (!isGridCustomerNotFoundError(e)) throw e
+    const recovered = await findGridCustomerByPlatformId(platformCustomerId).catch(() => null)
+    if (recovered?.id) {
+      created = recovered
+    } else {
+      created = await createWithKey(`${platformCustomerId}:hosted-kyb-v5`)
+    }
+  }
 
   const customerId = normalizeGridCustomerId(String(created.id ?? ""))
   if (!customerId) throw new Error("Grid BUSINESS customer create did not return id")
+  const live = (await requireExistingGridCustomer(customerId)) ?? created
   await persistGridCustomerId(input.admin, input.businessId, customerId)
   const finalized = await finalizeGridBusinessCustomer({
     admin: input.admin,
     businessId: input.businessId,
     customerId,
-    customer: created,
+    customer: live,
     profile,
     platformCustomerId,
     consent,
