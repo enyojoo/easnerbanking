@@ -13,6 +13,7 @@ import {
 } from "@/lib/login-pin"
 import { resetSessionActivity } from "@/lib/session-activity"
 import { requestHostedKybPrime } from "@/lib/compliance/prime-business-verification-flow"
+import { requestWorkspaceWarm } from "@/lib/query/prime-workspace-nav"
 import { PinSetupScreen } from "./pin-setup-screen"
 import { PinUnlockScreen } from "./pin-unlock-screen"
 
@@ -46,12 +47,14 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
     setBump((n) => n + 1)
     setResume((r) => ({ version: r.version + 1, until: Date.now() + POST_UNLOCK_RESUME_MS }))
     requestHostedKybPrime()
+    requestWorkspaceWarm()
   }, [user])
 
   const onSetupComplete = useCallback(() => {
     resetSessionActivity()
     setBump((n) => n + 1)
     requestHostedKybPrime()
+    requestWorkspaceWarm()
   }, [])
 
   if (!user) {

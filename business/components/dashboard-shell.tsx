@@ -18,7 +18,7 @@ import { openBusinessSupport } from "@/lib/intercom-messenger"
 import { verificationBannerCopy, verificationBannerCta, verificationBannerStarted } from "@/lib/copy/business-ui-copy"
 import { cn } from "@/lib/utils"
 import { useScope } from "@/lib/query/scope"
-import { prefetchWorkspaceCriticalData } from "@/lib/query/workspace-prefetch"
+import { primeWorkspaceNav, WORKSPACE_WARM_EVENT } from "@/lib/query/prime-workspace-nav"
 import {
   HOSTED_KYB_PRIME_EVENT,
   primeBusinessVerificationFlow,
@@ -101,53 +101,30 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
   }, [businessId, canManageBusinessVerification, tier1Complete, tier1CanResubmit])
 
   useEffect(() => {
-    if (!sessionUserId || !scope) return
-    const criticalRoutes = [
-      "/dashboard",
-      "/send",
-      "/transactions",
-      "/accounts",
-    ] as const
-
-    const secondaryRoutes = [
-      "/cards",
-      "/invoices",
-      "/payroll",
-      "/terminal",
-      "/qr-pay",
-      "/settings",
-    ] as const
-
-    for (const href of criticalRoutes) {
-      try {
-        router.prefetch(href)
-      } catch {
-        // Best-effort only; never block render.
-      }
-    }
-
-    const prefetchSecondary = () => {
-      for (const href of secondaryRoutes) {
-        try {
-          router.prefetch(href)
-        } catch {
-          // Best-effort only; never block render.
-        }
-      }
-      void prefetchWorkspaceCriticalData(queryClient, scope)
-    }
-
-    const w = window as Window & {
-      requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number
-      cancelIdleCallback?: (id: number) => void
-    }
-    if (typeof w.requestIdleCallback === "function") {
-      const id = w.requestIdleCallback(prefetchSecondary, { timeout: 2000 })
-      return () => w.cancelIdleCallback?.(id)
-    }
-    const t = window.setTimeout(prefetchSecondary, 250)
-    return () => window.clearTimeout(t)
-  }, [queryClient, router, scope, sessionUserId])
+    if (!sessionUserId) return
+    const warm = () =>
+      void primeWorkspaceNav({
+        queryClient,
+        scope,
+        router,
+        businessId,
+        canManageBusinessVerification,
+        tier1Complete,
+        tier1CanResubmit,
+      })
+    warm()
+    window.addEventListener(WORKSPACE_WARM_EVENT, warm)
+    return () => window.removeEventListener(WORKSPACE_WARM_EVENT, warm)
+  }, [
+    businessId,
+    canManageBusinessVerification,
+    queryClient,
+    router,
+    scope,
+    sessionUserId,
+    tier1CanResubmit,
+    tier1Complete,
+  ])
 
   return (
     <AppLockProvider>

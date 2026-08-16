@@ -188,6 +188,76 @@ export async function prefetchTransactionsWorkspaceData(
   await queryClient.prefetchInfiniteQuery(transactionsListPrefetchOptions(scope))
 }
 
+export function invoicesListPrefetchOptions(scope: Scope) {
+  return {
+    queryKey: qk.invoices.list(scope, {}),
+    queryFn: () => apiFetch<{ invoices: unknown[] }>("/api/business/b2b/invoices"),
+    staleTime: 60 * 60_000,
+    gcTime: 60 * 60_000,
+    meta: { safePersist: true, webPersist: "reduced", freshness: "operational" as const },
+  }
+}
+
+export function cardsListPrefetchOptions(scope: Scope) {
+  return {
+    queryKey: qk.cards.list(scope),
+    queryFn: () => apiFetch<{ cards: unknown[] }>("/api/business/cards"),
+    staleTime: 30_000,
+    gcTime: 10 * 60_000,
+    meta: { safePersist: true, webPersist: "reduced", freshness: "operational" as const },
+  }
+}
+
+export function fxRatesPrefetchOptions() {
+  return {
+    queryKey: qk.fx.pairs(),
+    queryFn: async () => {
+      const body = await apiFetch<{ rates?: unknown[] }>("/api/fx/exchange-rates", {
+        headers: ACCOUNT_SCOPE_HEADERS,
+      })
+      return body.rates ?? []
+    },
+    staleTime: 30_000,
+    gcTime: 30 * 60_000,
+    meta: { safePersist: true, webPersist: "reduced", freshness: "reference" as const },
+  }
+}
+
+export async function prefetchInvoicesWorkspaceData(
+  queryClient: QueryClient,
+  scope: Scope,
+): Promise<void> {
+  await queryClient.prefetchQuery(invoicesListPrefetchOptions(scope))
+}
+
+export async function prefetchCardsWorkspaceData(
+  queryClient: QueryClient,
+  scope: Scope,
+): Promise<void> {
+  await Promise.all([
+    queryClient.prefetchQuery(cardsListPrefetchOptions(scope)),
+    prefetchTransactionsWorkspaceData(queryClient, scope),
+  ])
+}
+
+/** First-paint data for every sidebar destination. */
+export async function prefetchAllNavWorkspaceData(
+  queryClient: QueryClient,
+  scope: Scope,
+): Promise<void> {
+  const { payrollOverviewQueryOptions, payrollPeopleQueryOptions } = await import(
+    "@/hooks/queries/use-payroll"
+  )
+  await Promise.all([
+    prefetchWorkspaceCriticalData(queryClient, scope),
+    queryClient.prefetchQuery(fxRatesPrefetchOptions()),
+    prefetchInvoicesWorkspaceData(queryClient, scope),
+    prefetchCardsWorkspaceData(queryClient, scope),
+    queryClient.prefetchQuery(payrollOverviewQueryOptions(scope)),
+    queryClient.prefetchQuery(payrollPeopleQueryOptions(scope)),
+  ])
+}
+
 /** Route-aware RQ prefetch for sidebar hover. */
 export async function prefetchRouteWorkspaceData(
   queryClient: QueryClient,
@@ -198,15 +268,41 @@ export async function prefetchRouteWorkspaceData(
     await prefetchAccountsWorkspaceData(queryClient, scope)
     return
   }
+  if (href === "/invoices" || href.startsWith("/invoices/")) {
+    await prefetchInvoicesWorkspaceData(queryClient, scope)
+    return
+  }
+  if (href === "/payroll" || href.startsWith("/payroll/")) {
+    const { payrollOverviewQueryOptions, payrollPeopleQueryOptions } = await import(
+      "@/hooks/queries/use-payroll"
+    )
+    await Promise.all([
+      queryClient.prefetchQuery(payrollOverviewQueryOptions(scope)),
+      queryClient.prefetchQuery(payrollPeopleQueryOptions(scope)),
+    ])
+    return
+  }
+  if (href === "/send" || href.startsWith("/send/")) {
+    await Promise.all([
+      import("@/lib/use-send-destinations").then((m) => m.prefetchSendDestinations()),
+      import("@/lib/use-payout-corridors").then((m) => m.prefetchPayoutCorridors()),
+    ])
+    return
+  }
+  if (href === "/cards" || href.startsWith("/cards/")) {
+    await prefetchCardsWorkspaceData(queryClient, scope)
+    return
+  }
   if (
     href === "/dashboard" ||
     href.startsWith("/dashboard/") ||
     href === "/transactions" ||
-    href.startsWith("/transactions/") ||
-    href === "/cards" ||
-    href.startsWith("/cards/")
+    href.startsWith("/transactions/")
   ) {
-    await prefetchTransactionsWorkspaceData(queryClient, scope)
+    await Promise.all([
+      prefetchTransactionsWorkspaceData(queryClient, scope),
+      queryClient.prefetchQuery(fxRatesPrefetchOptions()),
+    ])
   }
 }
 
