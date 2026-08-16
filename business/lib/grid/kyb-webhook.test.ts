@@ -76,6 +76,30 @@ describe("handleGridKybWebhook", () => {
     expect(mockSync).toHaveBeenCalledWith(expect.objectContaining({ businessId: "biz-2" }))
   })
 
+  it("resolves _g2 platformCustomerId to the business uuid when external id misses", async () => {
+    const businessId = "4769329d-a171-49cf-8647-7e9b8a0128d3"
+    const maybeSingle = vi
+      .fn()
+      .mockResolvedValueOnce({ data: null })
+      .mockResolvedValueOnce({ data: null })
+      .mockResolvedValueOnce({ data: { id: businessId } })
+    const eq = vi.fn().mockReturnValue({ maybeSingle })
+    const select = vi.fn().mockReturnValue({ eq })
+    const from = vi.fn().mockReturnValue({ select })
+    const admin = { from } as unknown as SupabaseClient
+
+    const handled = await handleGridKybWebhook(admin, {
+      type: "CUSTOMER.KYB_PENDING",
+      data: {
+        id: "Customer:new",
+        platformCustomerId: `eb_${businessId.replace(/-/g, "")}_g2`,
+      },
+    })
+
+    expect(handled).toEqual({ handled: true })
+    expect(mockSync).toHaveBeenCalledWith(expect.objectContaining({ businessId }))
+  })
+
   it("ignores non-KYB events", async () => {
     const admin = makeAdmin("biz-1")
     const handled = await handleGridKybWebhook(admin, {

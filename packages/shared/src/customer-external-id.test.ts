@@ -33,6 +33,14 @@ describe("customer-external-id", () => {
     })
   })
 
+  it("parses generation suffixes after a deleted Grid customer", () => {
+    const eb = ebFromBusinessId(ENYO_BUSINESS_ID)
+    expect(parseGridPlatformCustomerId(`${eb}_g2`)).toEqual({
+      kind: "business",
+      businessId: ENYO_BUSINESS_ID,
+    })
+  })
+
   it("rejects unknown prefixes", () => {
     expect(parseGridPlatformCustomerId("easner_business_abc")).toBeNull()
     expect(parseGridPlatformCustomerId("ebiz_abc")).toBeNull()

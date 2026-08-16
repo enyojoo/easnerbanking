@@ -29,9 +29,14 @@ function compactUuidToUuid(hex32: string): string | null {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`
 }
 
+/** Strip `_g2` / `_g3` suffixes used after a deleted Grid customer still owns the canonical id. */
+export function stripGridPlatformCustomerIdGeneration(id: string): string {
+  return String(id || "").trim().replace(/_g\d+$/i, "")
+}
+
 /** Parse canonical Grid `platformCustomerId` (`eb_` / `ei_`) back to Easner subject id. */
 export function parseGridPlatformCustomerId(id: string): ParsedGridPlatformCustomerId | null {
-  const trimmed = String(id || "").trim()
+  const trimmed = stripGridPlatformCustomerIdGeneration(id)
   if (trimmed.startsWith(EASNER_BUSINESS_EXTERNAL_PREFIX)) {
     const businessId = compactUuidToUuid(trimmed.slice(EASNER_BUSINESS_EXTERNAL_PREFIX.length))
     if (!businessId) return null

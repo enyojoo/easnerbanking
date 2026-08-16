@@ -98,7 +98,7 @@ export async function gridFetch<T>(opts: GridFetchOptions): Promise<T> {
 /** Paginate Grid list endpoints with `data` + optional cursor. */
 export async function gridFetchAllPages<T>(input: {
   path: string
-  query?: Record<string, string | number | undefined>
+  query?: Record<string, string | number | boolean | undefined>
   mapPage: (payload: { data?: T[]; cursor?: string | null }) => T[]
 }): Promise<T[]> {
   const out: T[] = []

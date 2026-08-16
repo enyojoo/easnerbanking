@@ -6,6 +6,7 @@ export {
   ebFromBusinessId,
   eiFromUserId,
   parseGridPlatformCustomerId,
+  stripGridPlatformCustomerIdGeneration,
   type ParsedGridPlatformCustomerId,
 } from "./customer-external-id"
 export {

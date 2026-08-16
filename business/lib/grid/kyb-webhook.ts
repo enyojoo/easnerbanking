@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { parseGridPlatformCustomerId } from "@easner/shared"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { syncGridBusinessKybToSupabase } from "./sync-kyb"
 import { provisionAfterVerificationApproved } from "@/lib/verification/provision-after-approval"
@@ -39,6 +40,17 @@ async function resolveBusinessSubject(
         .eq("external_customer_id", platformCustomerId)
         .maybeSingle()
       businessId = byExternal?.id ? String(byExternal.id) : null
+      if (!businessId) {
+        const parsed = parseGridPlatformCustomerId(platformCustomerId)
+        if (parsed?.kind === "business") {
+          const { data: byId } = await admin
+            .from("businesses")
+            .select("id")
+            .eq("id", parsed.businessId)
+            .maybeSingle()
+          businessId = byId?.id ? String(byId.id) : null
+        }
+      }
     }
   }
   if (!businessId) return null

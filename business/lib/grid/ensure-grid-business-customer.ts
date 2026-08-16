@@ -19,7 +19,10 @@ import {
   type GridBusinessProfile,
 } from "./business-kyc-metadata"
 import { buildGridBusinessProfileShell, resolveBusinessCountryIso2 } from "./business-profile-shell"
-import { gridPlatformCustomerIdFromBusinessId } from "./customer-id"
+import {
+  gridPlatformCustomerIdFromBusinessId,
+  gridPlatformCustomerIdWithGeneration,
+} from "./customer-id"
 import {
   customerNeedsEndUserTermsConsentPatch,
   loadGridEndUserTermsConsentForBusiness,
@@ -94,11 +97,16 @@ async function persistGridCustomerId(
   admin: SupabaseClient,
   businessId: string,
   customerId: string,
+  platformCustomerId?: string,
 ): Promise<void> {
-  await admin
-    .from("businesses")
-    .update({ grid_customer_id: customerId, updated_at: new Date().toISOString() })
-    .eq("id", businessId)
+  const patch: Record<string, unknown> = {
+    grid_customer_id: customerId,
+    updated_at: new Date().toISOString(),
+  }
+  if (platformCustomerId?.trim()) {
+    patch.external_customer_id = platformCustomerId.trim()
+  }
+  await admin.from("businesses").update(patch).eq("id", businessId)
 }
 
 async function verifyGridCustomerExists(customerId: string): Promise<boolean> {
@@ -424,7 +432,6 @@ export async function ensureGridBusinessCustomer(input: {
   )
 
   const stored = await readStoredGridCustomerId(input.admin, input.businessId)
-  let storedMissingOnGrid = false
 
   if (stored) {
     const customerId = normalizeGridCustomerId(stored)
@@ -448,7 +455,6 @@ export async function ensureGridBusinessCustomer(input: {
       return { customerId: finalized.customerId, platformCustomerId, customer: finalized.customer }
     }
     await resetBusinessKybToNotStarted(input.admin, input.businessId)
-    storedMissingOnGrid = true
   }
 
   const existing = await findGridCustomerByPlatformId(platformCustomerId).catch((e) => {
@@ -457,19 +463,22 @@ export async function ensureGridBusinessCustomer(input: {
   })
   if (existing?.id) {
     const customerId = normalizeGridCustomerId(existing.id)
-    await persistGridCustomerId(input.admin, input.businessId, customerId)
-    const finalized = await finalizeGridBusinessCustomer({
-      admin: input.admin,
-      businessId: input.businessId,
-      customerId,
-      customer: existing,
-      profile,
-      platformCustomerId,
-      consent,
-      ownerUserId,
-      contact,
-    })
-    return { customerId: finalized.customerId, platformCustomerId, customer: finalized.customer }
+    const liveExisting = await requireExistingGridCustomer(customerId)
+    if (liveExisting) {
+      await persistGridCustomerId(input.admin, input.businessId, customerId, platformCustomerId)
+      const finalized = await finalizeGridBusinessCustomer({
+        admin: input.admin,
+        businessId: input.businessId,
+        customerId,
+        customer: liveExisting,
+        profile,
+        platformCustomerId,
+        consent,
+        ownerUserId,
+        contact,
+      })
+      return { customerId: finalized.customerId, platformCustomerId, customer: finalized.customer }
+    }
   }
 
   if (!resolveBusinessCountryIso2(profile.country)) {
@@ -478,58 +487,73 @@ export async function ensureGridBusinessCustomer(input: {
     )
   }
 
-  const payload = {
-    ...buildGridBusinessCustomerPayload({
-      platformCustomerId,
-      profile,
-      forGridCreate: true,
-    }),
-    endUserTermsConsent: consent,
+  const tombstone = await findGridCustomerByPlatformId(platformCustomerId, {
+    includeDeleted: true,
+  }).catch(() => null)
+  let startGeneration = 1
+  if (tombstone?.id) {
+    const tombstoneId = normalizeGridCustomerId(tombstone.id)
+    const tombstoneLive = tombstoneId ? await requireExistingGridCustomer(tombstoneId) : null
+    if (!tombstoneLive) {
+      await resetBusinessKybToNotStarted(input.admin, input.businessId)
+      startGeneration = 2
+    }
   }
 
-  const createWithKey = (idempotencyKey: string) =>
-    gridFetch<GridCustomer>({
-      method: "POST",
-      path: "/customers",
-      json: payload,
-      idempotencyKey,
-    })
-
-  let created: GridCustomer
-  try {
-    created = await createWithKey(
-      storedMissingOnGrid ? `${platformCustomerId}:hosted-kyb-v4` : platformCustomerId,
-    )
-  } catch (e) {
-    if (!isGridCustomerNotFoundError(e)) throw e
-    await resetBusinessKybToNotStarted(input.admin, input.businessId)
-    const recovered = await findGridCustomerByPlatformId(platformCustomerId).catch(() => null)
-    if (recovered?.id) {
-      created = recovered
-    } else {
-      try {
-        created = await createWithKey(`${platformCustomerId}:hosted-kyb-v5`)
-      } catch (retryError) {
-        if (!isGridCustomerNotFoundError(retryError)) throw retryError
-        created = await createWithKey(`${platformCustomerId}:hosted-kyb-v8:${Date.now()}`)
+  let created: GridCustomer | null = null
+  let usedPlatformId = platformCustomerId
+  let lastCreateError: unknown
+  for (let generation = startGeneration; generation <= 5; generation += 1) {
+    usedPlatformId = gridPlatformCustomerIdWithGeneration(input.businessId, generation)
+    const payload = {
+      ...buildGridBusinessCustomerPayload({
+        platformCustomerId: usedPlatformId,
+        profile,
+        forGridCreate: true,
+      }),
+      endUserTermsConsent: consent,
+    }
+    try {
+      created = await gridFetch<GridCustomer>({
+        method: "POST",
+        path: "/customers",
+        json: payload,
+        idempotencyKey: `${usedPlatformId}:hosted-kyb-create`,
+      })
+      break
+    } catch (e) {
+      lastCreateError = e
+      if (!isGridCustomerNotFoundError(e)) throw e
+      await resetBusinessKybToNotStarted(input.admin, input.businessId)
+      const recovered = await findGridCustomerByPlatformId(usedPlatformId).catch(() => null)
+      const recoveredId = recovered?.id ? normalizeGridCustomerId(recovered.id) : ""
+      const recoveredLive = recoveredId ? await requireExistingGridCustomer(recoveredId) : null
+      if (recoveredLive) {
+        created = recoveredLive
+        break
       }
     }
+  }
+  if (!created) {
+    throw lastCreateError instanceof Error
+      ? lastCreateError
+      : new Error("Could not create Grid BUSINESS customer")
   }
 
   const customerId = normalizeGridCustomerId(String(created.id ?? ""))
   if (!customerId) throw new Error("Grid BUSINESS customer create did not return id")
   const live = (await requireExistingGridCustomer(customerId)) ?? created
-  await persistGridCustomerId(input.admin, input.businessId, customerId)
+  await persistGridCustomerId(input.admin, input.businessId, customerId, usedPlatformId)
   const finalized = await finalizeGridBusinessCustomer({
     admin: input.admin,
     businessId: input.businessId,
     customerId,
     customer: live,
     profile,
-    platformCustomerId,
+    platformCustomerId: usedPlatformId,
     consent,
     ownerUserId,
     contact,
   })
-  return { customerId: finalized.customerId, platformCustomerId, customer: finalized.customer }
+  return { customerId: finalized.customerId, platformCustomerId: usedPlatformId, customer: finalized.customer }
 }

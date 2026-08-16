@@ -36,10 +36,15 @@ export function pickLatestGridCustomerForPlatformId(
 
 export async function findGridCustomerByPlatformId(
   platformCustomerId: string,
+  options?: { includeDeleted?: boolean },
 ): Promise<GridCustomer | null> {
   const rows = await gridFetchAllPages<GridCustomer>({
     path: "/customers",
-    query: { platformCustomerId, limit: 50 },
+    query: {
+      platformCustomerId,
+      limit: 50,
+      ...(options?.includeDeleted ? { isIncludingDeleted: "true" } : {}),
+    },
     mapPage: (page) => parseGridCustomerListPayload(page),
   })
   const matched = pickLatestGridCustomerForPlatformId(rows, platformCustomerId)
