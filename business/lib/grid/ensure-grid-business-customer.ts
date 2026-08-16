@@ -26,6 +26,7 @@ import {
   markGridEndUserTermsSynced,
   type GridEndUserTermsConsentPayload,
 } from "./end-user-terms-consent"
+import { resetBusinessKybToNotStarted } from "@/lib/compliance/verification-store"
 import { pickGridBeneficialOwner } from "./parse-grid-beneficial-owner-for-users"
 import { gridBusinessCustomerUpdatePayload } from "./customer-update-payload"
 import { normalizeGridCustomerId } from "./quote-request"
@@ -97,16 +98,6 @@ async function persistGridCustomerId(
   await admin
     .from("businesses")
     .update({ grid_customer_id: customerId, updated_at: new Date().toISOString() })
-    .eq("id", businessId)
-}
-
-async function clearStoredGridCustomerId(
-  admin: SupabaseClient,
-  businessId: string,
-): Promise<void> {
-  await admin
-    .from("businesses")
-    .update({ grid_customer_id: null, updated_at: new Date().toISOString() })
     .eq("id", businessId)
 }
 
@@ -456,7 +447,7 @@ export async function ensureGridBusinessCustomer(input: {
       })
       return { customerId: finalized.customerId, platformCustomerId, customer: finalized.customer }
     }
-    await clearStoredGridCustomerId(input.admin, input.businessId)
+    await resetBusinessKybToNotStarted(input.admin, input.businessId)
     storedMissingOnGrid = true
   }
 
@@ -511,11 +502,17 @@ export async function ensureGridBusinessCustomer(input: {
     )
   } catch (e) {
     if (!isGridCustomerNotFoundError(e)) throw e
+    await resetBusinessKybToNotStarted(input.admin, input.businessId)
     const recovered = await findGridCustomerByPlatformId(platformCustomerId).catch(() => null)
     if (recovered?.id) {
       created = recovered
     } else {
-      created = await createWithKey(`${platformCustomerId}:hosted-kyb-v5`)
+      try {
+        created = await createWithKey(`${platformCustomerId}:hosted-kyb-v5`)
+      } catch (retryError) {
+        if (!isGridCustomerNotFoundError(retryError)) throw retryError
+        created = await createWithKey(`${platformCustomerId}:hosted-kyb-v8:${Date.now()}`)
+      }
     }
   }
 

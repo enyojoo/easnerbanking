@@ -52,5 +52,8 @@ export function formatHostedKybStartError(error: unknown): string {
   if (msg.includes("could not be finalized")) {
     return "Could not prepare your verification session. Please try again."
   }
+  if (/customer not found/i.test(msg)) {
+    return "Your previous verification session expired. Start verification again."
+  }
   return msg || "Could not start verification."
 }

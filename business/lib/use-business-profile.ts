@@ -153,6 +153,22 @@ export async function updateBusinessProfile(payload: {
   return json.profile ?? null
 }
 
+/** Merge fields into the cached profile so Settings updates without a refetch. */
+export function patchCachedBusinessProfile(patch: Partial<BusinessProfile>) {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(new CustomEvent<Partial<BusinessProfile>>("business-profile-patch", { detail: patch }))
+}
+
+export function applyHostedKycStatusToProfile(kycStatus: string | undefined) {
+  if (kycStatus !== "not_started") return
+  patchCachedBusinessProfile({
+    tier1VerificationStatus: "not_started",
+    noahKybCustomerId: null,
+    tier1Complete: false,
+    tier1CanResubmit: true,
+  })
+}
+
 export function useBusinessProfile() {
   const { user, sessionUserId } = useAuth()
   const profileUserId = sessionUserId
@@ -185,29 +201,56 @@ export function useBusinessProfile() {
   }, [setData, user?.id])
 
   useEffect(() => {
+    const persistProfile = (next: BusinessProfile) => {
+      setData(next)
+      if (!user?.id) return
+      dataCache.set(CACHE_KEYS.BUSINESS_PROFILE(user.id), next, PROFILE_CACHE_TTL_MS)
+      if (typeof window === "undefined") return
+      try {
+        localStorage.setItem(
+          `business_profile_cache_${user.id}`,
+          JSON.stringify({ data: next, timestamp: Date.now() }),
+        )
+      } catch {
+        // ignore
+      }
+    }
+
     const onUpdate = (e: Event) => {
       if (!user?.id) return
       const detail = (e as CustomEvent<BusinessProfile | undefined>).detail
       if (detail) {
-        setData(detail)
-        dataCache.set(CACHE_KEYS.BUSINESS_PROFILE(user.id), detail, PROFILE_CACHE_TTL_MS)
-        if (typeof window !== "undefined") {
-          try {
-            localStorage.setItem(
-              `business_profile_cache_${user.id}`,
-              JSON.stringify({ data: detail, timestamp: Date.now() }),
-            )
-          } catch {
-            // ignore
-          }
-        }
+        persistProfile(detail)
         return
       }
       dataCache.invalidate(CACHE_KEYS.BUSINESS_PROFILE(user.id))
       void refreshProfile()
     }
+    const onPatch = (e: Event) => {
+      const patch = (e as CustomEvent<Partial<BusinessProfile> | undefined>).detail
+      if (!patch) return
+      setData((prev) => {
+        const next = { ...prev, ...patch }
+        if (user?.id) {
+          dataCache.set(CACHE_KEYS.BUSINESS_PROFILE(user.id), next, PROFILE_CACHE_TTL_MS)
+          try {
+            localStorage.setItem(
+              `business_profile_cache_${user.id}`,
+              JSON.stringify({ data: next, timestamp: Date.now() }),
+            )
+          } catch {
+            // ignore
+          }
+        }
+        return next
+      })
+    }
     window.addEventListener("business-profile-updated", onUpdate)
-    return () => window.removeEventListener("business-profile-updated", onUpdate)
+    window.addEventListener("business-profile-patch", onPatch)
+    return () => {
+      window.removeEventListener("business-profile-updated", onUpdate)
+      window.removeEventListener("business-profile-patch", onPatch)
+    }
   }, [refreshProfile, setData, user?.id])
 
   const profile = useMemo(

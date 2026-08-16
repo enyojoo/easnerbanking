@@ -119,3 +119,22 @@ export async function persistVerificationStatus(
   const { error } = await admin.from("users").update(patch).eq("id", input.userId)
   if (error) throw new Error(`persistVerificationStatus(user): ${error.message}`)
 }
+
+/** Clear a stale Grid customer and return the org to Begin verification. */
+export async function resetBusinessKybToNotStarted(
+  admin: SupabaseClient,
+  businessId: string,
+): Promise<void> {
+  const now = new Date().toISOString()
+  const { error } = await admin
+    .from("businesses")
+    .update({
+      grid_customer_id: null,
+      verification_status: "not_started",
+      verification_rejection_reasons: null,
+      kyb_verified_at: null,
+      updated_at: now,
+    })
+    .eq("id", businessId)
+  if (error) throw new Error(`resetBusinessKybToNotStarted: ${error.message}`)
+}

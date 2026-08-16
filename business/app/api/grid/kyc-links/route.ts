@@ -11,7 +11,9 @@ import {
   gridBusinessKybStatus,
   syncGridBusinessKybToSupabase,
 } from "@/lib/grid/sync-kyb"
+import { resetBusinessKybToNotStarted } from "@/lib/compliance/verification-store"
 import { formatHostedKybStartError } from "@/lib/grid/format-grid-api-error"
+import { isGridCustomerNotFoundError } from "@/lib/grid/find-grid-customer"
 import { requireAuth, requireGridEnv, resolveGridBusinessContextAsync } from "../_helpers"
 
 function kybLinkIdempotencyKey(businessId: string, refresh: boolean): string {
@@ -103,6 +105,21 @@ export async function POST(request: Request) {
   } catch (e: unknown) {
     const msg = formatHostedKybStartError(e)
     console.warn("[grid/kyc-links] hosted KYB start failed:", msg, e)
+    if (isGridCustomerNotFoundError(e)) {
+      try {
+        await resetBusinessKybToNotStarted(admin, ctx.businessId)
+      } catch (resetError) {
+        console.warn("[grid/kyc-links] failed to reset stale KYB status:", resetError)
+      }
+      return NextResponse.json(
+        {
+          error: msg,
+          code: "CUSTOMER_NOT_FOUND",
+          kyc_status: "not_started",
+        },
+        { status: 400 },
+      )
+    }
     return NextResponse.json({ error: msg, code: "GRID_KYB_START_FAILED" }, { status: 400 })
   }
 }
