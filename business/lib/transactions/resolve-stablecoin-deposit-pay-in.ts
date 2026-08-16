@@ -27,6 +27,8 @@ export function isStablecoinDepositPayInRow(row: Record<string, unknown>): boole
 
 export type ResolvedStablecoinDepositPayIn = {
   lifecycle: StablecoinDepositLifecycleStep[]
+  /** Gross sent (Relay Tron USDT → USD face value). */
+  depositAmount?: number
   postedAmount: number
   postedCurrency: string
   feeAmount: number
@@ -58,10 +60,20 @@ export function resolveStablecoinDepositPayInDetail(
   const createdAt = resolveLedgerWhenAtFromRow(row)
   const settledAt = row.settled_at != null ? String(row.settled_at) : null
 
-  const amount =
-    typeof row.amount === "number" ? row.amount : Number(row.amount) || 0
-  const postedAmount = Math.round(amount * 1_000_000) / 1_000_000
-  const postedCurrency = String(row.currency ?? "USD").toUpperCase()
+  const isRelay = isRelayTronDepositMetadata(meta)
+  const rowAmount = typeof row.amount === "number" ? row.amount : Number(row.amount) || 0
+  const postedFromMeta =
+    typeof meta.posted_amount === "number" && Number.isFinite(meta.posted_amount)
+      ? meta.posted_amount
+      : null
+  const postedAmount = Math.round((isRelay && postedFromMeta != null ? postedFromMeta : rowAmount) * 1_000_000) / 1_000_000
+  const postedCurrency = String(
+    meta.posted_currency ?? row.currency ?? "USD",
+  ).toUpperCase()
+  const depositAmount =
+    isRelay && typeof meta.gross_usdt === "number" && Number.isFinite(meta.gross_usdt) && meta.gross_usdt > 0
+      ? Math.round(meta.gross_usdt * 100) / 100
+      : undefined
 
   const senderName =
     typeof meta.sender_name === "string" && meta.sender_name.trim()
@@ -131,6 +143,7 @@ export function resolveStablecoinDepositPayInDetail(
 
   return {
     lifecycle,
+    ...(depositAmount != null ? { depositAmount } : {}),
     postedAmount,
     postedCurrency,
     feeAmount,

@@ -40,6 +40,7 @@ import {
 } from "./verification-deposit"
 import { resolveAccountImpactAmount } from "./account-impact-reporting"
 import { formatOutboundTransferTitle } from "./transaction-detail-hero-title"
+import { isRelayTronDepositMetadata, resolveRelayTronDepositListDisplay } from "./relay-tron-deposit"
 
 // ---------------------------------------------------------------------------
 // Display id helpers (pure — no generation dependency)
@@ -96,6 +97,7 @@ export function inferLedgerListSourceType(
 ): string | undefined {
   if (!meta) return undefined
   if (String(meta.source ?? "").toLowerCase() === "easetag_p2p") return "easetag_p2p"
+  if (isRelayTronDepositMetadata(meta)) return "relay_tron_deposit"
   const explicit = String(meta.source_type ?? "").trim()
   if (explicit) return explicit
   if (isBankOnrampDepositFlow(meta)) return "virtual_account"
@@ -372,7 +374,9 @@ export function mapLedgerRowToMobileListItem(row: Record<string, unknown>): Reco
   const walletSend = globalPayout ? null : resolveWalletSendListDisplay(row)
   const ycCrossBorder =
     globalPayout || walletSend ? null : resolveYcCrossBorderListDisplay(row)
-  const payoutDisplay = globalPayout ?? walletSend ?? ycCrossBorder
+  const relayDeposit =
+    globalPayout || walletSend || ycCrossBorder ? null : resolveRelayTronDepositListDisplay(row)
+  const payoutDisplay = globalPayout ?? walletSend ?? ycCrossBorder ?? relayDeposit
   const displayAmount = payoutDisplay?.displayAmount ?? amount
   const displayCurrency = payoutDisplay?.displayCurrency ?? currency
   const displayName = payoutDisplay?.displayDescription ?? name

@@ -49,6 +49,16 @@ export function resolveTransactionDetailHeroAmount(transaction: Transaction): {
   const isCredit = transaction.direction === "credit"
   if (
     isCredit &&
+    transaction.depositAmount != null &&
+    transaction.depositAmount > 0
+  ) {
+    return {
+      amount: transaction.depositAmount,
+      currency: transaction.displayCurrency || transaction.postedCurrency || "USD",
+    }
+  }
+  if (
+    isCredit &&
     transaction.postedAmount != null &&
     transaction.postedAmount > 0
   ) {

@@ -166,6 +166,29 @@ describe("mapLedgerRowToMobileListItem", () => {
     expect(item.ledger_row_id).toBe("db-uuid-1")
   })
 
+  it("shows relay Tron gross sent as USD on the feed", () => {
+    const item = mapLedgerRowToMobileListItem(
+      baseRow({
+        direction: "in",
+        provider: "relay",
+        amount: 2.31,
+        currency: "USD",
+        metadata: {
+          activity_type: "relay_tron_deposit",
+          gross_usdt: 3,
+          posted_amount: 2.307509,
+          posted_currency: "USD",
+        },
+      }),
+    )
+    expect(item.amount).toBe(3)
+    expect(item.currency).toBe("USD")
+    expect(item.display_amount).toBe(3)
+    expect(item.display_currency).toBe("USD")
+    expect(item.account_impact_amount).toBe(2.307509)
+    expect(item.source_type).toBe("relay_tron_deposit")
+  })
+
   it("produces sender_display_name from bank deposit metadata", () => {
     const item = mapLedgerRowToMobileListItem(
       baseRow({

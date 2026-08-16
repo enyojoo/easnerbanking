@@ -43,17 +43,23 @@ describe("resolveStablecoinDepositPayInDetail", () => {
     const detail = resolveStablecoinDepositPayInDetail({
       direction: "in",
       provider: "relay",
-      amount: 5,
+      amount: 2.31,
       currency: "USD",
       status: "settled",
       metadata: {
         activity_type: "relay_tron_deposit",
+        gross_usdt: 3,
+        posted_amount: 2.307509,
+        posted_currency: "USD",
+        fee_amount: 0.692491,
         sender_tron_address: "TXYZabcdefghijklmnopqrstuvwxyz1234",
       },
       chain: "Tron",
       asset: "USDT",
     })
     expect(detail).not.toBeNull()
-    expect(detail?.postedAmount).toBe(5)
+    expect(detail?.depositAmount).toBe(3)
+    expect(detail?.postedAmount).toBe(2.307509)
+    expect(detail?.feeAmount).toBe(0.692491)
   })
 })

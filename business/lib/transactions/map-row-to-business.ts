@@ -20,6 +20,7 @@ import {
   resolveNoahVaFundingDepositTitleFromMeta,
   resolveInboundReceiveDetail,
   resolvePayoutReviewFlow,
+  resolveRelayTronDepositListDisplay,
   resolveLedgerWhenAt,
   resolveAccountImpactAmount,
   resolveYcPayInFeedStatus,
@@ -170,6 +171,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     globalPayoutDetail || walletSendPayoutReview || walletSendList
       ? null
       : resolveYcCrossBorderListDisplay(row)
+  const relayList = resolveRelayTronDepositListDisplay(row)
   const globalPayout = globalPayoutDetail ?? globalPayoutList
   const bankLabel =
     !isVerification && !isYcFundBalance && !globalPayout && (isBankOnrampDepositFlow(meta) || (payload && isNoahBankOnrampFiatPayIn(payload)))
@@ -201,7 +203,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
       }
     : null
   const displaySource =
-    globalPayout ?? walletSendDisplay ?? walletSendListDisplay ?? ycCrossBorderList
+    globalPayout ?? walletSendDisplay ?? walletSendListDisplay ?? relayList ?? ycCrossBorderList
   const accountImpact = resolveAccountImpactAmount({
     ...row,
     ...(displaySource
@@ -493,6 +495,9 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
             displayHeroTitle: "Stablecoin Deposit",
             lifecycle: stablecoinDepositDetail.lifecycle,
             transactionTiming: stablecoinDepositDetail.transactionTiming,
+            ...(stablecoinDepositDetail.depositAmount != null
+              ? { depositAmount: stablecoinDepositDetail.depositAmount }
+              : {}),
             postedAmount: stablecoinDepositDetail.postedAmount || undefined,
             postedCurrency: stablecoinDepositDetail.postedCurrency,
             paymentScheme: stablecoinDepositDetail.schemeLabel,
