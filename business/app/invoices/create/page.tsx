@@ -50,6 +50,7 @@ import { invoiceBackHref, withReturnTo } from "@/lib/invoice-navigation"
 import { dueDateFromPaymentTerms } from "@/lib/invoices/due-date"
 import { isInvoiceFieldsLocked, invoiceFieldsLockBanner } from "@/lib/invoices/invoice-edit-lock"
 import { assessInvoiceBusinessReadinessFromProfile } from "@/lib/invoices/invoice-business-readiness"
+import { useBusinessOperationalAddressReady } from "@/hooks/use-business-operational-address-ready"
 import { InvoiceBusinessSetupBanner } from "@/components/invoice-business-setup-banner"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { toast } from "sonner"
@@ -173,7 +174,11 @@ export default function CreateInvoicePage() {
   const { baseCurrency, isLoading: profileLoading, invoiceSettings } = profile
   const orgEasetag =
     typeof profile.easetag === "string" && profile.easetag.trim() ? profile.easetag.trim() : null
-  const invoiceReadiness = assessInvoiceBusinessReadinessFromProfile(profile)
+  const addressMetaReady = useBusinessOperationalAddressReady()
+  const invoiceReadiness = useMemo(
+    () => assessInvoiceBusinessReadinessFromProfile(profile),
+    [addressMetaReady, profile],
+  )
   const onlinePaymentsIncomplete = useMemo(() => {
     if (invoiceSettings?.showOnlinePayment === false) return false
     const cached = readCachedConnectStatus(profile.businessId)

@@ -347,6 +347,11 @@ describe("postal-address-form exemplars", () => {
     expect(sanitizeSubdivisionForCountry("US", "CA")).toBe("CA")
   })
 
+  it("does not throw config lookup for an unregistered country", () => {
+    expect(() => getOperationalAddressFormConfig("ZZ")).not.toThrow()
+    expect(getOperationalAddressFormConfig("ZZ").countryCode).toBe("ZZ")
+  })
+
   it("does not throw when formatting an incomplete US address", () => {
     expect(() =>
       formatOperationalAddress(

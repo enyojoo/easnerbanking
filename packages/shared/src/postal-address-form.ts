@@ -107,7 +107,7 @@ export function getOperationalAddressFormConfig(countryCode: string): Operationa
     return emptyOperationalAddressFormConfig(code)
   }
   if (!isOperationalAddressCountryRegistered(code)) {
-    throw new Error(`Country ${code} is not registered with lib-address`)
+    return emptyOperationalAddressFormConfig(code)
   }
 
   const fields = getCountryFields(code as CountryCode)

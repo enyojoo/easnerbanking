@@ -2,6 +2,7 @@ import type { BusinessProfile } from "@/lib/use-business-profile"
 import {
   getOperationalAddressMissingLabels,
   isOperationalAddressComplete,
+  isOperationalAddressCountryRegistered,
 } from "@easner/shared/postal-address-form"
 import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
 
@@ -64,6 +65,11 @@ export function assessInvoiceBusinessReadiness(input: {
   if (!countryCode) {
     if (!nonEmpty(input.addressLine1)) missing.push("business address")
     if (!nonEmpty(input.city)) missing.push("city")
+  } else if (!isOperationalAddressCountryRegistered(countryCode)) {
+    if (!nonEmpty(input.addressLine1)) missing.push("business address")
+    if (!nonEmpty(input.city)) missing.push("city")
+    if (!nonEmpty(input.state)) missing.push("state")
+    if (!nonEmpty(input.postalCode)) missing.push("postal code")
   } else if (!isOperationalAddressComplete(countryCode, addressParts)) {
     missing.push(...getOperationalAddressMissingLabels(countryCode, addressParts))
   }

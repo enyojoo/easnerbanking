@@ -62,6 +62,7 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { issuerFromBusinessProfile } from "@/lib/invoices/issuer"
 import { assessInvoiceBusinessReadinessFromProfile } from "@/lib/invoices/invoice-business-readiness"
+import { useBusinessOperationalAddressReady } from "@/hooks/use-business-operational-address-ready"
 import { InvoiceBusinessSetupBanner } from "@/components/invoice-business-setup-banner"
 import { invoiceActionBtnClass } from "@/lib/invoices/invoice-action-button-classes"
 import type { Account, StablecoinAccount } from "@/lib/finance-types"
@@ -132,10 +133,11 @@ export default function InvoicesPage() {
   const listHere = currentLocationPath(pathname, searchParams)
   const profile = useBusinessProfile()
   const { tier1Complete } = profile
+  const addressMetaReady = useBusinessOperationalAddressReady()
   const issuer = issuerFromBusinessProfile(profile)
   const invoiceReadiness = useMemo(
     () => assessInvoiceBusinessReadinessFromProfile(profile),
-    [profile],
+    [addressMetaReady, profile],
   )
   const onlinePaymentsIncomplete = useMemo(() => {
     if (profile.invoiceSettings?.showOnlinePayment === false) return false

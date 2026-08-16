@@ -13,6 +13,17 @@ describe("invoice-business-readiness", () => {
     expect(result.ready).toBe(true)
   })
 
+  it("does not throw when US address metadata is not registered yet", () => {
+    expect(() =>
+      assessInvoiceBusinessReadiness({
+        name: "Acme Ltd",
+        country: "United States",
+        countryCode: "US",
+        supportEmail: "billing@acme.com",
+      }),
+    ).not.toThrow()
+  })
+
   it("fails when support email is missing", () => {
     const result = assessInvoiceBusinessReadiness({
       name: "Acme Ltd",
