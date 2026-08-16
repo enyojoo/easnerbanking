@@ -130,9 +130,9 @@ export const GRID_KYB_OWNER_ROLES = [
 ] as const satisfies readonly GridKybSelectOption[]
 
 export const GRID_KYB_ID_TYPES = [
-  { value: "SSN", label: "U.S. Social Security number (SSN)" },
-  { value: "ITIN", label: "U.S. Individual Taxpayer Identification Number (ITIN)" },
-  { value: "EIN", label: "U.S. Employer Identification Number (EIN)" },
+  { value: "SSN", label: "SSN" },
+  { value: "ITIN", label: "ITIN" },
+  { value: "EIN", label: "EIN" },
   { value: "NON_US_TAX_ID", label: "Non-U.S. tax ID" },
 ] as const satisfies readonly GridKybSelectOption[]
 

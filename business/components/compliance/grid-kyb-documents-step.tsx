@@ -1,6 +1,6 @@
 "use client"
 
-import { AlertTriangle, ChevronRight, Loader2 } from "lucide-react"
+import { AlertTriangle, ChevronRight } from "lucide-react"
 import {
   GRID_KYB_COMPANY_DOCUMENT_CATEGORIES,
   GRID_KYB_DOCUMENT_CATEGORIES,
@@ -10,7 +10,6 @@ import {
 import { GRID_KYB_WIZARD_COPY } from "@/lib/copy/business-ui-copy"
 import type { KybDocumentPacket } from "@/lib/grid/kyb-packet-types"
 import { GridKybDocumentUpload } from "./grid-kyb-document-upload"
-import { Button } from "@/components/ui/button"
 import { useState } from "react"
 
 type Props = {
@@ -24,7 +23,6 @@ type Props = {
 
 export function GridKybDocumentsStep({ documents, errors, disabled, onReload, onUploaded, onRemove }: Props) {
   const [openCategory, setOpenCategory] = useState<GridKybDocumentCategory | null>(null)
-  const [removingId, setRemovingId] = useState<string | null>(null)
 
   return (
     <div className="space-y-6">
@@ -55,28 +53,12 @@ export function GridKybDocumentsStep({ documents, errors, disabled, onReload, on
               </button>
               {openCategory === category ? (
                 <div className="space-y-3 border-t px-4 py-4">
-                  {uploaded.map((doc) => (
-                    <div key={doc.id} className="flex items-center justify-between text-sm">
-                      <span>{doc.fileName}</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        disabled={disabled || removingId === doc.id}
-                        onClick={() => {
-                          setRemovingId(doc.id)
-                          void onRemove(doc.id).finally(() => setRemovingId(null))
-                        }}
-                      >
-                        {removingId === doc.id ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-                        Remove
-                      </Button>
-                    </div>
-                  ))}
                   <GridKybDocumentUpload
                     title={`Upload ${meta.label.toLowerCase()} document`}
                     category={category}
                     acceptedDocumentTypes={error?.acceptedDocumentTypes ?? meta.acceptedDocumentTypes}
+                    existingDocuments={uploaded}
+                    onRemoveExisting={onRemove}
                     disabled={disabled}
                     onUploaded={async (document) => {
                       if (document) onUploaded(document)

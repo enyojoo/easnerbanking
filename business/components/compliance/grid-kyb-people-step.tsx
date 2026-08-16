@@ -58,7 +58,6 @@ export function GridKybPeopleStep({
   const [editingId, setEditingId] = useState<string | "new" | null>(null)
   const [form, setForm] = useState(emptyPerson)
   const [saving, setSaving] = useState(false)
-  const [removingId, setRemovingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const idUploadRef = useRef<GridKybDocumentUploadHandle>(null)
 
@@ -298,32 +297,8 @@ export function GridKybPeopleStep({
               ))}
             </div>
           </div>
-          {identityDocsFor(selected?.id).length ? (
-            <div className="space-y-2 rounded-2xl border bg-card px-4 py-3 text-sm">
-              <p className="text-xs text-muted-foreground">Uploaded ID</p>
-              {identityDocsFor(selected?.id).map((doc) => (
-                <div key={doc.id} className="flex items-center justify-between gap-3">
-                  <span>{doc.fileName}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={disabled || removingId === doc.id}
-                    onClick={() => {
-                      setRemovingId(doc.id)
-                      void onRemoveDocument(doc.id)
-                        .catch((err) => setError(err instanceof Error ? err.message : "Could not remove document"))
-                        .finally(() => setRemovingId(null))
-                    }}
-                  >
-                    {removingId === doc.id ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-                    Remove
-                  </Button>
-                </div>
-              ))}
-            </div>
-          ) : null}
           <GridKybDocumentUpload
+            key={selected?.id ?? "new"}
             ref={idUploadRef}
             title="Upload owner ID document"
             category="identity"
@@ -332,6 +307,8 @@ export function GridKybPeopleStep({
                 ?.acceptedDocumentTypes ?? GRID_KYB_DOCUMENT_CATEGORIES.identity.acceptedDocumentTypes
             }
             extraFields={{ personId: selected?.id, issuingAuthority: true, documentNumber: true }}
+            existingDocuments={identityDocsFor(selected?.id)}
+            onRemoveExisting={onRemoveDocument}
             disabled={disabled}
             hideSubmit
             onUploaded={onReload}
