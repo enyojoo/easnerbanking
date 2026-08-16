@@ -2,8 +2,15 @@ import type { VerificationStatus } from "@/lib/compliance/types"
 import { mapGridPartnerStatus } from "@/lib/compliance/map-partner-status"
 
 export type GridVerificationSummary = {
+  id?: string | null
   verificationStatus?: string | null
-  errors?: Array<{ type?: string | null }> | null
+  errors?: Array<{
+    type?: string | null
+    field?: string | null
+    reason?: string | null
+    resourceId?: string | null
+    acceptedDocumentTypes?: string[] | null
+  }> | null
 }
 
 export type GridDocumentSummary = {

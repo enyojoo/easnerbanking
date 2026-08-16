@@ -228,7 +228,7 @@ export async function applyGridWebhookSideEffects(
   const transactionId = gridWebhookTransactionId(data)
   const status = String(data?.status ?? "").trim()
 
-  if (type.includes("CUSTOMER.KYB")) {
+  if (type.includes("CUSTOMER.KYB") || type.startsWith("VERIFICATION.")) {
     const { handleGridKybWebhook } = await import("./kyb-webhook")
     const kyb = await handleGridKybWebhook(admin, event)
     if (kyb.handled) return

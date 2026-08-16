@@ -145,12 +145,18 @@ async function resolveBusinessSubject(
   return { businessId, userId }
 }
 
+/** Customer KYB status and Grid verification lifecycle (hosted + BYO). */
+export function isGridKybLifecycleWebhook(eventType: string | null | undefined): boolean {
+  const type = String(eventType ?? "").trim().toUpperCase()
+  return type.includes("CUSTOMER.KYB") || type.startsWith("VERIFICATION.")
+}
+
 export async function handleGridKybWebhook(
   admin: SupabaseClient,
   event: GridWebhookEvent,
 ): Promise<{ handled: boolean }> {
   const type = String(event.eventType ?? event.type ?? "").trim().toUpperCase()
-  if (!type.includes("CUSTOMER.KYB")) return { handled: false }
+  if (!isGridKybLifecycleWebhook(type)) return { handled: false }
 
   const data = webhookData(event)
   const customerId = readCustomerId(event)

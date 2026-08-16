@@ -2,27 +2,20 @@
 
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import {
-  preloadSumsubWebSdk,
-  primeHostedVerificationCredentials,
   readHostedCredentialsCache,
   readHostedResumeAvailable,
 } from "@/lib/compliance/hosted-verification-credentials"
 
 export const HOSTED_KYB_PRIME_EVENT = "easner-prime-hosted-kyb"
 
-/** Warm Grid KYB token + SumSub after login, PIN unlock, or Settings. */
-export function primeBusinessVerificationFlow(options: {
+/** First-party KYB no longer primes SumSub. Kept so existing callers stay safe. */
+export function primeBusinessVerificationFlow(_options: {
   businessId: string | null | undefined
   canManageBusinessVerification: boolean
   tier1Complete: boolean
   tier1CanResubmit: boolean
 }) {
-  const { businessId, canManageBusinessVerification, tier1Complete, tier1CanResubmit } = options
-  if (!businessId || !canManageBusinessVerification || tier1Complete || !tier1CanResubmit) {
-    return
-  }
-  preloadSumsubWebSdk()
-  void primeHostedVerificationCredentials({ businessId })
+  return
 }
 
 /** Ask the dashboard shell to refresh hosted KYB credentials (PIN unlock / setup). */

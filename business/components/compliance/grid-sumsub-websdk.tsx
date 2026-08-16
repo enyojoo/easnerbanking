@@ -4,12 +4,9 @@ import { useEffect, useRef } from "react"
 import snsWebSdk from "@sumsub/websdk"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import {
-  sumsubApplicantHasNoRequiredAction,
-  sumsubReviewStatusIsWaitingForReview,
   sumsubReviewStatusShouldSyncGrid,
   sumsubReviewStatusTriggersComplete,
   sumsubStepIsIdentityDocument,
-  sumsubStepRequiresApplicantAction,
 } from "@/lib/compliance/sumsub-hosted-kyb-status"
 import { cn } from "@/lib/utils"
 
@@ -74,28 +71,7 @@ export function GridSumsubWebSdk({
 
     let disposed = false
     let identityStepDone = false
-    let requiredStepShown = false
-    let noActionTimer: ReturnType<typeof setTimeout> | null = null
     el.replaceChildren()
-
-    const markNoActionRequired = () => {
-      if (requiredStepShown || disposed) return
-      identityStepDone = true
-      onProgressRef.current?.("no_action_required")
-    }
-
-    const scheduleNoActionIfIdle = () => {
-      if (noActionTimer) clearTimeout(noActionTimer)
-      noActionTimer = setTimeout(() => {
-        if (!disposed && !requiredStepShown) markNoActionRequired()
-      }, 2000)
-    }
-
-    const noteRequiredStep = (payload: unknown) => {
-      if (!sumsubStepRequiresApplicantAction(readStepType(payload))) return
-      requiredStepShown = true
-      if (noActionTimer) clearTimeout(noActionTimer)
-    }
 
     const readStepType = (payload: unknown): string => {
       const record = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {}
@@ -114,12 +90,7 @@ export function GridSumsubWebSdk({
       const reviewStatus = String(
         (payload as { reviewStatus?: string } | null)?.reviewStatus ?? "",
       )
-      if (sumsubApplicantHasNoRequiredAction(payload) || sumsubReviewStatusIsWaitingForReview(reviewStatus)) {
-        scheduleNoActionIfIdle()
-      }
-      if (sumsubApplicantHasNoRequiredAction(payload)) {
-        markNoActionRequired()
-      } else if (sumsubReviewStatusShouldSyncGrid(reviewStatus)) {
+      if (sumsubReviewStatusShouldSyncGrid(reviewStatus)) {
         onProgressRef.current?.(
           identityStepDone && reviewStatus.toLowerCase() === "pending" ? "identity_submitted" : reviewStatus,
         )
@@ -136,21 +107,6 @@ export function GridSumsubWebSdk({
       .withOptions({ addViewportTag: false, adaptIframeHeight: false })
       .on("idCheck.onReady", () => {
         onReadyRef.current?.()
-      })
-      .on("idCheck.onStepInitiated", (payload) => {
-        noteRequiredStep(payload)
-      })
-      .on("idCheck.stepInitiated", (payload) => {
-        noteRequiredStep(payload)
-      })
-      .on("idCheck.onApplicantLoaded", (payload) => {
-        if (sumsubApplicantHasNoRequiredAction(payload)) markNoActionRequired()
-      })
-      .on("idCheck.onModuleResultPresented", () => {
-        markNoActionRequired()
-      })
-      .on("idCheck.moduleResultPresented", () => {
-        markNoActionRequired()
       })
       .on("idCheck.onStepCompleted", (payload) => {
         if (!sumsubStepIsIdentityDocument(readStepType(payload))) return
@@ -183,7 +139,6 @@ export function GridSumsubWebSdk({
 
     return () => {
       disposed = true
-      if (noActionTimer) clearTimeout(noActionTimer)
       try {
         // SumSub SDK has no documented destroy; clear DOM on unmount.
         el.replaceChildren()

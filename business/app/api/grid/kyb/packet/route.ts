@@ -1,0 +1,95 @@
+import { NextResponse } from "next/server"
+import { emptyGridKybCompanyDraft, mapGridKybVerificationErrors } from "@easner/shared"
+import { requireKybContext } from "../_context"
+import {
+  ensureKybApplication,
+  listKybDocuments,
+  listKybPeople,
+} from "@/lib/grid/kyb-application-store"
+import { ensureGridBusinessCustomer, loadGridBusinessProfile } from "@/lib/grid/ensure-grid-business-customer"
+
+function prefillCompanyFromProfile(
+  company: ReturnType<typeof emptyGridKybCompanyDraft>,
+  profile: {
+    legalName?: string | null
+    registrationNumber?: string | null
+    taxId?: string | null
+    country?: string | null
+    addressLine1?: string | null
+    city?: string | null
+    state?: string | null
+    postalCode?: string | null
+  } | null,
+) {
+  if (company.legalName.trim() || !profile) return company
+  return {
+    ...company,
+    legalName: String(profile.legalName ?? "").trim(),
+    registrationNumber: String(profile.registrationNumber ?? "").trim(),
+    taxId: String(profile.taxId ?? "").trim(),
+    country: String(profile.country ?? "").trim().toUpperCase(),
+    addressCountry: String(profile.country ?? "").trim().toUpperCase(),
+    addressLine1: String(profile.addressLine1 ?? "").trim(),
+    city: String(profile.city ?? "").trim(),
+    state: String(profile.state ?? "").trim(),
+    postalCode: String(profile.postalCode ?? "").trim(),
+  }
+}
+
+export async function GET(request: Request) {
+  const ctx = await requireKybContext(request)
+  if ("error" in ctx) return ctx.error
+
+  const application = await ensureKybApplication(ctx.admin, ctx.businessId)
+  const profile = await loadGridBusinessProfile(ctx.admin, ctx.businessId)
+  const company = prefillCompanyFromProfile(application.company, profile)
+  if (!application.company.legalName.trim() && company.legalName.trim()) {
+    await ctx.admin
+      .from("business_kyb_applications")
+      .update({ company, updated_at: new Date().toISOString() })
+      .eq("id", application.id)
+  }
+
+  if (profile) {
+    try {
+      const ensured = await ensureGridBusinessCustomer({
+        admin: ctx.admin,
+        userId: ctx.userId,
+        businessId: ctx.businessId,
+        profile,
+      })
+      if (ensured.customerId && ensured.customerId !== application.grid_customer_id) {
+        await ctx.admin
+          .from("business_kyb_applications")
+          .update({
+            grid_customer_id: ensured.customerId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", application.id)
+        application.grid_customer_id = ensured.customerId
+      }
+    } catch (error) {
+      console.warn("[grid/kyb/packet] ensure customer:", error)
+    }
+  }
+
+  const [people, documents] = await Promise.all([
+    listKybPeople(ctx.admin, application.id, true),
+    listKybDocuments(ctx.admin, application.id, true),
+  ])
+
+  return NextResponse.json({
+    applicationId: application.id,
+    status: application.status,
+    company,
+    people,
+    documents: documents.map((doc) => ({
+      ...doc,
+      storagePath: undefined,
+    })),
+    errors: application.last_errors,
+    errorPointers: mapGridKybVerificationErrors(application.last_errors),
+    gridCustomerId: application.grid_customer_id,
+    submittedAt: application.submitted_at,
+  })
+}

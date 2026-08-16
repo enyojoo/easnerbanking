@@ -28,6 +28,10 @@ vi.mock("@/lib/notifications/verification-notify", () => ({
   notifyBusinessKybStatusChange: (...args: unknown[]) => mockNotifyBusinessKybStatusChange(...args),
 }))
 
+vi.mock("./kyb-application-store", () => ({
+  persistKybApplicationFromGrid: vi.fn().mockResolvedValue(undefined),
+}))
+
 vi.mock("./http", () => ({
   gridFetch: (...args: unknown[]) => mockGridFetch(...args),
   gridFetchAllPages: async () => [],

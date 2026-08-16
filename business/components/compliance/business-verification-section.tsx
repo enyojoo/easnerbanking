@@ -1,37 +1,20 @@
 "use client"
 
 /**
- * Hosted KYB on the Verification settings tab. Prefer SumSub WebSDK via Grid `kyc_token`.
- * Fall back to iframing `kyc_link` if no token. One section card holds the hub;
- * CTA opens full-page flow (`?flow=hosted`); Back restores the tabbed hub.
+ * First-party Grid KYB on the Verification settings tab.
+ * CTA opens full-page wizard (`?flow=hosted`); Back restores the tabbed hub.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { ArrowLeft, Loader2, ShieldCheck } from "lucide-react"
-import {
-  syncBusinessGridStatus,
-  syncBusinessGridStatusUntilAccountsReady,
-} from "@/lib/grid/sync-business-grid-status"
-import { patchCachedBusinessProfile } from "@/lib/use-business-profile"
-import { sumsubReviewStatusMarksApplicantSubmitted } from "@/lib/compliance/sumsub-hosted-kyb-status"
+import { ArrowLeft, ShieldCheck } from "lucide-react"
+import { syncBusinessGridStatusUntilAccountsReady } from "@/lib/grid/sync-business-grid-status"
 import { useBusinessProfile } from "@/lib/use-business-profile"
-import {
-  hostedCredentialsAreReady,
-  preloadSumsubWebSdk,
-  primeHostedVerificationCredentials,
-  readHostedCredentialsCache,
-  readHostedResumeAvailable,
-  writeHostedCredentialsCache,
-} from "@/lib/compliance/hosted-verification-credentials"
-import { primeBusinessVerificationFlow } from "@/lib/compliance/prime-business-verification-flow"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { BUSINESS_TIER_LADDER } from "@/lib/compliance-tier-ladder-copy"
-import { isGridCompleteUrl } from "@/lib/grid/grid-complete-url"
 import { cn } from "@/lib/utils"
-import dynamic from "next/dynamic"
 import { KybRequiredDocumentsNotice } from "@/components/compliance/kyb-required-documents-notice"
 import { Tier1VerificationBadge } from "@/components/compliance/tier1-verification-badge"
 import { SettingsCardHeader } from "@/components/settings/settings-card-header"
@@ -48,12 +31,7 @@ import {
   type SettingsVerificationEmbeddedFlow,
 } from "@/lib/compliance/cutover-comms"
 import { useSuspendIdleLock } from "@/hooks/use-suspend-idle-lock"
-import { DelayedOpeningVerificationWait } from "@/components/compliance/opening-verification-wait"
-
-const GridSumsubWebSdk = dynamic(
-  () => import("@/components/compliance/grid-sumsub-websdk").then((m) => ({ default: m.GridSumsubWebSdk })),
-  { ssr: false, loading: () => <DelayedOpeningVerificationWait /> },
-)
+import { GridKybWizard } from "@/components/compliance/grid-kyb-wizard"
 
 function tier1StatusIsInReview(status: string | null | undefined): boolean {
   const s = (status || "").toLowerCase()
@@ -99,21 +77,9 @@ export function BusinessVerificationSection({
 
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
-  const [hostedResumeAvailable, setHostedResumeAvailable] = useState<boolean | null>(() =>
-    readHostedResumeAvailable(businessId),
-  )
-  const probedHostedUrlRef = useRef<string | null>(null)
-  const probedHostedTokenRef = useRef<string | null>(null)
   const [hostedOpen, setHostedOpen] = useState(false)
-  const [hostedUrl, setHostedUrl] = useState<string | null>(null)
-  const [hostedToken, setHostedToken] = useState<string | null>(null)
-  const [hostedTierLevel, setHostedTierLevel] = useState<1 | 2 | 3>(1)
-  const [openingVerification, setOpeningVerification] = useState(false)
-  const clearSessionAfterCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const flowAutoOpenRef = useRef(false)
 
-  const useSumsubSdk = Boolean(hostedToken?.trim())
-  const hostedIframeSrc = !useSumsubSdk ? hostedUrl : null
   const hostedFlowActive = hostedOpen || flowFromUrl || embeddedFlow === "hosted"
   const connectFlowActive = embeddedFlow === "connect" || connectFromUrl
 
@@ -137,12 +103,6 @@ export function BusinessVerificationSection({
   }, [onFlowOpenChange, searchParams])
 
   useEffect(() => {
-    return () => {
-      if (clearSessionAfterCloseRef.current) clearTimeout(clearSessionAfterCloseRef.current)
-    }
-  }, [])
-
-  useEffect(() => {
     if (hostedFlowActive || connectFlowActive) {
       document.documentElement.dataset.verificationFlowOpen = "true"
       document.querySelector("main")?.scrollTo({ top: 0 })
@@ -154,116 +114,6 @@ export function BusinessVerificationSection({
     }
   }, [hostedFlowActive, connectFlowActive])
 
-  const tier1RejectedForProbe = tier1VerificationStatus === "rejected"
-  const tier1UnderReviewForProbe = tier1StatusIsInReview(tier1VerificationStatus)
-  const tier1AwaitingReviewForProbe = tier1UnderReviewForProbe && !tier1RejectedForProbe
-  const tier1FinalRejectForPrefetch = tier1RejectedForProbe && !tier1CanResubmit
-
-  const syncCredentialsFromCache = useCallback(
-    (id: string) => {
-      const cached = readHostedCredentialsCache(id)
-      probedHostedUrlRef.current = cached.link
-      probedHostedTokenRef.current = cached.token
-      setHostedUrl(cached.link)
-      setHostedToken(cached.token)
-      if (hostedCredentialsAreReady(cached)) {
-        setHostedResumeAvailable(true)
-      }
-      return cached
-    },
-    [],
-  )
-
-  const primeHostedCredentials = useCallback(async () => {
-    if (
-      !businessId ||
-      !canManageBusinessVerification ||
-      tier1Complete ||
-      tier1FinalRejectForPrefetch ||
-      tier1AwaitingReviewForProbe
-    ) {
-      return readHostedCredentialsCache(businessId)
-    }
-    try {
-      const { link, token } = await primeHostedVerificationCredentials({ businessId })
-      probedHostedUrlRef.current = link
-      probedHostedTokenRef.current = token
-      const credentials = { link, token }
-      const ready = hostedCredentialsAreReady(credentials)
-      setHostedResumeAvailable(ready || readHostedResumeAvailable(businessId) === true)
-      if (!hostedOpen) {
-        setHostedUrl(link)
-        setHostedToken(token)
-      }
-      return credentials
-    } catch {
-      if (businessId) {
-        setHostedResumeAvailable(readHostedResumeAvailable(businessId) ?? false)
-      }
-      return readHostedCredentialsCache(businessId)
-    }
-  }, [
-    businessId,
-    canManageBusinessVerification,
-    hostedOpen,
-    tier1Complete,
-    tier1FinalRejectForPrefetch,
-    tier1AwaitingReviewForProbe,
-  ])
-
-  useEffect(() => {
-    if (
-      !businessId ||
-      !canManageBusinessVerification ||
-      tier1Complete ||
-      tier1FinalRejectForPrefetch ||
-      tier1AwaitingReviewForProbe
-    ) {
-      probedHostedUrlRef.current = null
-      probedHostedTokenRef.current = null
-      setHostedResumeAvailable(null)
-      return
-    }
-    const cached = syncCredentialsFromCache(businessId)
-    primeBusinessVerificationFlow({
-      businessId,
-      canManageBusinessVerification,
-      tier1Complete,
-      tier1CanResubmit,
-    })
-    if (hostedCredentialsAreReady(cached)) {
-      return
-    }
-    setHostedResumeAvailable(readHostedResumeAvailable(businessId))
-  }, [
-    businessId,
-    canManageBusinessVerification,
-    syncCredentialsFromCache,
-    tier1CanResubmit,
-    tier1Complete,
-    tier1FinalRejectForPrefetch,
-    tier1AwaitingReviewForProbe,
-  ])
-
-  const applyHostedCredentials = useCallback(
-    (link: string | null, token: string | null) => {
-      if (clearSessionAfterCloseRef.current) {
-        clearTimeout(clearSessionAfterCloseRef.current)
-        clearSessionAfterCloseRef.current = null
-      }
-      setHostedTierLevel(1)
-      setHostedToken(token)
-      setHostedUrl(link)
-      probedHostedUrlRef.current = link
-      probedHostedTokenRef.current = token
-      if (businessId) {
-        writeHostedCredentialsCache(businessId, { link, token })
-        setHostedResumeAvailable(hostedCredentialsAreReady({ link, token }))
-      }
-    },
-    [businessId],
-  )
-
   const syncBusinessTier1FromGrid = useCallback(async (): Promise<boolean> => {
     const result = await syncBusinessGridStatusUntilAccountsReady()
     return result.ok
@@ -271,188 +121,20 @@ export function BusinessVerificationSection({
 
   const closeHostedAndSync = useCallback(() => {
     setHostedOpen(false)
-    setOpeningVerification(false)
     clearVerificationFlowUrl()
     void syncBusinessTier1FromGrid()
-    if (clearSessionAfterCloseRef.current) clearTimeout(clearSessionAfterCloseRef.current)
-    clearSessionAfterCloseRef.current = setTimeout(() => {
-      setHostedUrl(null)
-      setHostedToken(null)
-      clearSessionAfterCloseRef.current = null
-    }, 280)
   }, [clearVerificationFlowUrl, syncBusinessTier1FromGrid])
 
-  const sumsubProgressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const handleSumsubProgress = useCallback((reviewStatus: string) => {
-    if (sumsubProgressTimerRef.current) clearTimeout(sumsubProgressTimerRef.current)
-    const submitted = sumsubReviewStatusMarksApplicantSubmitted(
-      reviewStatus,
-      tier1VerificationStatus === "in_progress",
-    )
-    const delayMs = submitted ? 0 : 800
-    sumsubProgressTimerRef.current = setTimeout(() => {
-      void (async () => {
-        const result = await syncBusinessGridStatus({ applicantSubmitted: submitted })
-        if (!submitted) return
-        const status = result.verificationStatus || "pending"
-        patchCachedBusinessProfile({
-          tier1VerificationStatus: status,
-          tier1Complete: status === "approved",
-        })
-        if (submitted) {
-          closeHostedAndSync()
-        }
-      })()
-    }, delayMs)
-  }, [closeHostedAndSync, tier1VerificationStatus])
-
-  useEffect(() => {
-    return () => {
-      if (sumsubProgressTimerRef.current) clearTimeout(sumsubProgressTimerRef.current)
-    }
-  }, [])
-
-  const abortHostedVerification = useCallback(() => {
-    setHostedOpen(false)
-    setOpeningVerification(false)
-    clearVerificationFlowUrl()
-  }, [clearVerificationFlowUrl])
-
-  useEffect(() => {
-    if (!hostedFlowActive) return
-    const onMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return
-      const data = event.data as
-        | { type?: string; kycCompleted?: boolean; gridHostedComplete?: boolean; noahHostedComplete?: boolean }
-        | null
-      if (
-        data?.type === "kycCompleted" ||
-        data?.kycCompleted ||
-        data?.gridHostedComplete ||
-        data?.noahHostedComplete
-      ) {
-        closeHostedAndSync()
-      }
-    }
-    window.addEventListener("message", onMessage)
-    return () => window.removeEventListener("message", onMessage)
-  }, [hostedFlowActive, closeHostedAndSync])
-
-  const handleHostedIframeLoad = useCallback(
-    (event: React.SyntheticEvent<HTMLIFrameElement>) => {
-      try {
-        const href = event.currentTarget.contentWindow?.location?.href
-        if (href && isGridCompleteUrl(href)) {
-          closeHostedAndSync()
-        }
-      } catch {
-        // Cross-origin until Grid redirects to our ReturnURL.
-      }
-    },
-    [closeHostedAndSync],
-  )
-
-  const openHostedVerification = useCallback(async () => {
+  const openHostedVerification = useCallback(() => {
     setError(null)
     setInfo(null)
     if (!businessId) {
       setInfo("Your organization is still being set up. Refresh and try again in a moment.")
       return
     }
-
-    const resolveCachedCredentials = () => {
-      const fromRefs = {
-        link: probedHostedUrlRef.current ?? hostedUrl,
-        token: probedHostedTokenRef.current ?? hostedToken,
-      }
-      if (hostedCredentialsAreReady(fromRefs)) return fromRefs
-      const cached = readHostedCredentialsCache(businessId)
-      if (hostedCredentialsAreReady(cached)) return cached
-      return null
-    }
-
-    const beginHostedFlow = () => {
-      preloadSumsubWebSdk()
-      setHostedOpen(true)
-      setHostedTierLevel(1)
-      pushVerificationFlowUrl()
-    }
-
-    const cachedReady = resolveCachedCredentials()
-    if (cachedReady) {
-      applyHostedCredentials(cachedReady.link, cachedReady.token)
-      setOpeningVerification(false)
-      beginHostedFlow()
-      return
-    }
-
-    setOpeningVerification(true)
-    beginHostedFlow()
-
-    try {
-      const { link, token, json, res } = await primeHostedVerificationCredentials({ businessId })
-
-      if (res.status === 431) {
-        abortHostedVerification()
-        setError(
-          json.error ??
-            "Session data is too large (often from a profile image stored in your account). Sign out and sign in again, or visit Personal settings after we refresh your session.",
-        )
-        return
-      }
-      if (!res.ok) {
-        setOpeningVerification(false)
-        if (json.kyc_status === "not_started") {
-          setError(json.error ?? "Your previous verification session expired. Start verification again.")
-          return
-        }
-        setError(json.error ?? "Could not start verification.")
-        return
-      }
-      if (json.canResubmit === false) {
-        abortHostedVerification()
-        setInfo("Verification could not be completed for this account. Please contact support if you have questions.")
-        return
-      }
-      if (json.alreadyOnboarded || (!link && !token)) {
-        void syncBusinessTier1FromGrid()
-        abortHostedVerification()
-        if (json.kyc_status === "approved") {
-          setError(null)
-          setInfo(null)
-          return
-        }
-        if (json.kyc_status === "rejected") {
-          setError("Verification was declined. Review the message above or contact support.")
-          return
-        }
-        if (tier1StatusIsInReview(json.kyc_status)) {
-          setInfo(
-            tier1StatusIsInReview(tier1VerificationStatus) ? null : NOAH_VERIFICATION_IN_REVIEW_COPY,
-          )
-          return
-        }
-        setInfo("No additional verification steps are available right now. We'll update your status shortly.")
-        return
-      }
-
-      applyHostedCredentials(link, token)
-      setOpeningVerification(false)
-    } catch (e: unknown) {
-      abortHostedVerification()
-      setError(e instanceof Error ? e.message : "Something went wrong.")
-    }
-  }, [
-    abortHostedVerification,
-    applyHostedCredentials,
-    businessId,
-    hostedToken,
-    hostedUrl,
-    pushVerificationFlowUrl,
-    syncBusinessTier1FromGrid,
-    tier1VerificationStatus,
-  ])
+    setHostedOpen(true)
+    pushVerificationFlowUrl()
+  }, [businessId, pushVerificationFlowUrl])
 
   useEffect(() => {
     if (!flowFromUrl) {
@@ -461,30 +143,18 @@ export function BusinessVerificationSection({
     }
     if (flowAutoOpenRef.current || hostedOpen) return
     flowAutoOpenRef.current = true
-    void openHostedVerification()
+    openHostedVerification()
   }, [flowFromUrl, hostedOpen, openHostedVerification])
 
   useEffect(() => {
-    // replaceState updates the URL without refreshing useSearchParams. Parent
-    // `fullPageFlow` is the source of truth after CTA click — do not wipe the
-    // SumSub token just because `flowFromUrl` is still stale.
     if (embeddedFlow === "hosted" || flowFromUrl || !hostedOpen) return
     setHostedOpen(false)
-    setOpeningVerification(false)
-    if (clearSessionAfterCloseRef.current) clearTimeout(clearSessionAfterCloseRef.current)
-    clearSessionAfterCloseRef.current = setTimeout(() => {
-      setHostedUrl(null)
-      setHostedToken(null)
-      clearSessionAfterCloseRef.current = null
-    }, 280)
   }, [embeddedFlow, flowFromUrl, hostedOpen])
 
   if (isLoading && !hasData) {
     return <div className="text-sm text-muted-foreground">Loading verification status…</div>
   }
 
-  const hostedTierMeta = tierLadderCopy(hostedTierLevel)
-  const hostedTierTitle = hostedTierMeta?.title ?? `Tier ${hostedTierLevel}`
   const tier1Rejected = tier1VerificationStatus === "rejected"
   const tier1OnHold = tier1VerificationStatus === "hold"
   const tier1ActionRequired = tier1Rejected || tier1OnHold
@@ -503,16 +173,15 @@ export function BusinessVerificationSection({
     canManageBusinessVerification &&
     !tier1Complete &&
     tier1CanResubmit &&
-    !tier1AwaitingReview &&
     (!tier1OnHold || tier1CanResubmit)
   const tier1HostedCtaLabel =
     tier1Rejected
       ? "Retry verification"
       : tier1OnHold
         ? "Continue verification"
-        : tier1InProgress
+        : tier1AwaitingReview
           ? "View progress"
-          : tier1StartedNotSubmitted || hostedResumeAvailable === true
+          : tier1InProgress || tier1StartedNotSubmitted
             ? "Continue verification"
             : "Begin verification"
 
@@ -533,37 +202,8 @@ export function BusinessVerificationSection({
         <ArrowLeft className="size-4" aria-hidden />
         Back
       </Button>
-      <div className="relative min-h-0 flex-1 overflow-hidden">
-        {error ? (
-          <p className="absolute left-0 right-0 top-2 z-10 mx-auto max-w-lg rounded-md bg-destructive/90 px-3 py-2 text-center text-sm text-destructive-foreground">
-            {error}
-          </p>
-        ) : null}
-        {useSumsubSdk && hostedToken ? (
-          <GridSumsubWebSdk
-            accessToken={hostedToken}
-            theme="light"
-            onComplete={closeHostedAndSync}
-            onProgress={handleSumsubProgress}
-            onReady={() => {
-              setOpeningVerification(false)
-            }}
-            onError={(message) => {
-              setOpeningVerification(false)
-              setError(message)
-            }}
-          />
-        ) : hostedIframeSrc ? (
-          <iframe
-            title={`Business verification for ${hostedTierTitle} (Tier ${hostedTierLevel})`}
-            src={hostedIframeSrc}
-            className="absolute inset-0 size-full border-0 bg-background"
-            allow="camera *; microphone *; payment *; publickey-credentials-get *; clipboard-read *; clipboard-write *"
-            onLoad={handleHostedIframeLoad}
-          />
-        ) : (
-          <DelayedOpeningVerificationWait />
-        )}
+      <div className="relative min-h-0 flex-1 overflow-hidden pt-10">
+        <GridKybWizard onClose={closeHostedAndSync} />
       </div>
     </div>
   )
@@ -691,10 +331,8 @@ export function BusinessVerificationSection({
                             {showTier1HostedCta ? (
                               <Button
                                 size="sm"
-                                onClick={() => void openHostedVerification()}
-                                onMouseEnter={() => void primeHostedCredentials()}
-                                onFocus={() => void primeHostedCredentials()}
-                                disabled={!businessId || openingVerification}
+                                onClick={() => openHostedVerification()}
+                                disabled={!businessId}
                               >
                                 {tier1HostedCtaLabel}
                               </Button>

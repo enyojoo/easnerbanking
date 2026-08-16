@@ -437,6 +437,21 @@ export const SETTINGS_CARD_COPY = {
   invoiceNotifications: "Get notified when customers view or pay.",
 } as const
 
+export const GRID_KYB_WIZARD_COPY = {
+  companyTitle: "Business details",
+  companySubtitle: "Update company information.",
+  peopleTitle: "Business owners",
+  peopleSubtitle:
+    "Add all individuals who own 25% or more of the business, or who have significant control over its operations.",
+  documentsTitle: "Add the required documents.",
+  documentsSubtitle: "One file can often cover more than one requirement.",
+  continue: "Continue",
+  saveAndExit: "Save and exit",
+  complete: "Complete",
+  waitingTitle: "Verification is in review",
+  waitingBody: "We’re checking the information you submitted. This usually completes within 1–3 days.",
+} as const
+
 export const VERIFICATION_SECTION_COPY = {
   complianceTiers: "Start Tier 1 verification to unlock banking.",
   accountsProvisioning:

@@ -166,6 +166,29 @@ describe("handleGridKybWebhook", () => {
     expect(id).toBe("4769329d-a171-49cf-8647-7e9b8a0128d3")
   })
 
+  it("syncs VERIFICATION.RESOLVE_ERRORS using data.customerId", async () => {
+    const admin = makeAdmin("biz-1")
+    const handled = await handleGridKybWebhook(admin, {
+      type: "VERIFICATION.RESOLVE_ERRORS",
+      timestamp: "2026-08-16T05:42:47.165243Z",
+      data: {
+        id: "Verification:01a00918-1060-4d4a-0000-a20d667fa487",
+        customerId: "Customer:01a008db-9fbc-938e-0000-a3e2e6585384",
+        verificationStatus: "RESOLVE_ERRORS",
+        errors: [{ type: "MISSING_IDENTITY_DOCUMENT" }],
+      },
+    })
+
+    expect(handled).toEqual({ handled: true })
+    expect(mockSync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        businessId: "biz-1",
+        customerId: "Customer:01a008db-9fbc-938e-0000-a3e2e6585384",
+        occurredAt: "2026-08-16T05:42:47.165243Z",
+      }),
+    )
+  })
+
   it("ignores non-KYB events", async () => {
     const admin = makeAdmin("biz-1")
     const handled = await handleGridKybWebhook(admin, {

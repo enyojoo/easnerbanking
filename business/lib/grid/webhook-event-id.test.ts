@@ -64,6 +64,17 @@ describe("gridWebhookCustomerId", () => {
       }),
     ).toBe("Customer:019ff8a6-443d-938e-0000-f6f502845e5b")
   })
+
+  it("reads Customer id from verification payloads", async () => {
+    const { gridWebhookCustomerId } = await import("@/lib/grid/webhook-event-id")
+    expect(
+      gridWebhookCustomerId({
+        id: "Verification:01a00918-1060-4d4a-0000-a20d667fa487",
+        customerId: "Customer:01a008db-9fbc-938e-0000-a3e2e6585384",
+        verificationStatus: "RESOLVE_ERRORS",
+      }),
+    ).toBe("Customer:01a008db-9fbc-938e-0000-a3e2e6585384")
+  })
 })
 
 describe("gridWebhookEventType", () => {

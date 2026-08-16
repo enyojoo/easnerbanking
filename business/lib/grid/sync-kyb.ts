@@ -6,6 +6,7 @@ import {
   persistVerificationStatus,
   type VerificationStatus,
 } from "@/lib/compliance"
+import { persistKybApplicationFromGrid } from "./kyb-application-store"
 import { notifyBusinessKybStatusChange } from "@/lib/notifications/verification-notify"
 import { extractGridCustomerRejectionReasons } from "@easner/shared"
 import { isGridShellBusinessTaxId } from "./business-kyc-metadata"
@@ -133,6 +134,17 @@ export async function syncGridBusinessKybToSupabase(input: {
     status = "pending"
   }
   const previousStatus = verificationStatusForKybEmail(priorLocal as VerificationStatus)
+
+  const latestVerification = verifications[0]
+  await persistKybApplicationFromGrid({
+    admin: input.admin,
+    businessId: input.businessId,
+    gridCustomerId: customerId,
+    verificationStatus: latestVerification?.verificationStatus,
+    localStatus: status,
+    verificationId: latestVerification?.id ? String(latestVerification.id) : null,
+    errors: latestVerification?.errors ?? [],
+  }).catch((e) => console.warn("grid kyb application persist (non-fatal):", e))
 
   await persistVerificationStatus(input.admin, {
     kind: "business",

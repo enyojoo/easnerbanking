@@ -17,6 +17,7 @@ export type GridFetchOptions = {
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
   path: string
   json?: unknown
+  formData?: FormData
   headers?: Record<string, string>
   idempotencyKey?: string
 }
@@ -44,11 +45,12 @@ export async function gridFetch<T>(opts: GridFetchOptions): Promise<T> {
 
   const path = normalizePath(opts.path)
   const url = `${getGridBaseUrl()}${path}`
-  const body = opts.json != null ? JSON.stringify(opts.json) : undefined
+  const formData = opts.formData
+  const jsonBody = formData ? undefined : opts.json != null ? JSON.stringify(opts.json) : undefined
   const headers: Record<string, string> = {
     Authorization: buildBasicAuthHeader(),
     Accept: "application/json",
-    ...(body ? { "Content-Type": "application/json" } : {}),
+    ...(jsonBody ? { "Content-Type": "application/json" } : {}),
     ...(opts.headers ?? {}),
   }
   if (opts.idempotencyKey?.trim()) {
@@ -58,7 +60,7 @@ export async function gridFetch<T>(opts: GridFetchOptions): Promise<T> {
   const res = await fetch(url, {
     method: opts.method,
     headers,
-    ...(body ? { body } : {}),
+    ...(formData ? { body: formData } : jsonBody ? { body: jsonBody } : {}),
   })
 
   const text = await res.text()
