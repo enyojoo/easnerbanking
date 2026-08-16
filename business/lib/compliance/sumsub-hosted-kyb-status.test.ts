@@ -3,10 +3,12 @@ import {
   gridKybStatusClosesHostedFlow,
   gridStatusAfterApplicantSubmitted,
   sumsubApplicantHasNoRequiredAction,
+  sumsubReviewStatusIsWaitingForReview,
   sumsubReviewStatusMarksApplicantSubmitted,
   sumsubReviewStatusShouldSyncGrid,
   sumsubReviewStatusTriggersComplete,
   sumsubStepIsIdentityDocument,
+  sumsubStepRequiresApplicantAction,
 } from "./sumsub-hosted-kyb-status"
 
 describe("sumsubReviewStatusTriggersComplete", () => {
@@ -36,6 +38,23 @@ describe("gridKybStatusClosesHostedFlow", () => {
     expect(gridKybStatusClosesHostedFlow("rejected")).toBe(true)
     expect(gridKybStatusClosesHostedFlow("in_progress")).toBe(false)
     expect(gridKybStatusClosesHostedFlow("not_started")).toBe(false)
+  })
+})
+
+describe("sumsubReviewStatusIsWaitingForReview", () => {
+  it("includes reopen onHold and in-queue pending", () => {
+    expect(sumsubReviewStatusIsWaitingForReview("onHold")).toBe(true)
+    expect(sumsubReviewStatusIsWaitingForReview("pending")).toBe(true)
+    expect(sumsubReviewStatusIsWaitingForReview("init")).toBe(false)
+  })
+})
+
+describe("sumsubStepRequiresApplicantAction", () => {
+  it("counts upload and form steps, not review chrome", () => {
+    expect(sumsubStepRequiresApplicantAction("IDENTITY")).toBe(true)
+    expect(sumsubStepRequiresApplicantAction("COMPANY")).toBe(true)
+    expect(sumsubStepRequiresApplicantAction("QUESTIONNAIRE")).toBe(true)
+    expect(sumsubStepRequiresApplicantAction("STATUS")).toBe(false)
   })
 })
 
@@ -85,6 +104,11 @@ describe("sumsubApplicantHasNoRequiredAction", () => {
 
   it("treats queued review without remaining identity as no action", () => {
     expect(sumsubApplicantHasNoRequiredAction({ reviewStatus: "queued" })).toBe(true)
+  })
+
+  it("does not treat mid-flow pending as done without identity doc sets", () => {
+    expect(sumsubApplicantHasNoRequiredAction({ reviewStatus: "pending" })).toBe(false)
+    expect(sumsubApplicantHasNoRequiredAction({ reviewStatus: "onHold" })).toBe(false)
   })
 })
 

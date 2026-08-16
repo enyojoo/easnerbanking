@@ -5,9 +5,11 @@ import snsWebSdk from "@sumsub/websdk"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import {
   sumsubApplicantHasNoRequiredAction,
+  sumsubReviewStatusIsWaitingForReview,
   sumsubReviewStatusShouldSyncGrid,
   sumsubReviewStatusTriggersComplete,
   sumsubStepIsIdentityDocument,
+  sumsubStepRequiresApplicantAction,
 } from "@/lib/compliance/sumsub-hosted-kyb-status"
 import { cn } from "@/lib/utils"
 
@@ -77,8 +79,22 @@ export function GridSumsubWebSdk({
     el.replaceChildren()
 
     const markNoActionRequired = () => {
+      if (requiredStepShown || disposed) return
       identityStepDone = true
       onProgressRef.current?.("no_action_required")
+    }
+
+    const scheduleNoActionIfIdle = () => {
+      if (noActionTimer) clearTimeout(noActionTimer)
+      noActionTimer = setTimeout(() => {
+        if (!disposed && !requiredStepShown) markNoActionRequired()
+      }, 2000)
+    }
+
+    const noteRequiredStep = (payload: unknown) => {
+      if (!sumsubStepRequiresApplicantAction(readStepType(payload))) return
+      requiredStepShown = true
+      if (noActionTimer) clearTimeout(noActionTimer)
     }
 
     const readStepType = (payload: unknown): string => {
@@ -94,6 +110,25 @@ export function GridSumsubWebSdk({
       onProgressRef.current?.("applicant_submitted")
     }
 
+    const handleApplicantStatus = (payload: unknown) => {
+      const reviewStatus = String(
+        (payload as { reviewStatus?: string } | null)?.reviewStatus ?? "",
+      )
+      if (sumsubApplicantHasNoRequiredAction(payload) || sumsubReviewStatusIsWaitingForReview(reviewStatus)) {
+        scheduleNoActionIfIdle()
+      }
+      if (sumsubApplicantHasNoRequiredAction(payload)) {
+        markNoActionRequired()
+      } else if (sumsubReviewStatusShouldSyncGrid(reviewStatus)) {
+        onProgressRef.current?.(
+          identityStepDone && reviewStatus.toLowerCase() === "pending" ? "identity_submitted" : reviewStatus,
+        )
+      }
+      if (sumsubReviewStatusTriggersComplete(reviewStatus)) {
+        onCompleteRef.current()
+      }
+    }
+
     const sdk = snsWebSdk
       .init(accessToken, () => refreshGridKycToken())
       .withConf({ lang: "en", theme })
@@ -102,14 +137,20 @@ export function GridSumsubWebSdk({
       .on("idCheck.onReady", () => {
         onReadyRef.current?.()
       })
-      .on("idCheck.onStepInitiated", () => {
-        requiredStepShown = true
+      .on("idCheck.onStepInitiated", (payload) => {
+        noteRequiredStep(payload)
       })
-      .on("idCheck.stepInitiated", () => {
-        requiredStepShown = true
+      .on("idCheck.stepInitiated", (payload) => {
+        noteRequiredStep(payload)
       })
       .on("idCheck.onApplicantLoaded", (payload) => {
         if (sumsubApplicantHasNoRequiredAction(payload)) markNoActionRequired()
+      })
+      .on("idCheck.onModuleResultPresented", () => {
+        markNoActionRequired()
+      })
+      .on("idCheck.moduleResultPresented", () => {
+        markNoActionRequired()
       })
       .on("idCheck.onStepCompleted", (payload) => {
         if (!sumsubStepIsIdentityDocument(readStepType(payload))) return
@@ -121,25 +162,8 @@ export function GridSumsubWebSdk({
         identityStepDone = true
         onProgressRef.current?.("identity_submitted")
       })
-      .on("idCheck.onApplicantStatusChanged", (payload) => {
-        const reviewStatus = String(
-          (payload as { reviewStatus?: string } | null)?.reviewStatus ?? "",
-        )
-        if (sumsubApplicantHasNoRequiredAction(payload)) {
-          markNoActionRequired()
-        } else if (sumsubReviewStatusShouldSyncGrid(reviewStatus)) {
-          if (reviewStatus.toLowerCase() === "pending" || reviewStatus.toLowerCase() === "queued") {
-            if (noActionTimer) clearTimeout(noActionTimer)
-            noActionTimer = setTimeout(() => {
-              if (!disposed && !requiredStepShown) markNoActionRequired()
-            }, 1500)
-          }
-          onProgressRef.current?.(identityStepDone && reviewStatus.toLowerCase() === "pending" ? "identity_submitted" : reviewStatus)
-        }
-        if (sumsubReviewStatusTriggersComplete(reviewStatus)) {
-          onCompleteRef.current()
-        }
-      })
+      .on("idCheck.onApplicantStatusChanged", handleApplicantStatus)
+      .on("idCheck.applicantStatus", handleApplicantStatus)
       .on("idCheck.onApplicantSubmitted", () => {
         onIdentityOrCompanySubmit()
       })

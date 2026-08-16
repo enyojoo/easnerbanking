@@ -48,10 +48,36 @@ export function sumsubApplicantHasNoRequiredAction(payload: unknown): boolean {
   if (identitySets.length > 0) {
     return !identitySets.some(docSetStillRequired)
   }
+  // `pending` / `onHold` also fire mid-flow; those wait for an idle timer in the SDK.
+  return reviewStatus === "completed" || reviewStatus === "queued" || reviewStatus === "prechecked"
+}
+
+/** SumSub is in queue / waiting — not collecting another upload. */
+export function sumsubReviewStatusIsWaitingForReview(reviewStatus: string | null | undefined): boolean {
+  const s = String(reviewStatus ?? "").toLowerCase()
   return (
-    reviewStatus === "completed" ||
-    reviewStatus === "queued" ||
-    reviewStatus === "prechecked"
+    s === "pending" ||
+    s === "queued" ||
+    s === "prechecked" ||
+    s === "onhold" ||
+    s === "completed"
+  )
+}
+
+/** Form / ID steps the owner still has to complete. Review screens do not count. */
+export function sumsubStepRequiresApplicantAction(idDocSetType: string | null | undefined): boolean {
+  if (sumsubStepIsIdentityDocument(idDocSetType)) return true
+  const s = String(idDocSetType ?? "").trim().toUpperCase().replace(/[\s-]+/g, "_")
+  return (
+    s === "COMPANY" ||
+    s === "COMPANY_DATA" ||
+    s === "COMPANY_DOCUMENTS" ||
+    s === "QUESTIONNAIRE" ||
+    s === "PROOF_OF_ADDRESS" ||
+    s === "SELFIE" ||
+    s === "E_SIGN" ||
+    s === "ESIGN" ||
+    s === "APPLICANT_DATA"
   )
 }
 
