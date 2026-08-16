@@ -497,12 +497,7 @@ export function BusinessVerificationSection({
             {error}
           </p>
         ) : null}
-        {hostedLoading || !hasHostedCredentials ? (
-          <div className="flex size-full min-h-[16rem] flex-col items-center justify-center gap-3 text-muted-foreground">
-            <Loader2 className="size-8 animate-spin" aria-hidden />
-            <p className="text-sm">Opening verification…</p>
-          </div>
-        ) : useSumsubSdk && hostedToken ? (
+        {useSumsubSdk && hostedToken ? (
           <GridSumsubWebSdk
             accessToken={hostedToken}
             theme="light"
@@ -513,6 +508,7 @@ export function BusinessVerificationSection({
             }}
             onError={(message) => {
               setHostedLoading(false)
+              setOpeningVerification(false)
               setError(message)
             }}
           />
@@ -524,6 +520,12 @@ export function BusinessVerificationSection({
             allow="camera *; microphone *; payment *; publickey-credentials-get *; clipboard-read *; clipboard-write *"
             onLoad={handleHostedIframeLoad}
           />
+        ) : null}
+        {hostedLoading || !hasHostedCredentials ? (
+          <div className="absolute inset-0 z-10 flex min-h-[16rem] flex-col items-center justify-center gap-3 bg-background text-muted-foreground">
+            <Loader2 className="size-8 animate-spin" aria-hidden />
+            <p className="text-sm">Opening verification…</p>
+          </div>
         ) : null}
       </div>
     </div>
