@@ -46,7 +46,7 @@ describe("verificationBannerCta", () => {
     expect(verificationBannerCta(null)).toBe(BANNER_CTA_COPY.begin)
   })
 
-  it("returns View progress while KYB is in progress", () => {
+  it("returns View while KYB is in progress", () => {
     expect(verificationBannerCta("in_progress")).toBe(BANNER_CTA_COPY.viewProgress)
     expect(verificationBannerCta("not_started", { started: true })).toBe(BANNER_CTA_COPY.continue)
   })

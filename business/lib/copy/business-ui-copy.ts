@@ -305,7 +305,7 @@ export const BANNER_COPY = {
   verification:
     "Complete verification to unlock payments and accounts.",
   verificationInProgress:
-    "Verification is in progress. View progress to see what's left.",
+    "Verification is in progress. You can see status or what's left.",
   verificationInReview:
     "Verification is in progress. This usually completes within 1–3 days.",
   verificationActionNeeded:
@@ -317,7 +317,7 @@ export const BANNER_COPY = {
 export const BANNER_CTA_COPY = {
   begin: "Begin",
   continue: "Continue",
-  viewProgress: "View progress",
+  viewProgress: "View",
   status: "Status",
   retry: "Retry",
 } as const

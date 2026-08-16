@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useAuth } from "@/lib/auth-context"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
@@ -66,6 +66,8 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
   useBusinessSync()
   const { user, logout, sessionUserId } = useAuth()
   const router = useRouter()
+  const pathname = usePathname() ?? ""
+  const onSettingsPage = pathname === "/settings" || pathname.startsWith("/settings/")
   const queryClient = useQueryClient()
   const { scope } = useScope()
   const {
@@ -85,7 +87,11 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
   const showProfileChromeSkeleton = profileLoading && !profileHasData && !profileImageUrl
   const hostedVerificationFlowOpen = useHostedVerificationFlowOpen()
   const showTier1Banner =
-    profileHasData && !profileLoading && !tier1Complete && !hostedVerificationFlowOpen
+    profileHasData &&
+    !profileLoading &&
+    !tier1Complete &&
+    !hostedVerificationFlowOpen &&
+    !onSettingsPage
 
   useEffect(() => {
     const prime = () =>
