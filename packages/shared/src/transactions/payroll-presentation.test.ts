@@ -22,6 +22,7 @@ describe("payroll transaction presentation", () => {
       metadata,
     })
     expect(result.pushTitle).toBe("Payroll payment received")
+    expect(result.emailSubject).toBe("Payroll payment received")
     expect(result.category).toBe("Payroll payment")
   })
 })

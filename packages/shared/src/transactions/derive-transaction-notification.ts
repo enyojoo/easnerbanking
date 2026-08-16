@@ -10,7 +10,6 @@ import {
   resolvePayoutNotificationActivityLabel,
 } from "./payout-transfer-method"
 import {
-  BANK_DEPOSIT_COMPLETED_DESCRIPTION,
   isBankOnrampDepositFlow,
 } from "./bank-deposit-lifecycle"
 import {
@@ -26,6 +25,7 @@ import {
   resolveYcFundBalanceNotificationActivityLabelFromMetadata,
 } from "./yc-deposit-display"
 import {
+  resolveInboundDepositNotificationAmountDisplay,
   resolveInboundReceiveDetail,
   resolveInboundReceiveNotification,
 } from "./inbound-receive-detail"
@@ -43,7 +43,7 @@ import {
 export const FAILED_OUTBOUND_FUNDS_RETURNED_PUSH =
   "Any debited funds have been returned to your balance."
 
-function withFailedOutboundPushBody(
+function withFailedOutboundBody(
   body: string,
   direction: LedgerNotificationDirection | null,
   outcome: NotificationOutcome,
@@ -297,6 +297,7 @@ function finalizeDescriptor(
   return {
     ...draft,
     ...headlines,
+    pushBody: draft.body,
     emailEnabled: draft.emailEnabled ?? true,
   }
 }
@@ -363,7 +364,7 @@ export function deriveTransactionNotification(
       body,
       pushTitle: "Payroll payment received",
       pushBody: body,
-      emailSubject: businessName ? `You've been paid by ${businessName}` : "Payroll payment received",
+      emailSubject: "Payroll payment received",
       category: "Payroll payment",
       counterpartyLabel: "Employer",
       counterpartyName: businessName || undefined,
@@ -379,19 +380,22 @@ export function deriveTransactionNotification(
         payload: input.payload ?? null,
         amountText,
       })
-      const body = payout.recipientName
-        ? input.failureReason
-          ? `Could not send ${payout.amountDisplay} to ${payout.recipientName}. ${input.failureReason}`
-          : `Could not send ${payout.amountDisplay} to ${payout.recipientName}.`
-        : input.failureReason
-          ? `Your ${payout.notificationActivityLabel.toLowerCase()} could not be completed. ${input.failureReason}`
-          : `Your ${payout.notificationActivityLabel.toLowerCase()} could not be completed.`
+      const body = withFailedOutboundBody(
+        payout.recipientName
+          ? input.failureReason
+            ? `Could not send ${payout.amountDisplay} to ${payout.recipientName}. ${input.failureReason}`
+            : `Could not send ${payout.amountDisplay} to ${payout.recipientName}.`
+          : input.failureReason
+            ? `Your ${payout.notificationActivityLabel.toLowerCase()} could not be completed. ${input.failureReason}`
+            : `Your ${payout.notificationActivityLabel.toLowerCase()} could not be completed.`,
+        direction,
+        outcome,
+      )
       return finalizeDescriptor(
         {
           ...base,
           kind: "bank_payout",
           body,
-          pushBody: withFailedOutboundPushBody(body, direction, outcome),
           amountDisplay: payout.amountDisplay,
           counterpartyLabel: "Recipient",
           counterpartyName: payout.recipientName,
@@ -453,15 +457,18 @@ export function deriveTransactionNotification(
       payload: input.payload ?? null,
     })
     const kind = inferFailedKind({ isCard, direction, outboundEasetag, inboundEasetag })
-    const body = input.failureReason
-      ? `Your ${category.toLowerCase()} could not be completed. ${input.failureReason}`
-      : `Your ${category.toLowerCase()} could not be completed.`
+    const body = withFailedOutboundBody(
+      input.failureReason
+        ? `Your ${category.toLowerCase()} could not be completed. ${input.failureReason}`
+        : `Your ${category.toLowerCase()} could not be completed.`,
+      direction,
+      outcome,
+    )
     return finalizeDescriptor(
       {
         ...base,
         kind,
         body,
-        pushBody: withFailedOutboundPushBody(body, direction, outcome),
         counterpartyLabel: direction === "in" ? "Sender" : "Recipient",
         counterpartyName: deriveOutboundCounterpartyName({ metadata: meta, payload: input.payload }),
         category,
@@ -483,7 +490,6 @@ export function deriveTransactionNotification(
         ...base,
         kind,
         body,
-        pushBody: "Your balance has been updated after a reversal.",
         category: "Reversal",
       },
       activityLabelForNotification(kind, "Reversal"),
@@ -583,15 +589,12 @@ export function deriveTransactionNotification(
     })
     if (inboundSnapshot?.kind === "stablecoin") {
       const notification = resolveInboundReceiveNotification(inboundSnapshot)
-      const creditedDisplay = formatMoneyDisplay(
-        inboundSnapshot.amountCredited.amount,
-        inboundSnapshot.amountCredited.currency,
-      )
+      const amountDisplay = resolveInboundDepositNotificationAmountDisplay(inboundSnapshot)
       return finalizeDescriptor(
         {
           ...base,
           kind: "stablecoin_deposit",
-          amountDisplay: creditedDisplay,
+          amountDisplay,
           body: notification.successBody,
           pushBody: notification.successBody,
           category: notification.activityLabel,
@@ -640,6 +643,30 @@ export function deriveTransactionNotification(
   }
 
   if (category === "Easetag Received") {
+    const inboundSnapshot = resolveInboundReceiveDetail({
+      provider: input.provider,
+      direction: input.direction,
+      metadata: meta ?? {},
+      currency: input.currency,
+      amount: input.amount,
+    })
+    if (inboundSnapshot?.kind === "easetag_receive") {
+      const notification = resolveInboundReceiveNotification(inboundSnapshot)
+      return finalizeDescriptor(
+        {
+          ...base,
+          kind: "easetag_receive",
+          amountDisplay: resolveInboundDepositNotificationAmountDisplay(inboundSnapshot),
+          body: notification.successBody,
+          pushBody: notification.successBody,
+          category: notification.activityLabel,
+          ...(inboundEasetag
+            ? { counterpartyLabel: "Sender", counterpartyName: `@${inboundEasetag}` }
+            : {}),
+        },
+        notification.activityLabel,
+      )
+    }
     const body = inboundEasetag
       ? `You've received ${amountText} from @${inboundEasetag}`
       : `You've received ${amountText}`
@@ -746,6 +773,7 @@ export function deriveTransactionNotification(
         {
           ...base,
           kind,
+          amountDisplay: resolveInboundDepositNotificationAmountDisplay(inboundSnapshot),
           body: notification.successBody,
           pushBody: notification.successBody,
           category: notification.activityLabel,
@@ -783,15 +811,21 @@ export function deriveTransactionNotification(
     ) {
       const review = normalizeYcFundBalanceDepositReview(meta.deposit_review)
       const activityLabel = resolveYcFundBalanceNotificationActivityLabelFromMetadata(meta, review)
-      const usdCredit = review?.usd_credit ?? Number(meta.usd_credit ?? input.amount)
+      const localAmount = review?.local_pay_in ?? Number(meta.local_pay_in ?? 0)
+      const localCurrency = String(review?.local_currency ?? meta.local_currency ?? input.currency ?? "USD")
+      const scheme = String(review?.transfer_method ?? meta.deposit_display_title ?? activityLabel)
       const pushBody =
-        review && Number.isFinite(usdCredit) && usdCredit > 0
-          ? `${formatMoneyDisplay(usdCredit, "USD")} credited to your USD balance`
-          : BANK_DEPOSIT_COMPLETED_DESCRIPTION
+        review && Number.isFinite(localAmount) && localAmount > 0
+          ? `You've received ${formatMoneyDisplay(localAmount, localCurrency)} via ${scheme}`
+          : `You've received ${amountText}`
       return finalizeDescriptor(
         {
           ...base,
           kind: "bank_deposit",
+          amountDisplay:
+            review && Number.isFinite(localAmount) && localAmount > 0
+              ? formatMoneyDisplay(localAmount, localCurrency)
+              : amountText,
           body: pushBody,
           pushBody,
           category: String(meta.deposit_display_title ?? activityLabel),
@@ -811,24 +845,41 @@ export function deriveTransactionNotification(
         meta.fiat_deposit_currency ?? meta.settled_currency ?? input.currency ?? "USD",
       )
       const activityLabel = resolveNoahVaFundingNotificationActivityLabel(currency)
+      const fiatAmount = Number(meta.fiat_deposit_amount ?? input.amount ?? 0)
+      const sender = deriveEasnerInboundRemitterDisplayName({
+        metadata: meta,
+        payload: input.payload ?? null,
+      })
+      const pushBody =
+        Number.isFinite(fiatAmount) && fiatAmount > 0
+          ? sender
+            ? `You've received ${formatMoneyDisplay(fiatAmount, currency)} from ${sender}`
+            : `You've received ${formatMoneyDisplay(fiatAmount, currency)}`
+          : `You've received ${amountText}`
       return finalizeDescriptor(
         {
           ...base,
           kind: "bank_deposit",
-          body: BANK_DEPOSIT_COMPLETED_DESCRIPTION,
-          pushBody: BANK_DEPOSIT_COMPLETED_DESCRIPTION,
+          amountDisplay:
+            Number.isFinite(fiatAmount) && fiatAmount > 0
+              ? formatMoneyDisplay(fiatAmount, currency)
+              : amountText,
+          body: pushBody,
+          pushBody,
           category: resolveNoahVaFundingDepositTitleFromMeta(meta),
+          ...(sender ? { counterpartyLabel: "Sender", counterpartyName: sender } : {}),
         },
         activityLabel,
       )
     }
     if (isBankOnrampDepositFlow(meta)) {
+      const pushBody = `You've received ${amountText}`
       return finalizeDescriptor(
         {
           ...base,
           kind: "bank_deposit",
-          body: BANK_DEPOSIT_COMPLETED_DESCRIPTION,
-          pushBody: BANK_DEPOSIT_COMPLETED_DESCRIPTION,
+          body: pushBody,
+          pushBody,
           category: "Bank Deposit",
         },
         activityLabelForNotification("bank_deposit", "Bank Deposit"),

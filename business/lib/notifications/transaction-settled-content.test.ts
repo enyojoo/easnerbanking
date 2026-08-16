@@ -27,7 +27,7 @@ describe("buildTransactionSettledPushContent", () => {
       },
     })
     expect(title).toBe("Bank verification deposit")
-    expect(body).toContain("Verification only")
+    expect(body).toBe("You've received $0.32 from Chase")
   })
 
   it("still uses bank deposit push for funding onramp", () => {
@@ -43,7 +43,7 @@ describe("buildTransactionSettledPushContent", () => {
       },
     })
     expect(title).toBe("US bank deposit complete")
-    expect(body).toContain("Funds are now available")
+    expect(body).toBe("You've received $9.95 via ACH")
   })
 
   it("uses transfer method headline for failed global payout", () => {

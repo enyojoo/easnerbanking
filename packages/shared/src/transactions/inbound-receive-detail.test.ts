@@ -216,15 +216,15 @@ describe("buildInboundReceiveDetailRows", () => {
     })
     expect(snapshot?.kind).toBe("stablecoin")
     expect(snapshot?.scheme).toBe("USDT on Tron")
+    expect(snapshot?.depositAmount).toEqual({ amount: 100, currency: "USD" })
     const map = rowMap(buildInboundReceiveDetailRows(snapshot!, { surface: "detail" }))
+    expect(map[REVIEW_ROW_LABELS.depositAmount]).toBeUndefined()
     expect(map[REVIEW_ROW_LABELS.processingFee]).toBe("$1")
     expect(map[REVIEW_ROW_LABELS.amountCredited]).toBe("+$99")
     expect(map[REVIEW_ROW_LABELS.creditTo]).toBe("USD Balance")
-
     const emailMap = rowMap(buildInboundReceiveEmailDetailRows(snapshot!))
-    expect(emailMap[REVIEW_ROW_LABELS.processingFee]).toBe("$1")
+    expect(emailMap[REVIEW_ROW_LABELS.depositAmount]).toBe("$100")
     expect(emailMap[REVIEW_ROW_LABELS.amountCredited]).toBe("+$99")
-    expect(emailMap[REVIEW_ROW_LABELS.creditTo]).toBe("USD Balance")
   })
 
   it("stablecoin without fee omits amount credited on detail", () => {
@@ -318,7 +318,28 @@ describe("resolveInboundReceiveNotification", () => {
     })!
     const notify = resolveInboundReceiveNotification(snapshot)
     expect(notify.successTitle).toBe("Stablecoin deposit complete")
-    expect(notify.successBody).toContain("USD Balance")
+    expect(notify.successBody).toBe("You've received $25 via address")
+  })
+
+  it("relay stablecoin notification shows gross received from sender address", () => {
+    const snapshot = resolveInboundReceiveDetail({
+      direction: "in",
+      provider: "relay",
+      metadata: {
+        activity_type: "relay_tron_deposit",
+        gross_usdt: 3,
+        posted_amount: 2.307509,
+        posted_currency: "USD",
+        fee_amount: 0.692491,
+        sender_tron_address: "TQbRULEB1NwizCwpCHTGbmt4Nnsfej6VhT",
+      },
+      counterparty_address: "TQbRULEB1NwizCwpCHTGbmt4Nnsfej6VhT",
+      amount: 2.31,
+      currency: "USD",
+    })!
+    const notify = resolveInboundReceiveNotification(snapshot)
+    expect(notify.successTitle).toBe("Stablecoin deposit complete")
+    expect(notify.successBody).toBe("You've received $3 from TQbRUL...ej6VhT")
   })
 
   it("returns easetag received body with handle", () => {
@@ -329,6 +350,47 @@ describe("resolveInboundReceiveNotification", () => {
       currency: "USD",
     })!
     const notify = resolveInboundReceiveNotification(snapshot)
-    expect(notify.successBody).toContain("@jane")
+    expect(notify.successBody).toBe("You've received $5 from @jane")
+  })
+
+  it("returns YC fund balance body with local pay-in and scheme", () => {
+    const snapshot = resolveInboundReceiveDetail({
+      direction: "in",
+      provider: "yellowcard",
+      metadata: {
+        yc_mode: "fund_balance",
+        deposit_review: {
+          local_pay_in: 100000,
+          local_currency: "NGN",
+          usd_credit: 65,
+          processing_fee: 0.65,
+          exchange_rate: 1538,
+          transfer_method: "Bank Transfer",
+          credit_to: "USD Balance",
+          residence_country: "NG",
+          pay_in_rail: "bank_transfer",
+        },
+      },
+    })!
+    const notify = resolveInboundReceiveNotification(snapshot)
+    expect(notify.successBody).toBe("You've received ₦100,000 via Bank Transfer")
+  })
+
+  it("returns Noah VA body with sender name", () => {
+    const snapshot = resolveInboundReceiveDetail({
+      direction: "in",
+      provider: "noah",
+      metadata: {
+        flow: "bank_onramp",
+        source_type: "virtual_account",
+        fiat_deposit_amount: 100,
+        fiat_deposit_currency: "USD",
+        posted_amount: 99.5,
+        posted_currency: "USD",
+        sender_name: "ACME CORP",
+      },
+    })!
+    const notify = resolveInboundReceiveNotification(snapshot)
+    expect(notify.successBody).toBe("You've received $100 from Acme Corp")
   })
 })

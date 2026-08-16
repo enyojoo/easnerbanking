@@ -704,7 +704,10 @@ export {
   buildInboundReceiveDetailRows,
   buildInboundReceiveEmailDetailRows,
   classifyInboundReceiveKind,
+  formatInboundDepositReceivedNotificationBody,
   resolveCreditDestination,
+  resolveInboundDepositNotificationAmountDisplay,
+  resolveInboundDepositReceivedAmount,
   resolveInboundReceiveDetail,
   resolveInboundReceiveNotification,
 } from "./transactions/inbound-receive-detail"

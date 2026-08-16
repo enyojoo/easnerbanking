@@ -11,10 +11,7 @@ import { computeDisplayProcessingFee } from "../payout-processing-fee"
 import { REVIEW_ROW_LABELS } from "../review-row-labels"
 import { isPayoutReviewFeeVisible } from "../payout-review-display"
 import { formatMaskedSenderDisplay } from "../payout-recipient-subtitle"
-import {
-  BANK_DEPOSIT_COMPLETED_DESCRIPTION,
-  isBankOnrampDepositFlow,
-} from "./bank-deposit-lifecycle"
+import { isBankOnrampDepositFlow } from "./bank-deposit-lifecycle"
 import { deriveBankDepositSchemeLabel } from "./bank-deposit-scheme"
 import type { YcFundBalanceDepositReviewSnapshot } from "./global-deposit-types"
 import {
@@ -32,7 +29,6 @@ import { deriveEasnerInboundRemitterDisplayName } from "./product-label"
 import { formatStablecoinDepositSchemeLabel } from "./stablecoin-deposit-scheme"
 import { isRelayTronDepositInbound } from "./relay-tron-deposit"
 import {
-  BANK_VERIFICATION_COMPLETED_DESCRIPTION,
   deriveVerificationBankName,
   isVerificationDepositMetadata,
 } from "./verification-deposit"
@@ -264,7 +260,7 @@ function resolveDisplayTitle(kind: InboundReceiveKind, input: InboundReceiveReso
       return "Stablecoin deposit"
     case "easetag_receive": {
       const handle = readEasetagHandle(meta)
-      return handle ? `Received from @${handle}` : "Easetag received"
+      return handle ? `Received from @${handle}` : "Easetag deposit"
     }
     default:
       return "Deposit"
@@ -428,6 +424,10 @@ export function resolveInboundReceiveDetail(
       ) ?? 0
     const feeAmount = pickAmount(input.fee_amount, meta.fee_amount, meta.fee) ?? 0
     const feeCurrency = String(input.currency ?? meta.currency ?? creditedCurrency).toUpperCase()
+    const fiatDepositAmount = pickAmount(meta.fiat_deposit_amount)
+    const fiatDepositCurrency = String(
+      meta.fiat_deposit_currency ?? creditedCurrency,
+    ).toUpperCase()
     return {
       kind,
       displayTitle: resolveDisplayTitle(kind, input),
@@ -438,6 +438,9 @@ export function resolveInboundReceiveDetail(
       creditDestination: resolveCreditDestination(creditedCurrency, kind),
       scheme: deriveBankDepositSchemeLabel({ metadata: meta, payload: input.payload ?? null }),
       ...resolveSenderFields(input),
+      ...(fiatDepositAmount != null
+        ? { depositAmount: { amount: fiatDepositAmount, currency: fiatDepositCurrency } }
+        : {}),
       ...(feeAmount > 0 ? { processingFee: { amount: feeAmount, currency: feeCurrency } } : {}),
       ...(readMetaString(meta, "reference") || readMetaString(meta, "narration") || input.reference
         ? {
@@ -463,6 +466,9 @@ export function resolveInboundReceiveDetail(
     const feeCurrency = isRelayTronDepositInbound(input)
       ? "USD"
       : String(input.currency ?? creditedCurrency).toUpperCase()
+    const grossUsd = pickAmount(meta.gross_usdt)
+    const depositAmount =
+      grossUsd != null ? { amount: grossUsd, currency: "USD" as const } : undefined
     return {
       kind,
       displayTitle: resolveDisplayTitle(kind, input),
@@ -473,6 +479,7 @@ export function resolveInboundReceiveDetail(
       creditDestination: resolveCreditDestination(creditedCurrency, kind),
       scheme: deriveStablecoinSchemeLabel(input),
       ...resolveSenderFields(input),
+      ...(depositAmount ? { depositAmount } : {}),
       ...(feeAmount > 0 ? { processingFee: { amount: feeAmount, currency: feeCurrency } } : {}),
       ...(note ? { note } : {}),
     }
@@ -635,6 +642,22 @@ export function buildInboundReceiveDetailRows(
     }
     case "stablecoin": {
       pushSenderRow(rows, snapshot)
+      if (
+        surface !== "detail" &&
+        snapshot.depositAmount &&
+        snapshot.processingFee &&
+        snapshot.processingFee.amount > 0
+      ) {
+        pushIf(
+          rows,
+          REVIEW_ROW_LABELS.depositAmount,
+          formatReviewRowMoneyDisplay(
+            REVIEW_ROW_LABELS.depositAmount,
+            snapshot.depositAmount.amount,
+            snapshot.depositAmount.currency,
+          ),
+        )
+      }
       if (snapshot.processingFee) {
         pushIf(
           rows,
@@ -678,54 +701,92 @@ export type InboundReceiveNotification = {
   failedBody: string
 }
 
+/** Feed/gross amount for deposit push copy (local pay-in, VA fiat sent, relay gross, etc.). */
+export function resolveInboundDepositReceivedAmount(snapshot: InboundReceiveDetailSnapshot): {
+  amount: number
+  currency: string
+} {
+  if (snapshot.kind === "easetag_receive") return snapshot.amountCredited
+  if (snapshot.kind === "yc_fund_balance" && snapshot.amountPaid) return snapshot.amountPaid
+  if (snapshot.depositAmount) return snapshot.depositAmount
+  if (snapshot.amountPaid) return snapshot.amountPaid
+  return snapshot.amountCredited
+}
+
+export function resolveInboundDepositNotificationAmountDisplay(
+  snapshot: InboundReceiveDetailSnapshot,
+): string {
+  const { amount, currency } = resolveInboundDepositReceivedAmount(snapshot)
+  return formatMoneyDisplay(amount, currency)
+}
+
+/** Unified deposit push/email intro — mirrors outbound "You've sent $X to …". */
+export function formatInboundDepositReceivedNotificationBody(
+  snapshot: InboundReceiveDetailSnapshot,
+): string {
+  const { amount, currency } = resolveInboundDepositReceivedAmount(snapshot)
+  const receivedText = formatMoneyDisplay(amount, currency)
+
+  switch (snapshot.kind) {
+    case "easetag_receive": {
+      const handle = snapshot.displayTitle.match(/@(\w+)/)?.[1]
+      return handle
+        ? `You've received ${receivedText} from @${handle}`
+        : `You've received ${receivedText}`
+    }
+    case "yc_fund_balance": {
+      const scheme = String(snapshot.scheme ?? "").trim()
+      return scheme
+        ? `You've received ${receivedText} via ${scheme}`
+        : `You've received ${receivedText}`
+    }
+    case "noah_verification": {
+      const bank = String(snapshot.sender ?? "").trim()
+      return bank
+        ? `You've received ${receivedText} from ${bank}`
+        : `You've received ${receivedText}`
+    }
+    case "noah_va_funding":
+    case "stablecoin": {
+      const sender = String(snapshot.sender ?? "").trim()
+      if (sender) return `You've received ${receivedText} from ${sender}`
+      if (snapshot.kind === "stablecoin") {
+        return `You've received ${receivedText} via address`
+      }
+      const scheme = String(snapshot.scheme ?? "").trim()
+      return scheme
+        ? `You've received ${receivedText} via ${scheme}`
+        : `You've received ${receivedText}`
+    }
+    default:
+      return `You've received ${receivedText}`
+  }
+}
+
 export function resolveInboundReceiveNotification(
   snapshot: InboundReceiveDetailSnapshot,
   outcome: "success" | "failed" = "success",
 ): InboundReceiveNotification {
-  const creditedText = formatMoneyDisplay(
-    snapshot.amountCredited.amount,
-    snapshot.amountCredited.currency,
-  )
-  const balanceLabel = snapshot.creditDestination?.balanceLabel ?? `${snapshot.amountCredited.currency} Balance`
-
   let activityLabel = snapshot.notificationActivityLabel ?? snapshot.displayTitle
   let successTitle = `${activityLabel} complete`
-  let successBody = `${creditedText} credited to your ${balanceLabel}`
+  let successBody = formatInboundDepositReceivedNotificationBody(snapshot)
 
   switch (snapshot.kind) {
-    case "yc_fund_balance": {
-      successBody = `${creditedText} credited to your USD balance`
-      break
-    }
-    case "noah_va_funding": {
-      successTitle = `${activityLabel} complete`
-      successBody = BANK_DEPOSIT_COMPLETED_DESCRIPTION
-      break
-    }
-    case "noah_verification": {
+    case "noah_verification":
       successTitle = "Bank verification deposit complete"
-      successBody = BANK_VERIFICATION_COMPLETED_DESCRIPTION
       break
-    }
-    case "stablecoin": {
+    case "stablecoin":
       activityLabel = "Stablecoin deposit"
       successTitle = "Stablecoin deposit complete"
-      successBody = `${creditedText} credited to your ${balanceLabel}`
       break
-    }
-    case "easetag_receive": {
-      activityLabel = snapshot.displayTitle.startsWith("Received from")
-        ? "Easetag received"
-        : snapshot.displayTitle
-      successTitle = snapshot.displayTitle.startsWith("Received from")
-        ? snapshot.displayTitle
-        : "Easetag received"
-      const handle = snapshot.displayTitle.match(/@(\w+)/)?.[1]
-      successBody = handle
-        ? `You've received ${creditedText} from @${handle}`
-        : `You've received ${creditedText}`
+    case "easetag_receive":
+      activityLabel = "Easetag deposit"
       break
-    }
+    case "noah_va_funding":
+      successTitle = `${activityLabel} complete`
+      break
+    default:
+      break
   }
 
   const failedTitle = `${activityLabel} failed`

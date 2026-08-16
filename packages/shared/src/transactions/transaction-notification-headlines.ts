@@ -24,7 +24,7 @@ export function activityLabelForNotification(
     case "easetag_send":
       return "Easetag transfer"
     case "easetag_receive":
-      return "Easetag received"
+      return "Easetag deposit"
     case "card_topup":
       return "Card top-up"
     case "card_payment":
@@ -59,9 +59,10 @@ export function buildTransactionNotificationHeadlines(
   }
 
   if (outcome === "failed") {
+    const line = `${activity} failed`
     return {
-      pushTitle: `${activity} failed`,
-      emailSubject: `${activity} couldn't be completed`,
+      pushTitle: line,
+      emailSubject: line,
       title: `${activity} couldn't be completed`,
     }
   }

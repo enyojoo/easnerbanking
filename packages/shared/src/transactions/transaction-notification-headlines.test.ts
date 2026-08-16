@@ -13,10 +13,10 @@ describe("buildTransactionNotificationHeadlines", () => {
     })
   })
 
-  it("uses failed vs couldn't be completed for failures", () => {
+  it("uses failed headline for failures", () => {
     expect(buildTransactionNotificationHeadlines("Easetag transfer", "failed")).toEqual({
       pushTitle: "Easetag transfer failed",
-      emailSubject: "Easetag transfer couldn't be completed",
+      emailSubject: "Easetag transfer failed",
       title: "Easetag transfer couldn't be completed",
     })
   })
@@ -45,6 +45,7 @@ describe("buildTransactionNotificationHeadlines", () => {
 describe("activityLabelForNotification", () => {
   it("maps easetag and card kinds", () => {
     expect(activityLabelForNotification("easetag_send", "Easetag Send")).toBe("Easetag transfer")
+    expect(activityLabelForNotification("easetag_receive", "Easetag Received")).toBe("Easetag deposit")
     expect(activityLabelForNotification("card_topup", "Card top up")).toBe("Card top-up")
   })
 })
