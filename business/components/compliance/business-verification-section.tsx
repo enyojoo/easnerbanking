@@ -39,11 +39,21 @@ import {
 } from "@easner/shared"
 import { SETTINGS_VERIFICATION_FLOW_PARAM } from "@/lib/compliance/cutover-comms"
 import { useSuspendIdleLock } from "@/hooks/use-suspend-idle-lock"
-import { useAuth } from "@/lib/auth-context"
+
+function OpeningVerificationWait() {
+  return (
+    <div className="flex size-full min-h-[16rem] items-center justify-center">
+      <div className="flex flex-col items-center gap-3 text-center text-muted-foreground">
+        <Loader2 className="size-8 animate-spin" aria-hidden />
+        <p className="text-sm">Please wait, Opening Verification</p>
+      </div>
+    </div>
+  )
+}
 
 const GridSumsubWebSdk = dynamic(
   () => import("@/components/compliance/grid-sumsub-websdk").then((m) => ({ default: m.GridSumsubWebSdk })),
-  { ssr: false, loading: () => <Loader2 className="mx-auto size-8 animate-spin text-muted-foreground" /> },
+  { ssr: false, loading: () => <OpeningVerificationWait /> },
 )
 
 function tier1StatusIsInReview(status: string | null | undefined): boolean {
@@ -67,7 +77,6 @@ export function BusinessVerificationSection({
   onFlowOpenChange,
 }: BusinessVerificationSectionProps) {
   const searchParams = useSearchParams()
-  const { user } = useAuth()
   const flowFromUrl = searchParams.get("flow") === SETTINGS_VERIFICATION_FLOW_PARAM
   const {
     tier1Complete,
@@ -106,7 +115,7 @@ export function BusinessVerificationSection({
   const hostedFlowActive = fullPageFlow || flowFromUrl || hostedOpen
 
   // SumSub runs in a cross-origin iframe; parent window does not receive pointer/keyboard events.
-  useSuspendIdleLock(hostedFlowActive, user?.id)
+  useSuspendIdleLock(hostedFlowActive)
 
   const pushVerificationFlowUrl = useCallback(() => {
     onFlowOpenChange?.(true)
@@ -234,7 +243,7 @@ export function BusinessVerificationSection({
   ])
 
   const applyHostedCredentials = useCallback(
-    (link: string | null, token: string | null, expiresAt?: string | null) => {
+    (link: string | null, token: string | null) => {
       if (clearSessionAfterCloseRef.current) {
         clearTimeout(clearSessionAfterCloseRef.current)
         clearSessionAfterCloseRef.current = null
@@ -245,7 +254,7 @@ export function BusinessVerificationSection({
       probedHostedUrlRef.current = link
       probedHostedTokenRef.current = token
       if (businessId) {
-        writeHostedCredentialsCache(businessId, { link, token }, expiresAt)
+        writeHostedCredentialsCache(businessId, { link, token })
         setHostedResumeAvailable(hostedCredentialsAreReady({ link, token }))
       }
     },
@@ -333,13 +342,13 @@ export function BusinessVerificationSection({
       preloadSumsubWebSdk()
       setHostedOpen(true)
       setHostedTierLevel(1)
-      setOpeningVerification(false)
       pushVerificationFlowUrl()
     }
 
     const cachedReady = resolveCachedCredentials()
     if (cachedReady) {
       applyHostedCredentials(cachedReady.link, cachedReady.token)
+      setOpeningVerification(false)
       beginHostedFlow()
       return
     }
@@ -360,6 +369,10 @@ export function BusinessVerificationSection({
       }
       if (!res.ok) {
         abortHostedVerification()
+        if (json.kyc_status === "not_started") {
+          setError(json.error ?? "Your previous verification session expired. Start verification again.")
+          return
+        }
         setError(json.error ?? "Could not start verification.")
         return
       }
@@ -390,11 +403,11 @@ export function BusinessVerificationSection({
         return
       }
 
-      applyHostedCredentials(link, token, json.expiresAt ?? null)
+      applyHostedCredentials(link, token)
       setOpeningVerification(false)
     } catch (e: unknown) {
       abortHostedVerification()
-      setError(e instanceof Error ? e.message : "Could not start verification.")
+      setError(e instanceof Error ? e.message : "Something went wrong.")
     }
   }, [
     abortHostedVerification,
@@ -467,6 +480,11 @@ export function BusinessVerificationSection({
           ? "Continue verification"
           : "Begin verification"
 
+  /** Full-page flow uses the settings content area; in-tab fallback keeps title/tabs chrome. */
+  const verificationFlowPanelClass = hostedFlowActive
+    ? "h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-2.5rem)] max-h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-2.5rem)]"
+    : "h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))] max-h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))]"
+
   const hostedFlowPanel = (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
       <Button
@@ -506,7 +524,9 @@ export function BusinessVerificationSection({
             allow="camera *; microphone *; payment *; publickey-credentials-get *; clipboard-read *; clipboard-write *"
             onLoad={handleHostedIframeLoad}
           />
-        ) : null}
+        ) : (
+          <OpeningVerificationWait />
+        )}
       </div>
     </div>
   )
@@ -515,7 +535,7 @@ export function BusinessVerificationSection({
     return (
       <div
         id="business-verification"
-        className="workspace-fill workspace-panel"
+        className={verificationFlowPanelClass}
         data-verification-flow="open"
       >
         {hostedFlowPanel}
@@ -538,7 +558,7 @@ export function BusinessVerificationSection({
               />
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-3">
                 {BUSINESS_TIER_LADDER.tiers.map((t) => {
                   const isT1 = t.tier === 1
                   const isT3 = t.tier === 3

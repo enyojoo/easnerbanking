@@ -5,10 +5,6 @@ import {
   notifyOnlinePaymentsStatusChange,
 } from "@/lib/notifications/online-payments-notify"
 import { getStripe } from "../client"
-import {
-  clearStaleConnectAccountRow,
-  isStripeConnectAccountInaccessibleError,
-} from "./account-access"
 import { ensureConnectAccountLinked } from "./discover-connect-account"
 import { resolveConnectReadyForCheckout } from "./resolve-connect-account"
 import { syncConnectAccountRow } from "./sync-account-from-stripe"
@@ -29,19 +25,10 @@ export async function ensureConnectedAccount(
     .maybeSingle()
 
   if (existing?.stripe_account_id) {
-    try {
-      return await syncConnectAccountRow(admin, {
-        businessId: input.businessId,
-        stripeAccountId: String(existing.stripe_account_id),
-      })
-    } catch (e) {
-      if (!isStripeConnectAccountInaccessibleError(e)) throw e
-      console.warn(
-        "[stripe-connect] stored account is inaccessible; creating a new Connect account",
-        existing.stripe_account_id,
-      )
-      await clearStaleConnectAccountRow(admin, input.businessId)
-    }
+    return syncConnectAccountRow(admin, {
+      businessId: input.businessId,
+      stripeAccountId: String(existing.stripe_account_id),
+    })
   }
 
   const linked = await ensureConnectAccountLinked(admin, input.businessId)

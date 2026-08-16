@@ -60,7 +60,7 @@ export default function CardsPage() {
   const hasCards = cards.length > 0
 
   return (
-    <div className="workspace-fill overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-9rem)] min-h-[500px] overflow-hidden">
       <div className="flex items-center justify-between mb-6 flex-shrink-0">
         <PageIntro title={PAGE_COPY.cards.title} description={PAGE_COPY.cards.intro} variant="page" />
         <Button className="gap-2" disabled={!hasCards}>

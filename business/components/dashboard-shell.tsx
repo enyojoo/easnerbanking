@@ -3,7 +3,7 @@
 import type React from "react"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
 import { MessageCircle } from "lucide-react"
@@ -23,6 +23,38 @@ import {
   HOSTED_KYB_PRIME_EVENT,
   primeBusinessVerificationFlow,
 } from "@/lib/compliance/prime-business-verification-flow"
+import { isHostedVerificationFlowLocation } from "@/lib/compliance/cutover-comms"
+
+function useHostedVerificationFlowOpen() {
+  const [open, setOpen] = useState(() => {
+    if (typeof window === "undefined") return false
+    return isHostedVerificationFlowLocation(window.location.pathname, window.location.search)
+  })
+
+  useEffect(() => {
+    const read = () => {
+      const urlOpen = isHostedVerificationFlowLocation(
+        window.location.pathname,
+        window.location.search,
+      )
+      const dataOpen = document.documentElement.dataset.verificationFlowOpen === "true"
+      setOpen(urlOpen || dataOpen)
+    }
+    read()
+    window.addEventListener("popstate", read)
+    const observer = new MutationObserver(read)
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-verification-flow-open"],
+    })
+    return () => {
+      window.removeEventListener("popstate", read)
+      observer.disconnect()
+    }
+  }, [])
+
+  return open
+}
 
 interface DashboardShellProps {
   children: React.ReactNode
@@ -51,7 +83,9 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
   const { avatarUrl: profileImageUrl } = usePersonalProfileAvatar()
   /** Keep header avatar visible when personal settings are hydrated even if business profile is still loading. */
   const showProfileChromeSkeleton = profileLoading && !profileHasData && !profileImageUrl
-  const showTier1Banner = profileHasData && !profileLoading && !tier1Complete
+  const hostedVerificationFlowOpen = useHostedVerificationFlowOpen()
+  const showTier1Banner =
+    profileHasData && !profileLoading && !tier1Complete && !hostedVerificationFlowOpen
 
   useEffect(() => {
     const prime = () =>
@@ -119,11 +153,8 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
     <AppLockProvider>
       <div className="min-h-dvh bg-background text-foreground">
         <DashboardNav />
-        <div data-dashboard-frame className="ml-64 flex h-dvh flex-col overflow-hidden">
-          <header
-            data-dashboard-header
-            className="z-30 flex h-16 min-h-16 shrink-0 items-center justify-end gap-3 border-b border-border/60 bg-background/80 px-8 backdrop-blur-md supports-[backdrop-filter]:bg-background/70"
-          >
+        <div className="ml-64 flex h-dvh flex-col overflow-hidden">
+          <header className="z-30 flex h-16 min-h-16 shrink-0 items-center justify-end gap-3 border-b border-border/60 bg-background/80 px-8 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
           {showProfileChromeSkeleton ? (
             <div className="flex items-center gap-3">
               <div className="h-9 w-9 animate-pulse rounded-full border-2 border-border bg-muted" />
@@ -155,7 +186,6 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
           </header>
           {showTier1Banner ? (
             <div
-              data-dashboard-banner
               className="z-20 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[hsl(var(--warning)/0.3)] bg-[hsl(var(--warning)/0.12)] px-8 py-2.5 text-sm text-[hsl(var(--warning))] backdrop-blur-sm"
               role="status"
             >

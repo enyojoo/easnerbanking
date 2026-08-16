@@ -37,13 +37,12 @@ import {
 import { resolveReportingAmountForFeed } from "@easner/shared"
 
 export function DashboardPageClient() {
-  const { data: rows, loading: transactionsLoading, error: transactionsError, refetch: refetchTransactions } =
+  const { data: rows, error: transactionsError, refetch: refetchTransactions } =
     useTransactionsCached()
   const {
     balances,
     baseCurrency,
     hasAuthoritativeBalances,
-    loading: accountsLoading,
     loadError: accountsError,
     refreshAccounts,
   } = useBusinessAccountRows()
@@ -135,7 +134,6 @@ export function DashboardPageClient() {
     : MASK
 
   const loadError = transactionsError || accountsError
-  const isLoading = transactionsLoading || accountsLoading
 
   if (loadError) {
     return (
@@ -152,14 +150,6 @@ export function DashboardPageClient() {
         >
           Try again
         </Button>
-      </div>
-    )
-  }
-
-  if (isLoading && rows.length === 0) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center p-6 text-sm text-muted-foreground">
-        Loading dashboard…
       </div>
     )
   }

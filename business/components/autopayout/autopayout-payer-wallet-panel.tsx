@@ -301,7 +301,7 @@ export function AutopayoutPayerWalletPanel({
       </div>
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add wallet address</DialogTitle>
             <DialogDescription>Choose asset, network and the name for your placard.</DialogDescription>

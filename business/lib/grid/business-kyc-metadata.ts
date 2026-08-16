@@ -236,84 +236,6 @@ export function gridBusinessKybStubFieldsNeedResync(input: {
   return Boolean(isoDateFromTimestamp(input.profile.createdAt))
 }
 
-/** Grid POST /customers create stubs we still need to scrub before hosted KYB. */
-export function gridBusinessInfoIsHistoricCreateStub(input: {
-  customer: Record<string, unknown>
-  platformCustomerId: string
-  profile: GridBusinessProfile
-}): boolean {
-  if (!gridBusinessKybStubFieldsNeedResync(input)) return false
-
-  const businessInfo = readGridBusinessInfo(input.customer)
-  if (!businessInfo) return false
-
-  const taxRaw = readGridBusinessInfoStringField(businessInfo, "taxId", "tax_id")
-  if (taxRaw && !isGridShellBusinessTaxId(taxRaw, input.platformCustomerId)) {
-    return false
-  }
-
-  const incorporatedOn = readGridBusinessInfoStringField(
-    businessInfo,
-    "incorporatedOn",
-    "incorporated_on",
-  )
-  const expectedIncorp = isoDateFromTimestamp(input.profile.createdAt)
-  if (incorporatedOn && expectedIncorp && incorporatedOn !== expectedIncorp) {
-    return false
-  }
-
-  const country = readGridBusinessInfoStringField(businessInfo, "country")
-  const expectedCountry = resolveBusinessCountryIso2(input.profile.country)
-  if (country && expectedCountry && country !== expectedCountry) {
-    return false
-  }
-
-  return true
-}
-
-export type GridHostedKybInFlightContext = {
-  platformCustomerId: string
-  profile: GridBusinessProfile
-}
-
-/**
- * True when the org has started hosted KYB in SumSub — never delete/recreate or stub-scrub
- * on kyc-link refresh (that wipes in-progress applicant data).
- */
-export function gridCustomerHasHostedKybInFlight(
-  customer: Record<string, unknown>,
-  context?: GridHostedKybInFlightContext,
-): boolean {
-  const status = String(customer.kybStatus ?? customer.kycStatus ?? "")
-    .trim()
-    .toUpperCase()
-  if (status === "PENDING") return true
-
-  const beneficialOwners = Array.isArray(customer.beneficialOwners)
-    ? (customer.beneficialOwners as unknown[])
-    : []
-  if (beneficialOwners.length > 0) return true
-
-  if (context && gridBusinessInfoIsHistoricCreateStub({ customer, ...context })) {
-    return false
-  }
-
-  const businessInfo = readGridBusinessInfo(customer)
-  if (!businessInfo) return false
-
-  const legalName = readGridBusinessInfoStringField(businessInfo, "legalName", "legal_name")
-  const tradeName = readGridBusinessInfoStringField(businessInfo, "tradeName", "trade_name")
-  const country = readGridBusinessInfoStringField(businessInfo, "country")
-  const incorporatedOn = readGridBusinessInfoStringField(
-    businessInfo,
-    "incorporatedOn",
-    "incorporated_on",
-  )
-  const hasName = Boolean(legalName?.trim() || tradeName?.trim())
-  const hasHostedFields = Boolean(country?.trim() || incorporatedOn?.trim())
-  return hasName && hasHostedFields
-}
-
 /** Canonical businessInfo we would send on a fresh thin create for hosted KYB. */
 export function buildGridBusinessInfoResyncPatch(input: {
   platformCustomerId: string
@@ -321,20 +243,4 @@ export function buildGridBusinessInfoResyncPatch(input: {
 }): Record<string, unknown> {
   const payload = buildGridBusinessCustomerPayload(input)
   return (payload.businessInfo ?? {}) as Record<string, unknown>
-}
-
-/**
- * Clear country/incorporation stubs that make Grid reject hosted KYB when taxId is not real.
- * Do not send `taxId: null` — Grid PATCH rejects a null taxId and that used to trigger
- * delete+recreate, which wiped in-progress and not-started customers.
- */
-export function buildGridBusinessInfoScrubPatch(input: {
-  platformCustomerId: string
-  profile: GridBusinessProfile
-}): Record<string, unknown> {
-  return {
-    ...buildGridBusinessInfoResyncPatch(input),
-    country: null,
-    incorporatedOn: null,
-  }
 }

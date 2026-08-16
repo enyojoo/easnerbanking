@@ -134,10 +134,7 @@ export function DashboardNav() {
   }
 
   return (
-    <div
-      data-dashboard-nav
-      className="fixed left-0 top-0 flex h-dvh w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
-    >
+    <div className="fixed left-0 top-0 h-screen w-64 border-r border-sidebar-border bg-sidebar text-sidebar-foreground flex flex-col">
       <div className="flex h-16 min-h-16 items-center gap-3 border-b border-sidebar-border px-5">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-card shadow-soft border border-border/60">
           {hasBusinessLogo && normalizedBusinessLogoUrl ? (

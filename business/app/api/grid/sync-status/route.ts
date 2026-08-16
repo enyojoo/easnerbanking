@@ -1,13 +1,10 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { loadGridBusinessProfile } from "@/lib/grid/ensure-grid-business-customer"
+import { ensureGridBusinessCustomer, loadGridBusinessProfile } from "@/lib/grid/ensure-grid-business-customer"
 import { syncGridBusinessKybToSupabase } from "@/lib/grid/sync-kyb"
 import { provisionAfterVerificationApproved } from "@/lib/verification/provision-after-approval"
 import { resolveGridBusinessProvisionNeeds } from "@/lib/compliance/needs-business-provision"
 import { formatGridApiError } from "@/lib/grid/format-grid-api-error"
-import { gridFetch, GridHttpError } from "@/lib/grid/http"
-import { normalizeGridCustomerId } from "@/lib/grid/quote-request"
-import type { GridCustomer } from "@/lib/grid/types"
 import { requireAuth, requireGridEnv, resolveGridBusinessContextAsync } from "../_helpers"
 
 export const runtime = "nodejs"
@@ -52,26 +49,12 @@ async function runGridBusinessSync(request: Request) {
   }
 
   try {
-    const customerId = normalizeGridCustomerId(stored.customerId)
-    try {
-      await gridFetch<GridCustomer>({
-        method: "GET",
-        path: `/customers/${encodeURIComponent(customerId)}`,
-      })
-    } catch (e) {
-      if (e instanceof GridHttpError && e.status === 404) {
-        await admin
-          .from("businesses")
-          .update({ grid_customer_id: null, updated_at: new Date().toISOString() })
-          .eq("id", ctx.businessId)
-        return NextResponse.json({
-          success: true,
-          skipped: true,
-          kycStatus: stored.verificationStatus || "not_started",
-        })
-      }
-      throw e
-    }
+    const { customerId } = await ensureGridBusinessCustomer({
+      admin,
+      userId: ctx.userId,
+      businessId: ctx.businessId,
+      profile,
+    })
 
     const { status } = await syncGridBusinessKybToSupabase({
       admin,

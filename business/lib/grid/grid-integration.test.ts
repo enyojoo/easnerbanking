@@ -9,17 +9,13 @@ import { buildGridIndividualCustomerPayload } from "@/lib/grid/kyc-metadata"
 import {
   buildGridBusinessCustomerPayload,
   buildGridBusinessInfoResyncPatch,
-  buildGridBusinessInfoScrubPatch,
   gridBusinessHostedKybBusinessInfoIsOverfilled,
-  gridBusinessInfoIsHistoricCreateStub,
   gridBusinessKybStubFieldsNeedResync,
   gridBusinessTaxIdIsInvalidOnGrid,
-  gridCustomerHasHostedKybInFlight,
   gridShellBusinessTaxId,
   isGridShellBusinessTaxId,
 } from "@/lib/grid/business-kyc-metadata"
 import { buildGridIdempotencyKey } from "@/lib/grid/idempotency"
-import { formatHostedKybStartError } from "@/lib/grid/format-grid-api-error"
 import { resolvePrimaryPayoutProvider } from "@easner/shared"
 
 describe("gridDiscoverySupportsCorridor", () => {
@@ -229,14 +225,6 @@ describe("gridBusinessKyb stub resync", () => {
     expect(patch.incorporatedOn).toBeUndefined()
   })
 
-  it("builds a scrub patch that clears Grid create stubs", () => {
-    const patch = buildGridBusinessInfoScrubPatch({ platformCustomerId, profile })
-    expect(patch.legalName).toBe("Fruitful Africa Limited")
-    expect(patch.taxId).toBeUndefined()
-    expect(patch.country).toBeNull()
-    expect(patch.incorporatedOn).toBeNull()
-  })
-
   it("flags country/incorporation without taxId as overfilled", () => {
     expect(
       gridBusinessHostedKybBusinessInfoIsOverfilled({
@@ -363,96 +351,5 @@ describe("grid provider registry", () => {
     expect(gridPayoutProvider.id).toBe("grid")
     expect(noahPayoutProvider.id).toBe("noah")
     expect(yellowcardPayoutProvider.id).toBe("yellowcard")
-  })
-})
-
-describe("hosted KYB resume safety", () => {
-  const platformId = "eb_testbusiness00000000000000000001"
-  const profile = {
-    legalName: "Fruitful Africa Limited",
-    email: "owner@example.com",
-    country: "NG",
-    createdAt: "2026-08-12T10:41:27.468649+00:00",
-  }
-  const inFlightContext = { platformCustomerId: platformId, profile }
-
-  it("detects in-flight hosted KYB from Grid PENDING status", () => {
-    expect(
-      gridCustomerHasHostedKybInFlight({
-        kybStatus: "PENDING",
-        businessInfo: { legalName: "Acme Ltd" },
-      }),
-    ).toBe(true)
-  })
-
-  it("detects in-flight hosted KYB when beneficial owners exist", () => {
-    expect(
-      gridCustomerHasHostedKybInFlight({
-        kybStatus: "NOT_STARTED",
-        beneficialOwners: [{ personalInfo: { firstName: "Jane" } }],
-      }),
-    ).toBe(true)
-  })
-
-  it("detects in-flight hosted KYB when SumSub synced company fields", () => {
-    expect(
-      gridCustomerHasHostedKybInFlight(
-        {
-          kybStatus: "NOT_STARTED",
-          businessInfo: {
-            legalName: "Fruitful Africa Limited",
-            country: "NG",
-            incorporatedOn: "2020-01-01",
-            taxId: gridShellBusinessTaxId(platformId),
-          },
-        },
-        inFlightContext,
-      ),
-    ).toBe(true)
-  })
-
-  it("allows legacy stub scrub only before hosted KYB starts", () => {
-    const customer = {
-      kybStatus: "NOT_STARTED",
-      businessInfo: {
-        legalName: "Fruitful Africa Limited",
-        country: "NG",
-        incorporatedOn: "2026-08-12",
-        taxId: gridShellBusinessTaxId(platformId),
-      },
-    }
-    expect(gridBusinessInfoIsHistoricCreateStub({ customer, ...inFlightContext })).toBe(true)
-    expect(gridCustomerHasHostedKybInFlight(customer, inFlightContext)).toBe(false)
-  })
-
-  it("allows legacy stub scrub when only shell taxId is present", () => {
-    expect(
-      gridCustomerHasHostedKybInFlight(
-        {
-          kybStatus: "NOT_STARTED",
-          businessInfo: {
-            legalName: "Fruitful Africa Limited",
-            taxId: gridShellBusinessTaxId(platformId),
-          },
-        },
-        inFlightContext,
-      ),
-    ).toBe(false)
-  })
-})
-
-describe("formatHostedKybStartError", () => {
-  it("maps missing terms to a retryable user message", () => {
-    expect(formatHostedKybStartError(new Error("grid_end_user_terms_required"))).toBe(
-      "Please accept the latest terms, then try verification again.",
-    )
-  })
-
-  it("keeps the missing-country message", () => {
-    expect(
-      formatHostedKybStartError(
-        new Error("Add your country of registration in Settings before starting verification."),
-      ),
-    ).toContain("country of registration")
   })
 })

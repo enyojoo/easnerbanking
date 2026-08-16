@@ -370,7 +370,7 @@ export function SettingsCustomersTab() {
       <Dialog open={detailDialogOpen} onOpenChange={(open) => !open && closeDetailDialog()}>
         <DialogContent
           showCloseButton
-          className="flex max-h-[min(90dvh,900px)] w-[calc(100%-1.5rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl"
+          className="flex max-h-[min(90vh,900px)] w-[calc(100%-1.5rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl"
         >
           {!detailId ? null : !customer && !loading ? (
             <>

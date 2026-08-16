@@ -11,7 +11,7 @@ import {
   isLoginPinModuleAvailable,
   setAppLocked,
 } from "@/lib/login-pin"
-import { isIdleLockSuspended, resetSessionActivity } from "@/lib/session-activity"
+import { resetSessionActivity } from "@/lib/session-activity"
 import { requestHostedKybPrime } from "@/lib/compliance/prime-business-verification-flow"
 import { PinSetupScreen } from "./pin-setup-screen"
 import { PinUnlockScreen } from "./pin-unlock-screen"
@@ -33,7 +33,6 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
 
   useLayoutEffect(() => {
     if (!user?.id) return
-    if (isIdleLockSuspended()) return
     const action = applyIdlePolicy(user.id)
     if (action === "logout") {
       void logout()
@@ -79,7 +78,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
   }
 
   const idleRequiresLock = evaluateIdlePolicy(uid) === "lock"
-  if (!isIdleLockSuspended() && (isAppLocked(uid) || idleRequiresLock)) {
+  if (isAppLocked(uid) || idleRequiresLock) {
     return (
       <PostUnlockResumeProvider resumeUntil={resume.until} resumeVersion={resume.version}>
         <PinUnlockScreen

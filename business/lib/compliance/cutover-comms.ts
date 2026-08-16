@@ -6,6 +6,18 @@ export const SETTINGS_VERIFICATION_FLOW_HREF = "/settings?tab=verification&flow=
 
 export const SETTINGS_VERIFICATION_FLOW_PARAM = "hosted" as const
 
+export function isHostedVerificationFlowLocation(
+  pathname: string,
+  search: string,
+): boolean {
+  if (!pathname.startsWith("/settings")) return false
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search)
+  return (
+    params.get("tab") === "verification" &&
+    params.get("flow") === SETTINGS_VERIFICATION_FLOW_PARAM
+  )
+}
+
 /** Email template for business KYB cutover — re-verification required. */
 export function buildBusinessKybCutoverEmail(input: {
   businessName: string

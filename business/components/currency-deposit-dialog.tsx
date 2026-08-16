@@ -558,7 +558,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
           Deposit
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CurrencyFlagCircle currency={account.currency} size={28} />
