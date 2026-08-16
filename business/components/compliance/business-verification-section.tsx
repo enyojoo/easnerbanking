@@ -94,7 +94,6 @@ export function BusinessVerificationSection({
   const probedHostedUrlRef = useRef<string | null>(null)
   const probedHostedTokenRef = useRef<string | null>(null)
   const [hostedOpen, setHostedOpen] = useState(false)
-  const [hostedLoading, setHostedLoading] = useState(false)
   const [hostedUrl, setHostedUrl] = useState<string | null>(null)
   const [hostedToken, setHostedToken] = useState<string | null>(null)
   const [hostedTierLevel, setHostedTierLevel] = useState<1 | 2 | 3>(1)
@@ -260,7 +259,6 @@ export function BusinessVerificationSection({
 
   const closeHostedAndSync = useCallback(() => {
     setHostedOpen(false)
-    setHostedLoading(false)
     setOpeningVerification(false)
     clearVerificationFlowUrl()
     void syncBusinessTier1FromGrid()
@@ -274,7 +272,6 @@ export function BusinessVerificationSection({
 
   const abortHostedVerification = useCallback(() => {
     setHostedOpen(false)
-    setHostedLoading(false)
     setOpeningVerification(false)
     clearVerificationFlowUrl()
   }, [clearVerificationFlowUrl])
@@ -301,7 +298,6 @@ export function BusinessVerificationSection({
 
   const handleHostedIframeLoad = useCallback(
     (event: React.SyntheticEvent<HTMLIFrameElement>) => {
-      setHostedLoading(false)
       try {
         const href = event.currentTarget.contentWindow?.location?.href
         if (href && isGridCompleteUrl(href)) {
@@ -334,24 +330,21 @@ export function BusinessVerificationSection({
     }
 
     const beginHostedFlow = () => {
-      setOpeningVerification(true)
       preloadSumsubWebSdk()
-      setHostedLoading(true)
       setHostedOpen(true)
       setHostedTierLevel(1)
+      setOpeningVerification(false)
       pushVerificationFlowUrl()
     }
 
     const cachedReady = resolveCachedCredentials()
     if (cachedReady) {
-      beginHostedFlow()
       applyHostedCredentials(cachedReady.link, cachedReady.token)
-      if (!cachedReady.token?.trim()) {
-        setOpeningVerification(false)
-      }
+      beginHostedFlow()
       return
     }
 
+    setOpeningVerification(true)
     beginHostedFlow()
 
     try {
@@ -398,9 +391,7 @@ export function BusinessVerificationSection({
       }
 
       applyHostedCredentials(link, token, json.expiresAt ?? null)
-      if (!token?.trim()) {
-        setOpeningVerification(false)
-      }
+      setOpeningVerification(false)
     } catch (e: unknown) {
       abortHostedVerification()
       setError(e instanceof Error ? e.message : "Could not start verification.")
@@ -432,7 +423,6 @@ export function BusinessVerificationSection({
     // SumSub token just because `flowFromUrl` is still stale.
     if (fullPageFlow || flowFromUrl || !hostedOpen) return
     setHostedOpen(false)
-    setHostedLoading(false)
     setOpeningVerification(false)
     if (clearSessionAfterCloseRef.current) clearTimeout(clearSessionAfterCloseRef.current)
     clearSessionAfterCloseRef.current = setTimeout(() => {
@@ -477,8 +467,6 @@ export function BusinessVerificationSection({
           ? "Continue verification"
           : "Begin verification"
 
-  const hasHostedCredentials = Boolean(hostedToken?.trim() || hostedUrl?.trim())
-
   const hostedFlowPanel = (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
       <Button
@@ -503,11 +491,9 @@ export function BusinessVerificationSection({
             theme="light"
             onComplete={closeHostedAndSync}
             onReady={() => {
-              setHostedLoading(false)
               setOpeningVerification(false)
             }}
             onError={(message) => {
-              setHostedLoading(false)
               setOpeningVerification(false)
               setError(message)
             }}
@@ -520,12 +506,6 @@ export function BusinessVerificationSection({
             allow="camera *; microphone *; payment *; publickey-credentials-get *; clipboard-read *; clipboard-write *"
             onLoad={handleHostedIframeLoad}
           />
-        ) : null}
-        {hostedLoading || !hasHostedCredentials ? (
-          <div className="absolute inset-0 z-10 flex min-h-[16rem] flex-col items-center justify-center gap-3 bg-background text-muted-foreground">
-            <Loader2 className="size-8 animate-spin" aria-hidden />
-            <p className="text-sm">Opening verification…</p>
-          </div>
         ) : null}
       </div>
     </div>
