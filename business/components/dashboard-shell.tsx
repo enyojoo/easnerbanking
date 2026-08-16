@@ -108,23 +108,11 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
         scope,
         router,
         businessId,
-        canManageBusinessVerification,
-        tier1Complete,
-        tier1CanResubmit,
       })
     warm()
     window.addEventListener(WORKSPACE_WARM_EVENT, warm)
     return () => window.removeEventListener(WORKSPACE_WARM_EVENT, warm)
-  }, [
-    businessId,
-    canManageBusinessVerification,
-    queryClient,
-    router,
-    scope,
-    sessionUserId,
-    tier1CanResubmit,
-    tier1Complete,
-  ])
+  }, [businessId, queryClient, router, scope, sessionUserId])
 
   return (
     <AppLockProvider>

@@ -20,9 +20,10 @@ import {
 } from "./business-kyc-metadata"
 import { buildGridBusinessProfileShell, resolveBusinessCountryIso2 } from "./business-profile-shell"
 import {
+  gridPlatformCustomerIdForRecreate,
   gridPlatformCustomerIdFromBusinessId,
-  gridPlatformCustomerIdRandom,
 } from "./customer-id"
+import { buildGridIdempotencyKey } from "./idempotency"
 import {
   customerNeedsEndUserTermsConsentPatch,
   loadGridEndUserTermsConsentForBusiness,
@@ -397,13 +398,47 @@ async function finalizeGridBusinessCustomer(input: {
   return { customerId: input.customerId, customer }
 }
 
-/** Ensure a Grid BUSINESS customer exists for the org. */
+type EnsuredGridBusinessCustomer = {
+  customerId: string
+  platformCustomerId: string
+  customer: GridCustomer
+}
+
+const ensureGridBusinessCustomerInflight = new Map<string, Promise<EnsuredGridBusinessCustomer>>()
+
+/** Test helper — drop in-process create lock. */
+export function __resetEnsureGridBusinessCustomerInflightForTests(): void {
+  ensureGridBusinessCustomerInflight.clear()
+}
+
+/**
+ * Ensure a Grid BUSINESS customer exists for the org.
+ * Concurrent callers for the same business share one in-flight create.
+ */
 export async function ensureGridBusinessCustomer(input: {
   admin: SupabaseClient
   userId: string
   businessId: string
   profile?: GridBusinessProfile
-}): Promise<{ customerId: string; platformCustomerId: string; customer: GridCustomer }> {
+}): Promise<EnsuredGridBusinessCustomer> {
+  const key = input.businessId.trim()
+  const existing = ensureGridBusinessCustomerInflight.get(key)
+  if (existing) return existing
+  const task = ensureGridBusinessCustomerUnlocked(input).finally(() => {
+    if (ensureGridBusinessCustomerInflight.get(key) === task) {
+      ensureGridBusinessCustomerInflight.delete(key)
+    }
+  })
+  ensureGridBusinessCustomerInflight.set(key, task)
+  return task
+}
+
+async function ensureGridBusinessCustomerUnlocked(input: {
+  admin: SupabaseClient
+  userId: string
+  businessId: string
+  profile?: GridBusinessProfile
+}): Promise<EnsuredGridBusinessCustomer> {
   const platformCustomerId = gridPlatformCustomerIdFromBusinessId(input.businessId)
   const loadedProfile =
     input.profile ?? (await loadGridBusinessProfile(input.admin, input.businessId))
@@ -487,6 +522,30 @@ export async function ensureGridBusinessCustomer(input: {
     )
   }
 
+  const storedBeforeCreate = await readStoredGridCustomerId(input.admin, input.businessId)
+  if (storedBeforeCreate) {
+    const customerId = normalizeGridCustomerId(storedBeforeCreate)
+    if (await verifyGridCustomerExists(customerId)) {
+      const customer = await gridFetch<GridCustomer>({
+        method: "GET",
+        path: `/customers/${encodeURIComponent(customerId)}`,
+      })
+      const finalized = await finalizeGridBusinessCustomer({
+        admin: input.admin,
+        businessId: input.businessId,
+        customerId,
+        customer,
+        profile,
+        platformCustomerId,
+        consent,
+        ownerUserId,
+        contact,
+        storedId: storedBeforeCreate,
+      })
+      return { customerId: finalized.customerId, platformCustomerId, customer: finalized.customer }
+    }
+  }
+
   const tombstone = await findGridCustomerByPlatformId(platformCustomerId, {
     includeDeleted: true,
   }).catch(() => null)
@@ -503,9 +562,24 @@ export async function ensureGridBusinessCustomer(input: {
   let created: GridCustomer | null = null
   let usedPlatformId = platformCustomerId
   let lastCreateError: unknown
+  let recreateGeneration = 0
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const useFreshId = skipCanonicalPlatformId || attempt > 0
-    usedPlatformId = useFreshId ? gridPlatformCustomerIdRandom() : platformCustomerId
+    if (useFreshId) {
+      recreateGeneration += 1
+      usedPlatformId = gridPlatformCustomerIdForRecreate(input.businessId, recreateGeneration)
+    } else {
+      usedPlatformId = platformCustomerId
+    }
+
+    const already = await findGridCustomerByPlatformId(usedPlatformId).catch(() => null)
+    const alreadyId = already?.id ? normalizeGridCustomerId(already.id) : ""
+    const alreadyLive = alreadyId ? await requireExistingGridCustomer(alreadyId) : null
+    if (alreadyLive) {
+      created = alreadyLive
+      break
+    }
+
     const payload = {
       ...buildGridBusinessCustomerPayload({
         platformCustomerId: usedPlatformId,
@@ -519,7 +593,7 @@ export async function ensureGridBusinessCustomer(input: {
         method: "POST",
         path: "/customers",
         json: payload,
-        idempotencyKey: crypto.randomUUID(),
+        idempotencyKey: buildGridIdempotencyKey(`grid-biz-create:${input.businessId}`, payload),
       })
       break
     } catch (e) {

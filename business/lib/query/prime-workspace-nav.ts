@@ -3,7 +3,6 @@
 import type { QueryClient } from "@tanstack/react-query"
 import type { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime"
 import type { Scope } from "@easner/shared"
-import { primeBusinessVerificationFlow } from "@/lib/compliance/prime-business-verification-flow"
 import { prefetchAllNavWorkspaceData } from "@/lib/query/workspace-prefetch"
 import { primeConnectStatus } from "@/lib/stripe/connect-status-cache"
 
@@ -43,21 +42,10 @@ export function primeWorkspaceNav(options: {
   scope: Scope | null | undefined
   router: AppRouterInstance
   businessId?: string | null
-  canManageBusinessVerification?: boolean
-  tier1Complete?: boolean
-  tier1CanResubmit?: boolean
 }): Promise<void> {
   if (warmInflight) return warmInflight
 
-  const {
-    queryClient,
-    scope,
-    router,
-    businessId,
-    canManageBusinessVerification = false,
-    tier1Complete = false,
-    tier1CanResubmit = true,
-  } = options
+  const { queryClient, scope, router, businessId } = options
 
   warmInflight = (async () => {
     for (const href of WORKSPACE_NAV_HREFS) prefetchHref(router, href)
@@ -74,12 +62,6 @@ export function primeWorkspaceNav(options: {
       window.setTimeout(prefetchSecondary, 250)
     }
 
-    primeBusinessVerificationFlow({
-      businessId,
-      canManageBusinessVerification,
-      tier1Complete,
-      tier1CanResubmit,
-    })
     primeConnectStatus(businessId)
 
     void import("@/lib/use-send-destinations").then((m) => m.prefetchSendDestinations())

@@ -366,7 +366,7 @@ export function BusinessVerificationSection({
         return
       }
       if (!res.ok) {
-        abortHostedVerification()
+        setOpeningVerification(false)
         if (json.kyc_status === "not_started") {
           setError(json.error ?? "Your previous verification session expired. Start verification again.")
           return

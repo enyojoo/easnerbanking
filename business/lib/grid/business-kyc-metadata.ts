@@ -236,6 +236,22 @@ export function gridBusinessKybStubFieldsNeedResync(input: {
   return Boolean(isoDateFromTimestamp(input.profile.createdAt))
 }
 
+/** Skip stub-field PATCH while SumSub/Grid KYB is already underway. */
+export function gridCustomerHasHostedKybInFlight(
+  customer: Record<string, unknown>,
+  _context?: { platformCustomerId?: string; profile?: GridBusinessProfile },
+): boolean {
+  const raw = String(customer.kybStatus ?? customer.kycStatus ?? "")
+    .trim()
+    .toUpperCase()
+  return (
+    raw === "PENDING" ||
+    raw === "IN_PROGRESS" ||
+    raw === "HOLD" ||
+    raw === "PENDING_MANUAL_REVIEW"
+  )
+}
+
 /** Canonical businessInfo we would send on a fresh thin create for hosted KYB. */
 export function buildGridBusinessInfoResyncPatch(input: {
   platformCustomerId: string

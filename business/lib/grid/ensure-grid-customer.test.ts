@@ -5,6 +5,23 @@ const mockGridFetch = vi.fn()
 
 vi.mock("./http", () => ({
   gridFetch: (...args: unknown[]) => mockGridFetch(...args),
+  gridFetchAllPages: async (input: {
+    path: string
+    query?: Record<string, string | number | boolean | undefined>
+    mapPage: (payload: { data?: unknown[]; cursor?: string | null }) => unknown[]
+  }) => {
+    const params = new URLSearchParams()
+    for (const [k, v] of Object.entries(input.query ?? {})) {
+      if (v != null && String(v).trim()) params.set(k, String(v))
+    }
+    const qs = params.toString()
+    const path = qs ? `${input.path}?${qs}` : input.path
+    const page = (await mockGridFetch({ method: "GET", path })) as {
+      data?: unknown[]
+      cursor?: string | null
+    }
+    return input.mapPage(page ?? {})
+  },
   GridHttpError: class GridHttpError extends Error {
     status: number
     constructor(message: string, status: number) {
@@ -94,12 +111,16 @@ function mockAdminForBusiness(storedGridId: string | null, opts?: { supportEmail
   }
 }
 
-import { ensureGridBusinessCustomer } from "./ensure-grid-business-customer"
+import {
+  __resetEnsureGridBusinessCustomerInflightForTests,
+  ensureGridBusinessCustomer,
+} from "./ensure-grid-business-customer"
 import { ensureGridCustomer } from "./ensure-grid-customer"
 
 describe("ensureGridBusinessCustomer", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    __resetEnsureGridBusinessCustomerInflightForTests()
   })
 
   it("uses stored grid_customer_id when GET succeeds (Enyo path)", async () => {
@@ -167,16 +188,16 @@ describe("ensureGridBusinessCustomer", () => {
   })
 
   it("looks up by canonical eb_ platformCustomerId when stored id missing", async () => {
-    mockGridFetch.mockResolvedValueOnce({
-      data: [
-        {
-          id: STORED_CUSTOMER,
-          email: "owner@example.com",
-          platformCustomerId: CANONICAL_EB,
-          endUserTermsConsent: { termsVersion: "2025-10-01" },
-        },
-      ],
-    })
+    const listed = {
+      id: STORED_CUSTOMER,
+      email: "owner@example.com",
+      platformCustomerId: CANONICAL_EB,
+      kybStatus: "UNVERIFIED",
+      endUserTermsConsent: { termsVersion: "2025-10-01" },
+    }
+    mockGridFetch
+      .mockResolvedValueOnce({ data: [listed] })
+      .mockResolvedValueOnce(listed)
 
     const admin = mockAdminForBusiness(null)
     const result = await ensureGridBusinessCustomer({
@@ -191,6 +212,52 @@ describe("ensureGridBusinessCustomer", () => {
       expect.objectContaining({
         method: "GET",
         path: expect.stringContaining("platformCustomerId="),
+      }),
+    )
+  })
+
+  it("shares one Grid create across concurrent callers for the same business", async () => {
+    let postCount = 0
+    const created = {
+      id: STORED_CUSTOMER,
+      email: "owner@example.com",
+      kybStatus: "UNVERIFIED",
+      endUserTermsConsent: { termsVersion: "2025-10-01" },
+    }
+    mockGridFetch.mockImplementation(async (opts: { method?: string; path?: string }) => {
+      if (opts.method === "POST" && opts.path === "/customers") {
+        postCount += 1
+        await new Promise((resolve) => setTimeout(resolve, 40))
+        return created
+      }
+      if (opts.method === "GET" && String(opts.path ?? "").includes(`/customers/${encodeURIComponent(STORED_CUSTOMER)}`)) {
+        return created
+      }
+      return { data: [] }
+    })
+
+    const admin = mockAdminForBusiness(null)
+    const [a, b] = await Promise.all([
+      ensureGridBusinessCustomer({
+        admin: admin as never,
+        userId: USER_ID,
+        businessId: BUSINESS_ID,
+      }),
+      ensureGridBusinessCustomer({
+        admin: admin as never,
+        userId: USER_ID,
+        businessId: BUSINESS_ID,
+      }),
+    ])
+
+    expect(postCount).toBe(1)
+    expect(a.customerId).toBe(STORED_CUSTOMER)
+    expect(b.customerId).toBe(STORED_CUSTOMER)
+    expect(mockGridFetch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "POST",
+        path: "/customers",
+        idempotencyKey: expect.stringMatching(/^grid-biz-create:/),
       }),
     )
   })

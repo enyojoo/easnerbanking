@@ -198,16 +198,6 @@ export function invoicesListPrefetchOptions(scope: Scope) {
   }
 }
 
-export function cardsListPrefetchOptions(scope: Scope) {
-  return {
-    queryKey: qk.cards.list(scope),
-    queryFn: () => apiFetch<{ cards: unknown[] }>("/api/business/cards"),
-    staleTime: 30_000,
-    gcTime: 10 * 60_000,
-    meta: { safePersist: true, webPersist: "reduced", freshness: "operational" as const },
-  }
-}
-
 export function fxRatesPrefetchOptions() {
   return {
     queryKey: qk.fx.pairs(),
@@ -230,14 +220,12 @@ export async function prefetchInvoicesWorkspaceData(
   await queryClient.prefetchQuery(invoicesListPrefetchOptions(scope))
 }
 
+/** Cards page is transaction-backed; there is no `/api/business/cards` list yet. */
 export async function prefetchCardsWorkspaceData(
   queryClient: QueryClient,
   scope: Scope,
 ): Promise<void> {
-  await Promise.all([
-    queryClient.prefetchQuery(cardsListPrefetchOptions(scope)),
-    prefetchTransactionsWorkspaceData(queryClient, scope),
-  ])
+  await prefetchTransactionsWorkspaceData(queryClient, scope)
 }
 
 /** First-paint data for every sidebar destination. */
@@ -248,7 +236,7 @@ export async function prefetchAllNavWorkspaceData(
   const { payrollOverviewQueryOptions, payrollPeopleQueryOptions } = await import(
     "@/hooks/queries/use-payroll"
   )
-  await Promise.all([
+  await Promise.allSettled([
     prefetchWorkspaceCriticalData(queryClient, scope),
     queryClient.prefetchQuery(fxRatesPrefetchOptions()),
     prefetchInvoicesWorkspaceData(queryClient, scope),

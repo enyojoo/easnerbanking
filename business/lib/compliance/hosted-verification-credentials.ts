@@ -149,7 +149,9 @@ export async function fetchHostedVerificationCredentials(options?: {
   const linkRaw = typeof json.kyc_link === "string" ? json.kyc_link.trim() : ""
   const tokenRaw = typeof json.kyc_token === "string" ? json.kyc_token.trim() : ""
   const expiresAt = typeof json.expiresAt === "string" ? json.expiresAt : null
-  applyHostedKycStatusToProfile(json.kyc_status)
+  if (res.ok) {
+    applyHostedKycStatusToProfile(json.kyc_status)
+  }
   return {
     link: linkRaw || null,
     token: tokenRaw || null,
