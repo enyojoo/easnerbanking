@@ -13,7 +13,10 @@ import { SettingsCustomersTab } from "@/components/settings/settings-customers-t
 import { SettingsInvoicingTab } from "@/components/settings/settings-invoicing-tab"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { primeConnectStatus } from "@/lib/stripe/connect-status-cache"
-import { SETTINGS_VERIFICATION_FLOW_PARAM } from "@/lib/compliance/cutover-comms"
+import {
+  parseSettingsVerificationFlow,
+  type SettingsVerificationEmbeddedFlow,
+} from "@/lib/compliance/cutover-comms"
 import { primeBusinessVerificationFlow } from "@/lib/compliance/prime-business-verification-flow"
 import { cn } from "@/lib/utils"
 
@@ -24,10 +27,11 @@ function SettingsContent() {
   const searchParams = useSearchParams()
   const tab = (searchParams.get("tab") || "personal") as TabValue
   const validTab = TABS.includes(tab) ? tab : "personal"
-  const flowFromUrl =
-    validTab === "verification" && searchParams.get("flow") === SETTINGS_VERIFICATION_FLOW_PARAM
-  const [verificationFlowActive, setVerificationFlowActive] = useState(flowFromUrl)
-  const verificationChromeHidden = validTab === "verification" && verificationFlowActive
+  const flowFromUrl = validTab === "verification" ? parseSettingsVerificationFlow(searchParams.get("flow")) : null
+  const [verificationFlow, setVerificationFlow] = useState<SettingsVerificationEmbeddedFlow | null>(
+    flowFromUrl,
+  )
+  const verificationChromeHidden = validTab === "verification" && verificationFlow != null
   const [activeTab, setActiveTab] = useState<TabValue>(validTab)
   const {
     businessId,
@@ -37,24 +41,28 @@ function SettingsContent() {
   } = useBusinessProfile()
 
   useEffect(() => {
-    setVerificationFlowActive(flowFromUrl)
+    setVerificationFlow(flowFromUrl)
   }, [flowFromUrl])
 
   useEffect(() => {
     const onPopState = () => {
       const params = new URLSearchParams(window.location.search)
-      setVerificationFlowActive(
-        params.get("tab") === "verification" &&
-          params.get("flow") === SETTINGS_VERIFICATION_FLOW_PARAM,
+      setVerificationFlow(
+        params.get("tab") === "verification"
+          ? parseSettingsVerificationFlow(params.get("flow"))
+          : null,
       )
     }
     window.addEventListener("popstate", onPopState)
     return () => window.removeEventListener("popstate", onPopState)
   }, [])
 
-  const handleVerificationFlowOpenChange = useCallback((open: boolean) => {
-    setVerificationFlowActive(open)
-  }, [])
+  const handleVerificationFlowOpenChange = useCallback(
+    (open: boolean, flow?: SettingsVerificationEmbeddedFlow) => {
+      setVerificationFlow(open ? (flow ?? flowFromUrl) : null)
+    },
+    [flowFromUrl],
+  )
 
   useEffect(() => {
     setActiveTab(validTab)
@@ -84,7 +92,7 @@ function SettingsContent() {
     }
     if (value !== "verification") {
       next.delete("flow")
-      setVerificationFlowActive(false)
+      setVerificationFlow(null)
     }
     if (typeof window !== "undefined") {
       window.history.replaceState(null, "", `/settings?${next.toString()}`)
@@ -100,7 +108,7 @@ function SettingsContent() {
   }
 
   return (
-    <div className={cn(verificationChromeHidden ? "-mt-6 space-y-0" : "space-y-6")}>
+    <div className={cn(verificationChromeHidden ? "flex min-h-0 flex-1 flex-col" : "space-y-6")}>
       {!verificationChromeHidden ? (
         <div>
           <h1 className="text-3xl font-semibold text-foreground">Settings</h1>
@@ -108,7 +116,11 @@ function SettingsContent() {
         </div>
       ) : null}
 
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+      <Tabs
+        value={activeTab}
+        onValueChange={handleTabChange}
+        className={cn("w-full", verificationChromeHidden && "flex min-h-0 flex-1 flex-col")}
+      >
         {!verificationChromeHidden ? (
           <TabsList className="w-full shrink-0 justify-start flex-wrap h-auto gap-1 p-1">
             <TabsTrigger value="personal">Personal</TabsTrigger>
@@ -128,9 +140,13 @@ function SettingsContent() {
         <TabsContent value="business" className="mt-6">
           <SettingsBusinessTab />
         </TabsContent>
-        <TabsContent value="verification" className={verificationChromeHidden ? "mt-0" : "mt-6"}>
+        <TabsContent
+          value="verification"
+          className={verificationChromeHidden ? "mt-0 flex min-h-0 flex-1 flex-col" : "mt-6"}
+        >
           <SettingsVerificationTab
             fullPageFlow={verificationChromeHidden}
+            embeddedFlow={verificationFlow}
             onFlowOpenChange={handleVerificationFlowOpenChange}
           />
         </TabsContent>

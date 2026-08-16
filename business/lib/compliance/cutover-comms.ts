@@ -6,7 +6,25 @@ export const SETTINGS_VERIFICATION_FLOW_HREF = "/settings?tab=verification&flow=
 
 export const SETTINGS_VERIFICATION_FLOW_PARAM = "hosted" as const
 
-export function isHostedVerificationFlowLocation(
+/** Full-page Stripe Connect / online-payments KYB on Settings. */
+export const SETTINGS_CONNECT_FLOW_HREF = "/settings?tab=verification&flow=connect"
+
+export const SETTINGS_CONNECT_FLOW_PARAM = "connect" as const
+
+export type SettingsVerificationEmbeddedFlow =
+  | typeof SETTINGS_VERIFICATION_FLOW_PARAM
+  | typeof SETTINGS_CONNECT_FLOW_PARAM
+
+export function parseSettingsVerificationFlow(
+  flow: string | null | undefined,
+): SettingsVerificationEmbeddedFlow | null {
+  if (flow === SETTINGS_VERIFICATION_FLOW_PARAM || flow === SETTINGS_CONNECT_FLOW_PARAM) {
+    return flow
+  }
+  return null
+}
+
+export function isSettingsVerificationFlowLocation(
   pathname: string,
   search: string,
 ): boolean {
@@ -14,8 +32,15 @@ export function isHostedVerificationFlowLocation(
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search)
   return (
     params.get("tab") === "verification" &&
-    params.get("flow") === SETTINGS_VERIFICATION_FLOW_PARAM
+    parseSettingsVerificationFlow(params.get("flow")) != null
   )
+}
+
+export function isHostedVerificationFlowLocation(
+  pathname: string,
+  search: string,
+): boolean {
+  return isSettingsVerificationFlowLocation(pathname, search)
 }
 
 /** Email template for business KYB cutover — re-verification required. */

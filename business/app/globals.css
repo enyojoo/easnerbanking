@@ -371,9 +371,13 @@ html[data-pwa-standalone="true"] body {
   min-height: 100dvh;
 }
 
-/* Settings KYB flow: keep SumSub in viewport; scroll only inside the SDK host */
+/* Settings KYB flow: fill remaining viewport so SumSub can use the bottom */
 html[data-verification-flow-open="true"] main {
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 /* Grid KYB — SumSub WebSDK should fill the verification dialog body */

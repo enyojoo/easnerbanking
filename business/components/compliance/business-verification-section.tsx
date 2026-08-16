@@ -37,23 +37,17 @@ import {
   NOAH_FINAL_REJECTION_USER_MESSAGE,
   NOAH_VERIFICATION_IN_REVIEW_COPY,
 } from "@easner/shared"
-import { SETTINGS_VERIFICATION_FLOW_PARAM } from "@/lib/compliance/cutover-comms"
+import {
+  SETTINGS_CONNECT_FLOW_PARAM,
+  SETTINGS_VERIFICATION_FLOW_PARAM,
+  type SettingsVerificationEmbeddedFlow,
+} from "@/lib/compliance/cutover-comms"
 import { useSuspendIdleLock } from "@/hooks/use-suspend-idle-lock"
-
-function OpeningVerificationWait() {
-  return (
-    <div className="flex size-full min-h-[16rem] items-center justify-center">
-      <div className="flex flex-col items-center gap-3 text-center text-muted-foreground">
-        <Loader2 className="size-8 animate-spin" aria-hidden />
-        <p className="text-sm">Please wait, Opening Verification</p>
-      </div>
-    </div>
-  )
-}
+import { DelayedOpeningVerificationWait } from "@/components/compliance/opening-verification-wait"
 
 const GridSumsubWebSdk = dynamic(
   () => import("@/components/compliance/grid-sumsub-websdk").then((m) => ({ default: m.GridSumsubWebSdk })),
-  { ssr: false, loading: () => <OpeningVerificationWait /> },
+  { ssr: false, loading: () => <DelayedOpeningVerificationWait /> },
 )
 
 function tier1StatusIsInReview(status: string | null | undefined): boolean {
@@ -67,17 +61,20 @@ function tierLadderCopy(tier: 1 | 2 | 3) {
 }
 
 type BusinessVerificationSectionProps = {
-  /** Settings hides title/tabs when the hosted KYB flow is active. */
+  /** Settings hides title/tabs when a hosted KYB or Connect flow is active. */
   fullPageFlow?: boolean
-  onFlowOpenChange?: (open: boolean) => void
+  embeddedFlow?: SettingsVerificationEmbeddedFlow | null
+  onFlowOpenChange?: (open: boolean, flow?: SettingsVerificationEmbeddedFlow) => void
 }
 
 export function BusinessVerificationSection({
   fullPageFlow = false,
+  embeddedFlow = null,
   onFlowOpenChange,
 }: BusinessVerificationSectionProps) {
   const searchParams = useSearchParams()
   const flowFromUrl = searchParams.get("flow") === SETTINGS_VERIFICATION_FLOW_PARAM
+  const connectFromUrl = searchParams.get("flow") === SETTINGS_CONNECT_FLOW_PARAM
   const {
     tier1Complete,
     tier1VerificationStatus,
@@ -112,13 +109,14 @@ export function BusinessVerificationSection({
 
   const useSumsubSdk = Boolean(hostedToken?.trim())
   const hostedIframeSrc = !useSumsubSdk ? hostedUrl : null
-  const hostedFlowActive = fullPageFlow || flowFromUrl || hostedOpen
+  const hostedFlowActive = hostedOpen || flowFromUrl || embeddedFlow === "hosted"
+  const connectFlowActive = embeddedFlow === "connect" || connectFromUrl
 
   // SumSub runs in a cross-origin iframe; parent window does not receive pointer/keyboard events.
-  useSuspendIdleLock(hostedFlowActive)
+  useSuspendIdleLock(hostedFlowActive || connectFlowActive)
 
   const pushVerificationFlowUrl = useCallback(() => {
-    onFlowOpenChange?.(true)
+    onFlowOpenChange?.(true, "hosted")
     const next = new URLSearchParams(searchParams.toString())
     next.set("tab", "verification")
     next.set("flow", SETTINGS_VERIFICATION_FLOW_PARAM)
@@ -140,7 +138,7 @@ export function BusinessVerificationSection({
   }, [])
 
   useEffect(() => {
-    if (hostedFlowActive) {
+    if (hostedFlowActive || connectFlowActive) {
       document.documentElement.dataset.verificationFlowOpen = "true"
       document.querySelector("main")?.scrollTo({ top: 0 })
     } else {
@@ -149,7 +147,7 @@ export function BusinessVerificationSection({
     return () => {
       delete document.documentElement.dataset.verificationFlowOpen
     }
-  }, [hostedFlowActive])
+  }, [hostedFlowActive, connectFlowActive])
 
   const tier1RejectedForProbe = tier1VerificationStatus === "rejected"
   const tier1UnderReviewForProbe = tier1StatusIsInReview(tier1VerificationStatus)
@@ -434,7 +432,7 @@ export function BusinessVerificationSection({
     // replaceState updates the URL without refreshing useSearchParams. Parent
     // `fullPageFlow` is the source of truth after CTA click — do not wipe the
     // SumSub token just because `flowFromUrl` is still stale.
-    if (fullPageFlow || flowFromUrl || !hostedOpen) return
+    if (embeddedFlow === "hosted" || flowFromUrl || !hostedOpen) return
     setHostedOpen(false)
     setOpeningVerification(false)
     if (clearSessionAfterCloseRef.current) clearTimeout(clearSessionAfterCloseRef.current)
@@ -443,7 +441,7 @@ export function BusinessVerificationSection({
       setHostedToken(null)
       clearSessionAfterCloseRef.current = null
     }, 280)
-  }, [fullPageFlow, flowFromUrl, hostedOpen])
+  }, [embeddedFlow, flowFromUrl, hostedOpen])
 
   if (isLoading && !hasData) {
     return <div className="text-sm text-muted-foreground">Loading verification status…</div>
@@ -480,9 +478,9 @@ export function BusinessVerificationSection({
           ? "Continue verification"
           : "Begin verification"
 
-  /** Full-page flow uses the settings content area; in-tab fallback keeps title/tabs chrome. */
+  /** Full-page flow fills remaining main; in-tab fallback keeps title/tabs chrome. */
   const verificationFlowPanelClass = hostedFlowActive
-    ? "h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-2.5rem)] max-h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-2.5rem)]"
+    ? "flex min-h-0 flex-1 flex-col"
     : "h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))] max-h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))]"
 
   const hostedFlowPanel = (
@@ -525,11 +523,26 @@ export function BusinessVerificationSection({
             onLoad={handleHostedIframeLoad}
           />
         ) : (
-          <OpeningVerificationWait />
+          <DelayedOpeningVerificationWait />
         )}
       </div>
     </div>
   )
+
+  if (connectFlowActive) {
+    return (
+      <div
+        id="business-verification"
+        className="flex min-h-0 flex-1 flex-col"
+        data-verification-flow="open"
+      >
+        <SettingsStripeConnectPanel
+          fullPageFlow
+          onFlowOpenChange={onFlowOpenChange}
+        />
+      </div>
+    )
+  }
 
   if (hostedFlowActive) {
     return (
@@ -644,14 +657,7 @@ export function BusinessVerificationSection({
                                 onFocus={() => void primeHostedCredentials()}
                                 disabled={!businessId || openingVerification}
                               >
-                                {openingVerification ? (
-                                  <>
-                                    <Loader2 className="size-4 animate-spin" aria-hidden />
-                                    Opening…
-                                  </>
-                                ) : (
-                                  tier1HostedCtaLabel
-                                )}
+                                {tier1HostedCtaLabel}
                               </Button>
                             ) : null}
                           </div>
@@ -665,6 +671,7 @@ export function BusinessVerificationSection({
                       <div key={t.tier} className="min-w-0 h-full">
                         <SettingsStripeConnectPanel
                           unavailableFallback={comingLaterCard}
+                          onFlowOpenChange={onFlowOpenChange}
                         />
                       </div>
                     )

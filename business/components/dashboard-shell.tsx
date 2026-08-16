@@ -23,17 +23,17 @@ import {
   HOSTED_KYB_PRIME_EVENT,
   primeBusinessVerificationFlow,
 } from "@/lib/compliance/prime-business-verification-flow"
-import { isHostedVerificationFlowLocation } from "@/lib/compliance/cutover-comms"
+import { isSettingsVerificationFlowLocation } from "@/lib/compliance/cutover-comms"
 
 function useHostedVerificationFlowOpen() {
   const [open, setOpen] = useState(() => {
     if (typeof window === "undefined") return false
-    return isHostedVerificationFlowLocation(window.location.pathname, window.location.search)
+    return isSettingsVerificationFlowLocation(window.location.pathname, window.location.search)
   })
 
   useEffect(() => {
     const read = () => {
-      const urlOpen = isHostedVerificationFlowLocation(
+      const urlOpen = isSettingsVerificationFlowLocation(
         window.location.pathname,
         window.location.search,
       )
