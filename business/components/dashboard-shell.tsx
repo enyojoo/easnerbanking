@@ -184,7 +184,7 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
               } as React.CSSProperties
             }
             className={cn(
-              "flex flex-1 min-h-0 flex-col overflow-y-auto overscroll-contain px-8 pb-10 pt-6",
+              "flex-1 min-h-0 overflow-y-auto overscroll-contain px-8 pb-10 pt-6",
               constrained ? "mx-auto w-full max-w-6xl" : "mx-auto w-full max-w-[1440px]",
             )}
           >

@@ -246,7 +246,7 @@ export function SendRecipientPicker({
       </Dialog>
 
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="min-w-0 overflow-x-hidden sm:max-w-lg max-h-[90dvh] overflow-y-auto">
+        <DialogContent className="min-w-0 overflow-x-hidden sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add recipient</DialogTitle>
             <DialogDescription>Enter the recipient&apos;s details</DialogDescription>

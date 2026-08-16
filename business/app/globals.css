@@ -383,6 +383,12 @@ html[data-pwa-standalone="true"] body {
   min-height: 0;
 }
 
+/* Only fill-height pages (cards, KYB) turn main into a flex column — not Send. */
+main:has(.workspace-fill) {
+  display: flex;
+  flex-direction: column;
+}
+
 .workspace-panel {
   flex: 1 1 auto;
   min-height: 0;
