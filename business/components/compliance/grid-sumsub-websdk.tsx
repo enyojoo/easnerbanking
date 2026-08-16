@@ -25,7 +25,7 @@ async function refreshGridKycToken(): Promise<string> {
   const res = await fetchWithSession("/api/grid/kyc-links", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ type: "business" }),
+    body: JSON.stringify({ type: "business", refresh: true }),
   })
   const json = (await res.json().catch(() => ({}))) as {
     kyc_token?: string | null
@@ -63,9 +63,6 @@ export function GridSumsubWebSdk({ accessToken, onComplete, onError, onReady, th
       .withConf({ lang: "en", theme })
       // false = fill our dialog height; true shrinks iframe to SumSub card height (leaves empty gap).
       .withOptions({ addViewportTag: false, adaptIframeHeight: false })
-      .on("idCheck.onApplicantSubmitted", () => {
-        onCompleteRef.current()
-      })
       .on("idCheck.onReady", () => {
         onReadyRef.current?.()
       })

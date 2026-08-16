@@ -14,6 +14,12 @@ import {
 import { formatHostedKybStartError } from "@/lib/grid/format-grid-api-error"
 import { requireAuth, requireGridEnv, resolveGridBusinessContextAsync } from "../_helpers"
 
+function kybLinkIdempotencyKey(businessId: string, refresh: boolean): string {
+  if (!refresh) return `kyb-link:${businessId}`
+  // Fresh token for the same customer when SumSub asks to refresh an expired one.
+  return `kyb-link:${businessId}:r:${Math.floor(Date.now() / 600_000)}`
+}
+
 export async function POST(request: Request) {
   const mis = requireGridEnv()
   if (mis) return mis
@@ -22,6 +28,9 @@ export async function POST(request: Request) {
 
   const ctx = await resolveGridBusinessContextAsync(auth.user.id)
   if (!ctx.ok) return ctx.response
+
+  const body = (await request.json().catch(() => ({}))) as { type?: string; refresh?: boolean }
+  const refresh = body.refresh === true
 
   const admin = createSupabaseAdmin()
   const preflight = await evaluateGridBusinessKycLinksPreflight({
@@ -78,7 +87,7 @@ export async function POST(request: Request) {
 
     const link = await createGridBusinessKycLink({
       customerId,
-      idempotencyKey: `kyb-link:${ctx.businessId}`,
+      idempotencyKey: kybLinkIdempotencyKey(ctx.businessId, refresh),
     })
 
     return NextResponse.json({
