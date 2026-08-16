@@ -8,17 +8,21 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { SETTINGS_INPUT_CLASS } from "@/lib/settings-control-surface"
 import { GRID_KYB_WIZARD_COPY } from "@/lib/copy/business-ui-copy"
-import type { KybPersonPacket } from "@/lib/grid/kyb-packet-types"
+import type { KybDocumentPacket, KybPersonPacket } from "@/lib/grid/kyb-packet-types"
 import { GridKybEnumSelect } from "./grid-kyb-enum-select"
+import { BusinessAddressFields } from "@/components/settings/business-address-fields"
 import { GridKybCountrySelect } from "./grid-kyb-country-select"
 import { GridKybDocumentUpload, type GridKybDocumentUploadHandle } from "./grid-kyb-document-upload"
 import { Checkbox } from "@/components/ui/checkbox"
 
 type Props = {
   people: KybPersonPacket[]
+  documents: KybDocumentPacket[]
   errors: GridKybErrorPointer[]
   disabled?: boolean
   onReload: () => Promise<void>
+  onDocumentAdded: (document: KybDocumentPacket) => void
+  onRemoveDocument: (id: string) => Promise<void>
 }
 
 const emptyPerson = {
@@ -42,10 +46,19 @@ const emptyPerson = {
   countryOfIssuance: "",
 }
 
-export function GridKybPeopleStep({ people, errors, disabled, onReload }: Props) {
+export function GridKybPeopleStep({
+  people,
+  documents,
+  errors,
+  disabled,
+  onReload,
+  onDocumentAdded,
+  onRemoveDocument,
+}: Props) {
   const [editingId, setEditingId] = useState<string | "new" | null>(null)
   const [form, setForm] = useState(emptyPerson)
   const [saving, setSaving] = useState(false)
+  const [removingId, setRemovingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const idUploadRef = useRef<GridKybDocumentUploadHandle>(null)
 
@@ -101,7 +114,8 @@ export function GridKybPeopleStep({ people, errors, disabled, onReload }: Props)
       if (personId && editingId === "new") setEditingId(personId)
       if (idUploadRef.current?.hasPendingFile()) {
         if (!personId) throw new Error("Could not attach the ID document")
-        await idUploadRef.current.submit(personId)
+        const uploaded = await idUploadRef.current.submit(personId)
+        if (uploaded) onDocumentAdded(uploaded)
       }
       setEditingId(null)
       await onReload()
@@ -113,6 +127,8 @@ export function GridKybPeopleStep({ people, errors, disabled, onReload }: Props)
   }
 
   const selected = editingId && editingId !== "new" ? people.find((row) => row.id === editingId) : null
+  const identityDocsFor = (personId: string | null | undefined) =>
+    documents.filter((doc) => doc.category === "identity" && doc.personId && doc.personId === personId)
 
   return (
     <div className="space-y-6">
@@ -155,6 +171,12 @@ export function GridKybPeopleStep({ people, errors, disabled, onReload }: Props)
                   </span>
                   {needsId ? (
                     <span className="text-xs text-muted-foreground">Needs ID document</span>
+                  ) : identityDocsFor(person.id).length ? (
+                    <span className="text-xs text-muted-foreground">
+                      {identityDocsFor(person.id)
+                        .map((doc) => doc.fileName)
+                        .join(", ")}
+                    </span>
                   ) : (
                     <span className="text-xs text-muted-foreground">{person.roles.join(", ") || "Owner"}</span>
                   )}
@@ -189,6 +211,7 @@ export function GridKybPeopleStep({ people, errors, disabled, onReload }: Props)
                 value={form.nationality}
                 onChange={(nationality) => setForm({ ...form, nationality })}
                 placeholder="Select nationality"
+                catalog="all"
                 disabled={disabled}
               />
             </div>
@@ -217,30 +240,41 @@ export function GridKybPeopleStep({ people, errors, disabled, onReload }: Props)
                 value={form.countryOfIssuance}
                 onChange={(countryOfIssuance) => setForm({ ...form, countryOfIssuance })}
                 placeholder="Select issuing country"
+                catalog="all"
                 disabled={disabled}
               />
             </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label>Address</Label>
-              <Input className={SETTINGS_INPUT_CLASS} value={form.addressLine1} onChange={(e) => setForm({ ...form, addressLine1: e.target.value })} disabled={disabled} />
-            </div>
-            <div className="space-y-2">
-              <Label>City</Label>
-              <Input className={SETTINGS_INPUT_CLASS} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} disabled={disabled} />
-            </div>
-            <div className="space-y-2">
-              <Label>Postal code</Label>
-              <Input className={SETTINGS_INPUT_CLASS} value={form.postalCode} onChange={(e) => setForm({ ...form, postalCode: e.target.value })} disabled={disabled} />
-            </div>
-            <div className="space-y-2">
-              <Label>Country</Label>
-              <GridKybCountrySelect
-                value={form.addressCountry}
-                onChange={(addressCountry) => setForm({ ...form, addressCountry })}
-                placeholder="Select country"
-                disabled={disabled}
-              />
-            </div>
+          </div>
+          <BusinessAddressFields
+            countryCode={form.addressCountry}
+            values={{
+              line1: form.addressLine1,
+              city: form.city,
+              state: form.state,
+              postalCode: form.postalCode,
+            }}
+            onChange={(patch) =>
+              setForm({
+                ...form,
+                addressLine1: patch.line1 ?? form.addressLine1,
+                city: patch.city ?? form.city,
+                state: patch.state ?? form.state,
+                postalCode: patch.postalCode ?? form.postalCode,
+              })
+            }
+            onCountryCodeChange={(addressCountry) => setForm({ ...form, addressCountry })}
+            disabled={disabled}
+            editing={!disabled}
+          />
+          <div className="space-y-2">
+            <Label>Address line 2 (optional)</Label>
+            <Input
+              className={SETTINGS_INPUT_CLASS}
+              value={form.addressLine2}
+              onChange={(e) => setForm({ ...form, addressLine2: e.target.value })}
+              placeholder="Suite, unit, etc."
+              disabled={disabled}
+            />
           </div>
           <div className="space-y-2">
             <Label>Roles</Label>
@@ -264,6 +298,31 @@ export function GridKybPeopleStep({ people, errors, disabled, onReload }: Props)
               ))}
             </div>
           </div>
+          {identityDocsFor(selected?.id).length ? (
+            <div className="space-y-2 rounded-2xl border bg-card px-4 py-3 text-sm">
+              <p className="text-xs text-muted-foreground">Uploaded ID</p>
+              {identityDocsFor(selected?.id).map((doc) => (
+                <div key={doc.id} className="flex items-center justify-between gap-3">
+                  <span>{doc.fileName}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={disabled || removingId === doc.id}
+                    onClick={() => {
+                      setRemovingId(doc.id)
+                      void onRemoveDocument(doc.id)
+                        .catch((err) => setError(err instanceof Error ? err.message : "Could not remove document"))
+                        .finally(() => setRemovingId(null))
+                    }}
+                  >
+                    {removingId === doc.id ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : null}
           <GridKybDocumentUpload
             ref={idUploadRef}
             title="Upload owner ID document"

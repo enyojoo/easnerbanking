@@ -73,10 +73,16 @@ export async function GET(request: Request) {
     }
   }
 
-  const [people, documents] = await Promise.all([
-    listKybPeople(ctx.admin, application.id, true),
-    listKybDocuments(ctx.admin, application.id, true),
-  ])
+  let people: Awaited<ReturnType<typeof listKybPeople>> = []
+  let documents: Awaited<ReturnType<typeof listKybDocuments>> = []
+  try {
+    ;[people, documents] = await Promise.all([
+      listKybPeople(ctx.admin, application.id, true),
+      listKybDocuments(ctx.admin, application.id, true),
+    ])
+  } catch (error) {
+    console.warn("[grid/kyb/packet] list people/documents:", error)
+  }
 
   return NextResponse.json({
     applicationId: application.id,

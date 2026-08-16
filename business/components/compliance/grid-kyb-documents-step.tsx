@@ -18,10 +18,11 @@ type Props = {
   errors: GridKybErrorPointer[]
   disabled?: boolean
   onReload: () => Promise<void>
+  onUploaded: (document: KybDocumentPacket) => void
   onRemove: (id: string) => Promise<void>
 }
 
-export function GridKybDocumentsStep({ documents, errors, disabled, onReload, onRemove }: Props) {
+export function GridKybDocumentsStep({ documents, errors, disabled, onReload, onUploaded, onRemove }: Props) {
   const [openCategory, setOpenCategory] = useState<GridKybDocumentCategory | null>(null)
   const [removingId, setRemovingId] = useState<string | null>(null)
 
@@ -77,7 +78,10 @@ export function GridKybDocumentsStep({ documents, errors, disabled, onReload, on
                     category={category}
                     acceptedDocumentTypes={error?.acceptedDocumentTypes ?? meta.acceptedDocumentTypes}
                     disabled={disabled}
-                    onUploaded={onReload}
+                    onUploaded={async (document) => {
+                      if (document) onUploaded(document)
+                      await onReload()
+                    }}
                   />
                 </div>
               ) : null}

@@ -18,6 +18,8 @@ type Props = {
   placeholder: string
   disabled?: boolean
   invalid?: boolean
+  /** `all` for citizenship / ID issuance. `business` for approved operating countries. */
+  catalog?: "all" | "business"
 }
 
 function countryFromCode(code: string) {
@@ -32,16 +34,17 @@ export function GridKybCountrySelect({
   placeholder,
   disabled,
   invalid,
+  catalog = "business",
 }: Props) {
   const [open, setOpen] = useState(false)
   const selected = countryFromCode(value)
   const options = useMemo(() => {
-    const base = filterCountriesForProductPicker(countries, "business")
+    const base = catalog === "all" ? countries : filterCountriesForProductPicker(countries, "business")
     if (selected && !base.some((row) => row.code === selected.code)) {
       return [selected, ...base]
     }
     return base
-  }, [selected])
+  }, [catalog, selected])
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

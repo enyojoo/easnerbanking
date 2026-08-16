@@ -32,14 +32,16 @@ export function encryptKybPii(value: string | null | undefined): {
 export function decryptKybPii(ciphertext: string | null | undefined): string {
   const raw = String(ciphertext ?? "").trim()
   if (!raw) return ""
-  const [version, ivValue, tagValue, encryptedValue] = raw.split(".")
-  if (version !== "v1" || !ivValue || !tagValue || !encryptedValue) {
-    throw new Error("Unsupported KYB identifier ciphertext")
+  try {
+    const [version, ivValue, tagValue, encryptedValue] = raw.split(".")
+    if (version !== "v1" || !ivValue || !tagValue || !encryptedValue) return ""
+    const decipher = createDecipheriv("aes-256-gcm", kybPiiKey(), Buffer.from(ivValue, "base64url"))
+    decipher.setAuthTag(Buffer.from(tagValue, "base64url"))
+    return Buffer.concat([
+      decipher.update(Buffer.from(encryptedValue, "base64url")),
+      decipher.final(),
+    ]).toString("utf8")
+  } catch {
+    return ""
   }
-  const decipher = createDecipheriv("aes-256-gcm", kybPiiKey(), Buffer.from(ivValue, "base64url"))
-  decipher.setAuthTag(Buffer.from(tagValue, "base64url"))
-  return Buffer.concat([
-    decipher.update(Buffer.from(encryptedValue, "base64url")),
-    decipher.final(),
-  ]).toString("utf8")
 }

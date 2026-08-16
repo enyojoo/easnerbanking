@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { SETTINGS_INPUT_CLASS } from "@/lib/settings-control-surface"
+import type { KybDocumentPacket } from "@/lib/grid/kyb-packet-types"
 import { GridKybEnumSelect } from "./grid-kyb-enum-select"
 import { GridKybCountrySelect } from "./grid-kyb-country-select"
 
@@ -14,7 +15,7 @@ type Props = {
   title: string
   acceptedDocumentTypes: string[]
   disabled?: boolean
-  onUploaded: () => Promise<void> | void
+  onUploaded: (document?: KybDocumentPacket) => Promise<void> | void
   extraFields?: {
     personId?: string
     issuingAuthority?: boolean
@@ -26,7 +27,7 @@ type Props = {
 
 export type GridKybDocumentUploadHandle = {
   hasPendingFile: () => boolean
-  submit: (personId?: string) => Promise<void>
+  submit: (personId?: string) => Promise<KybDocumentPacket | undefined>
 }
 
 export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Props>(function GridKybDocumentUpload(
@@ -73,11 +74,13 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
       if (issuingAuthority) form.set("issuingAuthority", issuingAuthority)
       if (documentNumber) form.set("documentNumber", documentNumber)
       const res = await fetch("/api/grid/kyb/documents", { method: "POST", body: form })
-      const json = (await res.json().catch(() => ({}))) as { error?: string }
+      const json = (await res.json().catch(() => ({}))) as { error?: string; document?: KybDocumentPacket }
       if (!res.ok) throw new Error(json.error || "Upload failed")
       setFile(null)
       setFileName("No file chosen")
-      await onUploaded()
+      if (inputRef.current) inputRef.current.value = ""
+      if (!hideSubmit) await onUploaded(json.document)
+      return json.document
     } catch (err) {
       const message = err instanceof Error ? err.message : "Upload failed"
       setError(message)

@@ -9,4 +9,10 @@ describe("kyb pii crypto", () => {
     expect(ciphertext).toBeTruthy()
     expect(decryptKybPii(ciphertext)).toBe("123-45-6789")
   })
+
+  it("returns empty string for missing or invalid ciphertext", () => {
+    process.env.KYB_PII_ENCRYPTION_KEY = "test-kyb-key"
+    expect(decryptKybPii("")).toBe("")
+    expect(decryptKybPii("not-valid")).toBe("")
+  })
 })

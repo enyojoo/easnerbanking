@@ -12,7 +12,7 @@ import { ArrowLeft, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { GRID_KYB_WIZARD_COPY } from "@/lib/copy/business-ui-copy"
 import { cn } from "@/lib/utils"
-import type { KybPacket } from "@/lib/grid/kyb-packet-types"
+import type { KybDocumentPacket, KybPacket } from "@/lib/grid/kyb-packet-types"
 import { GridKybCompanyStep } from "./grid-kyb-company-step"
 import { GridKybPeopleStep } from "./grid-kyb-people-step"
 import { GridKybDocumentsStep } from "./grid-kyb-documents-step"
@@ -38,6 +38,7 @@ export function GridKybWizard({ onClose, initialCompany, initialInReview = false
   const [pendingCta, setPendingCta] = useState<"exit" | "next" | "complete" | null>(null)
   const [error, setError] = useState<string | null>(null)
   const companyDirtyRef = useRef(false)
+  const hydratedSectionRef = useRef(false)
 
   const load = useCallback(async () => {
     const res = await fetch("/api/grid/kyb/packet")
@@ -47,9 +48,10 @@ export function GridKybWizard({ onClose, initialCompany, initialInReview = false
     if (!companyDirtyRef.current) {
       setCompany(json.company)
     }
-    if (json.errorPointers?.length) {
+    if (!hydratedSectionRef.current && json.errorPointers?.length) {
       setSection(firstGridKybErrorSection(json.errors))
     }
+    hydratedSectionRef.current = true
     return json
   }, [])
 
@@ -131,14 +133,37 @@ export function GridKybWizard({ onClose, initialCompany, initialInReview = false
     }
   }
 
+  function rememberDocument(doc: KybDocumentPacket) {
+    setPacket((prev) => {
+      if (!prev) return prev
+      if (prev.documents.some((row) => row.id === doc.id)) return prev
+      return { ...prev, documents: [...prev.documents, doc] }
+    })
+  }
+
+  function forgetDocument(id: string) {
+    setPacket((prev) =>
+      prev ? { ...prev, documents: prev.documents.filter((row) => row.id !== id) } : prev,
+    )
+  }
+
+  async function reloadQuiet() {
+    try {
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load verification")
+    }
+  }
+
   async function removeDocument(id: string) {
     const res = await fetch(`/api/grid/kyb/documents?id=${encodeURIComponent(id)}`, { method: "DELETE" })
     if (!res.ok) {
       const json = (await res.json().catch(() => ({}))) as { error?: string }
-      setError(json.error || "Could not remove document")
-      return
+      const message = json.error || "Could not remove document"
+      setError(message)
+      throw new Error(message)
     }
-    await load()
+    forgetDocument(id)
   }
 
   if (status === "in_review" && !editable) {
@@ -200,11 +225,12 @@ export function GridKybWizard({ onClose, initialCompany, initialInReview = false
           {section === "people" ? (
             <GridKybPeopleStep
               people={packet?.people ?? []}
+              documents={packet?.documents ?? []}
               errors={pointers}
               disabled={!editable}
-              onReload={async () => {
-                await load()
-              }}
+              onReload={reloadQuiet}
+              onDocumentAdded={rememberDocument}
+              onRemoveDocument={removeDocument}
             />
           ) : null}
           {section === "documents" ? (
@@ -212,9 +238,8 @@ export function GridKybWizard({ onClose, initialCompany, initialInReview = false
               documents={packet?.documents ?? []}
               errors={pointers}
               disabled={!editable}
-              onReload={async () => {
-                await load()
-              }}
+              onReload={reloadQuiet}
+              onUploaded={rememberDocument}
               onRemove={removeDocument}
             />
           ) : null}

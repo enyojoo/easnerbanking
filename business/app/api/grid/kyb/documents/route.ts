@@ -98,8 +98,16 @@ export async function DELETE(request: Request) {
     })
   }
   if (row.storage_path) {
-    await ctx.admin.storage.from(KYB_DOCUMENTS_BUCKET).remove([String(row.storage_path)])
+    const { error: storageError } = await ctx.admin.storage
+      .from(KYB_DOCUMENTS_BUCKET)
+      .remove([String(row.storage_path)])
+    if (storageError) {
+      console.warn("[grid/kyb/documents] storage delete:", storageError)
+    }
   }
-  await ctx.admin.from("business_kyb_documents").delete().eq("id", id)
+  const { error: deleteError } = await ctx.admin.from("business_kyb_documents").delete().eq("id", id)
+  if (deleteError) {
+    return NextResponse.json({ error: deleteError.message || "Could not remove document" }, { status: 400 })
+  }
   return NextResponse.json({ ok: true })
 }
