@@ -12,6 +12,7 @@ import { isGridShellBusinessTaxId } from "./business-kyc-metadata"
 import { parseGridCustomerForBusiness } from "./parse-grid-customer-for-business"
 import { syncGridBusinessOwnerUserFromKyb } from "./sync-grid-business-owner-user"
 import {
+  gridVerificationsMissingIdentityDocument,
   resolveGridBusinessKybLocalStatus,
   type GridDocumentSummary,
   type GridVerificationSummary,
@@ -122,9 +123,13 @@ export async function syncGridBusinessKybToSupabase(input: {
     .eq("id", input.businessId)
     .maybeSingle()
   const priorLocal = String(priorBiz?.verification_status ?? "not_started").toLowerCase()
-  // Hosted SumSub files never land on Grid documents. Once the client (or a
-  // review webhook) marked in-review, do not drop back to in_progress.
-  if (priorLocal === "pending" && status === "in_progress") {
+  // Keep in-review across empty Grid document lists, but not when Grid still
+  // reports MISSING_IDENTITY_DOCUMENT (owner needs ID — CTA must come back).
+  if (
+    priorLocal === "pending" &&
+    status === "in_progress" &&
+    !gridVerificationsMissingIdentityDocument(verifications)
+  ) {
     status = "pending"
   }
   const previousStatus = verificationStatusForKybEmail(priorLocal as VerificationStatus)

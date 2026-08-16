@@ -212,7 +212,7 @@ describe("syncGridBusinessKybToSupabase", () => {
     expect(mockEq).toHaveBeenCalledWith("id", "biz-1")
   })
 
-  it("does not drop hosted in-review back to in_progress when Grid documents are empty", async () => {
+  it("returns in-review to in_progress when Grid still requires the UBO ID", async () => {
     mockFrom.mockReturnValue({
       select: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
@@ -240,14 +240,46 @@ describe("syncGridBusinessKybToSupabase", () => {
 
     expect(mockPersistVerificationStatus).toHaveBeenCalledWith(
       mockAdmin,
-      expect.objectContaining({ status: "pending" }),
+      expect.objectContaining({ status: "in_progress" }),
     )
     expect(mockNotifyBusinessKybStatusChange).toHaveBeenCalledWith(
       mockAdmin,
       "biz-1",
       "under_review",
-      "under_review",
+      "not_started",
       null,
+    )
+  })
+
+  it("does not drop hosted in-review when Grid documents are empty and ID is not missing", async () => {
+    mockFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { verification_status: "pending" },
+          }),
+        }),
+      }),
+      update: mockBusinessUpdate,
+    })
+    mockGridReads(
+      {
+        kybStatus: "PENDING",
+        beneficialOwners: [{ kycStatus: "PENDING", roles: ["UBO"] }],
+      },
+      [],
+    )
+
+    await syncGridBusinessKybToSupabase({
+      admin: mockAdmin as never,
+      businessId: "biz-1",
+      userId: "user-1",
+      customerId: "Customer:abc",
+    })
+
+    expect(mockPersistVerificationStatus).toHaveBeenCalledWith(
+      mockAdmin,
+      expect.objectContaining({ status: "pending" }),
     )
   })
 

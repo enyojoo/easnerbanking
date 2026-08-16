@@ -87,7 +87,7 @@ async function runGridBusinessSync(request: Request) {
       userId: ctx.userId,
       customerId,
     })
-    if (applicantSubmitted) {
+    if (applicantSubmitted && status !== "in_progress") {
       const next = gridStatusAfterApplicantSubmitted(status)
       if (next !== status) {
         await persistVerificationStatus(admin, {

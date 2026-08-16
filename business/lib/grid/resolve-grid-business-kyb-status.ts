@@ -78,9 +78,11 @@ export function resolveGridBusinessKybLocalStatus(input: {
   const verifications = input.verifications ?? []
   const documents = input.documents ?? []
 
-  // Hosted SumSub uploads do not appear on Grid `/documents` or clear
-  // MISSING_IDENTITY_DOCUMENT (BYO checklist). Those signals only promote BYO.
-  // They must not force in_progress after hosted ID is already in SumSub.
+  // Grid dashboard "owner needs ID" — keep the Settings CTA (View progress).
+  if (gridVerificationsMissingIdentityDocument(verifications)) {
+    return "in_progress"
+  }
+
   if (gridDocumentsIncludeIdentity(documents)) {
     return "pending"
   }
