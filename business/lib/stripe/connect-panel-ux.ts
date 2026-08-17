@@ -44,6 +44,7 @@ export type ConnectPanelUx = {
 
 const BEGIN_VERIFICATION = "Begin verification"
 const CONTINUE_VERIFICATION = "Continue verification"
+const LINK_ACCOUNT = "Link Account"
 const ONLINE_PAYMENT_VERIFICATION = "Online payment verification"
 
 function isPlatformCollectedRequirement(key: string): boolean {
@@ -132,9 +133,9 @@ export function connectPanelVerificationPresentation(
     case "not_started":
       return { status: "not_started", complete: false }
     case "in_progress":
-    case "link_payout":
     case "missing_virtual_account":
       return { status: "in_progress", complete: false }
+    case "link_payout":
     case "requirements_due":
       return { status: "hold", complete: false }
     case "pending_review":
@@ -230,13 +231,13 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
         phase,
         verificationStatus: presentation.status,
         verificationComplete: presentation.complete,
-        bodyCopy: "Link payouts to your Easner USD account to finish verification.",
+        bodyCopy: "Link your Easner USD account as the payout destination.",
         checklist,
         primary: {
           kind: "link_payout",
-          label: CONTINUE_VERIFICATION,
+          label: LINK_ACCOUNT,
           variant: "default",
-          dialogTitle: CONTINUE_VERIFICATION,
+          dialogTitle: LINK_ACCOUNT,
         },
       }
 

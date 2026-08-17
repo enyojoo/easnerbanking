@@ -67,8 +67,8 @@ describe("connectPanelVerificationPresentation", () => {
       status: "not_started",
       complete: false,
     })
-    expect(connectPanelVerificationPresentation("pending_review", false)).toEqual({
-      status: "pending",
+    expect(connectPanelVerificationPresentation("link_payout", false)).toEqual({
+      status: "hold",
       complete: false,
     })
     expect(connectPanelVerificationPresentation("ready", true)).toEqual({
@@ -120,7 +120,7 @@ describe("resolveConnectPanelUx", () => {
     expect(ux.primary?.dialogTitle).toBe("Continue verification")
   })
 
-  it("links the Grid VA when Stripe is waiting on an external account", () => {
+  it("shows Link Account when Stripe is waiting on an external account", () => {
     const ux = resolveConnectPanelUx(
       base({
         stripeAccountId: "acct_1",
@@ -131,6 +131,8 @@ describe("resolveConnectPanelUx", () => {
     )
     expect(ux.phase).toBe("link_payout")
     expect(ux.primary?.kind).toBe("link_payout")
+    expect(ux.primary?.label).toBe("Link Account")
+    expect(ux.verificationStatus).toBe("hold")
   })
 
   it("shows provisioning copy when USD account is missing during onboarding", () => {
@@ -145,7 +147,7 @@ describe("resolveConnectPanelUx", () => {
     expect(ux.primary).toBeUndefined()
   })
 
-  it("shows Continue verification when linking payouts", () => {
+  it("shows Link Account when payouts still need the Grid VA", () => {
     const ux = resolveConnectPanelUx(
       base({
         stripeAccountId: "acct_1",
@@ -155,7 +157,7 @@ describe("resolveConnectPanelUx", () => {
       }),
     )
     expect(ux.primary?.kind).toBe("link_payout")
-    expect(ux.primary?.label).toBe("Continue verification")
+    expect(ux.primary?.label).toBe("Link Account")
     expect(ux.secondary).toBeUndefined()
   })
 

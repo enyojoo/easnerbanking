@@ -393,12 +393,6 @@ export function SettingsStripeConnectPanel({
     if (tier1Complete) void prefetchClientSecret()
   }, [tier1Complete, prefetchClientSecret])
 
-  useEffect(() => {
-    if (!fullPageFlow) return
-    if (connectInstance || onboardingOpen) return
-    void startOnboarding()
-  }, [connectInstance, fullPageFlow, onboardingOpen, startOnboarding])
-
   const panelUx = useMemo(() => {
     if (!status) return null
     if (!status.connectEnabled) {
@@ -415,6 +409,23 @@ export function SettingsStripeConnectPanel({
     if (!panelUx) return { status: "not_started", complete: false }
     return connectPanelVerificationPresentation(panelUx.phase, panelUx.verificationComplete)
   }, [panelUx])
+
+  useEffect(() => {
+    if (!fullPageFlow) return
+    if (!panelUx) return
+    if (
+      panelUx.phase === "link_payout" ||
+      panelUx.phase === "missing_virtual_account" ||
+      panelUx.phase === "ready" ||
+      panelUx.phase === "pending_review" ||
+      panelUx.phase === "activating"
+    ) {
+      clearConnectFlowUrl()
+      return
+    }
+    if (connectInstance || onboardingOpen) return
+    void startOnboarding()
+  }, [clearConnectFlowUrl, connectInstance, fullPageFlow, onboardingOpen, panelUx, startOnboarding])
 
   const runAction = useCallback(
     (action: ConnectPanelAction) => {
