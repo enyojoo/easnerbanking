@@ -3,10 +3,10 @@ import { appSectionsSeo } from "@/lib/seo/content/app-sections"
 import { businessMetadata } from "@/lib/seo/metadata"
 
 export const metadata = businessMetadata({
-  metadata: appSectionsSeo.qrPayCreate.metadata,
-  path: "/qr-pay/create",
+  metadata: appSectionsSeo.checkout.metadata,
+  path: "/checkout",
 })
 
-export default function QrPayCreateLayout({ children }: { children: ReactNode }) {
+export default function CheckoutLayout({ children }: { children: ReactNode }) {
   return children
 }

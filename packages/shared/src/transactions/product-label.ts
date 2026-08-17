@@ -20,6 +20,7 @@ import {
 } from "./verification-deposit"
 import { isStripeInvoiceSettlementMetadata } from "./stripe-invoice-settlement-lifecycle"
 import { isRelayTronDepositMetadata } from "./relay-tron-deposit"
+import { isBalanceConvertMetadata, balanceConvertListProductLabel } from "./balance-move-types"
 
 export type EasnerLedgerDirection = "in" | "out"
 
@@ -175,6 +176,9 @@ export function toEasnerTransactionProductCategory(input: {
     return direction === "in" ? "Easetag Received" : "Easetag Send"
   }
   const collectionChannel = String(meta?.collection_channel ?? "").toLowerCase()
+  if (direction === "out" && isBalanceConvertMetadata(meta)) {
+    return balanceConvertListProductLabel()
+  }
   const isWalletSend =
     direction === "out" && String(meta?.activity_type ?? "").trim().toLowerCase() === "wallet_send"
   const isStablecoin =
@@ -238,6 +242,9 @@ export function toEasnerTransactionPrimaryLabel(input: {
     return payeeTag ? `Sent to @${payeeTag}` : "Easetag Send"
   }
   const collectionChannel = String(meta?.collection_channel ?? "").toLowerCase()
+  if (direction === "out" && isBalanceConvertMetadata(meta)) {
+    return balanceConvertListProductLabel()
+  }
   const isWalletSend =
     direction === "out" && String(meta?.activity_type ?? "").trim().toLowerCase() === "wallet_send"
   const isStablecoin =

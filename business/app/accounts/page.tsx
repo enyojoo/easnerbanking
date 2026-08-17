@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { CurrencyDepositDialog } from "@/components/currency-deposit-dialog"
+import { MoveBetweenAccountsDialog } from "@/components/accounts/move-between-accounts-dialog"
 import { StatementDownloadDialog } from "@/components/statement-download-dialog"
 import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
 import { MoreVertical, FileText, Ban, Trash2 } from "lucide-react"
@@ -31,6 +32,7 @@ export default function AccountsPage() {
     accountScopeHeaders,
     accountsProvisioning,
     tier1Complete,
+    canMoveMoney,
   } = useBusinessAccountRows()
   const incomingQuery = useIncomingBalances()
 
@@ -155,6 +157,16 @@ export default function AccountsPage() {
                       copiedField={copiedField}
                       onCopy={copyToClipboard}
                     />
+                    {account.currency === "USD" || account.currency === "EUR" ? (
+                      <MoveBetweenAccountsDialog
+                        account={account}
+                        accountRows={accountRows}
+                        tier1Complete={tier1Complete}
+                        accountsProvisioning={accountsProvisioning}
+                        canMoveMoney={canMoveMoney}
+                        accountScopeHeaders={accountScopeHeaders}
+                      />
+                    ) : null}
 
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>

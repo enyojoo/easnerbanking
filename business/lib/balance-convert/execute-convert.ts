@@ -7,6 +7,9 @@ import { resolveTurnkeyAddressForNoahPair } from "@/lib/wallet/resolve-wallet-ow
 import { sourceSolVaultToken } from "@/lib/relay/token-map"
 import { getBalanceConvertSession } from "./quote-convert"
 import { settleBalanceConvertByRelayRequestId } from "./settle-convert"
+import { upsertBalanceConvertLedgerTransaction } from "./balance-move-ledger"
+import { buildMoveReviewFromQuote } from "./build-move-review"
+import type { BalanceConvertDirection } from "./quote-convert"
 
 export async function executeBalanceConvert(input: {
   admin: SupabaseClient
@@ -16,7 +19,12 @@ export async function executeBalanceConvert(input: {
   sessionId: string
   subOrganizationId: string
 }): Promise<
-  | { ok: true; status: "pending" | "settled" | "failed"; relayRequestId?: string }
+  | {
+      ok: true
+      status: "pending" | "settled" | "failed"
+      relayRequestId?: string
+      transactionId?: string
+    }
   | { ok: false; error: string }
 > {
   const session = await getBalanceConvertSession(input.admin, input.sessionId, input.userId)
@@ -26,7 +34,7 @@ export async function executeBalanceConvert(input: {
     return { ok: false, error: "convert_session_expired" }
   }
 
-  const direction = String(session.direction)
+  const direction = String(session.direction) as BalanceConvertDirection
   const sourceCurrency = direction === "usd_to_eur" ? "USD" : "EUR"
   const destCurrency = direction === "usd_to_eur" ? "EUR" : "USD"
   const source = sourceSolVaultToken(sourceCurrency as "USD" | "EUR")
@@ -55,6 +63,17 @@ export async function executeBalanceConvert(input: {
     tradeType: "EXACT_INPUT",
   })
 
+  const destinationAmount = Number(session.destination_amount ?? 0)
+  const moveReview = buildMoveReviewFromQuote({
+    direction,
+    sourceAmount: Number(session.source_amount),
+    destinationAmount:
+      Number.isFinite(destinationAmount) && destinationAmount > 0
+        ? destinationAmount
+        : Number(session.source_amount),
+    quote,
+  })
+
   const resolved = await resolveTurnkeySendClient({
     scope: { kind: "sub_org", subOrganizationId: input.subOrganizationId },
     admin: input.admin,
@@ -63,7 +82,7 @@ export async function executeBalanceConvert(input: {
   if (!resolved.client.solSendTransaction) return { ok: false, error: "turnkey_not_configured" }
 
   const unsigned = extractRelaySolanaUnsignedTx(quote)
-  const sendRes = (await resolved.client.solSendTransaction({
+  await resolved.client.solSendTransaction({
     type: "ACTIVITY_TYPE_SIGN_AND_BROADCAST_TRANSACTION",
     organizationId: input.subOrganizationId,
     parameters: {
@@ -73,7 +92,7 @@ export async function executeBalanceConvert(input: {
       caip2: getTurnkeySolanaBroadcastCaip2(),
       sponsor: isTurnkeySolSponsorshipEnabled(),
     },
-  })) as Record<string, unknown>
+  })
 
   const relayRequestId = String(quote.requestId ?? quote.id ?? session.relay_request_id ?? "").trim()
   parseRelayFromAmountRaw(quote)
@@ -83,9 +102,32 @@ export async function executeBalanceConvert(input: {
     .update({
       status: "executed",
       relay_request_id: relayRequestId || null,
+      destination_amount: moveReview.destination_amount,
+      metadata: {
+        ...meta,
+        move_review: moveReview,
+        relay_from_amount_raw: parseRelayFromAmountRaw(quote),
+      },
       updated_at: new Date().toISOString(),
     })
     .eq("id", input.sessionId)
+
+  const sessionRow = {
+    id: String(session.id),
+    wallet_owner_id: String(session.wallet_owner_id),
+    user_id: String(session.user_id),
+    direction: String(session.direction),
+    source_amount: Number(session.source_amount),
+    destination_amount: moveReview.destination_amount,
+    relay_request_id: relayRequestId || null,
+    metadata: { ...meta, move_review: moveReview },
+  }
+
+  const pendingLedger = await upsertBalanceConvertLedgerTransaction(input.admin, {
+    session: sessionRow,
+    scope: { userId: input.userId, businessId: input.businessId },
+    status: "pending",
+  })
 
   if (relayRequestId) {
     const settled = await settleBalanceConvertByRelayRequestId(input.admin, { relayRequestId })
@@ -94,9 +136,15 @@ export async function executeBalanceConvert(input: {
         ok: true,
         status: settled.action === "convert_settled" ? "settled" : "failed",
         relayRequestId,
+        transactionId: pendingLedger.transactionId,
       }
     }
   }
 
-  return { ok: true, status: "pending", relayRequestId: relayRequestId || undefined }
+  return {
+    ok: true,
+    status: "pending",
+    relayRequestId: relayRequestId || undefined,
+    transactionId: pendingLedger.transactionId,
+  }
 }

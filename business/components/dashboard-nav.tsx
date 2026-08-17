@@ -1,8 +1,5 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useQueryClient } from "@tanstack/react-query"
-import { Button } from "@/components/ui/button"
 import {
   CreditCard,
   LayoutDashboard,
@@ -14,9 +11,11 @@ import {
   Send,
   Inbox,
   Building2,
-  QrCode,
   SmartphoneNfc,
   Users,
+  Link2,
+  Code,
+  CircleDollarSign,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
@@ -31,15 +30,24 @@ import { normalizeBusinessLogoUrl, warmBusinessLogoUrl } from "@/lib/image-cache
 import { isNavPathActive } from "@/lib/navigation/is-nav-path-active"
 import { useScope } from "@/lib/query/scope"
 import { prefetchRouteWorkspaceData } from "@/lib/query/workspace-prefetch"
-
-/** Hide Collections (Terminal, QR Pay) in sidebar — routes and pages stay available via direct URL. */
-const SHOW_COLLECTIONS_IN_NAV = false
+import { useState, useEffect } from "react"
+import { useQueryClient } from "@tanstack/react-query"
+import { Button } from "@/components/ui/button"
 
 function deriveOpenGroups(pathname: string) {
   const openGroups = new Set<string>()
   if (
-    pathname.startsWith("/terminal") ||
-    pathname.startsWith("/qr-pay")
+    pathname.startsWith("/send") ||
+    pathname.startsWith("/cards") ||
+    pathname.startsWith("/payroll")
+  ) {
+    openGroups.add("spending")
+  }
+  if (
+    pathname.startsWith("/invoices") ||
+    pathname.startsWith("/checkout") ||
+    pathname.startsWith("/links") ||
+    pathname.startsWith("/terminal")
   ) {
     openGroups.add("collections")
   }
@@ -61,7 +69,6 @@ export function DashboardNav() {
     tier1VerificationStatus,
   } = useBusinessProfile()
 
-  /** Only skeleton on first load with no cached/profile rows — not during background refetch when data exists */
   const showBusinessHeaderSkeleton = businessProfileLoading && !businessProfileHasData
 
   const hasBusinessLogo = Boolean(businessLogoUrl?.trim())
@@ -91,24 +98,29 @@ export function DashboardNav() {
 
   const menuItems = [
     { href: "/dashboard", label: "Home", icon: LayoutDashboard, type: "single" as const },
-    { href: "/send", label: "Send", icon: Send, type: "single" as const },
-    { href: "/payroll", label: "Payroll", icon: Users, type: "single" as const },
-    { href: "/cards", label: "Cards", icon: CreditCard, type: "single" as const },
-    { href: "/invoices", label: "Invoices", icon: ReceiptText, type: "single" as const },
-    ...(SHOW_COLLECTIONS_IN_NAV
-      ? [
-          {
-            key: "collections",
-            label: "Collections",
-            icon: Inbox,
-            type: "group" as const,
-            items: [
-              { href: "/terminal", label: "Terminal", icon: SmartphoneNfc },
-              { href: "/qr-pay", label: "QR Pay", icon: QrCode },
-            ],
-          },
-        ]
-      : []),
+    {
+      key: "spending",
+      label: "Spending",
+      icon: CircleDollarSign,
+      type: "group" as const,
+      items: [
+        { href: "/send", label: "Send", icon: Send },
+        { href: "/cards", label: "Cards", icon: CreditCard },
+        { href: "/payroll", label: "Payroll", icon: Users },
+      ],
+    },
+    {
+      key: "collections",
+      label: "Collections",
+      icon: Inbox,
+      type: "group" as const,
+      items: [
+        { href: "/invoices", label: "Invoices", icon: ReceiptText },
+        { href: "/checkout", label: "Checkout", icon: Code },
+        { href: "/links", label: "Links", icon: Link2 },
+        { href: "/terminal", label: "Terminal", icon: SmartphoneNfc },
+      ],
+    },
     { href: "/transactions", label: "Transactions", icon: List, type: "single" as const },
     { href: "/accounts", label: "Accounts", icon: Wallet, type: "single" as const },
   ]
@@ -117,7 +129,6 @@ export function DashboardNav() {
     "w-full justify-start gap-3 px-3 py-2.5 min-h-11 h-auto text-sm font-medium rounded-xl transition-[background-color,color,box-shadow,border-color] duration-200 stroke-[1.5]"
   const navItemInactive =
     "text-muted-foreground hover:bg-muted/70 hover:text-foreground border border-transparent"
-  /** Elevated card tile — shadow + border; primary on icons only */
   const navItemActive =
     "bg-card text-foreground font-semibold shadow-card border border-border/70 [&_svg]:text-primary"
   const iconBase = "h-[18px] w-[18px] flex-shrink-0 stroke-[1.5]"

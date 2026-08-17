@@ -100,15 +100,15 @@ export default function QrPayPage() {
       <div className="sticky top-0 z-20 flex shrink-0 flex-col gap-4 border-b bg-background pb-4">
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">QR Pay</h1>
+            <h1 className="text-2xl font-semibold text-foreground">Payment Links</h1>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Accept in-person stablecoin payments using QR code counter placards. Customer deposits settle through
-              automated payout to the bank account you select in Setup payout.
+              Create and share payment links for card, bank, and stablecoin collections. Stablecoin placards from QR Pay
+              live here until the full link create flow ships.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button type="button" size="sm" className="gap-2" asChild>
-              <Link href="/qr-pay/create">
+              <Link href="/links/create">
                 <Plus className="h-4 w-4" />
                 Create Placard
               </Link>

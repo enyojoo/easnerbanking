@@ -166,15 +166,37 @@ export const appSectionsSeo = {
       altText: "Easner Business QR Pay",
     },
   },
-  qrPayCreate: {
+  links: {
+    metadata: {
+      title: "Payment Links | Easner Business Banking",
+      description: "Create and share payment links for card, bank, and stablecoin collections in Easner Business – built for modern finance teams and operators.",
+    },
+    hero: {
+      h1: "Payment Links",
+      subhead: "Create and share links to collect payments.",
+      altText: "Easner Business payment links",
+    },
+  },
+  linksCreate: {
     metadata: {
       title: "Create Placard | Easner Business Banking",
-      description: "Set up a placard for in-person stablecoin payments and configure QR Pay collection details in Easner Business – built for modern finance teams and operators.",
+      description: "Set up a stablecoin placard for in-person collections in Easner Business – built for modern finance teams and operators.",
     },
     hero: {
       h1: "Create Placard",
       subhead: "Set up a placard for in-person payments.",
-      altText: "Create a QR Pay placard",
+      altText: "Create a payment link placard",
+    },
+  },
+  checkout: {
+    metadata: {
+      title: "Online Checkout | Easner Business Banking",
+      description: "Connect your website with Easner Checkout — API keys, embed snippet, webhooks, and test mode in Easner Business.",
+    },
+    hero: {
+      h1: "Online Checkout",
+      subhead: "Collect on your website with Easner Checkout.",
+      altText: "Easner Business online checkout",
     },
   },
   developers: {

@@ -25,6 +25,11 @@ import {
   resolveYcFundBalanceNotificationActivityLabelFromMetadata,
 } from "./yc-deposit-display"
 import {
+  balanceConvertListProductLabel,
+  isBalanceConvertMetadata,
+  normalizeBalanceMoveReviewSnapshot,
+} from "./balance-move-types"
+import {
   resolveInboundDepositNotificationAmountDisplay,
   resolveInboundReceiveDetail,
   resolveInboundReceiveNotification,
@@ -70,6 +75,7 @@ export type TransactionNotificationKind =
   | "bank_verification_credit"
   | "bank_payout"
   | "bank_transfer"
+  | "balance_convert"
   | "generic"
 
 export type DeriveTransactionNotificationInput = {
@@ -374,6 +380,23 @@ export function deriveTransactionNotification(
   }
 
   if (outcome === "failed") {
+    if (isBalanceConvertMetadata(meta)) {
+      const activityLabel = balanceConvertListProductLabel()
+      const body = input.failureReason
+        ? `Your move of ${amountText} could not be completed. ${input.failureReason}`
+        : `Your move of ${amountText} could not be completed.`
+      return finalizeDescriptor(
+        {
+          ...base,
+          kind: "balance_convert",
+          body,
+          pushBody: body,
+          category: activityLabel,
+        },
+        activityLabel,
+      )
+    }
+
     if (direction === "out" && isGlobalPayoutOffRampFlow(meta)) {
       const payout = buildGlobalPayoutOutContext({
         meta,
@@ -556,6 +579,24 @@ export function deriveTransactionNotification(
         category: "Card payment",
       },
       activityLabelForNotification("card_payment", "Card payment"),
+    )
+  }
+
+  if (isBalanceConvertMetadata(meta) && direction === "out") {
+    const moveReview = normalizeBalanceMoveReviewSnapshot(meta?.move_review)
+    const activityLabel = balanceConvertListProductLabel()
+    const body = moveReview
+      ? `You moved ${formatMoneyDisplay(moveReview.source_amount, moveReview.source_currency)} from your ${moveReview.debited_from_label} to your ${moveReview.credited_to_label}.`
+      : `You moved ${amountText} between your accounts.`
+    return finalizeDescriptor(
+      {
+        ...base,
+        kind: "balance_convert",
+        body,
+        pushBody: body,
+        category: activityLabel,
+      },
+      activityLabel,
     )
   }
 

@@ -698,6 +698,18 @@ export type {
   GlobalPayoutReviewSnapshot,
 } from "./transactions/global-payout-types"
 export { displayPayoutReceiveAmount } from "./transactions/global-payout-types"
+export type {
+  BalanceMoveDirection,
+  BalanceMoveReviewSnapshot,
+} from "./transactions/balance-move-types"
+export {
+  BALANCE_CONVERT_MIN_SOURCE_AMOUNT,
+  balanceConvertListProductLabel,
+  buildBalanceMoveReviewSnapshot,
+  directionFromBalanceMove,
+  isBalanceConvertMetadata,
+  normalizeBalanceMoveReviewSnapshot,
+} from "./transactions/balance-move-types"
 export {
   resolveTransactionRecipientDisplay,
   isEasetagHandleValue,

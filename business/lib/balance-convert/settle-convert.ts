@@ -4,6 +4,10 @@ import { isRelayConfigured } from "@/lib/relay/config"
 import { isRelayRequestTerminalV3, mapRelayRequestStatusV3 } from "@/lib/relay/requests-v3"
 import type { RelayRequestV3 } from "@/lib/relay/types"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
+import {
+  findBalanceConvertLedgerTransactionId,
+  upsertBalanceConvertLedgerTransaction,
+} from "./balance-move-ledger"
 
 export type BalanceConvertSessionRow = {
   id: string
@@ -14,6 +18,7 @@ export type BalanceConvertSessionRow = {
   destination_amount: number | null
   relay_request_id: string | null
   status: string
+  metadata?: unknown
 }
 
 async function resolveConvertOwnerScope(
@@ -41,7 +46,9 @@ async function findConvertSessionByRelayRequestId(
 ): Promise<BalanceConvertSessionRow | null> {
   const { data } = await admin
     .from("balance_convert_sessions")
-    .select("id, wallet_owner_id, user_id, direction, source_amount, destination_amount, relay_request_id, status")
+    .select(
+      "id, wallet_owner_id, user_id, direction, source_amount, destination_amount, relay_request_id, status, metadata",
+    )
     .eq("relay_request_id", relayRequestId)
     .in("status", ["executed"])
     .maybeSingle()
@@ -92,6 +99,9 @@ export async function settleBalanceConvertByRelayRequestId(
   const session = await findConvertSessionByRelayRequestId(admin, relayRequestId)
   if (!session?.id) return { settled: false, action: "no_pending_convert_session" }
 
+  const scope = await resolveConvertOwnerScope(admin, String(session.wallet_owner_id))
+  if (!scope) return { settled: false, action: "missing_wallet_owner_scope" }
+
   const request = input.request ?? (await relayGetRequestV3(relayRequestId))
   if (!request || !isRelayRequestTerminalV3(String(request.status))) {
     return { settled: false, action: "relay_request_not_terminal" }
@@ -102,6 +112,11 @@ export async function settleBalanceConvertByRelayRequestId(
 
   if (mapped === "settled") {
     await applyConvertBalanceDeltas(admin, session)
+    await upsertBalanceConvertLedgerTransaction(admin, {
+      session,
+      scope,
+      status: "settled",
+    })
     await admin
       .from("balance_convert_sessions")
       .update({ status: "settled", updated_at: now })
@@ -109,6 +124,12 @@ export async function settleBalanceConvertByRelayRequestId(
     return { settled: true, action: "convert_settled" }
   }
 
+  await upsertBalanceConvertLedgerTransaction(admin, {
+    session,
+    scope,
+    status: "failed",
+    failureReason: String(request.status || "relay_convert_failed"),
+  })
   await admin
     .from("balance_convert_sessions")
     .update({ status: "failed", updated_at: now })
@@ -140,3 +161,5 @@ export async function reconcilePendingBalanceConverts(
 
   return { scanned: rows?.length ?? 0, settled }
 }
+
+export { findBalanceConvertLedgerTransactionId }

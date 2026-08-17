@@ -207,6 +207,33 @@ describe("buildTransactionEmailDetailRows", () => {
     expect(buildTransactionEmailDetailRows({ direction: "in" })).toEqual([])
   })
 
+  it("balance move rows mirror in-app move review detail", () => {
+    const rows = buildTransactionEmailDetailRows({
+      direction: "out",
+      moveReview: {
+        source_amount: 500,
+        source_currency: "USD",
+        destination_amount: 460.12,
+        destination_currency: "EUR",
+        exchange_rate: 0.92024,
+        processing_fee: 0,
+        total_debited: 500,
+        debited_from_label: "USD Balance",
+        credited_to_label: "EUR Balance",
+      },
+    })
+    expect(rows.map((r) => r.label)).toEqual([
+      "Sent amount",
+      "Exchange rate",
+      "Total debited",
+      "Debited from",
+      "Amount credited",
+      "Credited to",
+    ])
+    expect(rows.find((r) => r.label === "Sent amount")?.value).toBe("$500")
+    expect(rows.find((r) => r.label === "Amount credited")?.value).toBe("+€460.12")
+  })
+
   it("filterTransactionReceiptDetailRows keeps Exchange rate but omits hero amount and Transfer method", () => {
     const review: GlobalPayoutReviewSnapshot = {
       you_send_amount: 100,

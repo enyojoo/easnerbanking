@@ -76,7 +76,7 @@ export default function QrPayCreatePlacardPage() {
         dataCache.invalidate(CACHE_KEYS.AUTOPAYOUT_LIST(user.id))
         dataCache.invalidate(CACHE_KEYS.AUTOPAYOUT_PAYER_WALLETS(user.id))
       }
-      router.push("/qr-pay")
+      router.push("/links")
     } finally {
       setSubmitting(false)
     }
@@ -87,7 +87,7 @@ export default function QrPayCreatePlacardPage() {
       <div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" className="shrink-0 -ml-2 text-muted-foreground" asChild>
-            <Link href="/qr-pay" aria-label="Back to QR Pay">
+            <Link href="/links" aria-label="Back to Payment Links">
               <ArrowLeft className="h-5 w-5" aria-hidden />
             </Link>
           </Button>
@@ -135,7 +135,7 @@ export default function QrPayCreatePlacardPage() {
 
       <div className="flex flex-wrap justify-end gap-2">
         <Button type="button" variant="outline" asChild>
-          <Link href="/qr-pay">Cancel</Link>
+          <Link href="/links">Cancel</Link>
         </Button>
         <Button type="button" onClick={() => void handleSubmit()} disabled={submitting}>
           {submitting ? "Creating…" : "Create placard"}

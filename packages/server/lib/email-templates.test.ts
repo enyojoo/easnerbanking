@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { EmailAudience } from "./email-audience"
 import { emailTemplates } from "./email-templates"
-import { templateDefaultAudience, templateFixtures } from "./email-test-fixtures"
+import { templateDefaultAudience, templateFixtures, balanceMoveSettledFixture } from "./email-test-fixtures"
 import type { SecurityAlertEmailData } from "./email-types"
 
 function renderSubject(
@@ -96,6 +96,16 @@ describe("emailTemplates", () => {
     expect(html).toContain("Amount credited")
     expect(html).toContain(">When<")
     expect(html.indexOf(">When<")).toBeLessThan(html.indexOf(">Status<"))
+  })
+
+  it("renders balance move detailRows for business audience", () => {
+    const html = emailTemplates.transactionSettled.html(balanceMoveSettledFixture, "business")
+    expect(html).toContain("Sent amount")
+    expect(html).toContain("Amount credited")
+    expect(html).toContain("Debited from")
+    expect(html).toContain("USD Balance")
+    expect(html).toContain("EUR Balance")
+    expect(html).toContain("You moved $500.00 USD from your USD Balance to your EUR Balance.")
   })
 
   it("personal welcome uses Hey greeting and mobile dashboard deep link", () => {

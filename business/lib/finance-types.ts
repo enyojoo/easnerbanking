@@ -126,6 +126,7 @@ export interface Transaction {
   /** Balance debit vs YC cross-border local pay-in. */
   payoutReviewFlow?: import("@easner/shared").ReviewFlowKind
   depositReview?: import("@easner/shared").YcFundBalanceDepositReviewSnapshot
+  moveReview?: import("@easner/shared").BalanceMoveReviewSnapshot
   inboundReceive?: import("@easner/shared").InboundReceiveDetailSnapshot
   recipientSnapshot?: import("@easner/shared").GlobalPayoutRecipientSnapshot
   transactionTiming?: import("@easner/shared").TransactionTimingRow[]

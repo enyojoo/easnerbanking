@@ -1,13 +1,29 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { randomUUID } from "crypto"
+import {
+  BALANCE_CONVERT_MIN_SOURCE_AMOUNT,
+  buildBalanceMoveReviewSnapshot,
+} from "@easner/shared"
 import { relayQuote } from "@/lib/relay/quote"
 import { parseRelayFromAmountRaw, parseRelayToAmountHuman } from "@/lib/relay/quote"
 import { sourceSolVaultToken } from "@/lib/relay/token-map"
 import { isRelayConfigured } from "@/lib/relay/config"
+import { buildMoveReviewFromQuote } from "./build-move-review"
 
 export type BalanceConvertDirection = "usd_to_eur" | "eur_to_usd"
 
 const CONVERT_TTL_MS = 5 * 60 * 1000
+
+export type BalanceConvertQuoteResult = {
+  sessionId: string
+  sourceAmount: number
+  destinationAmount: number
+  expiresAt: string
+  rate: number
+  processingFee: number
+  totalDebited: number
+  moveReview: ReturnType<typeof buildBalanceMoveReviewSnapshot>
+}
 
 export async function quoteBalanceConvert(input: {
   admin: SupabaseClient
@@ -16,15 +32,13 @@ export async function quoteBalanceConvert(input: {
   direction: BalanceConvertDirection
   sourceAmount: number
   fromAddress: string
-}): Promise<{
-  sessionId: string
-  sourceAmount: number
-  destinationAmount: number
-  expiresAt: string
-}> {
+}): Promise<BalanceConvertQuoteResult> {
   if (!isRelayConfigured()) throw new Error("relay_not_configured")
   if (!Number.isFinite(input.sourceAmount) || input.sourceAmount <= 0) {
     throw new Error("source_amount_invalid")
+  }
+  if (input.sourceAmount < BALANCE_CONVERT_MIN_SOURCE_AMOUNT) {
+    throw new Error("min_amount_not_met")
   }
 
   const source =
@@ -47,6 +61,12 @@ export async function quoteBalanceConvert(input: {
   })
 
   const destinationAmount = parseRelayToAmountHuman(quote, dest.decimals)
+  const moveReview = buildMoveReviewFromQuote({
+    direction: input.direction,
+    sourceAmount: input.sourceAmount,
+    destinationAmount,
+    quote,
+  })
   const sessionId = randomUUID()
   const expiresAt = new Date(Date.now() + CONVERT_TTL_MS).toISOString()
 
@@ -61,11 +81,21 @@ export async function quoteBalanceConvert(input: {
     status: "quoted",
     metadata: {
       relay_from_amount_raw: parseRelayFromAmountRaw(quote),
+      move_review: moveReview,
     },
     expires_at: expiresAt,
   })
 
-  return { sessionId, sourceAmount: input.sourceAmount, destinationAmount, expiresAt }
+  return {
+    sessionId,
+    sourceAmount: input.sourceAmount,
+    destinationAmount,
+    expiresAt,
+    rate: moveReview.exchange_rate,
+    processingFee: moveReview.processing_fee,
+    totalDebited: moveReview.total_debited,
+    moveReview,
+  }
 }
 
 export async function getBalanceConvertSession(

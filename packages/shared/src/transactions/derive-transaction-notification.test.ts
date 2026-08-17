@@ -135,3 +135,48 @@ describe("deriveTransactionNotification relay stablecoin deposit", () => {
     expect(descriptor.counterpartyName).toBe("TQbRUL...ej6VhT")
   })
 })
+
+describe("deriveTransactionNotification balance convert", () => {
+  it("uses move between accounts activity label and success body", () => {
+    const descriptor = deriveTransactionNotification({
+      direction: "out",
+      amount: 500,
+      currency: "USD",
+      metadata: {
+        flow: "balance_convert",
+        move_review: {
+          source_amount: 500,
+          source_currency: "USD",
+          destination_amount: 460.12,
+          destination_currency: "EUR",
+          exchange_rate: 0.92024,
+          processing_fee: 0,
+          total_debited: 500,
+          debited_from_label: "USD Balance",
+          credited_to_label: "EUR Balance",
+        },
+      },
+      outcome: "success",
+    })
+
+    expect(descriptor.pushTitle).toBe("Move between accounts complete")
+    expect(descriptor.body).toBe(
+      "You moved $500 from your USD Balance to your EUR Balance.",
+    )
+    expect(descriptor.category).toBe("Move between accounts")
+    expect(descriptor.emailEnabled).toBe(true)
+  })
+
+  it("uses failed move body", () => {
+    const descriptor = deriveTransactionNotification({
+      direction: "out",
+      amount: 500,
+      currency: "USD",
+      metadata: { flow: "balance_convert" },
+      outcome: "failed",
+    })
+
+    expect(descriptor.pushTitle).toBe("Move between accounts failed")
+    expect(descriptor.body).toBe("Your move of $500 could not be completed.")
+  })
+})

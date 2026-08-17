@@ -15,6 +15,7 @@ import {
   type GlobalPayoutReviewSnapshot,
   type NotificationOutcome,
   isYcFundBalanceDepositMetadata,
+  normalizeBalanceMoveReviewSnapshot,
   normalizeYcFundBalanceDepositReview,
   reconstructYcFundBalanceDepositReview,
   resolveInboundReceiveDetail,
@@ -96,6 +97,12 @@ function buildEmailDetailRows(
 ): { label: string; value: string }[] | undefined {
   const meta = (input.metadata ?? {}) as Record<string, unknown>
   const direction = descriptor.direction
+
+  const moveReview = normalizeBalanceMoveReviewSnapshot(meta.move_review)
+  if (moveReview) {
+    const rows = buildTransactionEmailDetailRows({ direction, moveReview })
+    return rows.length ? rows : undefined
+  }
 
   const payoutReview = isWalletSendOutRow({
     direction: input.direction,

@@ -40,6 +40,10 @@ import {
   isWalletSendOutRow,
   resolveWalletSendPayoutReview,
 } from "@/lib/wallet-send/build-wallet-send-payout-review"
+import {
+  isBalanceConvertOutRow,
+  resolveBalanceMoveReviewFromRow,
+} from "@/lib/transactions/balance-move-detail"
 
 function resolveWalletSendTransactionTiming(row: Record<string, unknown>) {
   const meta = (row.metadata as Record<string, unknown> | null | undefined) ?? {}
@@ -138,11 +142,15 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
       ? resolveNoahVaFundingDepositTitleFromMeta(meta ?? {})
       : undefined
   const globalPayoutDetail = resolveGlobalPayoutOffRampDetail(row)
+  const balanceMoveReview =
+    !globalPayoutDetail && isBalanceConvertOutRow(row)
+      ? resolveBalanceMoveReviewFromRow(row)
+      : null
   const ledgerAmountForReview =
     typeof row.amount === "number" ? row.amount : Number(row.amount) || 0
   const ledgerCurrencyForReview = String(row.currency ?? "USD").toUpperCase()
   const walletSendPayoutReview =
-    !globalPayoutDetail && meta && isWalletSendOutRow(row)
+    !globalPayoutDetail && !balanceMoveReview && meta && isWalletSendOutRow(row)
       ? resolveWalletSendPayoutReview(meta, ledgerAmountForReview, ledgerCurrencyForReview)
       : null
   const bankDepositDetail =
@@ -418,6 +426,16 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
           transactionTiming: globalPayoutDetail.transactionTiming,
           ledgerCreatedAt: globalPayoutDetail.ledgerCreatedAt ?? ledgerCreatedAt,
         }
+      : balanceMoveReview
+        ? {
+            displayHeroTitle: balanceMoveReview.credited_to_label
+              ? `Move to ${balanceMoveReview.credited_to_label}`
+              : "Move between accounts",
+            ledgerAmount: balanceMoveReview.total_debited,
+            ledgerCurrency: balanceMoveReview.source_currency,
+            moveReview: balanceMoveReview,
+            ledgerCreatedAt,
+          }
       : walletSendPayoutReview
         ? {
             displayHeroTitle: walletSendDisplay?.displayHeroTitle,

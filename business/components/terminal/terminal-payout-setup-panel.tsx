@@ -45,7 +45,7 @@ export type TerminalPayoutSetupPanelProps = {
   onSelectRecipientId?: (recipientId: string) => void
   /** Dialog vs Card: dialog uses DialogHeader; embedded uses plain headings inside a parent Card. */
   embedded?: boolean
-  /** Invalidate payout setup cache and refetch when the panel becomes active (fresh list on /qr-pay/create). */
+  /** Invalidate payout setup cache and refetch when the panel becomes active (fresh list on /links/create). */
   syncListsOnMount?: boolean
   className?: string
 }

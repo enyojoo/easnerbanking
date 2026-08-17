@@ -40,6 +40,8 @@ export function activityLabelForNotification(
     case "bank_payout":
     case "bank_transfer":
       return capitalizeFirst(category)
+    case "balance_convert":
+      return balanceConvertListProductLabel()
     default:
       return capitalizeFirst(category)
   }

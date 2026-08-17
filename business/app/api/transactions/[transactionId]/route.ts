@@ -23,6 +23,7 @@ import {
   isGlobalPayoutOffRampRow,
 } from "@/lib/transactions/global-payout-detail"
 import { attachWalletSendDetailFields } from "@/lib/transactions/wallet-send-detail"
+import { attachBalanceMoveDetailFields, isBalanceConvertOutRow } from "@/lib/transactions/balance-move-detail"
 import {
   attachStablecoinDepositDetailFields,
   isStablecoinDepositPayInRow,
@@ -512,6 +513,7 @@ export async function GET(request: Request, routeCtx: Props) {
 
   transaction = await attachBankDepositDetailFieldsAsync(admin, ledgerRec, transaction)
   transaction = await attachGlobalPayoutDetailFieldsAsync(admin, ledgerRec, transaction)
+  transaction = attachBalanceMoveDetailFields(ledgerRec, transaction)
   transaction = attachWalletSendDetailFields(ledgerRec, transaction)
   transaction = attachStablecoinDepositDetailFields(ledgerRec, transaction)
 
@@ -586,6 +588,37 @@ export async function GET(request: Request, routeCtx: Props) {
         transactionTiming:
           (transaction.transaction_timing as typeof businessTransaction.transactionTiming) ??
           businessTransaction.transactionTiming,
+      }
+    } else if (isBalanceConvertOutRow(ledgerRec)) {
+      businessTransaction = {
+        ...businessTransaction,
+        amount:
+          typeof transaction.display_amount === "number"
+            ? transaction.display_amount
+            : businessTransaction.amount,
+        displayCurrency:
+          typeof transaction.display_currency === "string"
+            ? String(transaction.display_currency)
+            : businessTransaction.displayCurrency,
+        description:
+          typeof transaction.display_description === "string"
+            ? String(transaction.display_description)
+            : businessTransaction.description,
+        displayHeroTitle:
+          typeof transaction.display_hero_title === "string"
+            ? String(transaction.display_hero_title)
+            : businessTransaction.displayHeroTitle,
+        ledgerAmount:
+          typeof transaction.ledger_amount === "number"
+            ? transaction.ledger_amount
+            : businessTransaction.ledgerAmount,
+        ledgerCurrency:
+          typeof transaction.ledger_currency === "string"
+            ? String(transaction.ledger_currency)
+            : businessTransaction.ledgerCurrency,
+        moveReview:
+          (transaction.move_review as typeof businessTransaction.moveReview) ??
+          businessTransaction.moveReview,
       }
     } else if (isGlobalPayoutOffRampRow(ledgerRec) || isWalletSendOutRow(ledgerRec)) {
       businessTransaction = {

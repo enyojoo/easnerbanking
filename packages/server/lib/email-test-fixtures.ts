@@ -73,6 +73,29 @@ export const txReversedFixture: TransactionEmailData = {
   ],
 }
 
+export const balanceMoveSettledFixture: TransactionEmailData = {
+  transactionId: "tx-balance-move-1",
+  easnerTransactionId: "ET-MOVE-500",
+  title: "Move between accounts complete",
+  body: "You moved $500.00 USD from your USD Balance to your EUR Balance.",
+  firstName: "Sam",
+  amountDisplay: "$500.00",
+  category: "Move between accounts",
+  paymentRail: "Balance convert",
+  status: "settled",
+  createdAt: "2026-08-18T12:00:00.000Z",
+  outcome: "success",
+  detailRows: [
+    { label: "Sent amount", value: "$500.00" },
+    { label: "Exchange rate", value: "$1 = €0.9202" },
+    { label: "Total debited", value: "-$500.00" },
+    { label: "Debited from", value: "USD Balance" },
+    { label: "Amount credited", value: "+€460.12" },
+    { label: "Credited to", value: "EUR Balance" },
+  ],
+  audience: "business",
+}
+
 export const welcomeBusinessFixture: WelcomeEmailData = {
   firstName: "Alex",
   email: "alex@example.com",

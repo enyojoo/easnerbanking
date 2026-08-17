@@ -52,11 +52,21 @@ export async function POST(request: Request) {
       sourceAmount,
       fromAddress,
     })
-    return NextResponse.json({ ok: true, quote })
+    return NextResponse.json({
+      ok: true,
+      quote: {
+        sessionId: quote.sessionId,
+        sourceAmount: quote.sourceAmount,
+        destinationAmount: quote.destinationAmount,
+        expiresAt: quote.expiresAt,
+        rate: quote.rate,
+        processingFee: quote.processingFee,
+        totalDebited: quote.totalDebited,
+      },
+    })
   } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "quote_failed" },
-      { status: 400 },
-    )
+    const message = e instanceof Error ? e.message : "quote_failed"
+    const status = message === "min_amount_not_met" ? 400 : 400
+    return NextResponse.json({ error: message }, { status })
   }
 }

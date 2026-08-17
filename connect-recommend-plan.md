@@ -1,6 +1,6 @@
 # Recommended Connect integration
 
-Product: **Online Checkout** for Easner Business — dashboard Payment Links (one-time, recurring, and stablecoin / QR Pay), website embed, later Checkout API. Sidebar: **Collections** (Invoices, Online Checkout, Payment Links, Terminal) and **Spending** (Send, Cards, Payroll). Card/bank funds settle to Easner Balance on the same destination-charge rail as invoice Pay online.
+Product: **Online Checkout** for Easner Business — dashboard Payment Links (one-time, recurring, and stablecoin / QR Pay), website embed, later Checkout API. Sidebar: **Spending** then **Collections** (Invoices, Checkout, Links, Terminal). Card/bank funds settle to Easner Balance on the same destination-charge rail as invoice Pay online.
 
 Decisions locked 2026-08-15. Visual companion: Cursor canvases `online-checkout-connect.canvas.tsx`, `collections-ux-spec.canvas.tsx`.
 
@@ -10,30 +10,32 @@ Bring **Collections** back in the sidebar. Group money-out under **Spending** (n
 
 ### Information architecture (sidebar)
 
+Nav labels are short; page titles use full product names (e.g. sidebar **Checkout** → page **Online Checkout**).
+
 ```
 Home
-Collections
-  Invoices
-  Online Checkout
-  Payment Links
-  Terminal
 Spending
   Send
   Cards
   Payroll
+Collections
+  Invoices
+  Checkout
+  Links
+  Terminal
 Transactions
 Accounts
 ```
 
-Turn on `SHOW_COLLECTIONS_IN_NAV`. Move Invoices, Send, Cards, and Payroll off the top level into these groups. Operator routes: `/invoices`, `/checkout`, `/links`, `/send`, `/cards`, `/payroll`, `/terminal`. QR Pay (`/qr-pay`) folds into Payment Links (`/links`) rather than remaining a sibling.
+Operator routes: `/invoices`, `/checkout`, `/links`, `/send`, `/cards`, `/payroll`, `/terminal`. QR Pay placards live under `/links` (no `/qr-pay` route or redirect).
 
-| Nav item | Role |
-| --- | --- |
-| **Invoices** | B2B receivables: create, send, remind, pay. Pay online on an invoice stays here. |
-| **Online Checkout** | Website embed (and later Checkout API). Collect on the merchant’s site with no invoice. |
-| **Payment Links** | Create and share a link from the dashboard. One create flow for **one-time**, **recurring**, and **stablecoin** (today’s QR Pay placard lives here, not as its own nav item). |
-| **Terminal** | In-person collections. |
-| **Send / Cards / Payroll** | Outbound spend. Unchanged products, grouped. |
+| Nav label | Page title | Role |
+| --- | --- | --- |
+| **Invoices** | Invoices | B2B receivables: create, send, remind, pay. |
+| **Checkout** | Online Checkout | Website embed (and later Checkout API). Collect on the merchant’s site. |
+| **Links** | Payment Links | Create and share links: one-time, recurring, stablecoin (QR Pay placards until unified create ships). |
+| **Terminal** | Terminal | In-person collections. |
+| **Send / Cards / Payroll** | (same) | Outbound spend, grouped under Spending. |
 
 ### Checkout surfaces (under Online Checkout + Payment Links)
 
@@ -101,10 +103,12 @@ business.easner.com/links                        Payment Links — create & mana
 **No @easetag yet** — same hosts, shorter paths (matches today’s invoice behavior in `buildInvoiceCustomerViewPath`):
 
 ```
-invoice.easner.com/{invoiceId}                   Single segment — invoice row UUID (capability token)
-pay.easner.com/{linkPublicId}                    Payment Link — opaque public id (UUID or typed id)
-pay.easner.com/{sessionId}                       Stablecoin — terminal session UUID
+invoice.easner.com/{invoiceId}                   Single segment — invoice row UUID
+pay.easner.com/plink_{hex32}                     Payment Link — typed public id (see below)
+pay.easner.com/{sessionId}                       Stablecoin — terminal session UUID (standard shape)
 ```
+
+**Payment link public id (locked):** prefix `plink_` + 32 hex chars (UUID without dashes). Example: `plink_550e8400e29b41d4a716446655440000`. Never a raw UUID for links — that removes ambiguity with stablecoin session ids on one-segment `pay.easner.com` paths. Helper: `business/lib/payment-links/public-id.ts`.
 
 When the business later sets @easetag, **new** share links use the two-segment canonical form. Old one-segment links keep working (no broken emails or QR codes).
 
@@ -117,7 +121,7 @@ When the business later sets @easetag, **new** share links use the two-segment c
 | `invoice.easner.com` | 2 | `easetag` + `invoiceNumber` → public invoice API |
 | `invoice.easner.com` | 1 | `invoiceId` (UUID) → public by-id API |
 | `pay.easner.com` | 2 | `easetag` + second segment: if UUID → terminal session (stablecoin); else → payment link slug for that business |
-| `pay.easner.com` | 1 | UUID: terminal session first, else payment link public id; reject ambiguous |
+| `pay.easner.com` | 1 | `plink_{hex32}` → payment link; UUID v4 → terminal session |
 
 Second segment on `pay.easner.com/{easetag}/…` disambiguates **without** a `/l/` or `/charge/` prefix: human slug vs session UUID are different shapes. No collision between `acme/pro-plan` and `acme/8f3c…-session`.
 
@@ -131,7 +135,7 @@ Second segment on `pay.easner.com/{easetag}/…` disambiguates **without** a `/l
 **Migration (v1 or follow-up):**
 
 - `business.easner.com/invoice/…` → `invoice.easner.com/…`
-- `business.easner.com/qr-pay` → `business.easner.com/links`
+- `business.easner.com/qr-pay` — removed; use `/links`
 - `business.easner.com/pay/charge/{id}` → `pay.easner.com/{easetag}/{sessionId}` or `pay.easner.com/{sessionId}`
 - `business.easner.com/online-checkout` → `/checkout` (if introduced)
 - Do **not** use `business.easner.com/pay/…` for new card Payment Links
@@ -344,10 +348,10 @@ Do not create a separate v1 Customer object in order to bill connected accounts.
 
 1. **Account setup** — Reuse `business_stripe_connect_accounts`. Keep dashboard none / platform fees / platform losses. New accounts via `/v2/core/accounts` with `configuration.recipient` and `stripe_transfers`. Do not add a second connected account per business for Checkout.
 2. **Onboarding** — Same Settings Connect panel, embedded `account_onboarding` + `notification_banner`. Checkout and card/bank Payment Links share `resolveConnectReadyForCheckout`. Stablecoin links keep the existing QR Pay / autopayout eligibility.
-3. **Nav & domains** — Enable Collections + Spending. Deploy `invoice.easner.com` and `pay.easner.com`. Redirect legacy invoice and `/pay/charge` URLs. `/qr-pay` → `/links`.
+3. **Nav & domains** — Enable Collections + Spending. Deploy `invoice.easner.com` and `pay.easner.com`. Redirect legacy invoice and `/pay/charge` URLs. QR Pay UI at `/links` only.
 4. **Payments and fund flow**
    - Generalize `createInvoiceCheckoutSession` into `createOnlineCheckoutSession({ source: invoice | payment_link | embed })` with `ui_mode: "elements"`, `payment_intent_data.transfer_data.destination`, no `on_behalf_of`.
-   - Payment Links dashboard (absorbs QR Pay): amount, description, rail = card/bank vs stablecoin, one-time vs interval, copy URL or download placard, archive. Redirect `/qr-pay` into this page.
+   - Payment Links dashboard at `/links` (absorbs QR Pay placards): amount, description, rail = card/bank vs stablecoin, one-time vs interval, copy URL or download placard, archive.
    - One-time: Checkout Session `mode: "payment"` + `application_fee_amount = stripe_estimate + easner_take` (`easner_take = 0` today). Shared helper for invoices and Checkout — never omit the field.
    - Recurring: Checkout Session `mode: "subscription"` + `subscription_data.transfer_data.destination` + `application_fee_percent = stripe_estimate_percent + easner_take_percent` (`easner_take_percent = 0` today). Prices and Customers live on the **platform**.
    - Website embed: Easner publishable key + `client_secret`; merchant never sees `acct_`.

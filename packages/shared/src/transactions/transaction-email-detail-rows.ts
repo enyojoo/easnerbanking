@@ -26,6 +26,7 @@ import {
 import { normalizeTransferMethodLabel } from "./payout-transfer-method"
 import { displayPayoutReceiveAmount, type GlobalPayoutReviewSnapshot } from "./global-payout-types"
 import type { YcFundBalanceDepositReviewSnapshot } from "./global-deposit-types"
+import type { BalanceMoveReviewSnapshot } from "./balance-move-types"
 import { computeYcCrossBorderPrincipalLocalPayIn } from "./yc-deposit-display"
 import type { InboundReceiveDetailSnapshot } from "./inbound-receive-detail"
 import { buildInboundReceiveEmailDetailRows } from "./inbound-receive-detail"
@@ -60,6 +61,8 @@ export type TransactionEmailDetailInput = {
   depositReview?: YcFundBalanceDepositReviewSnapshot | null
   /** Unified inbound receive snapshot (YC, Noah VA, verification, stablecoin, Easetag). */
   inboundReceive?: InboundReceiveDetailSnapshot | null
+  /** USD↔EUR balance convert (move between accounts). */
+  moveReview?: BalanceMoveReviewSnapshot | null
   /** Balance debit vs local pay-in (YC cross-border send). */
   payoutReviewFlow?: ReviewFlowKind
 }
@@ -301,6 +304,58 @@ function buildYcFundBalanceDepositRows(
   return rows
 }
 
+function buildBalanceMoveEmailDetailRows(
+  review: BalanceMoveReviewSnapshot,
+): TransactionEmailDetailRow[] {
+  const rows: TransactionEmailDetailRow[] = []
+  pushIf(
+    rows,
+    REVIEW_ROW_LABELS.sent,
+    formatMoneyDisplay(review.source_amount, review.source_currency),
+  )
+  if (isPayoutReviewFeeVisible(review.processing_fee)) {
+    pushIf(
+      rows,
+      REVIEW_ROW_LABELS.processingFee,
+      formatReviewRowMoneyDisplay(
+        REVIEW_ROW_LABELS.processingFee,
+        review.processing_fee,
+        review.source_currency,
+      ),
+    )
+  }
+  pushIf(
+    rows,
+    REVIEW_ROW_LABELS.exchangeRate,
+    formatSendRateLabel(
+      review.source_currency,
+      review.destination_currency,
+      review.exchange_rate,
+    ),
+  )
+  pushIf(
+    rows,
+    REVIEW_ROW_LABELS.totalDebited,
+    formatReviewRowMoneyDisplay(
+      REVIEW_ROW_LABELS.totalDebited,
+      review.total_debited,
+      review.source_currency,
+    ),
+  )
+  pushIf(rows, REVIEW_ROW_LABELS.debitedFrom, review.debited_from_label)
+  pushIf(
+    rows,
+    REVIEW_ROW_LABELS.amountCredited,
+    formatReviewRowMoneyDisplay(
+      REVIEW_ROW_LABELS.amountCredited,
+      review.destination_amount,
+      review.destination_currency,
+    ),
+  )
+  pushIf(rows, REVIEW_ROW_LABELS.creditTo, review.credited_to_label)
+  return rows
+}
+
 /**
  * Canonical email detail rows (excluding Transaction ID / Status / Date, which the template owns).
  * Returns `[]` for shapes without enrichment (e.g. Easetag, which has no Processing fee row).
@@ -308,6 +363,7 @@ function buildYcFundBalanceDepositRows(
 export function buildTransactionEmailDetailRows(
   input: TransactionEmailDetailInput,
 ): TransactionEmailDetailRow[] {
+  if (input.moveReview) return buildBalanceMoveEmailDetailRows(input.moveReview)
   if (input.inboundReceive) return buildInboundReceiveEmailDetailRows(input.inboundReceive)
   if (input.payoutReview) return buildPayoutRows(input.payoutReview, input)
   if (input.depositReview) return buildYcFundBalanceDepositRows(input.depositReview)

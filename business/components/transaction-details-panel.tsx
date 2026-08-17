@@ -17,6 +17,7 @@ import { PayoutReviewDetailsRows } from "@/components/transactions/payout-review
 import { CrossBorderSendDetailRows } from "@/components/transactions/cross-border-send-detail-rows"
 import { TransactionRecipientSummary } from "@/components/transactions/transaction-recipient-summary"
 import { DepositReviewDetailsRows } from "@/components/transactions/deposit-review-details-rows"
+import { MoveReviewDetailsRows } from "@/components/accounts/move-review-details-rows"
 import { InboundReceiveDetailsRows } from "@/components/transactions/inbound-receive-details-rows"
 import { CreditDestinationRow } from "@/components/transactions/credit-destination-row"
 import { TransactionDetailSummaryRow } from "@/components/transactions/transaction-detail-summary-row"
@@ -362,6 +363,7 @@ export function TransactionDetailsPanel({
   if (!transaction) return null
 
   const isGlobalPayout = Boolean(transaction.payoutReview)
+  const isBalanceMove = Boolean(transaction.moveReview)
   const isYcFundBalanceDeposit = Boolean(transaction.depositReview)
   const isWalletSendPayout =
     transaction.payoutReview?.execution_model === "direct_turnkey" ||
@@ -450,7 +452,15 @@ export function TransactionDetailsPanel({
     <div className="space-y-4">
       <TransactionDetailHero transaction={transaction} />
 
-      {isGlobalPayout && transaction.payoutReview && payoutReviewFlow === "local_pay_in" ? (
+      {isBalanceMove && transaction.moveReview ? (
+        <MoveReviewDetailsRows
+          transactionId={transaction.id}
+          moveReview={transaction.moveReview}
+          copiedKey={copiedKey}
+          onCopy={handleCopy}
+          mode="detail"
+        />
+      ) : isGlobalPayout && transaction.payoutReview && payoutReviewFlow === "local_pay_in" ? (
         <Card className="border-border shadow-sm">
           <CardContent className="p-6 space-y-1">
             <CrossBorderSendDetailRows
@@ -545,7 +555,7 @@ export function TransactionDetailsPanel({
               Config: {transaction.autopayoutConfigId}
             </p>
             <Button variant="link" className="h-auto px-0 pt-2 text-primary" asChild>
-              <Link href="/qr-pay">Open QR Pay</Link>
+              <Link href="/links">Open Payment Links</Link>
             </Button>
           </CardContent>
         </Card>

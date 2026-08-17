@@ -3,8 +3,8 @@ import { appSectionsSeo } from "@/lib/seo/content/app-sections"
 import { businessMetadata } from "@/lib/seo/metadata"
 
 export const metadata = businessMetadata({
-  metadata: appSectionsSeo.qrPay.metadata,
-  path: "/qr-pay",
+  metadata: appSectionsSeo.links.metadata,
+  path: "/links",
 })
 
 export default function QrPayLayout({ children }: { children: ReactNode }) {

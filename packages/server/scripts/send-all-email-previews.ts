@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url"
 import type { EmailAudience } from "../lib/email-audience"
 import { emailService } from "../lib/email-service"
 import type { TransactionEmailData } from "../lib/email-types"
-import { templateDefaultAudience, templateFixtures } from "../lib/email-test-fixtures"
+import { templateDefaultAudience, templateFixtures, balanceMoveSettledFixture } from "../lib/email-test-fixtures"
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
 
@@ -207,6 +207,25 @@ async function main() {
     if (!result.ok) {
       failed++
       console.error(`FAIL ${templateKey}: ${result.error}`)
+    }
+    if (!dryRun) await sleep(400)
+  }
+
+  if (!templateFilter || templateFilter === "balanceMoveSettled") {
+    const moveData = personalizeFixture(
+      "transactionSettled",
+      balanceMoveSettledFixture,
+      to,
+      firstName,
+    )
+    const moveResult = await sendOne("transactionSettled", to, moveData, dryRun)
+    if (!moveResult.ok) {
+      failed++
+      console.error(`FAIL balanceMoveSettled preview: ${moveResult.error}`)
+    } else if (dryRun) {
+      console.log("[dry-run] would send balanceMoveSettled preview → transactionSettled template")
+    } else {
+      console.log("OK balanceMoveSettled preview → transactionSettled (sent)")
     }
     if (!dryRun) await sleep(400)
   }

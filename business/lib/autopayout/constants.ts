@@ -14,4 +14,4 @@ export const AUTOPAYOUT_PLACARD_BUCKET = "autopayout-placards"
 /** Bump when placard visual template changes (invalidates cached assets). */
 export const PLACARD_TEMPLATE_VERSION = 1
 
-export const AUTOPAYOUT_CTA_TEXT = "easner.com/qr-pay"
+export const AUTOPAYOUT_CTA_TEXT = "easner.com/links"
