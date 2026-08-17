@@ -86,9 +86,6 @@ export async function reconcileGridVaPayoutDestination(
   if (!row?.stripe_account_id) {
     return { skipped: true, reason: "no_connect_account" }
   }
-  if (!row.details_submitted) {
-    return { skipped: true, reason: "details_not_submitted" }
-  }
 
   const va = await getVirtualAccountDisplayFromDb(admin, {
     currency: fiat,
@@ -98,7 +95,7 @@ export async function reconcileGridVaPayoutDestination(
     return { skipped: true, reason: "no_grid_va" }
   }
 
-  if (fiat === "usd" && (!va.accountNumber || !va.routingNumber)) {
+  if (fiat === "usd" && !va.accountNumber) {
     return { skipped: true, reason: "missing_va_details" }
   }
   if (fiat === "eur" && !va.iban) {

@@ -28,7 +28,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { ArrowLeft, Loader2 } from "lucide-react"
+import { ArrowLeft, Check, Circle, Loader2 } from "lucide-react"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { toast } from "sonner"
 import { isStripePublishableConfigured } from "@/lib/stripe/public-enabled"
@@ -60,6 +60,61 @@ import {
   type SettingsVerificationEmbeddedFlow,
 } from "@/lib/compliance/cutover-comms"
 import { useSearchParams } from "next/navigation"
+import { verificationStatusLabel } from "@easner/shared"
+import { cn } from "@/lib/utils"
+
+const ONLINE_PAYMENTS_VERIFICATION_TITLE = "Online payments Verification"
+
+function ConnectStatusChecklistTooltip({
+  status,
+  complete,
+  summary,
+  checklist,
+}: {
+  status: string
+  complete: boolean
+  summary?: string | null
+  checklist: Array<{ label: string; done: boolean }>
+}) {
+  const label = verificationStatusLabel(status, { complete })
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="inline-flex cursor-default rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={`${label}. Show setup checklist.`}
+          >
+            <Tier1VerificationBadge
+              tier1Complete={complete}
+              tier1VerificationStatus={status}
+            />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" align="start" className="max-w-[17.5rem] space-y-2 p-3">
+          {summary ? <p className="text-xs leading-snug text-popover-foreground">{summary}</p> : null}
+          {checklist.length > 0 ? (
+            <ul className="space-y-1.5">
+              {checklist.map((item, index) => (
+                <li key={`${item.label}-${index}`} className="flex items-start gap-2 text-xs">
+                  {item.done ? (
+                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" aria-hidden />
+                  ) : (
+                    <Circle className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-40" aria-hidden />
+                  )}
+                  <span className={item.done ? "text-popover-foreground" : "text-muted-foreground"}>
+                    {item.label}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
+}
 
 let prefetchedConnectClientSecret: string | null = null
 let primedConnectInstance: ReturnType<typeof loadConnectAndInitialize> | null = null
@@ -386,8 +441,18 @@ export function SettingsStripeConnectPanel({
           <ArrowLeft className="size-4" aria-hidden />
           Back
         </Button>
-        <p className="truncate text-center text-sm font-medium">Online payments</p>
-        <span className="min-w-[8.5rem]" />
+        <p className="truncate text-center text-sm font-medium">{ONLINE_PAYMENTS_VERIFICATION_TITLE}</p>
+        <p
+          className={cn(
+            "min-w-[8.5rem] text-right text-xs font-medium",
+            badgePresentation.complete && "text-emerald-700 dark:text-emerald-400",
+            badgePresentation.status === "hold" && "text-destructive",
+            (badgePresentation.status === "pending" || badgePresentation.status === "in_progress") &&
+              "text-muted-foreground",
+          )}
+        >
+          {verificationStatusLabel(badgePresentation.status, { complete: badgePresentation.complete })}
+        </p>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
         <div className="mx-auto w-full max-w-2xl">
@@ -442,10 +507,19 @@ export function SettingsStripeConnectPanel({
         <CardHeader className="pb-2">
           <div className="flex flex-wrap items-center gap-2">
             <CardTitle className="text-base">{tier3?.title ?? "Online payments"}</CardTitle>
-            <Tier1VerificationBadge
-              tier1Complete={badgePresentation.complete}
-              tier1VerificationStatus={badgePresentation.status}
-            />
+            {badgePresentation.complete ? (
+              <Tier1VerificationBadge
+                tier1Complete={badgePresentation.complete}
+                tier1VerificationStatus={badgePresentation.status}
+              />
+            ) : (
+              <ConnectStatusChecklistTooltip
+                status={badgePresentation.status}
+                complete={badgePresentation.complete}
+                summary={panelUx.bodyCopy}
+                checklist={panelUx.checklist}
+              />
+            )}
           </div>
           <CardDescription className="text-sm">
             {tier3?.description ??

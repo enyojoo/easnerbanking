@@ -118,6 +118,30 @@ describe("reconcileGridVaPayoutDestination", () => {
     })
   })
 
+  it("creates Grid VA bank before details are submitted", async () => {
+    vi.mocked(getConnectAccountRow).mockResolvedValue({
+      stripe_account_id: "acct_1",
+      details_submitted: false,
+      stripe_external_account_id: null,
+    } as never)
+    listExternalAccounts.mockResolvedValue({ data: [] })
+    vi.mocked(createGridVaExternalAccountOnStripe).mockResolvedValue({
+      ok: true,
+      stripeExternalAccountId: "ba_new",
+      maskedDestination: "····7890",
+      payoutInterval: "daily",
+    })
+
+    const result = await reconcileGridVaPayoutDestination(admin, { businessId: "biz_1" })
+    expect(result).toEqual({
+      skipped: false,
+      ok: true,
+      action: "linked",
+      stripeExternalAccountId: "ba_new",
+    })
+    expect(createGridVaExternalAccountOnStripe).toHaveBeenCalled()
+  })
+
   it("creates Grid VA bank when payout destination drifted away", async () => {
     listExternalAccounts.mockResolvedValue({
       data: [

@@ -25,6 +25,11 @@ export type ConnectPanelAction = {
   dialogDescription?: string
 }
 
+export type ConnectChecklistItem = {
+  label: string
+  done: boolean
+}
+
 export type ConnectPanelUx = {
   phase: ConnectPanelPhase
   /** Maps to Tier 1 badge via `connectPanelVerificationPresentation`. */
@@ -32,6 +37,7 @@ export type ConnectPanelUx = {
   verificationComplete: boolean
   bodyCopy?: string
   bodyCopyDestructive?: string
+  checklist: ConnectChecklistItem[]
   primary?: ConnectPanelAction
   secondary?: ConnectPanelAction
 }
@@ -40,24 +46,73 @@ const BEGIN_VERIFICATION = "Begin verification"
 const CONTINUE_VERIFICATION = "Continue verification"
 const ONLINE_PAYMENT_VERIFICATION = "Online payment verification"
 
-function requirementsDue(status: ConnectStatusSnapshot): string[] {
-  return status.requirementsCurrentlyDue ?? []
+function isPlatformCollectedRequirement(key: string): boolean {
+  return key.startsWith("tos_acceptance")
+}
+
+function isExternalAccountRequirement(key: string): boolean {
+  return key === "external_account" || key.startsWith("external_account.")
+}
+
+export function requirementsDue(status: ConnectStatusSnapshot): string[] {
+  return (status.requirementsCurrentlyDue ?? []).filter((key) => !isPlatformCollectedRequirement(key))
+}
+
+export function requirementsDueExcludingPayoutAccount(status: ConnectStatusSnapshot): string[] {
+  return requirementsDue(status).filter((key) => !isExternalAccountRequirement(key))
+}
+
+const CONNECT_REQUIREMENT_LABELS: Record<string, string> = {
+  "business_profile.url": "Business website",
+  "business_profile.product_description": "Product description",
+  "business_profile.mcc": "Business category",
+  "company.tax_id": "Tax ID",
+  "company.address.line1": "Company address",
+  "company.verification.document": "Company documents",
+  "individual.verification.document": "Identity document",
+  external_account: "Payout account",
+}
+
+export function labelConnectRequirement(key: string): string {
+  if (CONNECT_REQUIREMENT_LABELS[key]) return CONNECT_REQUIREMENT_LABELS[key]
+  const last = key.split(".").pop() ?? key
+  return last.replace(/_/g, " ")
+}
+
+export function connectSetupChecklist(status: ConnectStatusSnapshot): ConnectChecklistItem[] {
+  const due = requirementsDue(status)
+  const businessVerified = Boolean(status.detailsSubmitted) && due.length === 0
+  const items: ConnectChecklistItem[] = [
+    { label: "Business verified", done: businessVerified },
+    { label: "Transfers", done: Boolean(status.transfersEnabled) },
+    { label: "Payouts", done: Boolean(status.payoutsEnabled) },
+    { label: "Virtual account", done: Boolean(status.hasGridVa) },
+    { label: "Payout linked", done: Boolean(status.externalAccountLinked) },
+  ]
+  if (due.length > 0) {
+    const dueItems = due.slice(0, 6).map((key) => ({
+      label: labelConnectRequirement(key),
+      done: false,
+    }))
+    return [...dueItems, ...items]
+  }
+  return items
 }
 
 export function resolveConnectPanelPhase(status: ConnectStatusSnapshot): ConnectPanelPhase {
   if (status.tier1Complete === false) return "kyb_required"
   if (status.ready) return "ready"
 
-  const due = requirementsDue(status)
-  if (due.length > 0) return "requirements_due"
+  const otherDue = requirementsDueExcludingPayoutAccount(status)
+  if (otherDue.length > 0) return "requirements_due"
 
   if (!status.stripeAccountId) return "not_started"
 
   if (!status.hasGridVa) return "missing_virtual_account"
 
-  if (!status.detailsSubmitted) return "in_progress"
-
   if (!status.externalAccountLinked) return "link_payout"
+
+  if (!status.detailsSubmitted) return "in_progress"
 
   if (!status.transfersEnabled || !status.payoutsEnabled) return "activating"
 
@@ -108,6 +163,7 @@ function onboardingAction(
 export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPanelUx {
   const phase = resolveConnectPanelPhase(status)
   const presentation = connectPanelVerificationPresentation(phase, Boolean(status.ready))
+  const checklist = connectSetupChecklist(status)
 
   switch (phase) {
     case "kyb_required":
@@ -116,6 +172,7 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
         verificationStatus: presentation.status,
         verificationComplete: presentation.complete,
         bodyCopy: VERIFICATION_SECTION_COPY.onlinePaymentsTier1Required,
+        checklist,
       }
 
     case "not_started":
@@ -123,6 +180,7 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
         phase,
         verificationStatus: presentation.status,
         verificationComplete: presentation.complete,
+        checklist,
         primary: onboardingAction(BEGIN_VERIFICATION, ONLINE_PAYMENT_VERIFICATION),
       }
 
@@ -131,6 +189,7 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
         phase,
         verificationStatus: presentation.status,
         verificationComplete: presentation.complete,
+        checklist,
         primary: onboardingAction(CONTINUE_VERIFICATION, CONTINUE_VERIFICATION),
       }
 
@@ -141,6 +200,7 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
         verificationComplete: presentation.complete,
         bodyCopy:
           status.reason?.trim() || VERIFICATION_SECTION_COPY.verificationOnHold,
+        checklist,
         primary: onboardingAction(CONTINUE_VERIFICATION, CONTINUE_VERIFICATION),
       }
 
@@ -151,6 +211,7 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
         verificationStatus: presentation.status,
         verificationComplete: presentation.complete,
         bodyCopy: NOAH_VERIFICATION_IN_REVIEW_COPY,
+        checklist,
       }
 
     case "missing_virtual_account":
@@ -161,6 +222,7 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
         bodyCopy:
           status.reason?.trim() ||
           "Your Easner USD account is still provisioning. Online payment verification will be available shortly.",
+        checklist,
       }
 
     case "link_payout":
@@ -169,6 +231,7 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
         verificationStatus: presentation.status,
         verificationComplete: presentation.complete,
         bodyCopy: "Link payouts to your Easner USD account to finish verification.",
+        checklist,
         primary: {
           kind: "link_payout",
           label: CONTINUE_VERIFICATION,
@@ -183,6 +246,7 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
         phase: "ready",
         verificationStatus: presentation.status,
         verificationComplete: presentation.complete,
+        checklist,
       }
   }
 }

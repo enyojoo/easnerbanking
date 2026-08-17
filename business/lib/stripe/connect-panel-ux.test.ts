@@ -112,11 +112,25 @@ describe("resolveConnectPanelUx", () => {
         stripeAccountId: "acct_1",
         detailsSubmitted: false,
         hasGridVa: true,
+        externalAccountLinked: true,
       }),
     )
     expect(ux.phase).toBe("in_progress")
     expect(ux.primary?.label).toBe("Continue verification")
     expect(ux.primary?.dialogTitle).toBe("Continue verification")
+  })
+
+  it("links the Grid VA when Stripe is waiting on an external account", () => {
+    const ux = resolveConnectPanelUx(
+      base({
+        stripeAccountId: "acct_1",
+        detailsSubmitted: false,
+        hasGridVa: true,
+        requirementsCurrentlyDue: ["external_account"],
+      }),
+    )
+    expect(ux.phase).toBe("link_payout")
+    expect(ux.primary?.kind).toBe("link_payout")
   })
 
   it("shows provisioning copy when USD account is missing during onboarding", () => {
@@ -155,6 +169,22 @@ describe("resolveConnectPanelUx", () => {
     expect(ux.phase).toBe("requirements_due")
     expect(ux.primary?.label).toBe("Continue verification")
     expect(ux.bodyCopy).toBe(VERIFICATION_SECTION_COPY.verificationOnHold)
+    expect(ux.checklist.some((item) => item.label === "Tax ID" && !item.done)).toBe(true)
+  })
+
+  it("does not treat platform ToS as action needed", () => {
+    const ux = resolveConnectPanelUx(
+      base({
+        stripeAccountId: "acct_1",
+        detailsSubmitted: true,
+        transfersEnabled: true,
+        payoutsEnabled: true,
+        externalAccountLinked: true,
+        hasGridVa: true,
+        requirementsCurrentlyDue: ["tos_acceptance.date"],
+      }),
+    )
+    expect(ux.phase).toBe("pending_review")
   })
 
   it("shows in-review copy with no CTA while Stripe reviews", () => {

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { getStripe } from "../client"
 import { acceptStripeConnectTermsOfService } from "./accept-platform-tos"
 import { ensureConnectedAccount } from "./create-connected-account"
+import { autoLinkGridVaPayoutIfEligible } from "./auto-link-grid-va-payout"
 
 export type CreateAccountSessionResult =
   | { ok: true; clientSecret: string; stripeAccountId: string }
@@ -23,6 +24,10 @@ export async function createConnectAccountSession(
       } catch (e) {
         console.warn("[stripe-connect] tos acceptance update failed:", e)
       }
+    }
+    const autoLink = await autoLinkGridVaPayoutIfEligible(admin, { businessId: input.businessId })
+    if (!autoLink.skipped && !autoLink.ok) {
+      console.warn("[stripe-connect] VA payout link before onboarding failed:", autoLink.error)
     }
     const stripe = getStripe()
     const session = await stripe.accountSessions.create({

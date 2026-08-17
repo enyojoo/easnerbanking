@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { getVirtualAccountDisplayFromDb } from "@/lib/noah/virtual-accounts-db"
 import { getStripe } from "../client"
+import { GRID_USD_SPONSOR_BANK } from "@/lib/grid/usd-sponsor-bank"
 import { configureConnectedAccountPayoutSchedule } from "./configure-payout-schedule"
 import { syncConnectAccountRow } from "./sync-account-from-stripe"
 
@@ -34,8 +35,9 @@ export async function createGridVaExternalAccountOnStripe(
   let externalAccount: { id: string }
   try {
     if (fiat === "usd") {
-      if (!va.accountNumber || !va.routingNumber) {
-        return { ok: false, error: "USD virtual account is missing account or routing number" }
+      const routingNumber = va.routingNumber?.trim() || GRID_USD_SPONSOR_BANK.routingNumber
+      if (!va.accountNumber) {
+        return { ok: false, error: "USD virtual account is missing account number" }
       }
       externalAccount = await stripe.accounts.createExternalAccount(input.stripeAccountId, {
         external_account: {
@@ -44,7 +46,7 @@ export async function createGridVaExternalAccountOnStripe(
           currency: "usd",
           account_holder_type: "company",
           account_holder_name: va.accountHolderName || undefined,
-          routing_number: va.routingNumber,
+          routing_number: routingNumber,
           account_number: va.accountNumber,
         },
         default_for_currency: true,
