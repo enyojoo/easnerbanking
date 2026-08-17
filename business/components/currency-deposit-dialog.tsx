@@ -80,15 +80,17 @@ function PaymentInstructions({
   currency,
   type,
   stablecoinToken,
+  gridUsd = false,
 }: {
   currency: string
   type: "bank" | "stablecoin"
   /** When set (e.g. live Noah wallet), overrides USD→USDC / EUR→EURC default. */
   stablecoinToken?: string
+  gridUsd?: boolean
 }) {
   const lines =
     type === "bank"
-      ? getPaymentInstructions(currency, "bank")
+      ? getPaymentInstructions(currency, "bank", { gridUsd })
       : stablecoinToken === "USDT"
         ? getStablecoinPaymentInstructions("USDT")
         : getPaymentInstructions(currency, "stablecoin")
@@ -193,6 +195,16 @@ function BankDepositDetailsPanel({
         onCopy={onCopy}
       />
 
+      {account.bankAddress ? (
+        <CopyableField
+          label="Bank Address"
+          value={account.bankAddress}
+          copiedField={copiedField}
+          fieldId={`bank-address-${account.id}`}
+          onCopy={onCopy}
+        />
+      ) : null}
+
       <Button variant="outline" size="sm" className="w-full gap-2" onClick={onShare}>
         <Share2 className="h-4 w-4" />
         Share Account Details
@@ -200,7 +212,11 @@ function BankDepositDetailsPanel({
 
       <div className="pt-4 border-t">
         <p className="text-sm font-medium mb-2">Payment Instructions</p>
-        <PaymentInstructions currency={account.currency} type="bank" />
+        <PaymentInstructions
+          currency={account.currency}
+          type="bank"
+          gridUsd={account.currency === "USD" && account.depositProvider === "grid"}
+        />
       </div>
     </div>
   )
@@ -513,6 +529,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
             account.routingNumber && `Routing Number: ${account.routingNumber}`,
             account.sortCode && `Sort Code: ${account.sortCode}`,
             `Bank Name: ${account.bankName}`,
+            account.bankAddress && `Bank Address: ${account.bankAddress}`,
           ]
             .filter(Boolean)
             .join("\n")

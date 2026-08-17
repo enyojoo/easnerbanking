@@ -19,6 +19,7 @@ import {
   Loader2,
   Lock,
   IdCard,
+  FileText,
   Shield,
 } from "lucide-react"
 import { fetchWithSession } from "@/lib/fetch-with-session"
@@ -402,36 +403,50 @@ export function SettingsPersonalTab() {
               </div>
             </div>
           ) : null}
-          {showVerifiedIdentity ? (
-            <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-              <p className="text-sm font-medium flex items-center gap-2">
-                <Lock className="h-4 w-4 text-muted-foreground" aria-hidden />
-                Verified identity
-              </p>
-              {verifiedIdentity.idType ? (
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Government ID</p>
-                  <div className="flex items-center gap-2 text-sm">
-                    {verifiedIdentity.issuingCountry?.code ? (
-                      <CountryFlag code={verifiedIdentity.issuingCountry.code} size={20} />
-                    ) : null}
-                    <span>{verifiedIdentity.idType}</span>
-                    {verifiedIdDisplay ? (
-                      <span className="text-muted-foreground">{verifiedIdDisplay}</span>
-                    ) : null}
-                  </div>
-                </div>
-              ) : null}
-              {verifiedAddressDisplay ? (
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Residential address</p>
-                  <p className="text-sm">{verifiedAddressDisplay}</p>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
         </CardContent>
       </Card>
+
+      {tier1Complete && showVerifiedIdentity ? (
+        <Card>
+          <CardHeader>
+            <SettingsCardHeader
+              title={
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" aria-hidden />
+                  Verified identity
+                </CardTitle>
+              }
+              description="Provided during business verification"
+            />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {verifiedIdentity?.idType ? (
+              <div className="space-y-2">
+                <Label>Government ID</Label>
+                <div className="flex items-center gap-2 text-sm">
+                  {verifiedIdentity.issuingCountry?.code ? (
+                    <CountryFlag code={verifiedIdentity.issuingCountry.code} size={20} />
+                  ) : null}
+                  <Input
+                    className={SETTINGS_INPUT_CLASS}
+                    readOnly
+                    disabled
+                    value={
+                      [verifiedIdentity.idType, verifiedIdDisplay].filter(Boolean).join(" · ") || "—"
+                    }
+                  />
+                </div>
+              </div>
+            ) : null}
+            {verifiedAddressDisplay ? (
+              <div className="space-y-2">
+                <Label>Residential address</Label>
+                <Input className={SETTINGS_INPUT_CLASS} readOnly disabled value={verifiedAddressDisplay} />
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

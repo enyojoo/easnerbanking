@@ -102,12 +102,14 @@ function PaymentInstructions({
   currency,
   type,
   extraLines = [],
+  gridUsd = false,
 }: {
   currency: string
   type: "bank" | "stablecoin"
   extraLines?: string[]
+  gridUsd?: boolean
 }) {
-  const lines = [...getPaymentInstructions(currency, type), ...extraLines]
+  const lines = [...getPaymentInstructions(currency, type, { gridUsd }), ...extraLines]
   if (!lines.length) return null
 
   return (
@@ -260,6 +262,7 @@ function BankPanel({
         <PaymentInstructions
           currency={invoice.currency}
           type="bank"
+          gridUsd={invoice.currency === "USD" && bankAccount.depositProvider === "grid"}
           extraLines={[bankPaymentExtraInstruction(invoice.invoiceNumber)]}
         />
       </div>

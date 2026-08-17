@@ -16,16 +16,16 @@ vi.mock("@/lib/business/org-owner", () => ({
 }))
 
 vi.mock("@/lib/noah/virtual-accounts-db", () => ({
-  hasActiveVirtualAccountInDb: vi.fn(),
+  hasActiveGridVirtualAccountInDb: vi.fn(),
 }))
 
 import { getWalletOwnerId } from "@/lib/wallet/resolve-wallet-owner"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
-import { hasActiveVirtualAccountInDb } from "@/lib/noah/virtual-accounts-db"
+import { hasActiveGridVirtualAccountInDb } from "@/lib/noah/virtual-accounts-db"
 
 const ownerIdMock = vi.mocked(getWalletOwnerId)
 const orgOwnerMock = vi.mocked(resolveBusinessOrgOwnerUserId)
-const hasVaMock = vi.mocked(hasActiveVirtualAccountInDb)
+const hasGridVaMock = vi.mocked(hasActiveGridVirtualAccountInDb)
 
 function adminWithWalletAccounts(rows: Array<{ address?: string; ata?: string }>): SupabaseClient {
   return {
@@ -78,8 +78,8 @@ describe("needsGridBusinessUsdVirtualAccountProvision", () => {
     orgOwnerMock.mockResolvedValue("user-owner")
   })
 
-  it("returns true when USD VA is missing", async () => {
-    hasVaMock.mockResolvedValue(false)
+  it("returns true when Grid USD VA is missing", async () => {
+    hasGridVaMock.mockResolvedValue(false)
     const admin = {} as SupabaseClient
     await expect(
       needsGridBusinessUsdVirtualAccountProvision(admin, {
@@ -87,15 +87,15 @@ describe("needsGridBusinessUsdVirtualAccountProvision", () => {
         userId: "user-1",
       }),
     ).resolves.toBe(true)
-    expect(hasVaMock).toHaveBeenCalledWith(admin, {
+    expect(hasGridVaMock).toHaveBeenCalledWith(admin, {
       currency: "usd",
       userId: "user-owner",
       businessId: "biz-1",
     })
   })
 
-  it("returns false when USD VA exists", async () => {
-    hasVaMock.mockResolvedValue(true)
+  it("returns false when Grid USD VA exists", async () => {
+    hasGridVaMock.mockResolvedValue(true)
     const admin = {} as SupabaseClient
     await expect(
       needsGridBusinessUsdVirtualAccountProvision(admin, {
@@ -114,7 +114,7 @@ describe("resolveGridBusinessProvisionNeeds", () => {
 
   it("reports both needs when vault and USD VA are missing", async () => {
     ownerIdMock.mockResolvedValue("owner-1")
-    hasVaMock.mockResolvedValue(false)
+    hasGridVaMock.mockResolvedValue(false)
     const admin = adminWithWalletAccounts([])
     await expect(
       resolveGridBusinessProvisionNeeds(admin, { businessId: "biz-1", userId: "user-1" }),
@@ -126,7 +126,7 @@ describe("resolveGridBusinessProvisionNeeds", () => {
 
   it("reports ready when vault and USD VA exist", async () => {
     ownerIdMock.mockResolvedValue("owner-1")
-    hasVaMock.mockResolvedValue(true)
+    hasGridVaMock.mockResolvedValue(true)
     const admin = adminWithWalletAccounts([{ address: "vault" }])
     await expect(
       resolveGridBusinessProvisionNeeds(admin, { businessId: "biz-1", userId: "user-1" }),
@@ -145,7 +145,7 @@ describe("needsBusinessProvisionAfterApproval", () => {
 
   it("returns true when only USD VA is missing", async () => {
     ownerIdMock.mockResolvedValue("owner-1")
-    hasVaMock.mockResolvedValue(false)
+    hasGridVaMock.mockResolvedValue(false)
     const admin = adminWithWalletAccounts([{ address: "vault" }])
     await expect(
       needsBusinessProvisionAfterApproval(admin, { businessId: "biz-1", userId: "user-1" }),

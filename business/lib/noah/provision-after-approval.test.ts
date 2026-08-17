@@ -82,10 +82,10 @@ describe("provisionNoahAfterVerificationApproved", () => {
     })
   })
 
-  it("resolves business org owner before scheduling and provisioning", async () => {
+  it("resolves business org owner before scheduling and skips Noah VA provision", async () => {
     resolveBusinessOrgOwnerUserId.mockResolvedValueOnce("owner-user-id")
 
-    await provisionNoahAfterVerificationApproved({
+    const result = await provisionNoahAfterVerificationApproved({
       admin,
       scope: "business",
       noahCustomerId: "ebiz_test",
@@ -101,12 +101,7 @@ describe("provisionNoahAfterVerificationApproved", () => {
         subjectBusinessId: "biz-1",
       }),
     )
-    expect(provisionNoahArtifactsForCustomer).toHaveBeenCalledWith(
-      expect.objectContaining({
-        subjectUserId: "owner-user-id",
-        subjectBusinessId: "biz-1",
-        scope: "business",
-      }),
-    )
+    expect(provisionNoahArtifactsForCustomer).not.toHaveBeenCalled()
+    expect(result).toEqual({ skipped: true, reason: "business_uses_grid_not_noah" })
   })
 })

@@ -64,6 +64,17 @@ describe("verified-identity lock helpers", () => {
     ).toBe(false)
   })
 
+  it("isProfileLockedFromKycFields for Grid verification_status approved", () => {
+    expect(
+      isProfileLockedFromKycFields({
+        verification_provider: "grid",
+        verification_status: "approved",
+        kyc_verified_at: "2025-01-01T00:00:00Z",
+        noah_kyc_status: null,
+      }),
+    ).toBe(true)
+  })
+
   it("buildVerifiedIdentityFromKycFields hides owner KYC until KYB is approved", () => {
     const pending = buildVerifiedIdentityFromKycFields(
       {

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { enrichGridUsdVirtualAccountDisplay } from "@/lib/grid/enrich-grid-va-display"
 import { isUsAbaRoutingNumber, looksLikeSwiftBic, type VirtualAccountDisplay } from "./payment-method-map"
 import {
   isUsdSwiftRow,
@@ -42,6 +43,12 @@ function rowToDisplay(row: VirtualAccountDbRow, currency: "usd" | "eur" | "gbp")
     bankAddress: row.bank_address ?? undefined,
     accountHolderName: row.account_holder_name ?? undefined,
     status: "active",
+    provider:
+      String(row.provider ?? "").trim().toLowerCase() === "grid"
+        ? "grid"
+        : String(row.provider ?? "").trim().toLowerCase() === "noah"
+          ? "noah"
+          : undefined,
   }
 }
 
@@ -70,10 +77,23 @@ export async function hasActiveVirtualAccountInDb(
     currency: "usd" | "eur" | "gbp"
     userId: string
     businessId?: string | null
+    provider?: "grid" | "noah"
   },
 ): Promise<boolean> {
   const display = await getVirtualAccountDisplayFromDb(admin, input)
   return Boolean(display?.hasAccount)
+}
+
+/** True when an active Grid fiat VA row exists for a business. */
+export async function hasActiveGridVirtualAccountInDb(
+  admin: SupabaseClient,
+  input: {
+    currency: "usd" | "eur" | "gbp"
+    userId: string
+    businessId: string
+  },
+): Promise<boolean> {
+  return hasActiveVirtualAccountInDb(admin, { ...input, provider: "grid" })
 }
 
 /**
@@ -87,6 +107,7 @@ export async function getVirtualAccountDisplayFromDb(
     currency: "usd" | "eur" | "gbp"
     userId: string
     businessId?: string | null
+    provider?: "grid" | "noah"
   },
 ): Promise<VirtualAccountDisplay | null> {
   const fiat = input.currency.toUpperCase()
@@ -95,7 +116,7 @@ export async function getVirtualAccountDisplayFromDb(
   let q = admin
     .from("virtual_accounts")
     .select(
-      "noah_virtual_account_id,currency,account_number,routing_number,iban,bic,sort_code,bank_name,bank_address,account_holder_name,updated_at,provider,status",
+      "provider_virtual_account_id,currency,account_number,routing_number,iban,bic,sort_code,bank_name,bank_address,account_holder_name,updated_at,provider,status",
     )
     .neq("status", "retired")
     .neq("status", "inactive")
@@ -107,6 +128,10 @@ export async function getVirtualAccountDisplayFromDb(
     q = q.eq("business_id", input.businessId)
   } else {
     q = q.eq("user_id", input.userId).is("business_id", null)
+  }
+
+  if (input.provider) {
+    q = q.eq("provider", input.provider)
   }
 
   const { data, error } = await q
@@ -124,8 +149,11 @@ export async function getVirtualAccountDisplayFromDb(
   const rows = data as VirtualAccountDbRow[]
   const row =
     (mirroredPmId
-      ? rows.find((r) => String(r.noah_virtual_account_id ?? "").trim() === mirroredPmId)
-      : null) ?? pickPreferredVirtualAccountRow(rows, currency)
+      ? rows.find((r) => String(r.provider_virtual_account_id ?? "").trim() === mirroredPmId)
+      : null) ??
+    pickPreferredVirtualAccountRow(rows, currency, {
+      preferProvider: input.provider ?? (input.businessId ? "grid" : undefined),
+    })
   if (!row) return null
 
   const hasDetails =
@@ -135,5 +163,24 @@ export async function getVirtualAccountDisplayFromDb(
     Boolean(row.bank_name)
   if (!hasDetails) return null
 
-  return rowToDisplay(row, currency)
+  let display = rowToDisplay(row, currency)
+  const rowProvider = String(row.provider ?? "").trim().toLowerCase()
+  if (rowProvider === "grid" && currency === "usd") {
+    let accountHolderNameFallback: string | null = null
+    if (input.businessId) {
+      const { data: biz } = await admin
+        .from("businesses")
+        .select("name")
+        .eq("id", input.businessId)
+        .maybeSingle()
+      accountHolderNameFallback = String(biz?.name ?? "").trim() || null
+    }
+    display = enrichGridUsdVirtualAccountDisplay(display, {
+      provider: "grid",
+      currency: "usd",
+      accountHolderNameFallback,
+    })
+  }
+
+  return display
 }

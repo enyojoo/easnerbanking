@@ -3,7 +3,8 @@ import { fetchNoahCustomerForScope } from "@/lib/noah/fetch-customer"
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
 import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../_helpers"
 import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
-import { provisionNoahAfterVerificationApproved } from "@/lib/noah/provision-after-approval"
+import { provisionAfterVerificationApproved } from "@/lib/verification/provision-after-approval"
+import { businessUsesGridVerification } from "@/lib/compliance/business-tier1"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
 export const runtime = "nodejs"
@@ -37,12 +38,24 @@ export async function POST(request: Request) {
     let provisioned: Record<string, unknown> | undefined
     if (kyc === "approved") {
       const admin = createSupabaseAdmin()
-      provisioned = await provisionNoahAfterVerificationApproved({
+      let gridCustomerId: string | null = null
+      if (ctx.scope === "business" && ctx.businessId) {
+        const { data: biz } = await admin
+          .from("businesses")
+          .select("verification_provider,grid_customer_id")
+          .eq("id", ctx.businessId)
+          .maybeSingle()
+        if (businessUsesGridVerification(biz as { verification_provider?: string | null } | null)) {
+          gridCustomerId = String(biz?.grid_customer_id ?? "").trim() || null
+        }
+      }
+      provisioned = await provisionAfterVerificationApproved({
         admin,
         scope: ctx.scope,
-        noahCustomerId: resolvedCustomerId,
         subjectUserId: user.id,
         subjectBusinessId: ctx.businessId,
+        partnerCustomerId: gridCustomerId ?? resolvedCustomerId,
+        provider: gridCustomerId ? "grid" : undefined,
       })
     }
     return NextResponse.json({ success: true, noahScope: ctx.scope, provisioned })

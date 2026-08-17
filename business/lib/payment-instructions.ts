@@ -1,11 +1,24 @@
 import { receiveStablecoinPaymentNotes } from "@easner/shared"
 
+/** Grid business USD receive rails (Cross River sponsor bank). */
+export function getGridUsdBankPaymentInstructions(): string[] {
+  return [
+    "Only send via ACH, Wire, RTP, or FedNow.",
+    "SWIFT is not supported.",
+    "Processing time: RTP & FedNow (instant), ACH & Wire (up to 48 hours).",
+  ]
+}
+
 /** Returns payment instruction strings for a given currency and type (for PDF or text) */
 export function getPaymentInstructions(
   currency: string,
-  type: "bank" | "stablecoin"
+  type: "bank" | "stablecoin",
+  opts?: { gridUsd?: boolean },
 ): string[] {
   if (type === "bank") {
+    if (currency === "USD" && opts?.gridUsd) {
+      return getGridUsdBankPaymentInstructions()
+    }
     if (currency === "USD") {
       return [
         "Only send ACH or Fedwire.",

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { qk } from "@easner/shared"
 import { useBusinessProfile } from "@/lib/use-business-profile"
+import { useAuth } from "@/lib/auth-context"
+import { CACHE_KEYS, dataCache } from "@/lib/cache"
 import {
   isBusinessTier1Complete,
   needsBusinessVirtualAccountProvision,
@@ -51,6 +53,7 @@ export function resolveBusinessSyncMinMs(verificationStatus: string | null | und
 export function useBusinessSync(): void {
   const queryClient = useQueryClient()
   const { scope } = useScope()
+  const { user } = useAuth()
   const {
     businessId,
     tier1Complete,
@@ -60,7 +63,15 @@ export function useBusinessSync(): void {
   } = useBusinessProfile()
 
   const lastAutoSyncMsRef = useRef(0)
+  const prevTier1CompleteRef = useRef(false)
   const [fiatProvisionResolved, setFiatProvisionResolved] = useState(false)
+
+  useEffect(() => {
+    if (tier1Complete && !prevTier1CompleteRef.current && user?.id) {
+      dataCache.invalidate(CACHE_KEYS.PERSONAL_SETTINGS(user.id))
+    }
+    prevTier1CompleteRef.current = tier1Complete
+  }, [tier1Complete, user?.id])
 
   useEffect(() => {
     setFiatProvisionResolved(false)
@@ -93,6 +104,9 @@ export function useBusinessSync(): void {
         if (scope) {
           void queryClient.invalidateQueries({ queryKey: qk.wallets.root(scope) })
         }
+        if (user?.id) {
+          dataCache.invalidate(CACHE_KEYS.PERSONAL_SETTINGS(user.id))
+        }
       }
     } catch {
       /* non-blocking; hosted return + webhooks can still update */
@@ -104,6 +118,7 @@ export function useBusinessSync(): void {
     fiatProvisionResolved,
     profileSlice,
     tier1VerificationStatus,
+    user?.id,
   ])
 
   useEffect(() => {

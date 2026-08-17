@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { hasActiveVirtualAccountInDb } from "@/lib/noah/virtual-accounts-db"
-import { isBusinessTier1Complete } from "@/lib/compliance/business-tier1"
+import { hasActiveGridVirtualAccountInDb, hasActiveVirtualAccountInDb } from "@/lib/noah/virtual-accounts-db"
+import { businessUsesGridVerification, isBusinessTier1Complete } from "@/lib/compliance/business-tier1"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import type { BusinessStripeConnectAccountRow, ConnectReadyStatus } from "./types"
 
@@ -45,12 +45,19 @@ export async function resolveConnectReadyForCheckout(
   const tier1Complete = isBusinessTier1Complete(biz)
 
   const ownerUserId = await resolveBusinessOrgOwnerUserId(admin, businessId)
+  const usesGrid = businessUsesGridVerification(biz as { verification_provider?: string | null } | null)
   const hasGridVa = ownerUserId
-    ? await hasActiveVirtualAccountInDb(admin, {
-        currency: fiat,
-        userId: ownerUserId,
-        businessId,
-      })
+    ? usesGrid
+      ? await hasActiveGridVirtualAccountInDb(admin, {
+          currency: fiat,
+          userId: ownerUserId,
+          businessId,
+        })
+      : await hasActiveVirtualAccountInDb(admin, {
+          currency: fiat,
+          userId: ownerUserId,
+          businessId,
+        })
     : false
 
   const row = await getConnectAccountRow(admin, businessId)

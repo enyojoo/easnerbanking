@@ -13,9 +13,30 @@ import {
 } from "@/lib/noah/persist-account-data"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { resolveBankOnrampDestinationAddress } from "@/lib/deposit-omnibus/resolve-va-destination"
+import { businessUsesGridVerification } from "@/lib/compliance/business-tier1"
 import { hasActiveVirtualAccountInDb } from "@/lib/noah/virtual-accounts-db"
 
 const NOAH_BANK_ONRAMP_NETWORK = "Solana"
+
+const EMPTY_BANK_ONRAMP_SUMMARY: BankOnrampVirtualAccountSummary = {
+  usdBankOnrampAttempted: false,
+  eurBankOnrampAttempted: false,
+  usdBankOnrampCreated: false,
+  eurBankOnrampCreated: false,
+}
+
+async function isGridVerifiedBusiness(
+  admin: SupabaseClient,
+  subjectBusinessId: string | null,
+): Promise<boolean> {
+  if (!subjectBusinessId) return false
+  const { data } = await admin
+    .from("businesses")
+    .select("verification_provider")
+    .eq("id", subjectBusinessId)
+    .maybeSingle()
+  return businessUsesGridVerification(data as { verification_provider?: string | null } | null)
+}
 
 type FiatRail = "usd" | "eur"
 
@@ -198,6 +219,14 @@ export async function ensureFiatVirtualAccountsViaBankOnramp(
     hasEurPaymentMethod: boolean
   },
 ): Promise<BankOnrampVirtualAccountSummary> {
+  if (
+    opts.scope === "business" ||
+    opts.subjectBusinessId ||
+    (await isGridVerifiedBusiness(admin, opts.subjectBusinessId))
+  ) {
+    return { ...EMPTY_BANK_ONRAMP_SUMMARY }
+  }
+
   const usd = await ensureSingleFiatRailViaBankOnramp(
     admin,
     opts,
@@ -243,6 +272,21 @@ export async function reprovisionBankOnrampRail(
     dryRun?: boolean
   },
 ): Promise<ReprovisionBankOnrampRailResult> {
+  if (
+    opts.scope === "business" ||
+    opts.subjectBusinessId ||
+    (await isGridVerifiedBusiness(admin, opts.subjectBusinessId))
+  ) {
+    return {
+      rail: opts.rail,
+      destinationAddress: null,
+      attempted: false,
+      ok: false,
+      paymentMethodId: null,
+      error: "grid_business_uses_grid_va_not_noah_onramp",
+    }
+  }
+
   const railConfig = FIAT_RAILS.find((r) => r.fiat === opts.rail)
   if (!railConfig) {
     return {
@@ -380,6 +424,13 @@ export async function ensureFiatVirtualAccountForLedgerCurrency(
 
   const scope = opts.ownerType === "business" ? "business" : "individual"
   const subjectBusinessId = scope === "business" ? opts.ownerRef : null
+  if (
+    scope === "business" ||
+    subjectBusinessId ||
+    (await isGridVerifiedBusiness(admin, subjectBusinessId))
+  ) {
+    return
+  }
   let subjectUserId = opts.ownerRef
   if (scope === "business") {
     const ownerId = await resolveBusinessOrgOwnerUserId(admin, opts.ownerRef)

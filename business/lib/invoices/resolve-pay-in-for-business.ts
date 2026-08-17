@@ -42,6 +42,7 @@ function vaJsonFromDisplay(
     bankName: display.bankName,
     bankAddress: display.bankAddress,
     accountHolderName: display.accountHolderName,
+    provider: display.provider,
   }
 }
 

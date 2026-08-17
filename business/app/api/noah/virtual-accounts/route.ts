@@ -33,6 +33,7 @@ type VaAccountJson = {
   accountHolderName?: string
   status?: string
   source?: "db" | "noah" | "grid"
+  provider?: "grid" | "noah"
 }
 
 const VA_CURRENCIES = new Set<VaCurrency>(["usd", "eur", "gbp"])
@@ -85,7 +86,8 @@ function accountJsonFromDb(
     bankAddress: cached.bankAddress,
     accountHolderName: cached.accountHolderName,
     status: cached.status,
-    source: "db",
+    source: cached.provider === "grid" ? "grid" : "db",
+    provider: cached.provider,
   }
 }
 

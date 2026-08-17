@@ -180,7 +180,7 @@ export async function inferSettlementRail(
   // Default fiat → Grid VA
   const { data: va } = await admin
     .from("virtual_accounts")
-    .select("id,noah_virtual_account_id,account_number,iban")
+    .select("id,provider_virtual_account_id,account_number,iban")
     .eq("business_id", businessId)
     .eq("provider", "grid")
     .eq("status", "active")
@@ -188,7 +188,7 @@ export async function inferSettlementRail(
     .maybeSingle()
 
   const destinationRef =
-    (va?.noah_virtual_account_id && String(va.noah_virtual_account_id)) ||
+    (va?.provider_virtual_account_id && String(va.provider_virtual_account_id)) ||
     (va?.iban && String(va.iban)) ||
     (va?.account_number && String(va.account_number)) ||
     (va?.id && String(va.id)) ||

@@ -55,6 +55,10 @@ export async function provisionNoahAfterVerificationApproved(opts: {
   })
   await trySyncTurnkeyDepositVaultsIfNeeded(admin, accountCtx)
 
+  if (scope === "business" || subjectBusinessId) {
+    return { skipped: true, reason: "business_uses_grid_not_noah" }
+  }
+
   const provisioned = await provisionNoahArtifactsForCustomer({
     subjectUserId,
     subjectBusinessId,

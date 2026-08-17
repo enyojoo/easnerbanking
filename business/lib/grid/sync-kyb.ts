@@ -184,6 +184,7 @@ export async function syncGridBusinessKybToSupabase(input: {
       fallbackUserId: input.userId,
       customer,
       occurredAt: status === "approved" ? verifiedAt : undefined,
+      kybApproved: status === "approved",
     })
   }
 

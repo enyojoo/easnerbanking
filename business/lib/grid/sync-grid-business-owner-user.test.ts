@@ -104,4 +104,66 @@ describe("syncGridBusinessOwnerUserFromKyb", () => {
       }),
     )
   })
+
+  it("syncs owner profile from UBO when KYB is approved even if owner already approved", async () => {
+    mockFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: {
+              id: "owner-1",
+              email: "hello@easner.com",
+              full_name: "Samuel Enyojo Odiba",
+              verification_status: "approved",
+              noah_kyc_status: null,
+            },
+          }),
+        }),
+      }),
+      update: mockOwnerUpdate,
+    })
+
+    await syncGridBusinessOwnerUserFromKyb({
+      admin: mockAdmin as never,
+      businessId: "biz-1",
+      fallbackUserId: "fallback",
+      customer: {
+        ...EASNER_CUSTOMER,
+        beneficialOwners: [
+          {
+            id: "BeneficialOwner:019ff8c8-66cb-8887-0000-9dbe15c60c97",
+            roles: ["UBO"],
+            ownershipPercentage: 90,
+            kycStatus: "APPROVED",
+            personalInfo: {
+              firstName: "Samuel",
+              middleName: "Enyojo",
+              lastName: "Odiba",
+              birthDate: "1996-11-06",
+              nationality: "NG",
+              idType: "NON_US_TAX_ID",
+              identifier: "22380755976",
+              countryOfIssuance: "NG",
+              address: {
+                line1: "39 Plot, Apo Dutse",
+                city: "Abuja",
+                state: "FC",
+                postalCode: "900108",
+                country: "NG",
+              },
+            },
+          },
+        ],
+      },
+      kybApproved: true,
+    })
+
+    expect(mockOwnerUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kyc_id_type: "Tax ID",
+        kyc_id_number: "22380755976",
+        kyc_address_street: "39 Plot, Apo Dutse",
+      }),
+    )
+  })
 })

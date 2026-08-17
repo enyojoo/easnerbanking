@@ -16,6 +16,7 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { reprovisionBankOnrampVirtualAccounts } from "@/lib/noah/bank-onramp-virtual-accounts"
 import { resolveReprovisionSubject } from "@/lib/noah/resolve-reprovision-subject"
+import { businessUsesGridVerification } from "@/lib/compliance/business-tier1"
 import {
   isDepositOmnibusEnabled,
   depositOmnibusAllowlistCustomerIds,
@@ -45,6 +46,20 @@ async function main() {
   const subject = await resolveReprovisionSubject(admin, { businessId, userId, noahCustomerId })
   if ("error" in subject) {
     throw new Error(subject.error)
+  }
+
+  if (subject.scope === "business" && subject.subjectBusinessId) {
+    const { data: biz } = await admin
+      .from("businesses")
+      .select("verification_provider")
+      .eq("id", subject.subjectBusinessId)
+      .maybeSingle()
+    if (businessUsesGridVerification(biz as { verification_provider?: string | null } | null)) {
+      console.error(
+        "Grid-verified business — use Grid sync / refreshGridBusinessReceiveRails instead of Noah on-ramp.",
+      )
+      process.exit(1)
+    }
   }
 
   console.log("Subject:", subject)

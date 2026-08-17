@@ -8,7 +8,8 @@ import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
 import { requireAuth, requireNoahEnv } from "../_helpers"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
-import { provisionNoahAfterVerificationApproved } from "@/lib/noah/provision-after-approval"
+import { provisionAfterVerificationApproved } from "@/lib/verification/provision-after-approval"
+import { businessUsesGridVerification } from "@/lib/compliance/business-tier1"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
@@ -80,12 +81,24 @@ export async function POST(request: Request) {
     )
 
     const admin = createSupabaseAdmin()
-    const provisioned = await provisionNoahAfterVerificationApproved({
+    let gridCustomerId: string | null = null
+    if (scope === "business" && acc.ctx.subjectBusinessId) {
+      const { data: biz } = await admin
+        .from("businesses")
+        .select("verification_provider,grid_customer_id")
+        .eq("id", acc.ctx.subjectBusinessId)
+        .maybeSingle()
+      if (businessUsesGridVerification(biz as { verification_provider?: string | null } | null)) {
+        gridCustomerId = String(biz?.grid_customer_id ?? "").trim() || null
+      }
+    }
+    const provisioned = await provisionAfterVerificationApproved({
       admin,
       scope,
-      noahCustomerId: resolvedCustomerId,
       subjectUserId,
       subjectBusinessId: acc.ctx.subjectBusinessId,
+      partnerCustomerId: gridCustomerId ?? resolvedCustomerId,
+      provider: gridCustomerId ? "grid" : undefined,
     })
 
     return NextResponse.json({

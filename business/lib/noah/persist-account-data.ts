@@ -55,8 +55,11 @@ export async function mirrorVirtualAccountIdOnSubject(
 type VirtualAccountUpsert = {
   user_id: string
   business_id: string | null
-  noah_virtual_account_id: string
+  provider_virtual_account_id: string
   provider_customer_id: string | null
+  provider: "noah"
+  status: "active"
+  settlement_target: "turnkey"
   currency: string
   account_number: string | null
   routing_number: string | null
@@ -67,6 +70,11 @@ type VirtualAccountUpsert = {
   bank_address: string | null
   account_holder_name: string | null
   updated_at: string
+}
+
+function isNoahProviderRow(row: VirtualAccountDbRow): boolean {
+  const provider = String(row.provider ?? "noah").trim().toLowerCase()
+  return provider === "noah" || provider === ""
 }
 
 function inferPayinCurrency(pm: Record<string, unknown>): "usd" | "eur" | "gbp" | null {
@@ -80,7 +88,7 @@ function mergedUsdFieldsFromDbRow(
   row: VirtualAccountDbRow,
 ): Partial<MergedUsdVirtualAccountFields> {
   return {
-    canonicalPmId: row.noah_virtual_account_id ?? undefined,
+    canonicalPmId: row.provider_virtual_account_id ?? undefined,
     accountNumber: row.account_number,
     routingNumber: row.routing_number,
     bic: row.bic,
@@ -98,7 +106,7 @@ async function fetchUsdVirtualAccountRows(
   let q = admin
     .from("virtual_accounts")
     .select(
-      "noah_virtual_account_id,currency,account_number,routing_number,iban,bic,sort_code,bank_name,bank_address,account_holder_name",
+      "provider_virtual_account_id,currency,account_number,routing_number,iban,bic,sort_code,bank_name,bank_address,account_holder_name,provider",
     )
     .eq("currency", "USD")
   if (businessId) {
@@ -125,11 +133,12 @@ async function pruneExtraUsdVirtualAccountRows(
 ): Promise<void> {
   const rows = await fetchUsdVirtualAccountRows(admin, opts.subjectUserId, opts.businessId)
   const staleIds = rows
-    .map((r) => String(r.noah_virtual_account_id ?? "").trim())
+    .filter(isNoahProviderRow)
+    .map((r) => String(r.provider_virtual_account_id ?? "").trim())
     .filter((id) => id && id !== opts.keepPmId)
   if (!staleIds.length) return
 
-  const { error } = await admin.from("virtual_accounts").delete().in("noah_virtual_account_id", staleIds)
+  const { error } = await admin.from("virtual_accounts").delete().in("provider_virtual_account_id", staleIds)
   if (error) {
     console.error("[pruneExtraUsdVirtualAccountRows]", error)
   }
@@ -143,7 +152,7 @@ async function fetchEurVirtualAccountRows(
   let q = admin
     .from("virtual_accounts")
     .select(
-      "noah_virtual_account_id,currency,account_number,routing_number,iban,bic,sort_code,bank_name,bank_address,account_holder_name",
+      "provider_virtual_account_id,currency,account_number,routing_number,iban,bic,sort_code,bank_name,bank_address,account_holder_name,provider",
     )
     .eq("currency", "EUR")
   if (businessId) {
@@ -170,11 +179,12 @@ async function pruneExtraEurVirtualAccountRows(
 ): Promise<void> {
   const rows = await fetchEurVirtualAccountRows(admin, opts.subjectUserId, opts.businessId)
   const staleIds = rows
-    .map((r) => String(r.noah_virtual_account_id ?? "").trim())
+    .filter(isNoahProviderRow)
+    .map((r) => String(r.provider_virtual_account_id ?? "").trim())
     .filter((id) => id && id !== opts.keepPmId)
   if (!staleIds.length) return
 
-  const { error } = await admin.from("virtual_accounts").delete().in("noah_virtual_account_id", staleIds)
+  const { error } = await admin.from("virtual_accounts").delete().in("provider_virtual_account_id", staleIds)
   if (error) {
     console.error("[pruneExtraEurVirtualAccountRows]", error)
   }
@@ -192,8 +202,11 @@ async function upsertMergedUsdVirtualAccount(
   const row: VirtualAccountUpsert = {
     user_id: opts.subjectUserId,
     business_id: opts.businessId ?? null,
-    noah_virtual_account_id: opts.merged.canonicalPmId,
+    provider_virtual_account_id: opts.merged.canonicalPmId,
     provider_customer_id: opts.noahCustomerId?.trim() || null,
+    provider: "noah",
+    status: "active",
+    settlement_target: "turnkey",
     currency: "USD",
     account_number: opts.merged.accountNumber,
     routing_number: opts.merged.routingNumber,
@@ -208,7 +221,7 @@ async function upsertMergedUsdVirtualAccount(
 
   const { error: upsertErr } = await admin
     .from("virtual_accounts")
-    .upsert(row, { onConflict: "noah_virtual_account_id" })
+    .upsert(row, { onConflict: "provider_virtual_account_id" })
 
   if (upsertErr) {
     console.error("[upsertMergedUsdVirtualAccount] upsert virtual_accounts:", upsertErr)
@@ -243,8 +256,11 @@ function buildUpsertRow(input: {
   return {
     user_id: input.subjectUserId,
     business_id: input.businessId ?? null,
-    noah_virtual_account_id: input.pmId,
+    provider_virtual_account_id: input.pmId,
     provider_customer_id: input.noahCustomerId?.trim() || null,
+    provider: "noah",
+    status: "active",
+    settlement_target: "turnkey",
     currency: input.currency.toUpperCase(),
     account_number: input.cols.accountNumber,
     routing_number: input.cols.routingNumber,
@@ -314,7 +330,7 @@ export async function persistVirtualAccountFromPaymentMethod(
 
   const { error: upsertErr } = await admin
     .from("virtual_accounts")
-    .upsert(row, { onConflict: "noah_virtual_account_id" })
+    .upsert(row, { onConflict: "provider_virtual_account_id" })
 
   if (upsertErr) {
     console.error("[persistVirtualAccountFromPaymentMethod] upsert virtual_accounts:", upsertErr)
@@ -467,7 +483,7 @@ export async function persistVirtualAccountFromBankOnrampWorkflow(
 
   const { error: upsertErr } = await admin
     .from("virtual_accounts")
-    .upsert(row, { onConflict: "noah_virtual_account_id" })
+    .upsert(row, { onConflict: "provider_virtual_account_id" })
 
   if (upsertErr) {
     console.error("[persistVirtualAccountFromBankOnrampWorkflow] upsert virtual_accounts:", upsertErr)

@@ -45,6 +45,8 @@ export async function syncGridBusinessOwnerUserFromKyb(input: {
   fallbackUserId: string
   customer: Record<string, unknown>
   occurredAt?: string
+  /** When true, always refresh UBO ID/address onto owner even if already individually approved. */
+  kybApproved?: boolean
 }): Promise<SyncGridBusinessOwnerUserResult> {
   const ownerUserId = await resolveOrgOwnerUserId(
     input.admin,
@@ -75,7 +77,11 @@ export async function syncGridBusinessOwnerUserFromKyb(input: {
     patch.grid_beneficial_owner_id = beneficialOwnerId
   }
 
-  if (!ownerIndividualApproved(ownerRow as { verification_status?: string | null; noah_kyc_status?: string | null })) {
+  const ownerApproved = ownerIndividualApproved(
+    ownerRow as { verification_status?: string | null; noah_kyc_status?: string | null },
+  )
+  const shouldSyncOwnerProfile = input.kybApproved === true || !ownerApproved
+  if (shouldSyncOwnerProfile) {
     Object.assign(
       patch,
       parseGridBeneficialOwnerForOwnerUsers(input.customer, {
@@ -94,7 +100,7 @@ export async function syncGridBusinessOwnerUserFromKyb(input: {
   }
 
   const ownerVerificationStatus = beneficialOwnerKycStatus(beneficialOwner)
-  if (ownerVerificationStatus && !ownerIndividualApproved(ownerRow as { verification_status?: string | null; noah_kyc_status?: string | null })) {
+  if (ownerVerificationStatus && (input.kybApproved === true || !ownerApproved)) {
     await persistVerificationStatus(input.admin, {
       kind: "individual",
       userId: ownerUserId,

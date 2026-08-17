@@ -5,6 +5,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireNoahEnv } from "@/app/api/noah/_helpers"
 import { reprovisionBankOnrampVirtualAccounts } from "@/lib/noah/bank-onramp-virtual-accounts"
 import { resolveReprovisionSubject } from "@/lib/noah/resolve-reprovision-subject"
+import { businessUsesGridVerification } from "@/lib/compliance/business-tier1"
 
 export const runtime = "nodejs"
 
@@ -54,6 +55,24 @@ export async function POST(request: Request) {
   })
   if ("error" in subject) {
     return NextResponse.json({ error: subject.error }, { status: 400 })
+  }
+
+  if (subject.scope === "business" && subject.subjectBusinessId) {
+    const { data: biz } = await admin
+      .from("businesses")
+      .select("verification_provider")
+      .eq("id", subject.subjectBusinessId)
+      .maybeSingle()
+    if (businessUsesGridVerification(biz as { verification_provider?: string | null } | null)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Grid-verified businesses use Grid INTERNAL_FIAT accounts, not Noah bank on-ramp.",
+          code: "GRID_BUSINESS_NO_NOAH_ONRAMP",
+        },
+        { status: 400 },
+      )
+    }
   }
 
   const rails = parseRails(body.rails)

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { isGridDigitalAssetJurisdiction } from "@easner/shared"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
+import { enrichGridUsdVirtualAccountPersistFields } from "./enrich-grid-va-display"
 import { gridFetchAllPages } from "./http"
 import { normalizeGridCustomerId } from "./quote-request"
 import { registerTurnkeyUsdcExternalAccount } from "./turnkey-external-account"
@@ -47,8 +48,15 @@ export async function persistGridVirtualAccountsFromInternalAccounts(input: {
   businessId: string
   userId: string
   customerId: string
-}): Promise<{ persisted: number }> {
+}): Promise<{ persisted: number; pendingProvisioning: boolean }> {
   const customerId = normalizeGridCustomerId(input.customerId)
+  const { data: biz } = await input.admin
+    .from("businesses")
+    .select("name")
+    .eq("id", input.businessId)
+    .maybeSingle()
+  const businessName = String(biz?.name ?? "").trim() || null
+
   const rows = await gridFetchAllPages<GridInternalAccountRow>({
     path: "/customers/internal-accounts",
     query: { customerId, type: "INTERNAL_FIAT" },
@@ -56,9 +64,19 @@ export async function persistGridVirtualAccountsFromInternalAccounts(input: {
   })
 
   let persisted = 0
+  let pendingProvisioning = false
   for (const row of rows) {
-    if (String(row.status ?? "").toUpperCase() === "FAILED") continue
+    const accountStatus = String(row.status ?? "").toUpperCase()
+    if (accountStatus === "FAILED") continue
+    if (accountStatus === "PENDING") {
+      pendingProvisioning = true
+      continue
+    }
     const instructions = row.fundingPaymentInstructions ?? []
+    if (instructions.length === 0) {
+      pendingProvisioning = true
+      continue
+    }
     for (const inst of instructions) {
       const info = inst.accountOrWalletInfo
       if (!info || typeof info !== "object") continue
@@ -72,7 +90,15 @@ export async function persistGridVirtualAccountsFromInternalAccounts(input: {
       if (!currency || !["usd", "eur", "gbp"].includes(currency)) continue
 
       const bank = mapBankFields(info, currency)
-      if (!bank.account_number && !bank.iban) continue
+      if (!bank.account_number && !bank.iban) {
+        pendingProvisioning = true
+        continue
+      }
+
+      const gridUsdEnrichment =
+        currency === "usd"
+          ? enrichGridUsdVirtualAccountPersistFields(bank, businessName)
+          : null
 
       const providerAccountId = `${row.id}:${currency}:${accountType || "bank"}`
       const now = new Date().toISOString()
@@ -82,9 +108,10 @@ export async function persistGridVirtualAccountsFromInternalAccounts(input: {
         provider: "grid" as const,
         status: "active" as const,
         settlement_target: "turnkey" as const,
-        noah_virtual_account_id: providerAccountId,
+        provider_virtual_account_id: providerAccountId,
         provider_customer_id: customerId,
         ...bank,
+        ...(gridUsdEnrichment ?? {}),
         updated_at: now,
       }
 
@@ -93,7 +120,7 @@ export async function persistGridVirtualAccountsFromInternalAccounts(input: {
         .select("id")
         .eq("business_id", input.businessId)
         .eq("provider", "grid")
-        .eq("noah_virtual_account_id", providerAccountId)
+        .eq("provider_virtual_account_id", providerAccountId)
         .maybeSingle()
 
       if (existing?.id) {
@@ -105,7 +132,10 @@ export async function persistGridVirtualAccountsFromInternalAccounts(input: {
       }
     }
   }
-  return { persisted }
+  if (persisted === 0 && rows.some((r) => String(r.status ?? "").toUpperCase() === "PENDING")) {
+    pendingProvisioning = true
+  }
+  return { persisted, pendingProvisioning }
 }
 
 export async function provisionGridAfterBusinessKybApproved(input: {
@@ -145,6 +175,7 @@ export async function provisionGridAfterBusinessKybApproved(input: {
     turnkey: true,
     gridExternalAccountId: receiveRails.gridExternalAccountId,
     gridVirtualAccountsPersisted: receiveRails.gridVirtualAccountsPersisted,
+    gridVirtualAccountsPending: receiveRails.gridVirtualAccountsPending,
   }
 }
 
@@ -154,7 +185,11 @@ export async function refreshGridBusinessReceiveRails(input: {
   businessId: string
   userId: string
   gridCustomerId?: string | null
-}): Promise<{ gridVirtualAccountsPersisted: number; gridExternalAccountId: string | null }> {
+}): Promise<{
+  gridVirtualAccountsPersisted: number
+  gridVirtualAccountsPending: boolean
+  gridExternalAccountId: string | null
+}> {
   let gridCustomerId = String(input.gridCustomerId ?? "").trim()
   let country: string | null = null
 
@@ -176,7 +211,7 @@ export async function refreshGridBusinessReceiveRails(input: {
   }
 
   if (!gridCustomerId) {
-    return { gridVirtualAccountsPersisted: 0, gridExternalAccountId: null }
+    return { gridVirtualAccountsPersisted: 0, gridVirtualAccountsPending: false, gridExternalAccountId: null }
   }
 
   let externalAccountId: string | null = null
@@ -199,10 +234,11 @@ export async function refreshGridBusinessReceiveRails(input: {
     businessId: input.businessId,
     userId: input.userId,
     customerId: gridCustomerId,
-  }).catch(() => ({ persisted: 0 }))
+  }).catch(() => ({ persisted: 0, pendingProvisioning: false }))
 
   return {
     gridVirtualAccountsPersisted: vaRes.persisted,
+    gridVirtualAccountsPending: vaRes.pendingProvisioning,
     gridExternalAccountId: externalAccountId,
   }
 }

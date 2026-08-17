@@ -24,7 +24,7 @@ type LiquidationSnapshot = {
   memo: string | null
 }
 
-type ProvisionSummary = {
+export type ProvisionSummary = {
   usdAccountCreated: boolean
   eurAccountCreated: boolean
   gbpAccountCreated: boolean
@@ -37,6 +37,16 @@ type ProvisionSummary = {
   eurBankOnrampAttempted?: boolean
   usdBankOnrampCreated?: boolean
   eurBankOnrampCreated?: boolean
+  skipped?: boolean
+  reason?: string
+}
+
+const EMPTY_PROVISION_SUMMARY: ProvisionSummary = {
+  usdAccountCreated: false,
+  eurAccountCreated: false,
+  gbpAccountCreated: false,
+  skipped: true,
+  reason: "business_uses_grid_not_noah",
 }
 
 function parseLiquidationFromProvider(
@@ -95,6 +105,10 @@ export async function provisionNoahArtifactsForCustomer(opts: {
   /** When set, runs bank-deposit-to-onchain workflow for missing USD/EUR VAs. */
   admin?: SupabaseClient
 }): Promise<ProvisionSummary> {
+  if (opts.scope === "business" || opts.subjectBusinessId) {
+    return { ...EMPTY_PROVISION_SUMMARY }
+  }
+
   const { subjectUserId, subjectBusinessId = null, noahCustomerId, admin } = opts
   const paymentMethods = await fetchAllPaymentMethodsForCustomer(noahCustomerId)
 

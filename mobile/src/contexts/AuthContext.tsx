@@ -5,9 +5,14 @@ import {
   isUserDeepLinkUrl,
   stashPendingDeepLinkFromUrl,
 } from '../lib/pendingDeepLinkNavigation'
-import { makeRedirectUri } from 'expo-auth-session'
 import * as WebBrowser from 'expo-web-browser'
 import { openEasnerInAppBrowser } from '../lib/inAppBrowser'
+import {
+  GOOGLE_OAUTH_INCOMPLETE_MESSAGE,
+  isGoogleSignInCancelledMessage,
+  mapOAuthCallbackErrorMessage,
+} from '../lib/oauthCallbackError'
+import { getOAuthRedirectUri } from '../lib/oauthRedirect'
 import * as AppleAuthentication from 'expo-apple-authentication'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase, clearInvalidPersistedAuthSession } from '../lib/supabase'
@@ -166,13 +171,6 @@ function shouldRunPostAuthBootstrap(sourceEvent?: string): boolean {
     sourceEvent === 'USER_UPDATED' ||
     sourceEvent === 'PASSWORD_RECOVERY'
   )
-}
-
-function getOAuthRedirectUri(): string {
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    return `${window.location.origin}/auth/callback`
-  }
-  return makeRedirectUri({ scheme: 'easner', path: 'auth/callback' })
 }
 
 /** True when we asked for a native deep link but Supabase substituted an https Site URL. */
@@ -737,10 +735,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const { code, accessToken, refreshToken, error, errorDescription } = parseAuthCallbackUrl(url)
     if (error) {
       console.warn('AuthContext: OAuth error:', error, errorDescription ?? '')
-      oauthCallbackErrorRef.current =
-        error === 'access_denied'
-          ? 'Google sign-in was cancelled.'
-          : errorDescription?.trim() || 'Sign-in failed. Please try again.'
+      oauthCallbackErrorRef.current = mapOAuthCallbackErrorMessage(error, errorDescription)
       analytics.trackSignInCancelled('google', { reason: error })
       return false
     }
@@ -752,6 +747,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const { error: exErr } = await supabase.auth.exchangeCodeForSession(code)
         if (exErr) {
           console.warn('AuthContext: exchangeCodeForSession failed:', exErr.message)
+          oauthCallbackErrorRef.current =
+            exErr.message || 'Could not complete Google sign-in. Try again.'
           return false
         }
         return true
@@ -763,6 +760,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         })
         if (sErr) {
           console.warn('AuthContext: setSession (OAuth fragment) failed:', sErr.message)
+          oauthCallbackErrorRef.current =
+            sErr.message || 'Could not complete Google sign-in. Try again.'
           return false
         }
         return true
@@ -1128,27 +1127,39 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // OAuth completion is delivered via Linking → consumeOAuthCallbackIfPresent (same as before).
       await openEasnerInAppBrowser(authUrl)
 
-      // Deep-link exchange can land as the browser closes. Give Linking a short settle, then
-      // finalizePostAuthSession (up to 20s) so a slow Android callback is not treated as cancel.
-      const settleStarted = Date.now()
-      while (Date.now() - settleStarted < 1_500) {
+      // Deep-link exchange can land as the browser closes. Wait for session, callback error,
+      // or in-flight PKCE exchange before deciding the flow failed.
+      const settleDeadline = Date.now() + 3_000
+      while (Date.now() < settleDeadline) {
         // eslint-disable-next-line no-await-in-loop
         const session = await getSessionReliable()
         if (session?.access_token) break
-        if (oauthConsumeInFlightRef.current) break
+        if (oauthCallbackErrorRef.current) break
         // eslint-disable-next-line no-await-in-loop
         await new Promise((r) => setTimeout(r, 100))
       }
+      while (oauthConsumeInFlightRef.current && Date.now() < settleDeadline + 2_000) {
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((r) => setTimeout(r, 50))
+      }
 
       const sessionAfterBrowser = await getSessionReliable()
-      if (!sessionAfterBrowser?.access_token && !oauthConsumeInFlightRef.current) {
+      if (!sessionAfterBrowser?.access_token) {
         if (oauthCallbackErrorRef.current) {
-          const err = new Error(oauthCallbackErrorRef.current)
+          const msg = oauthCallbackErrorRef.current
           oauthCallbackErrorRef.current = null
-          return { error: err }
+          if (isGoogleSignInCancelledMessage(msg)) {
+            analytics.trackSignInCancelled('google', { reason: 'access_denied' })
+            return { error: null }
+          }
+          analytics.trackError('sign_in_failed', { method: 'google', reason: msg })
+          return { error: new Error(msg) }
         }
-        analytics.trackSignInCancelled('google', { reason: 'dismissed' })
-        return { error: null }
+        analytics.trackError('sign_in_failed', {
+          method: 'google',
+          reason: 'no_session_after_browser',
+        })
+        return { error: new Error(GOOGLE_OAUTH_INCOMPLETE_MESSAGE) }
       }
 
       const finalized = await finalizePostAuthSession({

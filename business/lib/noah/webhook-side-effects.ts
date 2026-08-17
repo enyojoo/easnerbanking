@@ -44,7 +44,8 @@ import {
   applyNoahBankOnrampOrchestrationOutSideEffects,
   tryCreditNoahBankOnrampPayInWallet,
 } from "@/lib/noah/credit-bank-onramp-wallet"
-import { provisionNoahAfterVerificationApproved } from "@/lib/noah/provision-after-approval"
+import { provisionAfterVerificationApproved } from "@/lib/verification/provision-after-approval"
+import { businessUsesGridVerification } from "@/lib/compliance/business-tier1"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { applyGlobalPayoutMarginReconciliation, applyGlobalPayoutChannelFeeReconciliation } from "@/lib/noah/reconcile-payout-margin"
 import { captureGlobalPayoutProcessingFeeIfPending } from "@/lib/processing-fee/capture-pending-processing-fee"
@@ -594,12 +595,24 @@ export async function applyNoahWebhookSideEffects(
       }
       const mappedStatus = mapNoahVerificationToKycStatus(customerLike)
       if (mappedStatus === "approved") {
-        await provisionNoahAfterVerificationApproved({
+        let gridCustomerId: string | null = null
+        if (parsed.kind === "business") {
+          const { data: biz } = await admin
+            .from("businesses")
+            .select("verification_provider,grid_customer_id")
+            .eq("id", parsed.businessId)
+            .maybeSingle()
+          if (businessUsesGridVerification(biz as { verification_provider?: string | null } | null)) {
+            gridCustomerId = String(biz?.grid_customer_id ?? "").trim() || null
+          }
+        }
+        await provisionAfterVerificationApproved({
           admin,
           scope: parsed.kind === "business" ? "business" : "individual",
-          noahCustomerId: customerId,
           subjectUserId: parsed.kind === "individual" ? parsed.userId : "",
           subjectBusinessId: parsed.kind === "business" ? parsed.businessId : null,
+          partnerCustomerId: gridCustomerId ?? customerId,
+          provider: gridCustomerId ? "grid" : undefined,
         })
       }
     }

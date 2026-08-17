@@ -24,6 +24,7 @@ type VaJson = {
   bankName?: string
   bankAddress?: string
   accountHolderName?: string
+  provider?: "grid" | "noah"
 }
 
 const ACCOUNT_SCOPE_HEADERS = { "X-Easner-Account-Scope": "business" } as const
@@ -245,6 +246,7 @@ export function useBusinessAccountRows() {
         iban: currency === "EUR" && hasVa ? va?.iban : undefined,
         bic: currency === "EUR" && hasVa ? va?.bic : undefined,
         bankAddress: hasVa ? va?.bankAddress : undefined,
+        depositProvider: hasVa && va?.provider === "grid" ? "grid" : hasVa && va?.provider === "noah" ? "noah" : undefined,
         balance: bal,
         availableBalance: bal,
         status: tier1Complete ? "active" : "pending",

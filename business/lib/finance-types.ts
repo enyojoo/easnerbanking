@@ -19,6 +19,8 @@ export interface Account {
   stablecoinChain?: string
   stablecoinToken?: "USDC" | "EURC"
   showBankDepositTab?: boolean
+  /** Fiat VA source for payment instruction copy (Grid vs Noah). */
+  depositProvider?: "grid" | "noah"
 }
 
 export interface Card {

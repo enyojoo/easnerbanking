@@ -126,6 +126,9 @@ export function isProfileLockedFromKycFields(
   opts?: ProfileLockOptions,
 ): boolean {
   if (!row?.kyc_verified_at) return false
+  const verificationProvider = String(row.verification_provider ?? "").toLowerCase()
+  const verificationStatus = String(row.verification_status ?? "").toLowerCase()
+  if (verificationProvider === "grid" && verificationStatus === "approved") return true
   const status = String(row.noah_kyc_status ?? "").toLowerCase()
   if (status === "approved") return true
   if (opts?.orgKybApproved && row.kyc_id_type) return true

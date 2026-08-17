@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
-import { hasActiveVirtualAccountInDb } from "@/lib/noah/virtual-accounts-db"
+import { hasActiveGridVirtualAccountInDb } from "@/lib/noah/virtual-accounts-db"
 import { getWalletOwnerId } from "@/lib/wallet/resolve-wallet-owner"
 
 export type GridBusinessProvisionNeeds = {
@@ -38,7 +38,7 @@ export async function needsGridBusinessUsdVirtualAccountProvision(
   input: { businessId: string; userId: string },
 ): Promise<boolean> {
   const ownerUserId = await resolveBusinessOrgOwnerUserId(admin, input.businessId, input.userId)
-  const hasUsdVa = await hasActiveVirtualAccountInDb(admin, {
+  const hasUsdVa = await hasActiveGridVirtualAccountInDb(admin, {
     currency: "usd",
     userId: ownerUserId,
     businessId: input.businessId,

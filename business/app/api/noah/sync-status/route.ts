@@ -9,7 +9,9 @@ import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../_helper
 import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
 import { extractNoahRejectionReasons } from "@/lib/noah/rejection-reasons"
 import { needsNoahFiatVirtualAccountProvision } from "@/lib/noah/needs-account-provision"
-import { provisionNoahAfterVerificationApproved } from "@/lib/noah/provision-after-approval"
+import { provisionAfterVerificationApproved } from "@/lib/verification/provision-after-approval"
+import { businessUsesGridVerification } from "@/lib/compliance/business-tier1"
+import { resolveGridBusinessProvisionNeeds } from "@/lib/compliance/needs-business-provision"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
 export const runtime = "nodejs"
@@ -44,23 +46,56 @@ async function runSyncFromNoah(request: Request) {
     const admin = createSupabaseAdmin()
     let provisioned: Record<string, unknown> | undefined
     if (kyc === "approved") {
-      provisioned = await provisionNoahAfterVerificationApproved({
+      let gridCustomerId: string | null = null
+      if (ctx.scope === "business" && ctx.businessId) {
+        const { data: biz } = await admin
+          .from("businesses")
+          .select("verification_provider,grid_customer_id")
+          .eq("id", ctx.businessId)
+          .maybeSingle()
+        if (businessUsesGridVerification(biz as { verification_provider?: string | null } | null)) {
+          gridCustomerId = String(biz?.grid_customer_id ?? "").trim() || null
+        }
+      }
+      provisioned = await provisionAfterVerificationApproved({
         admin,
         scope: ctx.scope,
-        noahCustomerId: resolvedCustomerId,
         subjectUserId: user.id,
         subjectBusinessId: ctx.businessId,
+        partnerCustomerId: gridCustomerId ?? resolvedCustomerId,
+        provider: gridCustomerId ? "grid" : undefined,
       })
     }
 
-    const needsFiatAccountsAfter =
-      kyc === "approved"
-        ? await needsNoahFiatVirtualAccountProvision(admin, {
+    let needsFiatAccountsAfter = false
+    if (kyc === "approved") {
+      if (ctx.scope === "business" && ctx.businessId) {
+        const { data: biz } = await admin
+          .from("businesses")
+          .select("verification_provider")
+          .eq("id", ctx.businessId)
+          .maybeSingle()
+        if (businessUsesGridVerification(biz as { verification_provider?: string | null } | null)) {
+          const needs = await resolveGridBusinessProvisionNeeds(admin, {
+            businessId: ctx.businessId,
+            userId: user.id,
+          })
+          needsFiatAccountsAfter = needs.needsTurnkeyVaults || needs.needsUsdVirtualAccount
+        } else {
+          needsFiatAccountsAfter = await needsNoahFiatVirtualAccountProvision(admin, {
             scope: ctx.scope,
             subjectUserId: user.id,
             subjectBusinessId: ctx.businessId,
           })
-        : false
+        }
+      } else {
+        needsFiatAccountsAfter = await needsNoahFiatVirtualAccountProvision(admin, {
+          scope: ctx.scope,
+          subjectUserId: user.id,
+          subjectBusinessId: ctx.businessId,
+        })
+      }
+    }
 
     return NextResponse.json({
       success: true,
