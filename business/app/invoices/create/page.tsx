@@ -1023,6 +1023,19 @@ export default function CreateInvoicePage() {
               className="pl-9"
             />
           </div>
+          <Button
+            variant="outline"
+            className="shrink-0 w-full"
+            disabled={isLockedEdit}
+            onClick={() => {
+              setIsCustomerDialogOpen(false)
+              setCustomerSearchTerm("")
+              setIsAddCustomerDialogOpen(true)
+            }}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add new customer
+          </Button>
           <div className="overflow-y-auto min-h-0 flex-1 space-y-2 pr-1 -mr-1">
             {filteredCustomers.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">
