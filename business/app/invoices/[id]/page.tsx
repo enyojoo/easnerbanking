@@ -92,6 +92,7 @@ import {
   invoicePreviewPath,
 } from "@/lib/invoice-public-url"
 import { resolvePaymentDisplay } from "@/lib/invoices/resolve-payment-display"
+import { invalidateInvoiceQueries } from "@/lib/invoices/invoice-query-cache"
 import {
   invoiceFieldsLockBanner,
   showInvoicePaymentPreview,
@@ -670,11 +671,8 @@ export default function InvoiceDetailPage() {
         return base ? { ...base, phase: "failed" } : prev
       })
       if (scope) {
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: qk.invoices.detail(scope, invoice.id) }),
-          queryClient.invalidateQueries({ queryKey: qk.invoices.list(scope, {}) }),
-          queryClient.invalidateQueries({ queryKey: qk.transactions.root(scope) }),
-        ])
+        await invalidateInvoiceQueries(queryClient, scope)
+        await queryClient.invalidateQueries({ queryKey: qk.transactions.root(scope) })
       } else {
         await invoiceDetailQuery.refetch()
       }

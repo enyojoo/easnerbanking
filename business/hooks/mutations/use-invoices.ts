@@ -10,23 +10,12 @@ import {
   removeInvoiceFromStore,
   updateInvoiceInStore,
 } from "@/lib/invoice-store"
+import {
+  invalidateInvoiceQueries,
+  patchAllInvoiceLists,
+} from "@/lib/invoices/invoice-query-cache"
 
 type InvoicesListEnvelope = { invoices: Invoice[] }
-
-function listQueryFilter(scope: NonNullable<ReturnType<typeof useScope>["scope"]>) {
-  return { queryKey: [...qk.invoices.root(scope), "list"] as const }
-}
-
-function patchAllLists(
-  qc: ReturnType<typeof useQueryClient>,
-  scope: NonNullable<ReturnType<typeof useScope>["scope"]>,
-  patch: (prev: Invoice[]) => Invoice[],
-) {
-  qc.setQueriesData<InvoicesListEnvelope>(listQueryFilter(scope), (prev) => {
-    if (!prev) return prev
-    return { ...prev, invoices: patch(prev.invoices ?? []) }
-  })
-}
 
 /** Optimistic add: prepends the invoice locally, reconciles on response. */
 export function useAddInvoice() {
@@ -43,7 +32,7 @@ export function useAddInvoice() {
       if (!scope) return {}
       await qc.cancelQueries({ queryKey: qk.invoices.root(scope) })
       const prev = qc.getQueryData<InvoicesListEnvelope>(qk.invoices.list(scope, {}))
-      patchAllLists(qc, scope, (rows) => [invoice, ...rows.filter((i) => i.id !== invoice.id)])
+      patchAllInvoiceLists(qc, scope, (rows) => [invoice, ...rows.filter((i) => i.id !== invoice.id)])
       return { prev }
     },
     onError: (_err, _invoice, ctx) => {
@@ -55,11 +44,15 @@ export function useAddInvoice() {
       const created = data.invoice
       if (!created) return
       addInvoiceToStore(created)
-      patchAllLists(qc, scope, (rows) => [
+      patchAllInvoiceLists(qc, scope, (rows) => [
         created,
         ...rows.filter((i) => i.id !== created.id && i.id !== invoice.id),
       ])
       qc.setQueryData(qk.invoices.detail(scope, created.id), created)
+    },
+    onSettled: () => {
+      if (!scope) return
+      void invalidateInvoiceQueries(qc, scope)
     },
   })
 }
@@ -83,7 +76,7 @@ export function useUpdateInvoice() {
       const prev = qc.getQueryData<InvoicesListEnvelope>(listKey)
       const prevDetail = qc.getQueryData<Invoice>(detailKey)
       const base = prevDetail ?? prev?.invoices?.find((i) => i.id === id)
-      patchAllLists(qc, scope, (rows) =>
+      patchAllInvoiceLists(qc, scope, (rows) =>
         rows.map((i) => (i.id === id ? ({ ...i, ...updates, id } as Invoice) : i)),
       )
       if (base) {
@@ -106,8 +99,12 @@ export function useUpdateInvoice() {
       // GET responses cannot overwrite the just-saved status.
       await qc.cancelQueries({ queryKey: qk.invoices.root(scope) })
       updateInvoiceInStore(id, updated)
-      patchAllLists(qc, scope, (rows) => rows.map((i) => (i.id === id ? updated : i)))
+      patchAllInvoiceLists(qc, scope, (rows) => rows.map((i) => (i.id === id ? updated : i)))
       qc.setQueryData(qk.invoices.detail(scope, id), updated)
+    },
+    onSettled: () => {
+      if (!scope) return
+      void invalidateInvoiceQueries(qc, scope)
     },
   })
 }
@@ -126,7 +123,7 @@ export function useDeleteInvoice() {
       if (!scope) return {}
       await qc.cancelQueries({ queryKey: qk.invoices.root(scope) })
       const prev = qc.getQueryData<InvoicesListEnvelope>(qk.invoices.list(scope, {}))
-      patchAllLists(qc, scope, (rows) => rows.filter((i) => i.id !== id))
+      patchAllInvoiceLists(qc, scope, (rows) => rows.filter((i) => i.id !== id))
       return { prev }
     },
     onError: (_err, _id, ctx) => {
@@ -136,6 +133,10 @@ export function useDeleteInvoice() {
     onSuccess: (_data, id) => {
       if (scope) qc.removeQueries({ queryKey: qk.invoices.detail(scope, id) })
       removeInvoiceFromStore(id)
+    },
+    onSettled: () => {
+      if (!scope) return
+      void invalidateInvoiceQueries(qc, scope)
     },
   })
 }

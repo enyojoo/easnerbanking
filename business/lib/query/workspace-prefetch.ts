@@ -5,6 +5,9 @@ import {
   scopeKey,
   type Scope,
 } from "@easner/shared"
+import {
+  INVOICES_LIST_STALE_MS,
+} from "@/lib/invoices/invoice-query-cache"
 import { apiFetch } from "@/lib/query/api-client"
 import {
   BUSINESS_TRANSACTIONS_LIST_PAGE_SIZE,
@@ -192,8 +195,8 @@ export function invoicesListPrefetchOptions(scope: Scope) {
   return {
     queryKey: qk.invoices.list(scope, {}),
     queryFn: () => apiFetch<{ invoices: unknown[] }>("/api/business/b2b/invoices"),
-    staleTime: 60 * 60_000,
-    gcTime: 60 * 60_000,
+    staleTime: INVOICES_LIST_STALE_MS,
+    gcTime: 30 * 60_000,
     meta: { safePersist: true, webPersist: "reduced", freshness: "operational" as const },
   }
 }

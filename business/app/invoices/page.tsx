@@ -41,11 +41,9 @@ import {
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
-import { qk } from "@easner/shared"
 import { formatDate, formatCurrency } from "@/lib/utils"
-import { apiFetch } from "@/lib/query/api-client"
 import { useScope } from "@/lib/query/scope"
-import { useInvoicesList } from "@/hooks/queries/use-invoices"
+import { useInvoicesList, getInvoiceDetailPrefetchOptions } from "@/hooks/queries/use-invoices"
 import { useAddInvoice, useUpdateInvoice, useDeleteInvoice } from "@/hooks/mutations/use-invoices"
 import { formatInvoiceNumberFromClientId, generateInvoiceId } from "@/lib/invoice-id"
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge"
@@ -183,11 +181,7 @@ export default function InvoicesPage() {
 
   const prefetchInvoiceDetail = (id: string) => {
     if (!scope) return
-    void queryClient.prefetchQuery({
-      queryKey: qk.invoices.detail(scope, id),
-      queryFn: () => apiFetch<Invoice>(`/api/business/b2b/invoices/${id}`),
-      staleTime: 60_000,
-    })
+    void queryClient.prefetchQuery(getInvoiceDetailPrefetchOptions(scope, id))
   }
   const [activeTab, setActiveTab] = useState("all")
 
@@ -305,11 +299,23 @@ export default function InvoicesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ invoiceId: invoice.id }),
       })
-      const data = await res.json()
+      const data = (await res.json()) as {
+        error?: string
+        emailsSent?: Invoice["emailsSent"]
+        status?: Invoice["status"]
+      }
       if (!res.ok) throw new Error(data.error || INVOICE_TOAST_COPY.emailFailed)
+      const now = new Date().toISOString()
       updateInvoice(invoice.id, {
-        status: "sent",
-        statusHistory: [...(invoice.statusHistory ?? []), { status: "sent", timestamp: new Date().toISOString() }],
+        status: data.status ?? "sent",
+        emailsSent: data.emailsSent ?? [
+          ...(invoice.emailsSent ?? []),
+          { sentAt: now, to: invoice.customerEmail },
+        ],
+        statusHistory:
+          (data.status ?? "sent") === "sent" && invoice.status !== "sent"
+            ? [...(invoice.statusHistory ?? []), { status: "sent", timestamp: now }]
+            : invoice.statusHistory,
       })
       toast.success(INVOICE_TOAST_COPY.sentTo(invoice.customerEmail))
     } catch (err) {
