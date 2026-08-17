@@ -111,11 +111,24 @@ describe("resolveConnectPanelUx", () => {
       base({
         stripeAccountId: "acct_1",
         detailsSubmitted: false,
+        hasGridVa: true,
       }),
     )
     expect(ux.phase).toBe("in_progress")
     expect(ux.primary?.label).toBe("Continue verification")
     expect(ux.primary?.dialogTitle).toBe("Continue verification")
+  })
+
+  it("shows provisioning copy when USD account is missing during onboarding", () => {
+    const ux = resolveConnectPanelUx(
+      base({
+        stripeAccountId: "acct_1",
+        detailsSubmitted: false,
+        hasGridVa: false,
+      }),
+    )
+    expect(ux.phase).toBe("missing_virtual_account")
+    expect(ux.primary).toBeUndefined()
   })
 
   it("shows Continue verification when linking payouts", () => {

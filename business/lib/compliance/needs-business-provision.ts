@@ -1,6 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
-import { hasActiveGridVirtualAccountInDb } from "@/lib/noah/virtual-accounts-db"
+import { hasActiveGridVirtualAccountForBusinessInDb } from "@/lib/noah/virtual-accounts-db"
 import { getWalletOwnerId } from "@/lib/wallet/resolve-wallet-owner"
 
 export type GridBusinessProvisionNeeds = {
@@ -35,12 +34,10 @@ export async function needsBusinessTurnkeyVaultProvision(
 /** True when KYB is approved but no active USD fiat VA exists for the business. */
 export async function needsGridBusinessUsdVirtualAccountProvision(
   admin: SupabaseClient,
-  input: { businessId: string; userId: string },
+  input: { businessId: string },
 ): Promise<boolean> {
-  const ownerUserId = await resolveBusinessOrgOwnerUserId(admin, input.businessId, input.userId)
-  const hasUsdVa = await hasActiveGridVirtualAccountInDb(admin, {
+  const hasUsdVa = await hasActiveGridVirtualAccountForBusinessInDb(admin, {
     currency: "usd",
-    userId: ownerUserId,
     businessId: input.businessId,
   })
   return !hasUsdVa

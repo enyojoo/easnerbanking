@@ -239,5 +239,10 @@ export function displayCountryFromBusinessSetting(stored: string | null | undefi
     const m = countries.find((c) => c.code === code)
     return m?.name ?? t
   }
+  const byName = countries.find((c) => c.name.toLowerCase() === t.toLowerCase())
+  if (byName) return byName.name
   return t
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ")
 }

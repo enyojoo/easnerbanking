@@ -75,7 +75,7 @@ export async function hasActiveVirtualAccountInDb(
   admin: SupabaseClient,
   input: {
     currency: "usd" | "eur" | "gbp"
-    userId: string
+    userId?: string
     businessId?: string | null
     provider?: "grid" | "noah"
   },
@@ -84,16 +84,31 @@ export async function hasActiveVirtualAccountInDb(
   return Boolean(display?.hasAccount)
 }
 
+/** True when an active Grid fiat VA row exists for a business (scoped by `business_id` only). */
+export async function hasActiveGridVirtualAccountForBusinessInDb(
+  admin: SupabaseClient,
+  input: {
+    currency: "usd" | "eur" | "gbp"
+    businessId: string
+  },
+): Promise<boolean> {
+  return hasActiveVirtualAccountInDb(admin, {
+    currency: input.currency,
+    businessId: input.businessId,
+    provider: "grid",
+  })
+}
+
 /** True when an active Grid fiat VA row exists for a business. */
 export async function hasActiveGridVirtualAccountInDb(
   admin: SupabaseClient,
   input: {
     currency: "usd" | "eur" | "gbp"
-    userId: string
+    userId?: string
     businessId: string
   },
 ): Promise<boolean> {
-  return hasActiveVirtualAccountInDb(admin, { ...input, provider: "grid" })
+  return hasActiveGridVirtualAccountForBusinessInDb(admin, input)
 }
 
 /**
@@ -105,7 +120,7 @@ export async function getVirtualAccountDisplayFromDb(
   admin: SupabaseClient,
   input: {
     currency: "usd" | "eur" | "gbp"
-    userId: string
+    userId?: string
     businessId?: string | null
     provider?: "grid" | "noah"
   },
@@ -126,8 +141,10 @@ export async function getVirtualAccountDisplayFromDb(
 
   if (input.businessId) {
     q = q.eq("business_id", input.businessId)
-  } else {
+  } else if (input.userId) {
     q = q.eq("user_id", input.userId).is("business_id", null)
+  } else {
+    return null
   }
 
   if (input.provider) {
@@ -142,10 +159,12 @@ export async function getVirtualAccountDisplayFromDb(
 
   const mirroredPmId = input.businessId
     ? null
-    : await readUserMirroredVirtualAccountId(admin, {
-        subjectUserId: input.userId,
-        currency,
-      })
+    : input.userId
+      ? await readUserMirroredVirtualAccountId(admin, {
+          subjectUserId: input.userId,
+          currency,
+        })
+      : null
   const rows = data as VirtualAccountDbRow[]
   const row =
     (mirroredPmId

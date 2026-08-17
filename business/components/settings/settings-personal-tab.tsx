@@ -416,7 +416,7 @@ export function SettingsPersonalTab() {
                   Verified identity
                 </CardTitle>
               }
-              description="Provided during business verification"
+              description={SETTINGS_CARD_COPY.verifiedIdentity}
             />
           </CardHeader>
           <CardContent className="space-y-4">

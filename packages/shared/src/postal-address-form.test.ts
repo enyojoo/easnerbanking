@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest"
 import { isBlockedForBusiness } from "./jurisdiction-blocked-countries"
 import {
+  formatAddressDisplayPart,
   formatOperationalAddress,
   getOperationalAddressFormConfig,
   isOperationalAddressComplete,
@@ -372,6 +373,27 @@ describe("postal-address-form exemplars", () => {
     )
     expect(formatted).toContain("95014")
     expect(formatted.toUpperCase()).toContain("UNITED STATES")
+  })
+
+  it("title-cases ALL CAPS KYB-style US addresses for invoice display", () => {
+    expect(formatAddressDisplayPart("SAN FRANCISCO")).toBe("San Francisco")
+    expect(
+      listSubdivisions("US").find((row) => row.label.toLowerCase() === "california")?.value,
+    ).toBe("CA")
+
+    const formatted = formatOperationalAddress(
+      {
+        line1: "584 CASTRO STREET SUITE 4092",
+        city: "SAN FRANCISCO",
+        state: "CALIFORNIA",
+        postalCode: "94114",
+        countryCode: "US",
+      },
+      { appendCountry: true },
+    )
+    expect(formatted).toBe(
+      "584 Castro Street Suite 4092\nSan Francisco, CA 94114\nUnited States",
+    )
   })
 })
 

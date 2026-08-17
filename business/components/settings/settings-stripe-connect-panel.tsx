@@ -55,7 +55,6 @@ import { BUSINESS_TIER_LADDER } from "@/lib/compliance-tier-ladder-copy"
 import { Tier1VerificationBadge } from "@/components/compliance/tier1-verification-badge"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { useSuspendIdleLock } from "@/hooks/use-suspend-idle-lock"
-import { DelayedOpeningVerificationWait } from "@/components/compliance/opening-verification-wait"
 import {
   SETTINGS_CONNECT_FLOW_PARAM,
   type SettingsVerificationEmbeddedFlow,
@@ -63,6 +62,7 @@ import {
 import { useSearchParams } from "next/navigation"
 
 let prefetchedConnectClientSecret: string | null = null
+let primedConnectInstance: ReturnType<typeof loadConnectAndInitialize> | null = null
 
 const connectOnboardingCollectionOptions = {
   fields: "eventually_due" as const,
@@ -94,7 +94,7 @@ export function SettingsStripeConnectPanel({
     typeof loadConnectAndInitialize
   > | null>(null)
   const clearInstanceAfterCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const startedFullPageRef = useRef(false)
+  const startLockRef = useRef(false)
 
   // Stripe Connect onboarding is a cross-origin iframe — parent activity listeners
   // never see typing/clicks. Suspend idle PIN lock for the duration of the pane.
@@ -154,14 +154,42 @@ export function SettingsStripeConnectPanel({
     return json.clientSecret
   }, [])
 
+  const createConnectInstance = useCallback(() => {
+    if (primedConnectInstance) return primedConnectInstance
+    const instance = loadConnectAndInitialize({
+      publishableKey,
+      fetchClientSecret: async () => {
+        const cached = prefetchedConnectClientSecret
+        if (cached) {
+          prefetchedConnectClientSecret = null
+          return cached
+        }
+        return fetchClientSecret()
+      },
+      locale: browserStripeLocale(),
+      appearance: easnerStripeConnectAppearance(),
+    })
+    primedConnectInstance = instance
+    return instance
+  }, [fetchClientSecret, publishableKey])
+
   const prefetchClientSecret = useCallback(async () => {
-    if (!tier1Complete || prefetchedConnectClientSecret) return
+    if (!tier1Complete) return
+    if (primedConnectInstance) {
+      setConnectInstance((prev) => prev ?? primedConnectInstance)
+      return
+    }
     try {
-      prefetchedConnectClientSecret = await fetchClientSecret()
+      if (!prefetchedConnectClientSecret) {
+        prefetchedConnectClientSecret = await fetchClientSecret()
+      }
+      if (!publishableKey || !isStripePublishableConfigured()) return
+      const instance = createConnectInstance()
+      setConnectInstance(instance)
     } catch {
       prefetchedConnectClientSecret = null
     }
-  }, [fetchClientSecret, tier1Complete])
+  }, [createConnectInstance, fetchClientSecret, publishableKey, tier1Complete])
 
   const pushConnectFlowUrl = useCallback(() => {
     onFlowOpenChange?.(true, "connect")
@@ -186,13 +214,14 @@ export function SettingsStripeConnectPanel({
       setOnboardingFrameReady(false)
       setOnboardingError(null)
       prefetchedConnectClientSecret = null
+      primedConnectInstance = null
       clearInstanceAfterCloseRef.current = null
     }, 280)
   }, [])
 
   const closeOnboardingAndSync = useCallback(async () => {
     setOnboardingOpen(false)
-    startedFullPageRef.current = false
+    startLockRef.current = false
     clearConnectFlowUrl()
     await fetchWithSession("/api/business/stripe/connect/sync", { method: "POST" }).catch(() => null)
     const next = await refreshStatus()
@@ -217,7 +246,13 @@ export function SettingsStripeConnectPanel({
       toast.error("Online payments are not available yet")
       return
     }
+    if (startLockRef.current) {
+      setOnboardingOpen(true)
+      if (primedConnectInstance) setConnectInstance((prev) => prev ?? primedConnectInstance)
+      return
+    }
     try {
+      startLockRef.current = true
       if (clearInstanceAfterCloseRef.current) {
         clearTimeout(clearInstanceAfterCloseRef.current)
         clearInstanceAfterCloseRef.current = null
@@ -225,34 +260,25 @@ export function SettingsStripeConnectPanel({
       setOpeningOnboarding(true)
       setOnboardingError(null)
       setOnboardingFrameReady(false)
-      const clientSecret = prefetchedConnectClientSecret ?? (await fetchClientSecret())
-      prefetchedConnectClientSecret = clientSecret
-      const instance = loadConnectAndInitialize({
-        publishableKey,
-        fetchClientSecret: async () => {
-          const cached = prefetchedConnectClientSecret
-          if (cached) {
-            prefetchedConnectClientSecret = null
-            return cached
-          }
-          return fetchClientSecret()
-        },
-        locale: browserStripeLocale(),
-        appearance: easnerStripeConnectAppearance(),
-      })
+      if (!prefetchedConnectClientSecret && !primedConnectInstance) {
+        prefetchedConnectClientSecret = await fetchClientSecret()
+      }
+      const instance = connectInstance ?? createConnectInstance()
       setConnectInstance(instance)
       setOnboardingOpen(true)
     } catch (e) {
+      startLockRef.current = false
       setOnboardingOpen(false)
       setOnboardingFrameReady(false)
       prefetchedConnectClientSecret = null
+      primedConnectInstance = null
       const message = e instanceof Error ? e.message : "Could not start onboarding"
       setOnboardingError(message)
       toast.error(message)
     } finally {
       setOpeningOnboarding(false)
     }
-  }, [fetchClientSecret, publishableKey, tier1Complete])
+  }, [connectInstance, createConnectInstance, fetchClientSecret, publishableKey, tier1Complete])
 
   const openConnectFlow = useCallback(() => {
     if (!tier1Complete) {
@@ -263,8 +289,13 @@ export function SettingsStripeConnectPanel({
       toast.error("Online payments are not available yet")
       return
     }
+    if (primedConnectInstance) {
+      setConnectInstance((prev) => prev ?? primedConnectInstance)
+      setOnboardingOpen(true)
+    }
     pushConnectFlowUrl()
-  }, [publishableKey, pushConnectFlowUrl, tier1Complete])
+    void startOnboarding()
+  }, [publishableKey, pushConnectFlowUrl, startOnboarding, tier1Complete])
 
   useEffect(() => {
     if (!onboardingOpen || onboardingFrameReady || !connectInstance) return
@@ -308,14 +339,10 @@ export function SettingsStripeConnectPanel({
   }, [tier1Complete, prefetchClientSecret])
 
   useEffect(() => {
-    if (!fullPageFlow) {
-      startedFullPageRef.current = false
-      return
-    }
-    if (startedFullPageRef.current || connectInstance) return
-    startedFullPageRef.current = true
+    if (!fullPageFlow) return
+    if (connectInstance || onboardingOpen) return
     void startOnboarding()
-  }, [connectInstance, fullPageFlow, startOnboarding])
+  }, [connectInstance, fullPageFlow, onboardingOpen, startOnboarding])
 
   const panelUx = useMemo(() => {
     if (!status) return null
@@ -347,36 +374,40 @@ export function SettingsStripeConnectPanel({
   )
 
   const connectFlowPanel = (
-    <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="absolute left-2 top-2 z-20 h-8 gap-1 bg-background/90 px-2 shadow-sm backdrop-blur-sm hover:bg-background"
-        onClick={() => void closeOnboardingAndSync()}
-      >
-        <ArrowLeft className="size-4" aria-hidden />
-        Back
-      </Button>
-      <div className="relative min-h-0 flex-1 overflow-hidden bg-[#faf9f6]">
-        {onboardingError ? (
-          <div className="flex size-full min-h-[16rem] flex-col items-center justify-center gap-3 px-4 text-center">
-            <p className="text-sm text-destructive">{onboardingError}</p>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setOnboardingError(null)
-                startedFullPageRef.current = false
-                void startOnboarding()
-              }}
-            >
-              Try again
-            </Button>
-          </div>
-        ) : connectInstance ? (
-          <div className="size-full min-h-0 overflow-auto">
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-background">
+      <div className="grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b px-2 py-2 sm:px-4">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 min-w-[8.5rem] justify-start gap-1 px-2"
+          onClick={() => void closeOnboardingAndSync()}
+        >
+          <ArrowLeft className="size-4" aria-hidden />
+          Back
+        </Button>
+        <p className="truncate text-center text-sm font-medium">Online payments</p>
+        <span className="min-w-[8.5rem]" />
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+        <div className="mx-auto w-full max-w-2xl">
+          {onboardingError ? (
+            <div className="flex min-h-[12rem] flex-col items-center justify-center gap-3 px-4 text-center">
+              <p className="text-sm text-destructive">{onboardingError}</p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setOnboardingError(null)
+                  startLockRef.current = false
+                  void startOnboarding()
+                }}
+              >
+                Try again
+              </Button>
+            </div>
+          ) : connectInstance ? (
             <ConnectComponentsProvider connectInstance={connectInstance}>
               <ConnectAccountOnboarding
                 onExit={() => void closeOnboardingAndSync()}
@@ -386,10 +417,12 @@ export function SettingsStripeConnectPanel({
                 collectionOptions={connectOnboardingCollectionOptions}
               />
             </ConnectComponentsProvider>
-          </div>
-        ) : (
-          <DelayedOpeningVerificationWait />
-        )}
+          ) : (
+            <div className="flex min-h-[12rem] items-center justify-center">
+              <Loader2 className="size-5 animate-spin text-muted-foreground" aria-hidden />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

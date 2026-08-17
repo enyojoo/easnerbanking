@@ -11,21 +11,15 @@ vi.mock("@/lib/wallet/resolve-wallet-owner", () => ({
   getWalletOwnerId: vi.fn(),
 }))
 
-vi.mock("@/lib/business/org-owner", () => ({
-  resolveBusinessOrgOwnerUserId: vi.fn(),
-}))
-
 vi.mock("@/lib/noah/virtual-accounts-db", () => ({
-  hasActiveGridVirtualAccountInDb: vi.fn(),
+  hasActiveGridVirtualAccountForBusinessInDb: vi.fn(),
 }))
 
 import { getWalletOwnerId } from "@/lib/wallet/resolve-wallet-owner"
-import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
-import { hasActiveGridVirtualAccountInDb } from "@/lib/noah/virtual-accounts-db"
+import { hasActiveGridVirtualAccountForBusinessInDb } from "@/lib/noah/virtual-accounts-db"
 
 const ownerIdMock = vi.mocked(getWalletOwnerId)
-const orgOwnerMock = vi.mocked(resolveBusinessOrgOwnerUserId)
-const hasGridVaMock = vi.mocked(hasActiveGridVirtualAccountInDb)
+const hasGridVaMock = vi.mocked(hasActiveGridVirtualAccountForBusinessInDb)
 
 function adminWithWalletAccounts(rows: Array<{ address?: string; ata?: string }>): SupabaseClient {
   return {
@@ -75,7 +69,6 @@ describe("needsBusinessTurnkeyVaultProvision", () => {
 describe("needsGridBusinessUsdVirtualAccountProvision", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    orgOwnerMock.mockResolvedValue("user-owner")
   })
 
   it("returns true when Grid USD VA is missing", async () => {
@@ -84,12 +77,10 @@ describe("needsGridBusinessUsdVirtualAccountProvision", () => {
     await expect(
       needsGridBusinessUsdVirtualAccountProvision(admin, {
         businessId: "biz-1",
-        userId: "user-1",
       }),
     ).resolves.toBe(true)
     expect(hasGridVaMock).toHaveBeenCalledWith(admin, {
       currency: "usd",
-      userId: "user-owner",
       businessId: "biz-1",
     })
   })
@@ -100,7 +91,6 @@ describe("needsGridBusinessUsdVirtualAccountProvision", () => {
     await expect(
       needsGridBusinessUsdVirtualAccountProvision(admin, {
         businessId: "biz-1",
-        userId: "user-1",
       }),
     ).resolves.toBe(false)
   })
@@ -109,7 +99,6 @@ describe("needsGridBusinessUsdVirtualAccountProvision", () => {
 describe("resolveGridBusinessProvisionNeeds", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    orgOwnerMock.mockResolvedValue("user-owner")
   })
 
   it("reports both needs when vault and USD VA are missing", async () => {
@@ -140,7 +129,6 @@ describe("resolveGridBusinessProvisionNeeds", () => {
 describe("needsBusinessProvisionAfterApproval", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    orgOwnerMock.mockResolvedValue("user-owner")
   })
 
   it("returns true when only USD VA is missing", async () => {

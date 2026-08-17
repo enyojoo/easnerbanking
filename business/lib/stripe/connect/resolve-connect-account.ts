@@ -1,7 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { hasActiveGridVirtualAccountInDb, hasActiveVirtualAccountInDb } from "@/lib/noah/virtual-accounts-db"
+import {
+  hasActiveGridVirtualAccountForBusinessInDb,
+  hasActiveVirtualAccountInDb,
+} from "@/lib/noah/virtual-accounts-db"
 import { businessUsesGridVerification, isBusinessTier1Complete } from "@/lib/compliance/business-tier1"
-import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import type { BusinessStripeConnectAccountRow, ConnectReadyStatus } from "./types"
 
 export const CONNECT_KYB_REQUIRED_REASON =
@@ -44,21 +46,17 @@ export async function resolveConnectReadyForCheckout(
 
   const tier1Complete = isBusinessTier1Complete(biz)
 
-  const ownerUserId = await resolveBusinessOrgOwnerUserId(admin, businessId)
   const usesGrid = businessUsesGridVerification(biz as { verification_provider?: string | null } | null)
-  const hasGridVa = ownerUserId
-    ? usesGrid
-      ? await hasActiveGridVirtualAccountInDb(admin, {
-          currency: fiat,
-          userId: ownerUserId,
-          businessId,
-        })
-      : await hasActiveVirtualAccountInDb(admin, {
-          currency: fiat,
-          userId: ownerUserId,
-          businessId,
-        })
-    : false
+  const hasGridVa = usesGrid
+    ? await hasActiveGridVirtualAccountForBusinessInDb(admin, {
+        currency: fiat,
+        businessId,
+      })
+    : await hasActiveVirtualAccountInDb(admin, {
+        currency: fiat,
+        businessId,
+        provider: undefined,
+      })
 
   const row = await getConnectAccountRow(admin, businessId)
   const due = asDueList(row?.requirements_currently_due)

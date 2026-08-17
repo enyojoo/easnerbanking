@@ -3,7 +3,7 @@ import { countries, displayCountryFromBusinessSetting } from "@/lib/countries"
 import type { BusinessProfile } from "@/lib/use-business-profile"
 import { pickInvoiceReplyEmail, pickInvoiceReplyEmailWithSource } from "@/lib/invoices/invoice-reply-email"
 import type { InvoiceReplyEmailSource } from "@/lib/invoices/invoice-reply-email"
-import { formatOperationalAddressLines } from "@easner/shared/postal-address-form"
+import { formatOperationalAddressLines, formatAddressDisplayPart } from "@easner/shared/postal-address-form"
 import { ensureBusinessOperationalAddressCountriesRegistered } from "@/lib/address/register-lib-address-countries"
 
 export { pickInvoiceReplyEmail, pickInvoiceReplyEmailWithSource } from "@/lib/invoices/invoice-reply-email"
@@ -65,8 +65,13 @@ function buildIssuerAddressLines(input: {
   if (lines.length > 0) return lines
 
   const fallback: string[] = []
-  if (input.address) fallback.push(input.address)
-  const locality = [input.city, input.state].filter(Boolean).join(", ")
+  if (input.address) fallback.push(formatAddressDisplayPart(input.address))
+  const stateRaw = input.state.trim()
+  const stateDisplay =
+    stateRaw.length === 2 && stateRaw === stateRaw.toUpperCase()
+      ? stateRaw
+      : formatAddressDisplayPart(input.state)
+  const locality = [formatAddressDisplayPart(input.city), stateDisplay].filter(Boolean).join(", ")
   const localityPostal = [locality, input.zipCode].filter(Boolean).join(" ")
   if (localityPostal) fallback.push(localityPostal)
   if (input.country) fallback.push(input.country)

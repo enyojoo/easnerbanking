@@ -284,11 +284,102 @@ export type FormatOperationalAddressOptions = {
   preserveCase?: boolean
 }
 
-function formatOperationalAddressFallback(parts: OperationalAddressParts): string {
-  const line1 = String(parts.line1 ?? "").trim()
-  const city = String(parts.city ?? "").trim()
-  const state = String(parts.state ?? "").trim()
-  const postal = String(parts.postalCode ?? "").trim()
+function titleCaseAddressWord(word: string): string {
+  if (!word) return word
+  return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+}
+
+const ADDRESS_DISPLAY_TOKEN = /^([^\w]*)([\w'.-]+)([^\w]*)$/
+
+/** Title-case street/city/subdivision labels; keep 2-letter codes (CA, NY). */
+function titleCaseAddressDisplayToken(word: string): string {
+  const match = word.match(ADDRESS_DISPLAY_TOKEN)
+  if (!match) return word
+  const [, lead, core, trail] = match
+  if (/^[A-Z]{2}$/.test(core)) return `${lead}${core}${trail}`
+  if (core !== core.toUpperCase() && core !== core.toLowerCase()) {
+    return `${lead}${core}${trail}`
+  }
+  return `${lead}${titleCaseAddressWord(core)}${trail}`
+}
+
+/** Normalize ALL CAPS address fragments for customer-facing display (invoices, PDFs). */
+export function formatAddressDisplayPart(input: string | null | undefined): string {
+  const raw = String(input ?? "").trim()
+  if (!raw) return ""
+  return raw
+    .split(",")
+    .map((segment) =>
+      segment
+        .trim()
+        .split(/\s+/)
+        .map((word) => titleCaseAddressDisplayToken(word))
+        .join(" "),
+    )
+    .join(", ")
+}
+
+function resolveSubdivisionForFormatting(
+  countryCode: CountryCode,
+  subdivision: string | null | undefined,
+): string {
+  const value = String(subdivision ?? "").trim()
+  if (!value) return ""
+  if (!isOperationalAddressCountryRegistered(countryCode)) {
+    return formatAddressDisplayPart(value)
+  }
+
+  const upper = value.toUpperCase()
+  const subdivisions = getCountrySubdivisions(countryCode, LIB_ADDRESS_ENGLISH_DISPLAY)
+  const byCode = subdivisions.find((row: { value: string; label: string }) => row.value === upper)
+  if (byCode) return byCode.value
+
+  const byLabel = subdivisions.find(
+    (row: { value: string; label: string }) => row.label.toLowerCase() === value.toLowerCase(),
+  )
+  if (byLabel) return byLabel.value
+
+  if (isValidCountrySubdivisionCode(countryCode, value)) return value
+  return formatAddressDisplayPart(value)
+}
+
+function normalizeOperationalAddressParts(
+  parts: OperationalAddressParts,
+  opts?: FormatOperationalAddressOptions,
+): OperationalAddressParts {
+  if (opts?.preserveCase) return parts
+
+  const countryCode = normalizeCountryCode(parts.countryCode)
+  const line1 = formatAddressDisplayPart(parts.line1)
+  const city = formatAddressDisplayPart(parts.city)
+  const postalCode = String(parts.postalCode ?? "").trim()
+  let state = String(parts.state ?? "").trim()
+
+  if (/^[A-Z]{2}$/.test(countryCode) && isOperationalAddressCountryRegistered(countryCode)) {
+    state = resolveSubdivisionForFormatting(countryCode as CountryCode, state)
+  } else if (state) {
+    state = formatAddressDisplayPart(state)
+  }
+
+  return {
+    ...parts,
+    countryCode,
+    line1,
+    city,
+    state,
+    postalCode,
+  }
+}
+
+function formatOperationalAddressFallback(
+  parts: OperationalAddressParts,
+  opts?: FormatOperationalAddressOptions,
+): string {
+  const normalized = normalizeOperationalAddressParts(parts, opts)
+  const line1 = String(normalized.line1 ?? "").trim()
+  const city = String(normalized.city ?? "").trim()
+  const state = String(normalized.state ?? "").trim()
+  const postal = String(normalized.postalCode ?? "").trim()
   const lines: string[] = []
   if (line1) lines.push(line1)
   const locality = [city, state].filter(Boolean).join(", ")
@@ -301,20 +392,41 @@ export function formatOperationalAddress(
   parts: OperationalAddressParts,
   opts?: FormatOperationalAddressOptions,
 ): string {
-  const code = normalizeCountryCode(parts.countryCode)
+  const normalized = normalizeOperationalAddressParts(parts, opts)
+  const code = normalizeCountryCode(normalized.countryCode)
   if (!/^[A-Z]{2}$/.test(code) || !isOperationalAddressCountryRegistered(code)) {
-    return formatOperationalAddressFallback(parts)
+    return formatOperationalAddressFallback(normalized, opts)
+  }
+
+  const userPreserveCase = opts?.preserveCase ?? false
+  if (!userPreserveCase) {
+    const lines = formatOperationalAddressFallback(normalized, opts)
+    if (!lines.trim()) return ""
+    if (opts?.appendCountry) {
+      const countryData = getCountryData(code as CountryCode)
+      const countryName = formatAddressDisplayPart(String(countryData?.name ?? ""))
+      if (countryName) return [lines, countryName].filter(Boolean).join("\n")
+    }
+    return lines
   }
 
   try {
-    return formatAddress(toLibAddressInput(parts), {
+    return formatAddress(toLibAddressInput(normalized), {
       appendCountry: opts?.appendCountry ?? false,
-      preserveCase: opts?.preserveCase ?? false,
+      preserveCase: true,
       ...LIB_ADDRESS_ENGLISH_DISPLAY,
     })
   } catch {
     // lib-address throws on incomplete/invalid required fields (e.g. US with country only).
-    return formatOperationalAddressFallback(parts)
+    const fallback = formatOperationalAddressFallback(normalized, opts)
+    if (opts?.appendCountry) {
+      const countryData = getCountryData(code as CountryCode)
+      const countryName = String(countryData?.name ?? "").trim()
+      if (countryName) {
+        return [fallback, formatAddressDisplayPart(countryName)].filter(Boolean).join("\n")
+      }
+    }
+    return fallback
   }
 }
 

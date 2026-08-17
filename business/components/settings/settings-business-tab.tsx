@@ -606,7 +606,7 @@ export function SettingsBusinessTab() {
               value={
                 hasRegisteredAddress
                   ? registeredAddressDisplay
-                  : "Provided during business verification"
+                  : SETTINGS_CARD_COPY.registeredAddress
               }
               disabled
             />

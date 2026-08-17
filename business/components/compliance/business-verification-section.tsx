@@ -272,21 +272,6 @@ export function BusinessVerificationSection({
     </div>
   ) : null
 
-  if (connectFlowActive) {
-    return (
-      <div
-        id="business-verification"
-        className="flex min-h-0 flex-1 flex-col"
-        data-verification-flow="open"
-      >
-        <SettingsStripeConnectPanel
-          fullPageFlow
-          onFlowOpenChange={onFlowOpenChange}
-        />
-      </div>
-    )
-  }
-
   if (hostedFlowActive) {
     return (
       <div
@@ -300,9 +285,18 @@ export function BusinessVerificationSection({
   }
 
   return (
-    <div className="space-y-6" id="business-verification">
-      <Card>
-        <CardHeader>
+    <div
+      className={connectFlowActive ? "flex min-h-0 flex-1 flex-col" : "space-y-6"}
+      id="business-verification"
+      data-verification-flow={connectFlowActive ? "open" : undefined}
+    >
+      <Card
+        className={cn(
+          connectFlowActive &&
+            "flex min-h-0 flex-1 flex-col overflow-hidden border-0 bg-transparent shadow-none",
+        )}
+      >
+        <CardHeader className={cn(connectFlowActive && "hidden")}>
               <SettingsCardHeader
                 title={
                   <CardTitle className="flex items-center gap-2">
@@ -313,8 +307,15 @@ export function BusinessVerificationSection({
                 description={SETTINGS_TAB_COPY.verification.intro}
               />
             </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-3">
+            <CardContent
+              className={cn(connectFlowActive && "flex min-h-0 flex-1 flex-col p-0")}
+            >
+              <div
+                className={cn(
+                  "grid gap-4 md:grid-cols-3",
+                  connectFlowActive && "flex min-h-0 flex-1 flex-col gap-0 md:grid-cols-1",
+                )}
+              >
                 {BUSINESS_TIER_LADDER.tiers.map((t) => {
                   const isT1 = t.tier === 1
                   const isT3 = t.tier === 3
@@ -325,6 +326,7 @@ export function BusinessVerificationSection({
                       className={cn(
                         "flex h-full flex-col",
                         isT1 && "border-primary/25 md:border-primary/40",
+                        connectFlowActive && "hidden",
                       )}
                     >
                       <CardHeader className="pb-2">
@@ -410,8 +412,15 @@ export function BusinessVerificationSection({
 
                   if (isT3 && showOnlinePayments) {
                     return (
-                      <div key={t.tier} className="min-w-0 h-full">
+                      <div
+                        key={t.tier}
+                        className={cn(
+                          "min-w-0 h-full",
+                          connectFlowActive && "flex min-h-0 flex-1 flex-col",
+                        )}
+                      >
                         <SettingsStripeConnectPanel
+                          fullPageFlow={connectFlowActive}
                           unavailableFallback={comingLaterCard}
                           onFlowOpenChange={onFlowOpenChange}
                         />

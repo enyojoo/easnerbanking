@@ -53,9 +53,9 @@ export function resolveConnectPanelPhase(status: ConnectStatusSnapshot): Connect
 
   if (!status.stripeAccountId) return "not_started"
 
-  if (!status.detailsSubmitted) return "in_progress"
-
   if (!status.hasGridVa) return "missing_virtual_account"
+
+  if (!status.detailsSubmitted) return "in_progress"
 
   if (!status.externalAccountLinked) return "link_payout"
 

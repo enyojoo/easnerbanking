@@ -1,6 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type Stripe from "stripe"
-import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { getVirtualAccountDisplayFromDb } from "@/lib/noah/virtual-accounts-db"
 import { getStripe } from "../client"
 import { createGridVaExternalAccountOnStripe } from "./create-grid-va-external-account"
@@ -91,14 +90,8 @@ export async function reconcileGridVaPayoutDestination(
     return { skipped: true, reason: "details_not_submitted" }
   }
 
-  const ownerUserId = await resolveBusinessOrgOwnerUserId(admin, input.businessId)
-  if (!ownerUserId) {
-    return { skipped: true, reason: "no_grid_va" }
-  }
-
   const va = await getVirtualAccountDisplayFromDb(admin, {
     currency: fiat,
-    userId: ownerUserId,
     businessId: input.businessId,
   })
   if (!va?.hasAccount) {
