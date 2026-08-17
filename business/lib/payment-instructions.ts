@@ -5,7 +5,7 @@ export function getGridUsdBankPaymentInstructions(): string[] {
   return [
     "Only send via ACH, Wire, RTP, or FedNow.",
     "SWIFT is not supported.",
-    "Processing time: RTP & FedNow (instant), ACH & Wire (up to 48 hours).",
+    "Processing: RTP & FedNow (instant), ACH & Wire (up to 48 hours).",
   ]
 }
 
