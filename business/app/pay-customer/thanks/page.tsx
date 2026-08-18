@@ -1,10 +1,12 @@
 import { Check } from "lucide-react"
+import { getPayAppPublicOrigin } from "@/lib/customer-hosts"
 import { payCustomerSeo } from "@/lib/seo/content/pay-customer"
 import { businessMetadata } from "@/lib/seo/metadata"
 
 export const metadata = businessMetadata({
   metadata: payCustomerSeo.thanks.metadata,
   path: "/thanks",
+  metadataBase: getPayAppPublicOrigin(),
 })
 
 /** Built-in success page for links without a merchant redirect. */

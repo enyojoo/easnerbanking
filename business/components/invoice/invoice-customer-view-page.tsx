@@ -26,6 +26,7 @@ import type { InvoicePayInPayload } from "@/lib/invoices/resolve-pay-in-for-busi
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { INVOICE_CUSTOMER_VIEW_COPY } from "@/lib/copy/business-ui-copy"
 import { LoadingSpinner } from "@/components/loading-spinner"
+import { InvoiceIssuerLogo } from "@/components/invoice/invoice-issuer-logo"
 
 const FALLBACK_ISSUER: InvoicePdfIssuer = {
   name: businessInfo.name,
@@ -408,6 +409,7 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
 
           <div className="grid grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
             <div className="min-w-0">
+              <InvoiceIssuerLogo name={displayIssuer.name} logoUrl={displayIssuer.logoUrl} />
               <h2 className="text-base sm:text-lg font-semibold">{displayIssuer.name}</h2>
               {(displayIssuer.addressLines.length > 0
                 ? displayIssuer.addressLines

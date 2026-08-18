@@ -34,6 +34,13 @@ const styles = StyleSheet.create({
   },
   businessInfo: {
     flexDirection: "column",
+    alignItems: "flex-start",
+  },
+  issuerLogo: {
+    width: 48,
+    height: 48,
+    objectFit: "contain",
+    marginBottom: 8,
   },
   businessName: {
     fontSize: 14,
@@ -240,7 +247,10 @@ interface InvoicePDFDocumentProps {
   paymentSection?: InvoicePdfPaymentSection
   /** When omitted, uses static `business-info` defaults. */
   issuer?: InvoicePdfIssuer
+  /** Easner mark in the PDF footer. */
   logoUrl: string
+  /** Business logo above issuer name (data URL preferred). */
+  issuerLogoSrc?: string | null
 }
 
 export function InvoicePDFDocument({
@@ -248,6 +258,7 @@ export function InvoicePDFDocument({
   paymentSection,
   issuer,
   logoUrl,
+  issuerLogoSrc,
 }: InvoicePDFDocumentProps) {
   const biz = issuer ?? {
     name: defaultBusinessInfo.name,
@@ -283,6 +294,9 @@ export function InvoicePDFDocument({
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.businessInfo}>
+            {issuerLogoSrc ? (
+              <Image src={issuerLogoSrc} style={styles.issuerLogo} />
+            ) : null}
             <Text style={styles.businessName}>{biz.name}</Text>
             {(biz.addressLines.length > 0
               ? biz.addressLines

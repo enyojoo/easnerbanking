@@ -42,12 +42,13 @@ export function CustomerPayShell({ children }: { children: ReactNode }) {
 export function CustomerPayHeader({
   businessName,
   logoUrl,
-  subhead,
+  title,
 }: {
   businessName: string
   logoUrl?: string | null
-  subhead?: string | null
+  title?: string | null
 }) {
+  const heading = title?.trim() || "Payment"
   return (
     <div className="mb-6 flex flex-col items-center gap-3 text-center">
       {logoUrl ? (
@@ -62,8 +63,8 @@ export function CustomerPayHeader({
         </div>
       )}
       <div className="space-y-1">
-        <p className="text-base font-semibold text-foreground sm:text-lg">{businessName}</p>
-        {subhead ? <p className="text-sm text-muted-foreground">{subhead}</p> : null}
+        <p className="text-sm text-muted-foreground">{businessName}</p>
+        <h1 className="text-xl font-semibold text-foreground sm:text-2xl">{heading}</h1>
       </div>
     </div>
   )

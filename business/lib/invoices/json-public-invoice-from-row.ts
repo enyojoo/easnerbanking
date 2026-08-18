@@ -18,7 +18,7 @@ export type PublicInvoiceStripeCheckout = {
 
 export type PublicInvoicePayload = {
   invoice: ReturnType<typeof mapRowToInvoice>
-  issuer: Awaited<ReturnType<typeof fetchInvoiceIssuerForBusiness>> & { logoUrl?: string }
+  issuer: Awaited<ReturnType<typeof fetchInvoiceIssuerForBusiness>>
   payIn: Awaited<ReturnType<typeof resolvePayInForBusiness>>
   paymentDisplay: ReturnType<typeof resolvePaymentDisplay>
   invoiceSettings: ReturnType<typeof parseBusinessInvoiceSettings>
@@ -50,7 +50,7 @@ export async function jsonPublicInvoiceFromRow(
 
   const { data: bizRow } = await admin
     .from("businesses")
-    .select("easetag, invoice_settings, logo_url")
+    .select("easetag, invoice_settings")
     .eq("id", businessId)
     .maybeSingle()
   const businessEasetag =
@@ -97,10 +97,7 @@ export async function jsonPublicInvoiceFromRow(
 
   return {
     invoice,
-    issuer: {
-      ...issuer,
-      logoUrl: typeof bizRow?.logo_url === "string" ? bizRow.logo_url : undefined,
-    },
+    issuer,
     payIn: filteredPayIn,
     paymentDisplay,
     invoiceSettings,

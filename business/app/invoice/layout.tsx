@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import type { ReactNode } from "react"
+import { getInvoiceAppPublicOrigin } from "@/lib/customer-hosts"
 import { invoiceSeo } from "@/lib/seo/content/invoice"
 import { businessMetadata } from "@/lib/seo/metadata"
 
@@ -7,6 +8,7 @@ import { businessMetadata } from "@/lib/seo/metadata"
 export const metadata: Metadata = businessMetadata({
   metadata: invoiceSeo.publicDefault.metadata,
   path: "/invoice",
+  metadataBase: getInvoiceAppPublicOrigin(),
 })
 
 export default function InvoiceLayout({

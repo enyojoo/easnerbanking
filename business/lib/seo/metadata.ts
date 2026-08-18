@@ -10,6 +10,8 @@ export interface BusinessMetadataInput {
   metadata: BusinessPageMetadata
   path: string
   titleAbsolute?: string
+  /** Override root `metadataBase` (pay/invoice public hosts). */
+  metadataBase?: string | URL
   /** Defaults to true – Business app is noindex by product policy. */
   noIndex?: boolean
 }
@@ -18,6 +20,7 @@ export function businessMetadata({
   metadata,
   path,
   titleAbsolute,
+  metadataBase,
   noIndex = true,
 }: BusinessMetadataInput): Metadata {
   // Absolute titles – brand lives in the page string (`… | Easner Business Banking`).
@@ -29,6 +32,7 @@ export function businessMetadata({
     description: metadata.description,
     keywords: metadata.keywords,
     applicationName: "Easner Business Banking",
+    ...(metadataBase ? { metadataBase: new URL(metadataBase) } : {}),
     alternates: { canonical: path },
     openGraph: {
       title: ogTitle,

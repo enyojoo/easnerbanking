@@ -3,6 +3,7 @@ import { InvoicePDFDocument } from "@/components/invoice-pdf-document"
 import { PDF_LOGO_DATA_URL } from "@/lib/pdf-logo-base64"
 import type { Invoice } from "@/lib/b2b/types"
 import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
+import { fetchIssuerLogoDataUrl } from "@/lib/invoices/issuer-logo-data-url"
 import type { InvoicePdfPaymentSection } from "@/lib/invoices/invoice-payment-copy"
 
 export async function generateInvoicePdfBuffer(
@@ -10,12 +11,14 @@ export async function generateInvoicePdfBuffer(
   issuer?: InvoicePdfIssuer,
   paymentSection?: InvoicePdfPaymentSection,
 ): Promise<Buffer> {
+  const issuerLogoSrc = await fetchIssuerLogoDataUrl(issuer?.logoUrl)
   return renderToBuffer(
     <InvoicePDFDocument
       invoice={invoice}
       paymentSection={paymentSection}
       issuer={issuer}
       logoUrl={PDF_LOGO_DATA_URL}
+      issuerLogoSrc={issuerLogoSrc}
     />,
   )
 }

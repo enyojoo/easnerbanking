@@ -146,7 +146,7 @@ function PaymentLinkSurface({
       <CustomerPayHeader
         businessName={business.name}
         logoUrl={business.logoUrl}
-        subhead={link.label}
+        title={link.label}
       />
 
       <div className="mb-6 rounded-xl border bg-muted/30 px-4 py-4 text-left sm:px-5">

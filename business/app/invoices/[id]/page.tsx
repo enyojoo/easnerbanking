@@ -79,6 +79,7 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 import { useInvoicePayIn } from "@/hooks/use-invoice-pay-in"
 import { useTransactionsCached } from "@/hooks/use-transactions-cached"
 import { issuerFromBusinessProfile } from "@/lib/invoices/issuer"
+import { InvoiceIssuerLogo } from "@/components/invoice/invoice-issuer-logo"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import {
   TIER2_COMPLETE_PLACEHOLDER,
@@ -1070,6 +1071,7 @@ export default function InvoiceDetailPage() {
               {/* Business info | Bill to */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 mb-6 sm:mb-8">
                 <div className="min-w-0">
+                  <InvoiceIssuerLogo name={issuer.name} logoUrl={issuer.logoUrl} />
                   <h2 className="text-sm sm:text-base font-semibold">{issuer.name}</h2>
                   {(issuer.addressLines.length > 0
                     ? issuer.addressLines

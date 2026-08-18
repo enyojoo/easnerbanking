@@ -5,6 +5,7 @@ import { InvoicePDFDocument } from "@/components/invoice-pdf-document"
 import type { Invoice } from "@/lib/b2b/types"
 import { PDF_LOGO_DATA_URL } from "@/lib/pdf-logo-base64"
 import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
+import { fetchIssuerLogoDataUrl } from "@/lib/invoices/issuer-logo-data-url"
 import type { InvoicePdfPaymentSection } from "@/lib/invoices/invoice-payment-copy"
 
 async function getLogoDataUrl(): Promise<string> {
@@ -29,7 +30,10 @@ export async function downloadInvoicePdf(
   issuer?: InvoicePdfIssuer,
   paymentSection?: InvoicePdfPaymentSection,
 ): Promise<void> {
-  const logoUrl = await getLogoDataUrl()
+  const [logoUrl, issuerLogoSrc] = await Promise.all([
+    getLogoDataUrl(),
+    fetchIssuerLogoDataUrl(issuer?.logoUrl),
+  ])
 
   const blob = await pdf(
     <InvoicePDFDocument
@@ -37,6 +41,7 @@ export async function downloadInvoicePdf(
       paymentSection={paymentSection}
       issuer={issuer}
       logoUrl={logoUrl}
+      issuerLogoSrc={issuerLogoSrc}
     />,
   ).toBlob()
 

@@ -1,10 +1,11 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { ensureBusinessOperationalAddressCountriesRegistered } from "@/lib/address/register-lib-address-countries"
 import { countries, displayCountryFromBusinessSetting } from "@/lib/countries"
 import type { BusinessProfile } from "@/lib/use-business-profile"
 import { pickInvoiceReplyEmail, pickInvoiceReplyEmailWithSource } from "@/lib/invoices/invoice-reply-email"
 import type { InvoiceReplyEmailSource } from "@/lib/invoices/invoice-reply-email"
 import { formatOperationalAddressLines, formatAddressDisplayPart } from "@easner/shared/postal-address-form"
-import { ensureBusinessOperationalAddressCountriesRegistered } from "@/lib/address/register-lib-address-countries"
+import { normalizeBusinessLogoUrl } from "@/lib/image-cache"
 
 export { pickInvoiceReplyEmail, pickInvoiceReplyEmailWithSource } from "@/lib/invoices/invoice-reply-email"
 export type { InvoiceReplyEmailSource } from "@/lib/invoices/invoice-reply-email"
@@ -21,6 +22,7 @@ export type InvoicePdfIssuer = {
   addressLines: string[]
   email: string
   phone: string
+  logoUrl?: string | null
 }
 
 const EMPTY_ISSUER: InvoicePdfIssuer = {
@@ -34,6 +36,7 @@ const EMPTY_ISSUER: InvoicePdfIssuer = {
   addressLines: [],
   email: "",
   phone: "",
+  logoUrl: null,
 }
 
 function countryCodeFromBusinessSetting(value: string | null | undefined): string {
@@ -101,6 +104,7 @@ export function issuerFromBusinessProfile(profile: BusinessProfile): InvoicePdfI
     countryCode,
     email: profile.supportEmail?.trim() || "",
     phone: profile.supportPhone?.trim() || "",
+    logoUrl: profile.logoUrl,
   })
 }
 
@@ -117,7 +121,7 @@ export async function fetchInvoiceIssuerForBusiness(
   const { data: org, error } = await admin
     .from("businesses")
     .select(
-      "name,support_email,support_phone,address_line1,city,state,postal_code,country",
+      "name,support_email,support_phone,address_line1,city,state,postal_code,country,logo_url",
     )
     .eq("id", businessId)
     .maybeSingle()
@@ -136,6 +140,7 @@ export async function fetchInvoiceIssuerForBusiness(
     countryCode,
     email: (org.support_email as string | null)?.trim() || "",
     phone: (org.support_phone as string | null)?.trim() || "",
+    logoUrl: normalizeBusinessLogoUrl(org.logo_url),
   })
 }
 

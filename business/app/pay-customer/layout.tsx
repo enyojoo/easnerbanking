@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 import { CustomerPayShell } from "@/components/pay/customer-pay-shell"
+import { getPayAppPublicOrigin } from "@/lib/customer-hosts"
 import { payCustomerSeo } from "@/lib/seo/content/pay-customer"
 import { businessMetadata } from "@/lib/seo/metadata"
 
@@ -7,6 +8,7 @@ import { businessMetadata } from "@/lib/seo/metadata"
 export const metadata = businessMetadata({
   metadata: payCustomerSeo.publicDefault.metadata,
   path: "/",
+  metadataBase: getPayAppPublicOrigin(),
 })
 
 export default function PayCustomerLayout({ children }: { children: ReactNode }) {
