@@ -5,6 +5,8 @@ import { InvoiceCustomerViewPage } from "@/components/invoice/invoice-customer-v
 import { CustomerPayShell } from "@/components/pay/customer-pay-shell"
 import { PaymentLinkPayPanel } from "@/components/pay/payment-link-pay-panel"
 import { resolveCustomerPublicKind } from "@/lib/customer-public-path"
+import type { PublicInvoicePayload } from "@/lib/invoices/json-public-invoice-from-row"
+import type { PublicPayPageResult } from "@/lib/payment-links/load-public-pay-page"
 
 function PayThanks() {
   return (
@@ -25,9 +27,13 @@ function PayThanks() {
 export function CustomerPublicView({
   parts,
   hostname,
+  invoicePayload,
+  payPage,
 }: {
   parts: string[]
   hostname?: string | null
+  invoicePayload?: PublicInvoicePayload | null
+  payPage?: PublicPayPageResult
 }) {
   const host =
     typeof window !== "undefined" ? window.location.hostname : hostname ?? null
@@ -37,7 +43,12 @@ export function CustomerPublicView({
     return (
       <div className="flex min-h-screen flex-col overflow-y-auto bg-background">
         <main className="flex min-h-0 w-full flex-1 flex-col items-center justify-start px-4 py-6 pb-12 sm:px-6 sm:py-8">
-          <InvoiceCustomerViewPage key={parts.join("/")} mode="public" slugParts={parts} />
+          <InvoiceCustomerViewPage
+            key={parts.join("/")}
+            mode="public"
+            slugParts={parts}
+            initialPayload={invoicePayload}
+          />
         </main>
       </div>
     )
@@ -54,7 +65,7 @@ export function CustomerPublicView({
   if (kind === "pay") {
     return (
       <CustomerPayShell>
-        <PaymentLinkPayPanel key={parts.join("/")} slugParts={parts} />
+        <PaymentLinkPayPanel key={parts.join("/")} slugParts={parts} initial={payPage} />
       </CustomerPayShell>
     )
   }

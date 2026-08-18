@@ -11,7 +11,7 @@
  * Full-screen loaders:
  *   - WorkspaceBootSplash: logo-only when workspace is reached with no session at all
  *     (definitively logged out — not during auth resolve, hydration, or soft reload)
- *   - LoadingSpinner: public/unauthenticated surfaces (/pay, invoice customer view)
+ *   - Public pay/invoice: page-shaped skeletons, never this spinner
  *
  * Workspace rules:
  *   - Render DashboardShell immediately when session probe passes

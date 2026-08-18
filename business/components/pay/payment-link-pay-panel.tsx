@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useState } from "react"
 import { QRCodeSVG } from "qrcode.react"
 import { toast } from "sonner"
-import { Copy, Loader2 } from "lucide-react"
+import { Copy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CustomerPayHeader } from "@/components/pay/customer-pay-shell"
+import { PaymentLinkPageSkeleton } from "@/components/pay/payment-link-page-skeleton"
 import { StablecoinChargePanel } from "@/components/pay/stablecoin-charge-panel"
 import {
   EasnerPaymentElementCheckout,
@@ -13,21 +14,45 @@ import {
   PaymentReceivedNotice,
 } from "@/components/checkout/easner-payment-element-checkout"
 import type { PublicPaymentLinkPayload } from "@/lib/payment-links/public-payload"
+import type { PublicPayPageResult } from "@/lib/payment-links/load-public-pay-page"
 import { recurringDisclosure } from "@/lib/payment-links/types"
 import { formatCurrency } from "@/lib/utils"
 
 type Resolution =
   | { kind: "loading" }
   | { kind: "not_found" }
-  | { kind: "payment_link"; payload: PublicPaymentLinkPayload }
+  | { kind: "payment_link"; payload: PublicPaymentLinkPayload; stripeCheckout: { clientSecret: string } | null }
   | { kind: "stablecoin_session"; sessionId: string }
 
-export function PaymentLinkPayPanel({ slugParts }: { slugParts: string[] }) {
-  const [resolution, setResolution] = useState<Resolution>({ kind: "loading" })
+function resolutionFromInitial(initial: PublicPayPageResult | undefined): Resolution {
+  if (!initial) return { kind: "loading" }
+  if (initial.kind === "not_found") return { kind: "not_found" }
+  if (initial.kind === "stablecoin_session") {
+    return { kind: "stablecoin_session", sessionId: initial.sessionId }
+  }
+  return {
+    kind: "payment_link",
+    payload: initial.payload,
+    stripeCheckout: initial.stripeCheckout,
+  }
+}
+
+export function PaymentLinkPayPanel({
+  slugParts,
+  initial,
+}: {
+  slugParts: string[]
+  initial?: PublicPayPageResult
+}) {
+  const [resolution, setResolution] = useState<Resolution>(() => resolutionFromInitial(initial))
 
   const path = slugParts.map((part) => encodeURIComponent(part)).join("/")
 
   useEffect(() => {
+    if (initial) {
+      setResolution(resolutionFromInitial(initial))
+      return
+    }
     if (!path) {
       setResolution({ kind: "not_found" })
       return
@@ -49,7 +74,7 @@ export function PaymentLinkPayPanel({ slugParts }: { slugParts: string[] }) {
         setResolution(
           body.kind === "stablecoin_session"
             ? { kind: "stablecoin_session", sessionId: body.sessionId }
-            : { kind: "payment_link", payload: body },
+            : { kind: "payment_link", payload: body, stripeCheckout: null },
         )
       } catch {
         if (!cancelled) setResolution({ kind: "not_found" })
@@ -59,14 +84,10 @@ export function PaymentLinkPayPanel({ slugParts }: { slugParts: string[] }) {
     return () => {
       cancelled = true
     }
-  }, [path])
+  }, [path, initial])
 
   if (resolution.kind === "loading") {
-    return (
-      <div className="flex flex-1 items-center justify-center py-16" aria-busy="true">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-hidden />
-      </div>
-    )
+    return <PaymentLinkPageSkeleton />
   }
 
   if (resolution.kind === "not_found") {
@@ -84,20 +105,30 @@ export function PaymentLinkPayPanel({ slugParts }: { slugParts: string[] }) {
     return <StablecoinChargePanel sessionId={resolution.sessionId} variant="customer" />
   }
 
-  return <PaymentLinkSurface payload={resolution.payload} path={path} />
+  return (
+    <PaymentLinkSurface
+      payload={resolution.payload}
+      path={path}
+      initialClientSecret={resolution.stripeCheckout?.clientSecret ?? null}
+    />
+  )
 }
 
 function PaymentLinkSurface({
   payload,
   path,
+  initialClientSecret,
 }: {
   payload: PublicPaymentLinkPayload
   path: string
+  initialClientSecret: string | null
 }) {
   const { link, business } = payload
-  const [clientSecret, setClientSecret] = useState<string | null>(null)
+  const [clientSecret, setClientSecret] = useState<string | null>(initialClientSecret)
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(link.rail === "card_bank" && payload.onlinePaymentsEnabled)
+  const [loading, setLoading] = useState(
+    link.rail === "card_bank" && payload.onlinePaymentsEnabled && !initialClientSecret,
+  )
   const [paid, setPaid] = useState(false)
   const [attempt, setAttempt] = useState(0)
 
@@ -106,6 +137,12 @@ function PaymentLinkSurface({
 
   useEffect(() => {
     if (link.rail !== "card_bank" || !payload.onlinePaymentsEnabled || paid) return
+    if (initialClientSecret && attempt === 0) {
+      setClientSecret(initialClientSecret)
+      setLoading(false)
+      setError(null)
+      return
+    }
     let cancelled = false
 
     void (async () => {
@@ -132,7 +169,7 @@ function PaymentLinkSurface({
     return () => {
       cancelled = true
     }
-  }, [link.rail, payload.onlinePaymentsEnabled, paid, path, attempt])
+  }, [link.rail, payload.onlinePaymentsEnabled, paid, path, attempt, initialClientSecret])
 
   const onPaid = useCallback(() => {
     setPaid(true)

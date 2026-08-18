@@ -1,18 +1,22 @@
-"use client"
-
-import { useMemo } from "react"
-import { useParams } from "next/navigation"
 import { InvoiceCustomerViewPage } from "@/components/invoice/invoice-customer-view-page"
+import { loadPublicInvoicePage } from "@/lib/invoices/load-public-invoice-page"
 
-export default function InvoicePublicPage() {
-  const params = useParams()
-  const slugParts = useMemo(() => {
-    const raw = params.slug
-    if (raw == null) return [] as string[]
-    return Array.isArray(raw) ? raw : [String(raw)]
-  }, [params.slug])
+export const dynamic = "force-dynamic"
 
+export default async function InvoicePublicPage({
+  params,
+}: {
+  params: Promise<{ slug?: string[] }>
+}) {
+  const { slug } = await params
+  const parts = slug ?? []
+  const initialPayload = await loadPublicInvoicePage(parts)
   return (
-    <InvoiceCustomerViewPage key={slugParts.join("/")} mode="public" slugParts={slugParts} />
+    <InvoiceCustomerViewPage
+      key={parts.join("/")}
+      mode="public"
+      slugParts={parts}
+      initialPayload={initialPayload}
+    />
   )
 }

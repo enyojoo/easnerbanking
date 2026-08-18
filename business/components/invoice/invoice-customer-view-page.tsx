@@ -25,7 +25,7 @@ import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
 import type { InvoicePayInPayload } from "@/lib/invoices/resolve-pay-in-for-business"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { INVOICE_CUSTOMER_VIEW_COPY } from "@/lib/copy/business-ui-copy"
-import { LoadingSpinner } from "@/components/loading-spinner"
+import { InvoiceCustomerPageSkeleton } from "@/components/invoice/invoice-customer-page-skeleton"
 import { InvoiceIssuerLogo } from "@/components/invoice/invoice-issuer-logo"
 
 const FALLBACK_ISSUER: InvoicePdfIssuer = {
@@ -51,6 +51,7 @@ type InvoiceCustomerViewPageProps =
   | {
       mode: "public"
       slugParts: string[]
+      initialPayload?: PublicInvoicePayload | null
     }
   | {
       mode: "preview"
@@ -66,14 +67,24 @@ type PublicInvoicePayloadPartial = Pick<
 
 export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
   const mode: InvoiceViewMode = props.mode
-  const [invoice, setInvoice] = useState<Invoice | null>(null)
-  const [publicEasetag, setPublicEasetag] = useState<string | null>(null)
-  const [issuer, setIssuer] = useState<InvoicePdfIssuer | null>(null)
-  const [payIn, setPayIn] = useState<InvoicePayInPayload>({})
-  const [loadState, setLoadState] = useState<"loading" | "error" | "unauthorized" | "ok">("loading")
-  const [paymentTab, setPaymentTab] = useState<"online" | "bank" | "stablecoin">("bank")
-  const [showOnlinePayment, setShowOnlinePayment] = useState(false)
-  const [stripeCheckout, setStripeCheckout] = useState<PublicInvoiceStripeCheckout | null>(null)
+  const ssrPayload = props.mode === "public" ? props.initialPayload : undefined
+  const [invoice, setInvoice] = useState<Invoice | null>(ssrPayload?.invoice ?? null)
+  const [publicEasetag, setPublicEasetag] = useState<string | null>(ssrPayload?.businessEasetag ?? null)
+  const [issuer, setIssuer] = useState<InvoicePdfIssuer | null>(ssrPayload?.issuer ?? null)
+  const [payIn, setPayIn] = useState<InvoicePayInPayload>(ssrPayload?.payIn ?? {})
+  const [loadState, setLoadState] = useState<"loading" | "error" | "unauthorized" | "ok">(
+    ssrPayload === undefined ? "loading" : ssrPayload ? "ok" : "error",
+  )
+  const ssrOnline =
+    ssrPayload?.paymentDisplay?.showOnlinePayment === true || ssrPayload?.stripeOnlineEnabled === true
+  const [paymentTab, setPaymentTab] = useState<"online" | "bank" | "stablecoin">(
+    ssrPayload?.paymentDisplay?.defaultTab ??
+      (ssrOnline ? "online" : ssrPayload?.payIn?.bankAccount ? "bank" : "stablecoin"),
+  )
+  const [showOnlinePayment, setShowOnlinePayment] = useState(ssrOnline)
+  const [stripeCheckout, setStripeCheckout] = useState<PublicInvoiceStripeCheckout | null>(
+    ssrPayload?.stripeCheckout ?? null,
+  )
   const { data: fxRates = [] } = useFxRates()
   const [isDownloading, setIsDownloading] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
@@ -128,7 +139,7 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
     const online =
       data.paymentDisplay?.showOnlinePayment === true || data.stripeOnlineEnabled === true
     setShowOnlinePayment(online)
-    setStripeCheckout(data.stripeCheckout ?? null)
+    setStripeCheckout((prev) => data.stripeCheckout ?? prev ?? null)
     const tab =
       data.paymentDisplay?.defaultTab ??
       (online ? "online" : pi.bankAccount ? "bank" : "stablecoin")
@@ -185,7 +196,13 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
     scheduleBackgroundPaidRefetch()
   }, [scheduleBackgroundPaidRefetch])
 
+  const skipClientLoad = props.mode === "public" && props.initialPayload !== undefined
+
   useEffect(() => {
+    if (skipClientLoad) {
+      return
+    }
+
     let cancelled = false
     setLoadState("loading")
     setInvoice(null)
@@ -227,7 +244,7 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
     return () => {
       cancelled = true
     }
-  }, [fetchConfig, applyPublicPayload])
+  }, [fetchConfig, applyPublicPayload, skipClientLoad])
 
   // Return URL / ?stripe_session= → same optimistic paid + background refetch path
   useEffect(() => {
@@ -298,7 +315,7 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
   }
 
   if (loadState === "loading") {
-    return <LoadingSpinner />
+    return <InvoiceCustomerPageSkeleton />
   }
 
   if (loadState === "unauthorized") {

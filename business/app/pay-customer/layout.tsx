@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 import { CustomerPayShell } from "@/components/pay/customer-pay-shell"
+import { PreloadStripeJs } from "@/components/stripe/preload-stripe-js"
 import { getPayAppPublicOrigin } from "@/lib/customer-hosts"
 import { payCustomerSeo } from "@/lib/seo/content/pay-customer"
 import { businessMetadata } from "@/lib/seo/metadata"
@@ -12,5 +13,10 @@ export const metadata = businessMetadata({
 })
 
 export default function PayCustomerLayout({ children }: { children: ReactNode }) {
-  return <CustomerPayShell>{children}</CustomerPayShell>
+  return (
+    <CustomerPayShell>
+      <PreloadStripeJs />
+      {children}
+    </CustomerPayShell>
+  )
 }

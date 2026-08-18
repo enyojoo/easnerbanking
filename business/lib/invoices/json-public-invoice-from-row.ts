@@ -30,7 +30,7 @@ export type PublicInvoicePayload = {
 export async function jsonPublicInvoiceFromRow(
   admin: ReturnType<typeof createSupabaseAdmin>,
   row: B2bInvoiceRow,
-  options?: { allowDraft?: boolean },
+  options?: { allowDraft?: boolean; includeCheckout?: boolean },
 ): Promise<PublicInvoicePayload | null> {
   const invoice = mapRowToInvoice(row)
   if (!options?.allowDraft && !isInvoicePubliclyViewable(invoice.status)) {
@@ -80,7 +80,12 @@ export async function jsonPublicInvoiceFromRow(
   const filteredPayIn = filterPayInByDisplay(payIn, paymentDisplay)
 
   let stripeCheckout: PublicInvoiceStripeCheckout | null = null
-  if (paymentDisplay.showOnlinePayment && stripeOnlineEnabled && payable) {
+  if (
+    options?.includeCheckout &&
+    paymentDisplay.showOnlinePayment &&
+    stripeOnlineEnabled &&
+    payable
+  ) {
     const checkout = await createInvoiceCheckoutSession(admin, {
       businessId,
       invoiceRow: row,
