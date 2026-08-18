@@ -154,7 +154,7 @@ function CheckoutSurface({
   }
 
   // Keep Elements mounted while loading (required for Stripe init). Show
-  // skeleton until ready, then reveal methods + Pay CTA together — never put
+  // skeleton until ready, then reveal methods + Pay CTA together – never put
   // "Loading payment methods…" on the button.
   return (
     <div className="relative">
@@ -181,7 +181,7 @@ function CheckoutSurface({
           options={{
             layout: {
               type: "accordion",
-              // Omit defaultCollapsed — Checkout Elements' payment.update() rejects it.
+              // Omit defaultCollapsed – Checkout Elements' payment.update() rejects it.
               radios: "always",
               spacedAccordionItems: true,
             },
@@ -236,7 +236,7 @@ export function EasnerPaymentElementCheckout({ clientSecret, ...surface }: Props
       options={{
         clientSecret,
         // Email is set server-side via customer_email on the Checkout Session.
-        // Do not pass defaultValues.email here — Stripe rejects updating email twice.
+        // Do not pass defaultValues.email here – Stripe rejects updating email twice.
         elementsOptions: { appearance: elementsAppearance },
       }}
     >

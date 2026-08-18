@@ -16,7 +16,7 @@ export const MERCHANT_WEBHOOK_EVENTS = [
 export type MerchantWebhookEvent = (typeof MERCHANT_WEBHOOK_EVENTS)[number]
 
 export const MERCHANT_WEBHOOK_EVENT_DESCRIPTIONS: Record<MerchantWebhookEvent, string> = {
-  "checkout.completed": "Payment succeeded — safe to fulfil the order.",
+  "checkout.completed": "Payment succeeded – safe to fulfil the order.",
   "checkout.async_succeeded": "A delayed method (such as bank debit) finally cleared.",
   "checkout.failed": "The payment attempt failed or was abandoned.",
   "payment.available": "Funds landed in the Easner Balance and are available to use.",

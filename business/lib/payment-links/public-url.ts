@@ -19,7 +19,7 @@ export function buildPaymentLinkUrl(
   return `${origin}/${toPaymentLinkPublicId(link.id)}`
 }
 
-/** Stablecoin charge session — same host, same easetag-optional shape. */
+/** Stablecoin charge session – same host, same easetag-optional shape. */
 export function buildStablecoinChargeUrl(
   easetag: string | null | undefined,
   sessionId: string,

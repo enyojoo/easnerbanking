@@ -118,29 +118,23 @@ export function CheckoutIntegrationHub({
             setPhase("verify")
           }}
         />
-        <p className="text-sm text-muted-foreground">
-          {COLLECTIONS_COPY.notBuildingSite}{" "}
-          <Link href="/links" className="underline underline-offset-2">
-            {COLLECTIONS_COPY.openPaymentLinks}
-          </Link>
-        </p>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {COLLECTIONS_COPY.setupProgress} · {doneCount} {COLLECTIONS_COPY.of} {CHECKOUT_PHASES.length}
       </p>
-      <div className="flex gap-2 overflow-x-auto lg:hidden">
+      <div className="flex gap-2 overflow-x-auto pb-1 lg:hidden">
         {CHECKOUT_PHASES.map((item, index) => (
           <button
             key={item.id}
             type="button"
             onClick={() => setPhase(item.id)}
             className={cn(
-              "shrink-0 rounded-full border px-3 py-1 text-xs",
+              "shrink-0 rounded-full border px-3.5 py-1.5 text-xs",
               phase === item.id ? "border-primary bg-primary/5 font-medium" : "text-muted-foreground",
             )}
           >
@@ -149,8 +143,8 @@ export function CheckoutIntegrationHub({
         ))}
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(200px,240px)_minmax(0,1fr)]">
-        <ul className="hidden space-y-1 lg:block">
+      <div className="grid gap-8 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)] lg:items-start">
+        <ul className="hidden lg:flex lg:flex-col lg:gap-2">
           {CHECKOUT_PHASES.map((item, index) => {
             const isDone = phaseComplete(item, completed)
             return (
@@ -159,7 +153,7 @@ export function CheckoutIntegrationHub({
                   type="button"
                   onClick={() => setPhase(item.id)}
                   className={cn(
-                    "flex w-full items-start gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors",
+                    "flex w-full items-start gap-3 rounded-lg px-3 py-3 text-left text-sm transition-colors",
                     phase === item.id ? "bg-muted font-medium" : "hover:bg-muted/60",
                   )}
                 >
@@ -168,7 +162,7 @@ export function CheckoutIntegrationHub({
                   ) : (
                     <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                   )}
-                  <span>
+                  <span className="leading-snug">
                     {index + 1}. {PHASE_COPY[item.id].title}
                   </span>
                 </button>
@@ -178,23 +172,23 @@ export function CheckoutIntegrationHub({
         </ul>
 
         <Card>
-          <CardContent className="space-y-8 p-5">
-            <p className="text-sm text-muted-foreground">{PHASE_COPY[phase].blurb}</p>
-            {CHECKOUT_PHASES.find((item) => item.id === phase)?.steps.map((step) => (
-              <div key={step} className={cn(!ready && (step === "keys" || step === "live") && "opacity-70")}>
+          <CardContent className="flex flex-col gap-10 p-6 sm:p-8">
+            <p className="text-sm leading-relaxed text-muted-foreground">{PHASE_COPY[phase].blurb}</p>
+            {CHECKOUT_PHASES.find((item) => item.id === phase)?.steps.map((step, index) => (
+              <section
+                key={step}
+                className={cn(
+                  "flex flex-col gap-5",
+                  index > 0 && "border-t pt-10",
+                  !ready && (step === "keys" || step === "live") && "opacity-70",
+                )}
+              >
                 <StepBody step={step} data={data} onSaved={refetch} />
-              </div>
+              </section>
             ))}
           </CardContent>
         </Card>
       </div>
-
-      <p className="text-sm text-muted-foreground">
-        {COLLECTIONS_COPY.notBuildingSite}{" "}
-        <Link href="/links" className="underline underline-offset-2">
-          {COLLECTIONS_COPY.openPaymentLinks}
-        </Link>
-      </p>
     </div>
   )
 }
@@ -228,9 +222,9 @@ function StepBody({ step, data, onSaved }: StepProps & { step: CheckoutStepId })
 
 function StepHeading({ title, blurb }: { title: string; blurb: string }) {
   return (
-    <div className="space-y-1">
-      <h2 className="text-base font-semibold text-foreground">{title}</h2>
-      <p className="text-sm text-muted-foreground">{blurb}</p>
+    <div className="space-y-1.5">
+      <h2 className="text-lg font-semibold leading-snug text-foreground">{title}</h2>
+      <p className="text-sm leading-relaxed text-muted-foreground">{blurb}</p>
     </div>
   )
 }
@@ -249,7 +243,7 @@ function StepReady({ data }: StepProps) {
     <>
       <StepHeading title={STEP_COPY.ready.title} blurb={STEP_COPY.ready.blurb} />
       {data.readiness.ready ? (
-        <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm">
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
           <p className="font-medium text-foreground">Online payments are on</p>
         </div>
       ) : (
@@ -268,9 +262,9 @@ function StepFees({ data }: StepProps) {
   return (
     <>
       <StepHeading title={STEP_COPY.fees.title} blurb={STEP_COPY.fees.blurb} />
-      <div className="rounded-lg border bg-muted/40 p-3 text-sm">
+      <div className="rounded-xl border bg-muted/40 p-4 text-sm">
         <p className="font-medium text-foreground">
-          Current setting — {checkoutFeeModeLabel(data.settings.feeMode)}
+          Current setting – {checkoutFeeModeLabel(data.settings.feeMode)}
         </p>
         <p className="mt-1 text-muted-foreground">
           {data.settings.feeModeManagedByEasner
@@ -310,7 +304,7 @@ function StepWebsite({ data, onSaved }: StepProps) {
   return (
     <>
       <StepHeading title={STEP_COPY.website.title} blurb={STEP_COPY.website.blurb} />
-      <div className="flex flex-col gap-2 sm:flex-row">
+      <div className="flex flex-col gap-3 sm:flex-row">
         <Input
           value={origin}
           onChange={(e) => setOrigin(e.target.value)}
@@ -330,7 +324,7 @@ function StepWebsite({ data, onSaved }: StepProps) {
       {data.settings.allowedOrigins.length === 0 ? (
         <p className="text-xs text-muted-foreground">No websites added yet.</p>
       ) : (
-        <ul className="space-y-1">
+        <ul className="space-y-2">
           {data.settings.allowedOrigins.map((value) => (
             <li
               key={value}
@@ -384,8 +378,8 @@ function StepUrls({ data, onSaved }: StepProps) {
   return (
     <>
       <StepHeading title={STEP_COPY.urls.title} blurb={STEP_COPY.urls.blurb} />
-      <div className="space-y-3">
-        <div className="space-y-1.5">
+      <div className="space-y-5">
+        <div className="space-y-2">
           <Label htmlFor="checkout-success">Success URL</Label>
           <Input
             id="checkout-success"
@@ -397,7 +391,7 @@ function StepUrls({ data, onSaved }: StepProps) {
             Easner replaces {"{CHECKOUT_SESSION_ID}"} so your page can look up the order.
           </p>
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <Label htmlFor="checkout-cancel">Cancel URL</Label>
           <Input
             id="checkout-cancel"
@@ -446,45 +440,47 @@ function StepKeys({ data, onSaved }: StepProps) {
     <>
       <StepHeading title={STEP_COPY.keys.title} blurb={STEP_COPY.keys.blurb} />
 
-      {(["test", "live"] as const).map((mode) => {
-        const key = data.keys.find((item) => item.mode === mode)
-        return (
-          <div key={mode} className="space-y-2 rounded-lg border p-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-medium capitalize text-foreground">{mode} keys</p>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={creating !== null}
-                onClick={() => void create(mode)}
-              >
-                {creating === mode ? "Creating…" : key ? "Rotate" : "Create"}
-              </Button>
-            </div>
-            {key ? (
-              <div className="space-y-2">
-                <CheckoutCodeBlock label="Publishable key (browser)" code={key.publishable_key} />
-                <p className="text-xs text-muted-foreground">
-                  Secret key ending {key.secret_key_last4} — rotate to get a new one.
-                </p>
+      <div className="grid gap-4">
+        {(["test", "live"] as const).map((mode) => {
+          const key = data.keys.find((item) => item.mode === mode)
+          return (
+            <div key={mode} className="flex flex-col gap-4 rounded-xl border bg-muted/20 p-4 sm:p-5">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium capitalize text-foreground">{mode} keys</p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={creating !== null}
+                  onClick={() => void create(mode)}
+                >
+                  {creating === mode ? "Creating…" : key ? "Rotate" : "Create"}
+                </Button>
               </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                {mode === "live"
-                  ? "Create live keys when you are ready to take real payments."
-                  : "Start with test keys while you build."}
-              </p>
-            )}
-            {revealed?.mode === mode ? (
-              <RevealOnceValue
-                value={revealed.secretKey}
-                note="Store it in your server environment. Easner keeps only a fingerprint."
-              />
-            ) : null}
-          </div>
-        )
-      })}
+              {key ? (
+                <div className="flex flex-col gap-3">
+                  <CheckoutCodeBlock label="Publishable key (browser)" code={key.publishable_key} />
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Secret key ending {key.secret_key_last4} – rotate to get a new one.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {mode === "live"
+                    ? "Create live keys when you are ready to take real payments."
+                    : "Start with test keys while you build."}
+                </p>
+              )}
+              {revealed?.mode === mode ? (
+                <RevealOnceValue
+                  value={revealed.secretKey}
+                  note="Store it in your server environment. Easner keeps only a fingerprint."
+                />
+              ) : null}
+            </div>
+          )
+        })}
+      </div>
     </>
   )
 }
@@ -538,7 +534,7 @@ function StepSession() {
       />
       <StepLearnMore>
         <p>
-          The response contains a client_secret — pass it to the snippet. For a recurring charge use
+          The response contains a client_secret – pass it to the snippet. For a recurring charge use
           mode &quot;subscription&quot; with interval &quot;month&quot; or &quot;year&quot;.
         </p>
       </StepLearnMore>
@@ -589,7 +585,7 @@ function StepWebhook({ data, onSaved }: StepProps) {
   return (
     <>
       <StepHeading title={STEP_COPY.webhook.title} blurb={STEP_COPY.webhook.blurb} />
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <Label htmlFor="checkout-webhook">Endpoint URL</Label>
         <Input
           id="checkout-webhook"
@@ -628,7 +624,7 @@ function StepWebhook({ data, onSaved }: StepProps) {
 
       <div className="space-y-2">
         <p className="text-sm font-medium text-foreground">Events you can listen for</p>
-        <ul className="space-y-1">
+        <ul className="space-y-2">
           {Object.entries(data.webhookEvents).map(([event, description]) => (
             <li key={event} className="text-sm">
               <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{event}</code>{" "}
@@ -721,7 +717,7 @@ function StepLive({ data, onSaved }: StepProps) {
   return (
     <>
       <StepHeading title={STEP_COPY.live.title} blurb={STEP_COPY.live.blurb} />
-      <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+      <div className="flex items-center justify-between gap-4 rounded-xl border p-4 sm:p-5">
         <div className="min-w-0">
           <p className="text-sm font-medium text-foreground">Live payments</p>
           <p className="text-xs text-muted-foreground">

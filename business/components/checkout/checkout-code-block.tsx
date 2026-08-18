@@ -49,7 +49,7 @@ export function RevealOnceValue({ value, note }: { value: string; note?: string 
   return (
     <div className="space-y-2 rounded-lg border border-amber-200/80 bg-amber-50/70 p-3 dark:border-amber-900/40 dark:bg-amber-950/20">
       <p className="text-xs font-medium text-amber-950 dark:text-amber-200">
-        Copy this now — it is shown only once.
+        Copy this now – it is shown only once.
       </p>
       <CheckoutCodeBlock code={value} />
       {note ? <p className="text-xs text-muted-foreground">{note}</p> : null}

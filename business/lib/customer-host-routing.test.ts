@@ -49,10 +49,11 @@ describe("customer host routing", () => {
     expect(rewrittenPath("business.easner.com", "/links")).toBeNull()
   })
 
-  it("does not rewrite API routes, assets, or the embed script", () => {
+  it("does not rewrite API routes, assets, auth, or the embed script", () => {
     expect(rewrittenPath("pay.easner.com", "/api/payment-links/public/acme/tuition-fall")).toBeNull()
     expect(rewrittenPath("pay.easner.com", "/_next/static/chunk.js")).toBeNull()
     expect(rewrittenPath("invoice.easner.com", "/checkout.js")).toBeNull()
+    expect(rewrittenPath("pay.easner.com", "/auth/login")).toBeNull()
   })
 
   it("is idempotent when the path already points at the route tree", () => {

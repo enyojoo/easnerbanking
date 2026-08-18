@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import Link from "next/link"
 import { CheckoutIntegrationHub } from "@/components/checkout/checkout-integration-hub"
 import { CollectionsPageHeader } from "@/components/collections/collections-page-header"
 import { CollectionsReadinessBanner } from "@/components/collections/collections-readiness-banner"
@@ -40,6 +41,14 @@ export default function CheckoutPage() {
           title={PAGE_COPY.checkout.title}
           intro={PAGE_COPY.checkout.intro}
           chips={dashboard ? chips : undefined}
+          actions={
+            <p className="text-sm text-muted-foreground lg:text-right">
+              {COLLECTIONS_COPY.notBuildingSite}{" "}
+              <Link href="/links" className="underline underline-offset-2">
+                {COLLECTIONS_COPY.openPaymentLinks}
+              </Link>
+            </p>
+          }
         />
         <CollectionsReadinessBanner />
       </div>

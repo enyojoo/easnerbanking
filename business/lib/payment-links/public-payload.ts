@@ -19,7 +19,7 @@ export type PublicPaymentLinkPayload = {
   business: PublicPayBusiness
   /** Card and bank payments are ready for this business. */
   onlinePaymentsEnabled: boolean
-  /** What the customer is charged — above the listed amount when the business adds the fee. */
+  /** What the customer is charged – above the listed amount when the business adds the fee. */
   customerAmountCents: number
   /** Set when the customer pays the processing fee, so the pay page can show the breakdown. */
   surchargeCents: number
@@ -59,7 +59,7 @@ async function fetchPublicBusiness(
   }
 }
 
-/** Customer-facing payload for a Payment Link — never exposes provider ids or payout details. */
+/** Customer-facing payload for a Payment Link – never exposes provider ids or payout details. */
 export async function buildPublicPaymentLinkPayload(
   admin: SupabaseClient,
   row: Record<string, unknown>,

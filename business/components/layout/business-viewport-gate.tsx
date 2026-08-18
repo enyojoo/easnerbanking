@@ -4,17 +4,10 @@ import type { ReactNode } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
 import { DesktopMinViewportGate } from "@/components/layout/desktop-min-viewport-gate"
 import { parseSettingsVerificationFlow } from "@/lib/compliance/cutover-comms"
+import { isPublicSurfacePath } from "@/lib/surface-paths"
 
-function bypassesDesktopViewportGate(pathname: string, flow: string | null) {
-  if (pathname === "/invoice" || pathname.startsWith("/invoice/")) {
-    return true
-  }
-  if (pathname === "/pay" || pathname.startsWith("/pay/")) {
-    return true
-  }
-  if (pathname === "/auth" || pathname.startsWith("/auth/")) {
-    return true
-  }
+function bypassesDesktopViewportGate(pathname: string, flow: string | null, hostname?: string | null) {
+  if (isPublicSurfacePath(pathname, hostname)) return true
   // Hosted KYB is a full-page flow — do not bounce the user to the wide-screen wall.
   if (
     (pathname === "/settings" || pathname.startsWith("/settings/")) &&
@@ -25,11 +18,19 @@ function bypassesDesktopViewportGate(pathname: string, flow: string | null) {
   return false
 }
 
-export function BusinessViewportGate({ children }: { children: ReactNode }) {
+export function BusinessViewportGate({
+  children,
+  hostname,
+}: {
+  children: ReactNode
+  hostname?: string | null
+}) {
   const pathname = usePathname() ?? ""
   const searchParams = useSearchParams()
   const flow = searchParams.get("flow")
-  if (bypassesDesktopViewportGate(pathname, flow)) {
+  const host =
+    hostname ?? (typeof window !== "undefined" ? window.location.hostname : null)
+  if (bypassesDesktopViewportGate(pathname, flow, host)) {
     return <>{children}</>
   }
   return <DesktopMinViewportGate product="business">{children}</DesktopMinViewportGate>

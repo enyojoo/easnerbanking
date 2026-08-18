@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
-import { getInvoiceAppHostname, getPayAppHostname } from "@/lib/customer-hosts"
+import { getInvoiceAppHostname, getPayAppHostname, isCustomerAppHostname } from "@/lib/customer-hosts"
 import {
   getBusinessWebOriginForApiHostRedirect,
   getRequestHostname,
@@ -17,6 +17,8 @@ function isInternalPath(pathname: string): boolean {
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api/") ||
     pathname === "/api" ||
+    pathname === "/auth" ||
+    pathname.startsWith("/auth/") ||
     pathname === "/favicon.ico" ||
     pathname === "/robots.txt" ||
     pathname === "/manifest.webmanifest" ||
@@ -25,8 +27,7 @@ function isInternalPath(pathname: string): boolean {
 }
 
 function isCustomerPublicHostname(hostname: string): boolean {
-  const host = hostname.toLowerCase()
-  return host === getInvoiceAppHostname() || host === getPayAppHostname()
+  return isCustomerAppHostname(hostname)
 }
 
 /**

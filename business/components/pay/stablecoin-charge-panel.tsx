@@ -24,7 +24,7 @@ export type StablecoinChargeSession = {
 const STATUS_LABEL: Record<string, string> = {
   creating_workflow: "Preparing…",
   awaiting_deposit: "Awaiting payment",
-  deposit_detected: "Deposit seen — settlement in progress",
+  deposit_detected: "Deposit seen – settlement in progress",
   payout_pending: "Payout processing",
   payout_complete: "Paid",
   failed: "Failed",
@@ -261,7 +261,7 @@ export function StablecoinChargePanel({ sessionId, variant, amountLabel = "Amoun
         <div className="flex justify-between gap-3">
           <span className="shrink-0 text-muted-foreground">Min. crypto (quote)</span>
           <span className="min-w-0 text-right font-mono font-medium tabular-nums">
-            {cryptoExpected ? `${cryptoExpected} ${session.crypto_currency}` : "—"}
+            {cryptoExpected ? `${cryptoExpected} ${session.crypto_currency}` : "–"}
           </span>
         </div>
         <div className="flex justify-between gap-3">

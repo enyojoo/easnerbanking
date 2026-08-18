@@ -14,6 +14,7 @@ import { PwaInstallProvider } from "@/components/pwa/pwa-install-provider"
 import { BusinessViewportGate } from "@/components/layout/business-viewport-gate"
 import { AppSurfaceLayout } from "@/components/app-surface-layout"
 import { getBusinessAppPublicOrigin } from "@/lib/business-app-public-url"
+import { headers } from "next/headers"
 import "./globals.css"
 import { BRAND } from "@easner/shared"
 
@@ -65,11 +66,13 @@ export const viewport: Viewport = {
   themeColor: "#F6F3EB",
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const hostname = (await headers()).get("host")
+
   return (
     <html lang="en" className="light" suppressHydrationWarning>
       <body
@@ -82,8 +85,8 @@ export default function RootLayout({
             <ClientAuthProvider>
               <PwaStandaloneRoot />
               <PwaInstallProvider>
-                <SurfaceProviders>
-                  <BusinessViewportGate>
+                <SurfaceProviders hostname={hostname}>
+                  <BusinessViewportGate hostname={hostname}>
                     <AppSurfaceLayout>{children}</AppSurfaceLayout>
                   </BusinessViewportGate>
                 </SurfaceProviders>

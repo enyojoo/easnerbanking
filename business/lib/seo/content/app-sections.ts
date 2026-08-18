@@ -191,7 +191,7 @@ export const appSectionsSeo = {
   checkout: {
     metadata: {
       title: "Website checkout | Easner Business Banking",
-      description: "Connect your website with Easner Checkout — API keys, embed snippet, webhooks, and test mode in Easner Business.",
+      description: "Connect your website with Easner Checkout – API keys, embed snippet, webhooks, and test mode in Easner Business.",
     },
     hero: {
       h1: "Website checkout",

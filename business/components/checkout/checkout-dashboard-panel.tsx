@@ -76,9 +76,9 @@ export function Pay() {
         </Button>
       </div>
 
-      <div className="space-y-3 rounded-lg border p-4">
+      <div className="space-y-5 rounded-xl border p-5 sm:p-6">
         <p className="text-sm font-medium text-foreground">{COLLECTIONS_COPY.dashboardTitle}</p>
-        <dl className="grid gap-3 text-sm sm:grid-cols-2">
+        <dl className="grid gap-5 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-muted-foreground">Publishable key</dt>
             <dd className="mt-1">
@@ -101,7 +101,7 @@ export function Pay() {
             <dt className="text-muted-foreground">Secret key</dt>
             <dd className="mt-1 text-xs text-muted-foreground">
               {(liveKey ?? testKey)
-                ? `Ending ${(liveKey ?? testKey)?.secret_key_last4} — rotate in setup to reveal a new one.`
+                ? `Ending ${(liveKey ?? testKey)?.secret_key_last4} – rotate in setup to reveal a new one.`
                 : "None yet"}
             </dd>
           </div>

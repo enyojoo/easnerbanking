@@ -21,17 +21,17 @@ export function PaymentLinksListSkeleton() {
 export function CheckoutHubSkeleton() {
   return (
     <div
-      className="grid gap-5 lg:grid-cols-[minmax(200px,240px)_minmax(0,1fr)]"
+      className="grid gap-8 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)]"
       aria-busy="true"
       aria-label="Loading checkout setup"
     >
-      <div className="space-y-2">
+      <div className="hidden space-y-2 lg:block">
         <Skeleton className="h-4 w-24" />
         {Array.from({ length: 4 }).map((_, index) => (
-          <Skeleton key={index} className="h-10 w-full" />
+          <Skeleton key={index} className="h-12 w-full" />
         ))}
       </div>
-      <div className="space-y-3 rounded-lg border p-5">
+      <div className="space-y-6 rounded-lg border p-6 sm:p-8">
         <Skeleton className="h-5 w-40" />
         <Skeleton className="h-4 w-3/4" />
         <Skeleton className="h-24 w-full" />

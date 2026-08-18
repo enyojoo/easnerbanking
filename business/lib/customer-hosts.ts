@@ -42,3 +42,19 @@ export function getInvoiceAppHostname(): string {
 export function getPayAppHostname(): string {
   return hostnameOf(getPayAppPublicOrigin(), "pay.easner.com")
 }
+
+function normalizeHostname(value: string | null | undefined): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .split("/")[0]
+    ?.split(":")[0] ?? ""
+}
+
+/** True for invoice.easner.com / pay.easner.com (and env overrides). */
+export function isCustomerAppHostname(hostname: string | null | undefined): boolean {
+  const host = normalizeHostname(hostname)
+  if (!host) return false
+  return host === getInvoiceAppHostname() || host === getPayAppHostname()
+}

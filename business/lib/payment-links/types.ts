@@ -73,11 +73,11 @@ export function mapRowToPaymentLink(row: Record<string, unknown>): PaymentLink {
   }
 }
 
-/** Plain-language type for tables and share sheets — no provider names. */
+/** Plain-language type for tables and share sheets – no provider names. */
 export function paymentLinkTypeLabel(link: Pick<PaymentLink, "rail" | "mode" | "billingInterval">): string {
   if (link.rail === "stablecoin") return "Stablecoin"
   if (link.mode === "subscription") {
-    return link.billingInterval === "year" ? "Recurring — yearly" : "Recurring — monthly"
+    return link.billingInterval === "year" ? "Recurring – yearly" : "Recurring – monthly"
   }
   return "One-time"
 }

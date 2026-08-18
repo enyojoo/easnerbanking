@@ -283,7 +283,7 @@ export function CreatePaymentLinkDialog({
               />
               <p className="text-xs text-muted-foreground">
                 {previewUrl}
-                {easetag ? null : " — add an @easetag in Settings for shorter links."}
+                {easetag ? null : " – add an @easetag in Settings for shorter links."}
               </p>
             </div>
 

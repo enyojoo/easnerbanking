@@ -1,6 +1,6 @@
 const MAX_SLUG_LENGTH = 40
 
-/** URL segment on pay.easner.com/{easetag}/{slug} — lowercase, hyphenated, no reserved words. */
+/** URL segment on pay.easner.com/{easetag}/{slug} – lowercase, hyphenated, no reserved words. */
 export function normalizePaymentLinkSlug(raw: string): string {
   return raw
     .trim()
