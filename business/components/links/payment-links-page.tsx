@@ -101,8 +101,8 @@ export function PaymentLinksPage({ initialCreateRail }: { initialCreateRail?: Pa
       />
 
       {links.length > 0 ? (
-        <div className="flex flex-col gap-3">
-          <div className="flex space-x-1 overflow-x-auto">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-1 space-x-1 overflow-x-auto">
             {statusTabs.map((item) => (
               <button
                 key={item.id}
@@ -125,7 +125,7 @@ export function PaymentLinksPage({ initialCreateRail }: { initialCreateRail?: Pa
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={COLLECTIONS_COPY.searchPlaceholder}
-            className="max-w-md"
+            className="w-full max-w-[220px] shrink-0 sm:max-w-xs"
           />
         </div>
       ) : null}

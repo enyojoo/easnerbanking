@@ -820,11 +820,16 @@ function StepTest() {
         future expiry, and any security code.
       </p>
       <p className="text-sm text-muted-foreground">
-        Use Test delivery in Webhook if you only need to confirm the endpoint.
+        A successful test shows on{" "}
+        <button
+          type="button"
+          className="underline underline-offset-2"
+          onClick={() => setTestPaymentsOpen(true)}
+        >
+          Transactions
+        </button>
+        . Use Test delivery in Webhook if you only need to confirm the endpoint.
       </p>
-      <Button type="button" variant="outline" onClick={() => setTestPaymentsOpen(true)}>
-        {COLLECTIONS_COPY.viewTestPayments}
-      </Button>
       <CheckoutTestPaymentsDialog open={testPaymentsOpen} onOpenChange={setTestPaymentsOpen} />
     </>
   )

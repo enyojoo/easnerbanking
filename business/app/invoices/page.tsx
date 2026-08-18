@@ -511,34 +511,36 @@ export default function InvoicesPage() {
             <p className="text-xs text-muted-foreground">{INVOICE_LIST_COPY.mixedCurrencies}</p>
           ) : null}
         </div>
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search invoices, customers…"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <div className="flex space-x-1">
-          {statusTabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === tab.id
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {tab.label}
-              {tab.count > 0 && (
-                <span className="ml-2 px-2 py-0.5 text-xs bg-muted rounded-full">
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          ))}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-1 space-x-1 overflow-x-auto">
+            {statusTabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`shrink-0 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === tab.id
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {tab.label}
+                {tab.count > 0 && (
+                  <span className="ml-2 px-2 py-0.5 text-xs bg-muted rounded-full">
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+          <div className="relative w-full max-w-[220px] shrink-0 sm:max-w-xs">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search invoices, customers…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9"
+            />
+          </div>
         </div>
       </div>
 

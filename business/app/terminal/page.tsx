@@ -1,11 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { SetupPayoutDialog } from "@/components/terminal/setup-payout-dialog"
 import { TerminalSessionsTableSkeleton } from "@/components/terminal/terminal-sessions-table-skeleton"
+import { CollectionsPageHeader } from "@/components/collections/collections-page-header"
 import { getBusinessAppPublicOrigin } from "@/lib/business-app-public-url"
 import { formatDate } from "@/lib/utils"
 import { ExternalLink, Copy } from "lucide-react"
@@ -16,9 +18,18 @@ import {
   type TerminalSessionListItem,
 } from "@/hooks/use-terminal-sessions-cached"
 import { cn } from "@/lib/utils"
+import { PAGE_COPY, TERMINAL_LIST_COPY } from "@/lib/copy/business-ui-copy"
+
+type ChargeTab = "all" | "open" | "paid" | "failed"
 
 function shortSessionRef(id: string): string {
   return id.replace(/-/g, "").slice(0, 8).toUpperCase()
+}
+
+function chargeTab(status: string): Exclude<ChargeTab, "all"> {
+  if (status === "payout_complete") return "paid"
+  if (status === "failed" || status === "expired") return "failed"
+  return "open"
 }
 
 function statusClassName(status: string): string {
@@ -26,6 +37,14 @@ function statusClassName(status: string): string {
   if (status === "payout_complete") return "text-emerald-600 dark:text-emerald-400 font-medium"
   if (status === "creating_workflow") return "text-muted-foreground"
   return "text-foreground"
+}
+
+function emptyCopy(tab: ChargeTab, searching: boolean): string {
+  if (searching) return TERMINAL_LIST_COPY.emptySearch
+  if (tab === "open") return TERMINAL_LIST_COPY.emptyOpen
+  if (tab === "paid") return TERMINAL_LIST_COPY.emptyPaid
+  if (tab === "failed") return TERMINAL_LIST_COPY.emptyFailed
+  return TERMINAL_LIST_COPY.emptySearch
 }
 
 function SessionsTable({ sessions }: { sessions: TerminalSessionListItem[] }) {
@@ -120,6 +139,8 @@ export default function TerminalPage() {
   const { isLoading: authLoading } = useAuth()
   const { data: sessions, loading: sessionsLoading } = useTerminalSessionsCached()
   const showTableSkeleton = (authLoading && sessions.length === 0) || (sessionsLoading && sessions.length === 0)
+  const [tab, setTab] = useState<ChargeTab>("all")
+  const [search, setSearch] = useState("")
 
   const [payUrl, setPayUrl] = useState(() => {
     const envOrigin = getBusinessAppPublicOrigin()
@@ -142,37 +163,78 @@ export default function TerminalPage() {
     }
   }
 
+  const openCount = sessions.filter((s) => chargeTab(s.status) === "open").length
+  const paidCount = sessions.filter((s) => chargeTab(s.status) === "paid").length
+  const failedCount = sessions.filter((s) => chargeTab(s.status) === "failed").length
+  const statusTabs = [
+    { id: "all" as const, label: TERMINAL_LIST_COPY.tabAll, count: sessions.length },
+    { id: "open" as const, label: TERMINAL_LIST_COPY.tabOpen, count: openCount },
+    { id: "paid" as const, label: TERMINAL_LIST_COPY.tabPaid, count: paidCount },
+    { id: "failed" as const, label: TERMINAL_LIST_COPY.tabFailed, count: failedCount },
+  ]
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return sessions.filter((row) => {
+      if (tab !== "all" && chargeTab(row.status) !== tab) return false
+      if (!q) return true
+      return `${shortSessionRef(row.id)} ${row.fiat_amount} ${row.fiat_currency} ${row.crypto_currency} ${row.network} ${row.status} ${row.destination_address ?? ""}`
+        .toLowerCase()
+        .includes(q)
+    })
+  }, [sessions, tab, search])
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="sticky top-0 z-20 flex shrink-0 flex-col gap-4 border-b bg-background pb-4">
-        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground">Terminal</h1>
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Accept in-person stablecoin payments using a virtual terminal.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
-            <Button type="button" variant="outline" size="sm" asChild>
-              <Link href="/pay" target="_blank" rel="noopener noreferrer" className="gap-2">
+      <CollectionsPageHeader
+        title={PAGE_COPY.terminal.title}
+        intro={PAGE_COPY.terminal.intro}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" asChild>
+              <Link href="/pay" target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-4 w-4" aria-hidden />
                 Open counter
               </Link>
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={() => void copyCounterUrl()}
-            >
+            <Button type="button" variant="outline" onClick={() => void copyCounterUrl()}>
               <Copy className="h-4 w-4" aria-hidden />
               Copy URL
             </Button>
             <SetupPayoutDialog />
           </div>
+        }
+      />
+
+      {sessions.length > 0 ? (
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-1 space-x-1 overflow-x-auto">
+            {statusTabs.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setTab(item.id)}
+                className={`shrink-0 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  tab === item.id
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {item.label}
+                {item.count > 0 ? (
+                  <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">{item.count}</span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={TERMINAL_LIST_COPY.search}
+            className="w-full max-w-[220px] shrink-0 sm:max-w-xs"
+          />
         </div>
-      </div>
+      ) : null}
 
       <Card className="flex min-h-[400px] flex-col">
         <CardContent className="flex min-h-0 flex-1 flex-col p-0">
@@ -187,8 +249,12 @@ export default function TerminalPage() {
                 </p>
               </div>
             </div>
+          ) : filtered.length === 0 ? (
+            <p className="px-4 py-12 text-center text-sm text-muted-foreground">
+              {emptyCopy(tab, Boolean(search.trim()))}
+            </p>
           ) : (
-            <SessionsTable sessions={sessions} />
+            <SessionsTable sessions={filtered} />
           )}
         </CardContent>
       </Card>

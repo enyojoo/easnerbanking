@@ -9,6 +9,7 @@ import { CollectionsPageHeader } from "@/components/collections/collections-page
 import { CollectionsReadinessBanner } from "@/components/collections/collections-readiness-banner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,11 +33,16 @@ export function CheckoutSitesPage() {
   const [testPaymentsOpen, setTestPaymentsOpen] = useState(false)
   const sites = data?.sites ?? []
   const [tab, setTab] = useState<"all" | "incomplete">("all")
+  const [search, setSearch] = useState("")
   const incompleteCount = sites.filter((site) => !site.successUrl).length
-  const visibleSites = useMemo(
-    () => (tab === "incomplete" ? sites.filter((site) => !site.successUrl) : sites),
-    [sites, tab],
-  )
+  const visibleSites = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return sites.filter((site) => {
+      if (tab === "incomplete" && site.successUrl) return false
+      if (!q) return true
+      return `${site.origin} ${site.successUrl ?? ""} ${site.cancelUrl ?? ""}`.toLowerCase().includes(q)
+    })
+  }, [sites, tab, search])
 
   const createButton = (
     <Button asChild>
@@ -95,8 +101,8 @@ export function CheckoutSitesPage() {
       ) : null}
 
       {sites.length > 0 ? (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex space-x-1">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-1 space-x-1 overflow-x-auto">
             {(
               [
                 { id: "all" as const, label: COLLECTIONS_COPY.tabAll, count: sites.length },
@@ -107,7 +113,7 @@ export function CheckoutSitesPage() {
                 key={item.id}
                 type="button"
                 onClick={() => setTab(item.id)}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                className={`shrink-0 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                   tab === item.id
                     ? "border-primary text-primary"
                     : "border-transparent text-muted-foreground hover:text-foreground"
@@ -120,18 +126,12 @@ export function CheckoutSitesPage() {
               </button>
             ))}
           </div>
-          {data ? (
-            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-              <span className="rounded-full border bg-muted/50 px-2.5 py-1">
-                {data.settings.liveModeEnabled ? COLLECTIONS_COPY.statusLive : COLLECTIONS_COPY.statusTest}
-              </span>
-              <span className="rounded-full border bg-muted/50 px-2.5 py-1">
-                {data.settings.webhookUrl && data.settings.webhookSecretLast4
-                  ? COLLECTIONS_COPY.statusWebhookOn
-                  : COLLECTIONS_COPY.statusWebhookOff}
-              </span>
-            </div>
-          ) : null}
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={COLLECTIONS_COPY.searchWebsites}
+            className="w-full max-w-[220px] shrink-0 sm:max-w-xs"
+          />
         </div>
       ) : null}
 
@@ -152,7 +152,9 @@ export function CheckoutSitesPage() {
             </div>
           ) : visibleSites.length === 0 ? (
             <p className="px-4 py-12 text-center text-sm text-muted-foreground">
-              {COLLECTIONS_COPY.emptyIncomplete}
+              {search.trim()
+                ? COLLECTIONS_COPY.emptySearchWebsites
+                : COLLECTIONS_COPY.emptyIncomplete}
             </p>
           ) : (
             <div className="overflow-x-auto">

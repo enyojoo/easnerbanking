@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { flushSync } from "react-dom"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -20,6 +21,7 @@ import {
 } from "@/components/ui/select"
 import { CurrencyFlag } from "@/components/flags"
 import { RecipientForm } from "@/components/recipient-form"
+import { Skeleton } from "@/components/ui/skeleton"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { dataCache, CACHE_KEYS, notifyTerminalPayoutSetupUpdated } from "@/lib/cache"
@@ -84,12 +86,15 @@ export function TerminalPayoutSetupPanel({
     useTerminalPayoutSetupCached()
   const [showAddPanel, setShowAddPanel] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [uiDest, setUiDest] = useState<TerminalSettlementDestination | null>(null)
+  const [uiBalance, setUiBalance] = useState<"USD" | "EUR" | null>(null)
   const syncMountRef = useRef(false)
+  const settingsPatchSeq = useRef(0)
 
   const payouts = setup.payouts
   const savedDefaultId = setup.defaultTerminalPayoutId
-  const settlementDestination = setup.settlementDestination
-  const defaultBalanceCurrency = setup.defaultBalanceCurrency ?? "USD"
+  const settlementDestination = uiDest ?? setup.settlementDestination
+  const defaultBalanceCurrency = uiBalance ?? setup.defaultBalanceCurrency ?? "USD"
   const pickMode = variant === "pick-recipient"
   const { accountRows, loading: accountsLoading, loadError: accountsLoadError } =
     useBusinessAccountRows()
@@ -135,6 +140,8 @@ export function TerminalPayoutSetupPanel({
   useEffect(() => {
     if (!active) {
       setShowAddPanel(false)
+      setUiDest(null)
+      setUiBalance(null)
       return
     }
     if (!user?.id) return
@@ -166,62 +173,87 @@ export function TerminalPayoutSetupPanel({
 
   const patchTerminalSettings = useCallback(
     async (patch: Record<string, unknown>, rollback: () => void) => {
+      const seq = ++settingsPatchSeq.current
       try {
         const res = await fetchWithSession("/api/terminal/settings", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(patch),
         })
-        const data = (await res.json().catch(() => ({}))) as { error?: string }
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string
+          settlement_destination?: TerminalSettlementDestination
+          default_balance_currency?: "USD" | "EUR" | null
+          default_terminal_payout_id?: string | null
+        }
+        if (seq !== settingsPatchSeq.current) return
         if (!res.ok) {
           rollback()
           toast.error(data.error || "Could not update terminal settings.")
           return
         }
+        setSetupData((prev) => ({
+          ...prev,
+          ...(data.settlement_destination
+            ? { settlementDestination: data.settlement_destination }
+            : {}),
+          ...(data.default_balance_currency !== undefined
+            ? { defaultBalanceCurrency: data.default_balance_currency }
+            : {}),
+          ...(data.default_terminal_payout_id !== undefined
+            ? { defaultTerminalPayoutId: data.default_terminal_payout_id }
+            : {}),
+        }))
         if (user?.id) {
-          dataCache.invalidate(CACHE_KEYS.TERMINAL_PAYOUT_SETUP(user.id))
           dataCache.invalidate(CACHE_KEYS.TERMINAL_SESSIONS(user.id))
         }
-        await refetch()
         notifyTerminalPayoutSetupUpdated()
       } catch (e) {
+        if (seq !== settingsPatchSeq.current) return
         rollback()
         toast.error(e instanceof Error ? e.message : "Could not update settings.")
       }
     },
-    [refetch, user?.id],
+    [setSetupData, user?.id],
   )
 
   const setSettlementMode = (dest: TerminalSettlementDestination) => {
     if (dest === settlementDestination) return
     const snapshot = setup
-    setSetupData((prev) => ({
-      ...prev,
-      settlementDestination: dest,
-      defaultBalanceCurrency:
-        dest === "easner_balance" ? (prev.defaultBalanceCurrency ?? "USD") : null,
-    }))
+    const priorDest = uiDest
+    const priorBalance = uiBalance
+    flushSync(() => {
+      setUiDest(dest)
+      setUiBalance(dest === "easner_balance" ? (snapshot.defaultBalanceCurrency ?? "USD") : null)
+    })
     const body =
-      dest === "easner_balance" ?
-        {
-          settlement_destination: "easner_balance",
-          default_balance_currency: snapshot.defaultBalanceCurrency ?? "USD",
-        }
-      : { settlement_destination: "bank_payout", default_balance_currency: null }
-    void patchTerminalSettings(body, () => setSetupData(snapshot))
+      dest === "easner_balance"
+        ? {
+            settlement_destination: "easner_balance",
+            default_balance_currency: snapshot.defaultBalanceCurrency ?? "USD",
+          }
+        : { settlement_destination: "bank_payout", default_balance_currency: null }
+    void patchTerminalSettings(body, () => {
+      setUiDest(priorDest)
+      setUiBalance(priorBalance)
+      setSetupData(snapshot)
+    })
   }
 
   const setLedgerDefault = (c: "USD" | "EUR") => {
     if (defaultBalanceCurrency === c && settlementDestination === "easner_balance") return
     const snapshot = setup
-    setSetupData((prev) => ({
-      ...prev,
-      settlementDestination: "easner_balance",
-      defaultBalanceCurrency: c,
-    }))
+    const priorDest = uiDest
+    const priorBalance = uiBalance
+    setUiDest("easner_balance")
+    setUiBalance(c)
     void patchTerminalSettings(
       { settlement_destination: "easner_balance", default_balance_currency: c },
-      () => setSetupData(snapshot),
+      () => {
+        setUiDest(priorDest)
+        setUiBalance(priorBalance)
+        setSetupData(snapshot)
+      },
     )
   }
 
@@ -245,10 +277,8 @@ export function TerminalPayoutSetupPanel({
           return
         }
         if (user?.id) {
-          dataCache.invalidate(CACHE_KEYS.TERMINAL_PAYOUT_SETUP(user.id))
           dataCache.invalidate(CACHE_KEYS.TERMINAL_SESSIONS(user.id))
         }
-        await refetch()
         notifyTerminalPayoutSetupUpdated()
       } catch (e) {
         setSetupData((prev) => ({ ...prev, defaultTerminalPayoutId: rollback }))
@@ -277,10 +307,8 @@ export function TerminalPayoutSetupPanel({
           return
         }
         if (user?.id) {
-          dataCache.invalidate(CACHE_KEYS.TERMINAL_PAYOUT_SETUP(user.id))
           dataCache.invalidate(CACHE_KEYS.TERMINAL_SESSIONS(user.id))
         }
-        await refetch()
         notifyTerminalPayoutSetupUpdated()
       } catch (e) {
         setSetupData((prev) => ({ ...prev, defaultTerminalPayoutId: rollback }))
@@ -322,8 +350,6 @@ export function TerminalPayoutSetupPanel({
     })()
   }
 
-  const listLoading = active && setupLoading
-
   useEffect(() => {
     if (!pickMode || !onSelectRecipientId || !active) return
     if (setupLoading) return
@@ -347,33 +373,31 @@ export function TerminalPayoutSetupPanel({
     savedDefaultId,
   ])
 
+  const showInitialSkeleton = active && setupLoading && payouts.length === 0 && !uiDest
   const dialogHeaderClass = "shrink-0 space-y-1.5 pr-10 text-left sm:pr-12"
 
-  const headerBlock =
-    listLoading && !embedded ? (
-      <DialogHeader className={dialogHeaderClass}>
-        <DialogTitle className="text-xl font-semibold leading-snug">Setup payout</DialogTitle>
-        <DialogDescription className="sr-only">Terminal settlement configuration</DialogDescription>
-      </DialogHeader>
-    ) : listLoading ? null
-    : embedded ? (
-      <div className="sr-only">Terminal payout setup</div>
-    ) : (
-      <DialogHeader className={dialogHeaderClass}>
-        <DialogTitle className="text-xl font-semibold leading-snug">Setup payout</DialogTitle>
-        <DialogDescription className="sr-only">Terminal settlement configuration</DialogDescription>
-      </DialogHeader>
-    )
+  const headerBlock = embedded ? (
+    <div className="sr-only">Terminal payout setup</div>
+  ) : (
+    <DialogHeader className={dialogHeaderClass}>
+      <DialogTitle className="text-xl font-semibold leading-snug">Setup payout</DialogTitle>
+      <DialogDescription className="sr-only">Terminal settlement configuration</DialogDescription>
+    </DialogHeader>
+  )
 
   return (
     <div className={cn("w-full", !embedded && "flex flex-col gap-6", className)}>
       {headerBlock}
 
-      {listLoading ?
-        <div className="flex justify-center py-8 text-muted-foreground">
-          <Loader2 className="h-8 w-8 animate-spin" aria-hidden />
+      {showInitialSkeleton ? (
+        <div className={cn("mx-auto w-full min-w-0 space-y-4", !embedded && "max-w-md")} aria-busy="true">
+          <Skeleton className="h-10 w-full rounded-lg" />
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-16 w-full rounded-lg" />
+          <Skeleton className="h-16 w-full rounded-lg" />
         </div>
-      : <div className={cn("mx-auto w-full min-w-0 space-y-5", !embedded && "max-w-md")}>
+      ) : (
+        <div className={cn("mx-auto w-full min-w-0 space-y-5", !embedded && "max-w-md")}>
           {!pickMode ?
             <div className="space-y-4">
               <div className="space-y-2">
@@ -392,81 +416,69 @@ export function TerminalPayoutSetupPanel({
                 </Select>
               </div>
 
-              {settlementDestination === "easner_balance" ?
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <h3 className="text-base font-semibold tracking-tight text-foreground">Easner balance</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Choose the USD or EUR balance that receives automated settlement.
-                    </p>
-                  </div>
-                  {accountsLoadError ?
-                    <p className="text-sm text-destructive">{accountsLoadError}</p>
-                  : null}
-                  {accountsLoading ?
-                    <div className="flex justify-center py-6">
-                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-hidden />
-                    </div>
-                  : <div className="max-h-[min(520px,60vh)] space-y-3 overflow-y-auto pr-1">
-                      {easnerAccountRows.map((account) => {
-                        const checkId = `easner-ledger-${account.currency}`
-                        const isDefault = defaultBalanceCurrency === account.currency
-                        return (
-                          <div
-                            key={account.id}
-                            className={cn(
-                              "grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-lg border p-3 sm:p-4",
-                              isDefault && "border-primary ring-1 ring-primary/30",
-                            )}
-                          >
-                            <div className="flex items-center gap-2 self-center">
-                              <Checkbox
-                                id={checkId}
-                                checked={isDefault}
-                                onCheckedChange={(v) => {
-                                  if (v === true) {
-                                    setLedgerDefault(account.currency as "USD" | "EUR")
-                                  } else if (isDefault) {
-                                    const other =
-                                      account.currency === "USD" ? "EUR" : "USD"
-                                    setLedgerDefault(other)
-                                  }
-                                }}
-                                aria-label={`Set ${account.currency} balance as default Easner settlement currency`}
-                              />
-                              <CurrencyFlag
-                                currency={account.currency}
-                                size={36}
-                                className="rounded-md shrink-0"
-                              />
-                            </div>
-                            <Label
-                              htmlFor={checkId}
-                              className="self-center min-w-0 cursor-pointer text-base font-medium leading-snug"
-                            >
-                              {account.currency} Balance
-                            </Label>
-                            {account.bankName && account.bankName !== "—" ?
-                              <p className="col-start-2 text-sm text-muted-foreground">
-                                {account.bankName}
-                              </p>
-                            : null}
-                            {account.accountNumber && account.accountNumber !== "—" ?
-                              <p className="col-start-2 font-mono text-sm text-muted-foreground">
-                                {account.accountNumber}
-                              </p>
-                            : null}
-                          </div>
-                        )
-                      })}
-                    </div>}
+              <div
+                className={cn(
+                  "space-y-3",
+                  settlementDestination !== "easner_balance" && "hidden",
+                )}
+              >
+                <div className="space-y-1">
+                  <h3 className="text-base font-semibold tracking-tight text-foreground">Easner balance</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Choose the USD or EUR balance that receives automated settlement.
+                  </p>
                 </div>
-              : null}
+                {accountsLoadError ?
+                  <p className="text-sm text-destructive">{accountsLoadError}</p>
+                : null}
+                {accountsLoading && easnerAccountRows.length === 0 ?
+                  <div className="space-y-3" aria-busy="true" aria-label="Loading balances">
+                    <Skeleton className="h-16 w-full rounded-lg" />
+                    <Skeleton className="h-16 w-full rounded-lg" />
+                  </div>
+                : (
+                  <div className="space-y-3">
+                    {easnerAccountRows.map((account) => {
+                      const checkId = `easner-ledger-${account.currency}`
+                      const isDefault = defaultBalanceCurrency === account.currency
+                      const currency = account.currency as "USD" | "EUR"
+                      return (
+                        <button
+                          key={account.id}
+                          type="button"
+                          onClick={() => setLedgerDefault(currency)}
+                          aria-pressed={isDefault}
+                          aria-label={`Settle to ${account.currency} balance`}
+                          className={cn(
+                            "flex w-full items-center gap-3 rounded-lg border p-3 text-left sm:p-4",
+                            isDefault && "border-primary ring-1 ring-primary/30",
+                          )}
+                        >
+                          <Checkbox
+                            id={checkId}
+                            checked={isDefault}
+                            tabIndex={-1}
+                            className="pointer-events-none"
+                            aria-hidden
+                          />
+                          <CurrencyFlag
+                            currency={account.currency}
+                            size={36}
+                            className="rounded-md shrink-0"
+                          />
+                          <span className="text-base font-medium leading-snug">
+                            {account.currency} Balance
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           : null}
 
-          {showBankPayoutUi ?
-            <>
+          <div className={cn("space-y-5", !showBankPayoutUi && "hidden")}>
               {!pickMode && settlementDestination === "bank_payout" ?
                 <div className="space-y-1">
                   <h3 className="text-base font-semibold tracking-tight text-foreground">External payout</h3>
@@ -600,10 +612,9 @@ export function TerminalPayoutSetupPanel({
                   Add payout account
                 </Button>
               </div>
-            </>
-          : null}
+          </div>
         </div>
-      }
+      )}
 
       <Dialog open={showAddPanel} onOpenChange={setShowAddPanel}>
         <DialogContent className="min-w-0 max-w-lg overflow-x-hidden max-h-[90dvh] overflow-y-auto">

@@ -65,12 +65,26 @@ export const PAGE_COPY = {
   },
 } as const
 
+export const TERMINAL_LIST_COPY = {
+  search: "Search charges",
+  tabAll: "All",
+  tabOpen: "Open",
+  tabPaid: "Paid",
+  tabFailed: "Failed",
+  emptySearch: "No charges match this view",
+  emptyOpen: "No open charges.",
+  emptyPaid: "No paid charges yet.",
+  emptyFailed: "No failed charges.",
+} as const
+
 export const COLLECTIONS_COPY = {
   createLink: "Create link",
   createWebsite: "Add website",
   emptyWebsitesTitle: "No websites yet",
   emptyWebsitesBody: "Add a website to take card and bank payments on your checkout page.",
   emptyIncomplete: "Every website has a success URL.",
+  searchWebsites: "Search websites",
+  emptySearchWebsites: "No websites match this view",
   columnWebsite: "Website",
   columnSuccess: "Success URL",
   columnCancel: "Cancel URL",
