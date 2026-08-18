@@ -13,6 +13,7 @@ const OPERATOR_FIRST_SEGMENTS = new Set([
   "invoice",
   "invoices",
   "links",
+  "og",
   "pay",
   "pay-customer",
   "payroll",

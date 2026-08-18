@@ -33,6 +33,14 @@ function publicPath(parts: string[]): string {
   return encoded.length > 0 ? `/${encoded.join("/")}` : "/"
 }
 
+function ogImageFor(parts: string[], alt: string): { url: string; alt: string } {
+  const path = publicPath(parts)
+  return {
+    url: path === "/" ? "/og/customer" : `/og/customer${path}`,
+    alt,
+  }
+}
+
 function seoFromContent(content: {
   metadata: BusinessMetadataInput["metadata"]
   hero: { h1: string; subhead: string; altText: string }
@@ -103,6 +111,7 @@ export async function resolvePublicCustomerSeo(input: {
         metadata,
         path,
         metadataBase: getPayAppPublicOrigin(),
+        ogImage: ogImageFor(parts, og.alt),
       },
       og,
     }
@@ -118,6 +127,7 @@ export async function resolvePublicCustomerSeo(input: {
         metadata,
         path,
         metadataBase: getInvoiceAppPublicOrigin(),
+        ogImage: ogImageFor(parts, og.alt),
       },
       og,
     }
@@ -132,6 +142,7 @@ export async function resolvePublicCustomerSeo(input: {
       metadata,
       path,
       metadataBase: getPayAppPublicOrigin(),
+      ogImage: ogImageFor(parts, og.alt),
     },
     og,
   }

@@ -1,13 +1,19 @@
 import { headers } from "next/headers"
 import { pickPublicHostname } from "@/lib/customer-hosts"
-import { createOgImage, OG_CONTENT_TYPE, OG_SIZE } from "@/lib/seo/og-image"
+import { createOgImage } from "@/lib/seo/og-image"
 import { resolvePublicCustomerSeo } from "@/lib/seo/public-customer-metadata"
 
-export const size = OG_SIZE
-export const contentType = OG_CONTENT_TYPE
-export const alt = "Easner Business"
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
-export default async function Image({ params }: { params: Promise<{ slug: string[] }> }) {
+/**
+ * Share cards for pay/invoice public URLs. Cannot live as `opengraph-image`
+ * under `[...slug]` (catch-all must be the last URL segment).
+ */
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ slug?: string[] }> },
+) {
   const { slug } = await params
   const headerList = await headers()
   const hostname = pickPublicHostname(headerList.get("x-forwarded-host"), headerList.get("host"))

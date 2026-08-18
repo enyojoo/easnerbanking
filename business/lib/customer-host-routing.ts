@@ -22,7 +22,9 @@ function isInternalPath(pathname: string): boolean {
     pathname === "/favicon.ico" ||
     pathname === "/robots.txt" ||
     pathname === "/manifest.webmanifest" ||
-    pathname === "/checkout.js"
+    pathname === "/checkout.js" ||
+    pathname === "/og" ||
+    pathname.startsWith("/og/")
   )
 }
 

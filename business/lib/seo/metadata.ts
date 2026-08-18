@@ -12,6 +12,8 @@ export interface BusinessMetadataInput {
   titleAbsolute?: string
   /** Override root `metadataBase` (pay/invoice public hosts). */
   metadataBase?: string | URL
+  /** Public share card. Used when the route cannot host `opengraph-image` (catch-all). */
+  ogImage?: { url: string; alt: string }
   /** Defaults to true – Business app is noindex by product policy. */
   noIndex?: boolean
 }
@@ -21,11 +23,15 @@ export function businessMetadata({
   path,
   titleAbsolute,
   metadataBase,
+  ogImage,
   noIndex = true,
 }: BusinessMetadataInput): Metadata {
   // Absolute titles – brand lives in the page string (`… | Easner Business Banking`).
   const ogTitle = titleAbsolute ?? metadata.title
   const title = { absolute: ogTitle }
+  const images = ogImage
+    ? [{ url: ogImage.url, alt: ogImage.alt }]
+    : undefined
 
   return {
     title,
@@ -41,6 +47,7 @@ export function businessMetadata({
       type: "website",
       siteName: "Easner Business Banking",
       locale: "en_US",
+      ...(images ? { images } : {}),
     },
     twitter: {
       card: "summary_large_image",
@@ -48,6 +55,7 @@ export function businessMetadata({
       title: ogTitle,
       description: metadata.description,
       creator: "@easnerbanking",
+      ...(images ? { images: images.map((image) => image.url) } : {}),
     },
     ...(noIndex
       ? {

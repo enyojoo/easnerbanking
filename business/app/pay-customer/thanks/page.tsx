@@ -7,6 +7,7 @@ export const metadata = businessMetadata({
   metadata: payCustomerSeo.thanks.metadata,
   path: "/thanks",
   metadataBase: getPayAppPublicOrigin(),
+  ogImage: { url: "/og/customer/thanks", alt: payCustomerSeo.thanks.hero.altText },
 })
 
 /** Built-in success page for links without a merchant redirect. */
