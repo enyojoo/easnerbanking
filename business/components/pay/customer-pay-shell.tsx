@@ -43,12 +43,16 @@ export function CustomerPayHeader({
   businessName,
   logoUrl,
   title,
+  variant = "default",
 }: {
   businessName: string
   logoUrl?: string | null
   title?: string | null
+  /** Payment links: logo then “Pay {business}”. Other surfaces keep title + muted name. */
+  variant?: "default" | "payBusiness"
 }) {
-  const heading = title?.trim() || "Payment"
+  const payBusiness = variant === "payBusiness"
+  const heading = payBusiness ? `Pay ${businessName}` : title?.trim() || "Payment"
   return (
     <div className="mb-6 flex flex-col items-center gap-3 text-center">
       {logoUrl ? (
@@ -63,7 +67,7 @@ export function CustomerPayHeader({
         </div>
       )}
       <div className="space-y-1">
-        <p className="text-sm text-muted-foreground">{businessName}</p>
+        {payBusiness ? null : <p className="text-sm text-muted-foreground">{businessName}</p>}
         <h1 className="text-xl font-semibold text-foreground sm:text-2xl">{heading}</h1>
       </div>
     </div>

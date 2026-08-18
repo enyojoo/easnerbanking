@@ -143,6 +143,8 @@ export function InvoiceStripeCheckout({
       currency={invoice.currency}
       successMessage={`A receipt will be emailed to ${invoice.customerEmail || "the bill-to address"} shortly.`}
       showMethodsHint={false}
+      knownEmail={invoice.customerEmail || null}
+      knownName={invoice.customerName || null}
       onPaid={handlePaid}
     />
   )

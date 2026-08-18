@@ -3,6 +3,7 @@ import type Stripe from "stripe"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { dispatchMerchantWebhook } from "@/lib/checkout/merchant-webhooks"
+import { deliverCheckoutPayerReceiptEmail } from "@/lib/checkout/deliver-checkout-payer-receipt-email"
 import { getStripe } from "./client"
 import { resolveFeeAndTransfer } from "./resolve-charge-settlement"
 
@@ -26,6 +27,65 @@ type Input = {
 function headlineFor(source: CheckoutCollectionSource, linkLabel: string | null): string {
   if (source === "embed") return "Online payment"
   return linkLabel ? `Payment link — ${linkLabel}` : "Payment link payment"
+}
+
+function receiptDescription(source: CheckoutCollectionSource, linkLabel: string | null): string {
+  if (source === "embed") return "Online payment"
+  return linkLabel?.trim() || "Online payment"
+}
+
+function asMetadata(raw: unknown): Record<string, unknown> {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    return { ...(raw as Record<string, unknown>) }
+  }
+  return {}
+}
+
+async function sendPayerReceiptIfNeeded(
+  admin: SupabaseClient,
+  input: {
+    sessionRowId: string | null
+    metadata: unknown
+    businessId: string
+    to: string | null
+    customerName: string | null
+    amountCents: number
+    currency: string
+    description: string
+    paidAt: string
+  },
+): Promise<void> {
+  const to = input.to?.trim() || ""
+  if (!to) return
+  const metadata = asMetadata(input.metadata)
+  if (typeof metadata.payer_receipt_sent_at === "string" && metadata.payer_receipt_sent_at.trim()) {
+    return
+  }
+  try {
+    const result = await deliverCheckoutPayerReceiptEmail(admin, {
+      businessId: input.businessId,
+      to,
+      customerName: input.customerName,
+      amountCents: input.amountCents,
+      currency: input.currency,
+      description: input.description,
+      paidAt: input.paidAt,
+    })
+    if (!result.ok) {
+      console.error("Checkout payer receipt failed:", result.error)
+      return
+    }
+    if (!input.sessionRowId) return
+    await admin
+      .from("online_checkout_sessions")
+      .update({
+        metadata: { ...metadata, payer_receipt_sent_at: input.paidAt },
+        updated_at: input.paidAt,
+      })
+      .eq("id", input.sessionRowId)
+  } catch (err) {
+    console.error("Checkout payer receipt failed:", err)
+  }
 }
 
 /**
@@ -54,6 +114,36 @@ export async function handleCheckoutCollectionCompleted(
     .eq("stripe_payment_intent_id", input.paymentIntentId)
     .maybeSingle()
   if (existing?.id && existing.phase !== "failed") {
+    if (event.livemode !== false) {
+      const { data: priorSession } = await admin
+        .from("online_checkout_sessions")
+        .select("id, metadata, customer_email, payment_link_id")
+        .eq(input.sessionId ? "stripe_checkout_session_id" : "easner_settlement_id", input.sessionId || input.settlementId)
+        .maybeSingle()
+      let retryLabel: string | null = null
+      const retryLinkId =
+        input.paymentLinkId ||
+        (priorSession?.payment_link_id ? String(priorSession.payment_link_id) : null)
+      if (retryLinkId) {
+        const { data: link } = await admin
+          .from("payment_links")
+          .select("label")
+          .eq("id", retryLinkId)
+          .maybeSingle()
+        retryLabel = typeof link?.label === "string" ? link.label : null
+      }
+      await sendPayerReceiptIfNeeded(admin, {
+        sessionRowId: priorSession?.id ? String(priorSession.id) : null,
+        metadata: priorSession?.metadata,
+        businessId: input.businessId,
+        to: input.customerEmail || (typeof priorSession?.customer_email === "string" ? priorSession.customer_email : null),
+        customerName: input.customerName,
+        amountCents: input.amountTotal,
+        currency: input.currency.toUpperCase(),
+        description: receiptDescription(input.source, retryLabel),
+        paidAt: new Date().toISOString(),
+      })
+    }
     return { handled: true }
   }
 
@@ -96,7 +186,7 @@ export async function handleCheckoutCollectionCompleted(
       updated_at: paidAt,
     })
     .eq(sessionMatch.column, sessionMatch.value)
-    .select("id, payment_link_id")
+    .select("id, payment_link_id, metadata, customer_email")
 
   const sessionRow = sessionRows?.[0] ?? null
   const paymentLinkId =
@@ -215,6 +305,20 @@ export async function handleCheckoutCollectionCompleted(
   )
 
   await dispatchMerchantWebhook(admin, webhookPayload)
+
+  await sendPayerReceiptIfNeeded(admin, {
+    sessionRowId: sessionRow?.id ? String(sessionRow.id) : null,
+    metadata: sessionRow && "metadata" in sessionRow ? sessionRow.metadata : null,
+    businessId: input.businessId,
+    to:
+      input.customerEmail ||
+      (sessionRow && typeof sessionRow.customer_email === "string" ? sessionRow.customer_email : null),
+    customerName: input.customerName,
+    amountCents: grossCents,
+    currency,
+    description: receiptDescription(input.source, linkLabel),
+    paidAt,
+  })
 
   return { handled: true }
 }

@@ -561,6 +561,8 @@ function StepSnippet({ data }: HubDataProps) {
         code={`<script src="https://js.easner.com/checkout.js"></script>
 <div id="easner-checkout"></div>
 <script>
+  // Logged-in apps: pass customerEmail and customerName from POST /v1/checkout/sessions
+  // so the form does not ask for them again.
   EasnerCheckout.mount("#easner-checkout", {
     publishableKey: "${publishableKey}",
     clientSecret: window.EASNER_CLIENT_SECRET,
@@ -595,14 +597,17 @@ function StepSession({ site }: { site: CheckoutSite | null }) {
     "currency": "usd",
     "line_items": [{ "name": "Pro plan", "amount": 4900 }],
     "customer_email": "buyer@example.com",
+    "customer_name": "Buyer Name",
     "success_url": "${successUrl}",
     "cancel_url": "${cancelUrl}"
   }'`}
       />
       <StepLearnMore>
         <p>
-          The response contains a client_secret – pass it to the snippet. For a recurring charge use
-          mode &quot;subscription&quot; with interval &quot;month&quot; or &quot;year&quot;.
+          The response contains a client_secret – pass it to the snippet. Optional customer_email
+          and customer_name come back on the session so logged-in apps can hide the email field
+          and prefill name on card. For a recurring charge use mode &quot;subscription&quot; with
+          interval &quot;month&quot; or &quot;year&quot;.
         </p>
       </StepLearnMore>
     </>

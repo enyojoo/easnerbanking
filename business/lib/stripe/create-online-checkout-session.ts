@@ -27,6 +27,7 @@ export type CreateOnlineCheckoutSessionInput = {
   productName: string
   productDescription?: string | null
   customerEmail?: string | null
+  customerName?: string | null
   statementSuffix?: string | null
   /** Required for `ui_mode: elements`. */
   returnUrl: string
@@ -134,6 +135,10 @@ export async function createOnlineCheckoutSession(
     input.idempotencyKey || `checkout_${input.source}_${settlementId}`
   const table = sessionTableFor(input.source)
 
+  const customerName = input.customerName?.trim() || ""
+  const sessionMetadata =
+    customerName ? { easner_customer_name: customerName } : undefined
+
   const sessionRowPayload: Record<string, unknown> =
     input.source === "invoice"
       ? {
@@ -168,6 +173,7 @@ export async function createOnlineCheckoutSession(
           return_url: input.returnUrl,
           stripe_connected_account_id: connectedAccountId,
           livemode,
+          ...(sessionMetadata ? { metadata: sessionMetadata } : {}),
         }
 
   const { data: sessionRow, error: insertErr } = await admin
@@ -197,6 +203,7 @@ export async function createOnlineCheckoutSession(
     extra: {
       easner_livemode: livemode ? "true" : "false",
       ...(input.metadata ?? {}),
+      ...(customerName ? { easner_customer_name: customerName } : {}),
     },
   })
 

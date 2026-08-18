@@ -62,6 +62,7 @@ export async function POST(request: Request) {
     currency?: string
     line_items?: { name?: string; amount?: number; description?: string }[]
     customer_email?: string
+    customer_name?: string
     interval?: string
     success_url?: string
     cancel_url?: string
@@ -143,6 +144,9 @@ export async function POST(request: Request) {
     .eq("id", auth.ctx.businessId)
     .maybeSingle()
 
+  const customerEmail = String(body?.customer_email ?? "").trim() || null
+  const customerName = String(body?.customer_name ?? "").trim() || null
+
   const result = await createOnlineCheckoutSession(admin, {
     source: "embed",
     businessId: auth.ctx.businessId,
@@ -151,7 +155,8 @@ export async function POST(request: Request) {
     currency,
     productName,
     productDescription,
-    customerEmail: String(body?.customer_email ?? "").trim() || null,
+    customerEmail,
+    customerName,
     statementSuffix: buildEasnerStatementSuffix({
       businessName: typeof biz?.name === "string" ? biz.name : null,
     }),
@@ -175,6 +180,8 @@ export async function POST(request: Request) {
       amount: result.amounts.customerAmountCents,
       currency,
       mode,
+      customer_email: customerEmail,
+      customer_name: customerName,
     },
     { status: 201 },
   )
@@ -195,7 +202,7 @@ export async function GET(request: Request) {
 
   const { data } = await admin
     .from("online_checkout_sessions")
-    .select("stripe_checkout_session_id, status, gross_cents, currency, customer_email, completed_at")
+    .select("stripe_checkout_session_id, status, gross_cents, currency, customer_email, metadata, completed_at")
     .eq("business_id", auth.ctx.businessId)
     .eq("stripe_checkout_session_id", id)
     .maybeSingle()
@@ -204,12 +211,22 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
 
+  const metadata =
+    data.metadata && typeof data.metadata === "object" && !Array.isArray(data.metadata)
+      ? (data.metadata as Record<string, unknown>)
+      : {}
+  const customerName =
+    typeof metadata.easner_customer_name === "string" && metadata.easner_customer_name.trim()
+      ? metadata.easner_customer_name.trim()
+      : null
+
   return NextResponse.json({
     checkout_session_id: data.stripe_checkout_session_id,
     status: data.status,
     amount: data.gross_cents,
     currency: data.currency,
     customer_email: data.customer_email,
+    customer_name: customerName,
     completed_at: data.completed_at,
   })
 }

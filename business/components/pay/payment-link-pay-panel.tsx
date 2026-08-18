@@ -183,10 +183,13 @@ function PaymentLinkSurface({
       <CustomerPayHeader
         businessName={business.name}
         logoUrl={business.logoUrl}
-        title={link.label}
+        variant="payBusiness"
       />
 
       <div className="mb-6 rounded-xl border bg-muted/30 px-4 py-4 text-left sm:px-5">
+        {link.label ? (
+          <p className="mb-2 text-sm font-medium text-foreground">{link.label}</p>
+        ) : null}
         <p className="text-xs uppercase tracking-wide text-muted-foreground">Amount</p>
         <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{customerAmount}</p>
         {payload.surchargeCents > 0 ? (
@@ -250,6 +253,8 @@ function PaymentLinkSurface({
               ? recurringDisclosure(link, customerAmount)
               : undefined
           }
+          collectEmail
+          hintAlign="center"
           onPaid={onPaid}
         />
       )}

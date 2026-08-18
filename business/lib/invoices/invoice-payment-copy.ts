@@ -126,7 +126,7 @@ export function customerPaymentOptionsSubtitle(
 }
 
 export function onlinePaymentTabHint(): string {
-  return "Pay with card, bank debit, or other methods available in your region."
+  return "Pay with card, bank debit, or other methods available."
 }
 
 /** Short tab labels — fit 3-up on mobile; details live inside each tab. */

@@ -113,8 +113,6 @@ export function SettingsPaymentsTab() {
                 </Link>
               </Button>
             </div>
-          ) : connectReady ? (
-            <p className="text-sm text-muted-foreground">{PAYMENTS_SETTINGS_COPY.readyHint}</p>
           ) : null}
         </CardContent>
       </Card>

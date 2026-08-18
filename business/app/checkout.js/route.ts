@@ -51,6 +51,7 @@ export async function GET() {
     /**
      * @param {string|Element} target  mount point, e.g. "#easner-checkout"
      * @param {{ publishableKey: string, clientSecret: string, appearance?: object,
+     *           customerEmail?: string, customerName?: string,
      *           onSuccess?: function, onError?: function }} options
      */
     mount: function (target, options) {
@@ -65,20 +66,55 @@ export async function GET() {
       }
 
       return loadSdk().then(function (sdk) {
+        var mountEmail = String(opts.customerEmail || "").trim();
+        var mountName = String(opts.customerName || "").trim();
+        var elementsOptions = {};
+        if (opts.appearance) elementsOptions.appearance = opts.appearance;
+        if (mountName) {
+          elementsOptions.defaultValues = { billingDetails: { name: mountName } };
+        }
         return sdk
           .initCheckout({
             fetchClientSecret: function () {
               return Promise.resolve(opts.clientSecret);
             },
-            elementsOptions: opts.appearance ? { appearance: opts.appearance } : undefined,
+            elementsOptions: Object.keys(elementsOptions).length ? elementsOptions : undefined,
           })
           .then(function (checkout) {
+            var session = typeof checkout.session === "function" ? checkout.session() : {};
+            var sessionEmail = String(
+              (session && session.customerEmail) ||
+                (session && session.customerDetails && session.customerDetails.email) ||
+                ""
+            ).trim();
+            var knownEmail = mountEmail || sessionEmail;
             var hint = document.createElement("p");
             hint.textContent = ${JSON.stringify(onlinePaymentTabHint())};
             hint.style.margin = "0 0 12px";
             hint.style.fontSize = "14px";
             hint.style.lineHeight = "1.45";
             hint.style.color = "#6F756F";
+            var emailLabel = document.createElement("label");
+            emailLabel.textContent = ${JSON.stringify("Email")};
+            emailLabel.setAttribute("for", "easner-payer-email");
+            emailLabel.style.display = "block";
+            emailLabel.style.margin = "0 0 6px";
+            emailLabel.style.fontSize = "14px";
+            emailLabel.style.fontWeight = "500";
+            var emailInput = document.createElement("input");
+            emailInput.id = "easner-payer-email";
+            emailInput.type = "email";
+            emailInput.autocomplete = "email";
+            emailInput.placeholder = ${JSON.stringify("you@example.com")};
+            emailInput.required = true;
+            emailInput.style.width = "100%";
+            emailInput.style.boxSizing = "border-box";
+            emailInput.style.height = "48px";
+            emailInput.style.margin = "0 0 16px";
+            emailInput.style.padding = "0 16px";
+            emailInput.style.border = "1px solid #D6D9D6";
+            emailInput.style.borderRadius = "16px";
+            emailInput.style.fontSize = "15px";
             var form = document.createElement("form");
             form.setAttribute("novalidate", "novalidate");
             var mountPoint = document.createElement("div");
@@ -90,21 +126,39 @@ export async function GET() {
             message.style.display = "none";
 
             form.appendChild(hint);
+            if (!knownEmail) {
+              form.appendChild(emailLabel);
+              form.appendChild(emailInput);
+            }
             form.appendChild(mountPoint);
             form.appendChild(message);
             form.appendChild(button);
             el.innerHTML = "";
             el.appendChild(form);
 
-            var payment = checkout.createPaymentElement();
+            var payment = checkout.createPaymentElement({
+              fields: { billingDetails: { name: "always", email: "never" } },
+            });
             payment.mount(mountPoint);
 
             form.addEventListener("submit", function (event) {
               event.preventDefault();
+              var email = knownEmail || String(emailInput.value || "").trim();
+              if (!email || email.indexOf("@") < 1) {
+                message.textContent = ${JSON.stringify("Enter your email to continue")};
+                message.style.display = "block";
+                return;
+              }
               button.disabled = true;
               message.style.display = "none";
-              checkout
-                .confirm()
+              var confirm = function () {
+                return checkout.confirm({ email: email });
+              };
+              var pending =
+                typeof checkout.updateEmail === "function"
+                  ? checkout.updateEmail(email).then(confirm, confirm)
+                  : confirm();
+              pending
                 .then(function (result) {
                   if (result.type === "error") {
                     throw new Error(result.error.message || "Payment failed");

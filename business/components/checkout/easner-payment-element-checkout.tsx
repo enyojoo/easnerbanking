@@ -13,12 +13,15 @@ import {
   useCheckoutElements,
 } from "@stripe/react-stripe-js/checkout"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Check, Loader2 } from "lucide-react"
-import { formatCurrency } from "@/lib/utils"
+import { cn, formatCurrency } from "@/lib/utils"
 import { easnerStripeElementsAppearance } from "@/lib/stripe/elements-appearance"
 import { getStripeJs } from "@/lib/stripe/load-stripe-js"
 import { onlinePaymentTabHint } from "@/lib/invoices/invoice-payment-copy"
+import { COLLECTIONS_COPY } from "@/lib/copy/business-ui-copy"
 
 type Props = {
   clientSecret: string
@@ -30,7 +33,29 @@ type Props = {
   disclosure?: ReactNode
   /** Invoice already prints this above the tab; links and Checkout should show it here. */
   showMethodsHint?: boolean
+  /**
+   * Collect payer email on this page. Required for payment links (no bill-to).
+   * Invoices already set `customer_email` on the session — leave this off.
+   */
+  collectEmail?: boolean
+  /** Prefill / confirm with a known bill-to email (invoices). */
+  knownEmail?: string | null
+  /** Prefill name on card only — never hide the field or stamp it at confirm. */
+  knownName?: string | null
+  /** Payment-link page centers the methods hint; invoices stay left. */
+  hintAlign?: "left" | "center"
   onPaid?: () => void
+}
+
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
+}
+
+function payerEmailFromExpressEvent(
+  event: StripeExpressCheckoutElementConfirmEvent,
+): string {
+  const details = event.billingDetails as { email?: string | null } | undefined
+  return String(details?.email ?? "").trim()
 }
 
 function hasReadyExpressMethods(methods: AvailablePaymentMethods | undefined): boolean {
@@ -98,26 +123,47 @@ function CheckoutSurface({
   successMessage,
   disclosure,
   showMethodsHint = true,
+  collectEmail = false,
+  knownEmail = null,
+  hintAlign = "left",
   onPaid,
-}: Omit<Props, "clientSecret">) {
+}: Omit<Props, "clientSecret" | "knownName">) {
   const checkoutState = useCheckoutElements()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [hasWallets, setHasWallets] = useState(false)
+  const [email, setEmail] = useState(() => String(knownEmail ?? "").trim())
 
   const ready = checkoutState.type === "success"
+  const resolvedEmail = email.trim()
+  const emailReady = !collectEmail || isValidEmail(resolvedEmail)
 
-  const confirmPayment = useCallback(async (): Promise<
+  const confirmPayment = useCallback(async (overrideEmail?: string): Promise<
     { ok: true } | { ok: false; message: string }
   > => {
     if (checkoutState.type !== "success") {
       return { ok: false, message: "Payment form is not ready" }
     }
+    const payerEmail = (overrideEmail || resolvedEmail || String(knownEmail ?? "")).trim()
+    if (!isValidEmail(payerEmail)) {
+      const message = COLLECTIONS_COPY.payerEmailRequired
+      setError(message)
+      return { ok: false, message }
+    }
     setSubmitting(true)
     setError(null)
     try {
-      const result = await checkoutState.checkout.confirm({ redirect: "if_required" })
+      const checkout = checkoutState.checkout as typeof checkoutState.checkout & {
+        updateEmail?: (value: string) => Promise<unknown>
+      }
+      if (typeof checkout.updateEmail === "function") {
+        await checkout.updateEmail(payerEmail)
+      }
+      const result = await checkout.confirm({
+        redirect: "if_required",
+        email: payerEmail,
+      })
       if (result.type === "error") {
         const message = result.error.message || "Payment failed"
         setError(message)
@@ -133,16 +179,17 @@ function CheckoutSurface({
     } finally {
       setSubmitting(false)
     }
-  }, [checkoutState, onPaid])
+  }, [checkoutState, knownEmail, onPaid, resolvedEmail])
 
   const handleExpressConfirm = useCallback(
     async (event: StripeExpressCheckoutElementConfirmEvent) => {
-      const result = await confirmPayment()
+      const walletEmail = payerEmailFromExpressEvent(event)
+      const result = await confirmPayment(resolvedEmail || walletEmail)
       if (!result.ok) {
         event.paymentFailed({ reason: "fail", message: result.message })
       }
     },
-    [confirmPayment],
+    [confirmPayment, resolvedEmail],
   )
 
   if (success) {
@@ -162,8 +209,34 @@ function CheckoutSurface({
   // "Loading payment methods…" on the button.
   return (
     <div className="space-y-4">
+      {collectEmail ? (
+        <div className="space-y-2">
+          <Label htmlFor="easner-payer-email">{COLLECTIONS_COPY.payerEmailLabel}</Label>
+          <Input
+            id="easner-payer-email"
+            type="email"
+            autoComplete="email"
+            inputMode="email"
+            name="email"
+            placeholder={COLLECTIONS_COPY.payerEmailPlaceholder}
+            value={email}
+            onChange={(event) => {
+              setEmail(event.target.value)
+              if (error === COLLECTIONS_COPY.payerEmailRequired) setError(null)
+            }}
+            aria-invalid={Boolean(error) && !emailReady}
+          />
+        </div>
+      ) : null}
       {showMethodsHint ? (
-        <p className="text-sm text-muted-foreground">{onlinePaymentTabHint()}</p>
+        <p
+          className={cn(
+            "text-sm text-muted-foreground",
+            hintAlign === "center" && "text-center",
+          )}
+        >
+          {onlinePaymentTabHint()}
+        </p>
       ) : null}
       <div className="relative">
       {!ready ? <PaymentFormSkeleton /> : null}
@@ -193,6 +266,12 @@ function CheckoutSurface({
               radios: "always",
               spacedAccordionItems: true,
             },
+            fields: {
+              billingDetails: {
+                name: "always",
+                ...(collectEmail || knownEmail ? { email: "never" as const } : {}),
+              },
+            },
           }}
         />
 
@@ -211,7 +290,7 @@ function CheckoutSurface({
             <Button
               type="button"
               className="w-full h-11 text-base font-medium"
-              disabled={submitting}
+              disabled={submitting || (collectEmail && !emailReady)}
               onClick={() => void confirmPayment()}
             >
               {submitting ? (
@@ -235,18 +314,26 @@ function CheckoutSurface({
  * Card, bank, and wallet payment form for every Easner collection surface
  * (invoice Pay online, Payment Links, website embed preview).
  */
-export function EasnerPaymentElementCheckout({ clientSecret, ...surface }: Props) {
+export function EasnerPaymentElementCheckout({
+  clientSecret,
+  knownName,
+  ...surface
+}: Props) {
   const elementsAppearance = useMemo(() => easnerStripeElementsAppearance(), [])
   const stripePromise = useMemo(() => getStripeJs(), [])
+  const prefillName = String(knownName ?? "").trim()
 
   return (
     <CheckoutElementsProvider
       stripe={stripePromise}
       options={{
         clientSecret,
-        // Email is set server-side via customer_email on the Checkout Session.
-        // Do not pass defaultValues.email here – Stripe rejects updating email twice.
-        elementsOptions: { appearance: elementsAppearance },
+        elementsOptions: {
+          appearance: elementsAppearance,
+          ...(prefillName
+            ? { defaultValues: { billingDetails: { name: prefillName } } }
+            : {}),
+        },
       }}
     >
       <CheckoutSurface {...surface} />

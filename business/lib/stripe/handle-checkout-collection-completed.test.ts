@@ -10,6 +10,7 @@ const upsertLedgerTransaction = vi.fn(
   async (_admin: unknown, _input: LedgerCall) => ({ transactionId: "txn_1" }),
 )
 const dispatchMerchantWebhook = vi.fn(async () => ({ delivered: true }))
+const deliverCheckoutPayerReceiptEmail = vi.fn(async () => ({ ok: true, to: "buyer@example.com" }))
 
 vi.mock("./client", () => ({
   getStripe: () => ({ paymentIntents: { retrieve: paymentIntentsRetrieve } }),
@@ -26,6 +27,10 @@ vi.mock("@/lib/checkout/merchant-webhooks", () => ({
     dispatchMerchantWebhook.apply(null, args as [])
     return Promise.resolve({ delivered: true })
   },
+}))
+vi.mock("@/lib/checkout/deliver-checkout-payer-receipt-email", () => ({
+  deliverCheckoutPayerReceiptEmail: (...args: unknown[]) =>
+    deliverCheckoutPayerReceiptEmail(...(args as Parameters<typeof deliverCheckoutPayerReceiptEmail>)),
 }))
 vi.mock("@/lib/invoices/mark-invoice-paid-stripe", () => ({
   markInvoicePaidStripe: vi.fn(),
@@ -156,6 +161,16 @@ describe("payment link settlement", () => {
       expect.anything(),
       expect.objectContaining({ businessId: BUSINESS_ID, event: "checkout.completed" }),
     )
+
+    expect(deliverCheckoutPayerReceiptEmail).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        businessId: BUSINESS_ID,
+        to: "buyer@example.com",
+        description: "Tuition",
+        amountCents: 10_000,
+      }),
+    )
   })
 
   it("counts the payment against the link", async () => {
@@ -194,5 +209,6 @@ describe("payment link settlement", () => {
         data: expect.objectContaining({ livemode: false }),
       }),
     )
+    expect(deliverCheckoutPayerReceiptEmail).not.toHaveBeenCalled()
   })
 })
