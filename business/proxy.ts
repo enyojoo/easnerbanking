@@ -2,7 +2,10 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { maybeRedirectApiHostToBusiness } from "@/lib/api-subdomain-redirect"
 import { applyCorsHeaders, corsPreflightResponse, getCorsAllowedOrigins } from "@/lib/cors"
-import { maybeRewriteCustomerHost } from "@/lib/customer-host-routing"
+import {
+  maybeRedirectCustomerHostRootToBusiness,
+  maybeRewriteCustomerHost,
+} from "@/lib/customer-host-routing"
 
 function getClientIp(request: NextRequest): string {
   const forwarded = request.headers.get("x-forwarded-for")
@@ -18,6 +21,10 @@ export function proxy(request: NextRequest) {
   /** `api.*` domain: only `/api/*` is meant for clients; send browsers to the business web origin. */
   const apiHostRedirect = maybeRedirectApiHostToBusiness(request)
   if (apiHostRedirect) return apiHostRedirect
+
+  /** Bare invoice/pay hosts are not customer pages. */
+  const customerRootRedirect = maybeRedirectCustomerHostRootToBusiness(request)
+  if (customerRootRedirect) return customerRootRedirect
 
   /** Customer hosts (invoice.easner.com, pay.easner.com) share this app. */
   const customerHostRewrite = maybeRewriteCustomerHost(request)

@@ -89,7 +89,6 @@ export function PaymentLinksPage({ initialCreateRail }: { initialCreateRail?: Pa
         <CollectionsPageHeader
           title={PAGE_COPY.links.title}
           intro={PAGE_COPY.links.intro}
-          chips={chips}
           actions={
             <>
               <Button
@@ -133,7 +132,7 @@ export function PaymentLinksPage({ initialCreateRail }: { initialCreateRail?: Pa
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
             <Tabs value={tab} onValueChange={(value) => setTab(value as LinkTab)}>
               <TabsList>
                 <TabsTrigger value="all">{COLLECTIONS_COPY.tabAll}</TabsTrigger>
@@ -142,11 +141,23 @@ export function PaymentLinksPage({ initialCreateRail }: { initialCreateRail?: Pa
                 <TabsTrigger value="stablecoin">{COLLECTIONS_COPY.tabStablecoin}</TabsTrigger>
               </TabsList>
             </Tabs>
+            {chips ? (
+              <div className="flex flex-wrap justify-center gap-2 lg:flex-1">
+                {chips.map((chip) => (
+                  <span
+                    key={chip}
+                    className="rounded-full border bg-muted/50 px-2.5 py-1 text-xs text-muted-foreground"
+                  >
+                    {chip}
+                  </span>
+                ))}
+              </div>
+            ) : null}
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={COLLECTIONS_COPY.searchPlaceholder}
-              className="sm:max-w-xs"
+              className="lg:max-w-xs"
             />
           </div>
           {filtered.length === 0 ? (

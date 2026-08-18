@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { CreditCard } from "lucide-react"
 import { toast } from "sonner"
@@ -11,7 +11,6 @@ import { Switch } from "@/components/ui/switch"
 import { CheckoutFeeModeSelector } from "@/components/settings/checkout-fee-mode-selector"
 import { PaymentsConnectionStatusCard } from "@/components/settings/payments-connection-status-card"
 import { SettingsCardHeader } from "@/components/settings/settings-card-header"
-import { SettingsTabIntro } from "@/components/settings/settings-tab-intro"
 import { PaymentsSettingsPanelSkeleton } from "@/components/collections/collections-skeletons"
 import {
   saveCheckoutSettings,
@@ -19,11 +18,7 @@ import {
 } from "@/hooks/use-checkout-settings"
 import { useBusinessProfile, patchCachedBusinessProfile } from "@/lib/use-business-profile"
 import { SETTINGS_CONNECT_FLOW_PARAM } from "@/lib/compliance/cutover-comms"
-import {
-  COLLECTIONS_COPY,
-  PAYMENTS_SETTINGS_COPY,
-  SETTINGS_TAB_COPY,
-} from "@/lib/copy/business-ui-copy"
+import { COLLECTIONS_COPY, PAYMENTS_SETTINGS_COPY } from "@/lib/copy/business-ui-copy"
 import type { CheckoutFeeMode } from "@/lib/stripe/checkout-fee-mode"
 import { connectSetupChecklist } from "@/lib/stripe/connect-panel-ux"
 import { readCachedConnectStatus } from "@/lib/stripe/connect-status-cache"
@@ -68,36 +63,8 @@ export function SettingsPaymentsTab() {
   const checklist = cachedConnect ? connectSetupChecklist(cachedConnect) : []
   const pendingItems = checklist.filter((item) => !item.done)
 
-  const chips = useMemo(() => {
-    const next: string[] = []
-    if (!masterEnabled) {
-      next.push(PAYMENTS_SETTINGS_COPY.statusOff)
-      return next
-    }
-    next.push(connectReady ? PAYMENTS_SETTINGS_COPY.statusReady : PAYMENTS_SETTINGS_COPY.statusSetup)
-    if (checkoutData) {
-      next.push(
-        checkoutData.settings.liveModeEnabled
-          ? COLLECTIONS_COPY.statusLive
-          : COLLECTIONS_COPY.statusTest,
-      )
-      next.push(
-        checkoutData.settings.webhookUrl && checkoutData.settings.webhookSecretLast4
-          ? COLLECTIONS_COPY.statusWebhookOn
-          : COLLECTIONS_COPY.statusWebhookOff,
-      )
-    }
-    return next
-  }, [checkoutData, connectReady, masterEnabled])
-
   return (
     <div className="space-y-6">
-      <SettingsTabIntro
-        title={SETTINGS_TAB_COPY.payments.title}
-        description={SETTINGS_TAB_COPY.payments.intro}
-        chips={chips}
-      />
-
       <Card>
         <CardHeader>
           <SettingsCardHeader

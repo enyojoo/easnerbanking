@@ -22,13 +22,19 @@ import { primeBusinessVerificationFlow } from "@/lib/compliance/prime-business-v
 import { usePrimeKybPacket } from "@/lib/grid/kyb-packet-query"
 import { cn } from "@/lib/utils"
 
-const TABS = ["personal", "business", "verification", "payments", "team", "recipients", "customers", "communication", "invoicing"] as const
+const TABS = ["personal", "business", "verification", "payments", "team", "recipients", "customers", "communication", "invoice"] as const
 type TabValue = (typeof TABS)[number]
+
+function parseSettingsTab(raw: string | null): TabValue {
+  if (raw === "invoicing" || raw === "invoice") return "invoice"
+  if (raw && TABS.includes(raw as TabValue)) return raw as TabValue
+  return "personal"
+}
 
 function SettingsContent() {
   const searchParams = useSearchParams()
-  const tab = (searchParams.get("tab") || "personal") as TabValue
-  const validTab = TABS.includes(tab) ? tab : "personal"
+  const tab = parseSettingsTab(searchParams.get("tab"))
+  const validTab = tab
   const flowFromUrl = validTab === "verification" ? parseSettingsVerificationFlow(searchParams.get("flow")) : null
   const [verificationFlow, setVerificationFlow] = useState<SettingsVerificationEmbeddedFlow | null>(
     flowFromUrl,
@@ -69,6 +75,14 @@ function SettingsContent() {
   useEffect(() => {
     setActiveTab(validTab)
   }, [validTab])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (searchParams.get("tab") !== "invoicing") return
+    const next = new URLSearchParams(searchParams.toString())
+    next.set("tab", "invoice")
+    window.history.replaceState(null, "", `/settings?${next.toString()}`)
+  }, [searchParams])
 
   usePrimeKybPacket(Boolean(businessId && canManageBusinessVerification))
 
@@ -135,7 +149,7 @@ function SettingsContent() {
             <TabsTrigger value="recipients">Recipients</TabsTrigger>
             <TabsTrigger value="customers">Customers</TabsTrigger>
             <TabsTrigger value="communication">Communication</TabsTrigger>
-            <TabsTrigger value="invoicing">Invoicing</TabsTrigger>
+            <TabsTrigger value="invoice">Invoice</TabsTrigger>
           </TabsList>
         ) : null}
 
@@ -170,7 +184,7 @@ function SettingsContent() {
         <TabsContent value="communication" className="mt-6">
           <SettingsCommunicationTab />
         </TabsContent>
-        <TabsContent value="invoicing" className="mt-6">
+        <TabsContent value="invoice" className="mt-6">
           <SettingsInvoicingTab />
         </TabsContent>
       </Tabs>

@@ -499,7 +499,8 @@ export const SETTINGS_TAB_COPY = {
   recipients: { title: "Recipients", intro: "Keep payee details ready for transfers." },
   customers: { title: "Customers", intro: "Manage who you bill and track invoices." },
   communication: { title: "Communication", intro: "Control product and security emails from Easner." },
-  invoicing: { title: "Invoicing", intro: "Configure how you send invoices and get paid." },
+  invoice: { title: "Invoice", intro: "Configure how you send invoices and get paid." },
+  invoicing: { title: "Invoice", intro: "Configure how you send invoices and get paid." },
   payments: {
     title: "Payments",
     intro: "Control card and bank payments across your business.",
@@ -519,7 +520,6 @@ export const PAYMENTS_SETTINGS_COPY = {
   feesIntro: "Applies to every card and bank payment you collect.",
   payoutTitle: "Payout and settlement",
   payoutIntro: "Card and bank payments settle to your Easner account.",
-  payoutPending: "Your Easner account appears here after setup.",
   statusOff: "Turned off",
   statusReady: "Ready",
   statusSetup: "Setup required",

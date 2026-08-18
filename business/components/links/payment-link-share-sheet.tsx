@@ -6,12 +6,12 @@ import { toast } from "sonner"
 import { Archive, Check, Copy, ExternalLink, FileText, ImageIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet"
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { paymentLinkTypeLabel } from "@/lib/payment-links/types"
 import type { PaymentLinkListRow } from "@/hooks/use-payment-links"
@@ -81,104 +81,102 @@ export function PaymentLinkShareSheet({
   }
 
   return (
-    <Sheet open={Boolean(link)} onOpenChange={onOpenChange}>
-      <SheetContent>
+    <Dialog open={Boolean(link)} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
         {link ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>{link.label}</SheetTitle>
-          <SheetDescription>
-            {paymentLinkTypeLabel(link)} ·{" "}
-            {formatCurrency(link.amountCents / 100, link.currency)}
-          </SheetDescription>
-        </SheetHeader>
-
-        <div className="rounded-lg border bg-muted/30 p-3">
-          <div className="flex items-center gap-3">
-            {logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={logoUrl} alt="" className="h-8 w-8 rounded object-cover" />
-            ) : null}
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{name || "Your business"}</p>
-              <p className="text-xs text-muted-foreground">
+          <div className="space-y-4">
+            <DialogHeader>
+              <DialogTitle>{link.label}</DialogTitle>
+              <DialogDescription>
+                {paymentLinkTypeLabel(link)} ·{" "}
                 {formatCurrency(link.amountCents / 100, link.currency)}
-              </p>
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <div className="flex items-center gap-3">
+                {logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={logoUrl} alt="" className="h-8 w-8 rounded object-cover" />
+                ) : null}
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{name || "Your business"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatCurrency(link.amountCents / 100, link.currency)}
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        <div className="space-y-4">
-          <div className="mx-auto rounded-xl border bg-card p-3">
-            <QRCodeSVG value={link.url} size={180} includeMargin className="mx-auto h-auto" />
-          </div>
+            <div className="mx-auto rounded-xl border bg-card p-3">
+              <QRCodeSVG value={link.url} size={180} includeMargin className="mx-auto h-auto" />
+            </div>
 
-          <p className="break-all rounded-lg bg-muted/50 p-3 text-center font-mono text-xs">
-            {link.url}
-          </p>
-
-          {!easetag ? (
-            <p className="text-center text-xs text-muted-foreground">
-              Add an @easetag in Settings for shorter, friendlier links.
+            <p className="break-all rounded-lg bg-muted/50 p-3 text-center font-mono text-xs">
+              {link.url}
             </p>
-          ) : null}
 
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Button type="button" className="gap-2" onClick={() => void copy()}>
-              {copied ? (
-                <Check className="h-4 w-4" aria-hidden />
-              ) : (
-                <Copy className="h-4 w-4" aria-hidden />
-              )}
-              {copied ? "Copied" : "Copy link"}
-            </Button>
-            <Button type="button" variant="outline" className="gap-2" asChild>
-              <a href={link.url} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="h-4 w-4" aria-hidden />
-                Preview
-              </a>
-            </Button>
-
-            {link.rail === "stablecoin" && link.autopayoutConfigId ? (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="gap-2"
-                  onClick={() => void downloadPlacard("png")}
-                >
-                  <ImageIcon className="h-4 w-4" aria-hidden />
-                  Placard PNG
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="gap-2"
-                  onClick={() => void downloadPlacard("pdf")}
-                >
-                  <FileText className="h-4 w-4" aria-hidden />
-                  Placard PDF
-                </Button>
-              </>
+            {!easetag ? (
+              <p className="text-center text-xs text-muted-foreground">
+                Add an @easetag in Settings for shorter, friendlier links.
+              </p>
             ) : null}
-          </div>
 
-          {link.archivedAt ? null : (
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-full gap-2 text-destructive"
-              disabled={archiving}
-              onClick={() => void archive()}
-            >
-              <Archive className="h-4 w-4" aria-hidden />
-              {archiving ? "Closing…" : "Close this link"}
-            </Button>
-          )}
-        </div>
-        </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button type="button" className="gap-2" onClick={() => void copy()}>
+                {copied ? (
+                  <Check className="h-4 w-4" aria-hidden />
+                ) : (
+                  <Copy className="h-4 w-4" aria-hidden />
+                )}
+                {copied ? "Copied" : "Copy link"}
+              </Button>
+              <Button type="button" variant="outline" className="gap-2" asChild>
+                <a href={link.url} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-4 w-4" aria-hidden />
+                  Preview
+                </a>
+              </Button>
+
+              {link.rail === "stablecoin" && link.autopayoutConfigId ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => void downloadPlacard("png")}
+                  >
+                    <ImageIcon className="h-4 w-4" aria-hidden />
+                    Placard PNG
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => void downloadPlacard("pdf")}
+                  >
+                    <FileText className="h-4 w-4" aria-hidden />
+                    Placard PDF
+                  </Button>
+                </>
+              ) : null}
+            </div>
+
+            {link.archivedAt ? null : (
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full gap-2 text-destructive"
+                disabled={archiving}
+                onClick={() => void archive()}
+              >
+                <Archive className="h-4 w-4" aria-hidden />
+                {archiving ? "Closing…" : "Close this link"}
+              </Button>
+            )}
+          </div>
         ) : null}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   )
 }
