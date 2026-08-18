@@ -33,12 +33,21 @@ function publicPath(parts: string[]): string {
   return encoded.length > 0 ? `/${encoded.join("/")}` : "/"
 }
 
-function ogImageFor(parts: string[], alt: string): { url: string; alt: string } {
-  const path = publicPath(parts)
-  return {
-    url: path === "/" ? "/og/customer" : `/og/customer${path}`,
-    alt,
-  }
+/** Prerendered share cards — catch-all OG route handlers 500 on Vercel. */
+export const publicCustomerOgImagePath = {
+  pay: "/og/pay/opengraph-image",
+  invoice: "/og/invoice/opengraph-image",
+  thanks: "/og/pay/thanks/opengraph-image",
+} as const
+
+function ogImageFor(kind: CustomerPublicKind | "pay_default", alt: string): { url: string; alt: string } {
+  const url =
+    kind === "invoice"
+      ? publicCustomerOgImagePath.invoice
+      : kind === "pay_thanks"
+        ? publicCustomerOgImagePath.thanks
+        : publicCustomerOgImagePath.pay
+  return { url, alt }
 }
 
 function seoFromContent(content: {
@@ -111,7 +120,7 @@ export async function resolvePublicCustomerSeo(input: {
         metadata,
         path,
         metadataBase: getPayAppPublicOrigin(),
-        ogImage: ogImageFor(parts, og.alt),
+        ogImage: ogImageFor(kind, og.alt),
       },
       og,
     }
@@ -127,7 +136,7 @@ export async function resolvePublicCustomerSeo(input: {
         metadata,
         path,
         metadataBase: getInvoiceAppPublicOrigin(),
-        ogImage: ogImageFor(parts, og.alt),
+        ogImage: ogImageFor(kind, og.alt),
       },
       og,
     }
@@ -142,7 +151,7 @@ export async function resolvePublicCustomerSeo(input: {
       metadata,
       path,
       metadataBase: getPayAppPublicOrigin(),
-      ogImage: ogImageFor(parts, og.alt),
+      ogImage: ogImageFor(kind ?? "pay_default", og.alt),
     },
     og,
   }

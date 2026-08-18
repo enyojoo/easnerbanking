@@ -286,7 +286,11 @@ export async function prefetchRouteWorkspaceData(
   }
   if (href === "/links" || href.startsWith("/links/")) {
     const { prefetchPaymentLinks } = await import("@/hooks/queries/use-payment-links-query")
-    await prefetchPaymentLinks(queryClient, scope)
+    const { prefetchCheckoutSettings } = await import("@/hooks/queries/use-checkout-settings-query")
+    await Promise.all([
+      prefetchPaymentLinks(queryClient, scope),
+      prefetchCheckoutSettings(queryClient, scope),
+    ])
     return
   }
   if (href === "/checkout" || href.startsWith("/checkout/")) {

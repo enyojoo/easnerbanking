@@ -10,6 +10,7 @@ export const metadata: Metadata = businessMetadata({
   metadata: invoiceSeo.publicDefault.metadata,
   path: "/invoice",
   metadataBase: getInvoiceAppPublicOrigin(),
+  ogImage: { url: "/og/invoice/opengraph-image", alt: invoiceSeo.publicDefault.hero.altText },
 })
 
 export default function InvoiceLayout({

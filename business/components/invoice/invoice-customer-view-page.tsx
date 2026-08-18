@@ -56,6 +56,8 @@ type InvoiceCustomerViewPageProps =
   | {
       mode: "preview"
       invoiceId: string
+      initialPayload?: PublicInvoicePayload | null
+      initialUnauthorized?: boolean
     }
 
 type PublicInvoicePayloadPartial = Pick<
@@ -67,13 +69,14 @@ type PublicInvoicePayloadPartial = Pick<
 
 export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
   const mode: InvoiceViewMode = props.mode
-  const ssrPayload = props.mode === "public" ? props.initialPayload : undefined
+  const ssrPayload = props.initialPayload
+  const ssrUnauthorized = props.mode === "preview" && props.initialUnauthorized === true
   const [invoice, setInvoice] = useState<Invoice | null>(ssrPayload?.invoice ?? null)
   const [publicEasetag, setPublicEasetag] = useState<string | null>(ssrPayload?.businessEasetag ?? null)
   const [issuer, setIssuer] = useState<InvoicePdfIssuer | null>(ssrPayload?.issuer ?? null)
   const [payIn, setPayIn] = useState<InvoicePayInPayload>(ssrPayload?.payIn ?? {})
   const [loadState, setLoadState] = useState<"loading" | "error" | "unauthorized" | "ok">(
-    ssrPayload === undefined ? "loading" : ssrPayload ? "ok" : "error",
+    ssrUnauthorized ? "unauthorized" : ssrPayload === undefined ? "loading" : ssrPayload ? "ok" : "error",
   )
   const ssrOnline =
     ssrPayload?.paymentDisplay?.showOnlinePayment === true || ssrPayload?.stripeOnlineEnabled === true
@@ -196,7 +199,10 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
     scheduleBackgroundPaidRefetch()
   }, [scheduleBackgroundPaidRefetch])
 
-  const skipClientLoad = props.mode === "public" && props.initialPayload !== undefined
+  const skipClientLoad =
+    ssrUnauthorized ||
+    (props.mode === "public" && props.initialPayload !== undefined) ||
+    (props.mode === "preview" && props.initialPayload !== undefined)
 
   useEffect(() => {
     if (skipClientLoad) {

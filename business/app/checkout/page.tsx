@@ -4,7 +4,6 @@ import { useMemo, useState } from "react"
 import Link from "next/link"
 import { CheckoutIntegrationHub } from "@/components/checkout/checkout-integration-hub"
 import { CollectionsPageHeader } from "@/components/collections/collections-page-header"
-import { CollectionsReadinessBanner } from "@/components/collections/collections-readiness-banner"
 import { useCheckoutSettings } from "@/hooks/use-checkout-settings"
 import { COLLECTIONS_COPY, PAGE_COPY } from "@/lib/copy/business-ui-copy"
 
@@ -50,7 +49,6 @@ export default function CheckoutPage() {
             </p>
           }
         />
-        <CollectionsReadinessBanner />
       </div>
       <CheckoutIntegrationHub onDashboardReady={setDashboard} />
     </div>

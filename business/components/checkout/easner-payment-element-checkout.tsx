@@ -18,6 +18,7 @@ import { Check, Loader2 } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 import { easnerStripeElementsAppearance } from "@/lib/stripe/elements-appearance"
 import { getStripeJs } from "@/lib/stripe/load-stripe-js"
+import { onlinePaymentTabHint } from "@/lib/invoices/invoice-payment-copy"
 
 type Props = {
   clientSecret: string
@@ -27,6 +28,8 @@ type Props = {
   successMessage: string
   /** Shown above the pay button, e.g. the renewal disclosure on recurring links. */
   disclosure?: ReactNode
+  /** Invoice already prints this above the tab; links and Checkout should show it here. */
+  showMethodsHint?: boolean
   onPaid?: () => void
 }
 
@@ -94,6 +97,7 @@ function CheckoutSurface({
   currency,
   successMessage,
   disclosure,
+  showMethodsHint = true,
   onPaid,
 }: Omit<Props, "clientSecret">) {
   const checkoutState = useCheckoutElements()
@@ -157,7 +161,11 @@ function CheckoutSurface({
   // skeleton until ready, then reveal methods + Pay CTA together – never put
   // "Loading payment methods…" on the button.
   return (
-    <div className="relative">
+    <div className="space-y-4">
+      {showMethodsHint ? (
+        <p className="text-sm text-muted-foreground">{onlinePaymentTabHint()}</p>
+      ) : null}
+      <div className="relative">
       {!ready ? <PaymentFormSkeleton /> : null}
       <div
         className={
@@ -217,6 +225,7 @@ function CheckoutSurface({
             </Button>
           </>
         ) : null}
+      </div>
       </div>
     </div>
   )

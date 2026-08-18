@@ -1,4 +1,5 @@
 import { getStripePublishableKey } from "@/lib/stripe/config"
+import { onlinePaymentTabHint } from "@/lib/invoices/invoice-payment-copy"
 
 /**
  * Embed script served at /checkout.js (js.easner.com points here).
@@ -72,6 +73,12 @@ export async function GET() {
             elementsOptions: opts.appearance ? { appearance: opts.appearance } : undefined,
           })
           .then(function (checkout) {
+            var hint = document.createElement("p");
+            hint.textContent = ${JSON.stringify(onlinePaymentTabHint())};
+            hint.style.margin = "0 0 12px";
+            hint.style.fontSize = "14px";
+            hint.style.lineHeight = "1.45";
+            hint.style.color = "#6F756F";
             var form = document.createElement("form");
             form.setAttribute("novalidate", "novalidate");
             var mountPoint = document.createElement("div");
@@ -82,6 +89,7 @@ export async function GET() {
             message.setAttribute("role", "alert");
             message.style.display = "none";
 
+            form.appendChild(hint);
             form.appendChild(mountPoint);
             form.appendChild(message);
             form.appendChild(button);

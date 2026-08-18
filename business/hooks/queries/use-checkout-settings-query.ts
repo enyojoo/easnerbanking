@@ -6,7 +6,7 @@ import { apiFetch } from "@/lib/query/api-client"
 import { useScope } from "@/lib/query/scope"
 import type { CheckoutHubPayload } from "@/lib/checkout/hub-types"
 
-const STALE_MS = 60_000
+const STALE_MS = 0
 
 export function checkoutSettingsQueryOptions(scope: Scope) {
   return {
@@ -14,7 +14,8 @@ export function checkoutSettingsQueryOptions(scope: Scope) {
     queryFn: () => apiFetch<CheckoutHubPayload>("/api/checkout/settings"),
     staleTime: STALE_MS,
     gcTime: 30 * 60_000,
-    meta: { safePersist: true, webPersist: "reduced" as const, freshness: "operational" as const },
+    refetchOnMount: "always" as const,
+    meta: { safePersist: true, webPersist: "reduced" as const, freshness: "critical" as const },
   }
 }
 
@@ -28,7 +29,8 @@ export function useCheckoutSettingsQuery() {
     enabled: Boolean(scope),
     staleTime: STALE_MS,
     gcTime: 30 * 60_000,
-    meta: { safePersist: true, webPersist: "reduced", freshness: "operational" },
+    refetchOnMount: "always",
+    meta: { safePersist: true, webPersist: "reduced", freshness: "critical" },
   })
 }
 

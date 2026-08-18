@@ -10,7 +10,7 @@ export const metadata = businessMetadata({
   metadata: payCustomerSeo.publicDefault.metadata,
   path: "/",
   metadataBase: getPayAppPublicOrigin(),
-  ogImage: { url: "/og/customer", alt: payCustomerSeo.publicDefault.hero.altText },
+  ogImage: { url: "/og/pay/opengraph-image", alt: payCustomerSeo.publicDefault.hero.altText },
 })
 
 export default function PayCustomerLayout({ children }: { children: ReactNode }) {

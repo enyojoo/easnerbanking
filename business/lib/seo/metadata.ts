@@ -30,7 +30,7 @@ export function businessMetadata({
   const ogTitle = titleAbsolute ?? metadata.title
   const title = { absolute: ogTitle }
   const images = ogImage
-    ? [{ url: ogImage.url, alt: ogImage.alt }]
+    ? [{ url: ogImage.url, alt: ogImage.alt, width: 1200, height: 630, type: "image/png" }]
     : undefined
 
   return {
