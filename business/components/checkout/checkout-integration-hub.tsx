@@ -26,10 +26,8 @@ import {
 } from "@/hooks/use-checkout-settings"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import {
-  BUSINESS_SELECTABLE_FEE_MODES,
   checkoutFeeModeDescription,
   checkoutFeeModeLabel,
-  type CheckoutFeeMode,
 } from "@/lib/stripe/checkout-fee-mode"
 import { cn } from "@/lib/utils"
 
@@ -240,9 +238,13 @@ function StepReady({ data }: StepProps) {
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">
-          {data.readiness.reason || "Complete verification in Settings to switch this on."}{" "}
+          {data.readiness.reason || "Complete setup in Settings to switch this on."}{" "}
+          <Link href="/settings?tab=payments" className="underline underline-offset-2">
+            Go to Payments settings
+          </Link>
+          {" · "}
           <Link href="/settings?tab=verification" className="underline underline-offset-2">
-            Go to verification
+            Verification
           </Link>
         </p>
       )}
@@ -250,67 +252,29 @@ function StepReady({ data }: StepProps) {
   )
 }
 
-function StepFees({ data, onSaved }: StepProps) {
-  const [saving, setSaving] = useState(false)
-  const managed = data.settings.feeModeManagedByEasner
-
-  const choose = async (feeMode: CheckoutFeeMode) => {
-    setSaving(true)
-    try {
-      const result = await saveCheckoutSettings({ fee_mode: feeMode })
-      if (!result.ok) {
-        toast.error(result.error || "Could not save")
-        return
-      }
-      toast.success("Saved.")
-      onSaved()
-    } finally {
-      setSaving(false)
-    }
-  }
-
+function StepFees({ data }: StepProps) {
   return (
     <>
       <StepHeading
         title="Choose who pays the processing fee"
         blurb="Applies to every online payment you collect: invoices, links, and your website."
       />
-      {managed ? (
-        <div className="rounded-lg border bg-muted/40 p-3 text-sm">
-          <p className="font-medium text-foreground">
-            Managed by Easner — {checkoutFeeModeLabel(data.settings.feeMode)}
-          </p>
-          <p className="mt-1 text-muted-foreground">
-            {checkoutFeeModeDescription(data.settings.feeMode)}
-          </p>
-        </div>
-      ) : (
-        <div className="grid gap-2 sm:grid-cols-2">
-          {BUSINESS_SELECTABLE_FEE_MODES.map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              disabled={saving}
-              onClick={() => void choose(mode)}
-              className={cn(
-                "rounded-lg border p-3 text-left transition-colors",
-                data.settings.feeMode === mode
-                  ? "border-primary bg-primary/5"
-                  : "border-border hover:bg-muted/50",
-                saving && "opacity-60",
-              )}
-              aria-pressed={data.settings.feeMode === mode}
-            >
-              <span className="block text-sm font-medium text-foreground">
-                {checkoutFeeModeLabel(mode)}
-              </span>
-              <span className="mt-1 block text-xs text-muted-foreground">
-                {checkoutFeeModeDescription(mode)}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="rounded-lg border bg-muted/40 p-3 text-sm">
+        <p className="font-medium text-foreground">
+          Current setting — {checkoutFeeModeLabel(data.settings.feeMode)}
+        </p>
+        <p className="mt-1 text-muted-foreground">
+          {data.settings.feeModeManagedByEasner
+            ? checkoutFeeModeDescription(data.settings.feeMode)
+            : "Fee mode is configured in Settings."}
+        </p>
+        <Link
+          href="/settings?tab=payments"
+          className="mt-3 inline-block text-sm underline underline-offset-2"
+        >
+          Open Payments settings
+        </Link>
+      </div>
     </>
   )
 }

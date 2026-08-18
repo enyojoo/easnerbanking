@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { isBusinessTier1Complete } from "@/lib/compliance/business-tier1"
 import { isOnlineCheckoutEnabled } from "@/lib/stripe/config"
 import { resolveConnectReadyForCheckout } from "@/lib/stripe/connect"
+import { resolveOnlinePaymentsEnabled } from "@/lib/stripe/resolve-online-payments-enabled"
 import { resolveCheckoutFeeMode } from "@/lib/stripe/checkout-fee-mode"
 import { computeCheckoutAmounts } from "@/lib/stripe/application-fee"
 import { mapRowToPaymentLink, type PaymentLink } from "./types"
@@ -72,11 +73,12 @@ export async function buildPublicPaymentLinkPayload(
   let surchargeCents = 0
 
   if (link.rail === "card_bank" && tier1Complete && isOnlineCheckoutEnabled()) {
+    const { enabled: masterEnabled } = await resolveOnlinePaymentsEnabled(admin, businessId)
     const connect = await resolveConnectReadyForCheckout(admin, businessId, {
       currency: link.currency,
     })
-    onlinePaymentsEnabled = connect.ready
-    if (connect.ready) {
+    onlinePaymentsEnabled = masterEnabled && connect.ready
+    if (onlinePaymentsEnabled) {
       const { feeMode } = await resolveCheckoutFeeMode(admin, businessId)
       const amounts = computeCheckoutAmounts({ listedAmountCents: link.amountCents, feeMode })
       customerAmountCents = amounts.customerAmountCents

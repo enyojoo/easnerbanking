@@ -6,6 +6,7 @@ import { resolvePaymentDisplay } from "@/lib/invoices/resolve-payment-display"
 import { filterPayInByDisplay } from "@/lib/invoices/filter-pay-in-by-display"
 import { isInvoicePayableStatus, isInvoicePubliclyViewable } from "@/lib/invoices/invoice-status"
 import { resolveConnectReadyForCheckout } from "@/lib/stripe/connect"
+import { resolveOnlinePaymentsEnabled } from "@/lib/stripe/resolve-online-payments-enabled"
 import { isStripeInvoicePaymentsEnabled } from "@/lib/stripe/config"
 import { createInvoiceCheckoutSession } from "@/lib/stripe/create-invoice-checkout"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
@@ -58,11 +59,14 @@ export async function jsonPublicInvoiceFromRow(
   const invoiceSettings = parseBusinessInvoiceSettings(bizRow?.invoice_settings)
   const stripePlatformEnabled = isStripeInvoicePaymentsEnabled()
   let stripeConnectReady = false
+  let masterOnlineEnabled = true
   if (stripePlatformEnabled) {
+    const { enabled } = await resolveOnlinePaymentsEnabled(admin, businessId)
+    masterOnlineEnabled = enabled
     const connect = await resolveConnectReadyForCheckout(admin, businessId, {
       currency: invoice.currency,
     })
-    stripeConnectReady = connect.ready
+    stripeConnectReady = masterOnlineEnabled && connect.ready
   }
   const stripeOnlineEnabled = stripePlatformEnabled && stripeConnectReady
   const paymentDisplay = resolvePaymentDisplay({

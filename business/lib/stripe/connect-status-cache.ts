@@ -20,10 +20,17 @@ export type CachedConnectStatus = {
   hasGridVa?: boolean
   requirementsCurrentlyDue?: string[]
   payoutDestination?: {
-    stripeExternalAccountId: string
+    stripeExternalAccountId?: string
     settlementRail?: string | null
     schedule?: Record<string, unknown> | null
+    last4?: string | null
+    bankName?: string | null
+    currency?: string | null
+    status?: string | null
   } | null
+  requirementsSnapshot?: unknown
+  capabilities?: unknown
+  lastSyncedAt?: string | null
   cachedAt: number
 }
 

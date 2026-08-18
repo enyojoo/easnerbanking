@@ -8,12 +8,13 @@ import {
 import { BUSINESS_SELECTABLE_FEE_MODES, resolveCheckoutFeeMode } from "@/lib/stripe/checkout-fee-mode"
 import { parseCheckoutFeeMode } from "@/lib/stripe/checkout-fee-mode"
 import { resolveConnectReadyForCheckout } from "@/lib/stripe/connect"
+import { resolveOnlinePaymentsEnabled } from "@/lib/stripe/resolve-online-payments-enabled"
 import { isOnlineCheckoutEnabled } from "@/lib/stripe/config"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { requireEasnerBusinessId } from "@/lib/terminal/context"
 
 const SETTINGS_COLUMNS =
-  "business_id, fee_mode, allowed_origins, default_success_url, default_cancel_url, appearance, webhook_url, webhook_secret_last4, live_mode_enabled, test_payment_completed_at"
+  "business_id, fee_mode, allowed_origins, default_success_url, default_cancel_url, appearance, webhook_url, webhook_secret_last4, live_mode_enabled, test_payment_completed_at, online_payments_enabled"
 
 function normalizeOrigin(raw: string): string | null {
   try {
@@ -46,12 +47,10 @@ export async function GET(request: Request) {
   if (!ctx.ok) return ctx.response
 
   const admin = createSupabaseAdmin()
-  const [{ data: settings }, feeMode, connect, { data: keys }] = await Promise.all([
+  const [{ data: settings }, feeMode, onlinePayments, { data: keys }] = await Promise.all([
     admin.from("business_checkout_settings").select(SETTINGS_COLUMNS).eq("business_id", ctx.businessId).maybeSingle(),
     resolveCheckoutFeeMode(admin, ctx.businessId),
-    isOnlineCheckoutEnabled()
-      ? resolveConnectReadyForCheckout(admin, ctx.businessId)
-      : Promise.resolve({ ready: false, reason: "Online payments are not enabled" as string | null }),
+    resolveOnlinePaymentsEnabled(admin, ctx.businessId),
     admin
       .from("business_api_keys")
       .select("id, mode, publishable_key, secret_key_last4, created_at, last_used_at")
@@ -59,6 +58,16 @@ export async function GET(request: Request) {
       .is("revoked_at", null)
       .order("created_at", { ascending: false }),
   ])
+
+  const connect =
+    isOnlineCheckoutEnabled() && onlinePayments.enabled
+      ? await resolveConnectReadyForCheckout(admin, ctx.businessId)
+      : {
+          ready: false,
+          reason: onlinePayments.enabled
+            ? "Online payments are not enabled"
+            : "Online payments are turned off in Settings",
+        }
 
   return NextResponse.json({
     settings: {
@@ -72,6 +81,7 @@ export async function GET(request: Request) {
       webhookSecretLast4: settings?.webhook_secret_last4 ?? null,
       liveModeEnabled: Boolean(settings?.live_mode_enabled),
       testPaymentCompletedAt: settings?.test_payment_completed_at ?? null,
+      onlinePaymentsEnabled: onlinePayments.enabled,
     },
     readiness: {
       ready: connect.ready,
@@ -91,6 +101,7 @@ export async function PATCH(request: Request) {
 
   const body = (await request.json().catch(() => null)) as {
     fee_mode?: string
+    online_payments_enabled?: boolean
     allowed_origins?: string[]
     default_success_url?: string | null
     default_cancel_url?: string | null
@@ -120,6 +131,10 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Choose a valid fee option" }, { status: 400 })
     }
     patch.fee_mode = feeMode
+  }
+
+  if (body?.online_payments_enabled !== undefined) {
+    patch.online_payments_enabled = Boolean(body.online_payments_enabled)
   }
 
   if (body?.allowed_origins !== undefined) {

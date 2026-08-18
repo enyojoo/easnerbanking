@@ -7,6 +7,7 @@ import {
   parseCheckoutKeyMode,
 } from "@/lib/checkout/secrets"
 import { resolveConnectReadyForCheckout } from "@/lib/stripe/connect"
+import { resolveOnlinePaymentsEnabled } from "@/lib/stripe/resolve-online-payments-enabled"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { requireEasnerBusinessId } from "@/lib/terminal/context"
 
@@ -28,6 +29,14 @@ export async function POST(request: Request) {
   }
 
   const admin = createSupabaseAdmin()
+
+  const { enabled: onlinePaymentsEnabled } = await resolveOnlinePaymentsEnabled(admin, ctx.businessId)
+  if (!onlinePaymentsEnabled) {
+    return NextResponse.json(
+      { error: "Turn on online payments in Settings before creating API keys." },
+      { status: 409 },
+    )
+  }
 
   if (mode === "live") {
     const connect = await resolveConnectReadyForCheckout(admin, ctx.businessId)

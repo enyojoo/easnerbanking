@@ -61,6 +61,8 @@ export type BusinessProfile = {
   invoiceReplyEmailSource: InvoiceReplyEmailSource | null
   /** From `businesses.invoice_settings`. */
   invoiceSettings?: InvoicePaymentDefaults
+  /** Master switch for card/bank collections (`business_checkout_settings`). */
+  onlinePaymentsEnabled?: boolean
 }
 
 const DEFAULT_PROFILE: BusinessProfile = {
@@ -103,6 +105,7 @@ const DEFAULT_PROFILE: BusinessProfile = {
   invoiceReplyEmail: null,
   invoiceReplyEmailSource: null,
   invoiceSettings: undefined,
+  onlinePaymentsEnabled: true,
 }
 
 function countryCodeFromName(name: string | null | undefined): string | null {

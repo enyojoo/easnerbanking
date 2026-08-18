@@ -11,6 +11,7 @@ import { SettingsCommunicationTab } from "@/components/settings/settings-communi
 import { SettingsRecipientsTab } from "@/components/settings/settings-recipients-tab"
 import { SettingsCustomersTab } from "@/components/settings/settings-customers-tab"
 import { SettingsInvoicingTab } from "@/components/settings/settings-invoicing-tab"
+import { SettingsPaymentsTab } from "@/components/settings/settings-payments-tab"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { primeConnectStatus } from "@/lib/stripe/connect-status-cache"
 import {
@@ -21,7 +22,7 @@ import { primeBusinessVerificationFlow } from "@/lib/compliance/prime-business-v
 import { usePrimeKybPacket } from "@/lib/grid/kyb-packet-query"
 import { cn } from "@/lib/utils"
 
-const TABS = ["personal", "business", "verification", "team", "recipients", "customers", "communication", "invoicing"] as const
+const TABS = ["personal", "business", "verification", "payments", "team", "recipients", "customers", "communication", "invoicing"] as const
 type TabValue = (typeof TABS)[number]
 
 function SettingsContent() {
@@ -129,6 +130,7 @@ function SettingsContent() {
             <TabsTrigger value="personal">Personal</TabsTrigger>
             <TabsTrigger value="business">Business</TabsTrigger>
             <TabsTrigger value="verification">Verification</TabsTrigger>
+            <TabsTrigger value="payments">Payments</TabsTrigger>
             <TabsTrigger value="team">Team</TabsTrigger>
             <TabsTrigger value="recipients">Recipients</TabsTrigger>
             <TabsTrigger value="customers">Customers</TabsTrigger>
@@ -152,6 +154,9 @@ function SettingsContent() {
             embeddedFlow={verificationFlow}
             onFlowOpenChange={handleVerificationFlowOpenChange}
           />
+        </TabsContent>
+        <TabsContent value="payments" className="mt-6">
+          <SettingsPaymentsTab />
         </TabsContent>
         <TabsContent value="team" className="mt-6">
           <SettingsTeamTab />

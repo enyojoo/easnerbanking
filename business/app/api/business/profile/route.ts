@@ -30,6 +30,7 @@ import {
 } from "@/lib/invoices/invoice-settings"
 import type { InvoicePaymentDefaults } from "@/lib/b2b/types"
 import { validateOperationalAddress } from "@easner/shared/postal-address-form"
+import { resolveOnlinePaymentsEnabled } from "@/lib/stripe/resolve-online-payments-enabled"
 
 type UpdateBody = {
   businessName?: string
@@ -275,6 +276,16 @@ async function getBusinessProfileResponse(request: Request) {
     invoiceSettings = parseBusinessInvoiceSettings(org.invoice_settings)
   }
 
+  let onlinePaymentsEnabled = true
+  if (orgId) {
+    try {
+      const online = await resolveOnlinePaymentsEnabled(admin, orgId)
+      onlinePaymentsEnabled = online.enabled
+    } catch (error) {
+      console.warn("[GET /api/business/profile] online payments resolve failed (non-fatal):", error)
+    }
+  }
+
   const tier1RejectionDisplay = getVerificationRejectionDisplay(tier1RejectionReasons)
   const tier1RejectionType = tier1RejectionDisplay.rejectType
   const tier1CanResubmit = tier1RejectionDisplay.canResubmit
@@ -331,6 +342,7 @@ async function getBusinessProfileResponse(request: Request) {
       invoiceReplyEmail,
       invoiceReplyEmailSource,
       invoiceSettings,
+      onlinePaymentsEnabled,
     },
   })
 }

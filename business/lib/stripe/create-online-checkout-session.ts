@@ -7,6 +7,7 @@ import { resolveCheckoutFeeMode } from "./checkout-fee-mode"
 import { buildCheckoutSessionMetadata, type OnlineCheckoutSource } from "./checkout-session-metadata"
 import { getStripe } from "./client"
 import { resolveConnectReadyForCheckout } from "./connect"
+import { resolveOnlinePaymentsEnabled } from "./resolve-online-payments-enabled"
 import {
   getStripePublishableKey,
   isOnlineCheckoutEnabled,
@@ -98,6 +99,15 @@ export async function createOnlineCheckoutSession(
       ok: false,
       status: 403,
       error: "Business verification is required before accepting online payments",
+    }
+  }
+
+  const { enabled: onlinePaymentsEnabled } = await resolveOnlinePaymentsEnabled(admin, input.businessId)
+  if (!onlinePaymentsEnabled) {
+    return {
+      ok: false,
+      status: 403,
+      error: "Online payments are turned off in Settings",
     }
   }
 

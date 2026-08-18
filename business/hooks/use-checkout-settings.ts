@@ -9,6 +9,7 @@ export type CheckoutHubSettings = {
   feeMode: CheckoutFeeMode
   businessFeeMode: CheckoutFeeMode | null
   feeModeManagedByEasner: boolean
+  onlinePaymentsEnabled: boolean
   allowedOrigins: string[]
   defaultSuccessUrl: string | null
   defaultCancelUrl: string | null

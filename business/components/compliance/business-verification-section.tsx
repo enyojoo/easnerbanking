@@ -72,7 +72,7 @@ export function BusinessVerificationSection({
     hasData,
     businessId,
     noahKybCustomerId,
-    invoiceSettings,
+    onlinePaymentsEnabled,
     name,
     registrationNumber,
     taxId,
@@ -88,7 +88,7 @@ export function BusinessVerificationSection({
     registeredAddressPostalCode,
   } = useBusinessProfile()
 
-  const showOnlinePayments = invoiceSettings?.showOnlinePayment !== false
+  const showOnlinePayments = onlinePaymentsEnabled !== false
 
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)

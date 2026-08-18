@@ -204,7 +204,8 @@ export const INVOICE_SETTINGS_COPY = {
   stablecoin: "Stablecoin",
   stablecoinHelp: "Show wallet deposit address when available",
   onlinePayments: "Online payments",
-  onlinePaymentsHelp: "Let customers pay invoices online by card or bank",
+  onlinePaymentsHelp: "Show Pay online on invoice customer pages when online payments are enabled",
+  onlinePaymentsManagedInPayments: "Card and bank payments are managed in Settings → Payments.",
   defaultPaymentOption: "Default payment option",
   includePaymentOnPdf: "Include payment link on PDF",
   includePaymentOnPdfHelp:
@@ -419,6 +420,47 @@ export const SETTINGS_TAB_COPY = {
   customers: { title: "Customers", intro: "Manage who you bill and track invoices." },
   communication: { title: "Communication", intro: "Control product and security emails from Easner." },
   invoicing: { title: "Invoicing", intro: "Configure how you send invoices and get paid." },
+  payments: {
+    title: "Payments",
+    intro: "Accept card and bank payments across invoices, links, and your website.",
+  },
+} as const
+
+export const PAYMENTS_SETTINGS_COPY = {
+  masterTitle: "Online payments",
+  masterIntro: "One setup for card and bank collections across your business.",
+  masterSwitch: "Accept card and bank payments",
+  masterSwitchHelp: "Turn off to hide Pay online, Payment Links (card/bank), and website checkout.",
+  masterOffHint:
+    "Payment Links (card/bank), website checkout, and invoice Pay online are hidden while this is off.",
+  setupRequiredHint: "Complete verification to start accepting online payments.",
+  continueVerification: "Continue in Verification",
+  readyHint: "Online payments are ready across invoices, links, and your website.",
+  feesTitle: "Processing fees",
+  feesIntro: "Applies to every online payment: invoices, links, and your website.",
+  surfacesTitle: "Where customers pay",
+  surfacesIntro: "Control which surfaces offer card and bank checkout.",
+  invoiceSurface: "Invoices — Pay online",
+  invoiceSurfaceHelp: "Show card and bank checkout on invoice customer pages.",
+  linksSurface: "Payment Links",
+  linksSurfaceReady: "Card and bank links are available when online payments are ready.",
+  linksSurfacePending: "Available once online payment setup is complete.",
+  openLinks: "Open links",
+  checkoutSurface: "Website checkout",
+  checkoutWebhookConfigured: "Webhook configured",
+  checkoutWebhookPending: "Webhook not configured",
+  checkoutLiveOn: "Live mode on",
+  checkoutTestMode: "Test mode",
+  openCheckoutHub: "Open integration hub",
+  payoutTitle: "Payout and settlement",
+  payoutIntro: "Where online payments settle after processing.",
+  payoutDestination: "Destination",
+  payoutDestinationDetail: "Easner Balance via your Grid virtual account",
+  payoutAccount: "Payout account",
+  payoutPending: "Payout account will appear once setup is complete.",
+  requirementsSummary: "Setup checklist",
+  openRequirements: "Open requirements",
+  lastSynced: "Last synced",
 } as const
 
 export const SETTINGS_CARD_COPY = {

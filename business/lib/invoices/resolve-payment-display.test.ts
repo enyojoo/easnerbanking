@@ -115,4 +115,14 @@ describe("resolvePaymentDisplay", () => {
     })
     expect(d.defaultTab).toBe("stablecoin")
   })
+
+  it("hides online when invoice showOnlinePayment is false even if stripe is enabled", () => {
+    const d = resolvePaymentDisplay({
+      invoice: { status: "unpaid" },
+      businessDefaults: { showOnlinePayment: false },
+      payIn: both,
+      stripeOnlineEnabled: true,
+    })
+    expect(d.showOnlinePayment).toBe(false)
+  })
 })

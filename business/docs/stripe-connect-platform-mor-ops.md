@@ -57,7 +57,7 @@ CHECKOUT_SECRET_ENCRYPTION_KEY=
 3. On submit, Easner **automatically links** the Grid VA as the Stripe payout destination when eligible.
 4. Tier 3 shows **Ready** once Stripe enables transfers + payouts → Pay online on invoices.
 
-**Invoicing → Pay online** is on by default. Turn it off to hide Tier 3 on Verification.
+**Settings → Payments → turn off online payments** to hide card/bank across Collections and Tier 3 verification. Invoice Pay online on customer pages is controlled separately under Payments → Where customers pay.
 
 Manual **Link payout** appears only if auto-link fails.
 
