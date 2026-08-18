@@ -84,24 +84,27 @@ export function MoveBetweenAccountsDialog({
   const destAccount = accountRows.find((row) => row.currency === destCurrency)
   const enteredAmount = parseAmountFromDisplay(amountStr)
 
-  const quoteEnabled =
+  const moveBlocked = !tier1Complete || accountsProvisioning || !canMoveMoney
+  const missingCounterCurrency = tier1Complete && !destAccount
+  const canQuote =
     open &&
     step === "amount" &&
     Boolean(sourceAccount && destAccount) &&
     tier1Complete &&
     canMoveMoney &&
-    !accountsProvisioning &&
-    enteredAmount > 0
+    !accountsProvisioning
 
-  const { quote, loading, error, isFresh, ensureFreshQuote, resetQuote } = useMoveQuote({
-    direction,
-    sourceAmount: enteredAmount,
-    enabled: quoteEnabled,
-    accountScopeHeaders,
-  })
+  const quoteEnabled = canQuote && enteredAmount > 0
 
-  const moveBlocked = !tier1Complete || accountsProvisioning || !canMoveMoney
-  const missingCounterCurrency = tier1Complete && !destAccount
+  const { quote, indicativeRate, loading, rateLoading, error, isFresh, ensureFreshQuote, resetQuote } =
+    useMoveQuote({
+      direction,
+      sourceAmount: enteredAmount,
+      enabled: quoteEnabled,
+      seedOnOpen: canQuote,
+      accountScopeHeaders,
+    })
+
 
   const resetDialog = useCallback(() => {
     setStep("amount")
@@ -260,6 +263,8 @@ export function MoveBetweenAccountsDialog({
               amountStr={amountStr}
               onAmountStrChange={setAmountStr}
               quote={quote}
+              indicativeRate={indicativeRate}
+              quoteRateLoading={rateLoading}
               quoteLoading={loading}
               quoteError={error}
               onContinue={() => void handleContinue()}

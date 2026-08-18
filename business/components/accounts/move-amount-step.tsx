@@ -14,6 +14,7 @@ import type { MoveQuoteState } from "@/lib/move-quote-state"
 import {
   destCurrencyForDirection,
   oppositeMoveDirection,
+  resolveMoveQuoteRate,
   sourceCurrencyForDirection,
 } from "@/lib/move-quote-state"
 import type { Account } from "@/lib/finance-types"
@@ -38,6 +39,18 @@ function parseAmountFromDisplay(display: string): number {
   return Number.parseFloat(display.replace(/,/g, "")) || 0
 }
 
+function roundMoneyAmount(amount: number): number {
+  return Math.round(amount * 100) / 100
+}
+
+function quoteMatchesAmount(
+  quote: MoveQuoteState | null | undefined,
+  enteredAmount: number,
+): boolean {
+  if (!quote) return false
+  return Math.abs(quote.sourceAmount - enteredAmount) < 0.005
+}
+
 type Props = {
   direction: "usd_to_eur" | "eur_to_usd"
   onDirectionChange: (direction: "usd_to_eur" | "eur_to_usd") => void
@@ -46,6 +59,8 @@ type Props = {
   amountStr: string
   onAmountStrChange: (value: string) => void
   quote: MoveQuoteState | null
+  indicativeRate: number | null
+  quoteRateLoading: boolean
   quoteLoading: boolean
   quoteError: string | null
   onContinue: () => void
@@ -65,6 +80,8 @@ export function MoveAmountStep({
   amountStr,
   onAmountStrChange,
   quote,
+  indicativeRate,
+  quoteRateLoading,
   quoteLoading,
   quoteError,
   onContinue,
@@ -74,31 +91,41 @@ export function MoveAmountStep({
   const sourceCurrency = sourceCurrencyForDirection(direction)
   const destCurrency = destCurrencyForDirection(direction)
   const enteredAmount = parseAmountFromDisplay(amountStr)
-  const debitAmount = quote?.totalDebited ?? enteredAmount
+  const matchedQuote = quoteMatchesAmount(quote, enteredAmount) ? quote : null
+  const debitAmount = matchedQuote?.totalDebited ?? enteredAmount
   const hasInsufficientBalance =
     enteredAmount > 0 && debitAmount > sourceAccount.availableBalance
   const shortfallAmount = Math.max(0, debitAmount - sourceAccount.availableBalance)
-  const rateDisplay =
-    quote && quote.rate > 0 ? formatSendRateLabel(sourceCurrency, destCurrency, quote.rate) : null
-  const receivingPreview =
-    quote && quote.destinationAmount > 0
-      ? formatMoneyDisplay(quote.destinationAmount, destCurrency)
-      : null
+
+  const forwardRate = matchedQuote
+    ? resolveMoveQuoteRate(matchedQuote)
+    : indicativeRate && indicativeRate > 0
+      ? indicativeRate
+      : 0
+  const receiveAmount =
+    matchedQuote && matchedQuote.destinationAmount > 0
+      ? matchedQuote.destinationAmount
+      : forwardRate > 0 && enteredAmount > 0
+        ? roundMoneyAmount(enteredAmount * forwardRate)
+        : 0
+
+  const hasFx = enteredAmount > 0 && receiveAmount > 0
+  const rateDisplay = hasFx ? formatSendRateLabel(sourceCurrency, destCurrency, forwardRate) : null
+  const receivingPreview = hasFx ? formatMoneyDisplay(receiveAmount, destCurrency) : null
 
   const minAmountError =
     quoteError === "min_amount_not_met"
       ? `Minimum move amount is ${formatMoneyDisplay(BALANCE_CONVERT_MIN_SOURCE_AMOUNT, sourceCurrency)}.`
       : null
 
-  const relayError =
-    quoteError === "relay_not_configured"
-      ? "Balance moves are temporarily unavailable. Try again later."
-      : null
-
-  const genericQuoteError =
-    quoteError && quoteError !== "min_amount_not_met" && quoteError !== "relay_not_configured"
-      ? "Unable to fetch an exchange rate. Check the amount and try again."
-      : null
+  const showQuoteUnavailable =
+    enteredAmount > 0 &&
+    !quoteRateLoading &&
+    !quoteLoading &&
+    !rateDisplay &&
+    quoteError &&
+    quoteError !== "min_amount_not_met" &&
+    quoteError !== "relay_not_configured"
 
   return (
     <div className="space-y-6">
@@ -121,24 +148,36 @@ export function MoveAmountStep({
       </div>
 
       <div className="space-y-2">
-        <div className="flex min-h-10 items-center justify-between gap-3">
-          <p className="text-sm font-medium text-muted-foreground">Amount ({sourceCurrency})</p>
+        <div className="flex min-h-[2.5rem] items-center justify-between gap-3">
+          <p className="mb-0 shrink-0 text-sm font-medium leading-none text-muted-foreground">
+            Amount ({sourceCurrency})
+          </p>
           <div className="flex min-w-0 flex-1 items-center justify-end text-sm text-muted-foreground">
-            {quoteLoading ? (
-              <Skeleton className="h-4 w-48 max-w-full" />
-            ) : receivingPreview && rateDisplay ? (
-              <button
-                type="button"
-                onClick={() => onDirectionChange(oppositeMoveDirection(direction))}
-                className="inline-flex max-w-full items-center gap-1 hover:text-foreground"
-              >
-                <ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={2} aria-hidden />
-                <span className="min-w-0 truncate">
-                  Receiving: {receivingPreview}
-                </span>
-                <span className="shrink-0">• Rate: {rateDisplay}</span>
-              </button>
-            ) : null}
+            {quoteRateLoading ? (
+              <Skeleton className="h-4 w-52 max-w-full" />
+            ) : showQuoteUnavailable ? (
+              <span className="text-xs text-destructive">
+                Exchange rate unavailable. Try again shortly.
+              </span>
+            ) : hasFx && rateDisplay ? (
+              <div className="flex max-w-full flex-col items-end gap-0.5 text-sm text-muted-foreground">
+                <div className="flex max-w-full items-center justify-end gap-x-1 whitespace-nowrap">
+                  <button
+                    type="button"
+                    onClick={() => onDirectionChange(oppositeMoveDirection(direction))}
+                    className="inline-flex min-w-0 max-w-full items-center gap-1 hover:text-foreground"
+                  >
+                    <ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={2} aria-hidden />
+                    <span className="min-w-0 truncate">Receiving: {receivingPreview}</span>
+                  </button>
+                  <span className="shrink-0">• Rate: {rateDisplay}</span>
+                </div>
+              </div>
+            ) : (
+              <span className="pointer-events-none select-none text-sm leading-none opacity-0" aria-hidden>
+                .
+              </span>
+            )}
           </div>
         </div>
 
@@ -182,10 +221,10 @@ export function MoveAmountStep({
           </div>
         ) : null}
 
-        {relayError || genericQuoteError ? (
+        {quoteError === "relay_not_configured" ? (
           <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
             <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>{relayError ?? genericQuoteError}</span>
+            <span>Balance moves are temporarily unavailable. Try again later.</span>
           </div>
         ) : null}
       </div>

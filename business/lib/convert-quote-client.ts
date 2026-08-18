@@ -99,8 +99,13 @@ export function moveReviewFromQuote(quote: MoveQuoteState): BalanceMoveReviewSna
     source_currency: sourceCurrency,
     destination_amount: quote.destinationAmount,
     destination_currency: destCurrency,
-    exchange_rate: quote.rate,
-    processing_fee: quote.processingFee,
+    exchange_rate:
+      quote.rate > 0
+        ? quote.rate
+        : quote.sourceAmount > 0
+          ? quote.destinationAmount / quote.sourceAmount
+          : 0,
+    processing_fee: 0,
     total_debited: quote.totalDebited,
     debited_from_label: `${sourceCurrency} Balance`,
     credited_to_label: `${destCurrency} Balance`,
