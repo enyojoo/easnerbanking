@@ -79,28 +79,24 @@ const nextConfig = {
   },
   serverExternalPackages: ["@react-pdf/renderer"],
   async rewrites() {
-    const payHost = hostnameFromOrigin(
-      process.env.NEXT_PUBLIC_PAY_APP_URL,
-      "pay.easner.com",
-    )
-    const invoiceHost = hostnameFromOrigin(
-      process.env.NEXT_PUBLIC_INVOICE_APP_URL,
-      "invoice.easner.com",
-    )
+    const payHosts = [...new Set(["pay.easner.com", hostnameFromOrigin(process.env.NEXT_PUBLIC_PAY_APP_URL, "pay.easner.com")])]
+      .filter((host) => host === "pay.easner.com" || host.startsWith("pay."))
+    const invoiceHosts = [...new Set(["invoice.easner.com", hostnameFromOrigin(process.env.NEXT_PUBLIC_INVOICE_APP_URL, "invoice.easner.com")])]
+      .filter((host) => host === "invoice.easner.com" || host.startsWith("invoice."))
     const skip =
       "api|_next|auth|pay-customer|invoice|favicon.ico|robots.txt|manifest.webmanifest|checkout.js"
     return {
       beforeFiles: [
-        {
+        ...payHosts.map((host) => ({
           source: `/((?!${skip}).*)`,
-          has: [{ type: "host", value: payHost }],
+          has: [{ type: "host", value: host }],
           destination: "/pay-customer/$1",
-        },
-        {
+        })),
+        ...invoiceHosts.map((host) => ({
           source: `/((?!${skip}).*)`,
-          has: [{ type: "host", value: invoiceHost }],
+          has: [{ type: "host", value: host }],
           destination: "/invoice/$1",
-        },
+        })),
       ],
     }
   },

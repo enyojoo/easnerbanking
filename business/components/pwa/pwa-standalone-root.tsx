@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
+import { isPublicSurfacePath } from "@/lib/surface-paths"
 
 function setStandaloneDataset() {
   if (typeof window === "undefined") return
@@ -26,9 +27,9 @@ export function PwaStandaloneRoot() {
     // Public customer invoice views should not be controlled by a SW — avoids
     // console noise and unnecessary interception on unauthenticated pay pages.
     const path = window.location.pathname
-    const isPublicInvoice = path === "/invoice" || path.startsWith("/invoice/")
+    const isPublicCustomer = isPublicSurfacePath(path, window.location.hostname)
     if ("serviceWorker" in navigator) {
-      if (isPublicInvoice) {
+      if (isPublicCustomer) {
         void navigator.serviceWorker.getRegistrations().then((regs) => {
           for (const reg of regs) {
             void reg.unregister()

@@ -56,7 +56,27 @@ function normalizeHostname(value: string | null | undefined): string {
 export function isCustomerAppHostname(hostname: string | null | undefined): boolean {
   const host = normalizeHostname(hostname)
   if (!host) return false
-  return host === getInvoiceAppHostname() || host === getPayAppHostname()
+  if (host === getInvoiceAppHostname() || host === getPayAppHostname()) return true
+  if (host === "invoice.easner.com" || host === "pay.easner.com") return true
+  if (host.startsWith("invoice.") && host.endsWith(".easner.com")) return true
+  if (host.startsWith("pay.") && host.endsWith(".easner.com")) return true
+  return false
+}
+
+export function isPayAppHostname(hostname: string | null | undefined): boolean {
+  const host = normalizeHostname(hostname)
+  if (!host) return false
+  return host === getPayAppHostname() || host === "pay.easner.com" || (host.startsWith("pay.") && host.endsWith(".easner.com"))
+}
+
+export function isInvoiceAppHostname(hostname: string | null | undefined): boolean {
+  const host = normalizeHostname(hostname)
+  if (!host) return false
+  return (
+    host === getInvoiceAppHostname() ||
+    host === "invoice.easner.com" ||
+    (host.startsWith("invoice.") && host.endsWith(".easner.com"))
+  )
 }
 
 /**
