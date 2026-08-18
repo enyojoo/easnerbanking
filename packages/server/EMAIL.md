@@ -27,8 +27,10 @@ Welcome, KYB/KYC, team invite, security, and invoice emails are always subject t
 | `SENDGRID_FROM_NAME` | Recommended | Personal from display name |
 | `SENDGRID_FROM_EMAIL_BUSINESS` | Recommended | Business from address (falls back to `SENDGRID_FROM_EMAIL`) |
 | `SENDGRID_FROM_NAME_BUSINESS` | Recommended | Business from display name |
-| `SENDGRID_FROM_EMAIL_INVOICES` | Optional | Invoice to-customer from address (default **`invoices@easner.com`**, independent of business from) |
+| `SENDGRID_FROM_EMAIL_INVOICES` | Optional | Invoice to-customer from address (default **`invoices@easner.com`**). Not required in env. |
 | `SENDGRID_FROM_NAME_INVOICES` | Optional | Invoice from display name (defaults to `SENDGRID_FROM_NAME_BUSINESS`) |
+| `SENDGRID_FROM_EMAIL_RECEIPTS` | Optional | Checkout / Payment Link receipt from (default **`receipt@easner.com`**). Not required in env; same pattern as invoices. |
+| `EASNER_RECEIPT_TIMEZONE` | Optional | IANA zone for checkout/link receipt “When” (else Stripe Dashboard timezone, else UTC) |
 | `SENDGRID_REPLY_TO` | Recommended | Reply-to / support routing |
 | `LEDGER_TRANSACTION_EMAIL_ENABLED` | Optional | Default **on**. Set `false` to disable ledger transaction emails platform-wide |
 | `NEXT_PUBLIC_MOBILE_APP_URL` | Optional | Personal email / universal-link origin (default `https://app.easner.com`) |
@@ -160,6 +162,18 @@ Separate from the shared template registry (`business/lib/invoice-email-service.
 **Customer viewed invoice** (to merchant): styled template in `invoice-email-template.ts` — same Easner Business shell; CTA links to `/invoices/{id}` in the business app.
 
 **Payment receipt** (to customer on mark paid): styled template with merchant header block, payment confirmation, PDF attachment.
+
+### Collection receipts (Payment Links + website checkout)
+
+Separate from invoice mail (`business/lib/checkout/send-checkout-payer-receipt-email.ts`). Live charges only; Stripe test-mode events do not send.
+
+| Field | Value |
+|-------|--------|
+| **From** | **Easner Business** — **`receipt@easner.com`** (hardcoded default, same as invoices@; no env required) |
+| **Reply-To** | Same merchant support resolution as invoices |
+| **Subject** | `Receipt from {businessName}` |
+| **When** | Stripe `charge.created`, formatted in `EASNER_RECEIPT_TIMEZONE` or the platform Dashboard timezone |
+| **Trigger** | `checkout.session.completed` only (not also `payment_intent.succeeded`) |
 
 Platform mail to business users still uses **`SENDGRID_REPLY_TO`** (Easner support). Invoice Reply-To is per org, not env-based.
 

@@ -8,6 +8,15 @@ import {
 } from "@easner/server"
 import { formatTransactionWhen } from "@easner/shared"
 import { formatCurrency } from "@/lib/utils"
+import type { StripePaymentMethodDisplay } from "@/lib/stripe/parse-payment-method-display"
+import {
+  formatPaymentMethodText,
+  formatPaymentMethodTextBesideIcon,
+  hasPaymentBrandIcon,
+  paymentMethodIconKey,
+  paymentBrandPngEmailUrl,
+  shouldShowStripePaymentMethod,
+} from "@/lib/stripe/payment-method-display"
 
 export type CheckoutPayerReceiptEmailData = {
   customerName?: string | null
@@ -18,6 +27,9 @@ export type CheckoutPayerReceiptEmailData = {
   /** Payment link label, or “Online payment” for website checkout. */
   description: string
   paidAt: string
+  /** IANA zone for the When row (server mail is otherwise UTC). */
+  timeZone?: string | null
+  paymentMethod?: StripePaymentMethodDisplay | null
 }
 
 export function getCheckoutPayerReceiptEmailSubject(businessName: string): string {
@@ -64,15 +76,31 @@ function amountLine(data: CheckoutPayerReceiptEmailData): string {
   return `${amount} ${data.currency.toUpperCase()}`
 }
 
-function detailRows(data: CheckoutPayerReceiptEmailData) {
-  const rows = [
-    { label: "Amount", value: amountLine(data) },
-    { label: "Paid for", value: data.description.trim() || "Online payment" },
-  ]
-  const when = formatTransactionWhen(data.paidAt)
-  if (when) rows.push({ label: "When", value: when })
-  rows.push({ label: "Status", value: "Paid", isStatus: true, statusClass: "completed" })
-  return rows
+function formatPaidWhen(data: CheckoutPayerReceiptEmailData): string {
+  return formatTransactionWhen(data.paidAt, {
+    timeZone: data.timeZone?.trim() || "UTC",
+  })
+}
+
+function paymentMethodRow(data: CheckoutPayerReceiptEmailData): {
+  label: string
+  value: string
+  brandIconSrc?: string
+} | null {
+  const pm = data.paymentMethod
+  if (!shouldShowStripePaymentMethod(pm) || !pm) return null
+  const iconKey = paymentMethodIconKey(pm)
+  const brandIconSrc = hasPaymentBrandIcon(pm) ? paymentBrandPngEmailUrl(iconKey) : undefined
+  const plainText = formatPaymentMethodText(pm).trim()
+  if (!plainText) return null
+  const htmlText = brandIconSrc
+    ? formatPaymentMethodTextBesideIcon(pm).trim() || plainText
+    : plainText
+  return {
+    label: "Payment method",
+    value: htmlText,
+    ...(brandIconSrc ? { brandIconSrc } : {}),
+  }
 }
 
 export function generateCheckoutPayerReceiptEmailHtml(data: CheckoutPayerReceiptEmailData): string {
@@ -80,10 +108,20 @@ export function generateCheckoutPayerReceiptEmailHtml(data: CheckoutPayerReceipt
   const subject = getCheckoutPayerReceiptEmailSubject(businessName)
   const description = data.description.trim() || "Online payment"
 
+  const when = formatPaidWhen({ ...data, description, businessName })
+  const pmRow = paymentMethodRow({ ...data, description, businessName })
+  const rows = [
+    { label: "Amount", value: amountLine(data) },
+    { label: "Paid for", value: description },
+    ...(when ? [{ label: "When", value: when }] : []),
+    ...(pmRow ? [pmRow] : []),
+    { label: "Status", value: "Paid", isStatus: true, statusClass: "completed" },
+  ]
+
   const content = `
     ${customerGreetingParagraphHtml(data.customerName || "Customer")}
     <p class="confirmation-text">Thank you - we received your payment to ${businessName}.</p>
-    ${generateTransactionDetailsTable(detailRows({ ...data, description, businessName }))}
+    ${generateTransactionDetailsTable(rows)}
   `.trim()
 
   return generateBaseEmailTemplate(subject, "", content, undefined, {
@@ -99,7 +137,8 @@ export function generateCheckoutPayerReceiptEmailHtml(data: CheckoutPayerReceipt
 export function generateCheckoutPayerReceiptEmailText(data: CheckoutPayerReceiptEmailData): string {
   const businessName = data.businessName.trim() || "Business"
   const description = data.description.trim() || "Online payment"
-  const when = formatTransactionWhen(data.paidAt)
+  const when = formatPaidWhen(data)
+  const pmText = data.paymentMethod ? formatPaymentMethodText(data.paymentMethod).trim() : ""
   const lines = [
     formatCustomerGreetingPlain(data.customerName || "Customer"),
     "",
@@ -109,6 +148,7 @@ export function generateCheckoutPayerReceiptEmailText(data: CheckoutPayerReceipt
     `Paid for: ${description}`,
   ]
   if (when) lines.push(`When: ${when}`)
+  if (pmText) lines.push(`Payment method: ${pmText}`)
   lines.push("Status: Paid")
 
   return `${lines.join("\n")}

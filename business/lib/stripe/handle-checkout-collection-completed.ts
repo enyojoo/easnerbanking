@@ -4,6 +4,7 @@ import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { dispatchMerchantWebhook } from "@/lib/checkout/merchant-webhooks"
 import { deliverCheckoutPayerReceiptEmail } from "@/lib/checkout/deliver-checkout-payer-receipt-email"
+import type { StripePaymentMethodDisplay } from "@/lib/stripe/parse-payment-method-display"
 import { getStripe } from "./client"
 import { resolveFeeAndTransfer } from "./resolve-charge-settlement"
 
@@ -41,8 +42,23 @@ function asMetadata(raw: unknown): Record<string, unknown> {
   return {}
 }
 
+function hasReceiptClaim(metadata: Record<string, unknown>): boolean {
+  const sent = metadata.payer_receipt_sent_at
+  const claimed = metadata.payer_receipt_claimed_at
+  return (
+    (typeof sent === "string" && sent.trim().length > 0) ||
+    (typeof claimed === "string" && claimed.trim().length > 0)
+  )
+}
+
+/**
+ * Easner receipts send only on `checkout.session.completed`. The same
+ * settlement also arrives as `payment_intent.succeeded`; sending on both
+ * duplicated mail before `payer_receipt_sent_at` was written.
+ */
 async function sendPayerReceiptIfNeeded(
   admin: SupabaseClient,
+  event: Stripe.Event,
   input: {
     sessionRowId: string | null
     metadata: unknown
@@ -53,14 +69,30 @@ async function sendPayerReceiptIfNeeded(
     currency: string
     description: string
     paidAt: string
+    paymentMethod: StripePaymentMethodDisplay | null
   },
 ): Promise<void> {
+  if (event.type !== "checkout.session.completed") return
   const to = input.to?.trim() || ""
   if (!to) return
   const metadata = asMetadata(input.metadata)
-  if (typeof metadata.payer_receipt_sent_at === "string" && metadata.payer_receipt_sent_at.trim()) {
-    return
+  if (hasReceiptClaim(metadata)) return
+
+  if (input.sessionRowId) {
+    const claimedAt = new Date().toISOString()
+    const { error } = await admin
+      .from("online_checkout_sessions")
+      .update({
+        metadata: { ...metadata, payer_receipt_claimed_at: claimedAt },
+        updated_at: claimedAt,
+      })
+      .eq("id", input.sessionRowId)
+    if (error) {
+      console.error("Checkout payer receipt claim failed:", error)
+      return
+    }
   }
+
   try {
     const result = await deliverCheckoutPayerReceiptEmail(admin, {
       businessId: input.businessId,
@@ -70,6 +102,7 @@ async function sendPayerReceiptIfNeeded(
       currency: input.currency,
       description: input.description,
       paidAt: input.paidAt,
+      paymentMethod: input.paymentMethod,
     })
     if (!result.ok) {
       console.error("Checkout payer receipt failed:", result.error)
@@ -79,7 +112,11 @@ async function sendPayerReceiptIfNeeded(
     await admin
       .from("online_checkout_sessions")
       .update({
-        metadata: { ...metadata, payer_receipt_sent_at: input.paidAt },
+        metadata: {
+          ...metadata,
+          payer_receipt_claimed_at: metadata.payer_receipt_claimed_at ?? input.paidAt,
+          payer_receipt_sent_at: input.paidAt,
+        },
         updated_at: input.paidAt,
       })
       .eq("id", input.sessionRowId)
@@ -103,10 +140,21 @@ export async function handleCheckoutCollectionCompleted(
     return { handled: false }
   }
 
-  const { feeCents, chargeId, paymentMethodType, paymentMethod, transferId, connectedAccountId } =
-    await resolveFeeAndTransfer(getStripe(), input.paymentIntentId, {
-      sessionPaymentMethodTypes: input.sessionPaymentMethodTypes,
-    })
+  const {
+    feeCents,
+    chargeId,
+    chargedAt,
+    paymentMethodType,
+    paymentMethod,
+    transferId,
+    connectedAccountId,
+  } = await resolveFeeAndTransfer(getStripe(), input.paymentIntentId, {
+    sessionPaymentMethodTypes: input.sessionPaymentMethodTypes,
+  })
+
+  const paidAt =
+    chargedAt ||
+    (typeof event.created === "number" ? new Date(event.created * 1000).toISOString() : new Date().toISOString())
 
   const { data: existing } = await admin
     .from("checkout_stripe_settlements")
@@ -132,7 +180,7 @@ export async function handleCheckoutCollectionCompleted(
           .maybeSingle()
         retryLabel = typeof link?.label === "string" ? link.label : null
       }
-      await sendPayerReceiptIfNeeded(admin, {
+      await sendPayerReceiptIfNeeded(admin, event, {
         sessionRowId: priorSession?.id ? String(priorSession.id) : null,
         metadata: priorSession?.metadata,
         businessId: input.businessId,
@@ -141,7 +189,8 @@ export async function handleCheckoutCollectionCompleted(
         amountCents: input.amountTotal,
         currency: input.currency.toUpperCase(),
         description: receiptDescription(input.source, retryLabel),
-        paidAt: new Date().toISOString(),
+        paidAt,
+        paymentMethod,
       })
     }
     return { handled: true }
@@ -149,7 +198,6 @@ export async function handleCheckoutCollectionCompleted(
 
   const grossCents = input.amountTotal
   const netCents = Math.max(0, grossCents - feeCents)
-  const paidAt = new Date().toISOString()
   const currency = input.currency.toUpperCase()
 
   const sessionMatch = input.sessionId
@@ -306,7 +354,7 @@ export async function handleCheckoutCollectionCompleted(
 
   await dispatchMerchantWebhook(admin, webhookPayload)
 
-  await sendPayerReceiptIfNeeded(admin, {
+  await sendPayerReceiptIfNeeded(admin, event, {
     sessionRowId: sessionRow?.id ? String(sessionRow.id) : null,
     metadata: sessionRow && "metadata" in sessionRow ? sessionRow.metadata : null,
     businessId: input.businessId,
@@ -318,6 +366,7 @@ export async function handleCheckoutCollectionCompleted(
     currency,
     description: receiptDescription(input.source, linkLabel),
     paidAt,
+    paymentMethod,
   })
 
   return { handled: true }

@@ -8,6 +8,8 @@ import type { StripePaymentMethodDisplay } from "@/lib/stripe/parse-payment-meth
 export type ResolvedChargeSettlement = {
   feeCents: number
   chargeId: string | null
+  /** Charge.created as ISO — the paid-at Stripe receipts use. */
+  chargedAt: string | null
   paymentMethodType: string | null
   paymentMethod: StripePaymentMethodDisplay | null
   transferId: string | null
@@ -93,9 +95,17 @@ export async function resolveFeeAndTransfer(
     const connectedFromMeta =
       String(pi.metadata?.easner_stripe_connected_account_id ?? "").trim() || null
 
+    const chargedAt =
+      charge && typeof charge.created === "number"
+        ? new Date(charge.created * 1000).toISOString()
+        : typeof pi.created === "number"
+          ? new Date(pi.created * 1000).toISOString()
+          : null
+
     return {
       feeCents,
       chargeId,
+      chargedAt,
       paymentMethodType,
       paymentMethod,
       transferId,
@@ -106,6 +116,7 @@ export async function resolveFeeAndTransfer(
     return {
       feeCents: 0,
       chargeId: null,
+      chargedAt: null,
       paymentMethodType: null,
       paymentMethod: null,
       transferId: null,

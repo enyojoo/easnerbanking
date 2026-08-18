@@ -26,6 +26,15 @@ Connect onboarding, destination charges, zero platform fee, and daily payouts ar
    merchant sites needs the domain registered for wallets).
 5. Prefer **disabling** merchant self-serve external account collection in embedded
    onboarding (Easner links Grid VA via API). Already disabled in Account Session features.
+6. **Turn off Stripe customer receipts** on the **platform** account (destination charges
+   live here, not on the connected account):
+   [Settings → Business → Customer emails](https://dashboard.stripe.com/settings/emails) →
+   under Payments, disable **Successful payments**.
+   Checkout still collects a customer email so `confirm()` can run; Stripe will mail that
+   address whenever this toggle is on, even if we never set `receipt_email` on the session.
+   Easner sends its own receipt from **`receipt@easner.com`**. Invoice mail stays
+   `invoices@easner.com`. Connected-account Customer emails do **not** apply to destination
+   charges.
 
 ## Environment
 
@@ -38,6 +47,8 @@ NEXT_PUBLIC_INVOICE_APP_URL=
 NEXT_PUBLIC_PAY_APP_URL=
 # Encrypts merchant webhook signing secrets (falls back to KYB_PII_ENCRYPTION_KEY):
 CHECKOUT_SECRET_ENCRYPTION_KEY=
+# Optional: IANA zone for Easner checkout/link receipt “When” (else Dashboard timezone):
+# EASNER_RECEIPT_TIMEZONE=Asia/Jerusalem
 # Optional kill-switches only:
 # STRIPE_INVOICE_PAYMENTS_ENABLED=false
 # ONLINE_CHECKOUT_ENABLED=false

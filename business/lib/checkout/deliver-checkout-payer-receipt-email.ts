@@ -3,6 +3,8 @@ import { sendCheckoutPayerReceiptEmail } from "@/lib/checkout/send-checkout-paye
 import { resolveInvoiceFromEmail } from "@/lib/invoices/invoice-from-email"
 import { fetchInvoiceIssuerForBusiness, resolveInvoiceReplyEmail } from "@/lib/invoices/issuer"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
+import { resolveReceiptDisplayTimeZone } from "@/lib/checkout/resolve-receipt-display-timezone"
+import type { StripePaymentMethodDisplay } from "@/lib/stripe/parse-payment-method-display"
 
 export type DeliverCheckoutPayerReceiptResult =
   | { ok: true; to: string }
@@ -18,6 +20,7 @@ export async function deliverCheckoutPayerReceiptEmail(
     currency: string
     description: string
     paidAt: string
+    paymentMethod?: StripePaymentMethodDisplay | null
   },
 ): Promise<DeliverCheckoutPayerReceiptResult> {
   const to = input.to.trim()
@@ -33,6 +36,7 @@ export async function deliverCheckoutPayerReceiptEmail(
 
   const issuer = await fetchInvoiceIssuerForBusiness(admin, input.businessId)
   const businessName = issuer.name?.trim() || "Business"
+  const timeZone = await resolveReceiptDisplayTimeZone()
 
   const result = await sendCheckoutPayerReceiptEmail(to, {
     customerName: input.customerName,
@@ -42,6 +46,8 @@ export async function deliverCheckoutPayerReceiptEmail(
     currency: input.currency,
     description: input.description,
     paidAt: input.paidAt,
+    timeZone,
+    paymentMethod: input.paymentMethod,
   })
 
   if (!result.success) {

@@ -57,16 +57,25 @@ export async function PUT(request: Request) {
   }
 
   const admin = createSupabaseAdmin()
-  const { error } = await admin.from("business_checkout_fee_overrides").upsert(
-    {
-      business_id: businessId,
-      fee_mode: feeMode,
-      reason: String(body?.reason ?? "").trim() || null,
-      updated_by: auth.ctx.userId,
-      updated_at: new Date().toISOString(),
-    },
+  const row = {
+    business_id: businessId,
+    fee_mode: feeMode,
+    reason: String(body?.reason ?? "").trim() || null,
+    updated_at: new Date().toISOString(),
+  }
+  // Office staff are admin_users, not public.users. After
+  // 20260819020000 the FK matches; retry without updated_by if the old
+  // constraint is still applied.
+  let { error } = await admin.from("business_checkout_fee_overrides").upsert(
+    { ...row, updated_by: auth.ctx.userId },
     { onConflict: "business_id" },
   )
+  if (error?.message?.includes("business_checkout_fee_overrides_updated_by_fkey")) {
+    const retry = await admin
+      .from("business_checkout_fee_overrides")
+      .upsert({ ...row, updated_by: null }, { onConflict: "business_id" })
+    error = retry.error
+  }
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 })

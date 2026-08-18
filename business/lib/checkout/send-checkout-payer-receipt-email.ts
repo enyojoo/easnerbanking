@@ -1,5 +1,5 @@
 import sgMail from "@sendgrid/mail"
-import { resolveInvoiceFromEmail } from "@/lib/invoices/invoice-from-email"
+import { resolveReceiptFromEmail } from "@/lib/invoices/invoice-from-email"
 import {
   generateCheckoutPayerReceiptEmailHtml,
   generateCheckoutPayerReceiptEmailText,
@@ -31,7 +31,7 @@ export async function sendCheckoutPayerReceiptEmail(
 
   try {
     ensureSendGridInitialized()
-    const { email: fromEmail, name: fromName } = resolveInvoiceFromEmail()
+    const { email: fromEmail, name: fromName } = resolveReceiptFromEmail()
     const businessName = data.businessName.trim() || "Business"
     const replyTo = data.businessReplyEmail.trim() || fromEmail
 

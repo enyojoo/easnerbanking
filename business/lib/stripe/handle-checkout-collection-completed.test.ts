@@ -45,22 +45,41 @@ const LINK_ID = "44444444-4444-4444-8444-444444444444"
 
 type Recorded = { table: string; op: string; payload: Record<string, unknown> }
 
-function mockAdmin() {
+function mockAdmin(opts?: { existingSettlement?: boolean; sessionMetadata?: Record<string, unknown> }) {
   const writes: Recorded[] = []
 
   const admin = {
     from: (table: string) => ({
       select: () => ({
         eq: () => ({
-          maybeSingle: async () => ({
-            data: table === "payment_links" ? { label: "Tuition", payment_count: 2 } : null,
-          }),
+          maybeSingle: async () => {
+            if (table === "checkout_stripe_settlements" && opts?.existingSettlement) {
+              return { data: { id: SETTLEMENT_ID, phase: "payment_received" } }
+            }
+            if (table === "online_checkout_sessions") {
+              return {
+                data: {
+                  id: "sess_1",
+                  metadata: opts?.sessionMetadata ?? {},
+                  customer_email: "buyer@example.com",
+                  payment_link_id: LINK_ID,
+                },
+              }
+            }
+            if (table === "payment_links") {
+              return { data: { label: "Tuition", payment_count: 2 } }
+            }
+            return { data: null }
+          },
         }),
       }),
       update: (payload: Record<string, unknown>) => {
         writes.push({ table, op: "update", payload })
         const result = {
-          data: table === "online_checkout_sessions" ? [{ id: "sess_1", payment_link_id: LINK_ID }] : null,
+          data:
+            table === "online_checkout_sessions"
+              ? [{ id: "sess_1", payment_link_id: LINK_ID, metadata: opts?.sessionMetadata ?? {} }]
+              : null,
           error: null,
         }
         return {
@@ -115,6 +134,7 @@ describe("payment link settlement", () => {
       transfer_data: { destination: "acct_123" },
       latest_charge: {
         id: "ch_test_1",
+        created: Math.floor(Date.parse("2026-08-18T23:00:37.000Z") / 1000),
         transfer: "tr_test_1",
         balance_transaction: { fee: 320 },
         payment_method_details: { type: "card", card: { brand: "visa", last4: "4242" } },
@@ -169,8 +189,41 @@ describe("payment link settlement", () => {
         to: "buyer@example.com",
         description: "Tuition",
         amountCents: 10_000,
+        paidAt: "2026-08-18T23:00:37.000Z",
+        paymentMethod: { type: "card", brand: "visa", last4: "4242", wallet: null },
       }),
     )
+  })
+
+  it("does not send a second receipt on payment_intent.succeeded", async () => {
+    const { admin } = mockAdmin({ existingSettlement: true })
+    const event = paymentLinkSessionEvent()
+    event.id = "evt_pi_1"
+    event.type = "payment_intent.succeeded"
+    event.data = {
+      object: {
+        id: "pi_test_1",
+        amount: 10_000,
+        amount_received: 10_000,
+        currency: "usd",
+        metadata: (event.data.object as { metadata: Record<string, string> }).metadata,
+      },
+    } as Stripe.Event["data"]
+
+    const result = await handleStripeCheckoutCompleted(admin, event)
+    expect(result.handled).toBe(true)
+    expect(upsertLedgerTransaction).not.toHaveBeenCalled()
+    expect(deliverCheckoutPayerReceiptEmail).not.toHaveBeenCalled()
+  })
+
+  it("skips a claimed receipt when checkout.session.completed is retried", async () => {
+    const { admin } = mockAdmin({
+      existingSettlement: true,
+      sessionMetadata: { payer_receipt_claimed_at: "2026-08-18T23:00:37.000Z" },
+    })
+    const result = await handleStripeCheckoutCompleted(admin, paymentLinkSessionEvent())
+    expect(result.handled).toBe(true)
+    expect(deliverCheckoutPayerReceiptEmail).not.toHaveBeenCalled()
   })
 
   it("counts the payment against the link", async () => {

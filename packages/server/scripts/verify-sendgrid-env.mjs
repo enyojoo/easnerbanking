@@ -44,12 +44,18 @@ const invoiceName =
   process.env.SENDGRID_FROM_NAME_INVOICES ||
   process.env.SENDGRID_FROM_NAME_BUSINESS ||
   "Easner Business"
+const receiptFrom = process.env.SENDGRID_FROM_EMAIL_RECEIPTS || "receipt@easner.com"
+const receiptName =
+  process.env.SENDGRID_FROM_NAME_INVOICES ||
+  process.env.SENDGRID_FROM_NAME_BUSINESS ||
+  "Easner Business"
 const replyTo = process.env.SENDGRID_REPLY_TO || "support@easner.com"
 
 console.log("\nResolved from profiles:")
 console.log(`  personal: ${personalName} <${personalFrom}>`)
 console.log(`  business: ${businessName} <${businessFrom}>`)
 console.log(`  invoices: ${invoiceName} <${invoiceFrom}>`)
+console.log(`  receipts: ${receiptName} <${receiptFrom}>`)
 console.log(`  reply-to: ${replyTo}`)
 
 console.log("\nLedger transaction emails:")
