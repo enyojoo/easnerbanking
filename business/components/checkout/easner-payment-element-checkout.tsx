@@ -54,15 +54,8 @@ function isValidEmail(value: string): boolean {
 function payerEmailFromExpressEvent(
   event: StripeExpressCheckoutElementConfirmEvent,
 ): string {
-  const details = event.billingDetails as { email?: string | null; name?: string | null } | undefined
+  const details = event.billingDetails as { email?: string | null } | undefined
   return String(details?.email ?? "").trim()
-}
-
-function payerNameFromExpressEvent(
-  event: StripeExpressCheckoutElementConfirmEvent,
-): string {
-  const details = event.billingDetails as { name?: string | null } | undefined
-  return String(details?.name ?? "").trim()
 }
 
 function hasReadyExpressMethods(methods: AvailablePaymentMethods | undefined): boolean {
@@ -142,20 +135,15 @@ function CheckoutSurface({
   const [success, setSuccess] = useState(false)
   const [hasWallets, setHasWallets] = useState(false)
   const [email, setEmail] = useState(() => String(knownEmail ?? "").trim())
-  const [cardholderName, setCardholderName] = useState(() => String(knownName ?? "").trim())
-  const [selectedMethod, setSelectedMethod] = useState("card")
 
   const ready = checkoutState.type === "success"
   const resolvedEmail = email.trim()
   const emailReady = !collectEmail || isValidEmail(resolvedEmail)
-  const payingWithCard = selectedMethod === "card"
-  const resolvedCardName = cardholderName.trim()
-  const cardNameReady = !payingWithCard || resolvedCardName.length > 0
+  const prefillName = String(knownName ?? "").trim()
 
-  const confirmPayment = useCallback(async (
-    overrideEmail?: string,
-    options?: { fromWallet?: boolean; walletName?: string },
-  ): Promise<{ ok: true } | { ok: false; message: string }> => {
+  const confirmPayment = useCallback(async (overrideEmail?: string): Promise<
+    { ok: true } | { ok: false; message: string }
+  > => {
     if (checkoutState.type !== "success") {
       return { ok: false, message: "Payment form is not ready" }
     }
@@ -165,33 +153,19 @@ function CheckoutSurface({
       setError(message)
       return { ok: false, message }
     }
-    const payerName =
-      (options?.fromWallet ? options.walletName : "") ||
-      resolvedCardName ||
-      String(knownName ?? "").trim()
-    if (payingWithCard && !options?.fromWallet && !payerName) {
-      const message = COLLECTIONS_COPY.payerCardNameRequired
-      setError(message)
-      return { ok: false, message }
-    }
     setSubmitting(true)
     setError(null)
     try {
       const checkout = checkoutState.checkout as typeof checkoutState.checkout & {
         updateEmail?: (value: string) => Promise<unknown>
-        updateIndividualName?: (value: string) => Promise<unknown>
       }
       if (typeof checkout.updateEmail === "function") {
         await checkout.updateEmail(payerEmail)
       }
-      if (payerName && typeof checkout.updateIndividualName === "function") {
-        await checkout.updateIndividualName(payerName)
-      }
       const result = await checkout.confirm({
         redirect: "if_required",
         email: payerEmail,
-        ...(payerName ? { name: payerName } : {}),
-      } as Parameters<typeof checkout.confirm>[0])
+      })
       if (result.type === "error") {
         const message = result.error.message || "Payment failed"
         setError(message)
@@ -207,15 +181,12 @@ function CheckoutSurface({
     } finally {
       setSubmitting(false)
     }
-  }, [checkoutState, knownEmail, knownName, onPaid, payingWithCard, resolvedCardName, resolvedEmail])
+  }, [checkoutState, knownEmail, onPaid, resolvedEmail])
 
   const handleExpressConfirm = useCallback(
     async (event: StripeExpressCheckoutElementConfirmEvent) => {
       const walletEmail = payerEmailFromExpressEvent(event)
-      const result = await confirmPayment(resolvedEmail || walletEmail, {
-        fromWallet: true,
-        walletName: payerNameFromExpressEvent(event),
-      })
+      const result = await confirmPayment(resolvedEmail || walletEmail)
       if (!result.ok) {
         event.paymentFailed({ reason: "fail", message: result.message })
       }
@@ -297,36 +268,20 @@ function CheckoutSurface({
               radios: "always",
               spacedAccordionItems: true,
             },
+            ...(prefillName
+              ? { defaultValues: { billingDetails: { name: prefillName } } }
+              : {}),
             fields: {
               billingDetails: {
+                name: "always",
                 ...(collectEmail || knownEmail ? { email: "never" as const } : {}),
+              },
+              card: {
+                billingDetails: { name: "always" },
               },
             },
           }}
-          onChange={(event) => {
-            const type = String(event.value?.type ?? "").trim()
-            if (type) setSelectedMethod(type)
-          }}
         />
-
-        {payingWithCard ? (
-          <div className="space-y-2">
-            <Label htmlFor="easner-cardholder-name">{COLLECTIONS_COPY.payerCardNameLabel}</Label>
-            <Input
-              id="easner-cardholder-name"
-              type="text"
-              autoComplete="cc-name"
-              name="ccname"
-              placeholder={COLLECTIONS_COPY.payerCardNamePlaceholder}
-              value={cardholderName}
-              onChange={(event) => {
-                setCardholderName(event.target.value)
-                if (error === COLLECTIONS_COPY.payerCardNameRequired) setError(null)
-              }}
-              aria-invalid={Boolean(error) && !cardNameReady}
-            />
-          </div>
-        ) : null}
 
         {ready ? (
           <>
@@ -343,7 +298,7 @@ function CheckoutSurface({
             <Button
               type="button"
               className="w-full h-11 text-base font-medium"
-              disabled={submitting || (collectEmail && !emailReady) || (payingWithCard && !cardNameReady)}
+              disabled={submitting || (collectEmail && !emailReady)}
               onClick={() => void confirmPayment()}
             >
               {submitting ? (
