@@ -62,6 +62,7 @@ import { issuerFromBusinessProfile } from "@/lib/invoices/issuer"
 import { assessInvoiceBusinessReadinessFromProfile } from "@/lib/invoices/invoice-business-readiness"
 import { useBusinessOperationalAddressReady } from "@/hooks/use-business-operational-address-ready"
 import { InvoiceBusinessSetupBanner } from "@/components/invoice-business-setup-banner"
+import { CollectionsPageHeader } from "@/components/collections/collections-page-header"
 import { invoiceActionBtnClass } from "@/lib/invoices/invoice-action-button-classes"
 import type { Account, StablecoinAccount } from "@/lib/finance-types"
 import {
@@ -429,13 +430,11 @@ export default function InvoicesPage() {
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading invoices…</p>
       ) : null}
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground">{PAGE_COPY.invoices.title}</h1>
-            <p className="text-sm text-muted-foreground mt-1">{PAGE_COPY.invoices.intro}</p>
-          </div>
-          <div className="flex items-center gap-2">
+      <CollectionsPageHeader
+        title={PAGE_COPY.invoices.title}
+        intro={PAGE_COPY.invoices.intro}
+        actions={
+          <>
             <Button
               variant="outline"
               onClick={() => {
@@ -462,24 +461,26 @@ export default function InvoicesPage() {
                 URL.revokeObjectURL(url)
               }}
             >
-              <Download className="h-4 w-4 mr-2" />
+              <Download className="h-4 w-4" />
               Export CSV
             </Button>
             {invoiceReadiness.ready ? (
-              <Link href={withReturnTo("/invoices/create", listHere)}>
-                <Button className={invoiceActionBtnClass.email}>
-                  <Plus className="h-4 w-4 mr-2" />
+              <Button asChild>
+                <Link href={withReturnTo("/invoices/create", listHere)}>
+                  <Plus className="h-4 w-4" />
                   {INVOICE_LIST_COPY.createCta}
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             ) : (
-              <Button disabled title={invoiceReadiness.message} className={invoiceActionBtnClass.email}>
-                <Plus className="h-4 w-4 mr-2" />
+              <Button disabled title={invoiceReadiness.message}>
+                <Plus className="h-4 w-4" />
                 {INVOICE_LIST_COPY.createCta}
               </Button>
             )}
-          </div>
-        </div>
+          </>
+        }
+      />
+      <div className="flex flex-col gap-4">
         <div className="space-y-2">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Card>
@@ -557,12 +558,12 @@ export default function InvoicesPage() {
                   {emptyCopyForTab(activeTab, Boolean(searchTerm))}
                 </p>
                 {showEmptyCreateCta ? (
-                  <Link href={withReturnTo("/invoices/create", listHere)}>
-                    <Button className={invoiceActionBtnClass.email}>
-                      <Plus className="h-4 w-4 mr-2" />
+                  <Button asChild>
+                    <Link href={withReturnTo("/invoices/create", listHere)}>
+                      <Plus className="h-4 w-4" />
                       {INVOICE_LIST_COPY.createCta}
-                    </Button>
-                  </Link>
+                    </Link>
+                  </Button>
                 ) : null}
               </div>
             </div>
