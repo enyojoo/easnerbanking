@@ -9,7 +9,6 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
 import { CreatePaymentLinkDialog } from "@/components/links/create-payment-link-dialog"
 import { PaymentLinkCard } from "@/components/links/payment-link-card"
-import { PaymentLinkDetailSheet } from "@/components/links/payment-link-detail-sheet"
 import { PaymentLinkShareSheet } from "@/components/links/payment-link-share-sheet"
 import { CollectionsPageHeader } from "@/components/collections/collections-page-header"
 import { CollectionsReadinessBanner } from "@/components/collections/collections-readiness-banner"
@@ -35,7 +34,6 @@ export function PaymentLinksPage({ initialCreateRail }: { initialCreateRail?: Pa
   const { links, easetag, loading, refetch } = usePaymentLinks({ includeArchived: showArchived })
   const [createOpen, setCreateOpen] = useState(Boolean(initialCreateRail))
   const [shareLink, setShareLink] = useState<PaymentLinkListRow | null>(null)
-  const [detailLink, setDetailLink] = useState<PaymentLinkListRow | null>(null)
 
   const copyUrl = useCallback(async (url: string) => {
     try {
@@ -168,7 +166,6 @@ export function PaymentLinksPage({ initialCreateRail }: { initialCreateRail?: Pa
                 <PaymentLinkCard
                   key={row.id}
                   row={row}
-                  onOpen={() => setDetailLink(row)}
                   onShare={() => setShareLink(row)}
                   onCopy={() => void copyUrl(row.url)}
                   onArchive={() => void archive(row.id)}
@@ -197,16 +194,6 @@ export function PaymentLinksPage({ initialCreateRail }: { initialCreateRail?: Pa
           if (!open) setShareLink(null)
         }}
         onArchived={() => void refetch()}
-      />
-
-      <PaymentLinkDetailSheet
-        link={detailLink}
-        onOpenChange={(open) => {
-          if (!open) setDetailLink(null)
-        }}
-        onShare={() => {
-          if (detailLink) setShareLink(detailLink)
-        }}
       />
     </div>
   )

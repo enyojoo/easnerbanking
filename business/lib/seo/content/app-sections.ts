@@ -19,7 +19,7 @@ export const appSectionsSeo = {
     },
     hero: {
       h1: "Accounts",
-      subhead: "Multi-currency balances in one place.",
+      subhead: "Hold balances and add money in USD, EUR, or stablecoins.",
       altText: "Easner Business accounts",
     },
   },

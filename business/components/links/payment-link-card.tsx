@@ -13,13 +13,11 @@ export function PaymentLinkCard({
   onShare,
   onCopy,
   onArchive,
-  onOpen,
 }: {
   row: PaymentLinkListRow
   onShare: () => void
   onCopy: () => void
   onArchive: () => void
-  onOpen: () => void
 }) {
   const collected =
     row.totalCollectedCents != null
@@ -28,7 +26,7 @@ export function PaymentLinkCard({
 
   return (
     <article className="flex flex-col gap-3 rounded-lg border p-4">
-      <button type="button" className="min-w-0 text-left" onClick={onOpen}>
+      <div className="min-w-0">
         <div className="flex items-start justify-between gap-2">
           <p className="truncate text-sm font-medium text-foreground">{row.label}</p>
           {row.archivedAt ? <Badge variant="secondary">{COLLECTIONS_COPY.chipClosed}</Badge> : null}
@@ -42,7 +40,7 @@ export function PaymentLinkCard({
           {row.paymentCount} payments
           {collected ? ` · ${collected}` : ""}
         </p>
-      </button>
+      </div>
       <div className="flex flex-wrap gap-1">
         <Button type="button" variant="outline" size="sm" className="h-8 gap-1" onClick={onShare}>
           <Share2 className="h-3.5 w-3.5" aria-hidden />

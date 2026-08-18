@@ -35,7 +35,7 @@ export default function CheckoutPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="sticky top-0 z-20 flex shrink-0 flex-col gap-4 border-b bg-background pb-4">
+      <div className="flex flex-col gap-4">
         <CollectionsPageHeader
           title={PAGE_COPY.checkout.title}
           intro={PAGE_COPY.checkout.intro}

@@ -17,7 +17,8 @@ import { MoveBetweenAccountsDialog } from "@/components/accounts/move-between-ac
 import { StatementDownloadDialog } from "@/components/statement-download-dialog"
 import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
 import { MoreVertical, FileText, Ban, Trash2 } from "lucide-react"
-import { VERIFICATION_SECTION_COPY } from "@/lib/copy/business-ui-copy"
+import { VERIFICATION_SECTION_COPY, PAGE_COPY } from "@/lib/copy/business-ui-copy"
+import { PageIntro } from "@/components/copy/page-intro"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import { useIncomingBalances } from "@/hooks/queries/use-incoming-balance"
 import { OpenCurrencyAccountDialog } from "@/components/accounts/open-currency-account-dialog"
@@ -46,13 +47,8 @@ export default function AccountsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">Accounts</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Multi-currency accounts powered by stablecoins
-          </p>
-        </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <PageIntro title={PAGE_COPY.accounts.title} description={PAGE_COPY.accounts.intro} variant="page" />
         {profileLoading ? (
           <Skeleton className="h-9 w-44 shrink-0 rounded-md" />
         ) : (
