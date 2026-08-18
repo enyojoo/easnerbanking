@@ -1,3 +1,5 @@
+import { balanceConvertListProductLabel } from "./balance-move-types"
+
 export type NotificationOutcome = "success" | "failed" | "reversed"
 
 export type TransactionNotificationHeadlines = {
