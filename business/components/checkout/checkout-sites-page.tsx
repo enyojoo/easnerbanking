@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Globe, Pencil, Plus, Trash2 } from "lucide-react"
@@ -29,14 +29,12 @@ export function CheckoutSitesPage() {
   const [removeId, setRemoveId] = useState<string | null>(null)
   const [removing, setRemoving] = useState(false)
   const sites = data?.sites ?? []
-  const chips = data
-    ? [
-        data.settings.liveModeEnabled ? COLLECTIONS_COPY.statusLive : COLLECTIONS_COPY.statusTest,
-        data.settings.webhookUrl && data.settings.webhookSecretLast4
-          ? COLLECTIONS_COPY.statusWebhookOn
-          : COLLECTIONS_COPY.statusWebhookOff,
-      ]
-    : undefined
+  const [tab, setTab] = useState<"all" | "incomplete">("all")
+  const incompleteCount = sites.filter((site) => !site.successUrl).length
+  const visibleSites = useMemo(
+    () => (tab === "incomplete" ? sites.filter((site) => !site.successUrl) : sites),
+    [sites, tab],
+  )
 
   const createButton = (
     <Button asChild>
@@ -71,7 +69,6 @@ export function CheckoutSitesPage() {
         <CollectionsPageHeader
           title={PAGE_COPY.checkout.title}
           intro={PAGE_COPY.checkout.intro}
-          chips={chips}
           actions={
             <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
               <p className="text-sm text-muted-foreground lg:text-right">
@@ -92,6 +89,47 @@ export function CheckoutSitesPage() {
         </p>
       ) : null}
 
+      {sites.length > 0 ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex space-x-1">
+            {(
+              [
+                { id: "all" as const, label: COLLECTIONS_COPY.tabAll, count: sites.length },
+                { id: "incomplete" as const, label: COLLECTIONS_COPY.tabIncomplete, count: incompleteCount },
+              ]
+            ).map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setTab(item.id)}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  tab === item.id
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {item.label}
+                {item.count > 0 ? (
+                  <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">{item.count}</span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+          {data ? (
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <span className="rounded-full border bg-muted/50 px-2.5 py-1">
+                {data.settings.liveModeEnabled ? COLLECTIONS_COPY.statusLive : COLLECTIONS_COPY.statusTest}
+              </span>
+              <span className="rounded-full border bg-muted/50 px-2.5 py-1">
+                {data.settings.webhookUrl && data.settings.webhookSecretLast4
+                  ? COLLECTIONS_COPY.statusWebhookOn
+                  : COLLECTIONS_COPY.statusWebhookOff}
+              </span>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <Card>
         <CardContent className="p-0">
           {loading ? (
@@ -107,6 +145,10 @@ export function CheckoutSitesPage() {
                 {createButton}
               </div>
             </div>
+          ) : visibleSites.length === 0 ? (
+            <p className="px-4 py-12 text-center text-sm text-muted-foreground">
+              {COLLECTIONS_COPY.emptyIncomplete}
+            </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] table-fixed">
@@ -131,7 +173,7 @@ export function CheckoutSitesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sites.map((site) => (
+                  {visibleSites.map((site) => (
                     <tr
                       key={site.id}
                       className="cursor-pointer border-b last:border-0 hover:bg-muted/40"

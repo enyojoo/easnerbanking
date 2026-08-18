@@ -230,13 +230,57 @@ function StepLearnMore({ children }: { children: ReactNode }) {
   )
 }
 
+function FieldEditControls({
+  editing,
+  saving,
+  onEdit,
+  onCancel,
+  onSave,
+  saveDisabled,
+}: {
+  editing: boolean
+  saving: boolean
+  onEdit: () => void
+  onCancel: () => void
+  onSave: () => void
+  saveDisabled?: boolean
+}) {
+  if (editing) {
+    return (
+      <div className="flex items-center gap-2">
+        <Button type="button" variant="outline" size="sm" disabled={saving} onClick={onCancel}>
+          <X className="mr-1 h-4 w-4" aria-hidden />
+          Cancel
+        </Button>
+        <Button type="button" size="sm" disabled={saving || saveDisabled} onClick={onSave}>
+          {saving ? (
+            <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden />
+          ) : (
+            <Check className="mr-1 h-4 w-4" aria-hidden />
+          )}
+          Save
+        </Button>
+      </div>
+    )
+  }
+  return (
+    <Button type="button" variant="outline" size="sm" onClick={onEdit}>
+      <Edit className="mr-1 h-4 w-4" aria-hidden />
+      Edit
+    </Button>
+  )
+}
+
 function StepWebsite({ site, onSaved, onSiteCreated }: SiteStepProps) {
-  const [origin, setOrigin] = useState(site?.origin ?? "")
+  const saved = site?.origin ?? ""
+  const [editing, setEditing] = useState(!saved)
+  const [origin, setOrigin] = useState(saved)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    setOrigin(site?.origin ?? "")
-  }, [site?.origin])
+    setOrigin(saved)
+    if (saved) setEditing(false)
+  }, [saved])
 
   const save = async () => {
     setSaving(true)
@@ -248,6 +292,7 @@ function StepWebsite({ site, onSaved, onSiteCreated }: SiteStepProps) {
           return
         }
         toast.success("Saved.")
+        setEditing(false)
         onSaved()
         return
       }
@@ -257,6 +302,7 @@ function StepWebsite({ site, onSaved, onSiteCreated }: SiteStepProps) {
         return
       }
       toast.success("Website added.")
+      setEditing(false)
       onSiteCreated(result.siteId)
     } finally {
       setSaving(false)
@@ -266,49 +312,75 @@ function StepWebsite({ site, onSaved, onSiteCreated }: SiteStepProps) {
   return (
     <>
       <StepHeading title={STEP_COPY.website.title} blurb={STEP_COPY.website.blurb} />
-      <div className="space-y-2">
-        <Label htmlFor="checkout-origin">Website</Label>
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Label htmlFor="checkout-origin" className="mb-0">
+            Website
+          </Label>
+          <FieldEditControls
+            editing={editing}
+            saving={saving}
+            saveDisabled={!origin.trim()}
+            onEdit={() => setEditing(true)}
+            onCancel={() => {
+              setOrigin(saved)
+              setEditing(Boolean(!saved))
+            }}
+            onSave={() => void save()}
+          />
+        </div>
         <Input
           id="checkout-origin"
           value={origin}
           onChange={(e) => setOrigin(e.target.value)}
           placeholder="https://shop.yoursite.com"
           type="url"
+          disabled={!editing}
         />
       </div>
-      <Button type="button" disabled={saving || !origin.trim()} onClick={() => void save()}>
-        {saving ? "Saving…" : site ? "Save website" : "Add website"}
-      </Button>
     </>
   )
 }
 
 function StepUrls({ site, onSaved }: SiteStepProps) {
-  const [successUrl, setSuccessUrl] = useState(site?.successUrl ?? "")
-  const [cancelUrl, setCancelUrl] = useState(site?.cancelUrl ?? "")
-  const [saving, setSaving] = useState(false)
+  const savedSuccess = site?.successUrl ?? ""
+  const savedCancel = site?.cancelUrl ?? ""
+  const [editingSuccess, setEditingSuccess] = useState(!savedSuccess)
+  const [editingCancel, setEditingCancel] = useState(!savedCancel)
+  const [successUrl, setSuccessUrl] = useState(savedSuccess)
+  const [cancelUrl, setCancelUrl] = useState(savedCancel)
+  const [savingSuccess, setSavingSuccess] = useState(false)
+  const [savingCancel, setSavingCancel] = useState(false)
 
   useEffect(() => {
     setSuccessUrl(site?.successUrl ?? "")
-    setCancelUrl(site?.cancelUrl ?? "")
-  }, [site?.successUrl, site?.cancelUrl])
+    setEditingSuccess(!site?.successUrl)
+  }, [site?.id])
 
-  const save = async () => {
+  useEffect(() => {
+    setCancelUrl(site?.cancelUrl ?? "")
+    setEditingCancel(!site?.cancelUrl)
+  }, [site?.id])
+
+  const saveField = async (field: "success" | "cancel") => {
     if (!site) {
       toast.error("Save the website first.")
       return
     }
+    const setSaving = field === "success" ? setSavingSuccess : setSavingCancel
     setSaving(true)
     try {
       const result = await updateCheckoutSite(site.id, {
-        success_url: successUrl,
-        cancel_url: cancelUrl,
+        success_url: field === "success" ? successUrl : savedSuccess,
+        cancel_url: field === "cancel" ? cancelUrl : savedCancel,
       })
       if (!result.ok) {
         toast.error(result.error || "Could not save")
         return
       }
       toast.success("Saved.")
+      if (field === "success") setEditingSuccess(false)
+      else setEditingCancel(false)
       onSaved()
     } finally {
       setSaving(false)
@@ -322,32 +394,61 @@ function StepUrls({ site, onSaved }: SiteStepProps) {
         <p className="text-sm text-muted-foreground">Save the website first, then add return URLs.</p>
       ) : null}
       <div className="space-y-5">
-        <div className="space-y-2">
-          <Label htmlFor="checkout-success">Success URL</Label>
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Label htmlFor="checkout-success" className="mb-0">
+              Success URL
+            </Label>
+            {site ? (
+              <FieldEditControls
+                editing={editingSuccess}
+                saving={savingSuccess}
+                onEdit={() => setEditingSuccess(true)}
+                onCancel={() => {
+                  setSuccessUrl(savedSuccess)
+                  setEditingSuccess(!savedSuccess)
+                }}
+                onSave={() => void saveField("success")}
+              />
+            ) : null}
+          </div>
           <Input
             id="checkout-success"
             value={successUrl}
             onChange={(e) => setSuccessUrl(e.target.value)}
             placeholder="https://shop.yoursite.com/thanks?session_id={CHECKOUT_SESSION_ID}"
-            disabled={!site}
+            disabled={!site || !editingSuccess}
           />
           <p className="text-xs text-muted-foreground">
             Easner replaces {"{CHECKOUT_SESSION_ID}"} so your page can look up the order.
           </p>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="checkout-cancel">Cancel URL</Label>
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Label htmlFor="checkout-cancel" className="mb-0">
+              Cancel URL
+            </Label>
+            {site ? (
+              <FieldEditControls
+                editing={editingCancel}
+                saving={savingCancel}
+                onEdit={() => setEditingCancel(true)}
+                onCancel={() => {
+                  setCancelUrl(savedCancel)
+                  setEditingCancel(!savedCancel)
+                }}
+                onSave={() => void saveField("cancel")}
+              />
+            ) : null}
+          </div>
           <Input
             id="checkout-cancel"
             value={cancelUrl}
             onChange={(e) => setCancelUrl(e.target.value)}
             placeholder="https://shop.yoursite.com/cart"
-            disabled={!site}
+            disabled={!site || !editingCancel}
           />
         </div>
-        <Button type="button" disabled={saving || !site} onClick={() => void save()}>
-          {saving ? "Saving…" : "Save URLs"}
-        </Button>
       </div>
     </>
   )
@@ -566,38 +667,16 @@ function StepWebhook({ data, onSaved }: HubDataProps) {
           <Label htmlFor="checkout-webhook" className="mb-0">
             Endpoint URL
           </Label>
-          {editing ? (
-            <div className="flex items-center gap-2">
-              {savedUrl ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={saving}
-                  onClick={() => {
-                    setUrl(savedUrl)
-                    setEditing(false)
-                  }}
-                >
-                  <X className="mr-1 h-4 w-4" aria-hidden />
-                  Cancel
-                </Button>
-              ) : null}
-              <Button type="button" size="sm" disabled={saving} onClick={() => void saveUrl()}>
-                {saving ? (
-                  <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden />
-                ) : (
-                  <Check className="mr-1 h-4 w-4" aria-hidden />
-                )}
-                Save
-              </Button>
-            </div>
-          ) : (
-            <Button type="button" variant="outline" size="sm" onClick={() => setEditing(true)}>
-              <Edit className="mr-1 h-4 w-4" aria-hidden />
-              Edit
-            </Button>
-          )}
+          <FieldEditControls
+            editing={editing}
+            saving={saving}
+            onEdit={() => setEditing(true)}
+            onCancel={() => {
+              setUrl(savedUrl)
+              setEditing(!savedUrl)
+            }}
+            onSave={() => void saveUrl()}
+          />
         </div>
         <Input
           id="checkout-webhook"

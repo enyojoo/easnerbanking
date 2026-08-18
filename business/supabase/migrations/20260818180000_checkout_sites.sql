@@ -27,6 +27,7 @@ on conflict (business_id, origin) do nothing;
 
 alter table public.business_checkout_sites enable row level security;
 
+drop policy if exists business_checkout_sites_select_member on public.business_checkout_sites;
 create policy business_checkout_sites_select_member
   on public.business_checkout_sites
   for select
