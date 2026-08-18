@@ -18,6 +18,24 @@ function hostnameFromOrigin(raw, fallback) {
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   outputFileTracingRoot: resolve(__dirname, ".."),
+  outputFileTracingIncludes: {
+    "/og/customer/[[...slug]]": [
+      "./assets/easner-logo.png",
+      "./assets/og-fonts/**",
+    ],
+    "/og/pay/opengraph-image": [
+      "./assets/easner-logo.png",
+      "./assets/og-fonts/**",
+    ],
+    "/og/invoice/opengraph-image": [
+      "./assets/easner-logo.png",
+      "./assets/og-fonts/**",
+    ],
+    "/og/pay/thanks/opengraph-image": [
+      "./assets/easner-logo.png",
+      "./assets/og-fonts/**",
+    ],
+  },
   transpilePackages: ["@easner/server", "@easner/shared", "@sumsub/websdk"],
   webpack: (config) => {
     config.resolve.alias = {
@@ -87,20 +105,6 @@ const nextConfig = {
       "api|_next|auth|pay-customer|invoice|og|favicon.ico|robots.txt|manifest.webmanifest|checkout.js"
     return {
       beforeFiles: [
-        ...invoiceHosts.flatMap((host) => [
-          {
-            source: "/og/customer",
-            has: [{ type: "host", value: host }],
-            destination: "/og/invoice/opengraph-image",
-          },
-          {
-            source: "/og/customer/:path*",
-            has: [{ type: "host", value: host }],
-            destination: "/og/invoice/opengraph-image",
-          },
-        ]),
-        { source: "/og/customer", destination: "/og/pay/opengraph-image" },
-        { source: "/og/customer/:path*", destination: "/og/pay/opengraph-image" },
         ...payHosts.map((host) => ({
           source: `/((?!${skip}).*)`,
           has: [{ type: "host", value: host }],

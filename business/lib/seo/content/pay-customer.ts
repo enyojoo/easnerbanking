@@ -36,9 +36,10 @@ export function paymentLinkPublicMetadata(businessName: string) {
       description: `Pay ${name} securely by card, bank, or stablecoin – review the amount and complete your payment on Easner Business.`,
     },
     hero: {
-      h1: "Pay",
-      subhead: `Pay ${name}`,
+      h1: `Pay ${name}`,
+      subhead: "Pay securely by card, bank, or stablecoin.",
       altText: `Pay ${name}`,
     },
+    ogHeadline: ["Pay", name] as const,
   }
 }

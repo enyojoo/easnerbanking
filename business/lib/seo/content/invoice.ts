@@ -23,9 +23,10 @@ export function invoicePublicMetadata(businessName: string) {
       description: `View your invoice from ${name} – review the amount, due date, and available payment options on Easner Business today.`,
     },
     hero: {
-      h1: "Invoice",
-      subhead: `Invoice from ${name}`,
+      h1: `Invoice from ${name}`,
+      subhead: "View your invoice and payment options.",
       altText: `Invoice from ${name}`,
     },
+    ogHeadline: ["Invoice from", name] as const,
   }
 }

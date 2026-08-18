@@ -15,7 +15,7 @@ import type { BusinessMetadataInput } from "@/lib/seo/metadata"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
 export type PublicCustomerOg = {
-  headline: string
+  headline: string | string[]
   subhead: string
   alt: string
 }
@@ -33,31 +33,36 @@ function publicPath(parts: string[]): string {
   return encoded.length > 0 ? `/${encoded.join("/")}` : "/"
 }
 
-/** Prerendered share cards — catch-all OG route handlers 500 on Vercel. */
 export const publicCustomerOgImagePath = {
   pay: "/og/pay/opengraph-image",
   invoice: "/og/invoice/opengraph-image",
   thanks: "/og/pay/thanks/opengraph-image",
 } as const
 
-function ogImageFor(kind: CustomerPublicKind | "pay_default", alt: string): { url: string; alt: string } {
-  const url =
-    kind === "invoice"
-      ? publicCustomerOgImagePath.invoice
-      : kind === "pay_thanks"
-        ? publicCustomerOgImagePath.thanks
-        : publicCustomerOgImagePath.pay
-  return { url, alt }
+function ogImageFor(
+  kind: CustomerPublicKind | "pay_default",
+  parts: string[],
+  alt: string,
+): { url: string; alt: string } {
+  if (kind === "pay_thanks") {
+    return { url: publicCustomerOgImagePath.thanks, alt }
+  }
+  const path = publicPath(parts)
+  return {
+    url: path === "/" ? "/og/customer" : `/og/customer${path}`,
+    alt,
+  }
 }
 
 function seoFromContent(content: {
   metadata: BusinessMetadataInput["metadata"]
   hero: { h1: string; subhead: string; altText: string }
+  ogHeadline?: string | readonly string[]
 }): { metadata: BusinessMetadataInput["metadata"]; og: PublicCustomerOg } {
   return {
     metadata: content.metadata,
     og: {
-      headline: content.hero.h1,
+      headline: content.ogHeadline ? [...content.ogHeadline] : content.hero.h1,
       subhead: content.hero.subhead,
       alt: content.hero.altText,
     },
@@ -120,7 +125,7 @@ export async function resolvePublicCustomerSeo(input: {
         metadata,
         path,
         metadataBase: getPayAppPublicOrigin(),
-        ogImage: ogImageFor(kind, og.alt),
+        ogImage: ogImageFor(kind, parts, og.alt),
       },
       og,
     }
@@ -136,7 +141,7 @@ export async function resolvePublicCustomerSeo(input: {
         metadata,
         path,
         metadataBase: getInvoiceAppPublicOrigin(),
-        ogImage: ogImageFor(kind, og.alt),
+        ogImage: ogImageFor(kind, parts, og.alt),
       },
       og,
     }
@@ -151,7 +156,7 @@ export async function resolvePublicCustomerSeo(input: {
       metadata,
       path,
       metadataBase: getPayAppPublicOrigin(),
-      ogImage: ogImageFor(kind ?? "pay_default", og.alt),
+      ogImage: ogImageFor(kind ?? "pay_default", parts, og.alt),
     },
     og,
   }
