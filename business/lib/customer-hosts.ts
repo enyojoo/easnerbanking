@@ -58,3 +58,28 @@ export function isCustomerAppHostname(hostname: string | null | undefined): bool
   if (!host) return false
   return host === getInvoiceAppHostname() || host === getPayAppHostname()
 }
+
+/**
+ * Host used for public vs workspace chrome. Prefer a customer app host when
+ * proxies send both the deployment URL and pay/invoice.easner.com.
+ */
+export function pickPublicHostname(
+  forwardedHost: string | null | undefined,
+  hostHeader: string | null | undefined,
+): string | null {
+  const candidates: string[] = []
+  const seen = new Set<string>()
+  const push = (raw: string | null | undefined) => {
+    if (!raw) return
+    for (const part of raw.split(",")) {
+      const host = normalizeHostname(part)
+      if (host && !seen.has(host)) {
+        seen.add(host)
+        candidates.push(host)
+      }
+    }
+  }
+  push(forwardedHost)
+  push(hostHeader)
+  return candidates.find((host) => isCustomerAppHostname(host)) ?? candidates[0] ?? null
+}

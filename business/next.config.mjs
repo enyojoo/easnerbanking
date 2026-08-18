@@ -6,6 +6,15 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const nobleHashesRoot = resolve(__dirname, "../node_modules/@noble/hashes")
 const nobleHashesSubpath = (name) => resolve(nobleHashesRoot, `${name}.js`)
 
+function hostnameFromOrigin(raw, fallback) {
+  const value = typeof raw === "string" ? raw.trim() : ""
+  try {
+    return new URL(value || `https://${fallback}`).hostname.toLowerCase()
+  } catch {
+    return fallback
+  }
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   outputFileTracingRoot: resolve(__dirname, ".."),
@@ -69,6 +78,32 @@ const nextConfig = {
     ],
   },
   serverExternalPackages: ["@react-pdf/renderer"],
+  async rewrites() {
+    const payHost = hostnameFromOrigin(
+      process.env.NEXT_PUBLIC_PAY_APP_URL,
+      "pay.easner.com",
+    )
+    const invoiceHost = hostnameFromOrigin(
+      process.env.NEXT_PUBLIC_INVOICE_APP_URL,
+      "invoice.easner.com",
+    )
+    const skip =
+      "api|_next|auth|pay-customer|invoice|favicon.ico|robots.txt|manifest.webmanifest|checkout.js"
+    return {
+      beforeFiles: [
+        {
+          source: `/((?!${skip}).*)`,
+          has: [{ type: "host", value: payHost }],
+          destination: "/pay-customer/$1",
+        },
+        {
+          source: `/((?!${skip}).*)`,
+          has: [{ type: "host", value: invoiceHost }],
+          destination: "/invoice/$1",
+        },
+      ],
+    }
+  },
 }
 
 export default nextConfig

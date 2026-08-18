@@ -17,7 +17,7 @@ function normalizeHostname(value: string | undefined): string | null {
 }
 
 /** Hostnames seen on this request (deduped). `Host` first — it matches the URL the client used on Vercel. */
-function collectHostnameCandidates(request: NextRequest): string[] {
+export function collectHostnameCandidates(request: NextRequest): string[] {
   const out: string[] = []
   const seen = new Set<string>()
   const push = (raw: string | undefined | null) => {

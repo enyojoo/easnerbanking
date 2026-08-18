@@ -14,6 +14,7 @@ import { PwaInstallProvider } from "@/components/pwa/pwa-install-provider"
 import { BusinessViewportGate } from "@/components/layout/business-viewport-gate"
 import { AppSurfaceLayout } from "@/components/app-surface-layout"
 import { getBusinessAppPublicOrigin } from "@/lib/business-app-public-url"
+import { pickPublicHostname } from "@/lib/customer-hosts"
 import { headers } from "next/headers"
 import "./globals.css"
 import { BRAND } from "@easner/shared"
@@ -71,7 +72,8 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const hostname = (await headers()).get("host")
+  const headerList = await headers()
+  const hostname = pickPublicHostname(headerList.get("x-forwarded-host"), headerList.get("host"))
 
   return (
     <html lang="en" className="light" suppressHydrationWarning>

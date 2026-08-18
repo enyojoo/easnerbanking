@@ -2,8 +2,8 @@ import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 import { getInvoiceAppHostname, getPayAppHostname, isCustomerAppHostname } from "@/lib/customer-hosts"
 import {
+  collectHostnameCandidates,
   getBusinessWebOriginForApiHostRedirect,
-  getRequestHostname,
 } from "@/lib/api-subdomain-redirect"
 
 /** Route trees that back each customer host inside this app. */
@@ -31,6 +31,16 @@ function isCustomerPublicHostname(hostname: string): boolean {
 }
 
 /**
+ * Prefer invoice/pay hosts when proxies list several (Vercel `Host` can be the
+ * deployment URL while `x-forwarded-host` is pay.easner.com).
+ */
+export function getCustomerRequestHostname(request: NextRequest): string {
+  const candidates = collectHostnameCandidates(request)
+  const customer = candidates.find((host) => isCustomerAppHostname(host))
+  return customer ?? candidates[0] ?? ""
+}
+
+/**
  * Bare `invoice.easner.com/` and `pay.easner.com/` are not customer pages.
  * Send browsers to the operator app; keep every other path on these hosts.
  */
@@ -38,7 +48,7 @@ export function maybeRedirectCustomerHostRootToBusiness(request: NextRequest): N
   const pathname = request.nextUrl.pathname
   if (pathname !== "/") return null
 
-  const hostname = getRequestHostname(request)
+  const hostname = getCustomerRequestHostname(request)
   if (!hostname || !isCustomerPublicHostname(hostname)) return null
 
   let origin = getBusinessWebOriginForApiHostRedirect().replace(/\/$/, "")
@@ -63,7 +73,7 @@ export function maybeRewriteCustomerHost(request: NextRequest): NextResponse | n
   const pathname = request.nextUrl.pathname
   if (pathname === "/" || isInternalPath(pathname)) return null
 
-  const hostname = getRequestHostname(request)
+  const hostname = getCustomerRequestHostname(request)
   if (!hostname) return null
 
   const root =

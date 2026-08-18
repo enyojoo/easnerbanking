@@ -5,16 +5,24 @@ import {
   maybeRewriteCustomerHost,
 } from "./customer-host-routing"
 
-function request(host: string, pathname: string): NextRequest {
+function request(
+  host: string,
+  pathname: string,
+  extraHeaders?: Record<string, string>,
+): NextRequest {
   const url = new URL(`https://${host}${pathname}`)
   return {
     nextUrl: { pathname, hostname: host, clone: () => new URL(url.toString()) },
-    headers: new Headers({ host }),
+    headers: new Headers({ host, ...extraHeaders }),
   } as unknown as NextRequest
 }
 
-function rewrittenPath(host: string, pathname: string): string | null {
-  const response = maybeRewriteCustomerHost(request(host, pathname))
+function rewrittenPath(
+  host: string,
+  pathname: string,
+  extraHeaders?: Record<string, string>,
+): string | null {
+  const response = maybeRewriteCustomerHost(request(host, pathname, extraHeaders))
   const destination = response?.headers.get("x-middleware-rewrite")
   return destination ? new URL(destination).pathname : null
 }
@@ -43,6 +51,14 @@ describe("customer host routing", () => {
     expect(redirectLocation("business.easner.com", "/")).toBeNull()
     expect(rewrittenPath("pay.easner.com", "/")).toBeNull()
     expect(rewrittenPath("invoice.easner.com", "/")).toBeNull()
+  })
+
+  it("rewrites when the customer host is only on x-forwarded-host", () => {
+    expect(
+      rewrittenPath("easner-business.vercel.app", "/easner/testing", {
+        "x-forwarded-host": "pay.easner.com",
+      }),
+    ).toBe("/pay-customer/easner/testing")
   })
 
   it("leaves the operator dashboard host alone", () => {
