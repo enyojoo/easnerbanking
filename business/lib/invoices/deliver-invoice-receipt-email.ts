@@ -3,7 +3,7 @@ import type { Invoice } from "@/lib/b2b/types"
 import { generateReceiptPdfBuffer } from "@/lib/generate-receipt-pdf"
 import { sendInvoiceReceiptEmail } from "@/lib/invoice-email-service"
 import { resolveInvoiceFromEmail } from "@/lib/invoices/invoice-from-email"
-import { buildInvoiceCustomerViewUrl } from "@/lib/invoice-public-url"
+import { buildInvoiceCustomerUrl } from "@/lib/invoice-public-url"
 import { fetchInvoiceIssuerForBusiness, resolveInvoiceReplyEmail } from "@/lib/invoices/issuer"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 
@@ -58,11 +58,7 @@ export async function deliverInvoiceReceiptEmail(
       typeof biz?.easetag === "string" && biz.easetag.trim() ? biz.easetag.trim() : null
   }
 
-  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://business.easner.com").replace(
-    /\/$/,
-    "",
-  )
-  const viewUrl = buildInvoiceCustomerViewUrl(baseUrl, easetag, input.invoice)
+  const viewUrl = buildInvoiceCustomerUrl(easetag, input.invoice)
 
   const result = await sendInvoiceReceiptEmail({
     invoice: input.invoice,

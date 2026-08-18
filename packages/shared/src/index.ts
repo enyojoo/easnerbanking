@@ -651,7 +651,10 @@ export type {
 } from "./transactions/stablecoin-deposit-lifecycle"
 export {
   buildStripeInvoiceSettlementLifecycle,
+  isStripeCheckoutSettlementMetadata,
+  isStripeCollectionSettlementMetadata,
   isStripeInvoiceSettlementMetadata,
+  stripeCollectionSettlementTitle,
 } from "./transactions/stripe-invoice-settlement-lifecycle"
 export type {
   BuildStripeInvoiceSettlementLifecycleInput,

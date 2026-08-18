@@ -2,7 +2,31 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type Stripe from "stripe"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
-import { inferSettlementRail, matchPayoutToSettlements } from "./match-payout-to-settlements"
+import {
+  inferSettlementRail,
+  matchPayoutToSettlements,
+  SETTLEMENT_TABLES,
+  type MatchedSettlement,
+} from "./match-payout-to-settlements"
+
+async function appendEventId(
+  admin: SupabaseClient,
+  settlement: MatchedSettlement,
+  eventId: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  const table = SETTLEMENT_TABLES[settlement.source]
+  const { data: row } = await admin
+    .from(table)
+    .select("stripe_event_ids")
+    .eq("id", settlement.settlementId)
+    .maybeSingle()
+  const prior = Array.isArray(row?.stripe_event_ids) ? row!.stripe_event_ids : []
+  await admin
+    .from(table)
+    .update({ ...patch, stripe_event_ids: [...prior, eventId] })
+    .eq("id", settlement.settlementId)
+}
 
 /**
  * Hop 2: payout.paid (Connect connected-account or legacy platform) →
@@ -24,21 +48,11 @@ export async function handleStripePayoutPaid(
   if (event.type === "payout.failed") {
     const { settlements } = await matchPayoutToSettlements(admin, payout, { stripeAccountId })
     for (const s of settlements) {
-      const { data: row } = await admin
-        .from("invoice_stripe_settlements")
-        .select("stripe_event_ids")
-        .eq("id", s.settlementId)
-        .maybeSingle()
-      const prior = Array.isArray(row?.stripe_event_ids) ? row!.stripe_event_ids : []
-      await admin
-        .from("invoice_stripe_settlements")
-        .update({
-          phase: "failed",
-          stripe_payout_id: payout.id,
-          stripe_event_ids: [...prior, event.id],
-          updated_at: now,
-        })
-        .eq("id", s.settlementId)
+      await appendEventId(admin, s, event.id, {
+        phase: "failed",
+        stripe_payout_id: payout.id,
+        updated_at: now,
+      })
     }
     return { handled: settlements.length > 0 }
   }
@@ -58,7 +72,12 @@ export async function handleStripePayoutPaid(
   for (const [businessId, group] of byBusiness) {
     const { rail, destinationRef } = await inferSettlementRail(admin, businessId, payout)
     const expectedAmountCents = group.reduce((sum, s) => sum + s.netCents, 0)
-    const settlementIds = group.map((s) => s.settlementId)
+    const invoiceSettlementIds = group
+      .filter((s) => s.source === "invoice_stripe")
+      .map((s) => s.settlementId)
+    const checkoutSettlementIds = group
+      .filter((s) => s.source === "checkout_stripe")
+      .map((s) => s.settlementId)
     const ownerUserId = await resolveOrgOwnerUserId(admin, businessId, "")
     if (!ownerUserId) {
       console.warn("[stripe] payout.paid: no owner for business", businessId)
@@ -95,12 +114,13 @@ export async function handleStripePayoutPaid(
           settlement_rail: rail,
           destination_ref: destinationRef,
           expected_amount_cents: expectedAmountCents,
-          invoice_settlement_ids: settlementIds,
+          invoice_settlement_ids: invoiceSettlementIds,
+          checkout_settlement_ids: checkoutSettlementIds,
           grid_customer_id: gridCustomerId,
           receive_currency: group[0]?.currency ?? "USD",
           quoted_receive: expectedAmountCents / 100,
           metadata: {
-            source: "invoice_stripe",
+            source: checkoutSettlementIds.length > 0 ? "collections_stripe" : "invoice_stripe",
             stripe_event_id: event.id,
             stripe_connected_account_id: stripeAccountId,
           },
@@ -112,26 +132,15 @@ export async function handleStripePayoutPaid(
     }
 
     for (const s of group) {
-      const { data: row } = await admin
-        .from("invoice_stripe_settlements")
-        .select("stripe_event_ids")
-        .eq("id", s.settlementId)
-        .maybeSingle()
-      const prior = Array.isArray(row?.stripe_event_ids) ? row!.stripe_event_ids : []
-
-      await admin
-        .from("invoice_stripe_settlements")
-        .update({
-          phase: "payout_sent",
-          stripe_payout_id: payout.id,
-          stripe_balance_transaction_id: s.balanceTransactionId,
-          settlement_rail: rail,
-          grid_transfer_id: transferId,
-          expected_arrival_at: arrival,
-          stripe_event_ids: [...prior, event.id],
-          updated_at: now,
-        })
-        .eq("id", s.settlementId)
+      await appendEventId(admin, s, event.id, {
+        phase: "payout_sent",
+        stripe_payout_id: payout.id,
+        stripe_balance_transaction_id: s.balanceTransactionId,
+        settlement_rail: rail,
+        grid_transfer_id: transferId,
+        expected_arrival_at: arrival,
+        updated_at: now,
+      })
 
       if (s.ledgerTransactionId) {
         const { data: tx } = await admin
@@ -165,6 +174,7 @@ export async function handleStripePayoutPaid(
       }
 
       // Keep invoice paymentInfo settlement phase in sync
+      if (!s.invoiceId) continue
       const { data: inv } = await admin
         .from("invoices")
         .select("metadata")

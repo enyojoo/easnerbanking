@@ -14,7 +14,7 @@ import {
 } from "@/lib/invoices/invoice-payment-copy"
 import { sendInvoiceEmail } from "@/lib/invoice-email-service"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { buildInvoiceCustomerViewUrl } from "@/lib/invoice-public-url"
+import { buildInvoiceCustomerUrl } from "@/lib/invoice-public-url"
 import { assessInvoiceBusinessReadinessFromIssuer } from "@/lib/invoices/invoice-business-readiness"
 import {
   canProvisionInvoiceDepositInstructions,
@@ -126,11 +126,6 @@ export async function POST(request: NextRequest) {
 
     const issuerForCustomer = { ...issuer, email: businessReplyEmail }
 
-    const origin =
-      request.headers.get("origin") ||
-      request.headers.get("x-forwarded-host") ||
-      "http://localhost:3000"
-    const baseUrl = origin.startsWith("http") ? origin : `https://${origin}`
     const { data: bizRow } = await admin
       .from("businesses")
       .select("easetag")
@@ -138,13 +133,12 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
     const easetag =
       typeof bizRow?.easetag === "string" && bizRow.easetag.trim() ? bizRow.easetag.trim() : null
-    const invoiceViewUrl = buildInvoiceCustomerViewUrl(baseUrl, easetag, invoice)
+    const invoiceViewUrl = buildInvoiceCustomerUrl(easetag, invoice)
 
     const pdfBuffer = await generateInvoicePdfBuffer(
       invoice,
       issuerForCustomer,
       buildInvoicePdfPaymentSection({
-        baseUrl,
         easetag,
         invoice,
         flags: paymentFlags,

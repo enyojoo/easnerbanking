@@ -23,7 +23,7 @@ import {
   INVOICE_TOAST_COPY,
 } from "@/lib/copy/business-ui-copy"
 import {
-  buildInvoiceCustomerViewUrl,
+  buildInvoiceCustomerUrl,
   buildInvoicePreviewUrl,
   invoicePreviewPath,
 } from "@/lib/invoice-public-url"
@@ -73,7 +73,7 @@ export function InvoiceShareMenu({
   const onCopyCustomer = async (e: React.MouseEvent) => {
     if (stopPropagation) e.stopPropagation()
     if (!canShareCustomer) return
-    const url = buildInvoiceCustomerViewUrl(window.location.origin, easetag, invoice)
+    const url = buildInvoiceCustomerUrl(easetag, invoice)
     const ok = await copyText(url)
     if (ok) toast.success(INVOICE_TOAST_COPY.customerLinkCopied)
     else toast.error("Could not copy link")

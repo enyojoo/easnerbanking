@@ -1,4 +1,5 @@
 import { normalizeEasetag } from "@/lib/easetag-validation"
+import { getInvoiceAppPublicOrigin } from "@/lib/customer-hosts"
 import type { Invoice } from "@/lib/b2b/types"
 
 /**
@@ -21,11 +22,6 @@ export function invoicePreviewPath(invoiceId: string): string {
   return `/invoice/preview/${encodeURIComponent(invoiceId)}`
 }
 
-/** @deprecated Prefer `invoiceCustomerViewPath`. */
-export function invoicePublicViewPath(easetag: string, invoiceNumber: string): string {
-  return invoiceCustomerViewPath(easetag, invoiceNumber)
-}
-
 export function buildInvoiceCustomerViewPath(
   easetag: string | null | undefined,
   invoice: Pick<Invoice, "id" | "invoiceNumber">,
@@ -36,13 +32,16 @@ export function buildInvoiceCustomerViewPath(
   return invoiceCustomerViewPathById(invoice.id)
 }
 
-export function buildInvoiceCustomerViewUrl(
-  baseUrl: string,
+/**
+ * Customer-facing invoice URL on invoice.easner.com. The `/invoice` segment is an
+ * internal route prefix only — customers see `invoice.easner.com/acme/einv-1042`.
+ */
+export function buildInvoiceCustomerUrl(
   easetag: string | null | undefined,
   invoice: Pick<Invoice, "id" | "invoiceNumber">,
 ): string {
-  const origin = baseUrl.replace(/\/$/, "")
-  return `${origin}${buildInvoiceCustomerViewPath(easetag, invoice)}`
+  const path = buildInvoiceCustomerViewPath(easetag, invoice).replace(/^\/invoice/, "")
+  return `${getInvoiceAppPublicOrigin()}${path}`
 }
 
 export function buildInvoicePreviewUrl(

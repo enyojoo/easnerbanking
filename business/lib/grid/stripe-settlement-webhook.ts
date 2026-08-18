@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
+import { dispatchMerchantWebhook } from "@/lib/checkout/merchant-webhooks"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import type { GridWebhookEvent } from "./types"
 import { gridWebhookQuoteId } from "./webhook-event-id"
@@ -112,8 +113,11 @@ async function finalizeMatch(
   const userId = String(match.user_id)
   const netMajor = Number(match.expected_amount_cents ?? amountCents) / 100
   const currency = String(match.receive_currency ?? "USD").toUpperCase()
-  const settlementIds = Array.isArray(match.invoice_settlement_ids)
+  const invoiceSettlementIds = Array.isArray(match.invoice_settlement_ids)
     ? (match.invoice_settlement_ids as string[])
+    : []
+  const checkoutSettlementIds = Array.isArray(match.checkout_settlement_ids)
+    ? (match.checkout_settlement_ids as string[])
     : []
   const now = new Date().toISOString()
 
@@ -133,17 +137,22 @@ async function finalizeMatch(
     })
   }
 
-  for (const settlementId of settlementIds) {
+  const settlementRefs = [
+    ...invoiceSettlementIds.map((id) => ({ table: "invoice_stripe_settlements", id })),
+    ...checkoutSettlementIds.map((id) => ({ table: "checkout_stripe_settlements", id })),
+  ]
+
+  for (const ref of settlementRefs) {
     const { data: settlement } = await admin
-      .from("invoice_stripe_settlements")
+      .from(ref.table)
       .select("*")
-      .eq("id", settlementId)
+      .eq("id", ref.id)
       .maybeSingle()
     if (!settlement?.id) continue
     if (settlement.phase === "credited") continue
 
     await admin
-      .from("invoice_stripe_settlements")
+      .from(ref.table)
       .update({
         phase: "credited",
         credited_at: now,
@@ -180,6 +189,22 @@ async function finalizeMatch(
           },
         })
       }
+    }
+
+    if (ref.table === "checkout_stripe_settlements") {
+      await dispatchMerchantWebhook(admin, {
+        businessId: String(settlement.business_id),
+        event: "payment.available",
+        data: {
+          amount_cents: Number(settlement.net_cents ?? 0),
+          currency: String(settlement.currency ?? currency).toUpperCase(),
+          ...(settlement.payment_link_id
+            ? { payment_link_id: String(settlement.payment_link_id) }
+            : {}),
+          available_at: now,
+        },
+      })
+      continue
     }
 
     // Sync invoice paymentInfo

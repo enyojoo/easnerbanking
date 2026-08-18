@@ -1,6 +1,7 @@
 import {
   buildStripeInvoiceSettlementLifecycle,
-  isStripeInvoiceSettlementMetadata,
+  isStripeCollectionSettlementMetadata,
+  stripeCollectionSettlementTitle,
   type StripeInvoiceSettlementLifecycleStep,
 } from "@easner/shared"
 import { resolveLedgerWhenAtFromRow } from "@/lib/ledger/ledger-occurred-at"
@@ -16,6 +17,8 @@ import {
 export type ResolvedStripeInvoiceSettlement = {
   lifecycle: StripeInvoiceSettlementLifecycleStep[]
   settlementPhase: string
+  /** Hero/list title — invoice number, payment link label, or "Online payment". */
+  displayTitle: string
   invoiceId: string | null
   invoiceNumber: string | null
   /** List subtitle / detail — e.g. Invoice #EINV-… */
@@ -52,7 +55,7 @@ export function resolveStripeInvoiceSettlementDetail(
   row: Record<string, unknown>,
 ): ResolvedStripeInvoiceSettlement | null {
   const meta = (row.metadata as Record<string, unknown> | null | undefined) ?? {}
-  if (!isStripeInvoiceSettlementMetadata(meta)) return null
+  if (!isStripeCollectionSettlementMetadata(meta)) return null
 
   const createdAt = resolveLedgerWhenAtFromRow(row)
   const settledAt = row.settled_at != null ? String(row.settled_at) : null
@@ -81,6 +84,7 @@ export function resolveStripeInvoiceSettlementDetail(
   return {
     lifecycle,
     settlementPhase: String(meta.settlement_phase ?? "payment_received"),
+    displayTitle: stripeCollectionSettlementTitle(meta),
     invoiceId: typeof meta.invoice_id === "string" && meta.invoice_id.trim() ? meta.invoice_id.trim() : null,
     invoiceNumber,
     invoiceReference: invoiceNumber ? `Invoice #${invoiceNumber}` : null,

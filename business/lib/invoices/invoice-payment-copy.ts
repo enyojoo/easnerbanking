@@ -1,5 +1,5 @@
 import { formatCurrency } from "@/lib/utils"
-import { buildInvoiceCustomerViewUrl } from "@/lib/invoice-public-url"
+import { buildInvoiceCustomerUrl } from "@/lib/invoice-public-url"
 import type { Invoice } from "@/lib/b2b/types"
 
 export type PaymentMethodsFlags = {
@@ -106,11 +106,10 @@ export function customerPaymentDisplaySubtitle(
 }
 
 export function buildInvoiceViewUrl(
-  baseUrl: string,
   easetag: string | null | undefined,
   invoice: Pick<Invoice, "id" | "invoiceNumber">,
 ): string {
-  return buildInvoiceCustomerViewUrl(baseUrl, easetag, invoice)
+  return buildInvoiceCustomerUrl(easetag, invoice)
 }
 
 /** @deprecated Use customerPaymentDisplayTitle */
@@ -224,7 +223,6 @@ export function emailPrimaryCtaText(
 }
 
 export function buildInvoicePdfPaymentSection(input: {
-  baseUrl: string
   easetag: string | null | undefined
   invoice: Pick<Invoice, "id" | "invoiceNumber" | "status">
   flags: PaymentMethodsFlags
@@ -237,7 +235,7 @@ export function buildInvoicePdfPaymentSection(input: {
     return undefined
   }
   return {
-    url: buildInvoiceViewUrl(input.baseUrl, input.easetag, input.invoice),
+    url: buildInvoiceViewUrl(input.easetag, input.invoice),
     ...input.flags,
   }
 }

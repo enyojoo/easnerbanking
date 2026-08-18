@@ -11,6 +11,12 @@ vi.mock("./handle-checkout-completed", () => ({
 vi.mock("./handle-payout-paid", () => ({
   handleStripePayoutPaid: vi.fn(),
 }))
+vi.mock("./handle-subscription-lifecycle", () => ({
+  handleSubscriptionLifecycleEvent: vi.fn(),
+}))
+vi.mock("@/lib/checkout/merchant-webhooks", () => ({
+  dispatchMerchantWebhook: vi.fn(async () => ({ delivered: false })),
+}))
 
 import { applyStripeWebhookSideEffects } from "./webhook-side-effects"
 

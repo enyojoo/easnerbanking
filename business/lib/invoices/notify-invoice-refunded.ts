@@ -6,7 +6,7 @@ import {
   resolveInvoiceReplyEmail,
 } from "@/lib/invoices/issuer"
 import { parseBusinessInvoiceSettings } from "@/lib/invoices/invoice-settings"
-import { buildInvoiceCustomerViewUrl } from "@/lib/invoice-public-url"
+import { buildInvoiceCustomerUrl } from "@/lib/invoice-public-url"
 import { resolveInvoiceFromEmail } from "@/lib/invoices/invoice-from-email"
 import {
   sendInvoiceCustomerRefundEmail,
@@ -69,7 +69,7 @@ export async function notifyInvoiceStripeRefunded(
   if (input.invoice.customerEmail?.trim() && replyEmail) {
     const easetag =
       typeof biz?.easetag === "string" && biz.easetag.trim() ? biz.easetag.trim() : null
-    const invoiceViewUrl = buildInvoiceCustomerViewUrl(baseUrl, easetag, input.invoice)
+    const invoiceViewUrl = buildInvoiceCustomerUrl(easetag, input.invoice)
 
     void sendInvoiceCustomerRefundEmail({
       invoice: input.invoice,

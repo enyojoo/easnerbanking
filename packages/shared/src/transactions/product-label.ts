@@ -18,7 +18,10 @@ import {
   isVerificationDeposit,
   isVerificationDepositMetadata,
 } from "./verification-deposit"
-import { isStripeInvoiceSettlementMetadata } from "./stripe-invoice-settlement-lifecycle"
+import {
+  isStripeCollectionSettlementMetadata,
+  stripeCollectionSettlementTitle,
+} from "./stripe-invoice-settlement-lifecycle"
 import { isRelayTronDepositMetadata } from "./relay-tron-deposit"
 import { isBalanceConvertMetadata, balanceConvertListProductLabel } from "./balance-move-types"
 
@@ -212,8 +215,8 @@ export function toEasnerTransactionProductCategory(input: {
   ) {
     return resolveNoahVaFundingDepositTitleFromMeta(meta)
   }
-  if (direction === "in" && isStripeInvoiceSettlementMetadata(meta)) {
-    return "Invoice payment"
+  if (direction === "in" && isStripeCollectionSettlementMetadata(meta)) {
+    return stripeCollectionSettlementTitle(meta)
   }
   if (direction === "in") return "Bank Deposit"
   return "Bank Transfer"
@@ -284,8 +287,8 @@ export function toEasnerTransactionPrimaryLabel(input: {
   ) {
     return resolveNoahVaFundingDepositTitleFromMeta(meta)
   }
-  if (direction === "in" && isStripeInvoiceSettlementMetadata(meta)) {
-    return "Invoice payment"
+  if (direction === "in" && isStripeCollectionSettlementMetadata(meta)) {
+    return stripeCollectionSettlementTitle(meta)
   }
   if (direction === "in") {
     return deriveEasnerInboundRemitterDisplayName({

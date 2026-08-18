@@ -295,7 +295,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
   const displayHeroTitle =
     displaySource?.displayHeroTitle ??
     (stripeInvoiceSettlementDetail
-      ? "Invoice payment"
+      ? stripeInvoiceSettlementDetail.displayTitle
       : bankDepositDetail?.displayHeroTitle
         ? bankDepositDetail.displayHeroTitle
         : ycDepositTitle
@@ -478,7 +478,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
           }
         : stripeInvoiceSettlementDetail
         ? {
-            displayHeroTitle: "Invoice payment",
+            displayHeroTitle: stripeInvoiceSettlementDetail.displayTitle,
             lifecycle: stripeInvoiceSettlementDetail.lifecycle,
             depositAmount:
               stripeInvoiceSettlementDetail.grossAmount > 0

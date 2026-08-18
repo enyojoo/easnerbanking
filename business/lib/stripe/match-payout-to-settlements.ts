@@ -3,9 +3,19 @@ import type Stripe from "stripe"
 import { getStripe } from "./client"
 import type { StripeSettlementRail } from "./types"
 
+/** Which settlement table a matched row belongs to. */
+export type SettlementSource = "invoice_stripe" | "checkout_stripe"
+
+export const SETTLEMENT_TABLES: Record<SettlementSource, string> = {
+  invoice_stripe: "invoice_stripe_settlements",
+  checkout_stripe: "checkout_stripe_settlements",
+}
+
 export type MatchedSettlement = {
+  source: SettlementSource
   settlementId: string
-  invoiceId: string
+  /** Null for Payment Link and website-embed collections. */
+  invoiceId: string | null
   businessId: string
   netCents: number
   currency: string
@@ -13,8 +23,48 @@ export type MatchedSettlement = {
   balanceTransactionId: string | null
 }
 
+const SETTLEMENT_COLUMNS = "id,business_id,net_cents,currency,ledger_transaction_id,phase"
+
+function toMatched(
+  source: SettlementSource,
+  row: Record<string, unknown>,
+  balanceTransactionId: string | null,
+): MatchedSettlement {
+  return {
+    source,
+    settlementId: String(row.id),
+    invoiceId: row.invoice_id ? String(row.invoice_id) : null,
+    businessId: String(row.business_id),
+    netCents: Number(row.net_cents ?? 0),
+    currency: String(row.currency ?? "USD").toUpperCase(),
+    ledgerTransactionId: row.ledger_transaction_id ? String(row.ledger_transaction_id) : null,
+    balanceTransactionId,
+  }
+}
+
+async function findSettlementByPaymentIntent(
+  admin: SupabaseClient,
+  paymentIntentId: string,
+): Promise<{ source: SettlementSource; row: Record<string, unknown> } | null> {
+  const { data: invoiceRow } = await admin
+    .from(SETTLEMENT_TABLES.invoice_stripe)
+    .select(`${SETTLEMENT_COLUMNS},invoice_id`)
+    .eq("stripe_payment_intent_id", paymentIntentId)
+    .maybeSingle()
+  if (invoiceRow?.id) return { source: "invoice_stripe", row: invoiceRow }
+
+  const { data: checkoutRow } = await admin
+    .from(SETTLEMENT_TABLES.checkout_stripe)
+    .select(SETTLEMENT_COLUMNS)
+    .eq("stripe_payment_intent_id", paymentIntentId)
+    .maybeSingle()
+  if (checkoutRow?.id) return { source: "checkout_stripe", row: checkoutRow }
+
+  return null
+}
+
 /**
- * Resolve invoice settlements included in a Stripe payout via balance transactions.
+ * Resolve the collection settlements included in a Stripe payout via balance transactions.
  * For Connect, pass stripeAccountId (event.account) so balance txs are listed on the connected account.
  */
 export async function matchPayoutToSettlements(
@@ -32,6 +82,13 @@ export async function matchPayoutToSettlements(
     ? { stripeAccount: opts.stripeAccountId }
     : undefined
 
+  const collect = (matched: MatchedSettlement) => {
+    settlements.push(matched)
+    const list = byBusiness.get(matched.businessId) ?? []
+    list.push(matched)
+    byBusiness.set(matched.businessId, list)
+  }
+
   let startingAfter: string | undefined
   for (;;) {
     const page = await stripe.balanceTransactions.list(
@@ -45,19 +102,14 @@ export async function matchPayoutToSettlements(
     )
 
     for (const bt of page.data) {
-      if (bt.type !== "charge" && bt.type !== "payment" && bt.type !== "payment_refund") {
-        // Destination-charge transfers often appear as "payment" on connected accounts
-        // after platform transfer; also try type "transfer" source lookup below.
-      }
+      // Destination-charge transfers appear as "payment" on connected accounts.
       if (bt.type !== "charge" && bt.type !== "payment") continue
 
       let paymentIntentId = ""
       const source = bt.source
-      if (source && typeof source === "object") {
-        if ("payment_intent" in source) {
-          const pi = (source as Stripe.Charge).payment_intent
-          paymentIntentId = typeof pi === "string" ? pi : pi?.id ?? ""
-        }
+      if (source && typeof source === "object" && "payment_intent" in source) {
+        const pi = (source as Stripe.Charge).payment_intent
+        paymentIntentId = typeof pi === "string" ? pi : pi?.id ?? ""
       }
 
       if (!paymentIntentId && typeof bt.source === "string") {
@@ -68,39 +120,17 @@ export async function matchPayoutToSettlements(
               ? charge.payment_intent
               : charge.payment_intent?.id ?? ""
         } catch {
-          // On connected accounts, source may be a Transfer — try platform charge via metadata later
+          // On connected accounts the source may be a Transfer — handled by the fallback below.
           continue
         }
       }
 
       if (!paymentIntentId) continue
 
-      const { data: settlement } = await admin
-        .from("invoice_stripe_settlements")
-        .select(
-          "id,invoice_id,business_id,net_cents,currency,ledger_transaction_id,phase",
-        )
-        .eq("stripe_payment_intent_id", paymentIntentId)
-        .maybeSingle()
-
-      if (!settlement?.id) continue
-      if (settlement.phase === "credited") continue
-
-      const matched: MatchedSettlement = {
-        settlementId: String(settlement.id),
-        invoiceId: String(settlement.invoice_id),
-        businessId: String(settlement.business_id),
-        netCents: Number(settlement.net_cents ?? 0),
-        currency: String(settlement.currency ?? "USD").toUpperCase(),
-        ledgerTransactionId: settlement.ledger_transaction_id
-          ? String(settlement.ledger_transaction_id)
-          : null,
-        balanceTransactionId: bt.id,
-      }
-      settlements.push(matched)
-      const list = byBusiness.get(matched.businessId) ?? []
-      list.push(matched)
-      byBusiness.set(matched.businessId, list)
+      const found = await findSettlementByPaymentIntent(admin, paymentIntentId)
+      if (!found) continue
+      if (String(found.row.phase) === "credited") continue
+      collect(toMatched(found.source, found.row, bt.id))
     }
 
     if (!page.has_more || page.data.length === 0) break
@@ -108,42 +138,18 @@ export async function matchPayoutToSettlements(
     if (!startingAfter) break
   }
 
-  // Fallback for Connect destination charges: payout may not expose PI on connected balance txs.
-  // Match pending settlements for the connected account by net amount proximity.
+  // Fallback for Connect destination charges: payout may not expose the payment intent on
+  // connected balance txs. Greedily pack pending settlements whose nets sum to the payout.
   if (settlements.length === 0 && opts?.stripeAccountId) {
-    const { data: pending } = await admin
-      .from("invoice_stripe_settlements")
-      .select(
-        "id,invoice_id,business_id,net_cents,currency,ledger_transaction_id,phase",
-      )
-      .eq("stripe_connected_account_id", opts.stripeAccountId)
-      .eq("phase", "payment_received")
-      .order("created_at", { ascending: true })
-      .limit(50)
-
     const payoutAmount = typeof payout.amount === "number" ? payout.amount : 0
-    if (pending?.length && payoutAmount > 0) {
-      // Greedy pack settlements whose nets sum close to payout amount (±2 cents)
+    if (payoutAmount > 0) {
+      const pending = await listPendingSettlementsForAccount(admin, opts.stripeAccountId)
       let remaining = payoutAmount
-      for (const settlement of pending) {
-        const net = Number(settlement.net_cents ?? 0)
+      for (const candidate of pending) {
+        const net = Number(candidate.row.net_cents ?? 0)
         if (net <= 0) continue
         if (net - remaining > 2) continue
-        const matched: MatchedSettlement = {
-          settlementId: String(settlement.id),
-          invoiceId: String(settlement.invoice_id),
-          businessId: String(settlement.business_id),
-          netCents: net,
-          currency: String(settlement.currency ?? "USD").toUpperCase(),
-          ledgerTransactionId: settlement.ledger_transaction_id
-            ? String(settlement.ledger_transaction_id)
-            : null,
-          balanceTransactionId: null,
-        }
-        settlements.push(matched)
-        const list = byBusiness.get(matched.businessId) ?? []
-        list.push(matched)
-        byBusiness.set(matched.businessId, list)
+        collect(toMatched(candidate.source, candidate.row, null))
         remaining -= net
         if (remaining <= 2) break
       }
@@ -151,6 +157,33 @@ export async function matchPayoutToSettlements(
   }
 
   return { settlements, byBusiness }
+}
+
+async function listPendingSettlementsForAccount(
+  admin: SupabaseClient,
+  stripeAccountId: string,
+): Promise<{ source: SettlementSource; row: Record<string, unknown> }[]> {
+  const [{ data: invoiceRows }, { data: checkoutRows }] = await Promise.all([
+    admin
+      .from(SETTLEMENT_TABLES.invoice_stripe)
+      .select(`${SETTLEMENT_COLUMNS},invoice_id,created_at`)
+      .eq("stripe_connected_account_id", stripeAccountId)
+      .eq("phase", "payment_received")
+      .order("created_at", { ascending: true })
+      .limit(50),
+    admin
+      .from(SETTLEMENT_TABLES.checkout_stripe)
+      .select(`${SETTLEMENT_COLUMNS},created_at`)
+      .eq("stripe_connected_account_id", stripeAccountId)
+      .eq("phase", "payment_received")
+      .order("created_at", { ascending: true })
+      .limit(50),
+  ])
+
+  return [
+    ...(invoiceRows ?? []).map((row) => ({ source: "invoice_stripe" as const, row })),
+    ...(checkoutRows ?? []).map((row) => ({ source: "checkout_stripe" as const, row })),
+  ].sort((a, b) => String(a.row.created_at ?? "").localeCompare(String(b.row.created_at ?? "")))
 }
 
 /**

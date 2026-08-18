@@ -355,7 +355,6 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
     setIsDownloading(true)
     try {
       const paymentSection = buildInvoicePdfPaymentSection({
-        baseUrl: window.location.origin,
         easetag: publicEasetag,
         invoice,
         flags: {

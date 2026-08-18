@@ -87,7 +87,7 @@ import {
 import { currentLocationPath, invoiceBackHref, withReturnTo } from "@/lib/invoice-navigation"
 import {
   buildInvoiceCustomerViewPath,
-  buildInvoiceCustomerViewUrl,
+  buildInvoiceCustomerUrl,
   buildInvoicePreviewUrl,
   invoicePreviewPath,
 } from "@/lib/invoice-public-url"
@@ -534,7 +534,7 @@ export default function InvoiceDetailPage() {
   useEffect(() => {
     if (!invoice?.id || typeof window === "undefined") return
     const origin = window.location.origin
-    setCustomerViewUrl(buildInvoiceCustomerViewUrl(origin, orgEasetag, invoice))
+    setCustomerViewUrl(buildInvoiceCustomerUrl(orgEasetag, invoice))
     setPreviewViewUrl(buildInvoicePreviewUrl(origin, invoice.id))
   }, [invoice?.id, invoice?.invoiceNumber, orgEasetag])
 
@@ -927,7 +927,6 @@ export default function InvoiceDetailPage() {
                     invoice,
                     issuer,
                     buildInvoicePdfPaymentSection({
-                      baseUrl: window.location.origin,
                       easetag: orgEasetag,
                       invoice,
                       flags: paymentFlagsFromDisplay(paymentDisplay),

@@ -20,6 +20,19 @@ export function isStripeConnectEnabled(): boolean {
   return isStripeInvoicePaymentsEnabled()
 }
 
+/**
+ * Same rail as invoice Pay online — used by Payment Links and the website embed.
+ * Optional kill-switch: ONLINE_CHECKOUT_ENABLED=false turns off Collections
+ * without disabling invoice Pay online.
+ */
+export function isOnlineCheckoutEnabled(): boolean {
+  const flag = process.env.ONLINE_CHECKOUT_ENABLED?.trim().toLowerCase()
+  if (flag === "false" || flag === "0" || flag === "off") {
+    return false
+  }
+  return isStripeInvoicePaymentsEnabled()
+}
+
 /** Platform application fee in basis points (built-in: 0 for v1). */
 export function getStripePlatformFeeBps(): number {
   return 0

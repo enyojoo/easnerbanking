@@ -10,7 +10,7 @@ import {
   paymentFlagsFromDisplay,
 } from "@/lib/invoices/invoice-payment-copy"
 import { generateInvoicePdfBuffer } from "@/lib/generate-invoice-pdf"
-import { buildInvoiceCustomerViewUrl } from "@/lib/invoice-public-url"
+import { buildInvoiceCustomerUrl } from "@/lib/invoice-public-url"
 import {
   canProvisionInvoiceDepositInstructions,
   TIER2_COMPLETE_PLACEHOLDER,
@@ -72,14 +72,12 @@ export async function sendInvoiceReminder(row: B2bInvoiceRow, type: ReminderType
 
   const easetag =
     typeof biz?.easetag === "string" && biz.easetag.trim() ? biz.easetag.trim() : null
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://business.easner.com"
-  const invoiceViewUrl = buildInvoiceCustomerViewUrl(baseUrl, easetag, invoice)
+  const invoiceViewUrl = buildInvoiceCustomerUrl(easetag, invoice)
 
   const pdfBuffer = await generateInvoicePdfBuffer(
     invoice,
     { ...issuer, email: replyEmail },
     buildInvoicePdfPaymentSection({
-      baseUrl,
       easetag,
       invoice,
       flags: paymentFlags,

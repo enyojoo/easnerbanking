@@ -16,6 +16,7 @@ import { useOfficeBusinesses, useQueryInitialLoading } from "@/hooks/queries"
 import { businessTypeDisplayText } from "@/lib/business-type-label"
 import { OfficeBackgroundRefresh, OfficeQueryError } from "@/components/data/office-data-status"
 import { ProcessingFeeOverrideSection } from "@/components/platform-control/processing-fee-override-section"
+import { CheckoutFeeOverrideSection } from "@/components/platform-control/checkout-fee-override-section"
 import { VERIFICATION_STATUS_COPY, verificationStatusLabel } from "@easner/shared"
 
 /** Mirrors `public.businesses` (+ owner fields from admin API). */
@@ -432,6 +433,8 @@ function BusinessesPageInner() {
                     subjectType="business"
                     subjectId={selectedBusiness.id}
                   />
+
+                  <CheckoutFeeOverrideSection businessId={selectedBusiness.id} />
 
                   <div>
                     <label className="text-sm font-medium text-gray-900">Extra account currencies</label>

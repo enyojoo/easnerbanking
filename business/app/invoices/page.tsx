@@ -76,7 +76,7 @@ import {
   INVOICE_TOAST_COPY,
 } from "@/lib/copy/business-ui-copy"
 import {
-  buildInvoiceCustomerViewUrl,
+  buildInvoiceCustomerUrl,
   invoicePreviewPath,
 } from "@/lib/invoice-public-url"
 import { isInvoiceCustomerLinkShareable } from "@/lib/invoices/invoice-status"
@@ -328,7 +328,7 @@ export default function InvoicesPage() {
   const handleCopyCustomerLink = async (invoice: Invoice, e: React.MouseEvent) => {
     e.stopPropagation()
     if (!isInvoiceCustomerLinkShareable(invoice.status)) return
-    const url = buildInvoiceCustomerViewUrl(window.location.origin, profile.easetag, invoice)
+    const url = buildInvoiceCustomerUrl(profile.easetag, invoice)
     const ok = await copyText(url)
     if (ok) toast.success(INVOICE_TOAST_COPY.customerLinkCopied)
     else toast.error("Could not copy link")
@@ -370,7 +370,6 @@ export default function InvoicesPage() {
         invoice,
         issuer,
         buildInvoicePdfPaymentSection({
-          baseUrl: window.location.origin,
           easetag: profile.easetag,
           invoice,
           flags: paymentFlagsFromDisplay(paymentDisplay),

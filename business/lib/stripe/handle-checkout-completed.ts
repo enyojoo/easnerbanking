@@ -4,126 +4,20 @@ import { markInvoicePaidStripe } from "@/lib/invoices/mark-invoice-paid-stripe"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { getStripe } from "./client"
-import {
-  parsePaymentMethodDisplayFromCharge,
-  parsePaymentMethodDisplayFromPaymentMethod,
-} from "@/lib/stripe/parse-payment-method-display"
 import type { StripePaymentMethodDisplay } from "@/lib/stripe/parse-payment-method-display"
+import { parsePaymentMethodDisplayFromCharge } from "@/lib/stripe/parse-payment-method-display"
 import { patchInvoiceStripeLedgerTransactionId } from "@/lib/invoices/patch-invoice-stripe-ledger-transaction-id"
 import { needsPaymentMethodHeal } from "@/lib/stripe/heal-invoice-payment-metadata"
+import {
+  parseCheckoutSessionMetadata,
+  settlesAsCollection,
+} from "./checkout-session-metadata"
+import { handleCheckoutCollectionCompleted } from "./handle-checkout-collection-completed"
+import { paymentMethodIsComplete, resolveFeeAndTransfer } from "./resolve-charge-settlement"
 
 function asCents(n: unknown): number {
   const v = typeof n === "number" ? n : Number(n)
   return Number.isFinite(v) ? Math.round(v) : 0
-}
-
-function paymentMethodIsComplete(pm: StripePaymentMethodDisplay | null): boolean {
-  if (!pm?.type) return false
-  if (pm.type === "card") return Boolean(pm.brand || pm.last4)
-  if (pm.type === "us_bank_account" || pm.type === "ach_debit" || pm.type === "ach") {
-    return Boolean(pm.bankName || pm.last4)
-  }
-  return true
-}
-
-function inferPaymentMethodTypeFromSession(
-  types: string[] | null | undefined,
-): string | null {
-  if (!Array.isArray(types) || types.length === 0) return null
-  const normalized = types.map((t) => String(t).trim().toLowerCase()).filter(Boolean)
-  if (normalized.length === 1) return normalized[0]
-  // When multiple types are enabled, prefer bank debit over card for incomplete captures.
-  if (normalized.includes("us_bank_account")) return "us_bank_account"
-  return normalized[0] ?? null
-}
-
-async function resolveFeeAndTransfer(
-  stripe: Stripe,
-  paymentIntentId: string,
-  opts?: { sessionPaymentMethodTypes?: string[] | null },
-): Promise<{
-  feeCents: number
-  chargeId: string | null
-  paymentMethodType: string | null
-  paymentMethod: StripePaymentMethodDisplay | null
-  transferId: string | null
-  connectedAccountId: string | null
-}> {
-  try {
-    const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
-      expand: [
-        "latest_charge.balance_transaction",
-        "latest_charge.transfer",
-        "payment_method",
-      ],
-    })
-    const charge =
-      typeof pi.latest_charge === "object" && pi.latest_charge ? pi.latest_charge : null
-    const chargeId =
-      charge?.id ?? (typeof pi.latest_charge === "string" ? pi.latest_charge : null)
-    const bt =
-      charge && typeof charge.balance_transaction === "object" && charge.balance_transaction
-        ? charge.balance_transaction
-        : null
-    const feeCents = bt && typeof bt.fee === "number" ? bt.fee : 0
-
-    let paymentMethod = parsePaymentMethodDisplayFromCharge(charge)
-    let paymentMethodType =
-      paymentMethod?.type ??
-      (charge && typeof charge.payment_method_details?.type === "string"
-        ? charge.payment_method_details.type
-        : null)
-
-    if (!paymentMethod) {
-      const pmObj =
-        typeof pi.payment_method === "object" && pi.payment_method ? pi.payment_method : null
-      paymentMethod = parsePaymentMethodDisplayFromPaymentMethod(pmObj)
-      paymentMethodType = paymentMethod?.type ?? paymentMethodType
-    }
-
-    if (!paymentMethodType) {
-      paymentMethodType = inferPaymentMethodTypeFromSession(opts?.sessionPaymentMethodTypes)
-      if (paymentMethodType && !paymentMethod) {
-        paymentMethod = { type: paymentMethodType }
-      }
-    }
-
-    let transferId: string | null = null
-    if (charge && typeof charge.transfer === "string") {
-      transferId = charge.transfer
-    } else if (charge && typeof charge.transfer === "object" && charge.transfer) {
-      transferId = charge.transfer.id
-    }
-
-    const connectedFromPi =
-      typeof pi.transfer_data?.destination === "string"
-        ? pi.transfer_data.destination
-        : pi.transfer_data?.destination && typeof pi.transfer_data.destination === "object"
-          ? pi.transfer_data.destination.id
-          : null
-
-    const connectedFromMeta =
-      String(pi.metadata?.easner_stripe_connected_account_id ?? "").trim() || null
-
-    return {
-      feeCents,
-      chargeId,
-      paymentMethodType,
-      paymentMethod,
-      transferId,
-      connectedAccountId: connectedFromPi || connectedFromMeta,
-    }
-  } catch (e) {
-    console.warn("[stripe] fee resolve failed:", e)
-    return {
-      feeCents: 0,
-      chargeId: null,
-      paymentMethodType: null,
-      paymentMethod: null,
-      transferId: null,
-      connectedAccountId: null,
-    }
-  }
 }
 
 async function patchStripeInvoicePaymentMetadata(
@@ -205,7 +99,9 @@ async function patchStripeInvoicePaymentMetadata(
 }
 
 /**
- * Hop 1: checkout.session.completed / payment_intent.succeeded → invoice paid + settlement + ledger.
+ * Hop 1: checkout.session.completed / payment_intent.succeeded → collection settled.
+ * Invoice sources mark the invoice paid; Payment Links and website embeds settle
+ * through {@link handleCheckoutCollectionCompleted}.
  */
 export async function handleStripeCheckoutCompleted(
   admin: SupabaseClient,
@@ -220,6 +116,7 @@ export async function handleStripeCheckoutCompleted(
   let customerEmail: string | null = null
   let customerName: string | null = null
   let sessionPaymentMethodTypes: string[] | null = null
+  let subscriptionId: string | null = null
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session
@@ -241,6 +138,10 @@ export async function handleStripeCheckoutCompleted(
     sessionPaymentMethodTypes = Array.isArray(session.payment_method_types)
       ? session.payment_method_types.map(String)
       : null
+    subscriptionId =
+      typeof session.subscription === "string"
+        ? session.subscription
+        : session.subscription?.id ?? null
   } else if (event.type === "payment_intent.succeeded") {
     const pi = event.data.object as Stripe.PaymentIntent
     paymentIntentId = pi.id
@@ -254,10 +155,27 @@ export async function handleStripeCheckoutCompleted(
     return { handled: false }
   }
 
-  const settlementId = String(metadata.easner_settlement_id ?? "").trim()
-  const invoiceId = String(metadata.easner_invoice_id ?? "").trim()
-  const businessId = String(metadata.easner_business_id ?? "").trim()
-  const invoiceNumber = String(metadata.easner_invoice_number ?? "").trim()
+  const parsed = parseCheckoutSessionMetadata(metadata)
+  const { settlementId, businessId } = parsed
+  const invoiceId = parsed.invoiceId ?? ""
+  const invoiceNumber = parsed.invoiceNumber ?? ""
+
+  if (settlesAsCollection(parsed.source)) {
+    return handleCheckoutCollectionCompleted(admin, event, {
+      source: parsed.source,
+      settlementId,
+      businessId,
+      paymentIntentId,
+      sessionId,
+      subscriptionId,
+      amountTotal,
+      currency,
+      customerEmail,
+      customerName,
+      sessionPaymentMethodTypes,
+      paymentLinkId: parsed.paymentLinkId,
+    })
+  }
 
   if (!settlementId || !invoiceId || !businessId || !paymentIntentId) {
     return { handled: false }
@@ -314,8 +232,7 @@ export async function handleStripeCheckoutCompleted(
     return { handled: true }
   }
 
-  const connectedFromMeta = String(metadata.easner_stripe_connected_account_id ?? "").trim() || null
-  let stripeConnectedAccountId = connectedAccountId || connectedFromMeta
+  let stripeConnectedAccountId = connectedAccountId || parsed.connectedAccountId
 
   if (!stripeConnectedAccountId) {
     const { data: sessionRow } = await admin
@@ -461,6 +378,7 @@ export async function handleStripeCheckoutCompleted(
       fee_cents: feeCents,
       net_cents: netCents,
       currency,
+      fee_mode: parsed.feeMode,
       phase: "payment_received",
       ledger_transaction_id: ledger.transactionId,
       stripe_event_ids: eventIds,

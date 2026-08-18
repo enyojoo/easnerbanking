@@ -1,6 +1,7 @@
-"use client"
-
-import { Card, CardContent } from "@/components/ui/card"
+import {
+  CheckoutHubPills,
+  CheckoutIntegrationHub,
+} from "@/components/checkout/checkout-integration-hub"
 
 export default function CheckoutPage() {
   return (
@@ -9,19 +10,17 @@ export default function CheckoutPage() {
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Online Checkout</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Connect your website — allowlisted origins, API keys, embed snippet, server examples, and webhooks. Customers
-            pay on your site; this page is the integration hub, not a hosted checkout builder.
+            Take card and bank payments on your own website. Your products, cart, and checkout page
+            stay yours — Easner supplies the payment form and settles the money into your Easner
+            Balance.
           </p>
+          <div className="mt-3">
+            <CheckoutHubPills />
+          </div>
         </div>
       </div>
 
-      <Card>
-        <CardContent className="p-6 text-sm text-muted-foreground">
-          Setup checklist (online payments ready, website origins, return URLs, keys, snippet, webhook, test preview)
-          ships here next. Complete verification in Settings if card payments are not enabled yet. Payment Links for
-          no-code URLs live under Collections → Links.
-        </CardContent>
-      </Card>
+      <CheckoutIntegrationHub />
     </div>
   )
 }

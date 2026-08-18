@@ -17,9 +17,13 @@ Connect onboarding, destination charges, zero platform fee, and daily payouts ar
    - Enable **Listen to events on Connected accounts**.
    - Events: `account.updated`, `account.external_account.created`, `account.external_account.updated`,
      `account.external_account.deleted`, `capability.updated`, `checkout.session.completed`,
-     `payment_intent.succeeded`, `payout.paid`, `payout.failed`, `charge.dispute.created`,
-     `charge.refunded`, `transfer.created`.
-4. Payment method domains: `business.easner.com`.
+     `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.succeeded`,
+     `payout.paid`, `payout.failed`, `charge.dispute.created`, `charge.refunded`,
+     `transfer.created`, `invoice.paid`, `invoice.payment_failed`,
+     `customer.subscription.updated`, `customer.subscription.deleted`.
+4. Payment method domains: `business.easner.com`, `invoice.easner.com`, `pay.easner.com`,
+   plus every merchant domain registered in Online Checkout settings (Payment Element on
+   merchant sites needs the domain registered for wallets).
 5. Prefer **disabling** merchant self-serve external account collection in embedded
    onboarding (Easner links Grid VA via API). Already disabled in Account Session features.
 
@@ -29,8 +33,14 @@ Connect onboarding, destination charges, zero platform fee, and daily payouts ar
 STRIPE_SECRET_KEY=
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
 STRIPE_WEBHOOK_SECRET=
-# Optional kill-switch only:
+# Customer-facing hosts (default to invoice.easner.com / pay.easner.com):
+NEXT_PUBLIC_INVOICE_APP_URL=
+NEXT_PUBLIC_PAY_APP_URL=
+# Encrypts merchant webhook signing secrets (falls back to KYB_PII_ENCRYPTION_KEY):
+CHECKOUT_SECRET_ENCRYPTION_KEY=
+# Optional kill-switches only:
 # STRIPE_INVOICE_PAYMENTS_ENABLED=false
+# ONLINE_CHECKOUT_ENABLED=false
 ```
 
 ## Rollout
@@ -100,6 +110,45 @@ Alerts:
 
 ## Support notes
 
-- Refunds before credit: use invoice refund API (`reverse_transfer: true`).
+- Refunds before credit: use invoice refund API (`reverse_transfer: true`), or
+  `POST /api/checkout/refund` with `settlement_id` for a Payment Link / website checkout payment.
 - Refunds after credit: clawback required (API returns 409).
 - Disputes debit the **platform**; reverse transfer manually if needed.
+- A refund issued from the Stripe Dashboard is picked up by `charge.refunded` / `refund.created`
+  and fails the matching settlement and ledger entry for both invoices and collections.
+
+## Collections go-live (Payment Links + Online Checkout)
+
+Payment Links and the website embed share the invoice settlement rail: one session creator
+(`createOnlineCheckoutSession`), destination charges with `application_fee_amount`, and the
+same payout → Grid VA → balance hops. Settlements land in `checkout_stripe_settlements` and
+the ledger source is `checkout_stripe`.
+
+Before enabling for a merchant:
+
+1. Apply migration `20260818140000_collections_checkout.sql`.
+2. Connect account has **transfers + payouts active** and the Grid VA linked (same gate as
+   invoice Pay online — `resolveConnectReadyForCheckout`).
+3. Fee policy decided: business picks merchant net or buyer surcharge on `/checkout`; ops can
+   force any of the three modes (including Easner absorbs) from the Office business profile,
+   which supersedes the business choice.
+4. Customer hosts resolve: `invoice.easner.com` and `pay.easner.com` both point at this app
+   (middleware rewrites each host onto its own route tree).
+5. Radar rules reviewed on the platform account — Collections raises card volume from
+   unknown buyers, unlike invoices sent to named customers.
+6. Statement descriptor: invoices show `INV <number>`, links and embeds show the business
+   name suffix under the `EASNER` platform prefix.
+7. Merchant webhook endpoint saved and test event delivered from `/checkout`, then two smoke
+   payments with test card `4242 4242 4242 4242`: one through the hub's payment preview
+   (embed path) and one on a real Payment Link at `pay.easner.com` (link path). Both should
+   appear in Transactions as an Online Checkout collection.
+8. Margin report smoke test: confirm `application_fee_cents` on new sessions matches the
+   settlement fee for each fee mode.
+
+Recurring links (Stripe Billing on the platform account):
+
+- Closing a recurring link cancels its active subscriptions, so no further renewals are charged.
+- Renewals settle on `invoice.paid`; failures send the merchant a `checkout.failed` event with
+  the subscription id so dunning can be handled on their side.
+
+Reference: `connect-recommend-plan.md` for the product spec and fee math.

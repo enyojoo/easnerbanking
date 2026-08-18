@@ -73,6 +73,29 @@ export function isStripeInvoiceSettlementMetadata(
   return String(meta.source ?? "").toLowerCase() === "invoice_stripe"
 }
 
+/** Payment Link or website-embed collection on the same settlement rail as invoices. */
+export function isStripeCheckoutSettlementMetadata(
+  meta: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!meta) return false
+  return String(meta.source ?? "").toLowerCase() === "checkout_stripe"
+}
+
+export function isStripeCollectionSettlementMetadata(
+  meta: Record<string, unknown> | null | undefined,
+): boolean {
+  return isStripeInvoiceSettlementMetadata(meta) || isStripeCheckoutSettlementMetadata(meta)
+}
+
+/** List/detail title for a collection settlement — invoice number, link label, or embed. */
+export function stripeCollectionSettlementTitle(
+  meta: Record<string, unknown> | null | undefined,
+): string {
+  if (isStripeInvoiceSettlementMetadata(meta)) return "Invoice payment"
+  const headline = typeof meta?.headline === "string" ? meta.headline.trim() : ""
+  return headline || "Online payment"
+}
+
 export function buildStripeInvoiceSettlementLifecycle(
   input: BuildStripeInvoiceSettlementLifecycleInput,
 ): StripeInvoiceSettlementLifecycleStep[] {

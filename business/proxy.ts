@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { maybeRedirectApiHostToBusiness } from "@/lib/api-subdomain-redirect"
 import { applyCorsHeaders, corsPreflightResponse, getCorsAllowedOrigins } from "@/lib/cors"
+import { maybeRewriteCustomerHost } from "@/lib/customer-host-routing"
 
 function getClientIp(request: NextRequest): string {
   const forwarded = request.headers.get("x-forwarded-for")
@@ -17,6 +18,10 @@ export function proxy(request: NextRequest) {
   /** `api.*` domain: only `/api/*` is meant for clients; send browsers to the business web origin. */
   const apiHostRedirect = maybeRedirectApiHostToBusiness(request)
   if (apiHostRedirect) return apiHostRedirect
+
+  /** Customer hosts (invoice.easner.com, pay.easner.com) share this app. */
+  const customerHostRewrite = maybeRewriteCustomerHost(request)
+  if (customerHostRewrite) return customerHostRewrite
 
   // Browser calls from Easner Office (different origin) need CORS on API responses.
   if (pathname.startsWith("/api/")) {

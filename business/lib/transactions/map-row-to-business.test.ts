@@ -108,6 +108,12 @@ vi.mock("@easner/shared", () => ({
       : "Bank Deposit",
   isStripeInvoiceSettlementMetadata: (meta?: Record<string, unknown> | null) =>
     String(meta?.source ?? "").toLowerCase() === "invoice_stripe",
+  isStripeCollectionSettlementMetadata: (meta?: Record<string, unknown> | null) =>
+    ["invoice_stripe", "checkout_stripe"].includes(String(meta?.source ?? "").toLowerCase()),
+  stripeCollectionSettlementTitle: (meta?: Record<string, unknown> | null) =>
+    String(meta?.source ?? "").toLowerCase() === "invoice_stripe"
+      ? "Invoice payment"
+      : String(meta?.headline ?? "") || "Online payment",
   buildStripeInvoiceSettlementLifecycle: () => [
     {
       id: "payment_received",

@@ -8,14 +8,17 @@ function sanitizeAlnum(raw: string): string {
 }
 
 /**
- * Platform MoR suffix — Easner is on the statement; invoice number only.
- * Dashboard prefix should be EASNER → "EASNER* INV ACME2024"
+ * Platform MoR suffix — Easner is on the statement. Invoices carry their number
+ * ("EASNER* INV ACME2024"); other collections carry the business name so the payer
+ * recognizes the charge.
  */
 export function buildEasnerStatementSuffix(input: {
   invoiceNumber?: string | null
+  businessName?: string | null
 }): string {
-  const inv = sanitizeAlnum(String(input.invoiceNumber ?? "")).slice(0, 14) || "INVOICE"
-  return `INV ${inv}`.trim().slice(0, 22)
+  const inv = sanitizeAlnum(String(input.invoiceNumber ?? "")).slice(0, 14)
+  if (inv) return `INV ${inv}`.slice(0, 22)
+  return sanitizeAlnum(String(input.businessName ?? "")).slice(0, 22) || "PAYMENT"
 }
 
 /** @deprecated Prefer buildEasnerStatementSuffix for platform MoR. */

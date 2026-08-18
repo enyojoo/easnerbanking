@@ -10,7 +10,7 @@ import type { Account } from "@/lib/finance-types"
 import type { Invoice } from "@/lib/b2b/types"
 import { cn, formatCurrency } from "@/lib/utils"
 import { businessInfo } from "@/lib/business-info"
-import { buildInvoiceCustomerViewUrl } from "@/lib/invoice-public-url"
+import { buildInvoiceCustomerUrl } from "@/lib/invoice-public-url"
 import { getPaymentInstructions } from "@/lib/payment-instructions"
 import {
   bankPaymentExtraInstruction,
@@ -454,7 +454,7 @@ export function InvoicePaymentOptions({
           : ""
     const url =
       typeof window !== "undefined"
-        ? buildInvoiceCustomerViewUrl(window.location.origin, publicInvoiceEasetag, invoice)
+        ? buildInvoiceCustomerUrl(publicInvoiceEasetag, invoice)
         : ""
     return { details, url }
   }
