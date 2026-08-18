@@ -38,32 +38,12 @@ describe("checkout phases", () => {
     expect(firstIncompletePhase(payload({}))).toBe("get_ready")
   })
 
-  it("does not mark integrate complete from keys alone", () => {
-    const data = payload({ ready: true, businessFeeMode: "merchant_net", allowedOrigins: ["https://a.com"], defaultSuccessUrl: "https://a.com/ok" })
-    data.readiness.ready = true
-    data.keys = [
-      {
-        id: "1",
-        mode: "test",
-        publishable_key: "easner_pk_test_x",
-        secret_key_last4: "abcd",
-        created_at: "",
-        last_used_at: null,
-      },
-    ]
-    const done = completedCheckoutSteps(data)
-    const integrate = CHECKOUT_PHASES.find((p) => p.id === "integrate")!
-    expect(phaseComplete(integrate, done)).toBe(false)
-    expect(checkoutSetupComplete(data)).toBe(false)
-  })
-
-  it("marks integrate complete after keys and a test payment", () => {
+  it("marks integrate complete once keys exist", () => {
     const data = payload({
       ready: true,
       businessFeeMode: "merchant_net",
       allowedOrigins: ["https://a.com"],
       defaultSuccessUrl: "https://a.com/ok",
-      testPaymentCompletedAt: "2026-08-18T00:00:00.000Z",
     })
     data.keys = [
       {
@@ -79,5 +59,27 @@ describe("checkout phases", () => {
     const integrate = CHECKOUT_PHASES.find((p) => p.id === "integrate")!
     expect(phaseComplete(integrate, done)).toBe(true)
     expect(checkoutSetupComplete(data)).toBe(false)
+  })
+
+  it("marks setup complete after keys and a webhook, without an in-app test payment", () => {
+    const data = payload({
+      ready: true,
+      businessFeeMode: "merchant_net",
+      allowedOrigins: ["https://a.com"],
+      defaultSuccessUrl: "https://a.com/ok",
+      webhookUrl: "https://a.com/hooks",
+      webhookSecretLast4: "wxyz",
+    })
+    data.keys = [
+      {
+        id: "1",
+        mode: "test",
+        publishable_key: "easner_pk_test_x",
+        secret_key_last4: "abcd",
+        created_at: "",
+        last_used_at: null,
+      },
+    ]
+    expect(checkoutSetupComplete(data)).toBe(true)
   })
 })

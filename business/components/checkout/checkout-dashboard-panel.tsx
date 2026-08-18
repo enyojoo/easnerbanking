@@ -12,11 +12,9 @@ import { COLLECTIONS_COPY } from "@/lib/copy/business-ui-copy"
 export function CheckoutDashboardPanel({
   data,
   onEdit,
-  onTest,
 }: {
   data: CheckoutHubPayload
   onEdit: () => void
-  onTest: () => void
 }) {
   const [framework, setFramework] = useState("html")
   const testKey = data.keys.find((key) => key.mode === "test")
@@ -67,9 +65,6 @@ export function Pay() {
       <div className="flex flex-wrap gap-2">
         <Button type="button" onClick={onEdit}>
           {COLLECTIONS_COPY.editIntegration}
-        </Button>
-        <Button type="button" variant="outline" onClick={onTest}>
-          {COLLECTIONS_COPY.runTest}
         </Button>
         <Button type="button" variant="outline" asChild>
           <Link href="/transactions">{COLLECTIONS_COPY.viewTransactions}</Link>

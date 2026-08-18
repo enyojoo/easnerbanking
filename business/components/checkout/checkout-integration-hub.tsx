@@ -3,22 +3,28 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
-import { Check, Circle, Plus, X } from "lucide-react"
+import { Check, Circle, Edit, Loader2, Plus, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   CheckoutCodeBlock,
   RevealOnceValue,
 } from "@/components/checkout/checkout-code-block"
 import { CheckoutDashboardPanel } from "@/components/checkout/checkout-dashboard-panel"
 import { CheckoutHubSkeleton } from "@/components/collections/collections-skeletons"
-import {
-  EasnerPaymentElementCheckout,
-  PaymentFormSkeleton,
-} from "@/components/checkout/easner-payment-element-checkout"
 import {
   saveCheckoutSettings,
   useCheckoutSettings,
@@ -42,11 +48,11 @@ import {
 } from "@/lib/checkout/checkout-phases"
 import { cn } from "@/lib/utils"
 
-const PHASE_COPY: Record<CheckoutPhaseId, { title: string; blurb: string }> = {
-  get_ready: { title: COLLECTIONS_COPY.phaseGetReady, blurb: COLLECTIONS_COPY.phaseGetReadyBlurb },
-  connect_site: { title: COLLECTIONS_COPY.phaseConnect, blurb: COLLECTIONS_COPY.phaseConnectBlurb },
-  integrate: { title: COLLECTIONS_COPY.phaseIntegrate, blurb: COLLECTIONS_COPY.phaseIntegrateBlurb },
-  verify: { title: COLLECTIONS_COPY.phaseVerify, blurb: COLLECTIONS_COPY.phaseVerifyBlurb },
+const PHASE_COPY: Record<CheckoutPhaseId, { title: string }> = {
+  get_ready: { title: COLLECTIONS_COPY.phaseGetReady },
+  connect_site: { title: COLLECTIONS_COPY.phaseConnect },
+  integrate: { title: COLLECTIONS_COPY.phaseIntegrate },
+  verify: { title: COLLECTIONS_COPY.phaseVerify },
 }
 
 const STEP_COPY: Record<CheckoutStepId, { title: string; blurb: string }> = {
@@ -110,14 +116,7 @@ export function CheckoutIntegrationHub({
   if (dashboardReady) {
     return (
       <div className="space-y-6">
-        <CheckoutDashboardPanel
-          data={data}
-          onEdit={() => setEditing(true)}
-          onTest={() => {
-            setEditing(true)
-            setPhase("verify")
-          }}
-        />
+        <CheckoutDashboardPanel data={data} onEdit={() => setEditing(true)} />
       </div>
     )
   }
@@ -173,7 +172,6 @@ export function CheckoutIntegrationHub({
 
         <Card>
           <CardContent className="flex flex-col gap-10 p-6 sm:p-8">
-            <p className="text-sm leading-relaxed text-muted-foreground">{PHASE_COPY[phase].blurb}</p>
             {CHECKOUT_PHASES.find((item) => item.id === phase)?.steps.map((step, index) => (
               <section
                 key={step}
@@ -214,7 +212,7 @@ function StepBody({ step, data, onSaved }: StepProps & { step: CheckoutStepId })
     case "webhook":
       return <StepWebhook data={data} onSaved={onSaved} />
     case "test":
-      return <StepTest data={data} onSaved={onSaved} />
+      return <StepTest />
     case "live":
       return <StepLive data={data} onSaved={onSaved} />
   }
@@ -543,27 +541,51 @@ function StepSession() {
 }
 
 function StepWebhook({ data, onSaved }: StepProps) {
-  const [url, setUrl] = useState(data.settings.webhookUrl ?? "")
+  const savedUrl = data.settings.webhookUrl ?? ""
+  const [editing, setEditing] = useState(!savedUrl)
+  const [url, setUrl] = useState(savedUrl)
   const [saving, setSaving] = useState(false)
+  const [rotating, setRotating] = useState(false)
   const [testing, setTesting] = useState(false)
+  const [rotateOpen, setRotateOpen] = useState(false)
   const [secret, setSecret] = useState<string | null>(null)
+  const [lastTest, setLastTest] = useState<string | null>(null)
+  const hasSecret = Boolean(data.settings.webhookSecretLast4)
 
-  const save = async (rotate: boolean) => {
+  useEffect(() => {
+    if (!editing) setUrl(savedUrl)
+  }, [savedUrl, editing])
+
+  const saveUrl = async () => {
     setSaving(true)
     try {
-      const result = await saveCheckoutSettings({
-        webhook_url: url,
-        ...(rotate ? { rotate_webhook_secret: true } : {}),
-      })
+      const result = await saveCheckoutSettings({ webhook_url: url })
       if (!result.ok) {
         toast.error(result.error || "Could not save")
         return
       }
-      if (result.webhookSecret) setSecret(result.webhookSecret)
       toast.success("Saved.")
+      setEditing(false)
       onSaved()
     } finally {
       setSaving(false)
+    }
+  }
+
+  const rotateSecret = async () => {
+    setRotating(true)
+    try {
+      const result = await saveCheckoutSettings({ rotate_webhook_secret: true })
+      if (!result.ok) {
+        toast.error(result.error || "Could not rotate the secret")
+        return
+      }
+      if (result.webhookSecret) setSecret(result.webhookSecret)
+      toast.success(hasSecret ? "Signing secret rotated." : "Signing secret created.")
+      setRotateOpen(false)
+      onSaved()
+    } finally {
+      setRotating(false)
     }
   }
 
@@ -574,9 +596,12 @@ function StepWebhook({ data, onSaved }: StepProps) {
       const body = (await res.json().catch(() => ({}))) as { error?: string; status?: number }
       if (!res.ok) {
         toast.error(body.error || "Test delivery failed")
+        setLastTest(null)
         return
       }
-      toast.success(`Your endpoint replied ${body.status ?? 200}.`)
+      const message = `Your endpoint replied ${body.status ?? 200}.`
+      setLastTest(message)
+      toast.success(message)
     } finally {
       setTesting(false)
     }
@@ -585,42 +610,115 @@ function StepWebhook({ data, onSaved }: StepProps) {
   return (
     <>
       <StepHeading title={STEP_COPY.webhook.title} blurb={STEP_COPY.webhook.blurb} />
-      <div className="space-y-2">
-        <Label htmlFor="checkout-webhook">Endpoint URL</Label>
+
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Label htmlFor="checkout-webhook" className="mb-0">
+            Endpoint URL
+          </Label>
+          {editing ? (
+            <div className="flex items-center gap-2">
+              {savedUrl ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={saving}
+                  onClick={() => {
+                    setUrl(savedUrl)
+                    setEditing(false)
+                  }}
+                >
+                  <X className="mr-1 h-4 w-4" aria-hidden />
+                  Cancel
+                </Button>
+              ) : null}
+              <Button type="button" size="sm" disabled={saving} onClick={() => void saveUrl()}>
+                {saving ? (
+                  <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden />
+                ) : (
+                  <Check className="mr-1 h-4 w-4" aria-hidden />
+                )}
+                Save
+              </Button>
+            </div>
+          ) : (
+            <Button type="button" variant="outline" size="sm" onClick={() => setEditing(true)}>
+              <Edit className="mr-1 h-4 w-4" aria-hidden />
+              Edit
+            </Button>
+          )}
+        </div>
         <Input
           id="checkout-webhook"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://shop.yoursite.com/webhooks/easner"
+          disabled={!editing}
+          className="font-mono text-xs"
         />
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" disabled={saving} onClick={() => void save(false)}>
-          {saving ? "Saving…" : "Save endpoint"}
-        </Button>
-        <Button type="button" variant="outline" disabled={saving} onClick={() => void save(true)}>
-          {data.settings.webhookSecretLast4 ? "Rotate signing secret" : "Create signing secret"}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={testing || !data.settings.webhookUrl}
-          onClick={() => void sendTest()}
-        >
-          {testing ? "Sending…" : "Send test event"}
-        </Button>
+        {!savedUrl && editing ? (
+          <p className="text-xs text-muted-foreground">Save an https:// URL your server can receive.</p>
+        ) : null}
       </div>
 
-      {secret ? (
-        <RevealOnceValue
-          value={secret}
-          note="Use it to verify the Easner-Signature header on every event."
-        />
-      ) : data.settings.webhookSecretLast4 ? (
-        <p className="text-xs text-muted-foreground">
-          Signing secret ending {data.settings.webhookSecretLast4}.
-        </p>
-      ) : null}
+      <div className="flex flex-col gap-3 rounded-xl border p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <p className="text-sm font-medium text-foreground">Signing secret</p>
+            <p className="text-xs text-muted-foreground">
+              {data.settings.webhookSecretLast4
+                ? `Ending ${data.settings.webhookSecretLast4}. Use it to verify the Easner-Signature header.`
+                : "Create a secret before you verify events on your server."}
+            </p>
+          </div>
+          {hasSecret ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={rotating}
+              onClick={() => setRotateOpen(true)}
+            >
+              Rotate
+            </Button>
+          ) : (
+            <Button type="button" size="sm" disabled={rotating} onClick={() => void rotateSecret()}>
+              {rotating ? "Creating…" : "Create"}
+            </Button>
+          )}
+        </div>
+        {secret ? (
+          <RevealOnceValue
+            value={secret}
+            note="Use it to verify the Easner-Signature header on every event."
+          />
+        ) : null}
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-xl border p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <p className="text-sm font-medium text-foreground">Test delivery</p>
+            <p className="text-xs text-muted-foreground">
+              Sends a signed event to the saved endpoint. Does not charge a card.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={testing || !savedUrl}
+            onClick={() => void sendTest()}
+          >
+            {testing ? "Sending…" : "Send test"}
+          </Button>
+        </div>
+        {lastTest ? <p className="text-xs text-muted-foreground">{lastTest}</p> : null}
+        {!savedUrl ? (
+          <p className="text-xs text-muted-foreground">Save an endpoint before sending a test.</p>
+        ) : null}
+      </div>
 
       <div className="space-y-2">
         <p className="text-sm font-medium text-foreground">Events you can listen for</p>
@@ -633,65 +731,50 @@ function StepWebhook({ data, onSaved }: StepProps) {
           ))}
         </ul>
       </div>
+
+      <AlertDialog open={rotateOpen} onOpenChange={setRotateOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Rotate signing secret?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The current secret stops working immediately. Copy the new one and update your server
+              before events fail to verify.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={rotating}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={rotating}
+              onClick={(event) => {
+                event.preventDefault()
+                void rotateSecret()
+              }}
+            >
+              {rotating ? "Rotating…" : "Rotate secret"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }
 
-function StepTest({ data, onSaved }: StepProps) {
-  const [session, setSession] = useState<{ clientSecret: string; amountCents: number } | null>(null)
-  const [starting, setStarting] = useState(false)
-
-  const start = async () => {
-    setStarting(true)
-    try {
-      const res = await fetchWithSession("/api/checkout/test-session", { method: "POST" })
-      const body = (await res.json().catch(() => ({}))) as {
-        clientSecret?: string
-        amountCents?: number
-        error?: string
-      }
-      if (!res.ok || !body.clientSecret) {
-        toast.error(body.error || "Could not start the test payment")
-        return
-      }
-      setSession({ clientSecret: body.clientSecret, amountCents: body.amountCents ?? 100 })
-    } finally {
-      setStarting(false)
-    }
-  }
-
-  const markComplete = async () => {
-    await saveCheckoutSettings({ test_payment_completed: true })
-    onSaved()
-  }
-
+function StepTest() {
   return (
     <>
       <StepHeading title={STEP_COPY.test.title} blurb={STEP_COPY.test.blurb} />
       <p className="text-sm text-muted-foreground">
-        Card <code className="rounded bg-muted px-1.5 py-0.5 text-xs">4242 4242 4242 4242</code>,
-        any future expiry, any security code.
+        Use the test keys from Integrate on a website you added, then pay with card{" "}
+        <code className="rounded bg-muted px-1.5 py-0.5 text-xs">4242 4242 4242 4242</code>, any
+        future expiry, and any security code.
       </p>
-      {session ? (
-        <EasnerPaymentElementCheckout
-          clientSecret={session.clientSecret}
-          amount={session.amountCents / 100}
-          currency="USD"
-          successMessage="Test payment received. It appears on Transactions as an Online Checkout payment."
-          onPaid={() => void markComplete()}
-        />
-      ) : starting ? (
-        <PaymentFormSkeleton />
-      ) : (
-        <Button type="button" onClick={() => void start()}>
-          Start test payment
-        </Button>
-      )}
-      {data.settings.testPaymentCompletedAt ? (
-        <p className="text-xs text-muted-foreground">
-          You already completed a test payment. Run another any time.
-        </p>
-      ) : null}
+      <p className="text-sm text-muted-foreground">
+        A successful test shows on{" "}
+        <Link href="/transactions" className="underline underline-offset-2">
+          Transactions
+        </Link>
+        . Use Test delivery in Webhook if you only need to confirm the endpoint.
+      </p>
     </>
   )
 }

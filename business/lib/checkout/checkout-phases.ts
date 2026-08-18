@@ -33,13 +33,10 @@ export function completedCheckoutSteps(data: CheckoutHubPayload | null): Set<Che
   if (data.settings.defaultSuccessUrl) done.add("urls")
   if (data.keys.length > 0) {
     done.add("keys")
-    if (data.settings.testPaymentCompletedAt) {
-      done.add("snippet")
-      done.add("session")
-    }
+    done.add("snippet")
+    done.add("session")
   }
   if (data.settings.webhookUrl && data.settings.webhookSecretLast4) done.add("webhook")
-  if (data.settings.testPaymentCompletedAt) done.add("test")
   if (data.settings.liveModeEnabled) done.add("live")
   return done
 }
@@ -49,10 +46,10 @@ export function phaseComplete(
   done: Set<CheckoutStepId>,
 ): boolean {
   if (phase.id === "integrate") {
-    return done.has("keys") && done.has("test")
+    return done.has("keys")
   }
   if (phase.id === "verify") {
-    return done.has("webhook") && (done.has("live") || done.has("test"))
+    return done.has("webhook")
   }
   return phase.steps.every((step) => done.has(step))
 }

@@ -7,18 +7,6 @@ import { CollectionsPageHeader } from "@/components/collections/collections-page
 import { useCheckoutSettings } from "@/hooks/use-checkout-settings"
 import { COLLECTIONS_COPY, PAGE_COPY } from "@/lib/copy/business-ui-copy"
 
-function relativeTime(iso: string | null): string | null {
-  if (!iso) return null
-  const then = new Date(iso).getTime()
-  if (!Number.isFinite(then)) return null
-  const delta = Date.now() - then
-  const hours = Math.round(delta / 3_600_000)
-  if (hours < 1) return `${COLLECTIONS_COPY.statusLastTest}: just now`
-  if (hours < 24) return `${COLLECTIONS_COPY.statusLastTest}: ${hours}h ago`
-  const days = Math.round(hours / 24)
-  return `${COLLECTIONS_COPY.statusLastTest}: ${days}d ago`
-}
-
 export default function CheckoutPage() {
   const { data } = useCheckoutSettings()
   const [dashboard, setDashboard] = useState(false)
@@ -29,7 +17,6 @@ export default function CheckoutPage() {
     return [
       data.settings.liveModeEnabled ? COLLECTIONS_COPY.statusLive : COLLECTIONS_COPY.statusTest,
       webhookOn ? COLLECTIONS_COPY.statusWebhookOn : COLLECTIONS_COPY.statusWebhookOff,
-      relativeTime(data.settings.testPaymentCompletedAt) ?? COLLECTIONS_COPY.statusNoTest,
     ]
   }, [data])
 
