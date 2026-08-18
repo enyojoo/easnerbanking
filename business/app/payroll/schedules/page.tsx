@@ -68,7 +68,7 @@ export default function PayrollSchedulesPage() {
   }
   return (
     <div className="flex flex-col gap-6">
-    <PayrollListToolbar>
+    <PayrollListToolbar
       query={query}
       onQueryChange={setQuery}
       queryPlaceholder="Search schedules"

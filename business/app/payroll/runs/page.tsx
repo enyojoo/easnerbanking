@@ -116,7 +116,7 @@ export default function PayrollRunsPage() {
   }
   return (
     <div className="flex flex-col gap-6">
-    <PayrollListToolbar>
+    <PayrollListToolbar
       query={query}
       onQueryChange={setQuery}
       queryPlaceholder="Search payroll runs"
