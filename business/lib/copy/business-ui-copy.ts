@@ -563,6 +563,8 @@ export const PAYMENTS_SETTINGS_COPY = {
   feesIntro: "Applies to every card and bank payment you collect.",
   payoutTitle: "Payout and settlement",
   payoutIntro: "Card and bank payments settle to your Easner account.",
+  payoutAccountLabel: "USD Balance",
+  payoutAccountHint: "Payout account",
   statusOff: "Turned off",
   statusReady: "Ready",
   statusSetup: "Setup required",

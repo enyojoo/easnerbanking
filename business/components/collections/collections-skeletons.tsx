@@ -83,10 +83,19 @@ export function PaymentsSettingsPanelSkeleton() {
 
 export function PaymentsPayoutSkeleton() {
   return (
-    <div className="space-y-3" aria-busy="true" aria-label="Loading payout details">
-      <Skeleton className="h-4 w-32" />
-      <Skeleton className="h-4 w-2/3" />
-      <Skeleton className="h-4 w-1/2" />
+    <div
+      className="flex items-center justify-between gap-3 rounded-xl border bg-muted/20 p-3 sm:p-4"
+      aria-busy="true"
+      aria-label="Loading payout account"
+    >
+      <div className="flex items-center gap-3">
+        <Skeleton className="h-9 w-9 rounded-full" />
+        <div className="space-y-1.5">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-3 w-20" />
+        </div>
+      </div>
+      <Skeleton className="h-6 w-24" />
     </div>
   )
 }
