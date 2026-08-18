@@ -1,12 +1,19 @@
 import type { Appearance, StripeElementLocale } from "@stripe/stripe-js"
 
-/** Stripe Appearance Builder “Shapes → pill” (fully rounded inputs and buttons). */
-const PILL_RADIUS = "100px"
+/** Fully rounded ends — Stripe Appearance Builder “Shapes → pill”. */
+const PILL_RADIUS = "9999px"
+const BOX_BORDER = "hsl(40 27% 82%)"
 
-/** Stripe Elements appearance aligned with Easner business invoice UI (light). */
+/**
+ * Stripe Elements appearance aligned with Easner business invoice UI (light).
+ * `inputs: spaced` so card number / expiry / CVC are individual pill boxes
+ * instead of Stripe’s condensed grouped card (which ignores a large radius).
+ */
 export function easnerStripeElementsAppearance(): Appearance {
   return {
     theme: "stripe",
+    inputs: "spaced",
+    labels: "above",
     variables: {
       colorPrimary: "#0080cc",
       colorBackground: "#faf9f6",
@@ -21,8 +28,32 @@ export function easnerStripeElementsAppearance(): Appearance {
     },
     rules: {
       ".AccordionItem": {
-        borderColor: "hsl(40 27% 82%)",
+        borderRadius: PILL_RADIUS,
+        borderColor: BOX_BORDER,
         boxShadow: "none",
+        padding: "12px 20px",
+      },
+      ".AccordionItem--selected": {
+        borderRadius: PILL_RADIUS,
+        padding: "14px 22px 22px",
+      },
+      ".Input": {
+        borderRadius: PILL_RADIUS,
+        borderColor: BOX_BORDER,
+        padding: "12px 16px",
+      },
+      ".Block": {
+        borderRadius: PILL_RADIUS,
+        borderColor: BOX_BORDER,
+      },
+      ".Tab": {
+        borderRadius: PILL_RADIUS,
+      },
+      ".PickerItem": {
+        borderRadius: PILL_RADIUS,
+      },
+      ".Dropdown": {
+        borderRadius: PILL_RADIUS,
       },
       ".Label": {
         fontWeight: "500",
