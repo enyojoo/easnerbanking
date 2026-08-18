@@ -1,5 +1,6 @@
 import { getStripePublishableKey } from "@/lib/stripe/config"
 import { onlinePaymentTabHint } from "@/lib/invoices/invoice-payment-copy"
+import { easnerStripeElementsAppearance } from "@/lib/stripe/elements-appearance"
 
 /**
  * Embed script served at /checkout.js (js.easner.com points here).
@@ -11,6 +12,7 @@ import { onlinePaymentTabHint } from "@/lib/invoices/invoice-payment-copy"
  */
 export async function GET() {
   const platformKey = getStripePublishableKey()
+  const defaultAppearance = easnerStripeElementsAppearance()
 
   const script = `(function () {
   "use strict";
@@ -68,8 +70,9 @@ export async function GET() {
       return loadSdk().then(function (sdk) {
         var mountEmail = String(opts.customerEmail || "").trim();
         var mountName = String(opts.customerName || "").trim();
-        var elementsOptions = {};
-        if (opts.appearance) elementsOptions.appearance = opts.appearance;
+        var elementsOptions = {
+          appearance: opts.appearance || ${JSON.stringify(defaultAppearance)},
+        };
         if (mountName) {
           elementsOptions.defaultValues = { billingDetails: { name: mountName } };
         }
@@ -113,7 +116,7 @@ export async function GET() {
             emailInput.style.margin = "0 0 16px";
             emailInput.style.padding = "0 16px";
             emailInput.style.border = "1px solid #D6D9D6";
-            emailInput.style.borderRadius = "16px";
+            emailInput.style.borderRadius = "100px";
             emailInput.style.fontSize = "15px";
             var form = document.createElement("form");
             form.setAttribute("novalidate", "novalidate");

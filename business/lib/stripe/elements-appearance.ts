@@ -1,5 +1,8 @@
 import type { Appearance, StripeElementLocale } from "@stripe/stripe-js"
 
+/** Stripe Appearance Builder “Shapes → pill” (fully rounded inputs and buttons). */
+const PILL_RADIUS = "100px"
+
 /** Stripe Elements appearance aligned with Easner business invoice UI (light). */
 export function easnerStripeElementsAppearance(): Appearance {
   return {
@@ -11,7 +14,9 @@ export function easnerStripeElementsAppearance(): Appearance {
       colorDanger: "#7a2e2e",
       fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
       fontSizeBase: "15px",
-      borderRadius: "8px",
+      borderRadius: PILL_RADIUS,
+      buttonBorderRadius: PILL_RADIUS,
+      buttonExpressCheckoutBorderRadius: PILL_RADIUS,
       spacingUnit: "4px",
     },
     rules: {

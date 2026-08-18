@@ -220,6 +220,7 @@ function CheckoutSurface({
             autoComplete="email"
             inputMode="email"
             name="email"
+            className="rounded-full"
             placeholder={COLLECTIONS_COPY.payerEmailPlaceholder}
             value={email}
             onChange={(event) => {
@@ -297,7 +298,7 @@ function CheckoutSurface({
 
             <Button
               type="button"
-              className="w-full h-11 text-base font-medium"
+              className="w-full h-11 rounded-full text-base font-medium"
               disabled={submitting || (collectEmail && !emailReady)}
               onClick={() => void confirmPayment()}
             >
