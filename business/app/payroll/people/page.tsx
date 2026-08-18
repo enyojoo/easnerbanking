@@ -94,7 +94,7 @@ export default function PayrollPeoplePage() {
   }
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <PayrollListToolbar
         query={search}
         onQueryChange={setSearch}
@@ -188,7 +188,7 @@ export default function PayrollPeoplePage() {
         }}
       />
       <PayrollInlineRefreshing visible={peopleQuery.isFetching && !peopleQuery.isPending} />
-    </>
+    </div>
   )
 }
 

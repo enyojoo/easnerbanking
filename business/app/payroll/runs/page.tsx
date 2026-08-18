@@ -114,8 +114,9 @@ export default function PayrollRunsPage() {
     }
     router.push(`/payroll/runs/${run.id}?returnTo=${encodeURIComponent(returnTo)}`)
   }
-  return <>
-    <PayrollListToolbar
+  return (
+    <div className="flex flex-col gap-6">
+    <PayrollListToolbar>
       query={query}
       onQueryChange={setQuery}
       queryPlaceholder="Search payroll runs"
@@ -210,5 +211,6 @@ export default function PayrollRunsPage() {
       }}
     />
     <PayrollInlineRefreshing visible={runsQuery.isFetching && !runsQuery.isPending} />
-  </>
+    </div>
+  )
 }

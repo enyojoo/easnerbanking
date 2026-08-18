@@ -1,8 +1,8 @@
 "use client"
 
 import { Search } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
 
 export function PayrollListToolbar<Filter extends string>({
   query,
@@ -22,8 +22,31 @@ export function PayrollListToolbar<Filter extends string>({
   label: string
 }) {
   return (
-    <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-      <div className="relative w-full lg:max-w-sm">
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex min-w-0 flex-1 space-x-1 overflow-x-auto" aria-label={label}>
+        {filters.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={filter === option.value}
+            onClick={() => onFilterChange(option.value)}
+            className={cn(
+              "shrink-0 border-b-2 px-4 py-2 text-sm font-medium transition-colors",
+              filter === option.value
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {option.label}
+            {option.count !== undefined && option.count > 0 ? (
+              <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums">
+                {option.count}
+              </span>
+            ) : null}
+          </button>
+        ))}
+      </div>
+      <div className="relative w-full max-w-[220px] shrink-0 sm:max-w-xs">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           className="pl-9"
@@ -33,25 +56,6 @@ export function PayrollListToolbar<Filter extends string>({
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
         />
-      </div>
-      <div className="-mx-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div className="flex min-w-max gap-1" aria-label={label}>
-          {filters.map((option) => (
-            <Button
-              key={option.value}
-              variant={filter === option.value ? "secondary" : "ghost"}
-              size="sm"
-              className="min-h-10 shrink-0"
-              aria-pressed={filter === option.value}
-              onClick={() => onFilterChange(option.value)}
-            >
-              {option.label}
-              {option.count !== undefined ? (
-                <span className="ml-1.5 text-xs tabular-nums opacity-70">{option.count}</span>
-              ) : null}
-            </Button>
-          ))}
-        </div>
       </div>
     </div>
   )

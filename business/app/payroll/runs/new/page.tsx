@@ -406,7 +406,7 @@ export default function NewPayrollRunPage() {
   }
   if (editRunId && (!editRun || editRun.status !== "draft")) {
     return (
-      <div className="mx-auto max-w-3xl px-4 pb-12 sm:px-6">
+      <div className="max-w-3xl">
         <Card>
           <CardContent className="p-8 text-center">
             <h1 className="text-lg font-semibold">This payroll run can’t be edited</h1>
@@ -428,7 +428,7 @@ export default function NewPayrollRunPage() {
           !(sourceRun.lines ?? []).some((line) => line.status === "failed"))))
   ) {
     return (
-      <div className="mx-auto max-w-3xl px-4 pb-12 sm:px-6">
+      <div className="max-w-3xl">
         <Card>
           <CardContent className="p-8 text-center">
             <h1 className="text-lg font-semibold">This payroll run can’t be copied</h1>
@@ -469,7 +469,6 @@ export default function NewPayrollRunPage() {
       }
       title={editRunId ? "Edit payroll run" : "Run payroll"}
         description="Build, check, and approve a payroll run before any money moves."
-      maxWidth="max-w-7xl"
       >
       {copyMode === "correction" ? (
         <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">

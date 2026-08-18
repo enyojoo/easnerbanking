@@ -13,7 +13,7 @@ export default function EditPayrollSchedulePage() {
   const query = usePayrollSchedules()
   const schedule = query.data?.find((item) => item.id === scheduleId)
   if (query.isPending && !schedule) return <PayrollFormSkeleton />
-  if (!schedule) return <div className="mx-auto max-w-6xl px-4 pb-12"><p className="font-medium">Schedule not found.</p><Button className="mt-4" variant="outline" asChild><Link href="/payroll/schedules">Back to Schedules</Link></Button></div>
+  if (!schedule) return <div><p className="font-medium">Schedule not found.</p><Button className="mt-4" variant="outline" asChild><Link href="/payroll/schedules">Back to Schedules</Link></Button></div>
   return (
     <PayrollSubpageShell
       backHref={`/payroll/schedules/${schedule.id}`}

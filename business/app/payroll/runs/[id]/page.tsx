@@ -279,7 +279,7 @@ export default function PayrollRunDetailPage() {
   }
 
   if (!run) {
-    return <div className="mx-auto max-w-6xl px-4 pb-8 text-sm text-muted-foreground">Run not found.</div>
+    return <div className="text-sm text-muted-foreground">Run not found.</div>
   }
 
   return (

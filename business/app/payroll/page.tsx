@@ -36,7 +36,7 @@ export default function PayrollOverviewPage() {
   const empty = !overviewQuery.isPending && (overview?.headcount ?? 0) === 0
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       {overviewQuery.isPending && !overviewQuery.data ? (
         <div className="grid gap-4 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-2xl" />)}
@@ -94,8 +94,8 @@ export default function PayrollOverviewPage() {
           </div>
 
           {(overview?.attentionItems ?? []).length > 0 ? (
-            <section className="mt-8">
-              <h2 className="mb-3 text-base font-semibold">Needs attention</h2>
+            <section className="space-y-3">
+              <h2 className="text-base font-semibold">Needs attention</h2>
               <div className="grid gap-3 lg:grid-cols-2">
                 {overview?.attentionItems.map((item) => (
                   <Card key={`${item.code}-${item.actionHref}`} className="shadow-soft">
@@ -112,8 +112,8 @@ export default function PayrollOverviewPage() {
             </section>
           ) : null}
 
-          <section className="mt-8">
-            <div className="mb-3 flex items-center justify-between">
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold">Recent runs</h2>
               <Button variant="ghost" size="sm" asChild><Link href="/payroll/runs">View all <ArrowRight className="ml-1 h-4 w-4" /></Link></Button>
             </div>
@@ -163,9 +163,9 @@ export default function PayrollOverviewPage() {
           </section>
         </>
       )}
-      <PayrollLegalNote className="mt-8" />
+      <PayrollLegalNote />
       <PayrollInlineRefreshing visible={overviewQuery.isFetching && !overviewQuery.isPending} />
-    </>
+    </div>
   )
 }
 

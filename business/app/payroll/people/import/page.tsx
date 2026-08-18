@@ -19,7 +19,6 @@ export default function ImportPayrollPeoplePage() {
     current="Import"
     title="Import people"
     description="Upload a CSV to add payroll people in bulk. You can review readiness before creating a run."
-    maxWidth="max-w-5xl"
   >
     <Card className="shadow-card"><CardContent className="p-6 sm:p-8">
       <div className="rounded-2xl border border-dashed p-8 text-center">

@@ -99,9 +99,8 @@ function PayrollWorkspaceContent({
   const secondary = activeTab.secondaryActions ?? []
 
   return (
-    // Bottom padding only — top spacing comes from DashboardShell main (pt-6).
-    <div className="mx-auto w-full max-w-7xl px-4 pb-7 sm:px-6 sm:pb-8">
-      <header className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="flex flex-col gap-6">
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Payroll</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{activeTab.description}</p>
@@ -144,7 +143,7 @@ function PayrollWorkspaceContent({
             )}
             {primary ? (
               <PayrollPermissionAction allowed={canPrepare} loading={capabilitiesQuery.isPending}>
-                <Button variant="primary" asChild>
+                <Button asChild>
                   <Link href={primary.href}>
                     <Plus className="mr-2 h-4 w-4" />
                     {primary.label}
@@ -158,7 +157,7 @@ function PayrollWorkspaceContent({
 
       <nav
         aria-label="Payroll sections"
-        className="-mx-1 mb-6 overflow-x-auto border-b border-border/70 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="overflow-x-auto border-b border-border/70 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         <div className="flex min-w-max gap-6">
           {PAYROLL_WORKSPACE_TABS.map((tab) => {
@@ -188,7 +187,7 @@ function PayrollWorkspaceContent({
       </nav>
 
       {capabilitiesQuery.isError ? (
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm">
           <span>We couldn’t check your Payroll permissions. Your payroll data is still available.</span>
           <Button variant="outline" size="sm" onClick={() => void capabilitiesQuery.refetch()}>
             Retry

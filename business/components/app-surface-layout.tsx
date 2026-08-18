@@ -38,11 +38,6 @@ function isDashboardShellPath(pathname: string) {
   return DASHBOARD_SHELL_ROOTS.some((root) => matchesShellRoot(pathname, root))
 }
 
-function resolveShellProps(pathname: string) {
-  const constrained = matchesShellRoot(pathname, "/dashboard")
-  return { constrained }
-}
-
 export function AppSurfaceLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const { user, isLoading, canBootstrapWorkspace } = useAuth()
@@ -86,9 +81,8 @@ export function AppSurfaceLayout({ children }: { children: React.ReactNode }) {
     return null
   }
 
-  const { constrained } = resolveShellProps(pathname!)
   return (
-    <DashboardShell constrained={constrained}>
+    <DashboardShell>
       {children}
     </DashboardShell>
   )

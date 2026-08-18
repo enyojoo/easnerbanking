@@ -155,7 +155,7 @@ export function DashboardPageClient() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <Card>
         <CardHeader className="pb-4">
           <div className="flex items-start justify-between gap-6">
@@ -277,8 +277,8 @@ export function DashboardPageClient() {
         </CardContent>
       </Card>
 
-      <div>
-        <div className="flex items-center justify-between mb-4">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">Recent activity</h3>
           <Button variant="ghost" size="sm" asChild>
             <Link href="/transactions">View all</Link>

@@ -21,7 +21,6 @@ import {
   verificationBannerHasCta,
   verificationBannerStarted,
 } from "@/lib/copy/business-ui-copy"
-import { cn } from "@/lib/utils"
 import { useScope } from "@/lib/query/scope"
 import { primeWorkspaceNav, WORKSPACE_WARM_EVENT } from "@/lib/query/prime-workspace-nav"
 import {
@@ -63,11 +62,9 @@ function useHostedVerificationFlowOpen() {
 
 interface DashboardShellProps {
   children: React.ReactNode
-  /** Use max-width constraint like dashboard (max-w-6xl) */
-  constrained?: boolean
 }
 
-export function DashboardShell({ children, constrained = false }: DashboardShellProps) {
+export function DashboardShell({ children }: DashboardShellProps) {
   useBusinessSync()
   const { user, logout, sessionUserId } = useAuth()
   const router = useRouter()
@@ -191,10 +188,7 @@ export function DashboardShell({ children, constrained = false }: DashboardShell
                 "--dashboard-sticky-top": showTier1Banner ? "6.5rem" : "4rem",
               } as React.CSSProperties
             }
-            className={cn(
-              "flex-1 min-h-0 overflow-y-auto overscroll-contain px-8 pb-10 pt-6",
-              constrained ? "mx-auto w-full max-w-6xl" : "mx-auto w-full max-w-[1440px]",
-            )}
+            className="mx-auto min-h-0 w-full max-w-[1440px] flex-1 overflow-y-auto overscroll-contain px-8 pb-10 pt-6"
           >
             {children}
           </main>

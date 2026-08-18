@@ -49,7 +49,7 @@ export default function PayrollPersonDetailPage() {
   const detail = query.data as ({ person: NonNullable<typeof query.data>["person"]; paymentHistory?: Payment[]; connection?: { status: string; approvedAt?: string | null; preferredMethod?: { label: string } | null } | null }) | undefined
   const person = detail?.person
   if (query.isPending && !person) return <PayrollDetailSkeleton />
-  if (!person) return <div className="mx-auto max-w-6xl px-4 pb-12"><p className="font-medium">This payroll person could not be found.</p><Button className="mt-4" variant="outline" asChild><Link href="/payroll/people">Back to People</Link></Button></div>
+  if (!person) return <div><p className="font-medium">This payroll person could not be found.</p><Button className="mt-4" variant="outline" asChild><Link href="/payroll/people">Back to People</Link></Button></div>
   const canPrepare = Boolean(capabilities?.canPrepare)
   const requestAction = person.rail === "easetag" && person.connectionStatus !== "approved" && person.email
 

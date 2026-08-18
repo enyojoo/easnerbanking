@@ -49,7 +49,7 @@ const developerTools = [
 
 export default function DevelopersOverviewPage() {
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-semibold text-foreground">Developer Tools</h1>
         <p className="text-muted-foreground mt-2">Build and integrate with Easner Business Banking&apos;s APIs and services</p>

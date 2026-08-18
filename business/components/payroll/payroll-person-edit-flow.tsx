@@ -169,7 +169,7 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
   }
   if (!person) {
     return (
-      <div className="mx-auto max-w-6xl px-4 pb-12">
+      <div>
         <p className="font-medium">This payroll person could not be found.</p>
         <Button className="mt-4" variant="outline" asChild>
           <Link href="/payroll/people">Back to People</Link>
@@ -179,7 +179,7 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
   }
   if (!capabilitiesQuery.isPending && !capabilitiesQuery.data?.canPrepare) {
     return (
-      <div className="mx-auto max-w-3xl px-4 pb-12 sm:px-6">
+      <div className="max-w-3xl">
         <Card>
           <CardContent className="p-8 text-center">
             <h1 className="text-lg font-semibold">You can’t edit Payroll people</h1>

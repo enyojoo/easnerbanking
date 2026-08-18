@@ -40,7 +40,7 @@ export default function PayrollScheduleDetailPage() {
   if ((schedulesQuery.isPending && !schedule) || (peopleQuery.isPending && !peopleQuery.data)) {
     return <PayrollDetailSkeleton sidebar={false} />
   }
-  if (!schedule) return <div className="mx-auto max-w-6xl px-4 pb-12"><p className="font-medium">Schedule not found.</p><Button className="mt-4" variant="outline" asChild><Link href="/payroll/schedules">Back to Schedules</Link></Button></div>
+  if (!schedule) return <div><p className="font-medium">Schedule not found.</p><Button className="mt-4" variant="outline" asChild><Link href="/payroll/schedules">Back to Schedules</Link></Button></div>
   const template = schedule.template ?? {}
   const includedPeople = (peopleQuery.data ?? []).filter((person) => schedule.personIds?.includes(person.id))
   const frequency = schedule.frequency === "semimonthly" ? "Twice monthly" : schedule.frequency.replace(/^\w/, (character) => character.toUpperCase())

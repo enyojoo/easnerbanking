@@ -9,13 +9,9 @@ export function PayrollDetailSkeleton({
   rows?: number
 }) {
   return (
-    <div
-      className="mx-auto max-w-6xl px-4 pb-8 sm:px-6"
-      aria-label="Loading payroll details"
-      aria-busy="true"
-    >
-      <Skeleton className="mb-5 h-9 w-36 rounded-lg" />
-      <div className="mb-8 flex items-center justify-between gap-4">
+    <div className="flex flex-col gap-6" aria-label="Loading payroll details" aria-busy="true">
+      <Skeleton className="h-9 w-36 rounded-lg" />
+      <div className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-4">
           <Skeleton className="h-14 w-14 shrink-0 rounded-full" />
           <div className="space-y-2">
@@ -67,13 +63,9 @@ export function PayrollDetailSkeleton({
 
 export function PayrollFormSkeleton() {
   return (
-    <div
-      className="mx-auto max-w-6xl px-4 pb-8 sm:px-6"
-      aria-label="Loading payroll form"
-      aria-busy="true"
-    >
-      <Skeleton className="mb-5 h-9 w-36 rounded-lg" />
-      <div className="mb-8 space-y-2">
+    <div className="flex flex-col gap-6" aria-label="Loading payroll form" aria-busy="true">
+      <Skeleton className="h-9 w-36 rounded-lg" />
+      <div className="space-y-2">
         <Skeleton className="h-8 w-52" />
         <Skeleton className="h-4 w-80 max-w-full" />
       </div>
@@ -116,7 +108,7 @@ export function PayrollInlineRefreshing({ visible }: { visible: boolean }) {
 
 export function PayrollWorkspaceContentSkeleton() {
   return (
-    <div className="space-y-5" aria-label="Loading Payroll" aria-busy="true">
+    <div className="flex flex-col gap-6" aria-label="Loading Payroll" aria-busy="true">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <Skeleton className="h-10 w-full rounded-xl lg:max-w-sm" />
         <Skeleton className="h-10 w-full rounded-xl lg:w-96" />

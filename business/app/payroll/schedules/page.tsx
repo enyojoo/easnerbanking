@@ -66,8 +66,9 @@ export default function PayrollSchedulesPage() {
       })
     }
   }
-  return <>
-    <PayrollListToolbar
+  return (
+    <div className="flex flex-col gap-6">
+    <PayrollListToolbar>
       query={query}
       onQueryChange={setQuery}
       queryPlaceholder="Search schedules"
@@ -107,7 +108,8 @@ export default function PayrollSchedulesPage() {
       }}
     />
     <PayrollInlineRefreshing visible={schedulesQuery.isFetching && !schedulesQuery.isPending} />
-  </>
+    </div>
+  )
 }
 
 function ScheduleActions({
