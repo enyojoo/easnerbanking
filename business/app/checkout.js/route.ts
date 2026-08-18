@@ -115,6 +115,27 @@ export async function GET() {
             emailInput.style.border = "1px solid #D6D9D6";
             emailInput.style.borderRadius = "16px";
             emailInput.style.fontSize = "15px";
+            var nameLabel = document.createElement("label");
+            nameLabel.textContent = ${JSON.stringify("Name on card")};
+            nameLabel.setAttribute("for", "easner-cardholder-name");
+            nameLabel.style.display = "block";
+            nameLabel.style.margin = "16px 0 6px";
+            nameLabel.style.fontSize = "14px";
+            nameLabel.style.fontWeight = "500";
+            var nameInput = document.createElement("input");
+            nameInput.id = "easner-cardholder-name";
+            nameInput.type = "text";
+            nameInput.autocomplete = "cc-name";
+            nameInput.placeholder = ${JSON.stringify("Name on card")};
+            nameInput.value = mountName;
+            nameInput.style.width = "100%";
+            nameInput.style.boxSizing = "border-box";
+            nameInput.style.height = "48px";
+            nameInput.style.margin = "0 0 16px";
+            nameInput.style.padding = "0 16px";
+            nameInput.style.border = "1px solid #D6D9D6";
+            nameInput.style.borderRadius = "16px";
+            nameInput.style.fontSize = "15px";
             var form = document.createElement("form");
             form.setAttribute("novalidate", "novalidate");
             var mountPoint = document.createElement("div");
@@ -131,15 +152,25 @@ export async function GET() {
               form.appendChild(emailInput);
             }
             form.appendChild(mountPoint);
+            form.appendChild(nameLabel);
+            form.appendChild(nameInput);
             form.appendChild(message);
             form.appendChild(button);
             el.innerHTML = "";
             el.appendChild(form);
 
             var payment = checkout.createPaymentElement({
-              fields: { billingDetails: { name: "always", email: "never" } },
+              fields: { billingDetails: { email: "never" } },
             });
             payment.mount(mountPoint);
+            if (typeof payment.on === "function") {
+              payment.on("change", function (event) {
+                var type = event && event.value && event.value.type;
+                var showName = !type || type === "card";
+                nameLabel.style.display = showName ? "block" : "none";
+                nameInput.style.display = showName ? "block" : "none";
+              });
+            }
 
             form.addEventListener("submit", function (event) {
               event.preventDefault();
@@ -149,16 +180,35 @@ export async function GET() {
                 message.style.display = "block";
                 return;
               }
+              var nameVisible = nameInput.style.display !== "none";
+              var cardName = String(nameInput.value || "").trim() || mountName;
+              if (nameVisible && !cardName) {
+                message.textContent = ${JSON.stringify("Enter the name on the card")};
+                message.style.display = "block";
+                return;
+              }
               button.disabled = true;
               message.style.display = "none";
+              var confirmArgs = { email: email };
+              if (cardName) confirmArgs.name = cardName;
               var confirm = function () {
-                return checkout.confirm({ email: email });
+                return checkout.confirm(confirmArgs);
               };
-              var pending =
+              var afterEmail =
                 typeof checkout.updateEmail === "function"
-                  ? checkout.updateEmail(email).then(confirm, confirm)
-                  : confirm();
-              pending
+                  ? checkout.updateEmail(email)
+                  : Promise.resolve();
+              var afterName =
+                cardName && typeof checkout.updateIndividualName === "function"
+                  ? function () {
+                      return checkout.updateIndividualName(cardName);
+                    }
+                  : function () {
+                      return Promise.resolve();
+                    };
+              afterEmail
+                .then(afterName, afterName)
+                .then(confirm, confirm)
                 .then(function (result) {
                   if (result.type === "error") {
                     throw new Error(result.error.message || "Payment failed");

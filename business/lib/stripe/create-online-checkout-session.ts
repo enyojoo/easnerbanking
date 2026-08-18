@@ -231,6 +231,9 @@ export async function createOnlineCheckoutSession(
         mode: input.mode,
         customer_email: input.customerEmail?.trim() || undefined,
         billing_address_collection: "auto",
+        name_collection: {
+          individual: { enabled: true, optional: true },
+        },
         line_items: [lineItem],
         metadata,
         return_url: input.returnUrl,
