@@ -31,24 +31,14 @@ export interface OgImageContent {
 }
 
 async function loadBundledFont(packagePath: string) {
-  try {
-    if (packagePath.includes("unbounded-latin-700-normal.woff")) {
-      const res = await fetch(
-        new URL("../../assets/og-fonts/unbounded-latin-700-normal.woff", import.meta.url),
-      )
-      if (res.ok) return Buffer.from(await res.arrayBuffer())
-    }
-    if (packagePath.includes("inter-latin-400-normal.woff")) {
-      const res = await fetch(
-        new URL("../../assets/og-fonts/inter-latin-400-normal.woff", import.meta.url),
-      )
-      if (res.ok) return Buffer.from(await res.arrayBuffer())
-    }
-  } catch {
-    // fall through to node_modules (local `next dev`)
-  }
+  const fileName = packagePath.includes("unbounded")
+    ? "unbounded-latin-700-normal.woff"
+    : packagePath.includes("inter")
+      ? "inter-latin-400-normal.woff"
+      : null
 
   const candidates = [
+    ...(fileName ? [join(businessDir, "assets/og-fonts", fileName)] : []),
     join(businessDir, "node_modules", packagePath),
     join(monorepoRoot, "node_modules", packagePath),
   ]
@@ -65,17 +55,7 @@ async function loadBundledFont(packagePath: string) {
 }
 
 async function loadEasnerLogoDataUrl() {
-  try {
-    const res = await fetch(new URL("../../assets/easner-logo.png", import.meta.url))
-    if (res.ok) {
-      const logo = Buffer.from(await res.arrayBuffer())
-      return `data:image/png;base64,${logo.toString("base64")}`
-    }
-  } catch {
-    // fall through
-  }
-  const logoPath = join(businessDir, "assets/easner-logo.png")
-  const logo = await readFile(logoPath)
+  const logo = await readFile(join(businessDir, "assets/easner-logo.png"))
   return `data:image/png;base64,${logo.toString("base64")}`
 }
 
@@ -89,12 +69,23 @@ function normalizeHeadline(headline: string | string[]) {
   return lines.map((line) => truncate(line.trim(), 42)).filter(Boolean).slice(0, 3)
 }
 
+type OgAssets = { unbounded: Buffer; inter: Buffer; logoSrc: string }
+
+let ogAssetsPromise: Promise<OgAssets> | null = null
+
+function loadOgAssets(): Promise<OgAssets> {
+  if (!ogAssetsPromise) {
+    ogAssetsPromise = Promise.all([
+      loadBundledFont("@fontsource/unbounded/files/unbounded-latin-700-normal.woff"),
+      loadBundledFont("@fontsource/inter/files/inter-latin-400-normal.woff"),
+      loadEasnerLogoDataUrl(),
+    ]).then(([unbounded, inter, logoSrc]) => ({ unbounded, inter, logoSrc }))
+  }
+  return ogAssetsPromise
+}
+
 export async function createOgImage({ headline, subhead }: OgImageContent) {
-  const [unbounded, inter, logoSrc] = await Promise.all([
-    loadBundledFont("@fontsource/unbounded/files/unbounded-latin-700-normal.woff"),
-    loadBundledFont("@fontsource/inter/files/inter-latin-400-normal.woff"),
-    loadEasnerLogoDataUrl(),
-  ])
+  const { unbounded, inter, logoSrc } = await loadOgAssets()
 
   const logoHeight = scale(44)
   const logoWidth = Math.round(logoHeight * (2295 / 500))

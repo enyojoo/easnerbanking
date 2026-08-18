@@ -5,6 +5,8 @@ import {
   encryptCheckoutSecret,
   generateWebhookSigningSecret,
 } from "@/lib/checkout/secrets"
+import { mapCheckoutSite } from "@/lib/checkout/map-checkout-site"
+import { normalizeOrigin, normalizeReturnUrl } from "@/lib/checkout/normalize-checkout-url"
 import { BUSINESS_SELECTABLE_FEE_MODES, resolveCheckoutFeeMode } from "@/lib/stripe/checkout-fee-mode"
 import { parseCheckoutFeeMode } from "@/lib/stripe/checkout-fee-mode"
 import { resolveConnectReadyForCheckout } from "@/lib/stripe/connect"
@@ -16,29 +18,6 @@ import { requireEasnerBusinessId } from "@/lib/terminal/context"
 const SETTINGS_COLUMNS =
   "business_id, fee_mode, allowed_origins, default_success_url, default_cancel_url, appearance, webhook_url, webhook_secret_last4, live_mode_enabled, test_payment_completed_at, online_payments_enabled"
 
-function normalizeOrigin(raw: string): string | null {
-  try {
-    const url = new URL(raw.trim())
-    if (url.protocol !== "https:" && url.hostname !== "localhost") return null
-    return url.origin
-  } catch {
-    return null
-  }
-}
-
-function normalizeReturnUrl(raw: string): string | null {
-  const trimmed = raw.trim()
-  if (!trimmed) return null
-  try {
-    // Keep the {CHECKOUT_SESSION_ID} placeholder intact while still validating the URL.
-    const url = new URL(trimmed.replace("{CHECKOUT_SESSION_ID}", "placeholder"))
-    if (url.protocol !== "https:" && url.hostname !== "localhost") return null
-    return trimmed
-  } catch {
-    return null
-  }
-}
-
 export async function GET(request: Request) {
   const user = await getUserFromApiRequest(request)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -47,7 +26,7 @@ export async function GET(request: Request) {
   if (!ctx.ok) return ctx.response
 
   const admin = createSupabaseAdmin()
-  const [{ data: settings }, feeMode, onlinePayments, { data: keys }] = await Promise.all([
+  const [{ data: settings }, feeMode, onlinePayments, { data: keys }, { data: siteRows }] = await Promise.all([
     admin.from("business_checkout_settings").select(SETTINGS_COLUMNS).eq("business_id", ctx.businessId).maybeSingle(),
     resolveCheckoutFeeMode(admin, ctx.businessId),
     resolveOnlinePaymentsEnabled(admin, ctx.businessId),
@@ -57,6 +36,11 @@ export async function GET(request: Request) {
       .eq("business_id", ctx.businessId)
       .is("revoked_at", null)
       .order("created_at", { ascending: false }),
+    admin
+      .from("business_checkout_sites")
+      .select("id, origin, success_url, cancel_url, created_at, updated_at")
+      .eq("business_id", ctx.businessId)
+      .order("created_at", { ascending: true }),
   ])
 
   const connect =
@@ -88,6 +72,7 @@ export async function GET(request: Request) {
       reason: connect.ready ? null : (connect.reason ?? null),
     },
     keys: keys ?? [],
+    sites: (siteRows ?? []).map((row) => mapCheckoutSite(row as Parameters<typeof mapCheckoutSite>[0])),
     webhookEvents: MERCHANT_WEBHOOK_EVENT_DESCRIPTIONS,
   })
 }

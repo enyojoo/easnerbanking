@@ -1,10 +1,8 @@
-import type { CheckoutHubPayload } from "@/lib/checkout/hub-types"
+import type { CheckoutHubPayload, CheckoutSite } from "@/lib/checkout/hub-types"
 
-export type CheckoutPhaseId = "get_ready" | "connect_site" | "integrate" | "verify"
+export type CheckoutPhaseId = "connect_site" | "integrate" | "verify"
 
 export type CheckoutStepId =
-  | "ready"
-  | "fees"
   | "website"
   | "urls"
   | "keys"
@@ -18,19 +16,27 @@ export const CHECKOUT_PHASES: Array<{
   id: CheckoutPhaseId
   steps: CheckoutStepId[]
 }> = [
-  { id: "get_ready", steps: ["ready", "fees"] },
   { id: "connect_site", steps: ["website", "urls"] },
   { id: "integrate", steps: ["keys", "snippet", "session"] },
   { id: "verify", steps: ["webhook", "test", "live"] },
 ]
 
-export function completedCheckoutSteps(data: CheckoutHubPayload | null): Set<CheckoutStepId> {
+export function completedCheckoutSteps(
+  data: CheckoutHubPayload | null,
+  site?: CheckoutSite | null,
+): Set<CheckoutStepId> {
   const done = new Set<CheckoutStepId>()
   if (!data) return done
-  if (data.readiness.ready) done.add("ready")
-  if (data.settings.businessFeeMode || data.settings.feeModeManagedByEasner) done.add("fees")
-  if (data.settings.allowedOrigins.length > 0) done.add("website")
-  if (data.settings.defaultSuccessUrl) done.add("urls")
+  const websiteDone =
+    site !== undefined
+      ? Boolean(site?.origin)
+      : (data.sites ?? []).some((item) => item.origin) || data.settings.allowedOrigins.length > 0
+  const urlsDone =
+    site !== undefined
+      ? Boolean(site?.successUrl)
+      : (data.sites ?? []).some((item) => item.successUrl) || Boolean(data.settings.defaultSuccessUrl)
+  if (websiteDone) done.add("website")
+  if (urlsDone) done.add("urls")
   if (data.keys.length > 0) {
     done.add("keys")
     done.add("snippet")

@@ -28,14 +28,15 @@ function payload(partial: {
       ...settings,
     },
     readiness: { ready: ready ?? false, reason: null },
+    sites: [],
     keys: [],
     webhookEvents: {} as CheckoutHubPayload["webhookEvents"],
   }
 }
 
 describe("checkout phases", () => {
-  it("starts at get ready when nothing is complete", () => {
-    expect(firstIncompletePhase(payload({}))).toBe("get_ready")
+  it("starts at connect site when nothing is complete", () => {
+    expect(firstIncompletePhase(payload({}))).toBe("connect_site")
   })
 
   it("marks integrate complete once keys exist", () => {
@@ -81,5 +82,29 @@ describe("checkout phases", () => {
       },
     ]
     expect(checkoutSetupComplete(data)).toBe(true)
+  })
+
+  it("treats website and urls as incomplete for a new site even if others exist", () => {
+    const data = payload({
+      ready: true,
+      businessFeeMode: "merchant_net",
+      allowedOrigins: ["https://a.com"],
+      defaultSuccessUrl: "https://a.com/ok",
+    })
+    data.sites = [
+      {
+        id: "site_a",
+        origin: "https://a.com",
+        successUrl: "https://a.com/ok",
+        cancelUrl: null,
+        createdAt: "",
+        updatedAt: "",
+      },
+    ]
+    const done = completedCheckoutSteps(data, null)
+    expect(done.has("website")).toBe(false)
+    expect(done.has("urls")).toBe(false)
+    expect(completedCheckoutSteps(data).has("website")).toBe(true)
+    expect(completedCheckoutSteps(data, data.sites[0]).has("urls")).toBe(true)
   })
 })

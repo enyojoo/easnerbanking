@@ -1,6 +1,15 @@
 import type { CheckoutFeeMode } from "@/lib/stripe/checkout-fee-mode"
 import type { MerchantWebhookEvent } from "@/lib/checkout/merchant-webhooks"
 
+export type CheckoutSite = {
+  id: string
+  origin: string
+  successUrl: string | null
+  cancelUrl: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export type CheckoutHubSettings = {
   feeMode: CheckoutFeeMode
   businessFeeMode: CheckoutFeeMode | null
@@ -26,6 +35,7 @@ export type CheckoutApiKey = {
 
 export type CheckoutHubPayload = {
   settings: CheckoutHubSettings
+  sites: CheckoutSite[]
   readiness: { ready: boolean; reason: string | null }
   keys: CheckoutApiKey[]
   webhookEvents: Record<MerchantWebhookEvent, string>

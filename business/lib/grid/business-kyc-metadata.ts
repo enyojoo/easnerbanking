@@ -260,3 +260,33 @@ export function buildGridBusinessInfoResyncPatch(input: {
   const payload = buildGridBusinessCustomerPayload(input)
   return (payload.businessInfo ?? {}) as Record<string, unknown>
 }
+
+/**
+ * Clear Grid fields that block hosted KYB (shell taxId, country/incorporation without a real tax id).
+ * PATCH merges — omitted keys stay — so these must be sent as null.
+ */
+export function buildGridBusinessInfoScrubPatch(input: {
+  platformCustomerId: string
+  profile: GridBusinessProfile
+}): Record<string, unknown> {
+  const legalName = String(input.profile.legalName ?? "").trim() || "Easner Business"
+  const patch: Record<string, unknown> = { legalName }
+  const taxId = resolveGridBusinessTaxId({
+    taxId: input.profile.taxId,
+    registrationNumber: input.profile.registrationNumber,
+    country: input.profile.country,
+    platformCustomerId: input.platformCustomerId,
+  })
+  if (taxId) {
+    patch.taxId = taxId
+    const countryIso2 = resolveBusinessCountryIso2(input.profile.country)
+    if (countryIso2) patch.country = countryIso2
+    const incorporatedOn = isoDateFromTimestamp(input.profile.createdAt)
+    if (incorporatedOn) patch.incorporatedOn = incorporatedOn
+    return patch
+  }
+  patch.taxId = null
+  patch.country = null
+  patch.incorporatedOn = null
+  return patch
+}

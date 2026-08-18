@@ -17,6 +17,7 @@ function hostnameFromOrigin(raw, fallback) {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  staticPageGenerationTimeout: 180,
   outputFileTracingRoot: resolve(__dirname, ".."),
   outputFileTracingIncludes: {
     "/og/customer/[[...slug]]": [

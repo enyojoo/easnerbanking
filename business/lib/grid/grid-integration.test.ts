@@ -9,6 +9,7 @@ import { buildGridIndividualCustomerPayload } from "@/lib/grid/kyc-metadata"
 import {
   buildGridBusinessCustomerPayload,
   buildGridBusinessInfoResyncPatch,
+  buildGridBusinessInfoScrubPatch,
   gridBusinessHostedKybBusinessInfoIsOverfilled,
   gridBusinessKybStubFieldsNeedResync,
   gridBusinessTaxIdIsInvalidOnGrid,
@@ -223,6 +224,14 @@ describe("gridBusinessKyb stub resync", () => {
     expect(patch.legalName).toBe("Fruitful Africa Limited")
     expect(patch.country).toBeUndefined()
     expect(patch.incorporatedOn).toBeUndefined()
+  })
+
+  it("builds a scrub patch that nulls taxId, country, and incorporatedOn", () => {
+    const patch = buildGridBusinessInfoScrubPatch({ platformCustomerId, profile })
+    expect(patch.legalName).toBe("Fruitful Africa Limited")
+    expect(patch.taxId).toBeNull()
+    expect(patch.country).toBeNull()
+    expect(patch.incorporatedOn).toBeNull()
   })
 
   it("flags country/incorporation without taxId as overfilled", () => {

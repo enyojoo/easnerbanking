@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Check, Circle, Edit, Loader2, Plus, X } from "lucide-react"
+import { Check, Circle, Edit, Loader2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -23,25 +24,21 @@ import {
   CheckoutCodeBlock,
   RevealOnceValue,
 } from "@/components/checkout/checkout-code-block"
-import { CheckoutDashboardPanel } from "@/components/checkout/checkout-dashboard-panel"
 import { CheckoutHubSkeleton } from "@/components/collections/collections-skeletons"
 import {
+  createCheckoutSite,
   saveCheckoutSettings,
+  updateCheckoutSite,
   useCheckoutSettings,
   type CheckoutApiKey,
   type CheckoutHubPayload,
+  type CheckoutSite,
 } from "@/hooks/use-checkout-settings"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import {
-  checkoutFeeModeDescription,
-  checkoutFeeModeLabel,
-} from "@/lib/stripe/checkout-fee-mode"
 import { COLLECTIONS_COPY } from "@/lib/copy/business-ui-copy"
 import {
   CHECKOUT_PHASES,
-  checkoutSetupComplete,
   completedCheckoutSteps,
-  firstIncompletePhase,
   phaseComplete,
   type CheckoutPhaseId,
   type CheckoutStepId,
@@ -49,15 +46,12 @@ import {
 import { cn } from "@/lib/utils"
 
 const PHASE_COPY: Record<CheckoutPhaseId, { title: string }> = {
-  get_ready: { title: COLLECTIONS_COPY.phaseGetReady },
   connect_site: { title: COLLECTIONS_COPY.phaseConnect },
   integrate: { title: COLLECTIONS_COPY.phaseIntegrate },
-  verify: { title: COLLECTIONS_COPY.phaseVerify },
+  verify: { title: COLLECTIONS_COPY.phaseGoLive },
 }
 
 const STEP_COPY: Record<CheckoutStepId, { title: string; blurb: string }> = {
-  ready: { title: COLLECTIONS_COPY.stepReadyTitle, blurb: COLLECTIONS_COPY.stepReadyBlurb },
-  fees: { title: COLLECTIONS_COPY.stepFeesTitle, blurb: COLLECTIONS_COPY.stepFeesBlurb },
   website: { title: COLLECTIONS_COPY.stepWebsiteTitle, blurb: COLLECTIONS_COPY.stepWebsiteBlurb },
   urls: { title: COLLECTIONS_COPY.stepUrlsTitle, blurb: COLLECTIONS_COPY.stepUrlsBlurb },
   keys: { title: COLLECTIONS_COPY.stepKeysTitle, blurb: COLLECTIONS_COPY.stepKeysBlurb },
@@ -69,31 +63,20 @@ const STEP_COPY: Record<CheckoutStepId, { title: string; blurb: string }> = {
 }
 
 export function CheckoutIntegrationHub({
-  forceSetup = false,
-  onDashboardReady,
+  flow,
+  siteId = null,
 }: {
-  forceSetup?: boolean
-  onDashboardReady?: (ready: boolean) => void
+  flow: "create" | "edit"
+  siteId?: string | null
 }) {
+  const router = useRouter()
   const { data, loading, error, refetch } = useCheckoutSettings()
-  const [phase, setPhase] = useState<CheckoutPhaseId>("get_ready")
-  const [editing, setEditing] = useState(forceSetup)
-  const primedPhase = useRef(false)
+  const [phase, setPhase] = useState<CheckoutPhaseId>("connect_site")
 
-  const completed = useMemo(() => completedCheckoutSteps(data), [data])
-  const dashboardReady = checkoutSetupComplete(data) && !editing && !forceSetup
+  const site = (data?.sites ?? []).find((item) => item.id === siteId) ?? null
+  const completed = useMemo(() => completedCheckoutSteps(data, site), [data, site])
 
-  useEffect(() => {
-    if (!data || primedPhase.current) return
-    primedPhase.current = true
-    setPhase(firstIncompletePhase(data))
-  }, [data])
-
-  useEffect(() => {
-    onDashboardReady?.(dashboardReady)
-  }, [dashboardReady, onDashboardReady])
-
-  if (loading && !data) {
+  if (loading) {
     return <CheckoutHubSkeleton />
   }
 
@@ -110,16 +93,21 @@ export function CheckoutIntegrationHub({
     )
   }
 
-  const ready = data.readiness.ready
-  const doneCount = CHECKOUT_PHASES.filter((item) => phaseComplete(item, completed)).length
-
-  if (dashboardReady) {
+  if (flow === "edit" && Array.isArray(data.sites) && !site) {
     return (
-      <div className="space-y-6">
-        <CheckoutDashboardPanel data={data} onEdit={() => setEditing(true)} />
-      </div>
+      <Card>
+        <CardContent className="space-y-3 p-6 text-sm">
+          <p>{COLLECTIONS_COPY.siteNotFound}</p>
+          <Button type="button" variant="outline" size="sm" asChild>
+            <Link href="/checkout">{COLLECTIONS_COPY.siteNotFoundCta}</Link>
+          </Button>
+        </CardContent>
+      </Card>
     )
   }
+
+  const ready = data.readiness.ready
+  const doneCount = CHECKOUT_PHASES.filter((item) => phaseComplete(item, completed)).length
 
   return (
     <div className="flex flex-col gap-8">
@@ -181,7 +169,13 @@ export function CheckoutIntegrationHub({
                   !ready && (step === "keys" || step === "live") && "opacity-70",
                 )}
               >
-                <StepBody step={step} data={data} onSaved={refetch} />
+                <StepBody
+                  step={step}
+                  data={data}
+                  site={site}
+                  onSaved={refetch}
+                  onSiteCreated={(id) => router.replace(`/checkout/${id}`)}
+                />
               </section>
             ))}
           </CardContent>
@@ -191,24 +185,24 @@ export function CheckoutIntegrationHub({
   )
 }
 
-type StepProps = { data: CheckoutHubPayload; onSaved: () => void }
+type HubDataProps = { data: CheckoutHubPayload; onSaved: () => void }
+type SiteStepProps = HubDataProps & {
+  site: CheckoutSite | null
+  onSiteCreated: (id: string) => void
+}
 
-function StepBody({ step, data, onSaved }: StepProps & { step: CheckoutStepId }) {
+function StepBody({ step, data, site, onSaved, onSiteCreated }: SiteStepProps & { step: CheckoutStepId }) {
   switch (step) {
-    case "ready":
-      return <StepReady data={data} onSaved={onSaved} />
-    case "fees":
-      return <StepFees data={data} onSaved={onSaved} />
     case "website":
-      return <StepWebsite data={data} onSaved={onSaved} />
+      return <StepWebsite data={data} site={site} onSaved={onSaved} onSiteCreated={onSiteCreated} />
     case "urls":
-      return <StepUrls data={data} onSaved={onSaved} />
+      return <StepUrls data={data} site={site} onSaved={onSaved} onSiteCreated={onSiteCreated} />
     case "keys":
       return <StepKeys data={data} onSaved={onSaved} />
     case "snippet":
       return <StepSnippet data={data} onSaved={onSaved} />
     case "session":
-      return <StepSession />
+      return <StepSession site={site} />
     case "webhook":
       return <StepWebhook data={data} onSaved={onSaved} />
     case "test":
@@ -236,64 +230,34 @@ function StepLearnMore({ children }: { children: ReactNode }) {
   )
 }
 
-function StepReady({ data }: StepProps) {
-  return (
-    <>
-      <StepHeading title={STEP_COPY.ready.title} blurb={STEP_COPY.ready.blurb} />
-      {data.readiness.ready ? (
-        <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
-          <p className="font-medium text-foreground">Online payments are on</p>
-        </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          {data.readiness.reason || COLLECTIONS_COPY.setupTitle}{" "}
-          <Link href="/settings?tab=payments" className="underline underline-offset-2">
-            {COLLECTIONS_COPY.masterOffCta}
-          </Link>
-        </p>
-      )}
-    </>
-  )
-}
-
-function StepFees({ data }: StepProps) {
-  return (
-    <>
-      <StepHeading title={STEP_COPY.fees.title} blurb={STEP_COPY.fees.blurb} />
-      <div className="rounded-xl border bg-muted/40 p-4 text-sm">
-        <p className="font-medium text-foreground">
-          Current setting – {checkoutFeeModeLabel(data.settings.feeMode)}
-        </p>
-        <p className="mt-1 text-muted-foreground">
-          {data.settings.feeModeManagedByEasner
-            ? checkoutFeeModeDescription(data.settings.feeMode)
-            : "Fee mode is configured in Settings."}
-        </p>
-        <Link
-          href="/settings?tab=payments"
-          className="mt-3 inline-block text-sm underline underline-offset-2"
-        >
-          Open Payments settings
-        </Link>
-      </div>
-    </>
-  )
-}
-
-function StepWebsite({ data, onSaved }: StepProps) {
-  const [origin, setOrigin] = useState("")
+function StepWebsite({ site, onSaved, onSiteCreated }: SiteStepProps) {
+  const [origin, setOrigin] = useState(site?.origin ?? "")
   const [saving, setSaving] = useState(false)
 
-  const save = async (origins: string[]) => {
+  useEffect(() => {
+    setOrigin(site?.origin ?? "")
+  }, [site?.origin])
+
+  const save = async () => {
     setSaving(true)
     try {
-      const result = await saveCheckoutSettings({ allowed_origins: origins })
-      if (!result.ok) {
-        toast.error(result.error || "Could not save")
+      if (site) {
+        const result = await updateCheckoutSite(site.id, { origin })
+        if (!result.ok) {
+          toast.error(result.error || "Could not save")
+          return
+        }
+        toast.success("Saved.")
+        onSaved()
         return
       }
-      setOrigin("")
-      onSaved()
+      const result = await createCheckoutSite({ origin })
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      toast.success("Website added.")
+      onSiteCreated(result.siteId)
     } finally {
       setSaving(false)
     }
@@ -302,65 +266,43 @@ function StepWebsite({ data, onSaved }: StepProps) {
   return (
     <>
       <StepHeading title={STEP_COPY.website.title} blurb={STEP_COPY.website.blurb} />
-      <div className="flex flex-col gap-3 sm:flex-row">
+      <div className="space-y-2">
+        <Label htmlFor="checkout-origin">Website</Label>
         <Input
+          id="checkout-origin"
           value={origin}
           onChange={(e) => setOrigin(e.target.value)}
           placeholder="https://shop.yoursite.com"
           type="url"
         />
-        <Button
-          type="button"
-          className="gap-2"
-          disabled={saving || !origin.trim()}
-          onClick={() => void save([...data.settings.allowedOrigins, origin.trim()])}
-        >
-          <Plus className="h-4 w-4" aria-hidden />
-          Add
-        </Button>
       </div>
-      {data.settings.allowedOrigins.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No websites added yet.</p>
-      ) : (
-        <ul className="space-y-2">
-          {data.settings.allowedOrigins.map((value) => (
-            <li
-              key={value}
-              className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
-            >
-              <span className="min-w-0 truncate font-mono text-xs">{value}</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0"
-                aria-label={`Remove ${value}`}
-                disabled={saving}
-                onClick={() =>
-                  void save(data.settings.allowedOrigins.filter((item) => item !== value))
-                }
-              >
-                <X className="h-3.5 w-3.5" aria-hidden />
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <Button type="button" disabled={saving || !origin.trim()} onClick={() => void save()}>
+        {saving ? "Saving…" : site ? "Save website" : "Add website"}
+      </Button>
     </>
   )
 }
 
-function StepUrls({ data, onSaved }: StepProps) {
-  const [successUrl, setSuccessUrl] = useState(data.settings.defaultSuccessUrl ?? "")
-  const [cancelUrl, setCancelUrl] = useState(data.settings.defaultCancelUrl ?? "")
+function StepUrls({ site, onSaved }: SiteStepProps) {
+  const [successUrl, setSuccessUrl] = useState(site?.successUrl ?? "")
+  const [cancelUrl, setCancelUrl] = useState(site?.cancelUrl ?? "")
   const [saving, setSaving] = useState(false)
 
+  useEffect(() => {
+    setSuccessUrl(site?.successUrl ?? "")
+    setCancelUrl(site?.cancelUrl ?? "")
+  }, [site?.successUrl, site?.cancelUrl])
+
   const save = async () => {
+    if (!site) {
+      toast.error("Save the website first.")
+      return
+    }
     setSaving(true)
     try {
-      const result = await saveCheckoutSettings({
-        default_success_url: successUrl,
-        default_cancel_url: cancelUrl,
+      const result = await updateCheckoutSite(site.id, {
+        success_url: successUrl,
+        cancel_url: cancelUrl,
       })
       if (!result.ok) {
         toast.error(result.error || "Could not save")
@@ -376,6 +318,9 @@ function StepUrls({ data, onSaved }: StepProps) {
   return (
     <>
       <StepHeading title={STEP_COPY.urls.title} blurb={STEP_COPY.urls.blurb} />
+      {!site ? (
+        <p className="text-sm text-muted-foreground">Save the website first, then add return URLs.</p>
+      ) : null}
       <div className="space-y-5">
         <div className="space-y-2">
           <Label htmlFor="checkout-success">Success URL</Label>
@@ -384,6 +329,7 @@ function StepUrls({ data, onSaved }: StepProps) {
             value={successUrl}
             onChange={(e) => setSuccessUrl(e.target.value)}
             placeholder="https://shop.yoursite.com/thanks?session_id={CHECKOUT_SESSION_ID}"
+            disabled={!site}
           />
           <p className="text-xs text-muted-foreground">
             Easner replaces {"{CHECKOUT_SESSION_ID}"} so your page can look up the order.
@@ -396,9 +342,10 @@ function StepUrls({ data, onSaved }: StepProps) {
             value={cancelUrl}
             onChange={(e) => setCancelUrl(e.target.value)}
             placeholder="https://shop.yoursite.com/cart"
+            disabled={!site}
           />
         </div>
-        <Button type="button" disabled={saving} onClick={() => void save()}>
+        <Button type="button" disabled={saving || !site} onClick={() => void save()}>
           {saving ? "Saving…" : "Save URLs"}
         </Button>
       </div>
@@ -406,7 +353,7 @@ function StepUrls({ data, onSaved }: StepProps) {
   )
 }
 
-function StepKeys({ data, onSaved }: StepProps) {
+function StepKeys({ data, onSaved }: HubDataProps) {
   const [creating, setCreating] = useState<"test" | "live" | null>(null)
   const [revealed, setRevealed] = useState<{ mode: string; secretKey: string } | null>(null)
 
@@ -483,7 +430,7 @@ function StepKeys({ data, onSaved }: StepProps) {
   )
 }
 
-function StepSnippet({ data }: StepProps) {
+function StepSnippet({ data }: HubDataProps) {
   const publishableKey =
     data.keys.find((key) => key.mode === "test")?.publishable_key ?? "easner_pk_test_…"
 
@@ -511,7 +458,10 @@ function StepSnippet({ data }: StepProps) {
   )
 }
 
-function StepSession() {
+function StepSession({ site }: { site: CheckoutSite | null }) {
+  const successUrl =
+    site?.successUrl || "https://shop.yoursite.com/thanks?session_id={CHECKOUT_SESSION_ID}"
+  const cancelUrl = site?.cancelUrl || "https://shop.yoursite.com/cart"
   return (
     <>
       <StepHeading title={STEP_COPY.session.title} blurb={STEP_COPY.session.blurb} />
@@ -526,8 +476,8 @@ function StepSession() {
     "currency": "usd",
     "line_items": [{ "name": "Pro plan", "amount": 4900 }],
     "customer_email": "buyer@example.com",
-    "success_url": "https://shop.yoursite.com/thanks?session_id={CHECKOUT_SESSION_ID}",
-    "cancel_url": "https://shop.yoursite.com/cart"
+    "success_url": "${successUrl}",
+    "cancel_url": "${cancelUrl}"
   }'`}
       />
       <StepLearnMore>
@@ -540,7 +490,7 @@ function StepSession() {
   )
 }
 
-function StepWebhook({ data, onSaved }: StepProps) {
+function StepWebhook({ data, onSaved }: HubDataProps) {
   const savedUrl = data.settings.webhookUrl ?? ""
   const [editing, setEditing] = useState(!savedUrl)
   const [url, setUrl] = useState(savedUrl)
@@ -779,7 +729,7 @@ function StepTest() {
   )
 }
 
-function StepLive({ data, onSaved }: StepProps) {
+function StepLive({ data, onSaved }: HubDataProps) {
   const [saving, setSaving] = useState(false)
 
   const toggle = async (next: boolean) => {

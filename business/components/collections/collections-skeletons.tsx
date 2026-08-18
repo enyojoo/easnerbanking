@@ -27,7 +27,7 @@ export function CheckoutHubSkeleton() {
     >
       <div className="hidden space-y-2 lg:block">
         <Skeleton className="h-4 w-24" />
-        {Array.from({ length: 4 }).map((_, index) => (
+        {Array.from({ length: 3 }).map((_, index) => (
           <Skeleton key={index} className="h-12 w-full" />
         ))}
       </div>
@@ -36,6 +36,23 @@ export function CheckoutHubSkeleton() {
         <Skeleton className="h-4 w-3/4" />
         <Skeleton className="h-24 w-full" />
       </div>
+    </div>
+  )
+}
+
+export function CheckoutSitesTableSkeleton() {
+  return (
+    <div aria-busy="true" aria-label="Loading websites">
+      <div className="border-b px-4 py-3">
+        <Skeleton className="h-3 w-24" />
+      </div>
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div key={index} className="flex gap-4 border-b px-4 py-4 last:border-0">
+          <Skeleton className="h-4 w-[28%]" />
+          <Skeleton className="h-4 flex-1" />
+          <Skeleton className="h-4 flex-1" />
+        </div>
+      ))}
     </div>
   )
 }

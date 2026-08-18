@@ -13,12 +13,35 @@ type CheckoutSettings = {
   default_cancel_url: string | null
 }
 
+type CheckoutSiteRow = {
+  origin: string
+  success_url: string | null
+  cancel_url: string | null
+}
+
 function originOf(url: string): string | null {
   try {
     return new URL(url.replace("{CHECKOUT_SESSION_ID}", "placeholder")).origin
   } catch {
     return null
   }
+}
+
+function pickCheckoutSite(
+  sites: CheckoutSiteRow[],
+  successUrl: string,
+  requestOrigin: string | null,
+): CheckoutSiteRow | null {
+  const fromSuccess = originOf(successUrl)
+  if (fromSuccess) {
+    const match = sites.find((site) => site.origin === fromSuccess)
+    if (match) return match
+  }
+  if (requestOrigin) {
+    const match = sites.find((site) => site.origin === requestOrigin)
+    if (match) return match
+  }
+  return sites.find((site) => site.success_url) ?? sites[0] ?? null
 }
 
 /**
@@ -55,18 +78,33 @@ export async function POST(request: Request) {
   const productName = String(body?.line_items?.[0]?.name ?? "").trim() || "Online payment"
   const productDescription = String(body?.line_items?.[0]?.description ?? "").trim() || null
 
-  const { data: settingsRow } = await admin
-    .from("business_checkout_settings")
-    .select("allowed_origins, default_success_url, default_cancel_url")
-    .eq("business_id", auth.ctx.businessId)
-    .maybeSingle()
+  const [{ data: settingsRow }, { data: siteRows }] = await Promise.all([
+    admin
+      .from("business_checkout_settings")
+      .select("allowed_origins, default_success_url, default_cancel_url")
+      .eq("business_id", auth.ctx.businessId)
+      .maybeSingle(),
+    admin
+      .from("business_checkout_sites")
+      .select("origin, success_url, cancel_url")
+      .eq("business_id", auth.ctx.businessId),
+  ])
   const settings = (settingsRow ?? null) as CheckoutSettings | null
+  const sites = (siteRows ?? []) as CheckoutSiteRow[]
 
+  const requestedSuccess = String(body?.success_url ?? "").trim()
+  const requestedCancel = String(body?.cancel_url ?? "").trim()
+  const site = pickCheckoutSite(sites, requestedSuccess, request.headers.get("origin"))
   const successUrl =
-    String(body?.success_url ?? "").trim() || settings?.default_success_url || buildPaymentThanksUrl()
-  const cancelUrl = String(body?.cancel_url ?? "").trim() || settings?.default_cancel_url || null
+    requestedSuccess || site?.success_url || settings?.default_success_url || buildPaymentThanksUrl()
+  const cancelUrl = requestedCancel || site?.cancel_url || settings?.default_cancel_url || null
 
-  const allowedOrigins = Array.isArray(settings?.allowed_origins) ? settings.allowed_origins : []
+  const allowedOrigins = [
+    ...new Set([
+      ...(Array.isArray(settings?.allowed_origins) ? settings.allowed_origins : []),
+      ...sites.map((row) => row.origin).filter(Boolean),
+    ]),
+  ]
   if (allowedOrigins.length > 0) {
     for (const url of [successUrl, cancelUrl]) {
       if (!url) continue
