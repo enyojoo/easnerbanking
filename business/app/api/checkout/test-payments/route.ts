@@ -12,7 +12,7 @@ type SessionRow = {
 }
 
 /**
- * Completed Stripe *test* collections for this business. Live payments stay on
+ * Completed test collections for this business. Live payments stay on
  * Transactions; this list is the Checkout popup.
  */
 export async function GET(request: Request) {
@@ -34,6 +34,9 @@ export async function GET(request: Request) {
     .limit(50)
 
   if (error) {
+    const missingColumn =
+      error.code === "42703" || /livemode/i.test(error.message || "")
+    if (missingColumn) return NextResponse.json({ payments: [] })
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
 

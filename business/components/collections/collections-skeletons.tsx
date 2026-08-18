@@ -40,6 +40,21 @@ export function CheckoutHubSkeleton() {
   )
 }
 
+export function CheckoutTestPaymentsSkeleton() {
+  return (
+    <div aria-busy="true" aria-label="Loading test payments">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div key={index} className="flex gap-4 border-b py-2.5 last:border-0">
+          <Skeleton className="h-4 w-[28%]" />
+          <Skeleton className="h-4 w-[16%]" />
+          <Skeleton className="h-4 flex-1" />
+          <Skeleton className="h-4 w-[18%]" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function CheckoutSitesTableSkeleton() {
   return (
     <div aria-busy="true" aria-label="Loading websites">

@@ -153,10 +153,9 @@ export const COLLECTIONS_COPY = {
   stepTestBlurb: "Pay with test keys on the site you connected. Nothing is charged.",
   viewTestPayments: "Test payments",
   testPaymentsTitle: "Test payments",
-  testPaymentsBlurb: "These are Stripe test charges. They do not appear on Transactions.",
+  testPaymentsBlurb: "These are test charges. They do not appear on Transactions.",
   testPaymentsEmpty:
     "No test payments yet. Pay on your site with test keys and card 4242 4242 4242 4242.",
-  testPaymentsLoading: "Loading…",
   testPaymentsLoadError: "Couldn’t load test payments",
   columnWhen: "When",
   columnCustomer: "Customer",

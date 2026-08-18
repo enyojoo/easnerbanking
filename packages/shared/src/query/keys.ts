@@ -106,6 +106,8 @@ export const qk = {
     checkoutSettings: {
       root: (scope: Scope) => [...scopeKey(scope), "collections", "checkout-settings"] as const,
       hub: (scope: Scope) => [...scopeKey(scope), "collections", "checkout-settings", "hub"] as const,
+      testPayments: (scope: Scope) =>
+        [...scopeKey(scope), "collections", "checkout-settings", "test-payments"] as const,
     },
   },
   invoices: {

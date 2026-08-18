@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useIsRestoring } from "@tanstack/react-query"
 import { formatMoneyDisplay } from "@easner/shared"
 import {
   Dialog,
@@ -9,17 +9,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { fetchWithSession } from "@/lib/fetch-with-session"
+import { CheckoutTestPaymentsSkeleton } from "@/components/collections/collections-skeletons"
+import { useCheckoutTestPaymentsQuery } from "@/hooks/queries/use-checkout-test-payments-query"
 import { COLLECTIONS_COPY } from "@/lib/copy/business-ui-copy"
-
-type TestPayment = {
-  id: string
-  source: "embed" | "payment_link"
-  amountCents: number
-  currency: string
-  customerEmail: string | null
-  completedAt: string | null
-}
 
 export function CheckoutTestPaymentsDialog({
   open,
@@ -28,42 +20,12 @@ export function CheckoutTestPaymentsDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [payments, setPayments] = useState<TestPayment[]>([])
-
-  useEffect(() => {
-    if (!open) return
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    void fetchWithSession("/api/checkout/test-payments")
-      .then(async (res) => {
-        const body = (await res.json().catch(() => ({}))) as {
-          payments?: TestPayment[]
-          error?: string
-        }
-        if (cancelled) return
-        if (!res.ok) {
-          setError(body.error || COLLECTIONS_COPY.testPaymentsLoadError)
-          setPayments([])
-          return
-        }
-        setPayments(Array.isArray(body.payments) ? body.payments : [])
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setError(COLLECTIONS_COPY.testPaymentsLoadError)
-          setPayments([])
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [open])
+  const isRestoring = useIsRestoring()
+  const query = useCheckoutTestPaymentsQuery(open)
+  const payments = query.data?.payments ?? []
+  const loading = !query.data && (isRestoring || query.isFetching)
+  const error =
+    query.error instanceof Error ? query.error.message : query.error ? COLLECTIONS_COPY.testPaymentsLoadError : null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -73,7 +35,7 @@ export function CheckoutTestPaymentsDialog({
           <DialogDescription>{COLLECTIONS_COPY.testPaymentsBlurb}</DialogDescription>
         </DialogHeader>
         {loading ? (
-          <p className="text-sm text-muted-foreground">{COLLECTIONS_COPY.testPaymentsLoading}</p>
+          <CheckoutTestPaymentsSkeleton />
         ) : error ? (
           <p className="text-sm text-destructive" role="status">
             {error}

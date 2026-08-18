@@ -33,6 +33,15 @@ export type CheckoutApiKey = {
   last_used_at: string | null
 }
 
+export type CheckoutTestPayment = {
+  id: string
+  source: "embed" | "payment_link"
+  amountCents: number
+  currency: string
+  customerEmail: string | null
+  completedAt: string | null
+}
+
 export type CheckoutHubPayload = {
   settings: CheckoutHubSettings
   sites: CheckoutSite[]
