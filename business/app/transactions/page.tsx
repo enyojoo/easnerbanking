@@ -95,8 +95,10 @@ export default function TransactionsPage() {
   useEffect(() => {
     const status = searchParams.get("status")
     const period = searchParams.get("period")
+    const search = searchParams.get("search")
     if (status && ["completed", "pending", "processing", "failed"].includes(status)) setStatusFilter(status)
     if (period && ["7d", "30d", "90d", "1y", "custom"].includes(period)) setTimePeriod(period as TimePeriod)
+    if (search) setSearchTerm(search)
   }, [searchParams])
 
   useEffect(() => {

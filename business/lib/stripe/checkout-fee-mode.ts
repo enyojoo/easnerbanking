@@ -84,10 +84,10 @@ export function checkoutFeeModeLabel(mode: CheckoutFeeMode): string {
 /** Plain-language explanation shown to operators — no provider names. */
 export function checkoutFeeModeDescription(mode: CheckoutFeeMode): string {
   if (mode === "buyer_surcharge") {
-    return "Your customer pays the amount you list plus the processing fee, so your Easner Balance receives the full listed amount."
+    return "The customer pays the listed amount plus the processing fee."
   }
   if (mode === "easner_absorbs") {
-    return "Your customer pays the amount you list and your Easner Balance receives it in full. Easner covers the processing fee."
+    return "Easner covers the processing fee on these payments."
   }
-  return "Your customer pays the amount you list and the processing fee is deducted before the payment reaches your Easner Balance."
+  return "You receive the listed amount minus the processing fee."
 }

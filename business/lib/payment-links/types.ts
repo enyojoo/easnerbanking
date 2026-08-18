@@ -21,6 +21,8 @@ export type PaymentLink = {
   paymentCount: number
   archivedAt: string | null
   createdAt: string
+  totalCollectedCents?: number
+  lastPaymentAt?: string | null
 }
 
 const RAILS: readonly PaymentLinkRail[] = ["card_bank", "stablecoin"]
@@ -65,6 +67,9 @@ export function mapRowToPaymentLink(row: Record<string, unknown>): PaymentLink {
     paymentCount: Number(row.payment_count ?? 0),
     archivedAt: typeof row.archived_at === "string" ? row.archived_at : null,
     createdAt: String(row.created_at ?? ""),
+    totalCollectedCents:
+      row.total_collected_cents == null ? undefined : Number(row.total_collected_cents),
+    lastPaymentAt: typeof row.last_payment_at === "string" ? row.last_payment_at : null,
   }
 }
 

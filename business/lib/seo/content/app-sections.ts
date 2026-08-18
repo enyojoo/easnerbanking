@@ -172,8 +172,8 @@ export const appSectionsSeo = {
       description: "Create and share payment links for card, bank, and stablecoin collections in Easner Business – built for modern finance teams and operators.",
     },
     hero: {
-      h1: "Payment Links",
-      subhead: "Create and share links to collect payments.",
+      h1: "Payment links",
+      subhead: "Share a link and collect payment without an invoice.",
       altText: "Easner Business payment links",
     },
   },
@@ -190,13 +190,13 @@ export const appSectionsSeo = {
   },
   checkout: {
     metadata: {
-      title: "Online Checkout | Easner Business Banking",
+      title: "Website checkout | Easner Business Banking",
       description: "Connect your website with Easner Checkout — API keys, embed snippet, webhooks, and test mode in Easner Business.",
     },
     hero: {
-      h1: "Online Checkout",
-      subhead: "Collect on your website with Easner Checkout.",
-      altText: "Easner Business online checkout",
+      h1: "Website checkout",
+      subhead: "Add card and bank payments to your site.",
+      altText: "Easner Business website checkout",
     },
   },
   developers: {

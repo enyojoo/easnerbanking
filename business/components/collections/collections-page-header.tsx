@@ -2,19 +2,21 @@ import type { ReactNode } from "react"
 import { PageIntro } from "@/components/copy/page-intro"
 import { Badge } from "@/components/ui/badge"
 
-type SettingsTabIntroProps = {
+export function CollectionsPageHeader({
+  title,
+  intro,
+  chips,
+  actions,
+}: {
   title: string
-  description: string
-  icon?: ReactNode
+  intro: string
   chips?: string[]
   actions?: ReactNode
-}
-
-export function SettingsTabIntro({ title, description, icon, chips, actions }: SettingsTabIntroProps) {
+}) {
   return (
     <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
       <div className="min-w-0 space-y-2">
-        <PageIntro title={title} description={description} variant="tab" icon={icon} />
+        <PageIntro title={title} description={intro} variant="page" />
         {chips && chips.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {chips.map((chip) => (

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import {
   ChevronUp,
@@ -21,6 +22,8 @@ import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { normalizeBusinessLogoUrl, normalizeProfileImageUrl } from "@/lib/image-cache"
 import { StableAvatar } from "@/components/stable-avatar"
+import { useScope } from "@/lib/query/scope"
+import { prefetchRouteWorkspaceData } from "@/lib/query/workspace-prefetch"
 
 interface BusinessDropdownProps {
   businessName: string
@@ -45,12 +48,20 @@ export function BusinessDropdown({
   variant = "sidebar",
 }: BusinessDropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const queryClient = useQueryClient()
+  const { scope } = useScope()
   const normalizedProfileImageUrl = normalizeProfileImageUrl(profileImageUrl)
   const normalizedBusinessLogoUrl = normalizeBusinessLogoUrl(businessLogoUrl)
   const hasBusinessLogo = Boolean(normalizedBusinessLogoUrl)
 
   return (
-    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+    <DropdownMenu
+      open={isOpen}
+      onOpenChange={(open) => {
+        setIsOpen(open)
+        if (open && scope) void prefetchRouteWorkspaceData(queryClient, scope, "/settings")
+      }}
+    >
       <DropdownMenuTrigger asChild>
         {variant === "header" ? (
           <Button
@@ -149,7 +160,12 @@ export function BusinessDropdown({
           </>
         )}
         <DropdownMenuItem asChild className="gap-2">
-          <Link href="/settings">
+          <Link
+            href="/settings"
+            onMouseEnter={() => {
+              if (scope) void prefetchRouteWorkspaceData(queryClient, scope, "/settings")
+            }}
+          >
             <Settings className="h-4 w-4" />
             <span>Account settings</span>
           </Link>

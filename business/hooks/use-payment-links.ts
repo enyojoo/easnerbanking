@@ -1,43 +1,36 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
-import { fetchWithSession } from "@/lib/fetch-with-session"
+import { useCallback } from "react"
+import { useQueryClient } from "@tanstack/react-query"
+import { qk } from "@easner/shared"
+import { useScope } from "@/lib/query/scope"
+import { usePaymentLinksQuery } from "@/hooks/queries/use-payment-links-query"
 import type { PaymentLink } from "@/lib/payment-links/types"
 
 export type PaymentLinkListRow = PaymentLink & { url: string }
 
 export function usePaymentLinks(options?: { includeArchived?: boolean }) {
   const includeArchived = options?.includeArchived ?? false
-  const [links, setLinks] = useState<PaymentLinkListRow[]>([])
-  const [easetag, setEasetag] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const query = usePaymentLinksQuery({ includeArchived })
+  const queryClient = useQueryClient()
+  const { scope } = useScope()
+  const links = query.data?.links ?? []
+  const easetag = query.data?.easetag ?? null
+  const loading = query.isPending && links.length === 0 && !query.data
 
   const refetch = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await fetchWithSession(
-        `/api/payment-links${includeArchived ? "?archived=true" : ""}`,
-      )
-      const body = (await res.json().catch(() => ({}))) as {
-        links?: PaymentLinkListRow[]
-        easetag?: string | null
-        error?: string
-      }
-      if (!res.ok) throw new Error(body.error || "Could not load payment links")
-      setLinks(body.links ?? [])
-      setEasetag(body.easetag ?? null)
-      setError(null)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load payment links")
-    } finally {
-      setLoading(false)
+    if (scope) {
+      await queryClient.invalidateQueries({ queryKey: qk.collections.paymentLinks.root(scope) })
     }
-  }, [includeArchived])
+    await query.refetch()
+  }, [query, queryClient, scope])
 
-  useEffect(() => {
-    void refetch()
-  }, [refetch])
-
-  return { links, easetag, loading, error, refetch }
+  return {
+    links,
+    easetag,
+    loading,
+    error: query.error instanceof Error ? query.error.message : null,
+    refetch,
+    isFetching: query.isFetching,
+  }
 }

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest"
 import {
   BANNER_COPY,
   BANNER_CTA_COPY,
+  PAGE_COPY,
+  SETTINGS_TAB_COPY,
   verificationBannerCopy,
   verificationBannerCta,
   verificationBannerHasCta,
@@ -63,5 +65,20 @@ describe("verificationBannerCta", () => {
   it("returns Retry for rejected and Continue for hold", () => {
     expect(verificationBannerCta("rejected")).toBe(BANNER_CTA_COPY.retry)
     expect(verificationBannerCta("hold")).toBe(BANNER_CTA_COPY.continue)
+  })
+})
+
+describe("PAGE_COPY collections intros", () => {
+  it("keeps links and checkout intros to one short line", () => {
+    const words = (value: string) => value.trim().split(/\s+/).length
+    expect(words(PAGE_COPY.links.intro)).toBeLessThanOrEqual(12)
+    expect(words(PAGE_COPY.checkout.intro)).toBeLessThanOrEqual(12)
+  })
+})
+
+describe("SETTINGS_TAB_COPY payments intro", () => {
+  it("keeps the payments tab intro to one short line", () => {
+    const words = (value: string) => value.trim().split(/\s+/).length
+    expect(words(SETTINGS_TAB_COPY.payments.intro)).toBeLessThanOrEqual(12)
   })
 })

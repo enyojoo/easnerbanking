@@ -4,18 +4,19 @@ import { useState } from "react"
 import { QRCodeSVG } from "qrcode.react"
 import { toast } from "sonner"
 import { Archive, Check, Copy, ExternalLink, FileText, ImageIcon } from "lucide-react"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { paymentLinkTypeLabel } from "@/lib/payment-links/types"
 import type { PaymentLinkListRow } from "@/hooks/use-payment-links"
 import { formatCurrency } from "@/lib/utils"
+import { useBusinessProfile } from "@/lib/use-business-profile"
 
 export function PaymentLinkShareSheet({
   link,
@@ -30,10 +31,10 @@ export function PaymentLinkShareSheet({
 }) {
   const [copied, setCopied] = useState(false)
   const [archiving, setArchiving] = useState(false)
-
-  if (!link) return null
+  const { name, logoUrl } = useBusinessProfile()
 
   const copy = async () => {
+    if (!link) return
     try {
       await navigator.clipboard.writeText(link.url)
       setCopied(true)
@@ -45,7 +46,7 @@ export function PaymentLinkShareSheet({
   }
 
   const downloadPlacard = async (format: "png" | "pdf") => {
-    if (!link.autopayoutConfigId) return
+    if (!link?.autopayoutConfigId) return
     const res = await fetchWithSession(
       `/api/autopayout/${encodeURIComponent(link.autopayoutConfigId)}/placard?format=${format}`,
     )
@@ -58,6 +59,7 @@ export function PaymentLinkShareSheet({
   }
 
   const archive = async () => {
+    if (!link) return
     setArchiving(true)
     try {
       const res = await fetchWithSession(`/api/payment-links/${encodeURIComponent(link.id)}`, {
@@ -79,15 +81,32 @@ export function PaymentLinkShareSheet({
   }
 
   return (
-    <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{link.label}</DialogTitle>
-          <DialogDescription>
+    <Sheet open={Boolean(link)} onOpenChange={onOpenChange}>
+      <SheetContent>
+        {link ? (
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle>{link.label}</SheetTitle>
+          <SheetDescription>
             {paymentLinkTypeLabel(link)} ·{" "}
             {formatCurrency(link.amountCents / 100, link.currency)}
-          </DialogDescription>
-        </DialogHeader>
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="rounded-lg border bg-muted/30 p-3">
+          <div className="flex items-center gap-3">
+            {logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logoUrl} alt="" className="h-8 w-8 rounded object-cover" />
+            ) : null}
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">{name || "Your business"}</p>
+              <p className="text-xs text-muted-foreground">
+                {formatCurrency(link.amountCents / 100, link.currency)}
+              </p>
+            </div>
+          </div>
+        </div>
 
         <div className="space-y-4">
           <div className="mx-auto rounded-xl border bg-card p-3">
@@ -157,7 +176,9 @@ export function PaymentLinkShareSheet({
             </Button>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+        </div>
+        ) : null}
+      </SheetContent>
+    </Sheet>
   )
 }

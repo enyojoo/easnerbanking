@@ -1,10 +1,9 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
-import { CreditCard, ExternalLink } from "lucide-react"
+import { CreditCard } from "lucide-react"
 import { toast } from "sonner"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
@@ -12,18 +11,16 @@ import { Switch } from "@/components/ui/switch"
 import { CheckoutFeeModeSelector } from "@/components/settings/checkout-fee-mode-selector"
 import { PaymentsConnectionStatusCard } from "@/components/settings/payments-connection-status-card"
 import { SettingsCardHeader } from "@/components/settings/settings-card-header"
+import { SettingsTabIntro } from "@/components/settings/settings-tab-intro"
+import { PaymentsSettingsPanelSkeleton } from "@/components/collections/collections-skeletons"
 import {
   saveCheckoutSettings,
   useCheckoutSettings,
 } from "@/hooks/use-checkout-settings"
-import { useBusinessProfile, patchCachedBusinessProfile, type BusinessProfile } from "@/lib/use-business-profile"
-import { fetchWithSession } from "@/lib/fetch-with-session"
-import {
-  DEFAULT_INVOICE_PAYMENT_DEFAULTS,
-  type BusinessInvoiceSettings,
-} from "@/lib/invoices/invoice-settings"
+import { useBusinessProfile, patchCachedBusinessProfile } from "@/lib/use-business-profile"
 import { SETTINGS_CONNECT_FLOW_PARAM } from "@/lib/compliance/cutover-comms"
 import {
+  COLLECTIONS_COPY,
   PAYMENTS_SETTINGS_COPY,
   SETTINGS_TAB_COPY,
 } from "@/lib/copy/business-ui-copy"
@@ -33,59 +30,13 @@ import { readCachedConnectStatus } from "@/lib/stripe/connect-status-cache"
 
 export function SettingsPaymentsTab() {
   const profile = useBusinessProfile()
-  const { data: checkoutData, loading: checkoutLoading, refetch } = useCheckoutSettings()
+  const { data: checkoutData, loading: checkoutLoading, error, refetch } = useCheckoutSettings()
   const [masterSaving, setMasterSaving] = useState(false)
-  const [invoiceSettings, setInvoiceSettings] = useState<BusinessInvoiceSettings>({
-    ...DEFAULT_INVOICE_PAYMENT_DEFAULTS,
-    ...profile.invoiceSettings,
-  })
-  const invoiceRef = useRef(invoiceSettings)
 
-  useEffect(() => {
-    invoiceRef.current = invoiceSettings
-  }, [invoiceSettings])
-
-  useEffect(() => {
-    if (profile.invoiceSettings) {
-      setInvoiceSettings({ ...DEFAULT_INVOICE_PAYMENT_DEFAULTS, ...profile.invoiceSettings })
-    }
-  }, [profile.invoiceSettings])
-
-  const masterEnabled = checkoutData?.settings.onlinePaymentsEnabled !== false
+  const masterEnabled =
+    checkoutData?.settings.onlinePaymentsEnabled ?? profile.onlinePaymentsEnabled !== false
   const connectReady = checkoutData?.readiness.ready === true
-
-  const persistInvoiceSettings = useCallback(async (next: BusinessInvoiceSettings) => {
-    try {
-      const res = await fetchWithSession("/api/business/profile", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invoiceSettings: next }),
-      })
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string }
-        throw new Error(j.error || "Failed to save")
-      }
-      const json = (await res.json()) as { profile?: BusinessProfile }
-      if (json.profile) {
-        window.dispatchEvent(
-          new CustomEvent("business-profile-updated", { detail: json.profile }),
-        )
-      }
-      return true
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not save invoice settings")
-      return false
-    }
-  }, [])
-
-  const patchInvoice = useCallback(
-    (partial: Partial<BusinessInvoiceSettings>) => {
-      const optimistic = { ...invoiceRef.current, ...partial }
-      setInvoiceSettings(optimistic)
-      void persistInvoiceSettings(optimistic)
-    },
-    [persistInvoiceSettings],
-  )
+  const showSkeleton = checkoutLoading && !checkoutData
 
   const setMasterEnabled = async (enabled: boolean) => {
     setMasterSaving(true)
@@ -117,24 +68,35 @@ export function SettingsPaymentsTab() {
   const checklist = cachedConnect ? connectSetupChecklist(cachedConnect) : []
   const pendingItems = checklist.filter((item) => !item.done)
 
-  let statusLabel = "Turned off"
-  let statusVariant: "default" | "secondary" | "outline" = "secondary"
-  if (masterEnabled) {
-    if (connectReady) {
-      statusLabel = "Ready"
-      statusVariant = "default"
-    } else {
-      statusLabel = "Setup required"
-      statusVariant = "outline"
+  const chips = useMemo(() => {
+    const next: string[] = []
+    if (!masterEnabled) {
+      next.push(PAYMENTS_SETTINGS_COPY.statusOff)
+      return next
     }
-  }
+    next.push(connectReady ? PAYMENTS_SETTINGS_COPY.statusReady : PAYMENTS_SETTINGS_COPY.statusSetup)
+    if (checkoutData) {
+      next.push(
+        checkoutData.settings.liveModeEnabled
+          ? COLLECTIONS_COPY.statusLive
+          : COLLECTIONS_COPY.statusTest,
+      )
+      next.push(
+        checkoutData.settings.webhookUrl && checkoutData.settings.webhookSecretLast4
+          ? COLLECTIONS_COPY.statusWebhookOn
+          : COLLECTIONS_COPY.statusWebhookOff,
+      )
+    }
+    return next
+  }, [checkoutData, connectReady, masterEnabled])
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">{SETTINGS_TAB_COPY.payments.title}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{SETTINGS_TAB_COPY.payments.intro}</p>
-      </div>
+      <SettingsTabIntro
+        title={SETTINGS_TAB_COPY.payments.title}
+        description={SETTINGS_TAB_COPY.payments.intro}
+        chips={chips}
+      />
 
       <Card>
         <CardHeader>
@@ -162,20 +124,14 @@ export function SettingsPaymentsTab() {
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-muted-foreground">Status</span>
-            <Badge variant={statusVariant}>{statusLabel}</Badge>
-          </div>
-
           {!masterEnabled ? (
             <p className="rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
               {PAYMENTS_SETTINGS_COPY.masterOffHint}
             </p>
-          ) : !connectReady ? (
+          ) : !connectReady && !showSkeleton ? (
             <div className="space-y-3 rounded-lg border bg-muted/30 p-3 text-sm">
               <p className="text-muted-foreground">
-                {checkoutData?.readiness.reason ||
-                  PAYMENTS_SETTINGS_COPY.setupRequiredHint}
+                {checkoutData?.readiness.reason || PAYMENTS_SETTINGS_COPY.setupRequiredHint}
               </p>
               {pendingItems.length > 0 ? (
                 <ul className="space-y-1 text-muted-foreground">
@@ -190,13 +146,26 @@ export function SettingsPaymentsTab() {
                 </Link>
               </Button>
             </div>
-          ) : (
+          ) : connectReady ? (
             <p className="text-sm text-muted-foreground">{PAYMENTS_SETTINGS_COPY.readyHint}</p>
-          )}
+          ) : null}
         </CardContent>
       </Card>
 
-      {masterEnabled ? (
+      {masterEnabled && error && !checkoutData ? (
+        <Card>
+          <CardContent className="space-y-3 p-6 text-sm">
+            <p className="text-destructive">{COLLECTIONS_COPY.loadError}</p>
+            <Button type="button" variant="outline" size="sm" onClick={() => void refetch()}>
+              {COLLECTIONS_COPY.retry}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {masterEnabled && showSkeleton ? <PaymentsSettingsPanelSkeleton /> : null}
+
+      {masterEnabled && !showSkeleton ? (
         <>
           <Card>
             <CardHeader>
@@ -206,73 +175,13 @@ export function SettingsPaymentsTab() {
               />
             </CardHeader>
             <CardContent>
-              {checkoutLoading || !checkoutData ? (
-                <p className="text-sm text-muted-foreground">Loading…</p>
-              ) : (
+              {checkoutData ? (
                 <CheckoutFeeModeSelector
                   feeMode={checkoutData.settings.feeMode}
                   managedByEasner={checkoutData.settings.feeModeManagedByEasner}
                   onSelect={saveFeeMode}
                 />
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <SettingsCardHeader
-                title={PAYMENTS_SETTINGS_COPY.surfacesTitle}
-                description={PAYMENTS_SETTINGS_COPY.surfacesIntro}
-              />
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <Label htmlFor="invoice-pay-online">{PAYMENTS_SETTINGS_COPY.invoiceSurface}</Label>
-                  <p className="text-sm text-muted-foreground">
-                    {PAYMENTS_SETTINGS_COPY.invoiceSurfaceHelp}
-                  </p>
-                </div>
-                <Switch
-                  id="invoice-pay-online"
-                  checked={invoiceSettings.showOnlinePayment !== false}
-                  onCheckedChange={(v) => patchInvoice({ showOnlinePayment: v })}
-                />
-              </div>
-
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="font-medium text-foreground">{PAYMENTS_SETTINGS_COPY.linksSurface}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {connectReady
-                      ? PAYMENTS_SETTINGS_COPY.linksSurfaceReady
-                      : PAYMENTS_SETTINGS_COPY.linksSurfacePending}
-                  </p>
-                </div>
-                <Button variant="outline" size="sm" asChild>
-                  <Link href="/links">{PAYMENTS_SETTINGS_COPY.openLinks}</Link>
-                </Button>
-              </div>
-
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="font-medium text-foreground">{PAYMENTS_SETTINGS_COPY.checkoutSurface}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {checkoutData?.settings.webhookUrl && checkoutData.settings.webhookSecretLast4
-                      ? PAYMENTS_SETTINGS_COPY.checkoutWebhookConfigured
-                      : PAYMENTS_SETTINGS_COPY.checkoutWebhookPending}
-                    {checkoutData?.settings.liveModeEnabled
-                      ? ` · ${PAYMENTS_SETTINGS_COPY.checkoutLiveOn}`
-                      : ` · ${PAYMENTS_SETTINGS_COPY.checkoutTestMode}`}
-                  </p>
-                </div>
-                <Button variant="outline" size="sm" asChild>
-                  <Link href="/checkout" className="inline-flex items-center gap-1">
-                    {PAYMENTS_SETTINGS_COPY.openCheckoutHub}
-                    <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-                  </Link>
-                </Button>
-              </div>
+              ) : null}
             </CardContent>
           </Card>
 

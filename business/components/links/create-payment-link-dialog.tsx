@@ -58,6 +58,7 @@ export function CreatePaymentLinkDialog({
 }) {
   const defaultRail: Rail = initialRail === "stablecoin" ? "stablecoin" : "one_time"
   const [rail, setRail] = useState<Rail>(defaultRail)
+  const [step, setStep] = useState<1 | 2>(1)
   const [label, setLabel] = useState("")
   const [slugEdited, setSlugEdited] = useState(false)
   const [slug, setSlug] = useState("")
@@ -83,6 +84,7 @@ export function CreatePaymentLinkDialog({
 
   const reset = () => {
     setRail(defaultRail)
+    setStep(1)
     setLabel("")
     setSlug("")
     setSlugEdited(false)
@@ -148,13 +150,14 @@ export function CreatePaymentLinkDialog({
     >
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Create payment link</DialogTitle>
+          <DialogTitle>{step === 1 ? "Choose type" : "Link details"}</DialogTitle>
           <DialogDescription>
-            Share one link and let customers pay you without an invoice.
+            {step === 1 ? "How should customers pay?" : "Name, amount, and link address."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
+          {step === 1 ? (
           <div className="space-y-2">
             <Label>How customers pay</Label>
             <div className="grid gap-2 sm:grid-cols-3">
@@ -177,7 +180,10 @@ export function CreatePaymentLinkDialog({
               ))}
             </div>
           </div>
+          ) : null}
 
+          {step === 2 ? (
+          <>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="link-label">Name</Label>
@@ -318,19 +324,33 @@ export function CreatePaymentLinkDialog({
               />
             </div>
           ) : null}
+          </>
+          ) : null}
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            onClick={() => void submit()}
-            disabled={submitting || !label.trim() || !slug || !amount}
-          >
-            {submitting ? "Creating…" : "Create link"}
-          </Button>
+          {step === 2 ? (
+            <Button type="button" variant="outline" onClick={() => setStep(1)}>
+              Back
+            </Button>
+          ) : (
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+          )}
+          {step === 1 ? (
+            <Button type="button" onClick={() => setStep(2)}>
+              Continue
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              onClick={() => void submit()}
+              disabled={submitting || !label.trim() || !slug || !amount}
+            >
+              {submitting ? "Creating…" : "Create link"}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

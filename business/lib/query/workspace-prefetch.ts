@@ -284,6 +284,21 @@ export async function prefetchRouteWorkspaceData(
     await prefetchCardsWorkspaceData(queryClient, scope)
     return
   }
+  if (href === "/links" || href.startsWith("/links/")) {
+    const { prefetchPaymentLinks } = await import("@/hooks/queries/use-payment-links-query")
+    await prefetchPaymentLinks(queryClient, scope)
+    return
+  }
+  if (href === "/checkout" || href.startsWith("/checkout/")) {
+    const { prefetchCheckoutSettings } = await import("@/hooks/queries/use-checkout-settings-query")
+    await prefetchCheckoutSettings(queryClient, scope)
+    return
+  }
+  if (href === "/settings" || href.startsWith("/settings")) {
+    const { prefetchCheckoutSettings } = await import("@/hooks/queries/use-checkout-settings-query")
+    await prefetchCheckoutSettings(queryClient, scope)
+    return
+  }
   if (
     href === "/dashboard" ||
     href.startsWith("/dashboard/") ||

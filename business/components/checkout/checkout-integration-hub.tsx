@@ -1,10 +1,9 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
-import { Check, Circle, Loader2, Plus, X } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
+import { Check, Circle, Plus, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -14,6 +13,8 @@ import {
   CheckoutCodeBlock,
   RevealOnceValue,
 } from "@/components/checkout/checkout-code-block"
+import { CheckoutDashboardPanel } from "@/components/checkout/checkout-dashboard-panel"
+import { CheckoutHubSkeleton } from "@/components/collections/collections-skeletons"
 import {
   EasnerPaymentElementCheckout,
   PaymentFormSkeleton,
@@ -29,165 +30,178 @@ import {
   checkoutFeeModeDescription,
   checkoutFeeModeLabel,
 } from "@/lib/stripe/checkout-fee-mode"
+import { COLLECTIONS_COPY } from "@/lib/copy/business-ui-copy"
+import {
+  CHECKOUT_PHASES,
+  checkoutSetupComplete,
+  completedCheckoutSteps,
+  firstIncompletePhase,
+  phaseComplete,
+  type CheckoutPhaseId,
+  type CheckoutStepId,
+} from "@/lib/checkout/checkout-phases"
 import { cn } from "@/lib/utils"
 
-type StepId =
-  | "ready"
-  | "fees"
-  | "website"
-  | "urls"
-  | "keys"
-  | "snippet"
-  | "session"
-  | "webhook"
-  | "test"
-  | "live"
-
-const STEP_TITLES: Record<StepId, string> = {
-  ready: "Confirm online payments are on",
-  fees: "Choose who pays the processing fee",
-  website: "Add your website",
-  urls: "Set success and cancel URLs",
-  keys: "Get API keys",
-  snippet: "Add the payment form to your page",
-  session: "Create a session from your server",
-  webhook: "Add a webhook",
-  test: "Make a test payment",
-  live: "Go live",
+const PHASE_COPY: Record<CheckoutPhaseId, { title: string; blurb: string }> = {
+  get_ready: { title: COLLECTIONS_COPY.phaseGetReady, blurb: COLLECTIONS_COPY.phaseGetReadyBlurb },
+  connect_site: { title: COLLECTIONS_COPY.phaseConnect, blurb: COLLECTIONS_COPY.phaseConnectBlurb },
+  integrate: { title: COLLECTIONS_COPY.phaseIntegrate, blurb: COLLECTIONS_COPY.phaseIntegrateBlurb },
+  verify: { title: COLLECTIONS_COPY.phaseVerify, blurb: COLLECTIONS_COPY.phaseVerifyBlurb },
 }
 
-const STEP_ORDER: StepId[] = [
-  "ready",
-  "fees",
-  "website",
-  "urls",
-  "keys",
-  "snippet",
-  "session",
-  "webhook",
-  "test",
-  "live",
-]
+const STEP_COPY: Record<CheckoutStepId, { title: string; blurb: string }> = {
+  ready: { title: COLLECTIONS_COPY.stepReadyTitle, blurb: COLLECTIONS_COPY.stepReadyBlurb },
+  fees: { title: COLLECTIONS_COPY.stepFeesTitle, blurb: COLLECTIONS_COPY.stepFeesBlurb },
+  website: { title: COLLECTIONS_COPY.stepWebsiteTitle, blurb: COLLECTIONS_COPY.stepWebsiteBlurb },
+  urls: { title: COLLECTIONS_COPY.stepUrlsTitle, blurb: COLLECTIONS_COPY.stepUrlsBlurb },
+  keys: { title: COLLECTIONS_COPY.stepKeysTitle, blurb: COLLECTIONS_COPY.stepKeysBlurb },
+  snippet: { title: COLLECTIONS_COPY.stepSnippetTitle, blurb: COLLECTIONS_COPY.stepSnippetBlurb },
+  session: { title: COLLECTIONS_COPY.stepSessionTitle, blurb: COLLECTIONS_COPY.stepSessionBlurb },
+  webhook: { title: COLLECTIONS_COPY.stepWebhookTitle, blurb: COLLECTIONS_COPY.stepWebhookBlurb },
+  test: { title: COLLECTIONS_COPY.stepTestTitle, blurb: COLLECTIONS_COPY.stepTestBlurb },
+  live: { title: COLLECTIONS_COPY.stepLiveTitle, blurb: COLLECTIONS_COPY.stepLiveBlurb },
+}
 
-const GATED_STEPS = new Set<StepId>(["keys", "snippet", "session", "webhook", "test", "live"])
-
-export function CheckoutIntegrationHub() {
+export function CheckoutIntegrationHub({
+  forceSetup = false,
+  onDashboardReady,
+}: {
+  forceSetup?: boolean
+  onDashboardReady?: (ready: boolean) => void
+}) {
   const { data, loading, error, refetch } = useCheckoutSettings()
-  const [step, setStep] = useState<StepId>("ready")
+  const [phase, setPhase] = useState<CheckoutPhaseId>("get_ready")
+  const [editing, setEditing] = useState(forceSetup)
+  const primedPhase = useRef(false)
 
-  const completed = useMemo(() => completedSteps(data), [data])
+  const completed = useMemo(() => completedCheckoutSteps(data), [data])
+  const dashboardReady = checkoutSetupComplete(data) && !editing && !forceSetup
+
+  useEffect(() => {
+    if (!data || primedPhase.current) return
+    primedPhase.current = true
+    setPhase(firstIncompletePhase(data))
+  }, [data])
+
+  useEffect(() => {
+    onDashboardReady?.(dashboardReady)
+  }, [dashboardReady, onDashboardReady])
 
   if (loading && !data) {
-    return (
-      <Card>
-        <CardContent className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          Loading your checkout setup…
-        </CardContent>
-      </Card>
-    )
+    return <CheckoutHubSkeleton />
   }
 
   if (error || !data) {
     return (
       <Card>
-        <CardContent className="p-6 text-sm text-destructive">
-          {error || "Could not load checkout settings"}
+        <CardContent className="space-y-3 p-6 text-sm">
+          <p className="text-destructive">{COLLECTIONS_COPY.loadError}</p>
+          <Button type="button" variant="outline" size="sm" onClick={() => void refetch()}>
+            {COLLECTIONS_COPY.retry}
+          </Button>
         </CardContent>
       </Card>
     )
   }
 
   const ready = data.readiness.ready
+  const doneCount = CHECKOUT_PHASES.filter((item) => phaseComplete(item, completed)).length
+
+  if (dashboardReady) {
+    return (
+      <div className="space-y-6">
+        <CheckoutDashboardPanel
+          data={data}
+          onEdit={() => setEditing(true)}
+          onTest={() => {
+            setEditing(true)
+            setPhase("verify")
+          }}
+        />
+        <p className="text-sm text-muted-foreground">
+          {COLLECTIONS_COPY.notBuildingSite}{" "}
+          <Link href="/links" className="underline underline-offset-2">
+            {COLLECTIONS_COPY.openPaymentLinks}
+          </Link>
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6">
-      {!ready ? (
-        <div className="rounded-lg border border-amber-200/80 bg-amber-50/80 p-4 text-sm text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-100">
-          <p className="font-medium">Online payments are not on yet</p>
-          <p className="mt-1">
-            {data.readiness.reason ||
-              "Complete verification so you can accept card and bank payments."}{" "}
-            <Link href="/settings?tab=verification" className="underline underline-offset-2">
-              Go to verification
-            </Link>
-          </p>
-          <p className="mt-1 text-xs">
-            Keys, the snippet, webhooks, and live mode appear here once you are ready.
-          </p>
-        </div>
-      ) : null}
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {COLLECTIONS_COPY.setupProgress} · {doneCount} {COLLECTIONS_COPY.of} {CHECKOUT_PHASES.length}
+      </p>
+      <div className="flex gap-2 overflow-x-auto lg:hidden">
+        {CHECKOUT_PHASES.map((item, index) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setPhase(item.id)}
+            className={cn(
+              "shrink-0 rounded-full border px-3 py-1 text-xs",
+              phase === item.id ? "border-primary bg-primary/5 font-medium" : "text-muted-foreground",
+            )}
+          >
+            {index + 1}. {PHASE_COPY[item.id].title}
+          </button>
+        ))}
+      </div>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(240px,280px)_minmax(0,1fr)]">
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Setup — {completed.size} of {STEP_ORDER.length} complete
-          </p>
-          <ul className="space-y-1">
-            {STEP_ORDER.map((id, index) => {
-              const isLocked = !ready && GATED_STEPS.has(id)
-              const isDone = completed.has(id)
-              return (
-                <li key={id}>
-                  <button
-                    type="button"
-                    disabled={isLocked}
-                    onClick={() => setStep(id)}
-                    className={cn(
-                      "flex w-full items-start gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors",
-                      step === id ? "bg-muted font-medium" : "hover:bg-muted/60",
-                      isLocked && "cursor-not-allowed opacity-50",
-                    )}
-                  >
-                    {isDone ? (
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
-                    ) : (
-                      <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                    )}
-                    <span className="min-w-0">
-                      {index + 1}. {STEP_TITLES[id]}
-                    </span>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        </div>
+      <div className="grid gap-5 lg:grid-cols-[minmax(200px,240px)_minmax(0,1fr)]">
+        <ul className="hidden space-y-1 lg:block">
+          {CHECKOUT_PHASES.map((item, index) => {
+            const isDone = phaseComplete(item, completed)
+            return (
+              <li key={item.id}>
+                <button
+                  type="button"
+                  onClick={() => setPhase(item.id)}
+                  className={cn(
+                    "flex w-full items-start gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors",
+                    phase === item.id ? "bg-muted font-medium" : "hover:bg-muted/60",
+                  )}
+                >
+                  {isDone ? (
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+                  ) : (
+                    <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  )}
+                  <span>
+                    {index + 1}. {PHASE_COPY[item.id].title}
+                  </span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
 
         <Card>
-          <CardContent className="space-y-4 p-5">
-            <StepBody step={step} data={data} onSaved={refetch} />
+          <CardContent className="space-y-8 p-5">
+            <p className="text-sm text-muted-foreground">{PHASE_COPY[phase].blurb}</p>
+            {CHECKOUT_PHASES.find((item) => item.id === phase)?.steps.map((step) => (
+              <div key={step} className={cn(!ready && (step === "keys" || step === "live") && "opacity-70")}>
+                <StepBody step={step} data={data} onSaved={refetch} />
+              </div>
+            ))}
           </CardContent>
         </Card>
       </div>
 
-      <WhoDoesWhat />
+      <p className="text-sm text-muted-foreground">
+        {COLLECTIONS_COPY.notBuildingSite}{" "}
+        <Link href="/links" className="underline underline-offset-2">
+          {COLLECTIONS_COPY.openPaymentLinks}
+        </Link>
+      </p>
     </div>
   )
 }
 
-function completedSteps(data: CheckoutHubPayload | null): Set<StepId> {
-  const done = new Set<StepId>()
-  if (!data) return done
-  if (data.readiness.ready) done.add("ready")
-  if (data.settings.businessFeeMode || data.settings.feeModeManagedByEasner) done.add("fees")
-  if (data.settings.allowedOrigins.length > 0) done.add("website")
-  if (data.settings.defaultSuccessUrl) done.add("urls")
-  if (data.keys.length > 0) {
-    done.add("keys")
-    // The snippet and server call are proven by a real session, which the test step covers.
-    done.add("snippet")
-    done.add("session")
-  }
-  if (data.settings.webhookUrl && data.settings.webhookSecretLast4) done.add("webhook")
-  if (data.settings.testPaymentCompletedAt) done.add("test")
-  if (data.settings.liveModeEnabled) done.add("live")
-  return done
-}
-
 type StepProps = { data: CheckoutHubPayload; onSaved: () => void }
 
-function StepBody({ step, data, onSaved }: StepProps & { step: StepId }) {
+function StepBody({ step, data, onSaved }: StepProps & { step: CheckoutStepId }) {
   switch (step) {
     case "ready":
       return <StepReady data={data} onSaved={onSaved} />
@@ -221,30 +235,28 @@ function StepHeading({ title, blurb }: { title: string; blurb: string }) {
   )
 }
 
+function StepLearnMore({ children }: { children: ReactNode }) {
+  return (
+    <details className="text-sm text-muted-foreground">
+      <summary className="cursor-pointer select-none">{COLLECTIONS_COPY.learnMore}</summary>
+      <div className="mt-2 space-y-2">{children}</div>
+    </details>
+  )
+}
+
 function StepReady({ data }: StepProps) {
   return (
     <>
-      <StepHeading
-        title="Confirm online payments"
-        blurb="Card and bank payments use the same setup as invoice Pay online — there is nothing extra to sign up for here."
-      />
+      <StepHeading title={STEP_COPY.ready.title} blurb={STEP_COPY.ready.blurb} />
       {data.readiness.ready ? (
         <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm">
           <p className="font-medium text-foreground">Online payments are on</p>
-          <p className="mt-1 text-muted-foreground">
-            Invoices, Payment Links, and your website all collect through the same setup, and money
-            settles into your Easner Balance.
-          </p>
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">
-          {data.readiness.reason || "Complete setup in Settings to switch this on."}{" "}
+          {data.readiness.reason || COLLECTIONS_COPY.setupTitle}{" "}
           <Link href="/settings?tab=payments" className="underline underline-offset-2">
-            Go to Payments settings
-          </Link>
-          {" · "}
-          <Link href="/settings?tab=verification" className="underline underline-offset-2">
-            Verification
+            {COLLECTIONS_COPY.masterOffCta}
           </Link>
         </p>
       )}
@@ -255,10 +267,7 @@ function StepReady({ data }: StepProps) {
 function StepFees({ data }: StepProps) {
   return (
     <>
-      <StepHeading
-        title="Choose who pays the processing fee"
-        blurb="Applies to every online payment you collect: invoices, links, and your website."
-      />
+      <StepHeading title={STEP_COPY.fees.title} blurb={STEP_COPY.fees.blurb} />
       <div className="rounded-lg border bg-muted/40 p-3 text-sm">
         <p className="font-medium text-foreground">
           Current setting — {checkoutFeeModeLabel(data.settings.feeMode)}
@@ -300,10 +309,7 @@ function StepWebsite({ data, onSaved }: StepProps) {
 
   return (
     <>
-      <StepHeading
-        title="Add your website"
-        blurb="Only these addresses can take payments with your keys, so a stolen key cannot run checkout somewhere else. Add both www and the bare domain if you use both."
-      />
+      <StepHeading title={STEP_COPY.website.title} blurb={STEP_COPY.website.blurb} />
       <div className="flex flex-col gap-2 sm:flex-row">
         <Input
           value={origin}
@@ -377,10 +383,7 @@ function StepUrls({ data, onSaved }: StepProps) {
 
   return (
     <>
-      <StepHeading
-        title="Set success and cancel URLs"
-        blurb="Where customers land after paying, or if they back out. Your server can override these per payment."
-      />
+      <StepHeading title={STEP_COPY.urls.title} blurb={STEP_COPY.urls.blurb} />
       <div className="space-y-3">
         <div className="space-y-1.5">
           <Label htmlFor="checkout-success">Success URL</Label>
@@ -441,10 +444,7 @@ function StepKeys({ data, onSaved }: StepProps) {
 
   return (
     <>
-      <StepHeading
-        title="Get API keys"
-        blurb="The publishable key is safe in your page. The secret key stays on your server and only creates checkout sessions — it can never move money out of your account."
-      />
+      <StepHeading title={STEP_COPY.keys.title} blurb={STEP_COPY.keys.blurb} />
 
       {(["test", "live"] as const).map((mode) => {
         const key = data.keys.find((item) => item.mode === mode)
@@ -495,10 +495,7 @@ function StepSnippet({ data }: StepProps) {
 
   return (
     <>
-      <StepHeading
-        title="Add the payment form to your page"
-        blurb="Your page keeps your own design. Only the card and bank fields come from Easner."
-      />
+      <StepHeading title={STEP_COPY.snippet.title} blurb={STEP_COPY.snippet.blurb} />
       <CheckoutCodeBlock
         label="On your checkout page"
         code={`<script src="https://js.easner.com/checkout.js"></script>
@@ -510,10 +507,12 @@ function StepSnippet({ data }: StepProps) {
   });
 </script>`}
       />
-      <p className="text-xs text-muted-foreground">
-        The client secret comes from the next step and is never hardcoded. You can pass an
-        appearance object to match your colours and fonts.
-      </p>
+      <StepLearnMore>
+        <p>
+          The client secret comes from the next step and is never hardcoded. You can pass an
+          appearance object to match your colours and fonts.
+        </p>
+      </StepLearnMore>
     </>
   )
 }
@@ -521,10 +520,7 @@ function StepSnippet({ data }: StepProps) {
 function StepSession() {
   return (
     <>
-      <StepHeading
-        title="Create a session from your server"
-        blurb="When a customer clicks Pay, your server asks Easner for a session. Amounts are set server-side so a browser cannot change the price."
-      />
+      <StepHeading title={STEP_COPY.session.title} blurb={STEP_COPY.session.blurb} />
       <CheckoutCodeBlock
         label="POST /v1/checkout/sessions"
         code={`curl https://api.easner.com/v1/checkout/sessions \\
@@ -540,10 +536,12 @@ function StepSession() {
     "cancel_url": "https://shop.yoursite.com/cart"
   }'`}
       />
-      <p className="text-xs text-muted-foreground">
-        The response contains a client_secret — pass it to the snippet. For a recurring charge use
-        mode &quot;subscription&quot; with interval &quot;month&quot; or &quot;year&quot;.
-      </p>
+      <StepLearnMore>
+        <p>
+          The response contains a client_secret — pass it to the snippet. For a recurring charge use
+          mode &quot;subscription&quot; with interval &quot;month&quot; or &quot;year&quot;.
+        </p>
+      </StepLearnMore>
     </>
   )
 }
@@ -590,10 +588,7 @@ function StepWebhook({ data, onSaved }: StepProps) {
 
   return (
     <>
-      <StepHeading
-        title="Add a webhook"
-        blurb="Do not fulfil orders from the browser — a customer can close the tab. Easner posts signed events to your server instead."
-      />
+      <StepHeading title={STEP_COPY.webhook.title} blurb={STEP_COPY.webhook.blurb} />
       <div className="space-y-1.5">
         <Label htmlFor="checkout-webhook">Endpoint URL</Label>
         <Input
@@ -676,10 +671,7 @@ function StepTest({ data, onSaved }: StepProps) {
 
   return (
     <>
-      <StepHeading
-        title="Make a test payment"
-        blurb="This is the same form your customers will see, running here in Easner. Use test keys and a test card — nothing is charged."
-      />
+      <StepHeading title={STEP_COPY.test.title} blurb={STEP_COPY.test.blurb} />
       <p className="text-sm text-muted-foreground">
         Card <code className="rounded bg-muted px-1.5 py-0.5 text-xs">4242 4242 4242 4242</code>,
         any future expiry, any security code.
@@ -728,10 +720,7 @@ function StepLive({ data, onSaved }: StepProps) {
 
   return (
     <>
-      <StepHeading
-        title="Go live"
-        blurb="Swap the test keys in your page and server for live keys. Real payments settle into your Easner Balance the same way test ones do."
-      />
+      <StepHeading title={STEP_COPY.live.title} blurb={STEP_COPY.live.blurb} />
       <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
         <div className="min-w-0">
           <p className="text-sm font-medium text-foreground">Live payments</p>
@@ -750,57 +739,10 @@ function StepLive({ data, onSaved }: StepProps) {
       </div>
       {data.keys.some((key) => key.mode === "live") ? null : (
         <p className="text-xs text-muted-foreground">
-          Create live keys in step 5 before switching your website over.
+          Create live keys before switching your website over.
         </p>
       )}
     </>
   )
 }
 
-function WhoDoesWhat() {
-  return (
-    <div className="space-y-3">
-      <h2 className="text-base font-semibold text-foreground">Who does what</h2>
-      <div className="grid gap-3 md:grid-cols-3">
-        {[
-          {
-            title: "Your website",
-            body: "Products, cart, prices, the Pay button, and your thank-you page. You decide the amount before calling Easner.",
-          },
-          {
-            title: "This screen",
-            body: "Your website addresses, return URLs, keys, the snippet, and webhooks — all in one place.",
-          },
-          {
-            title: "Easner",
-            body: "Creates the payment, collects the money, and settles it into your Easner Balance.",
-          },
-        ].map((card) => (
-          <Card key={card.title}>
-            <CardContent className="space-y-1 p-4">
-              <p className="text-sm font-medium text-foreground">{card.title}</p>
-              <p className="text-sm text-muted-foreground">{card.body}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Need a link to share instead of a website integration?{" "}
-        <Link href="/links" className="underline underline-offset-2">
-          Payment Links
-        </Link>{" "}
-        live under Collections.
-      </p>
-    </div>
-  )
-}
-
-export function CheckoutHubPills() {
-  return (
-    <div className="flex flex-wrap gap-2">
-      <Badge variant="secondary">Card and bank</Badge>
-      <Badge variant="secondary">Same setup as invoices</Badge>
-      <Badge variant="secondary">Money lands in Easner Balance</Badge>
-    </div>
-  )
-}

@@ -37,5 +37,8 @@ export { useCustomersList } from "./use-customers"
 export { useFxRates, persistFxRates } from "./use-fx"
 export type { FxRate } from "./use-fx"
 
+export { usePaymentLinksQuery, prefetchPaymentLinks } from "./use-payment-links-query"
+export { useCheckoutSettingsQuery, prefetchCheckoutSettings } from "./use-checkout-settings-query"
+
 export { useIncomingBalances, useIncomingBalance } from "./use-incoming-balance"
 export type { IncomingBalances } from "./use-incoming-balance"

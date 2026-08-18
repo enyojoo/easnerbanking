@@ -1,6 +1,5 @@
 "use client"
 
-import Link from "next/link"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
@@ -95,12 +94,6 @@ export function SettingsInvoicingTab() {
           />
         </CardHeader>
         <CardContent className="space-y-6">
-          <p className="text-sm text-muted-foreground">
-            {INVOICE_SETTINGS_COPY.onlinePaymentsManagedInPayments}{" "}
-            <Link href="/settings?tab=payments" className="underline underline-offset-2">
-              Open Payments settings
-            </Link>
-          </p>
           <div className="flex items-center justify-between gap-4">
             <div>
               <Label htmlFor="show-bank">{INVOICE_SETTINGS_COPY.bankTransfer}</Label>
@@ -128,6 +121,20 @@ export function SettingsInvoicingTab() {
             />
           </div>
           <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label htmlFor="show-online">{INVOICE_SETTINGS_COPY.onlinePayments}</Label>
+              <p className="text-sm text-muted-foreground">
+                {INVOICE_SETTINGS_COPY.onlinePaymentsHelp}
+              </p>
+            </div>
+            <Switch
+              id="show-online"
+              checked={settings.showOnlinePayment !== false}
+              disabled={!masterOnlineEnabled}
+              onCheckedChange={(v) => patch({ showOnlinePayment: v })}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-4">
             <Label>{INVOICE_SETTINGS_COPY.defaultPaymentOption}</Label>
             <Select
               value={settings.preferredMethod}
@@ -150,15 +157,6 @@ export function SettingsInvoicingTab() {
               </SelectContent>
             </Select>
           </div>
-          {!masterOnlineEnabled || settings.showOnlinePayment === false ? (
-            <p className="text-xs text-muted-foreground">
-              Online is unavailable — enable it in{" "}
-              <Link href="/settings?tab=payments" className="underline underline-offset-2">
-                Payments settings
-              </Link>
-              .
-            </p>
-          ) : null}
           <div className="flex items-center justify-between gap-4">
             <div>
               <Label htmlFor="pdf-pay">{INVOICE_SETTINGS_COPY.includePaymentOnPdf}</Label>

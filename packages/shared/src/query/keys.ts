@@ -97,6 +97,17 @@ export const qk = {
     detail: (scope: Scope, id: string) =>
       [...scopeKey(scope), "beneficiaries", id] as const,
   },
+  collections: {
+    paymentLinks: {
+      root: (scope: Scope) => [...scopeKey(scope), "collections", "payment-links"] as const,
+      list: (scope: Scope, filters: QueryFilters = {}) =>
+        [...scopeKey(scope), "collections", "payment-links", "list", filters] as const,
+    },
+    checkoutSettings: {
+      root: (scope: Scope) => [...scopeKey(scope), "collections", "checkout-settings"] as const,
+      hub: (scope: Scope) => [...scopeKey(scope), "collections", "checkout-settings", "hub"] as const,
+    },
+  },
   invoices: {
     root: (scope: Scope) => [...scopeKey(scope), "invoices"] as const,
     list: (scope: Scope, filters: QueryFilters = {}) =>

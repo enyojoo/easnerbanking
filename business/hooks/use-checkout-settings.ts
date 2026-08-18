@@ -1,65 +1,47 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback } from "react"
+import { useQueryClient } from "@tanstack/react-query"
+import { qk } from "@easner/shared"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import type { CheckoutFeeMode } from "@/lib/stripe/checkout-fee-mode"
-import type { MerchantWebhookEvent } from "@/lib/checkout/merchant-webhooks"
+import { getBrowserQueryClient } from "@/lib/query/query-client"
+import { useScope } from "@/lib/query/scope"
+import { useCheckoutSettingsQuery } from "@/hooks/queries/use-checkout-settings-query"
+import type { CheckoutHubPayload } from "@/lib/checkout/hub-types"
 
-export type CheckoutHubSettings = {
-  feeMode: CheckoutFeeMode
-  businessFeeMode: CheckoutFeeMode | null
-  feeModeManagedByEasner: boolean
-  onlinePaymentsEnabled: boolean
-  allowedOrigins: string[]
-  defaultSuccessUrl: string | null
-  defaultCancelUrl: string | null
-  webhookUrl: string | null
-  webhookSecretLast4: string | null
-  liveModeEnabled: boolean
-  testPaymentCompletedAt: string | null
-}
+export type {
+  CheckoutApiKey,
+  CheckoutHubPayload,
+  CheckoutHubSettings,
+} from "@/lib/checkout/hub-types"
 
-export type CheckoutApiKey = {
-  id: string
-  mode: "test" | "live"
-  publishable_key: string
-  secret_key_last4: string
-  created_at: string
-  last_used_at: string | null
-}
-
-export type CheckoutHubPayload = {
-  settings: CheckoutHubSettings
-  readiness: { ready: boolean; reason: string | null }
-  keys: CheckoutApiKey[]
-  webhookEvents: Record<MerchantWebhookEvent, string>
-}
-
-export function useCheckoutSettings() {
-  const [data, setData] = useState<CheckoutHubPayload | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+export function useCheckoutSettings(): {
+  data: CheckoutHubPayload | null
+  loading: boolean
+  error: string | null
+  refetch: () => Promise<unknown>
+  isFetching: boolean
+} {
+  const query = useCheckoutSettingsQuery()
+  const queryClient = useQueryClient()
+  const { scope } = useScope()
+  const data: CheckoutHubPayload | null = query.data ?? null
+  const loading = query.isPending && !data
 
   const refetch = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await fetchWithSession("/api/checkout/settings")
-      const body = (await res.json().catch(() => ({}))) as CheckoutHubPayload & { error?: string }
-      if (!res.ok) throw new Error(body.error || "Could not load checkout settings")
-      setData(body)
-      setError(null)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load checkout settings")
-    } finally {
-      setLoading(false)
+    if (scope) {
+      await queryClient.invalidateQueries({ queryKey: qk.collections.checkoutSettings.root(scope) })
     }
-  }, [])
+    await query.refetch()
+  }, [query, queryClient, scope])
 
-  useEffect(() => {
-    void refetch()
-  }, [refetch])
-
-  return { data, loading, error, refetch }
+  return {
+    data,
+    loading,
+    error: query.error instanceof Error ? query.error.message : null,
+    refetch,
+    isFetching: query.isFetching,
+  }
 }
 
 export async function saveCheckoutSettings(
@@ -72,5 +54,11 @@ export async function saveCheckoutSettings(
   })
   const body = (await res.json().catch(() => ({}))) as { error?: string; webhookSecret?: string }
   if (!res.ok) return { ok: false, error: body.error || "Could not save" }
+  await getBrowserQueryClient().invalidateQueries({
+    predicate: (query) =>
+      Array.isArray(query.queryKey) &&
+      query.queryKey.includes("collections") &&
+      query.queryKey.includes("checkout-settings"),
+  })
   return { ok: true, webhookSecret: body.webhookSecret }
 }

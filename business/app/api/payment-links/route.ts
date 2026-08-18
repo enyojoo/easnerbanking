@@ -40,6 +40,27 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
 
+  const linkIds = (data ?? []).map((row) => String(row.id))
+  const totals = new Map<string, { totalCollectedCents: number; lastPaymentAt: string | null }>()
+  if (linkIds.length > 0) {
+    const { data: settlements } = await admin
+      .from("checkout_stripe_settlements")
+      .select("payment_link_id, gross_cents, created_at, refunded_at")
+      .eq("business_id", ctx.businessId)
+      .in("payment_link_id", linkIds)
+    for (const row of settlements ?? []) {
+      const id = typeof row.payment_link_id === "string" ? row.payment_link_id : null
+      if (!id || row.refunded_at) continue
+      const current = totals.get(id) ?? { totalCollectedCents: 0, lastPaymentAt: null }
+      current.totalCollectedCents += Number(row.gross_cents ?? 0)
+      const created = typeof row.created_at === "string" ? row.created_at : null
+      if (created && (!current.lastPaymentAt || created > current.lastPaymentAt)) {
+        current.lastPaymentAt = created
+      }
+      totals.set(id, current)
+    }
+  }
+
   const { data: biz } = await admin
     .from("businesses")
     .select("easetag")
@@ -49,7 +70,13 @@ export async function GET(request: Request) {
 
   const links = (data ?? []).map((row) => {
     const link = mapRowToPaymentLink(row as Record<string, unknown>)
-    return { ...link, url: buildPaymentLinkUrl(easetag, link) }
+    const stats = totals.get(link.id)
+    return {
+      ...link,
+      url: buildPaymentLinkUrl(easetag, link),
+      totalCollectedCents: stats?.totalCollectedCents ?? 0,
+      lastPaymentAt: stats?.lastPaymentAt ?? null,
+    }
   })
 
   return NextResponse.json({ links, easetag })

@@ -116,8 +116,8 @@ export function DashboardNav() {
       type: "group" as const,
       items: [
         { href: "/invoices", label: "Invoices", icon: ReceiptText },
-        { href: "/checkout", label: "Checkout", icon: Code },
-        { href: "/links", label: "Links", icon: Link2 },
+        { href: "/checkout", label: "Website checkout", icon: Code },
+        { href: "/links", label: "Payment links", icon: Link2 },
         { href: "/terminal", label: "Terminal", icon: SmartphoneNfc },
       ],
     },
