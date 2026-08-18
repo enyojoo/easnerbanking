@@ -2,36 +2,41 @@
 
 import Link from "next/link"
 import { useCallback, useMemo, useState } from "react"
-import { Plus } from "lucide-react"
+import { Archive, ArchiveRestore, Copy, Link2, MoreHorizontal, Plus, Share2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
 import { CreatePaymentLinkDialog } from "@/components/links/create-payment-link-dialog"
-import { PaymentLinkCard } from "@/components/links/payment-link-card"
 import { PaymentLinkShareSheet } from "@/components/links/payment-link-share-sheet"
 import { CollectionsPageHeader } from "@/components/collections/collections-page-header"
 import { CollectionsReadinessBanner } from "@/components/collections/collections-readiness-banner"
 import { PaymentLinksListSkeleton } from "@/components/collections/collections-skeletons"
 import { usePaymentLinks, type PaymentLinkListRow } from "@/hooks/use-payment-links"
 import { fetchWithSession } from "@/lib/fetch-with-session"
+import { paymentLinkTypeLabel } from "@/lib/payment-links/types"
 import type { PaymentLinkRail } from "@/lib/payment-links/types"
 import { COLLECTIONS_COPY, PAGE_COPY } from "@/lib/copy/business-ui-copy"
+import { formatCurrency } from "@/lib/utils"
 
-type LinkTab = "all" | "one_time" | "recurring" | "stablecoin"
+type LinkTab = "all" | "active" | "closed"
 
 function matchesTab(row: PaymentLinkListRow, tab: LinkTab): boolean {
-  if (tab === "all") return true
-  if (tab === "stablecoin") return row.rail === "stablecoin"
-  if (tab === "recurring") return row.rail === "card_bank" && row.mode === "subscription"
-  return row.rail === "card_bank" && row.mode === "one_time"
+  if (tab === "active") return !row.archivedAt
+  if (tab === "closed") return Boolean(row.archivedAt)
+  return true
 }
 
 export function PaymentLinksPage({ initialCreateRail }: { initialCreateRail?: PaymentLinkRail }) {
-  const [showArchived, setShowArchived] = useState(false)
   const [tab, setTab] = useState<LinkTab>("all")
   const [search, setSearch] = useState("")
-  const { links, easetag, loading, refetch } = usePaymentLinks({ includeArchived: showArchived })
+  const { links, easetag, loading, refetch } = usePaymentLinks({ includeArchived: true })
   const [createOpen, setCreateOpen] = useState(Boolean(initialCreateRail))
   const [shareLink, setShareLink] = useState<PaymentLinkListRow | null>(null)
 
@@ -44,19 +49,19 @@ export function PaymentLinksPage({ initialCreateRail }: { initialCreateRail?: Pa
     }
   }, [])
 
-  const archive = useCallback(
-    async (id: string) => {
+  const setArchived = useCallback(
+    async (id: string, archived: boolean) => {
       const res = await fetchWithSession(`/api/payment-links/${encodeURIComponent(id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ archived: true }),
+        body: JSON.stringify({ archived }),
       })
       const body = (await res.json().catch(() => ({}))) as { error?: string }
       if (!res.ok) {
-        toast.error(body.error || "Could not close link.")
+        toast.error(body.error || (archived ? "Could not close link." : "Could not reopen link."))
         return
       }
-      toast.success("Link closed.")
+      toast.success(archived ? "Link closed." : "Link reopened.")
       void refetch()
     },
     [refetch],
@@ -73,108 +78,197 @@ export function PaymentLinksPage({ initialCreateRail }: { initialCreateRail?: Pa
 
   const activeCount = links.filter((row) => !row.archivedAt).length
   const closedCount = links.filter((row) => row.archivedAt).length
-  const chips = links.length
-    ? [
-        `${COLLECTIONS_COPY.chipActive} ${activeCount}`,
-        `${COLLECTIONS_COPY.chipClosed} ${closedCount}`,
-        `${COLLECTIONS_COPY.chipTotal} ${links.length}`,
-      ]
-    : undefined
+  const statusTabs = [
+    { id: "all" as const, label: COLLECTIONS_COPY.tabAll, count: links.length },
+    { id: "active" as const, label: COLLECTIONS_COPY.chipActive, count: activeCount },
+    { id: "closed" as const, label: COLLECTIONS_COPY.chipClosed, count: closedCount },
+  ]
+
+  const createButton = (
+    <Button type="button" className="gap-2" onClick={() => setCreateOpen(true)}>
+      <Plus className="h-4 w-4" aria-hidden />
+      {COLLECTIONS_COPY.createLink}
+    </Button>
+  )
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="sticky top-0 z-20 flex shrink-0 flex-col gap-4 border-b bg-background pb-4">
-        <CollectionsPageHeader
-          title={PAGE_COPY.links.title}
-          intro={PAGE_COPY.links.intro}
-          actions={
-            <>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setShowArchived((v) => !v)}
-              >
-                {showArchived ? COLLECTIONS_COPY.hideClosed : COLLECTIONS_COPY.showClosed}
-              </Button>
-              <Button type="button" size="sm" className="gap-2" onClick={() => setCreateOpen(true)}>
-                <Plus className="h-4 w-4" aria-hidden />
-                {COLLECTIONS_COPY.createLink}
-              </Button>
-            </>
-          }
-        />
-        <CollectionsReadinessBanner />
-      </div>
+      <CollectionsReadinessBanner />
+      <CollectionsPageHeader
+        title={PAGE_COPY.links.title}
+        intro={PAGE_COPY.links.intro}
+        actions={createButton}
+      />
 
-      {loading ? (
-        <PaymentLinksListSkeleton />
-      ) : links.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-          <p className="text-lg font-semibold">{COLLECTIONS_COPY.emptyTitle}</p>
-          <p className="max-w-md text-sm text-muted-foreground">{COLLECTIONS_COPY.emptyBody}</p>
-          <Button type="button" className="gap-2" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4" aria-hidden />
-            {COLLECTIONS_COPY.emptyCta}
-          </Button>
-          <p className="mt-4 text-xs text-muted-foreground">
-            {COLLECTIONS_COPY.otherWays}:{" "}
-            <Link href="/invoices" className="underline underline-offset-2">
-              {COLLECTIONS_COPY.otherInvoices}
-            </Link>
-            {" · "}
-            <Link href="/checkout" className="underline underline-offset-2">
-              {COLLECTIONS_COPY.otherCheckout}
-            </Link>
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <Tabs value={tab} onValueChange={(value) => setTab(value as LinkTab)}>
-              <TabsList>
-                <TabsTrigger value="all">{COLLECTIONS_COPY.tabAll}</TabsTrigger>
-                <TabsTrigger value="one_time">{COLLECTIONS_COPY.tabOneTime}</TabsTrigger>
-                <TabsTrigger value="recurring">{COLLECTIONS_COPY.tabRecurring}</TabsTrigger>
-                <TabsTrigger value="stablecoin">{COLLECTIONS_COPY.tabStablecoin}</TabsTrigger>
-              </TabsList>
-            </Tabs>
-            {chips ? (
-              <div className="flex flex-wrap justify-center gap-2 lg:flex-1">
-                {chips.map((chip) => (
-                  <span
-                    key={chip}
-                    className="rounded-full border bg-muted/50 px-2.5 py-1 text-xs text-muted-foreground"
-                  >
-                    {chip}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={COLLECTIONS_COPY.searchPlaceholder}
-              className="lg:max-w-xs"
-            />
+      {links.length > 0 ? (
+        <div className="flex flex-col gap-3">
+          <div className="flex space-x-1 overflow-x-auto">
+            {statusTabs.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setTab(item.id)}
+                className={`shrink-0 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  tab === item.id
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {item.label}
+                {item.count > 0 ? (
+                  <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">{item.count}</span>
+                ) : null}
+              </button>
+            ))}
           </div>
-          {filtered.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">{COLLECTIONS_COPY.emptyTitle}</p>
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={COLLECTIONS_COPY.searchPlaceholder}
+            className="max-w-md"
+          />
+        </div>
+      ) : null}
+
+      <Card>
+        <CardContent className="p-0">
+          {loading ? (
+            <PaymentLinksListSkeleton />
+          ) : links.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+              <div className="mb-1 flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
+                <Link2 className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <p className="text-sm font-medium">{COLLECTIONS_COPY.emptyTitle}</p>
+              <p className="max-w-md text-sm text-muted-foreground">{COLLECTIONS_COPY.emptyBody}</p>
+              {createButton}
+              <p className="mt-2 text-xs text-muted-foreground">
+                {COLLECTIONS_COPY.otherWays}:{" "}
+                <Link href="/invoices" className="underline underline-offset-2">
+                  {COLLECTIONS_COPY.otherInvoices}
+                </Link>
+                {" · "}
+                <Link href="/checkout" className="underline underline-offset-2">
+                  {COLLECTIONS_COPY.otherCheckout}
+                </Link>
+              </p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <p className="px-4 py-12 text-center text-sm text-muted-foreground">
+              {search.trim()
+                ? COLLECTIONS_COPY.emptySearchLinks
+                : tab === "closed"
+                  ? COLLECTIONS_COPY.emptyClosedLinks
+                  : tab === "active"
+                    ? COLLECTIONS_COPY.emptyActiveLinks
+                    : COLLECTIONS_COPY.emptySearchLinks}
+            </p>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {filtered.map((row) => (
-                <PaymentLinkCard
-                  key={row.id}
-                  row={row}
-                  onShare={() => setShareLink(row)}
-                  onCopy={() => void copyUrl(row.url)}
-                  onArchive={() => void archive(row.id)}
-                />
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[800px] table-fixed">
+                <colgroup>
+                  <col style={{ width: "28%" }} />
+                  <col style={{ width: "16%" }} />
+                  <col style={{ width: "14%" }} />
+                  <col style={{ width: "16%" }} />
+                  <col style={{ width: "16%" }} />
+                  <col style={{ width: "10%" }} />
+                </colgroup>
+                <thead className="border-b">
+                  <tr>
+                    <th className="p-4 text-left text-xs font-medium text-muted-foreground">
+                      {COLLECTIONS_COPY.columnLink}
+                    </th>
+                    <th className="p-4 text-left text-xs font-medium text-muted-foreground">
+                      {COLLECTIONS_COPY.columnType}
+                    </th>
+                    <th className="p-4 text-left text-xs font-medium text-muted-foreground">
+                      {COLLECTIONS_COPY.columnAmount}
+                    </th>
+                    <th className="p-4 text-left text-xs font-medium text-muted-foreground">
+                      {COLLECTIONS_COPY.columnPayments}
+                    </th>
+                    <th className="p-4 text-left text-xs font-medium text-muted-foreground">
+                      Status
+                    </th>
+                    <th className="p-4" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((row) => {
+                    const collected =
+                      row.totalCollectedCents != null
+                        ? formatCurrency(row.totalCollectedCents / 100, row.currency)
+                        : null
+                    return (
+                      <tr
+                        key={row.id}
+                        className="cursor-pointer border-b last:border-0 hover:bg-muted/40"
+                        onClick={() => setShareLink(row)}
+                      >
+                        <td className="min-w-0 p-4 align-middle">
+                          <span className="block truncate text-sm font-medium">{row.label}</span>
+                          <span className="mt-0.5 block truncate font-mono text-xs text-muted-foreground">
+                            {row.url.replace(/^https?:\/\//, "")}
+                          </span>
+                        </td>
+                        <td className="p-4 align-middle text-sm text-muted-foreground">
+                          {paymentLinkTypeLabel(row)}
+                        </td>
+                        <td className="p-4 align-middle text-sm tabular-nums">
+                          {formatCurrency(row.amountCents / 100, row.currency)}
+                        </td>
+                        <td className="p-4 align-middle text-sm text-muted-foreground">
+                          {row.paymentCount}
+                          {collected ? (
+                            <span className="block truncate text-xs tabular-nums">{collected}</span>
+                          ) : null}
+                        </td>
+                        <td className="p-4 align-middle text-sm">
+                          {row.archivedAt ? COLLECTIONS_COPY.chipClosed : COLLECTIONS_COPY.chipActive}
+                        </td>
+                        <td className="p-4 align-middle" onClick={(event) => event.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" aria-label="Link actions">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => setShareLink(row)}>
+                                <Share2 className="mr-2 h-4 w-4" />
+                                {COLLECTIONS_COPY.share}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => void copyUrl(row.url)}>
+                                <Copy className="mr-2 h-4 w-4" />
+                                {COLLECTIONS_COPY.copyLink}
+                              </DropdownMenuItem>
+                              {row.archivedAt ? (
+                                <DropdownMenuItem onClick={() => void setArchived(row.id, false)}>
+                                  <ArchiveRestore className="mr-2 h-4 w-4" />
+                                  {COLLECTIONS_COPY.reopenLink}
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => void setArchived(row.id, true)}
+                                >
+                                  <Archive className="mr-2 h-4 w-4" />
+                                  {COLLECTIONS_COPY.closeLink}
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
-        </div>
-      )}
+        </CardContent>
+      </Card>
 
       <CreatePaymentLinkDialog
         open={createOpen}
@@ -193,7 +287,12 @@ export function PaymentLinksPage({ initialCreateRail }: { initialCreateRail?: Pa
         onOpenChange={(open) => {
           if (!open) setShareLink(null)
         }}
-        onArchived={() => void refetch()}
+        onArchived={() => {
+          void refetch()
+          setShareLink((prev) =>
+            prev ? { ...prev, archivedAt: prev.archivedAt ? null : new Date().toISOString() } : null
+          )
+        }}
       />
     </div>
   )

@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { QRCodeSVG } from "qrcode.react"
 import { toast } from "sonner"
-import { Archive, Check, Copy, ExternalLink, FileText, ImageIcon } from "lucide-react"
+import { Archive, ArchiveRestore, Check, Copy, ExternalLink, FileText, ImageIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -15,6 +15,7 @@ import {
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { paymentLinkTypeLabel } from "@/lib/payment-links/types"
 import type { PaymentLinkListRow } from "@/hooks/use-payment-links"
+import { COLLECTIONS_COPY } from "@/lib/copy/business-ui-copy"
 import { formatCurrency } from "@/lib/utils"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 
@@ -58,23 +59,23 @@ export function PaymentLinkShareSheet({
     window.open(body.url, "_blank", "noopener,noreferrer")
   }
 
-  const archive = async () => {
+  const setArchived = async (archived: boolean) => {
     if (!link) return
     setArchiving(true)
     try {
       const res = await fetchWithSession(`/api/payment-links/${encodeURIComponent(link.id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ archived: true }),
+        body: JSON.stringify({ archived }),
       })
       const body = (await res.json().catch(() => ({}))) as { error?: string }
       if (!res.ok) {
-        toast.error(body.error || "Could not close link.")
+        toast.error(body.error || (archived ? "Could not close link." : "Could not reopen link."))
         return
       }
-      toast.success("Link closed.")
+      toast.success(archived ? "Link closed." : "Link reopened.")
       onArchived()
-      onOpenChange(false)
+      if (archived) onOpenChange(false)
     } finally {
       setArchiving(false)
     }
@@ -162,13 +163,24 @@ export function PaymentLinkShareSheet({
               ) : null}
             </div>
 
-            {link.archivedAt ? null : (
+            {link.archivedAt ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full gap-2"
+                disabled={archiving}
+                onClick={() => void setArchived(false)}
+              >
+                <ArchiveRestore className="h-4 w-4" aria-hidden />
+                {archiving ? "Reopening…" : COLLECTIONS_COPY.reopenLink}
+              </Button>
+            ) : (
               <Button
                 type="button"
                 variant="ghost"
                 className="w-full gap-2 text-destructive"
                 disabled={archiving}
-                onClick={() => void archive()}
+                onClick={() => void setArchived(true)}
               >
                 <Archive className="h-4 w-4" aria-hidden />
                 {archiving ? "Closing…" : "Close this link"}

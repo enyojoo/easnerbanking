@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { CheckoutSitesTableSkeleton } from "@/components/collections/collections-skeletons"
+import { CheckoutTestPaymentsDialog } from "@/components/checkout/checkout-test-payments-dialog"
 import { deleteCheckoutSite, useCheckoutSettings } from "@/hooks/use-checkout-settings"
 import { COLLECTIONS_COPY, PAGE_COPY } from "@/lib/copy/business-ui-copy"
 
@@ -28,6 +29,7 @@ export function CheckoutSitesPage() {
   const { data, loading, error, refetch } = useCheckoutSettings()
   const [removeId, setRemoveId] = useState<string | null>(null)
   const [removing, setRemoving] = useState(false)
+  const [testPaymentsOpen, setTestPaymentsOpen] = useState(false)
   const sites = data?.sites ?? []
   const [tab, setTab] = useState<"all" | "incomplete">("all")
   const incompleteCount = sites.filter((site) => !site.successUrl).length
@@ -77,6 +79,9 @@ export function CheckoutSitesPage() {
                   {COLLECTIONS_COPY.openPaymentLinks}
                 </Link>
               </p>
+              <Button type="button" variant="outline" onClick={() => setTestPaymentsOpen(true)}>
+                {COLLECTIONS_COPY.viewTestPayments}
+              </Button>
               {createButton}
             </div>
           }
@@ -212,6 +217,8 @@ export function CheckoutSitesPage() {
           )}
         </CardContent>
       </Card>
+
+      <CheckoutTestPaymentsDialog open={testPaymentsOpen} onOpenChange={setTestPaymentsOpen} />
 
       <AlertDialog open={Boolean(removeId)} onOpenChange={(open) => !open && setRemoveId(null)}>
         <AlertDialogContent>

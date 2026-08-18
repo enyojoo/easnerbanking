@@ -47,5 +47,5 @@ export function usePaymentLinksQuery(options?: { includeArchived?: boolean }) {
 }
 
 export async function prefetchPaymentLinks(queryClient: QueryClient, scope: Scope) {
-  await queryClient.prefetchQuery(paymentLinksListQueryOptions(scope, false))
+  await queryClient.prefetchQuery(paymentLinksListQueryOptions(scope, true))
 }

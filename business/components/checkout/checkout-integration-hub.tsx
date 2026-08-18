@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Check, Circle, Edit, Loader2, X } from "lucide-react"
+import { Check, Circle, Edit, Loader2, Plus, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -34,6 +34,7 @@ import {
   type CheckoutHubPayload,
   type CheckoutSite,
 } from "@/hooks/use-checkout-settings"
+import { CheckoutTestPaymentsDialog } from "@/components/checkout/checkout-test-payments-dialog"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { COLLECTIONS_COPY } from "@/lib/copy/business-ui-copy"
 import {
@@ -233,6 +234,7 @@ function StepLearnMore({ children }: { children: ReactNode }) {
 function FieldEditControls({
   editing,
   saving,
+  hasSaved,
   onEdit,
   onCancel,
   onSave,
@@ -240,11 +242,24 @@ function FieldEditControls({
 }: {
   editing: boolean
   saving: boolean
+  hasSaved: boolean
   onEdit: () => void
   onCancel: () => void
   onSave: () => void
   saveDisabled?: boolean
 }) {
+  if (!hasSaved) {
+    return (
+      <Button type="button" size="sm" disabled={saving || saveDisabled} onClick={onSave}>
+        {saving ? (
+          <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden />
+        ) : (
+          <Plus className="mr-1 h-4 w-4" aria-hidden />
+        )}
+        Add
+      </Button>
+    )
+  }
   if (editing) {
     return (
       <div className="flex items-center gap-2">
@@ -320,6 +335,7 @@ function StepWebsite({ site, onSaved, onSiteCreated }: SiteStepProps) {
           <FieldEditControls
             editing={editing}
             saving={saving}
+            hasSaved={Boolean(saved)}
             saveDisabled={!origin.trim()}
             onEdit={() => setEditing(true)}
             onCancel={() => {
@@ -403,6 +419,7 @@ function StepUrls({ site, onSaved }: SiteStepProps) {
               <FieldEditControls
                 editing={editingSuccess}
                 saving={savingSuccess}
+                hasSaved={Boolean(savedSuccess)}
                 onEdit={() => setEditingSuccess(true)}
                 onCancel={() => {
                   setSuccessUrl(savedSuccess)
@@ -432,6 +449,7 @@ function StepUrls({ site, onSaved }: SiteStepProps) {
               <FieldEditControls
                 editing={editingCancel}
                 saving={savingCancel}
+                hasSaved={Boolean(savedCancel)}
                 onEdit={() => setEditingCancel(true)}
                 onCancel={() => {
                   setCancelUrl(savedCancel)
@@ -670,6 +688,8 @@ function StepWebhook({ data, onSaved }: HubDataProps) {
           <FieldEditControls
             editing={editing}
             saving={saving}
+            hasSaved={Boolean(savedUrl)}
+            saveDisabled={!url.trim()}
             onEdit={() => setEditing(true)}
             onCancel={() => {
               setUrl(savedUrl)
@@ -789,6 +809,8 @@ function StepWebhook({ data, onSaved }: HubDataProps) {
 }
 
 function StepTest() {
+  const [testPaymentsOpen, setTestPaymentsOpen] = useState(false)
+
   return (
     <>
       <StepHeading title={STEP_COPY.test.title} blurb={STEP_COPY.test.blurb} />
@@ -798,12 +820,12 @@ function StepTest() {
         future expiry, and any security code.
       </p>
       <p className="text-sm text-muted-foreground">
-        A successful test shows on{" "}
-        <Link href="/transactions" className="underline underline-offset-2">
-          Transactions
-        </Link>
-        . Use Test delivery in Webhook if you only need to confirm the endpoint.
+        Use Test delivery in Webhook if you only need to confirm the endpoint.
       </p>
+      <Button type="button" variant="outline" onClick={() => setTestPaymentsOpen(true)}>
+        {COLLECTIONS_COPY.viewTestPayments}
+      </Button>
+      <CheckoutTestPaymentsDialog open={testPaymentsOpen} onOpenChange={setTestPaymentsOpen} />
     </>
   )
 }

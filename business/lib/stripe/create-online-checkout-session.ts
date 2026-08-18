@@ -38,6 +38,8 @@ export type CreateOnlineCheckoutSessionInput = {
   trialDays?: number | null
   metadata?: Record<string, string>
   idempotencyKey?: string
+  /** False for merchant test keys. Defaults to live. */
+  livemode?: boolean
 }
 
 export type CreateOnlineCheckoutSessionResult =
@@ -127,6 +129,7 @@ export async function createOnlineCheckoutSession(
   const amounts = computeCheckoutAmounts({ listedAmountCents, feeMode })
 
   const settlementId = randomUUID()
+  const livemode = input.livemode !== false
   const idempotencyKey =
     input.idempotencyKey || `checkout_${input.source}_${settlementId}`
   const table = sessionTableFor(input.source)
@@ -164,6 +167,7 @@ export async function createOnlineCheckoutSession(
           customer_email: input.customerEmail || null,
           return_url: input.returnUrl,
           stripe_connected_account_id: connectedAccountId,
+          livemode,
         }
 
   const { data: sessionRow, error: insertErr } = await admin
@@ -190,7 +194,10 @@ export async function createOnlineCheckoutSession(
     invoiceId: input.invoiceId,
     invoiceNumber: input.invoiceNumber,
     paymentLinkId: input.paymentLinkId,
-    extra: input.metadata,
+    extra: {
+      easner_livemode: livemode ? "true" : "false",
+      ...(input.metadata ?? {}),
+    },
   })
 
   const lineItem: Stripe.Checkout.SessionCreateParams.LineItem =

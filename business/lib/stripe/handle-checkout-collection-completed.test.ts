@@ -175,4 +175,24 @@ describe("payment link settlement", () => {
     expect(result.handled).toBe(false)
     expect(upsertLedgerTransaction).not.toHaveBeenCalled()
   })
+
+  it("keeps Stripe test payments off the ledger and Transactions", async () => {
+    const { admin, writes } = mockAdmin()
+    const event = paymentLinkSessionEvent()
+    event.livemode = false
+
+    const result = await handleStripeCheckoutCompleted(admin, event)
+    expect(result.handled).toBe(true)
+    expect(upsertLedgerTransaction).not.toHaveBeenCalled()
+    expect(writes.some((w) => w.table === "checkout_stripe_settlements")).toBe(false)
+    expect(writes.some((w) => w.table === "payment_links" && w.op === "update")).toBe(false)
+    expect(dispatchMerchantWebhook).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        businessId: BUSINESS_ID,
+        event: "checkout.completed",
+        data: expect.objectContaining({ livemode: false }),
+      }),
+    )
+  })
 })

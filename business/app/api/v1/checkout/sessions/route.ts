@@ -157,6 +157,7 @@ export async function POST(request: Request) {
     }),
     returnUrl: successUrl,
     stripePriceId,
+    livemode: auth.ctx.mode === "live",
     metadata: {
       ...(cancelUrl ? { easner_cancel_url: cancelUrl } : {}),
       ...(body?.metadata ?? {}),

@@ -31,8 +31,8 @@ function headlineFor(source: CheckoutCollectionSource, linkLabel: string | null)
 /**
  * Settle a Payment Link or website-embed collection: complete the session row,
  * record the settlement, credit the ledger with `source: checkout_stripe`, and
- * notify the merchant webhook. Mirrors the invoice settlement phases
- * (payment_received → payout_sent → credited).
+ * notify the merchant webhook. Stripe test events (`livemode: false`) complete
+ * the session and fire the merchant webhook, but skip the live ledger.
  */
 export async function handleCheckoutCollectionCompleted(
   admin: SupabaseClient,
@@ -66,6 +66,19 @@ export async function handleCheckoutCollectionCompleted(
     ? { column: "stripe_checkout_session_id", value: input.sessionId }
     : { column: "easner_settlement_id", value: input.settlementId }
 
+  const isStripeTest = event.livemode === false
+
+  if (isStripeTest) {
+    const { data: prior } = await admin
+      .from("online_checkout_sessions")
+      .select("id, status")
+      .eq(sessionMatch.column, sessionMatch.value)
+      .maybeSingle()
+    if (prior?.status === "complete") {
+      return { handled: true }
+    }
+  }
+
   const { data: sessionRows } = await admin
     .from("online_checkout_sessions")
     .update({
@@ -78,6 +91,7 @@ export async function handleCheckoutCollectionCompleted(
       payment_method_type: paymentMethodType,
       ...(input.customerEmail ? { customer_email: input.customerEmail } : {}),
       ...(connectedAccountId ? { stripe_connected_account_id: connectedAccountId } : {}),
+      ...(typeof event.livemode === "boolean" ? { livemode: event.livemode } : {}),
       completed_at: paidAt,
       updated_at: paidAt,
     })
@@ -97,13 +111,40 @@ export async function handleCheckoutCollectionCompleted(
       .eq("id", paymentLinkId)
       .maybeSingle()
     linkLabel = typeof link?.label === "string" ? link.label : null
-    await admin
-      .from("payment_links")
-      .update({
-        payment_count: Number(link?.payment_count ?? 0) + 1,
-        updated_at: paidAt,
-      })
-      .eq("id", paymentLinkId)
+    if (!isStripeTest) {
+      await admin
+        .from("payment_links")
+        .update({
+          payment_count: Number(link?.payment_count ?? 0) + 1,
+          updated_at: paidAt,
+        })
+        .eq("id", paymentLinkId)
+    }
+  }
+
+  const webhookPayload = {
+    businessId: input.businessId,
+    event: "checkout.completed" as const,
+    data: {
+      checkout_session_id: input.sessionId,
+      amount_cents: grossCents,
+      currency,
+      ...(paymentLinkId ? { payment_link_id: paymentLinkId } : {}),
+      ...(input.customerEmail ? { customer_email: input.customerEmail } : {}),
+      paid_at: paidAt,
+      livemode: !isStripeTest,
+    },
+  }
+
+  if (isStripeTest) {
+    if (input.source === "embed") {
+      await admin
+        .from("business_checkout_settings")
+        .update({ test_payment_completed_at: paidAt, updated_at: paidAt })
+        .eq("business_id", input.businessId)
+    }
+    await dispatchMerchantWebhook(admin, webhookPayload)
+    return { handled: true }
   }
 
   const ownerUserId = await resolveOrgOwnerUserId(admin, input.businessId, "")
@@ -173,18 +214,7 @@ export async function handleCheckoutCollectionCompleted(
     { onConflict: "id" },
   )
 
-  await dispatchMerchantWebhook(admin, {
-    businessId: input.businessId,
-    event: "checkout.completed",
-    data: {
-      checkout_session_id: input.sessionId,
-      amount_cents: grossCents,
-      currency,
-      ...(paymentLinkId ? { payment_link_id: paymentLinkId } : {}),
-      ...(input.customerEmail ? { customer_email: input.customerEmail } : {}),
-      paid_at: paidAt,
-    },
-  })
+  await dispatchMerchantWebhook(admin, webhookPayload)
 
   return { handled: true }
 }
