@@ -47,7 +47,7 @@ describe("resolveInvoiceEmailPaymentMethod", () => {
     expect(resolved!.plainText).toContain("4242")
   })
 
-  it("returns Cash App label in front of the chip when there is no last4", () => {
+  it("returns Cash App label beside the chip when there is no last4", () => {
     const resolved = resolveInvoiceEmailPaymentMethod({
       ...paidStripeInvoice,
       paymentInfo: {
@@ -65,7 +65,6 @@ describe("resolveInvoiceEmailPaymentMethod", () => {
     })
     expect(resolved!.plainText).toBe("Cash App")
     expect(resolved!.htmlText).toBe("Cash App")
-    expect(resolved!.labelBeforeBrandIcon).toBe(true)
     expect(resolved!.brandIconSrc).toMatch(/\/payment-brands\/cashapp\.png$/)
   })
 

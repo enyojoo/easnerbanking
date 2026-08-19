@@ -1,14 +1,11 @@
 "use client"
 
 import { PaymentMethodBrandIconWithFallback } from "@/components/payment-method-brand-icon"
-import {
-  formatPaymentMethodTextBesideIcon,
-  paymentMethodShowsNameBeforeIcon,
-} from "@/lib/stripe/payment-method-display"
+import { formatPaymentMethodTextBesideIcon } from "@/lib/stripe/payment-method-display"
 import type { StripePaymentMethodDisplay } from "@/lib/stripe/parse-payment-method-display"
 import { cn } from "@/lib/utils"
 
-/** SVG brand chip + mask/label (brand name omitted when the chip already shows it). */
+/** Brand chip on the left, mask or wallet name on the right. */
 export function StripePaymentMethodRow({
   pm,
   className,
@@ -20,15 +17,12 @@ export function StripePaymentMethodRow({
 }) {
   if (!pm?.type) return null
   const text = formatPaymentMethodTextBesideIcon(pm)
-  const nameFirst = paymentMethodShowsNameBeforeIcon(pm)
-  const label = text ? (
-    <span className={cn("truncate text-sm font-medium", textClassName)}>{text}</span>
-  ) : null
   return (
     <span className={cn("inline-flex items-center gap-2 min-w-0", className)}>
-      {nameFirst ? label : null}
       <PaymentMethodBrandIconWithFallback pm={pm} />
-      {nameFirst ? null : label}
+      {text ? (
+        <span className={cn("truncate text-sm font-medium", textClassName)}>{text}</span>
+      ) : null}
     </span>
   )
 }

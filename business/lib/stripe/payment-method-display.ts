@@ -10,6 +10,8 @@ export type PaymentBrandIconKey =
   | "cashapp"
   | "amazon_pay"
   | "alipay"
+  | "apple_pay"
+  | "google_pay"
   | "bank"
   | "card"
 
@@ -25,6 +27,8 @@ const BRAND_KEYS = new Set<string>([
   "cash_app",
   "amazon_pay",
   "alipay",
+  "apple_pay",
+  "google_pay",
   "bank",
   "card",
 ])
@@ -41,6 +45,10 @@ export function paymentMethodIconKey(
   pm: StripePaymentMethodDisplay | null | undefined,
 ): PaymentBrandIconKey {
   if (!pm?.type) return "card"
+  const wallet = (pm.wallet ?? "").toLowerCase()
+  if (wallet === "apple_pay") return "apple_pay"
+  if (wallet === "google_pay") return "google_pay"
+
   const type = pm.type.toLowerCase()
   const brand = (pm.brand ?? "").toLowerCase()
 
@@ -79,6 +87,7 @@ function paymentMethodWalletLabel(
 ): string | null {
   if (pm?.wallet === "apple_pay") return "Apple Pay"
   if (pm?.wallet === "google_pay") return "Google Pay"
+  if (pm?.wallet === "samsung_pay") return "Samsung Pay"
   return null
 }
 
@@ -132,8 +141,9 @@ export function formatPaymentMethodText(
 }
 
 /**
- * Text beside a brand SVG/PNG chip: omit redundant brand name when the icon already shows it.
- * e.g. Visa icon → "•••• 4242"; no brand icon → "Visa •••• 4242".
+ * Text beside a brand SVG/PNG chip. Always the same layout as card/bank:
+ * chip on the left, identifier on the right.
+ * Card/bank → last4; wallets → name (Cash App, Apple Pay, Klarna, …).
  */
 export function formatPaymentMethodTextBesideIcon(
   pm: StripePaymentMethodDisplay | null | undefined,
@@ -148,41 +158,21 @@ export function formatPaymentMethodTextBesideIcon(
   const wallet = paymentMethodWalletLabel(pm)
 
   if (type === "card") {
-    if (wallet && mask) return `${wallet} ${mask}`
     if (wallet) return wallet
     return mask ?? ""
   }
 
   if (type === "us_bank_account" || type === "ach_debit" || type === "ach") {
-    // Bank chip is generic; keep institution name when present.
-    const bank = pm.bankName?.trim()
-    if (bank && mask) return `${bank} ${mask}`
-    if (bank) return bank
-    return mask ?? ""
+    return mask ?? pm.bankName?.trim() ?? ""
   }
 
-  if (type === "sepa_debit") return mask ?? ""
-  if (type === "link") return mask ?? ""
+  if (type === "sepa_debit") return mask ?? "SEPA"
+  if (type === "link") return mask ?? "Link"
   if (type === "klarna") return "Klarna"
   if (type === "cashapp" || type === "cash_app") return "Cash App"
   if (type === "amazon_pay") return "Amazon Pay"
   if (type === "alipay") return "Alipay"
-  return mask ?? ""
-}
-
-/** Named wallets with no last4: label sits in front of the brand chip. */
-export function paymentMethodShowsNameBeforeIcon(
-  pm: StripePaymentMethodDisplay | null | undefined,
-): boolean {
-  if (!pm?.type) return false
-  const type = pm.type.toLowerCase()
-  return (
-    type === "cashapp" ||
-    type === "cash_app" ||
-    type === "klarna" ||
-    type === "amazon_pay" ||
-    type === "alipay"
-  )
+  return mask ?? formatPaymentMethodListLabel(pm)
 }
 
 /** Short list label (e.g. "Visa" / "Card") when full mask is not needed. */

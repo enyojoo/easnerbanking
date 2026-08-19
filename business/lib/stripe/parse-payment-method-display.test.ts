@@ -37,6 +37,8 @@ describe("parsePaymentMethodDisplayFromCharge", () => {
       last4: "4242",
       wallet: "apple_pay",
     })
+    expect(paymentMethodIconKey(pm)).toBe("apple_pay")
+    expect(formatPaymentMethodTextBesideIcon(pm)).toBe("Apple Pay")
   })
 
   it("parses us_bank_account", () => {
@@ -159,7 +161,7 @@ describe("formatPaymentMethodText / icon key", () => {
         last4: "4242",
         wallet: "apple_pay",
       }),
-    ).toBe("Apple Pay •••• 4242")
+    ).toBe("Apple Pay")
     expect(
       formatPaymentMethodTextBesideIcon({ type: "card", last4: "4242" }),
     ).toBe("Card •••• 4242")
@@ -168,6 +170,9 @@ describe("formatPaymentMethodText / icon key", () => {
   it("shows bank type even without last4", () => {
     expect(shouldShowStripePaymentMethod({ type: "us_bank_account" })).toBe(true)
     expect(formatPaymentMethodListLabel({ type: "us_bank_account" })).toBe("Bank")
+    expect(
+      formatPaymentMethodTextBesideIcon({ type: "us_bank_account", last4: "6789" }),
+    ).toBe("•••• 6789")
   })
 
   it("names Cash App beside the chip when there is no last4", () => {

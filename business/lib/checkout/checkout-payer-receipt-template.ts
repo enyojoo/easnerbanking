@@ -15,7 +15,6 @@ import {
   hasPaymentBrandIcon,
   paymentMethodIconKey,
   paymentBrandPngEmailUrl,
-  paymentMethodShowsNameBeforeIcon,
   shouldShowStripePaymentMethod,
 } from "@/lib/stripe/payment-method-display"
 
@@ -87,7 +86,6 @@ function paymentMethodRow(data: CheckoutPayerReceiptEmailData): {
   label: string
   value: string
   brandIconSrc?: string
-  labelBeforeBrandIcon?: boolean
 } | null {
   const pm = data.paymentMethod
   if (!shouldShowStripePaymentMethod(pm) || !pm) return null
@@ -102,7 +100,6 @@ function paymentMethodRow(data: CheckoutPayerReceiptEmailData): {
     label: "Payment method",
     value: htmlText,
     ...(brandIconSrc ? { brandIconSrc } : {}),
-    ...(paymentMethodShowsNameBeforeIcon(pm) ? { labelBeforeBrandIcon: true } : {}),
   }
 }
 

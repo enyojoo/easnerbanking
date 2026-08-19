@@ -16,7 +16,6 @@ import {
   formatPaymentMethodTextBesideIcon,
   hasPaymentBrandIcon,
   paymentMethodIconKey,
-  paymentMethodShowsNameBeforeIcon,
 } from "@/lib/stripe/payment-method-display"
 import { paymentBrandPngDataUrl } from "@/lib/stripe/payment-brand-png-data"
 import type { StripePaymentMethodDisplay } from "@/lib/stripe/parse-payment-method-display"
@@ -170,7 +169,6 @@ type ReceiptRow = {
   value: string
   /** When set, render brand PNG chip + value (mask) instead of plain text. */
   brandIconSrc?: string | null
-  labelBeforeBrandIcon?: boolean
 }
 
 function TableRow({
@@ -180,7 +178,6 @@ function TableRow({
   isLast,
   rowStyle,
   brandIconSrc,
-  labelBeforeBrandIcon,
 }: {
   label: string
   value: string
@@ -188,7 +185,6 @@ function TableRow({
   isLast?: boolean
   rowStyle?: object
   brandIconSrc?: string | null
-  labelBeforeBrandIcon?: boolean
 }) {
   const base = isLast ? styles.tableRowLast : styles.tableRow
   const iconSrc =
@@ -207,17 +203,10 @@ function TableRow({
       <Text style={styles.tableCell}>{label}</Text>
       {iconSrc ? (
         <View style={styles.pmValueRow}>
-          {labelBeforeBrandIcon && value ? <Text style={styles.pmValueText}>{value}</Text> : null}
-          <View
-            style={
-              labelBeforeBrandIcon
-                ? { ...styles.pmBrandIconWrap, marginRight: 0, marginLeft: 6 }
-                : styles.pmBrandIconWrap
-            }
-          >
+          <View style={styles.pmBrandIconWrap}>
             <Image style={styles.pmBrandIcon} src={iconSrc} />
           </View>
-          {!labelBeforeBrandIcon && value ? <Text style={styles.pmValueText}>{value}</Text> : null}
+          {value ? <Text style={styles.pmValueText}>{value}</Text> : null}
         </View>
       ) : (
         <Text style={styles.tableCellValue}>{value}</Text>
@@ -312,9 +301,6 @@ export function InvoiceReceiptPDFDocument({
         label: "Payment Method",
         value: pmText,
         brandIconSrc,
-        ...(pmDisplay && paymentMethodShowsNameBeforeIcon(pmDisplay)
-          ? { labelBeforeBrandIcon: true }
-          : {}),
       },
       ...(stripe?.customerEmail
         ? [{ label: "Email", value: stripe.customerEmail }]
@@ -352,7 +338,6 @@ export function InvoiceReceiptPDFDocument({
               isLast={i === allRows.length - 1}
               rowStyle={i % 2 === 0 ? styles.tableRowEven : styles.tableRowOdd}
               brandIconSrc={row.brandIconSrc}
-              labelBeforeBrandIcon={row.labelBeforeBrandIcon}
             />
           ))}
         </View>
