@@ -1,19 +1,15 @@
+import type { CorridorContext, PayoutProvider } from "./types"
 import {
   listGridDiscoveries,
   gridDiscoverySupportsCorridor,
 } from "@/lib/grid/discoveries"
-import type { CorridorContext, PayoutProvider } from "./types"
 
 export const gridPayoutProvider: PayoutProvider = {
   id: "grid",
   async supports(ctx: CorridorContext): Promise<boolean> {
-    const discoveries = await listGridDiscoveries()
-    return gridDiscoverySupportsCorridor({
-      discoveries,
-      countryCode: ctx.countryCode,
-      currencyCode: ctx.currencyCode,
-      rail: ctx.rail,
-    })
+    // Office routing is the source of truth on quote/confirm. Live /discoveries
+    // pagination is 5–15s on a cold serverless instance and must not run here.
+    return Boolean(ctx.countryCode?.trim() && ctx.currencyCode?.trim())
   },
 }
 
@@ -28,10 +24,11 @@ export async function corridorHasGridPayout(
   },
 ): Promise<boolean> {
   if (!input.providerRouting.some((entry) => entry.provider === "grid")) return false
-  return gridPayoutProvider.supports({
+  const discoveries = await listGridDiscoveries()
+  return gridDiscoverySupportsCorridor({
+    discoveries,
     countryCode: input.countryCode.trim().toUpperCase(),
     currencyCode: input.currencyCode.trim().toUpperCase(),
     rail: input.rail,
-    providerRouting: input.providerRouting,
   })
 }

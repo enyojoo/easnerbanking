@@ -26,10 +26,11 @@ export async function POST(request: Request) {
   if ("error" in auth) return auth.error
   const { user } = auth
 
-  const noahCtxResult = await resolveNoahContextAsync(user.id, request)
+  const [noahCtxResult, acc] = await Promise.all([
+    resolveNoahContextAsync(user.id, request),
+    resolveNoahAccountContext(request, user.id),
+  ])
   if (!noahCtxResult.ok) return noahCtxResult.response
-
-  const acc = await resolveNoahAccountContext(request, user.id)
   if (!acc.ok) return acc.response
   const guard = await requireNoahVerificationApproved(
     acc.ctx.subjectUserId,

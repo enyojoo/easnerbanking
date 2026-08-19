@@ -1404,12 +1404,26 @@ export default function SendPage() {
       return
     if (!payoutQuotePrefetchReady) return
     void fetchPayoutQuote()
+    const meta: PayoutQuoteStashMeta = {
+      recipientId: recipient.id,
+      amountEntryMode,
+      entryAmount:
+        amountEntryMode === "send" && displaySendAmount > 0
+          ? displaySendAmount
+          : displayReceiveAmount,
+      receiveCurrency,
+      sourceBalanceCurrency: sendCurrency,
+      ...(note.trim() ? { note: note.trim() } : {}),
+      ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+    }
+    void ensurePayoutOrderConfirmed(meta, businessId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     needsPayoutQuoteBeforeConfirm,
     debouncedPayoutQuotePrefetchKey,
     recipient?.id,
     payoutQuotePrefetchReady,
+    payoutQuoteCacheKey,
   ])
 
   useEffect(() => {

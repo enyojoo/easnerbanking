@@ -84,7 +84,7 @@ export async function validatePayoutQuoteAmountLimits(input: {
     const rates = await listGridRates(input.admin, {
       destinations: [currencyCode],
       status: "active",
-    })
+    }, { backgroundRefresh: false })
     customerRate = findGridBalancePayoutRate(rates, currencyCode)?.rate
   }
 

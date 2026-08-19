@@ -501,19 +501,30 @@ export async function lockGridBalancePayoutQuote(
       ? ("mobile_money" as const)
       : ("bank_transfer" as const)
 
-  const { customerId } = await ensureGridCustomer({
-    admin,
-    userId: input.userId,
-    businessId: input.businessId,
-    scope: input.businessId ? "business" : "individual",
-    profile: input.senderProfile,
-  })
-
-  const gridCandidates = await loadGridRecipientBankCandidates(admin, {
-    countryCode,
-    currencyCode: receiveCurrency,
-    rail,
-  })
+  const [customerResult, gridCandidates, rates, processingFeeBps] = await Promise.all([
+    ensureGridCustomer({
+      admin,
+      userId: input.userId,
+      businessId: input.businessId,
+      scope: input.businessId ? "business" : "individual",
+      profile: input.senderProfile,
+    }),
+    loadGridRecipientBankCandidates(admin, {
+      countryCode,
+      currencyCode: receiveCurrency,
+      rail,
+    }),
+    listGridRates(admin, { destinations: [receiveCurrency], status: "active" }, {
+      backgroundRefresh: false,
+    }),
+    quoteFiatProcessingFeeBps(
+      admin,
+      { countryCode, currencyCode: receiveCurrency, rail },
+      "pay_out",
+      { userId: input.userId, businessId: input.businessId ?? null },
+    ),
+  ])
+  const { customerId } = customerResult
 
   const externalAccount = await createGridExternalAccount({
     customerId,
@@ -524,7 +535,6 @@ export async function lockGridBalancePayoutQuote(
     gridMomoCandidates: gridCandidates.momoProviders,
   })
 
-  const rates = await listGridRates(admin, { destinations: [receiveCurrency], status: "active" })
   const payoutRate = findGridBalancePayoutRate(rates, receiveCurrency)
   const customerRate = payoutRate?.rate ?? 0
   const gridMidLocalPerUsd = payoutRate?.grid_mid ?? 0
@@ -599,12 +609,6 @@ export async function lockGridBalancePayoutQuote(
     quoteExchangeRate: hydratedQuote.exchangeRate,
     previewCustomerRate: customerRate,
   })
-  const processingFeeBps = await quoteFiatProcessingFeeBps(
-    admin,
-    { countryCode, currencyCode: receiveCurrency, rail },
-    "pay_out",
-    { userId: input.userId, businessId: input.businessId ?? null },
-  )
   const applied = applyLiveGridQuoteToLockedPricing({
     quote: hydratedQuote,
     receiveAmount: quoteReceiveAmount,

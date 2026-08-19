@@ -275,12 +275,10 @@ describe("ensureGridCustomer", () => {
   })
 
   it("uses stored grid_customer_id for individual scope", async () => {
-    mockGridFetch
-      .mockResolvedValueOnce({ id: STORED_CUSTOMER })
-      .mockResolvedValueOnce({
-        id: STORED_CUSTOMER,
-        endUserTermsConsent: { termsVersion: "2025-10-01" },
-      })
+    mockGridFetch.mockResolvedValueOnce({
+      id: STORED_CUSTOMER,
+      endUserTermsConsent: { termsVersion: "2025-10-01" },
+    })
 
     const admin = mockAdminForBusiness(STORED_CUSTOMER)
     const result = await ensureGridCustomer({

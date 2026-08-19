@@ -1,14 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { extractCorridorRecipientCandidates, type GridMomoProviderOption } from "@easner/shared"
-import { buildGridCorridorSchema } from "@/lib/fx/grid-schema-sync"
-import { listGridDiscoveries } from "@/lib/grid/discoveries"
 
 export type GridRecipientBankCandidates = {
   bankNames: string[]
   momoProviders: GridMomoProviderOption[]
 }
 
-/** Load Grid bank/provider candidates for a corridor (DB union first, discoveries fallback). */
+/** Load Grid bank/provider candidates for a corridor from Office schema (no live discoveries). */
 export async function loadGridRecipientBankCandidates(
   admin: SupabaseClient,
   input: {
@@ -37,24 +35,8 @@ export async function loadGridRecipientBankCandidates(
     providers: corridor?.providers,
   })
 
-  if (union.bankNames.length || union.momoCandidates.length) {
-    return {
-      bankNames: union.bankNames,
-      momoProviders: union.momoCandidates,
-    }
-  }
-
-  const discoveries = await listGridDiscoveries()
-  const built = buildGridCorridorSchema({
-    discoveries,
-    countryCode,
-    currencyCode,
-    rail,
-    fieldsSchema: corridor?.fields_schema,
-  })
-
   return {
-    bankNames: built?.bank_enum ?? [],
-    momoProviders: built?.momo_provider_enum ?? [],
+    bankNames: union.bankNames,
+    momoProviders: union.momoCandidates,
   }
 }

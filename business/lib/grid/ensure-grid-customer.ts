@@ -73,16 +73,6 @@ async function clearStoredGridCustomerId(
     .eq("id", input.userId)
 }
 
-async function verifyGridCustomerExists(customerId: string): Promise<boolean> {
-  try {
-    await gridFetch({ method: "GET", path: `/customers/${encodeURIComponent(customerId)}` })
-    return true
-  } catch (e) {
-    if (e instanceof GridHttpError && e.status === 404) return false
-    throw e
-  }
-}
-
 async function findGridCustomerByPlatformId(platformCustomerId: string): Promise<GridCustomer | null> {
   const qs = new URLSearchParams({ platformCustomerId })
   const res = await gridFetch<{ data?: GridCustomer[] }>({
@@ -144,7 +134,11 @@ export async function ensureGridCustomer(input: {
   const stored = await readStoredGridCustomerId(input.admin, input)
   if (stored) {
     const customerId = normalizeGridCustomerId(stored)
-    if (await verifyGridCustomerExists(customerId)) {
+    try {
+      const customer = await gridFetch<GridCustomer>({
+        method: "GET",
+        path: `/customers/${encodeURIComponent(customerId)}`,
+      })
       if (customerId !== stored) {
         await persistGridCustomerId(input.admin, {
           userId: input.userId,
@@ -153,10 +147,6 @@ export async function ensureGridCustomer(input: {
           customerId,
         })
       }
-      const customer = await gridFetch<GridCustomer>({
-        method: "GET",
-        path: `/customers/${encodeURIComponent(customerId)}`,
-      })
       await syncEndUserTermsConsentIfNeeded({
         admin: input.admin,
         customerId,
@@ -165,6 +155,8 @@ export async function ensureGridCustomer(input: {
         userId: input.userId,
       })
       return { customerId, platformCustomerId }
+    } catch (e) {
+      if (!(e instanceof GridHttpError && e.status === 404)) throw e
     }
     await clearStoredGridCustomerId(input.admin, input)
   }

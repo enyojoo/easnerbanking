@@ -36,15 +36,11 @@ export async function confirmPayoutOrder(
   const countryCode = resolveRecipientPayoutCountry(recipient)
   if (!countryCode) throw new Error("Recipient country is required for payout.")
 
-  const orgOwner =
+  const [orgOwner, provider] = await Promise.all([
     input.ctx.scope === "business" && input.businessId
-      ? await resolveBusinessOrgOwnerUserId(admin, input.businessId).catch(() => null)
-      : null
-  const kycUserId = orgOwner ?? input.userId
-
-  let providerId: string
-  try {
-    const provider = await selectProviderForCorridor(admin, {
+      ? resolveBusinessOrgOwnerUserId(admin, input.businessId).catch(() => null)
+      : Promise.resolve(null),
+    selectProviderForCorridor(admin, {
       countryCode,
       currencyCode: receiveCurrency,
       rail:
@@ -55,13 +51,10 @@ export async function confirmPayoutOrder(
       bankName: recipient.bank_name,
       businessId: input.businessId,
       userId: input.userId,
-    })
-    providerId = provider.id
-  } catch (e) {
-    throw e instanceof Error
-      ? e
-      : new Error("Payout provider is not available for this corridor.")
-  }
+    }),
+  ])
+  const kycUserId = orgOwner ?? input.userId
+  const providerId = provider.id
 
   const amountEntryMode = input.amountEntryMode === "send" ? "send" : "receive"
   const sendBudget =
@@ -70,22 +63,6 @@ export async function confirmPayoutOrder(
       : undefined
 
   if (providerId === "grid" && isPayoutLockOnReviewEnabled("grid")) {
-    const walletOwnerId = await getWalletOwnerId(
-      admin,
-      input.businessId ? "business" : "individual",
-      input.businessId ?? kycUserId,
-    )
-    const { data: walletRow } = walletOwnerId
-      ? await admin
-          .from("wallet_accounts")
-          .select("address")
-          .eq("wallet_owner_id", walletOwnerId)
-          .eq("ledger_currency", "USD")
-          .eq("asset", "USDC")
-          .eq("status", "active")
-          .maybeSingle()
-      : { data: null }
-
     const { data: userRow } = await admin
       .from("users")
       .select(
