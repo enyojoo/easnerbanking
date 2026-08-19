@@ -30,3 +30,6 @@ next-env.d.ts
 
 # Local scratch/probe scripts (underscore-prefixed, never committed)
 scripts/_*.ts
+
+# Supabase CLI cache
+supabase/.temp/
