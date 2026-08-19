@@ -290,6 +290,7 @@ describe("filterResolvedGridKybErrorPointers", () => {
           addressCountry: "GB",
           addressLine1: "1 Street",
           city: "London",
+          postalCode: "SW1A 2AA",
         },
       ],
       documents: [{ personId: "p1", category: "identity" }],

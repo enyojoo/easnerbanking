@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { emptyGridKybCompanyDraft } from "@easner/shared"
-import { gridAddressFromKybCompany, gridBusinessInfoFromKybCompany } from "./kyb-company-to-grid"
+import { gridAddressFromKybCompany, gridAddressFromKybParts, gridBusinessInfoFromKybCompany } from "./kyb-company-to-grid"
 
 describe("gridBusinessInfoFromKybCompany", () => {
   it("maps source of funds and arrays", () => {
@@ -29,5 +29,38 @@ describe("gridAddressFromKybCompany", () => {
       postalCode: "94114",
       country: "US",
     })
+  })
+})
+
+describe("gridAddressFromKybParts", () => {
+  it("maps a Nigerian owner address without inventing US defaults", () => {
+    expect(
+      gridAddressFromKybParts({
+        addressLine1: "12 Admiralty Way",
+        addressLine2: "Victoria Island",
+        city: "Lagos",
+        state: "LA",
+        postalCode: "101241",
+        addressCountry: "ng",
+      }),
+    ).toEqual({
+      line1: "12 Admiralty Way",
+      line2: "Victoria Island",
+      city: "Lagos",
+      state: "LA",
+      postalCode: "101241",
+      country: "NG",
+    })
+  })
+
+  it("omits incomplete addresses instead of substituting placeholders", () => {
+    expect(
+      gridAddressFromKybParts({
+        addressLine1: "",
+        city: "Lagos",
+        postalCode: "",
+        addressCountry: "NG",
+      }),
+    ).toBeNull()
   })
 })

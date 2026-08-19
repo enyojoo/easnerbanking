@@ -43,17 +43,38 @@ export function gridBusinessInfoFromKybCompany(company: GridKybCompanyDraft): Re
   return businessInfo
 }
 
-export function gridAddressFromKybCompany(company: GridKybCompanyDraft): Record<string, unknown> | null {
-  const line1 = company.addressLine1.trim()
-  const country = company.addressCountry.trim().toUpperCase() || company.country.trim().toUpperCase()
-  const postalCode = company.postalCode.trim()
+export type GridKybAddressInput = {
+  addressLine1: string
+  addressLine2?: string
+  city?: string
+  state?: string
+  postalCode?: string
+  addressCountry: string
+}
+
+/** Grid Address requires `country`, `line1`, and `postalCode`. */
+export function gridAddressFromKybParts(input: GridKybAddressInput): Record<string, unknown> | null {
+  const line1 = String(input.addressLine1 ?? "").trim()
+  const country = String(input.addressCountry ?? "").trim().toUpperCase()
+  const postalCode = String(input.postalCode ?? "").trim()
   if (!line1 || !country || !postalCode) return null
   return {
     line1,
-    line2: company.addressLine2.trim() || undefined,
-    city: company.city.trim() || undefined,
-    state: company.state.trim() || undefined,
+    line2: String(input.addressLine2 ?? "").trim() || undefined,
+    city: String(input.city ?? "").trim() || undefined,
+    state: String(input.state ?? "").trim() || undefined,
     postalCode,
     country,
   }
+}
+
+export function gridAddressFromKybCompany(company: GridKybCompanyDraft): Record<string, unknown> | null {
+  return gridAddressFromKybParts({
+    addressLine1: company.addressLine1,
+    addressLine2: company.addressLine2,
+    city: company.city,
+    state: company.state,
+    postalCode: company.postalCode,
+    addressCountry: company.addressCountry.trim() || company.country.trim(),
+  })
 }

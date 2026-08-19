@@ -21,6 +21,7 @@ import {
   SETTINGS_COMBOBOX_TRIGGER_CLASS,
   SETTINGS_INPUT_CLASS,
 } from "@/lib/settings-control-surface"
+import { cn } from "@/lib/utils"
 
 export type BusinessAddressValues = {
   line1: string
@@ -36,6 +37,10 @@ type Props = {
   onCountryCodeChange: (code: string) => void
   disabled?: boolean
   editing?: boolean
+  /** `business` for operating/registered address. `all` for residential (owners). */
+  catalog?: "all" | "business"
+  idPrefix?: string
+  invalid?: boolean
 }
 
 function getCountryFromCode(code: string) {
@@ -49,6 +54,9 @@ export function BusinessAddressFields({
   onCountryCodeChange,
   disabled = false,
   editing = false,
+  catalog = "business",
+  idPrefix = "",
+  invalid = false,
 }: Props) {
   const [countryOpen, setCountryOpen] = useState(false)
   const [subdivisionOpen, setSubdivisionOpen] = useState(false)
@@ -64,13 +72,13 @@ export function BusinessAddressFields({
   })
 
   const countriesForPicker = useMemo(() => {
-    const base = filterCountriesForProductPicker(countries, "business")
+    const base = catalog === "all" ? countries : filterCountriesForProductPicker(countries, "business")
     const cur = getCountryFromCode(countryCode)
     if (cur && !base.some((b) => b.code === cur.code)) {
       return [cur, ...base]
     }
     return base
-  }, [countryCode])
+  }, [catalog, countryCode])
 
   useEffect(() => {
     let cancelled = false
@@ -127,6 +135,10 @@ export function BusinessAddressFields({
   }
 
   const selectedSubdivision = subdivisions.find((row) => row.value === values.state)
+  const streetId = `${idPrefix}street`
+  const cityId = `${idPrefix}city`
+  const stateId = `${idPrefix}state`
+  const postalId = `${idPrefix}zipCode`
 
   return (
     <>
@@ -140,7 +152,8 @@ export function BusinessAddressFields({
                   variant="outline"
                   role="combobox"
                   aria-expanded={countryOpen}
-                  className={SETTINGS_COMBOBOX_TRIGGER_CLASS}
+                  aria-invalid={invalid || undefined}
+                  className={cn(SETTINGS_COMBOBOX_TRIGGER_CLASS, invalid && "border-destructive")}
                 >
                   <span className="flex min-w-0 items-center gap-2">
                     {selectedCountry ? (
@@ -162,7 +175,11 @@ export function BusinessAddressFields({
                     <CommandEmpty>No country found.</CommandEmpty>
                     <CommandGroup>
                       {countriesForPicker.map((c) => (
-                        <CommandItem key={c.code} value={c.name} onSelect={() => void handleCountryChange(c.code)}>
+                        <CommandItem
+                          key={c.code}
+                          value={`${c.name} ${c.code}`}
+                          onSelect={() => void handleCountryChange(c.code)}
+                        >
                           <div className="flex w-full items-center gap-2">
                             <CountryFlag code={c.code} size={22} />
                             <span className="flex-1">{c.name}</span>
@@ -198,11 +215,11 @@ export function BusinessAddressFields({
           )}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="street">{config?.line1.label ?? "Street address"}</Label>
+          <Label htmlFor={streetId}>{config?.line1.label ?? "Street address"}</Label>
           <Input
-            id="street"
+            id={streetId}
             autoComplete="address-line1"
-            className={SETTINGS_INPUT_CLASS}
+            className={cn(SETTINGS_INPUT_CLASS, invalid && "border-destructive")}
             value={values.line1}
             onChange={(e) => onChange({ line1: e.target.value })}
             disabled={!isEditing}
@@ -213,9 +230,9 @@ export function BusinessAddressFields({
       <div className={`grid grid-cols-1 gap-4 ${gridCols}`}>
         {config?.city.visible !== false ? (
           <div className="space-y-2">
-            <Label htmlFor="city">{config?.city.label ?? "City"}</Label>
+            <Label htmlFor={cityId}>{config?.city.label ?? "City"}</Label>
             <Input
-              id="city"
+              id={cityId}
               autoComplete="address-level2"
               className={SETTINGS_INPUT_CLASS}
               value={values.city}
@@ -227,13 +244,13 @@ export function BusinessAddressFields({
 
         {config?.subdivision.visible || (!config && /^[A-Z]{2}$/i.test(countryCode.trim())) ? (
           <div className="space-y-2">
-            <Label htmlFor="state">{config?.subdivision.label ?? "State / region"}</Label>
+            <Label htmlFor={stateId}>{config?.subdivision.label ?? "State / region"}</Label>
             {config?.subdivision.mode === "dropdown" ? (
               isEditing ? (
                 <Popover open={subdivisionOpen} onOpenChange={setSubdivisionOpen}>
                   <PopoverTrigger asChild>
                     <Button
-                      id="state"
+                      id={stateId}
                       variant="outline"
                       role="combobox"
                       aria-expanded={subdivisionOpen}
@@ -270,7 +287,7 @@ export function BusinessAddressFields({
                 </Popover>
               ) : (
                 <Input
-                  id="state"
+                  id={stateId}
                   className={SETTINGS_INPUT_CLASS}
                   value={selectedSubdivision?.label ?? values.state}
                   disabled
@@ -279,7 +296,7 @@ export function BusinessAddressFields({
               )
             ) : (
               <Input
-                id="state"
+                id={stateId}
                 autoComplete="address-level1"
                 className={SETTINGS_INPUT_CLASS}
                 value={values.state}
@@ -292,9 +309,9 @@ export function BusinessAddressFields({
 
         {config?.postal.visible || (!config && /^[A-Z]{2}$/i.test(countryCode.trim())) ? (
           <div className="space-y-2">
-            <Label htmlFor="zipCode">{config?.postal.label ?? "Postal code"}</Label>
+            <Label htmlFor={postalId}>{config?.postal.label ?? "Postal code"}</Label>
             <Input
-              id="zipCode"
+              id={postalId}
               autoComplete="postal-code"
               className={SETTINGS_INPUT_CLASS}
               value={values.postalCode}

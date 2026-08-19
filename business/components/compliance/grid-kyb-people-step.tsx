@@ -365,35 +365,33 @@ export function GridKybPeopleStep({
             </div>
           </div>
           {idTypeError ? <p className="text-sm text-destructive">{idTypeError.reason}</p> : null}
-          <p className="text-sm text-muted-foreground">
-            Use this person’s tax ID. Passport, driver’s license, and national ID go in the upload below.
-          </p>
-          <div className={cn(addressError && "rounded-xl ring-1 ring-destructive/40 p-3")}>
-            <BusinessAddressFields
-              countryCode={form.addressCountry}
-              values={{
-                line1: form.addressLine1,
-                city: form.city,
-                state: form.state,
-                postalCode: form.postalCode,
-              }}
-              onChange={(patch) =>
-                patchForm((prev) => ({
-                  addressLine1: patch.line1 ?? prev.addressLine1,
-                  city: patch.city ?? prev.city,
-                  state: patch.state ?? prev.state,
-                  postalCode: patch.postalCode ?? prev.postalCode,
-                }))
-              }
-              onCountryCodeChange={(addressCountry) => patchForm({ addressCountry })}
-              disabled={disabled}
-              editing={!disabled}
-            />
-            {addressError ? <p className="mt-2 text-sm text-destructive">{addressError.reason}</p> : null}
-          </div>
+          <BusinessAddressFields
+            catalog="all"
+            idPrefix="owner-"
+            invalid={Boolean(addressError)}
+            countryCode={form.addressCountry}
+            values={{
+              line1: form.addressLine1,
+              city: form.city,
+              state: form.state,
+              postalCode: form.postalCode,
+            }}
+            onChange={(patch) =>
+              patchForm((prev) => ({
+                addressLine1: patch.line1 ?? prev.addressLine1,
+                city: patch.city ?? prev.city,
+                state: patch.state ?? prev.state,
+                postalCode: patch.postalCode ?? prev.postalCode,
+              }))
+            }
+            onCountryCodeChange={(addressCountry) => patchForm({ addressCountry })}
+            disabled={disabled}
+            editing={!disabled}
+          />
           <div className="space-y-2">
-            <Label>Address line 2 (optional)</Label>
+            <Label htmlFor="owner-address-2">Address line 2 (optional)</Label>
             <Input
+              id="owner-address-2"
               className={SETTINGS_INPUT_CLASS}
               value={form.addressLine2}
               onChange={(e) => patchForm({ addressLine2: e.target.value })}
@@ -401,6 +399,7 @@ export function GridKybPeopleStep({
               disabled={disabled}
             />
           </div>
+          {addressError ? <p className="text-sm text-destructive">{addressError.reason}</p> : null}
           <div className="space-y-2">
             <Label>Roles</Label>
             <div className="grid gap-2 sm:grid-cols-2">

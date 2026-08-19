@@ -1,7 +1,11 @@
 import { gridFetch } from "./http"
 import { normalizeGridCustomerId } from "./quote-request"
 import { gridBusinessCustomerUpdatePayload } from "./customer-update-payload"
-import { gridAddressFromKybCompany, gridBusinessInfoFromKybCompany } from "./kyb-company-to-grid"
+import {
+  gridAddressFromKybCompany,
+  gridAddressFromKybParts,
+  gridBusinessInfoFromKybCompany,
+} from "./kyb-company-to-grid"
 import { gridKybOwnerIdTypeForGrid, type GridKybCompanyDraft } from "@easner/shared"
 import type { KybDocumentRow, KybPersonRow } from "./kyb-application-store"
 
@@ -23,8 +27,15 @@ export async function patchGridBusinessKybCustomer(input: {
 }
 
 function ownerPersonalInfo(person: KybPersonRow): Record<string, unknown> {
-  const addressCountry = person.addressCountry.trim().toUpperCase() || person.nationality.trim().toUpperCase()
   const idType = gridKybOwnerIdTypeForGrid(person) || undefined
+  const address = gridAddressFromKybParts({
+    addressLine1: person.addressLine1,
+    addressLine2: person.addressLine2,
+    city: person.city,
+    state: person.state,
+    postalCode: person.postalCode,
+    addressCountry: person.addressCountry,
+  })
   return {
     firstName: person.firstName.trim(),
     lastName: person.lastName.trim(),
@@ -36,14 +47,7 @@ function ownerPersonalInfo(person: KybPersonRow): Record<string, unknown> {
     identifier: person.identifier.trim() || undefined,
     idType,
     countryOfIssuance: person.countryOfIssuance.trim().toUpperCase() || undefined,
-    address: {
-      line1: person.addressLine1.trim() || "Address on file",
-      line2: person.addressLine2.trim() || undefined,
-      city: person.city.trim() || undefined,
-      state: person.state.trim() || undefined,
-      postalCode: person.postalCode.trim() || "00000",
-      country: addressCountry || "US",
-    },
+    ...(address ? { address } : {}),
   }
 }
 
@@ -56,6 +60,9 @@ export async function upsertGridBeneficialOwner(input: {
     ownershipPercentage: input.person.ownershipPercentage ?? 0,
     roles: input.person.roles.length ? input.person.roles : ["UBO"],
     personalInfo: ownerPersonalInfo(input.person),
+  }
+  if (!input.person.gridBeneficialOwnerId && !body.personalInfo.address) {
+    throw new Error("Owner street, country, and postal code are required.")
   }
   if (input.person.gridBeneficialOwnerId) {
     const updated = await gridFetch<{ id?: string }>({

@@ -580,7 +580,12 @@ export function gridKybOwnerResourceMatches(
 function personFieldIsFilled(person: GridKybPointerPerson, field: string): boolean {
   const path = field.replace(/^personalInfo\./, "")
   if (path === "address" || path.endsWith(".address")) {
-    return Boolean(person.addressLine1?.trim() && person.city?.trim() && person.addressCountry?.trim())
+    return Boolean(
+      person.addressLine1?.trim() &&
+        person.city?.trim() &&
+        person.addressCountry?.trim() &&
+        person.postalCode?.trim(),
+    )
   }
   const key = lastFieldSegment(path)
   if (key === "roles") return person.roles.length > 0

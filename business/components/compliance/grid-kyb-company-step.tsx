@@ -112,6 +112,7 @@ export function GridKybCompanyStep({ company, onChange, errors, disabled }: Prop
       </div>
 
       <BusinessAddressFields
+        idPrefix="kyb-"
         countryCode={company.addressCountry || company.country}
         values={{
           line1: company.addressLine1,
