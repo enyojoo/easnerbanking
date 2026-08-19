@@ -345,11 +345,12 @@ export function TransactionDetailsPanel({
   const txHere = currentLocationPath(pathname, searchParams)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [downloadingReceipt, setDownloadingReceipt] = useState(false)
+  const transactionId = transaction.id
 
   const refetchExpiredPayIn = useCallback(() => {
-    if (!scope || !transaction?.id) return
-    void qc.invalidateQueries(getTransactionDetailPrefetchOptions(scope, transaction.id))
-  }, [qc, scope, transaction?.id])
+    if (!scope || !transactionId) return
+    void qc.invalidateQueries(getTransactionDetailPrefetchOptions(scope, transactionId))
+  }, [qc, scope, transactionId])
 
   useYcPayInExpiredDetailRefetch({
     enabled: Boolean(transaction),

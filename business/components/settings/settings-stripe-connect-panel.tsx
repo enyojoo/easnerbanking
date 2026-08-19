@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { loadConnectAndInitialize } from "@stripe/connect-js"
+import { loadConnectAndInitialize } from "@stripe/connect-js/pure"
 import {
   ConnectAccountOnboarding,
   ConnectComponentsProvider,
