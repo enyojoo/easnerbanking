@@ -188,14 +188,52 @@ function extractSolanaAddressFromWalletInfo(info: Record<string, unknown> | unde
   return null
 }
 
+type GridPaymentInstructionLike = {
+  accountOrWalletInfo?: Record<string, unknown>
+}
+
+/** Grid returns quote/internal-account instructions as an array; older fixtures used a single object. */
+export function asGridPaymentInstructionList(value: unknown): GridPaymentInstructionLike[] {
+  if (value == null) return []
+  if (Array.isArray(value)) {
+    return value.filter((item): item is GridPaymentInstructionLike => !!item && typeof item === "object")
+  }
+  if (typeof value === "object") return [value as GridPaymentInstructionLike]
+  return []
+}
+
+function isSolanaWalletInstruction(instruction: GridPaymentInstructionLike): boolean {
+  const accountType = String(instruction.accountOrWalletInfo?.accountType ?? "").toUpperCase()
+  return accountType.includes("SOLANA")
+}
+
+export function firstGridPaymentInstructionWalletInfo(
+  value: unknown,
+): Record<string, unknown> | null {
+  for (const instruction of asGridPaymentInstructionList(value)) {
+    const info = instruction.accountOrWalletInfo
+    if (info && typeof info === "object") return info
+  }
+  return null
+}
+
 export function extractGridFundingSolanaAddress(quote: {
-  paymentInstructions?: { accountOrWalletInfo?: Record<string, unknown> }
-  fundingPaymentInstructions?: { accountOrWalletInfo?: Record<string, unknown> }
+  paymentInstructions?: unknown
+  fundingPaymentInstructions?: unknown
 }): string | null {
-  return (
-    extractSolanaAddressFromWalletInfo(quote.paymentInstructions?.accountOrWalletInfo) ??
-    extractSolanaAddressFromWalletInfo(quote.fundingPaymentInstructions?.accountOrWalletInfo)
-  )
+  const instructions = [
+    ...asGridPaymentInstructionList(quote.paymentInstructions),
+    ...asGridPaymentInstructionList(quote.fundingPaymentInstructions),
+  ]
+  const ordered = [
+    ...instructions.filter(isSolanaWalletInstruction),
+    ...instructions.filter((instruction) => !isSolanaWalletInstruction(instruction)),
+  ]
+  for (const instruction of ordered) {
+    const address = extractSolanaAddressFromWalletInfo(instruction.accountOrWalletInfo)
+    if (address) return address
+  }
+  return null
 }
 
 export function gridMinorUnits(amount: number, decimals = 2): number {

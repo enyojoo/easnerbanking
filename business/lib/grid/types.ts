@@ -3,6 +3,12 @@ export type GridMoneyAmount = {
   currency?: { code?: string; decimals?: number }
 }
 
+export type GridPaymentInstruction = {
+  accountOrWalletInfo?: Record<string, unknown>
+  instructionsNotes?: string
+  isPlatformAccount?: boolean
+}
+
 export type GridQuote = {
   id: string
   createdAt?: string
@@ -14,17 +20,10 @@ export type GridQuote = {
   receivingCurrency?: { code?: string; decimals?: number }
   sendingCurrency?: { code?: string; decimals?: number }
   transactionId?: string
-  paymentInstructions?: {
-    accountOrWalletInfo?: Record<string, unknown>
-    instructionsNotes?: string
-    isPlatformAccount?: boolean
-  }
+  /** Grid returns an array; some cached/test payloads used a single object. */
+  paymentInstructions?: GridPaymentInstruction | GridPaymentInstruction[]
   /** Present on some internal-account / platform responses. */
-  fundingPaymentInstructions?: {
-    accountOrWalletInfo?: Record<string, unknown>
-    instructionsNotes?: string
-    isPlatformAccount?: boolean
-  }
+  fundingPaymentInstructions?: GridPaymentInstruction | GridPaymentInstruction[]
   rateDetails?: {
     gridApiFixedFee?: number
     gridApiVariableFeeAmount?: number

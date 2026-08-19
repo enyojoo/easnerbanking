@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
+import { firstGridPaymentInstructionWalletInfo } from "@/lib/grid/external-account"
 
 export const runtime = "nodejs"
 
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
 
   const metadata = (transfer.metadata ?? {}) as Record<string, unknown>
   const settlement = (transfer.settlement_info ?? {}) as {
-    paymentInstructions?: { accountOrWalletInfo?: Record<string, unknown> }
+    paymentInstructions?: unknown
   }
 
   return NextResponse.json({
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
     customerRate: Number(transfer.customer_rate ?? 0),
     receiveAmount: Number(transfer.quoted_receive ?? 0),
     receiveCurrency: String(transfer.receive_currency ?? ""),
-    bankInfo: settlement.paymentInstructions?.accountOrWalletInfo ?? null,
+    bankInfo: firstGridPaymentInstructionWalletInfo(settlement.paymentInstructions),
     expiresAt: String(transfer.expires_at ?? new Date().toISOString()),
   })
 }

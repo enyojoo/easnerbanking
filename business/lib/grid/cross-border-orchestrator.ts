@@ -3,12 +3,15 @@ import { computeYcCrossBorderPricing } from "@easner/shared"
 import { generateTransactionId } from "@/lib/transaction-id"
 import { buildCrossBorderQuoteSummary } from "@/lib/yellowcard/build-yc-quote-response"
 import { ensureGridCustomer, type GridPersonProfile } from "./ensure-grid-customer"
-import { createGridExternalAccount } from "./external-account"
+import {
+  createGridExternalAccount,
+  firstGridPaymentInstructionWalletInfo,
+  gridMinorUnits,
+} from "./external-account"
 import { loadGridRecipientBankCandidates } from "./grid-bank-candidates"
 import { buildGridIdempotencyKey } from "./idempotency"
 import { buildGridCrossBorderQuoteBody } from "./quote-request"
 import { gridFetch } from "./http"
-import { gridMinorUnits } from "./external-account"
 import {
   findGridBalancePayoutRate,
   findGridCrossRate,
@@ -331,7 +334,7 @@ export async function confirmGridCrossBorderTransfer(input: {
   const metadata = (transfer.metadata ?? {}) as Record<string, unknown>
   const easnerTransactionId = String(metadata.easner_transaction_id ?? generateTransactionId())
   const settlement = (transfer.settlement_info ?? {}) as {
-    paymentInstructions?: { accountOrWalletInfo?: Record<string, unknown> }
+    paymentInstructions?: unknown
   }
   const now = new Date().toISOString()
 
@@ -389,7 +392,7 @@ export async function confirmGridCrossBorderTransfer(input: {
     customerRate: Number(transfer.customer_rate ?? 0),
     receiveAmount: Number(transfer.quoted_receive ?? 0),
     receiveCurrency: String(transfer.receive_currency ?? ""),
-    bankInfo: settlement.paymentInstructions?.accountOrWalletInfo ?? null,
+    bankInfo: firstGridPaymentInstructionWalletInfo(settlement.paymentInstructions),
     expiresAt: String(transfer.expires_at ?? now),
   }
 }

@@ -1,14 +1,12 @@
-import { gridFetch } from "./http"
+import { gridFetch, gridFetchAllPages } from "./http"
 import { extractGridFundingSolanaAddress } from "./external-account"
-import type { GridQuote } from "./types"
-
-type GridPaymentInstructions = NonNullable<GridQuote["paymentInstructions"]>
+import type { GridPaymentInstruction, GridQuote } from "./types"
 
 type GridInternalAccountRow = {
   type?: string
   status?: string
   balance?: { currency?: { code?: string } }
-  fundingPaymentInstructions?: GridPaymentInstructions
+  fundingPaymentInstructions?: GridPaymentInstruction | GridPaymentInstruction[]
 }
 
 /** GET /quotes/{id} — payment instructions may appear after create. */
@@ -19,25 +17,29 @@ export async function retrieveGridQuote(quoteId: string): Promise<GridQuote> {
   })
 }
 
-/** Platform USDC internal account deposit instructions (JIT funding fallback). */
-export async function resolveGridPlatformUsdcFundingInstructions(): Promise<GridPaymentInstructions | null> {
-  const page = await gridFetch<{ data?: GridInternalAccountRow[] }>({
-    method: "GET",
-    path: "/platform/internal-accounts?currency=USDC&type=INTERNAL_CRYPTO",
+/** Standing USDC internal-account deposit instructions (JIT funding fallback). */
+export async function resolveGridPlatformUsdcFundingInstructions(): Promise<
+  GridPaymentInstruction[] | null
+> {
+  const rows = await gridFetchAllPages<GridInternalAccountRow>({
+    path: "/customers/internal-accounts",
+    query: { currency: "USDC", type: "INTERNAL_CRYPTO" },
+    mapPage: (page) => page.data ?? [],
   })
-  const rows = page.data ?? []
   const active =
     rows.find(
       (row) =>
         String(row.status ?? "").toUpperCase() === "ACTIVE" &&
         String(row.balance?.currency?.code ?? "").toUpperCase() === "USDC",
     ) ?? rows[0]
-  return active?.fundingPaymentInstructions ?? null
+  const instructions = active?.fundingPaymentInstructions
+  if (!instructions) return null
+  return Array.isArray(instructions) ? instructions : [instructions]
 }
 
 /**
  * Ensure quote carries Solana USDC funding instructions for balance payout.
- * Tries create response → GET quote → platform internal USDC account.
+ * Tries create response → GET quote → customer USDC internal account.
  */
 export async function hydrateGridQuotePaymentInstructions(quote: GridQuote): Promise<GridQuote> {
   if (extractGridFundingSolanaAddress(quote)) return quote
@@ -46,8 +48,7 @@ export async function hydrateGridQuotePaymentInstructions(quote: GridQuote): Pro
   if (quoteId) {
     try {
       const retrieved = await retrieveGridQuote(quoteId)
-      const retrievedFunding = (retrieved as { fundingPaymentInstructions?: GridPaymentInstructions })
-        .fundingPaymentInstructions
+      const retrievedFunding = retrieved.fundingPaymentInstructions
       const merged: GridQuote = {
         ...quote,
         paymentInstructions: retrieved.paymentInstructions ?? quote.paymentInstructions,

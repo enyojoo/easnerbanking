@@ -357,6 +357,10 @@ export async function lockGridBalancePayoutQuote(
   const hydratedQuote = await hydrateGridQuotePaymentInstructions(quote)
   const fundingAddress = resolveGridQuoteFundingAddress(hydratedQuote)
   if (!fundingAddress) {
+    console.warn("[grid] payout quote missing solana funding address", {
+      quoteId: hydratedQuote.id,
+      paymentInstructionsIsArray: Array.isArray(hydratedQuote.paymentInstructions),
+    })
     throw new Error("Grid payout funding instructions are unavailable. Try again shortly.")
   }
 

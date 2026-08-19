@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
+import { firstGridPaymentInstructionWalletInfo } from "@/lib/grid/external-account"
 import { createGridFundBalanceSession } from "@/lib/grid/fund-balance-session"
 import {
   logGridFundBalanceConfirmError,
@@ -87,7 +88,7 @@ export async function POST(request: Request) {
       },
     })
 
-    const bankInfo = session.paymentInstructions?.accountOrWalletInfo ?? null
+    const bankInfo = firstGridPaymentInstructionWalletInfo(session.paymentInstructions)
     return NextResponse.json({
       ok: true,
       provider: "grid",

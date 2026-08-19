@@ -27,6 +27,45 @@ describe("extractGridFundingSolanaAddress", () => {
       }),
     ).toBeNull()
   })
+
+  it("reads SOLANA_WALLET address from Grid's paymentInstructions array", () => {
+    expect(
+      extractGridFundingSolanaAddress({
+        paymentInstructions: [
+          {
+            accountOrWalletInfo: {
+              accountType: "SOLANA_WALLET",
+              address: sol,
+              assetType: "USDC",
+            },
+          },
+        ],
+      }),
+    ).toBe(sol)
+  })
+
+  it("prefers SOLANA_WALLET when EVM addresses come first", () => {
+    expect(
+      extractGridFundingSolanaAddress({
+        fundingPaymentInstructions: [
+          {
+            accountOrWalletInfo: {
+              accountType: "ETHEREUM_WALLET",
+              address: "0x4665242F0be442969aBf56d449Ec2a8D2EF11830",
+              assetType: "USDC",
+            },
+          },
+          {
+            accountOrWalletInfo: {
+              accountType: "SOLANA_WALLET",
+              address: sol,
+              assetType: "USDC",
+            },
+          },
+        ],
+      }),
+    ).toBe(sol)
+  })
 })
 
 describe("buildGridExternalAccountPayload CAD", () => {
