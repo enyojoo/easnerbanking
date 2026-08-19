@@ -8,6 +8,7 @@ import {
   gridKybIdTypeOptionsForPerson,
   gridKybOwnerResourceMatches,
   resolveGridKybOwnerIdType,
+  gridKybOwnerCountriesFromNationality,
   type GridKybErrorPointer,
 } from "@easner/shared"
 import { Button } from "@/components/ui/button"
@@ -15,7 +16,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { SETTINGS_INPUT_CLASS } from "@/lib/settings-control-surface"
 import { GRID_KYB_WIZARD_COPY } from "@/lib/copy/business-ui-copy"
+import { ensureBusinessOperationalAddressCountryRegistered } from "@/lib/address/register-lib-address-countries"
 import { resolveCountryIso2 } from "@/lib/countries"
+import {
+  getOperationalAddressFormConfig,
+  sanitizeSubdivisionForCountry,
+} from "@easner/shared/postal-address-form"
 import { cn } from "@/lib/utils"
 import type { KybDocumentPacket, KybPersonPacket } from "@/lib/grid/kyb-packet-types"
 import { GridKybEnumSelect } from "./grid-kyb-enum-select"
@@ -78,6 +84,31 @@ export function GridKybPeopleStep({
       const idType = resolveGridKybOwnerIdType(next)
       if (idType && idType !== next.idType) next.idType = idType
       return next
+    })
+  }
+
+  function applyNationality(nationality: string) {
+    const countries = gridKybOwnerCountriesFromNationality(nationality)
+    patchForm(countries)
+    const code = countries.addressCountry
+    if (!/^[A-Z]{2}$/.test(code)) return
+    void ensureBusinessOperationalAddressCountryRegistered(code).then(() => {
+      patchForm((prev) => {
+        if (prev.addressCountry !== code) return {}
+        try {
+          const nextConfig = getOperationalAddressFormConfig(code)
+          const next: Partial<typeof emptyPerson> = {}
+          if (!nextConfig.subdivision.visible || nextConfig.subdivision.mode === "dropdown") {
+            next.state = sanitizeSubdivisionForCountry(code, prev.state)
+          }
+          if (!nextConfig.postal.visible) {
+            next.postalCode = ""
+          }
+          return next
+        } catch {
+          return {}
+        }
+      })
     })
   }
 
@@ -315,7 +346,7 @@ export function GridKybPeopleStep({
               <Label>Nationality</Label>
               <GridKybCountrySelect
                 value={form.nationality}
-                onChange={(nationality) => patchForm({ nationality })}
+                onChange={applyNationality}
                 placeholder="Select nationality"
                 catalog="all"
                 disabled={disabled}

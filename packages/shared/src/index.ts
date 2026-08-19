@@ -487,6 +487,7 @@ export {
   GRID_KYB_ID_TYPES,
   normalizeGridKybIdType,
   resolveGridKybOwnerIdType,
+  gridKybOwnerCountriesFromNationality,
   gridKybOwnerIdTypeForGrid,
   gridKybIdTypeOptionsForPerson,
   GRID_KYB_SOURCE_OF_FUNDS,

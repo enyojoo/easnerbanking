@@ -9,6 +9,7 @@ import {
   gridKybApplicationIsEditable,
   gridKybApplicationStatusFromVerification,
   gridKybIdTypeOptionsForPerson,
+  gridKybOwnerCountriesFromNationality,
   gridKybOwnerIdTypeForGrid,
   gridKybWizardReadiness,
   mapGridKybVerificationErrors,
@@ -207,6 +208,16 @@ describe("resolveGridKybOwnerIdType", () => {
       "ITIN",
     ])
     expect(GRID_KYB_ID_TYPES.some((row) => row.value === "EIN")).toBe(false)
+  })
+})
+
+describe("gridKybOwnerCountriesFromNationality", () => {
+  it("copies nationality onto tax ID country and address country", () => {
+    expect(gridKybOwnerCountriesFromNationality("ng")).toEqual({
+      nationality: "NG",
+      countryOfIssuance: "NG",
+      addressCountry: "NG",
+    })
   })
 })
 

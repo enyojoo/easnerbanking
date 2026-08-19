@@ -200,6 +200,20 @@ export function gridKybOwnerIdTypeForGrid(input: {
   return resolveGridKybOwnerIdType(input)
 }
 
+/** Prefill tax ID country and home address country from nationality. */
+export function gridKybOwnerCountriesFromNationality(nationality: string | null | undefined): {
+  nationality: string
+  countryOfIssuance: string
+  addressCountry: string
+} {
+  const code = iso2Country(nationality)
+  return {
+    nationality: code,
+    countryOfIssuance: code,
+    addressCountry: code,
+  }
+}
+
 export type GridKybSourceOfFundsId =
   | "revenue_from_operations"
   | "client_customer_payments"
