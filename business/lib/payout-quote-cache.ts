@@ -23,6 +23,8 @@ let inflightQuote: Promise<PayoutQuoteResult | null> | null = null
 let inflightQuoteKey = ""
 let inflightConfirm: Promise<PayoutQuoteResult | null> | null = null
 let inflightConfirmKey = ""
+let inflightGridPrepare: Promise<PayoutQuoteResult | null> | null = null
+let inflightGridPrepareKey = ""
 
 function quoteMetaKey(meta: PayoutQuoteStashMeta): string {
   return [
@@ -109,10 +111,7 @@ export function isStashedPayoutQuoteFresh(meta: PayoutQuoteStashMeta): boolean {
   return quoteMetaKey(stashedMeta) === quoteMetaKey(meta)
 }
 
-function buildConfirmBody(
-  meta: PayoutQuoteStashMeta,
-  opts?: { liveQuote?: boolean },
-): Record<string, unknown> {
+function buildConfirmBody(meta: PayoutQuoteStashMeta): Record<string, unknown> {
   return {
     recipientId: meta.recipientId,
     receiveAmount: meta.amountEntryMode === "receive" ? meta.entryAmount : undefined,
@@ -121,7 +120,6 @@ function buildConfirmBody(
     sourceBalanceCurrency: meta.sourceBalanceCurrency,
     ...(meta.note ? { note: meta.note } : {}),
     ...(meta.paymentPurpose ? { paymentPurpose: meta.paymentPurpose } : {}),
-    ...(opts?.liveQuote ? { liveQuote: true } : {}),
   }
 }
 
@@ -178,7 +176,13 @@ export async function ensurePayoutOrderConfirmed(
   meta: PayoutQuoteStashMeta,
   businessId?: string | null,
 ): Promise<PayoutQuoteResult | null> {
-  if (isStashedPayoutQuoteFresh(meta)) return peekPayoutQuote()
+  if (isStashedPayoutQuoteFresh(meta)) {
+    const existing = peekPayoutQuote()
+    if (existing?.provider === "grid" && existing.lockId) {
+      void ensureGridLivePayoutQuote(existing.lockId, businessId)
+    }
+    return existing
+  }
 
   const key = quoteMetaKey(meta)
   if (inflightConfirm && inflightConfirmKey === key) return inflightConfirm
@@ -208,6 +212,9 @@ export async function ensurePayoutOrderConfirmed(
         return null
       }
       stashPayoutQuote(data.quote, meta)
+      if (data.quote.provider === "grid" && data.quote.lockId) {
+        void ensureGridLivePayoutQuote(data.quote.lockId, businessId)
+      }
       return data.quote
     } catch (e) {
       lastQuoteError = e instanceof Error ? e.message : "confirm_failed"
@@ -221,33 +228,49 @@ export async function ensurePayoutOrderConfirmed(
   return inflightConfirm
 }
 
-let inflightGridLiveQuote: Promise<void> | null = null
-let inflightGridLiveQuoteKey = ""
-
-/** Background Grid POST /quotes so PIN can reuse the lock. Does not block Continue. */
-export function prefetchGridLivePayoutQuote(
-  meta: PayoutQuoteStashMeta,
+/** Grid POST /quotes for PIN. Does not block Continue; coalesces with the confirm prefetch. */
+export async function ensureGridLivePayoutQuote(
+  lockId: string,
   businessId?: string | null,
-): void {
-  const key = `${quoteMetaKey(meta)}|live`
-  if (inflightGridLiveQuote && inflightGridLiveQuoteKey === key) return
-  inflightGridLiveQuoteKey = key
-  inflightGridLiveQuote = (async () => {
+): Promise<PayoutQuoteResult | null> {
+  const id = String(lockId || "").trim()
+  if (!id) return null
+  if (inflightGridPrepare && inflightGridPrepareKey === id) return inflightGridPrepare
+
+  inflightGridPrepareKey = id
+  inflightGridPrepare = (async () => {
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" }
       if (businessId) headers["X-Easner-Account-Scope"] = "business"
-      await fetchWithSession("/api/payouts/confirm", {
+      const res = await fetchWithSession("/api/payouts/grid-prepare", {
         method: "POST",
         headers,
-        body: JSON.stringify(buildConfirmBody(meta, { liveQuote: true })),
+        body: JSON.stringify({ lockId: id }),
       })
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean
+        quote?: PayoutQuoteResult
+      }
+      if (!res.ok || !data.ok || !data.quote) return null
+      if (stashed?.lockId === id && stashedMeta) {
+        stashPayoutQuote(
+          {
+            ...stashed,
+            grid: data.quote.grid ?? stashed.grid,
+          },
+          stashedMeta,
+        )
+      }
+      return data.quote
     } catch {
-      // PIN will create the live quote if this prefetch fails.
+      return null
     }
   })().finally(() => {
-    inflightGridLiveQuote = null
-    inflightGridLiveQuoteKey = ""
+    inflightGridPrepare = null
+    inflightGridPrepareKey = ""
   })
+
+  return inflightGridPrepare
 }
 
 /** Preview when needed, then confirm only if the provider requires a lock step. */

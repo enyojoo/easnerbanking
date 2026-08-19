@@ -40,7 +40,6 @@ export interface SendOperationInput {
   note?: string
   idempotencyKey: string
   prepareOverrides?: SellPrepareOverrides
-  gridLiveQuote?: boolean
 }
 
 export type SendExecutionResult =
@@ -147,7 +146,6 @@ export async function lockSendDestination(
     note: input.note,
     paymentPurpose: input.purpose,
     recipient: input.destination,
-    gridLiveQuote: input.gridLiveQuote,
   })
   return {
     lockId: quote.lockId ?? null,

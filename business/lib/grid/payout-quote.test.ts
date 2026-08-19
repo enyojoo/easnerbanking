@@ -24,7 +24,6 @@ import {
   buildGridEasnerFeeSlice,
   computeGridLockedBalancePayoutPricing,
   ensureFreshGridBalancePayoutQuote,
-  fetchGridPayoutExchangeRateQuote,
 } from "./payout-quote"
 
 const receiveAmount = 2000
@@ -108,46 +107,6 @@ describe("applyLiveGridQuoteToLockedPricing", () => {
     })
     expect(applied.cryptoAmount).toBe(1.501175)
     expect(applied.pricing.totalDebited).toBeGreaterThanOrEqual(1.6)
-  })
-})
-
-describe("fetchGridPayoutExchangeRateQuote", () => {
-  beforeEach(() => {
-    vi.mocked(gridFetch).mockReset()
-  })
-
-  it("reads sending amount and fees from GET /exchange-rates", async () => {
-    vi.mocked(gridFetch).mockResolvedValue({
-      data: [
-        {
-          sourceCurrency: "USDC",
-          destinationCurrency: "NGN",
-          destinationPaymentRail: "BANK_TRANSFER",
-          sendingAmount: 1_501_175,
-          receivingAmount: 200_000,
-          fees: { total: 15_000 },
-        },
-      ],
-    })
-
-    const quoted = await fetchGridPayoutExchangeRateQuote({
-      receiveCurrency: "NGN",
-      sendingUsdcMajor: 1.44,
-      rail: "bank_transfer",
-    })
-
-    expect(quoted).toEqual({
-      sendingUsd: 1.501175,
-      feesUsd: 0.015,
-      receivingAmount: 2000,
-    })
-    expect(gridFetch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: "GET",
-        timeoutMs: 4_000,
-      }),
-    )
-    expect(String(vi.mocked(gridFetch).mock.calls[0]?.[0]?.path)).toContain("/exchange-rates?")
   })
 })
 

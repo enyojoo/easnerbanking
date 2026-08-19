@@ -13,14 +13,6 @@ vi.mock("@/lib/grid/payout-quote", () => ({
     quotePhase: "locked",
     grid: { quoteId: input.locked.quoteId },
   })),
-  computeGridLockedBalancePayoutPricing: vi.fn(() => ({
-    customerPrincipal: 1.44,
-    totalDebited: 1.53,
-    marginAmount: 0.007,
-    processingFee: 0.014,
-    channelCost: 0.015,
-  })),
-  fetchGridPayoutExchangeRateQuote: vi.fn(),
   lockGridBalancePayoutQuote: vi.fn(),
 }))
 
@@ -28,6 +20,7 @@ vi.mock("@/lib/payout/payout-lock-session", () => ({
   findReusablePayoutLockSession: vi.fn(),
   lockedQuoteFromSession: vi.fn(() => ({ provider: "grid", reused: true })),
   upsertPayoutLockSession: vi.fn(),
+  getPayoutLockSession: vi.fn(),
 }))
 
 vi.mock("@/lib/payout/payout-quote-key", () => ({
@@ -41,7 +34,6 @@ vi.mock("@/lib/payout/recipient-snapshot-hash", () => ({
 import { confirmGridBalancePayoutOrder } from "./confirm-grid-balance-payout"
 import {
   buildGridBalancePayoutPreview,
-  fetchGridPayoutExchangeRateQuote,
   lockGridBalancePayoutQuote,
 } from "@/lib/grid/payout-quote"
 import {
@@ -64,11 +56,10 @@ describe("confirmGridBalancePayoutOrder", () => {
     vi.mocked(findReusablePayoutLockSession).mockReset()
     vi.mocked(lockGridBalancePayoutQuote).mockReset()
     vi.mocked(buildGridBalancePayoutPreview).mockReset()
-    vi.mocked(fetchGridPayoutExchangeRateQuote).mockReset()
     vi.mocked(upsertPayoutLockSession).mockReset()
   })
 
-  it("reuses a review lock without posting Grid quotes", async () => {
+  it("reuses a Grid review lock without posting Grid quotes", async () => {
     vi.mocked(findReusablePayoutLockSession).mockResolvedValue({
       id: "lock-1",
       provider: "grid",
@@ -79,16 +70,15 @@ describe("confirmGridBalancePayoutOrder", () => {
     const result = await confirmGridBalancePayoutOrder(input)
     expect(result).toEqual({ provider: "grid", reused: true })
     expect(lockGridBalancePayoutQuote).not.toHaveBeenCalled()
-    expect(fetchGridPayoutExchangeRateQuote).not.toHaveBeenCalled()
   })
 
-  it("locks review from GET /exchange-rates and never calls POST /quotes", async () => {
+  it("locks Easner actuals from the Office preview and never calls Grid POST /quotes", async () => {
     vi.mocked(findReusablePayoutLockSession).mockResolvedValue(null)
     vi.mocked(buildGridBalancePayoutPreview).mockResolvedValue({
       receiveAmount: 2000,
       receiveCurrency: "NGN",
       customerPrincipal: 1.44,
-      totalDebited: 1.53,
+      totalDebited: 1.46,
       marginAmount: 0.007,
       processingFee: 0.014,
       channelCost: 0,
@@ -97,23 +87,17 @@ describe("confirmGridBalancePayoutOrder", () => {
       settlement: { cryptoAuthorizedAmount: "1.44", sessionId: "grid_preview_1", customerRate: 1384.59 },
       pricingQuoteId: "grid_preview_1",
     } as never)
-    vi.mocked(fetchGridPayoutExchangeRateQuote).mockResolvedValue({
-      sendingUsd: 1.501175,
-      feesUsd: 0.015,
-      receivingAmount: 2000,
-    })
     vi.mocked(upsertPayoutLockSession).mockResolvedValue({ id: "lock-2" } as never)
 
-    await confirmGridBalancePayoutOrder(input)
+    const result = await confirmGridBalancePayoutOrder(input)
 
     expect(lockGridBalancePayoutQuote).not.toHaveBeenCalled()
-    expect(fetchGridPayoutExchangeRateQuote).toHaveBeenCalledTimes(1)
-    expect(upsertPayoutLockSession).toHaveBeenCalledWith(
-      input.admin,
-      expect.objectContaining({
-        provider: "grid",
-        providerPayload: expect.objectContaining({ quoteId: "" }),
-      }),
-    )
+    expect(buildGridBalancePayoutPreview).toHaveBeenCalledTimes(1)
+    expect(result).toEqual({
+      provider: "grid",
+      lockId: "lock-2",
+      quotePhase: "locked",
+      grid: { quoteId: "" },
+    })
   })
 })

@@ -2,8 +2,6 @@ import { getGridQuoteTtlMs, gridQuoteCanReuseOnConfirm } from "@/lib/grid/config
 import {
   buildGridBalancePayoutPreview,
   buildGridLockedPayoutQuoteResult,
-  computeGridLockedBalancePayoutPricing,
-  fetchGridPayoutExchangeRateQuote,
   lockGridBalancePayoutQuote,
   type LockGridBalancePayoutQuoteResult,
 } from "@/lib/grid/payout-quote"
@@ -12,6 +10,7 @@ import type { PayoutQuoteResult } from "@/lib/noah/payout-quote"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
 import {
   findReusablePayoutLockSession,
+  getPayoutLockSession,
   lockedQuoteFromSession,
   upsertPayoutLockSession,
   type PayoutLockSessionRow,
@@ -20,33 +19,15 @@ import { buildPayoutQuoteKey } from "@/lib/payout/payout-quote-key"
 import { hashRecipientSnapshot } from "@/lib/payout/recipient-snapshot-hash"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-function gridReviewQuoteKey(input: {
-  recipientId: string
-  destinationRef?: string
-  sourceBalanceCurrency: string
-  amountEntryMode: "send" | "receive"
-  receiveAmount: number
-  sendBudget?: number
-}): string {
-  return buildPayoutQuoteKey({
-    recipientId: input.recipientId,
-    destinationRef: input.destinationRef,
-    sourceBalanceCurrency: input.sourceBalanceCurrency,
-    amountEntryMode: input.amountEntryMode,
-    receiveAmount: input.receiveAmount,
-    sendBudget: input.sendBudget,
-  })
-}
-
-function isReusableGridReviewLock(row: PayoutLockSessionRow): boolean {
-  if (row.provider !== "grid") return false
-  return gridQuoteCanReuseOnConfirm(row.expires_at)
-}
-
-function storedGridExternalAccountId(recipient: RecipientSellPrepareRow): string {
+function storedGridExternalAccountId(recipient: RecipientSellPrepareRow): string | null {
   const meta = recipient.metadata
   const obj = meta && typeof meta === "object" ? (meta as Record<string, unknown>) : {}
-  return String(obj.grid_external_account_id ?? "").trim()
+  const id = String(obj.grid_external_account_id ?? "").trim()
+  return id || null
+}
+
+function liveQuoteIdFromLock(row: PayoutLockSessionRow): string {
+  return String(row.provider_payload_json?.quoteId ?? "").trim()
 }
 
 export type ConfirmGridBalancePayoutInput = {
@@ -60,34 +41,32 @@ export type ConfirmGridBalancePayoutInput = {
   sourceBalanceCurrency: string
   amountEntryMode?: "send" | "receive"
   sendBudget?: number
-  senderProfile?: GridPersonProfile
   paymentPurpose?: string
 }
 
 /**
- * Noah/YC confirm is a fast provider lock (prepare / POST /send).
- * Grid POST /quotes (REALTIME_FUNDING) mints a Solana address and is ~20s, so review
- * locks Grid GET /exchange-rates (cached ~5 min, includes platform fees). Live
- * POST /quotes is prefetched in the background and used at PIN.
+ * Review lock is Easner actuals (Office rate + 1% + FX margin). Grid POST /quotes
+ * runs in the background / at PIN so Continue stays fast.
  */
 export async function confirmGridBalancePayoutOrder(
   input: ConfirmGridBalancePayoutInput,
 ): Promise<PayoutQuoteResult> {
   const amountEntryMode = input.amountEntryMode === "send" ? "send" : "receive"
-  const quoteKey = gridReviewQuoteKey({
+  const quoteKey = buildPayoutQuoteKey({
     recipientId: input.recipientId,
     destinationRef: input.destinationRef,
     sourceBalanceCurrency: input.sourceBalanceCurrency,
     amountEntryMode,
     receiveAmount: input.receiveFiatAmount,
     sendBudget: input.sendBudget,
+    paymentPurpose: input.paymentPurpose,
   })
 
   const existing = await findReusablePayoutLockSession(input.admin, {
     userId: input.userId,
     quoteKey,
   })
-  if (existing && isReusableGridReviewLock(existing)) {
+  if (existing && existing.provider === "grid") {
     return lockedQuoteFromSession(existing)
   }
 
@@ -104,42 +83,17 @@ export async function confirmGridBalancePayoutOrder(
     paymentPurpose: input.paymentPurpose,
   })
 
-  const rail =
-    input.recipient.mobile_provider ||
-    String(input.recipient.bank_name || "").toLowerCase().includes("mobile money")
-      ? ("mobile_money" as const)
-      : ("bank_transfer" as const)
-  const receiveCurrency = String(input.recipient.currency || "").trim().toUpperCase()
-  const provisional = Number(
+  const cryptoAmount = Number(
     preview.settlement?.cryptoAuthorizedAmount ?? preview.customerPrincipal,
   )
-  const liveRate = await fetchGridPayoutExchangeRateQuote({
-    receiveCurrency,
-    sendingUsdcMajor: provisional,
-    rail,
-  })
-  const processingFeeBps =
-    preview.customerPrincipal > 0 && preview.processingFee > 0
-      ? Math.round((preview.processingFee / preview.customerPrincipal) * 10_000)
-      : 100
-  const customerRate = preview.easner?.effectiveRate ?? preview.settlement?.customerRate ?? 0
-  const pricing = liveRate
-    ? computeGridLockedBalancePayoutPricing({
-        receiveAmount: preview.receiveAmount,
-        customerRate,
-        gridSendingUsd: liveRate.sendingUsd,
-        processingFeeBps,
-        gridFeesUsd: liveRate.feesUsd,
-      })
-    : null
-
-  const cryptoAmount = liveRate?.sendingUsd ?? provisional
   const expiresAt = preview.expiresAt ?? new Date(Date.now() + getGridQuoteTtlMs()).toISOString()
+  const customerRate = preview.easner?.effectiveRate ?? preview.settlement?.customerRate ?? 0
+
   const locked: LockGridBalancePayoutQuoteResult = {
     quoteId: "",
     sequenceId: String(preview.pricingQuoteId || preview.settlement?.sessionId || ""),
     customerId: "",
-    externalAccountId: storedGridExternalAccountId(input.recipient),
+    externalAccountId: storedGridExternalAccountId(input.recipient) ?? "",
     receiveAmount: preview.receiveAmount,
     receiveCurrency: preview.receiveCurrency,
     cryptoAmount,
@@ -147,16 +101,16 @@ export async function confirmGridBalancePayoutOrder(
     exchangeRate: customerRate,
     expiresAt,
     pricing: {
-      customerPrincipal: pricing?.customerPrincipal ?? preview.customerPrincipal,
-      totalDebited: pricing?.totalDebited ?? preview.totalDebited,
-      marginAmount: pricing?.marginAmount ?? preview.marginAmount,
-      processingFee: pricing?.processingFee ?? preview.processingFee,
-      channelCost: pricing?.channelCost ?? preview.channelCost,
+      customerPrincipal: preview.customerPrincipal,
+      totalDebited: preview.totalDebited,
+      marginAmount: preview.marginAmount,
+      processingFee: preview.processingFee,
+      channelCost: preview.channelCost,
       customerRate,
     },
   }
 
-  const result = buildGridLockedPayoutQuoteResult({
+  const pricing = buildGridLockedPayoutQuoteResult({
     locked,
     sourceBalanceCurrency: input.sourceBalanceCurrency,
     quoteKey,
@@ -171,7 +125,7 @@ export async function confirmGridBalancePayoutOrder(
     provider: "grid",
     quoteKey,
     recipientSnapshotHash: hashRecipientSnapshot(input.recipient),
-    pricing: { ...result, lockId: undefined },
+    pricing: { ...pricing, lockId: undefined },
     providerPayload: {
       quoteId: "",
       sequenceId: locked.sequenceId,
@@ -179,6 +133,9 @@ export async function confirmGridBalancePayoutOrder(
       externalAccountId: locked.externalAccountId,
       cryptoAmount,
       fundingAddress: "",
+      paymentPurpose: input.paymentPurpose ?? "",
+      amountEntryMode,
+      sendBudget: input.sendBudget ?? null,
     },
     expiresAt,
   })
@@ -191,64 +148,65 @@ export async function confirmGridBalancePayoutOrder(
   })
 }
 
-/** Background POST /quotes so PIN does not wait 20s after review. */
-export async function prefetchGridBalancePayoutLiveQuote(
-  input: ConfirmGridBalancePayoutInput & { senderProfile: GridPersonProfile },
-): Promise<void> {
-  const amountEntryMode = input.amountEntryMode === "send" ? "send" : "receive"
-  const quoteKey = gridReviewQuoteKey({
-    recipientId: input.recipientId,
-    destinationRef: input.destinationRef,
-    sourceBalanceCurrency: input.sourceBalanceCurrency,
-    amountEntryMode,
-    receiveAmount: input.receiveFiatAmount,
-    sendBudget: input.sendBudget,
-  })
-  const existing = await findReusablePayoutLockSession(input.admin, {
+export async function attachLiveGridQuoteToLockSession(input: {
+  admin: SupabaseClient
+  userId: string
+  lockId: string
+  recipient: RecipientSellPrepareRow
+  senderProfile: GridPersonProfile
+}): Promise<PayoutQuoteResult> {
+  const row = await getPayoutLockSession(input.admin, {
+    lockId: input.lockId,
     userId: input.userId,
-    quoteKey,
   })
-  const quoteId = String(existing?.provider_payload_json?.quoteId ?? "").trim()
-  const fundingAddress = String(existing?.provider_payload_json?.fundingAddress ?? "").trim()
-  if (existing && quoteId && fundingAddress && gridQuoteCanReuseOnConfirm(existing.expires_at)) {
-    return
+  if (!row || row.provider !== "grid") {
+    throw new Error("Payout lock expired or invalid.")
+  }
+  if (liveQuoteIdFromLock(row) && gridQuoteCanReuseOnConfirm(row.expires_at)) {
+    return lockedQuoteFromSession(row)
   }
 
+  const payload = row.provider_payload_json ?? {}
   const locked = await lockGridBalancePayoutQuote({
     admin: input.admin,
     userId: input.userId,
-    businessId: input.businessId,
+    businessId: row.business_id,
     recipient: input.recipient,
-    receiveFiatAmount: input.receiveFiatAmount,
-    sourceBalanceCurrency: input.sourceBalanceCurrency,
-    amountEntryMode: input.amountEntryMode,
-    sendBudget: input.sendBudget,
+    receiveFiatAmount: row.pricing_json.receiveAmount,
+    sourceBalanceCurrency: row.pricing_json.sendCurrency || "USD",
+    amountEntryMode: payload.amountEntryMode === "send" ? "send" : "receive",
+    sendBudget:
+      payload.sendBudget != null && Number(payload.sendBudget) > 0
+        ? Number(payload.sendBudget)
+        : undefined,
     senderProfile: input.senderProfile,
-    paymentPurpose: input.paymentPurpose,
+    paymentPurpose: String(payload.paymentPurpose ?? "").trim() || undefined,
   })
+
   const pricing = buildGridLockedPayoutQuoteResult({
     locked,
-    sourceBalanceCurrency: input.sourceBalanceCurrency,
-    quoteKey,
-    lockId: existing?.id ?? "",
+    sourceBalanceCurrency: row.pricing_json.sendCurrency || "USD",
+    quoteKey: row.quote_key,
+    lockId: row.id,
   })
-  await upsertPayoutLockSession(input.admin, {
-    userId: input.userId,
-    businessId: input.businessId,
-    recipientId: input.recipientId,
-    destinationRef: input.destinationRef,
-    provider: "grid",
-    quoteKey,
-    recipientSnapshotHash: hashRecipientSnapshot(input.recipient),
-    pricing: { ...pricing, lockId: undefined },
-    providerPayload: {
-      quoteId: locked.quoteId,
-      sequenceId: locked.sequenceId,
-      customerId: locked.customerId,
-      externalAccountId: locked.externalAccountId,
-      cryptoAmount: locked.cryptoAmount,
-      fundingAddress: locked.fundingAddress ?? "",
-    },
-    expiresAt: locked.expiresAt,
-  })
+
+  await input.admin
+    .from("payout_lock_sessions")
+    .update({
+      provider_payload_json: {
+        ...payload,
+        quoteId: locked.quoteId,
+        sequenceId: locked.sequenceId,
+        customerId: locked.customerId,
+        externalAccountId: locked.externalAccountId,
+        cryptoAmount: locked.cryptoAmount,
+        fundingAddress: locked.fundingAddress ?? "",
+      },
+      expires_at: locked.expiresAt,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", row.id)
+    .eq("user_id", input.userId)
+
+  return { ...pricing, lockId: row.id }
 }

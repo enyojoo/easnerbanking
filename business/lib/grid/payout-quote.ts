@@ -31,7 +31,6 @@ import {
   quantizeGridUsdcMajor,
 } from "./quote-request"
 import { gridFetch } from "./http"
-import type { GridExchangeRate, GridQuote } from "./types"
 import {
   hydrateGridQuotePaymentInstructions,
   resolveGridQuoteFundingAddress,
@@ -45,6 +44,7 @@ import {
   gridQuoteNeedsRefresh,
   resolveGridQuoteExpiresAt,
 } from "./config"
+import type { GridQuote } from "./types"
 
 function storedGridExternalAccountId(recipient: RecipientSellPrepareRow): string | null {
   const meta = recipient.metadata
@@ -78,82 +78,6 @@ function persistRecipientGridExternalAccount(
 function roundUsdc(n: number): number {
   if (!Number.isFinite(n)) return 0
   return Math.round(n * 1_000_000) / 1_000_000
-}
-
-export type GridPayoutExchangeRateQuote = {
-  sendingUsd: number
-  feesUsd: number
-  receivingAmount: number
-}
-
-function pickGridPayoutExchangeRateRow(
-  rows: Array<
-    GridExchangeRate & {
-      sendingAmount?: number
-      receivingAmount?: number
-      fees?: { total?: number; fixed?: number }
-    }
-  >,
-  rail: "bank_transfer" | "mobile_money",
-): (typeof rows)[number] | null {
-  const railHint = rail === "mobile_money" ? /MOBILE|MOMO/i : /BANK|SWIFT|WIRE|FASTER|SEPA|ACH/i
-  const withRail = rows.find((row) => railHint.test(String(row.destinationPaymentRail ?? "")))
-  return withRail ?? rows[0] ?? null
-}
-
-/**
- * Fast Grid actuals for review: cached GET /exchange-rates (≈5 min), not POST /quotes.
- * REALTIME_FUNDING POST /quotes mints a Solana address and is often ~20s.
- */
-export async function fetchGridPayoutExchangeRateQuote(input: {
-  receiveCurrency: string
-  sendingUsdcMajor: number
-  rail: "bank_transfer" | "mobile_money"
-}): Promise<GridPayoutExchangeRateQuote | null> {
-  const dest = input.receiveCurrency.trim().toUpperCase()
-  const sendingMinor = Math.round(quantizeGridUsdcMajor(input.sendingUsdcMajor) * 1_000_000)
-  if (!dest || !(sendingMinor > 0)) return null
-  const params = new URLSearchParams({
-    sourceCurrency: "USDC",
-    destinationCurrency: dest,
-    sendingAmount: String(sendingMinor),
-  })
-  try {
-    const page = await gridFetch<{
-      data?: Array<
-        GridExchangeRate & {
-          sendingAmount?: number
-          receivingAmount?: number
-          fees?: { total?: number; fixed?: number }
-        }
-      >
-    }>({
-      method: "GET",
-      path: `/exchange-rates?${params.toString()}`,
-      timeoutMs: 4_000,
-    })
-    const picked = pickGridPayoutExchangeRateRow(page.data ?? [], input.rail)
-    if (!picked) return null
-    const sendingUsd =
-      gridQuoteSendingAmountMajor({
-        totalSendingAmount: Number(picked.sendingAmount ?? sendingMinor),
-        sendingCurrency: { code: "USDC", decimals: 6 },
-      }) ?? quantizeGridUsdcMajor(input.sendingUsdcMajor)
-    const feeMinor = Number(picked.fees?.total ?? picked.fees?.fixed ?? 0)
-    const feesUsd = feeMinor > 0 ? feeMinor / 1_000_000 : 0
-    const receivingAmount = Number(picked.receivingAmount ?? 0) / 100
-    return {
-      sendingUsd,
-      feesUsd: Number.isFinite(feesUsd) ? feesUsd : 0,
-      receivingAmount: Number.isFinite(receivingAmount) ? receivingAmount : 0,
-    }
-  } catch (e) {
-    console.warn(
-      "[grid] exchange-rates quote failed:",
-      e instanceof Error ? e.message : e,
-    )
-    return null
-  }
 }
 
 /** Locked Grid payout: send exactly Grid totalSendingAmount; Easner 1% + FX margin on top. No YC 2% pad. */
@@ -423,7 +347,7 @@ export type LockGridBalancePayoutQuoteResult = {
 }
 
 /**
- * Amount-screen Grid preview (Office rates, no Grid API). Review uses GET /exchange-rates.
+ * Amount-screen and review Grid preview (Office rates, no Grid API). Live POST /quotes is background / PIN.
  */
 export async function buildGridBalancePayoutPreview(input: {
   admin?: ReturnType<typeof createSupabaseAdmin>

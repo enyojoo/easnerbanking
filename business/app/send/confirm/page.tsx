@@ -57,6 +57,7 @@ import {
   type CrossBorderQuoteStashMeta,
 } from "@/lib/yc-cross-border-quote-cache"
 import {
+  ensureGridLivePayoutQuote,
   ensurePayoutOrderConfirmed,
   isCompletePayoutQuoteLocked,
   isStashedPayoutQuoteFresh,
@@ -756,6 +757,22 @@ export default function SendConfirmPage() {
         ...(pq!.noahSendAmount ? { noah_send_amount: Number(pq!.noahSendAmount) } : {}),
       }
 
+      let gridQuoteId = pq.gridQuoteId
+      let gridFundingAddress = pq.gridFundingAddress
+      let gridCryptoAmount = pq.gridCryptoAmount
+      let gridCustomerId = pq.gridCustomerId
+      let gridExternalAccountId = pq.gridExternalAccountId
+      if (pq.provider === "grid" && pq.lockId) {
+        const live = await ensureGridLivePayoutQuote(pq.lockId, businessId)
+        if (live?.grid?.quoteId) {
+          gridQuoteId = live.grid.quoteId
+          gridFundingAddress = live.grid.fundingAddress
+          gridCryptoAmount = live.grid.cryptoAmount
+          gridCustomerId = live.grid.customerId
+          gridExternalAccountId = live.grid.externalAccountId
+        }
+      }
+
       const transferBody = {
         amount: state.amount.toFixed(2),
         currency: state.receiveCurrency.toLowerCase(),
@@ -784,11 +801,11 @@ export default function SendConfirmPage() {
         ...(pq.ycWalletAddress ? { ycWalletAddress: pq.ycWalletAddress } : {}),
         ...(pq.ycCryptoAmount != null ? { ycCryptoAmount: pq.ycCryptoAmount } : {}),
         ...(pq.lockId ? { lockId: pq.lockId } : {}),
-        ...(pq.provider === "grid" && pq.gridQuoteId ? { gridQuoteId: pq.gridQuoteId } : {}),
-        ...(pq.provider === "grid" && pq.gridFundingAddress ? { gridFundingAddress: pq.gridFundingAddress } : {}),
-        ...(pq.provider === "grid" && pq.gridCryptoAmount != null ? { gridCryptoAmount: pq.gridCryptoAmount } : {}),
-        ...(pq.provider === "grid" && pq.gridCustomerId ? { gridCustomerId: pq.gridCustomerId } : {}),
-        ...(pq.provider === "grid" && pq.gridExternalAccountId ? { gridExternalAccountId: pq.gridExternalAccountId } : {}),
+        ...(pq.provider === "grid" && gridQuoteId ? { gridQuoteId } : {}),
+        ...(pq.provider === "grid" && gridFundingAddress ? { gridFundingAddress } : {}),
+        ...(pq.provider === "grid" && gridCryptoAmount != null ? { gridCryptoAmount } : {}),
+        ...(pq.provider === "grid" && gridCustomerId ? { gridCustomerId } : {}),
+        ...(pq.provider === "grid" && gridExternalAccountId ? { gridExternalAccountId } : {}),
         reviewSnapshot,
       }
 
