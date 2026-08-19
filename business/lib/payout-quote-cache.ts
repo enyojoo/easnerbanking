@@ -26,15 +26,14 @@ let inflightConfirmKey = ""
 let inflightGridPrepare: Promise<PayoutQuoteResult | null> | null = null
 let inflightGridPrepareKey = ""
 
-function quoteMetaKey(meta: PayoutQuoteStashMeta): string {
+/** Recipient + amount + currencies. Note/purpose do not restart a Grid lock. */
+export function payoutQuoteEconomicsKey(meta: PayoutQuoteStashMeta): string {
   return [
     meta.recipientId,
     meta.amountEntryMode,
     meta.entryAmount,
     meta.receiveCurrency,
     meta.sourceBalanceCurrency,
-    meta.note ?? "",
-    meta.paymentPurpose ?? "",
   ].join("|")
 }
 
@@ -86,7 +85,7 @@ export function peekPayoutQuotePreview(): PayoutQuoteResult | null {
 export function isStashedPayoutQuotePreviewFresh(meta: PayoutQuoteStashMeta): boolean {
   if (!isUsablePayoutQuotePreview(previewStashed) || !previewStashedMeta) return false
   if (new Date(previewStashed.expiresAt).getTime() <= Date.now()) return false
-  return quoteMetaKey(previewStashedMeta) === quoteMetaKey(meta)
+  return payoutQuoteEconomicsKey(previewStashedMeta) === payoutQuoteEconomicsKey(meta)
 }
 
 export function peekPayoutQuote(): PayoutQuoteResult | null {
@@ -108,7 +107,7 @@ export function clearPayoutQuote(): void {
 export function isStashedPayoutQuoteFresh(meta: PayoutQuoteStashMeta): boolean {
   if (!isCompletePayoutQuoteLocked(stashed) || !stashedMeta) return false
   if (new Date(stashed.expiresAt).getTime() <= Date.now()) return false
-  return quoteMetaKey(stashedMeta) === quoteMetaKey(meta)
+  return payoutQuoteEconomicsKey(stashedMeta) === payoutQuoteEconomicsKey(meta)
 }
 
 function buildConfirmBody(meta: PayoutQuoteStashMeta): Record<string, unknown> {
@@ -129,7 +128,7 @@ export async function ensurePayoutQuoteStashed(
 ): Promise<PayoutQuoteResult | null> {
   if (isStashedPayoutQuoteFresh(meta)) return peekPayoutQuote()
 
-  const key = quoteMetaKey(meta)
+  const key = payoutQuoteEconomicsKey(meta)
   if (inflightQuote && inflightQuoteKey === key) return inflightQuote
 
   inflightQuoteKey = key
@@ -179,12 +178,13 @@ export async function ensurePayoutOrderConfirmed(
   if (isStashedPayoutQuoteFresh(meta)) {
     const existing = peekPayoutQuote()
     if (existing?.provider === "grid" && existing.lockId) {
-      void ensureGridLivePayoutQuote(existing.lockId, businessId)
+      if (existing.grid?.quoteId) return existing
+      return (await ensureGridLivePayoutQuote(existing.lockId, businessId)) ?? existing
     }
     return existing
   }
 
-  const key = quoteMetaKey(meta)
+  const key = payoutQuoteEconomicsKey(meta)
   if (inflightConfirm && inflightConfirmKey === key) return inflightConfirm
 
   inflightConfirmKey = key
@@ -213,7 +213,13 @@ export async function ensurePayoutOrderConfirmed(
       }
       stashPayoutQuote(data.quote, meta)
       if (data.quote.provider === "grid" && data.quote.lockId) {
-        void ensureGridLivePayoutQuote(data.quote.lockId, businessId)
+        const live = await ensureGridLivePayoutQuote(data.quote.lockId, businessId)
+        if (!live?.grid?.quoteId) {
+          lastQuoteError = "Could not lock payout order. Try again."
+          return null
+        }
+        stashPayoutQuote(live, meta)
+        return live
       }
       return data.quote
     } catch (e) {
@@ -228,7 +234,7 @@ export async function ensurePayoutOrderConfirmed(
   return inflightConfirm
 }
 
-/** Grid POST /quotes for PIN. Does not block Continue; coalesces with the confirm prefetch. */
+/** Grid POST /quotes for review actuals. Prefetch starts this; Continue awaits the same inflight. */
 export async function ensureGridLivePayoutQuote(
   lockId: string,
   businessId?: string | null,
@@ -252,14 +258,8 @@ export async function ensureGridLivePayoutQuote(
         quote?: PayoutQuoteResult
       }
       if (!res.ok || !data.ok || !data.quote) return null
-      if (stashed?.lockId === id && stashedMeta) {
-        stashPayoutQuote(
-          {
-            ...stashed,
-            grid: data.quote.grid ?? stashed.grid,
-          },
-          stashedMeta,
-        )
+      if (stashedMeta) {
+        stashPayoutQuote({ ...data.quote, lockId: data.quote.lockId || id }, stashedMeta)
       }
       return data.quote
     } catch {

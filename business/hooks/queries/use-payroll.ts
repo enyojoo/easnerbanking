@@ -1,6 +1,5 @@
 "use client"
 
-import { useMemo } from "react"
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query"
 import { qk } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
@@ -128,17 +127,17 @@ export function usePayrollCapabilities() {
 export function usePayrollPerson(personId: string | null) {
   const { scope } = useScope()
   const queryClient = useQueryClient()
-  const listPlaceholder = useMemo(() => {
-    if (!scope || !personId) return undefined
-    const envelope = queryClient.getQueryData<{ people: PayrollPerson[] }>(qk.payroll.people.list(scope))
-    const person = envelope?.people?.find((item) => item.id === personId)
-    return person ? { person, paymentHistory: [] } : undefined
-  }, [personId, queryClient, scope])
   return useQuery<PayrollPersonDetailEnvelope>({
     queryKey: scope && personId ? qk.payroll.people.detail(scope, personId) : ["payroll", "person", "disabled"],
     enabled: Boolean(scope && personId),
     queryFn: () => fetchPayrollPersonDetail(personId as string),
-    placeholderData: listPlaceholder,
+    placeholderData: (previousData) => {
+      if (previousData?.person?.id === personId) return previousData
+      if (!scope || !personId) return undefined
+      const envelope = queryClient.getQueryData<{ people: PayrollPerson[] }>(qk.payroll.people.list(scope))
+      const person = envelope?.people?.find((item) => item.id === personId)
+      return person ? { person, paymentHistory: [] } : undefined
+    },
     staleTime: 5 * 60_000,
     gcTime: 60 * 60_000,
     meta: { safePersist: false, webPersist: "none", freshness: "operational" },
@@ -204,22 +203,22 @@ export function usePayrollRuns() {
 export function usePayrollRunDetail(runId: string | null) {
   const { scope } = useScope()
   const queryClient = useQueryClient()
-  const listPlaceholder = useMemo(() => {
-    if (!scope || !runId) return undefined
-    const envelope = queryClient.getQueryData<{ runs: PayrollRun[] }>(qk.payroll.runs.list(scope))
-    const run = envelope?.runs?.find((item) => item.id === runId)
-    return run ? { run } : undefined
-  }, [queryClient, runId, scope])
   return useQuery<{ run: PayrollRun }, Error, PayrollRun>({
     queryKey: scope && runId ? qk.payroll.runs.detail(scope, runId) : ["payroll", "run", "disabled"],
     enabled: Boolean(scope) && Boolean(runId),
     queryFn: () => apiFetch<{ run: PayrollRun }>(`/api/business/payroll/runs/${runId}`),
     select: (d) => d.run,
-    placeholderData: listPlaceholder,
+    placeholderData: (previousData) => {
+      if (previousData?.run?.id === runId) return previousData
+      if (!scope || !runId) return undefined
+      const envelope = queryClient.getQueryData<{ runs: PayrollRun[] }>(qk.payroll.runs.list(scope))
+      const run = envelope?.runs?.find((item) => item.id === runId)
+      return run ? { run } : undefined
+    },
     staleTime: 60_000,
     gcTime: 60 * 60_000,
     refetchInterval: (q) => {
-      const run = q.state.data?.run
+      const run = q.state.data
       const job = run?.metadata?.executionJob as { status?: string } | undefined
       return run?.status === "executing" ||
         ["queued", "processing", "retry"].includes(String(job?.status || ""))

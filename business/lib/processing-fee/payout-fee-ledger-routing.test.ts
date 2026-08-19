@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  isGridBalancePayoutLedgerMeta,
   isNoahGlobalPayoutLedgerMeta,
   isYcBalancePayoutLedgerMeta,
 } from "./payout-fee-ledger-routing"
@@ -33,5 +34,17 @@ describe("payout fee capture ledger routing", () => {
         payout_provider: "noah",
       }),
     ).toBe(true)
+  })
+
+  it("routes Grid balance payout off the Noah and YC capture paths", () => {
+    const gridMeta = {
+      payout_provider: "grid",
+      payout_type: "global_fiat",
+      grid_mode: "balance_payout",
+      execution_model: "turnkey_workflow",
+    }
+    expect(isGridBalancePayoutLedgerMeta(gridMeta)).toBe(true)
+    expect(isYcBalancePayoutLedgerMeta(gridMeta)).toBe(false)
+    expect(isNoahGlobalPayoutLedgerMeta(gridMeta)).toBe(false)
   })
 })

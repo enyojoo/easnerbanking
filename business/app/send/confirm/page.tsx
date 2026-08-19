@@ -31,13 +31,14 @@ import { PayoutReviewDetailsRows } from "@/components/transactions/payout-review
 import { YcPayInReviewSection } from "@/components/yc/yc-pay-in-review-section"
 import { generateTransactionId, isEasnerClientTransactionIdFormat } from "@/lib/transaction-id"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import { dataCache, CACHE_KEYS, requestBusinessAccountsRefresh } from "@/lib/cache"
+import { requestBusinessAccountsRefresh } from "@/lib/cache"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { refetchBusinessMoneyQueries } from "@/lib/query/refresh-after-money-move"
 import { useScope } from "@/lib/query/scope"
 import { type SendFlowState, SEND_FLOW_STATE_KEY } from "@/lib/send-flow-session"
 import {
   isPayoutQuoteFresh,
+  payoutQuoteReviewYouSendAmount,
 } from "@/lib/noah/map-payout-quote-to-flow"
 import {
   isWalletQuoteFresh,
@@ -75,6 +76,16 @@ import {
 import { ArrowLeft, Loader2 } from "lucide-react"
 
 const SEND_FLOW_STATE_KEY_LOCAL = SEND_FLOW_STATE_KEY
+
+function hasPayoutReviewSnapshot(pq: SendFlowState["payoutQuote"] | undefined): boolean {
+  if (!pq) return false
+  return (pq.totalDebited ?? 0) > 0 || (pq.sendAmount ?? 0) > 0
+}
+
+function hasWalletReviewSnapshot(wq: SendFlowState["walletQuote"] | undefined): boolean {
+  if (!wq) return false
+  return (wq.totalDebited ?? 0) > 0 || (wq.sendAmount ?? 0) > 0
+}
 
 function isYcCrossBorderFlow(state: SendFlowState | null): boolean {
   return (
@@ -614,9 +625,6 @@ export default function SendConfirmPage() {
             planned ||
             generateTransactionId(),
         )
-        if (user?.id) {
-          dataCache.invalidate(CACHE_KEYS.TRANSACTIONS_LIST(user.id))
-        }
         requestBusinessAccountsRefresh()
         await finishSend(id)
       } catch (e) {
@@ -693,9 +701,6 @@ export default function SendConfirmPage() {
         const transactionId = String(
           data.easner_transaction_id ?? data.transaction_id ?? state.transactionId ?? generateTransactionId(),
         ).trim()
-        if (user?.id) {
-          dataCache.invalidate(CACHE_KEYS.TRANSACTIONS_LIST(user.id))
-        }
         requestBusinessAccountsRefresh()
         await finishSend(transactionId)
       } catch (e) {
@@ -727,18 +732,41 @@ export default function SendConfirmPage() {
           ? state.transactionId.trim().toUpperCase()
           : ""
 
+      let pqLive = pq
+      let gridQuoteId = pq.gridQuoteId
+      let gridFundingAddress = pq.gridFundingAddress
+      let gridCryptoAmount = pq.gridCryptoAmount
+      let gridCustomerId = pq.gridCustomerId
+      let gridExternalAccountId = pq.gridExternalAccountId
+      if (pq.provider === "grid" && pq.lockId) {
+        const live = await ensureGridLivePayoutQuote(pq.lockId, businessId)
+        if (!live?.grid?.quoteId) {
+          throw new Error("Could not lock payout order. Try again.")
+        }
+        pqLive = payoutQuoteToFlowState(state, live).payoutQuote ?? pq
+        gridQuoteId = live.grid.quoteId
+        gridFundingAddress = live.grid.fundingAddress
+        gridCryptoAmount = live.grid.cryptoAmount
+        gridCustomerId = live.grid.customerId
+        gridExternalAccountId = live.grid.externalAccountId
+      }
+
       const transferMethod = corridorTransferMethod(flowRecipient, state.receiveCurrency)
       const processingTime = arrivalHint ?? undefined
-      const reviewYouSend = pq!.customerPrincipal ?? pq!.sendAmount
-      const reviewExchangeRate = pq!.midRate && pq!.midRate > 0 ? pq!.midRate : 1
-      // Display channel component (foots with total); ops channel cost + margin kept separately.
-      const reviewDisplayChannel = pq!.displayChannelCost ?? pq!.channelCost ?? 0
-      const reviewChannelCost = pq!.channelCost ?? 0
-      const reviewMargin = pq!.marginAmount ?? 0
-      const reviewProcessingFee = pq!.processingFee ?? pq!.easnerFee ?? 0
+      const reviewProcessingFee = pqLive.processingFee ?? pqLive.easnerFee ?? 0
+      const reviewDisplayChannel =
+        pqLive.provider === "grid"
+          ? Math.max(
+              0,
+              Math.round((pqLive.totalDebited - reviewYouSend - reviewProcessingFee) * 1_000_000) /
+                1_000_000,
+            )
+          : (pqLive.displayChannelCost ?? pqLive.channelCost ?? 0)
+      const reviewChannelCost = pqLive.channelCost ?? 0
+      const reviewMargin = pqLive.marginAmount ?? 0
       const reviewSnapshot = {
         you_send_amount: reviewYouSend,
-        total_debited: pq!.totalDebited,
+        total_debited: pqLive.totalDebited,
         exchange_fee: reviewDisplayChannel,
         processing_fee: reviewProcessingFee,
         exchange_rate: reviewExchangeRate,
@@ -750,62 +778,53 @@ export default function SendConfirmPage() {
         ...(reviewProcessingFee > 0 ? { easner_fee: reviewProcessingFee } : {}),
         ...(reviewMargin > 0 ? { margin_amount: reviewMargin } : {}),
         ...(reviewChannelCost > 0 ? { channel_cost: reviewChannelCost } : {}),
-        ...(pq!.scheduleFee != null ? { noah_schedule_fee: pq!.scheduleFee } : {}),
-        ...(pq!.prepareChannelFee != null ? { noah_channel_fee: pq!.prepareChannelFee } : {}),
-        ...(pq!.quoteNoahMid != null ? { quote_noah_mid: pq!.quoteNoahMid } : {}),
-        ...(pq!.noahFloor ? { noah_floor: Number(pq!.noahFloor) } : {}),
-        ...(pq!.noahSendAmount ? { noah_send_amount: Number(pq!.noahSendAmount) } : {}),
-      }
-
-      let gridQuoteId = pq.gridQuoteId
-      let gridFundingAddress = pq.gridFundingAddress
-      let gridCryptoAmount = pq.gridCryptoAmount
-      let gridCustomerId = pq.gridCustomerId
-      let gridExternalAccountId = pq.gridExternalAccountId
-      if (pq.provider === "grid" && pq.lockId) {
-        const live = await ensureGridLivePayoutQuote(pq.lockId, businessId)
-        if (live?.grid?.quoteId) {
-          gridQuoteId = live.grid.quoteId
-          gridFundingAddress = live.grid.fundingAddress
-          gridCryptoAmount = live.grid.cryptoAmount
-          gridCustomerId = live.grid.customerId
-          gridExternalAccountId = live.grid.externalAccountId
-        }
+        ...(pqLive.scheduleFee != null ? { noah_schedule_fee: pqLive.scheduleFee } : {}),
+        ...(pqLive.prepareChannelFee != null ? { noah_channel_fee: pqLive.prepareChannelFee } : {}),
+        ...(pqLive.quoteNoahMid != null ? { quote_noah_mid: pqLive.quoteNoahMid } : {}),
+        ...(pqLive.provider === "grid"
+          ? { noah_floor: reviewYouSend, noah_send_amount: reviewYouSend }
+          : {
+              ...(pqLive.noahFloor ? { noah_floor: Number(pqLive.noahFloor) } : {}),
+              ...(pqLive.noahSendAmount ? { noah_send_amount: Number(pqLive.noahSendAmount) } : {}),
+            }),
       }
 
       const transferBody = {
         amount: state.amount.toFixed(2),
         currency: state.receiveCurrency.toLowerCase(),
-        formSessionId: pq.formSessionId,
-        cryptoAuthorizedAmount: pq.cryptoAuthorizedAmount,
-        cryptoCurrency: pq.cryptoCurrency,
+        formSessionId: pqLive.formSessionId,
+        cryptoAuthorizedAmount:
+          pqLive.provider === "grid" && gridCryptoAmount != null
+            ? String(gridCryptoAmount)
+            : pqLive.cryptoAuthorizedAmount,
+        cryptoCurrency: pqLive.cryptoCurrency,
         countryCode: flowRecipient.countryCode?.toUpperCase(),
-        ...(state.payoutQuote?.channelId ? { channelId: state.payoutQuote.channelId } : {}),
+        ...(pqLive.channelId ? { channelId: pqLive.channelId } : {}),
         recipientId: flowRecipient.id,
         ...(payoutEtid ? { reservedDebitEtid: payoutEtid } : {}),
         ...(state.note ? { note: state.note } : {}),
         ...(state.paymentPurpose ? { paymentPurpose: state.paymentPurpose } : {}),
-        ...(pq.noahFloor ? { noahFloor: pq.noahFloor } : {}),
-        ...(pq.noahSendAmount ? { noahSendAmount: pq.noahSendAmount } : {}),
-        totalDebited: String(pq.totalDebited),
-        ...(pq.marginAmount != null ? { marginAmount: String(pq.marginAmount) } : {}),
-        ...(pq.marginCaptureMode ? { marginCaptureMode: pq.marginCaptureMode } : {}),
-        ...(pq.midRate != null ? { customerRate: pq.midRate } : {}),
-        ...(pq.noahMid != null ? { noahMid: pq.noahMid } : {}),
-        ...(pq.processingFee != null ? { processingFee: String(pq.processingFee) } : {}),
-        ...(pq.channelCost != null ? { channelCost: String(pq.channelCost) } : {}),
-        ...(pq.customerPrincipal != null ? { customerPrincipal: String(pq.customerPrincipal) } : {}),
-        ...(pq.provider ? { payoutProvider: pq.provider } : {}),
-        ...(pq.ycSequenceId ? { ycSequenceId: pq.ycSequenceId } : {}),
-        ...(pq.ycSendId ? { ycSendId: pq.ycSendId } : {}),
-        ...(pq.ycWalletAddress ? { ycWalletAddress: pq.ycWalletAddress } : {}),
-        ...(pq.ycCryptoAmount != null ? { ycCryptoAmount: pq.ycCryptoAmount } : {}),
-        ...(pq.lockId ? { lockId: pq.lockId } : {}),
-        ...(pq.provider === "grid" && gridQuoteId ? { gridQuoteId } : {}),
-        ...(pq.provider === "grid" && gridFundingAddress ? { gridFundingAddress } : {}),
-        ...(pq.provider === "grid" && gridCryptoAmount != null ? { gridCryptoAmount } : {}),
-        ...(pq.provider === "grid" && gridCustomerId ? { gridCustomerId } : {}),
-        ...(pq.provider === "grid" && gridExternalAccountId ? { gridExternalAccountId } : {}),
+        ...(pqLive.noahFloor ? { noahFloor: pqLive.noahFloor } : {}),
+        ...(pqLive.noahSendAmount ? { noahSendAmount: pqLive.noahSendAmount } : {}),
+        totalDebited: String(pqLive.totalDebited),
+        ...(pqLive.marginAmount != null ? { marginAmount: String(pqLive.marginAmount) } : {}),
+        ...(pqLive.marginCaptureMode ? { marginCaptureMode: pqLive.marginCaptureMode } : {}),
+        ...(pqLive.midRate != null ? { customerRate: pqLive.midRate } : {}),
+        ...(pqLive.noahMid != null ? { noahMid: pqLive.noahMid } : {}),
+        ...(pqLive.processingFee != null ? { processingFee: String(pqLive.processingFee) } : {}),
+        ...(pqLive.channelCost != null ? { channelCost: String(pqLive.channelCost) } : {}),
+        ...(pqLive.customerPrincipal != null ? { customerPrincipal: String(pqLive.customerPrincipal) } : {}),
+        ...(pqLive.provider ? { payoutProvider: pqLive.provider } : {}),
+        ...(pqLive.ycSequenceId ? { ycSequenceId: pqLive.ycSequenceId } : {}),
+        ...(pqLive.ycSendId ? { ycSendId: pqLive.ycSendId } : {}),
+        ...(pqLive.ycWalletAddress ? { ycWalletAddress: pqLive.ycWalletAddress } : {}),
+        ...(pqLive.ycCryptoAmount != null ? { ycCryptoAmount: pqLive.ycCryptoAmount } : {}),
+        ...(pqLive.lockId ? { lockId: pqLive.lockId } : {}),
+        ...(pqLive.provider === "grid" && gridQuoteId ? { gridQuoteId } : {}),
+        ...(pqLive.provider === "grid" && gridFundingAddress ? { gridFundingAddress } : {}),
+        ...(pqLive.provider === "grid" && gridCryptoAmount != null ? { gridCryptoAmount } : {}),
+        ...(pqLive.provider === "grid" && gridCustomerId ? { gridCustomerId } : {}),
+        ...(pqLive.provider === "grid" && gridExternalAccountId ? { gridExternalAccountId } : {}),
         reviewSnapshot,
       }
 
@@ -836,9 +855,6 @@ export default function SendConfirmPage() {
         providerTxId ||
         state.transactionId ||
         generateTransactionId()
-      if (user?.id) {
-        dataCache.invalidate(CACHE_KEYS.TRANSACTIONS_LIST(user.id))
-      }
       requestBusinessAccountsRefresh()
       await finishSend(transactionId)
     } catch (e) {
@@ -904,8 +920,8 @@ export default function SendConfirmPage() {
     ? ycPreviewReady
     : easenetSend ||
       (walletSend
-        ? isWalletQuoteFresh(wq, state.amount, state.recipient.id) && !walletQuoteLoading
-        : isPayoutQuoteFresh(pq, state.amount, state.recipient.id) && !payoutQuoteLoading)
+        ? isWalletQuoteFresh(wq, state.amount, state.recipient.id)
+        : isPayoutQuoteFresh(pq, requestedReceiveAmount, state.recipient.id))
   const easnerFee = isYcCrossBorder
     ? (yc?.processingFee ?? 0)
     : walletSend
@@ -920,7 +936,7 @@ export default function SendConfirmPage() {
     ? (yc?.localPayIn ?? state.sendAmount)
     : walletSend
       ? (wq?.sendAmount ?? state.sendAmount)
-      : (pq?.customerPrincipal ?? pq?.sendAmount ?? state.sendAmount)
+      : (payoutQuoteReviewYouSendAmount(pq, state.sendAmount) || state.sendAmount)
   const exchangeRate = isYcCrossBorder
     ? (yc?.customerRate ?? 1)
     : hasFx && (walletSend ? wq?.customerRate : pq?.midRate) &&
@@ -931,7 +947,15 @@ export default function SendConfirmPage() {
       : 1
   const exchangeFee = isYcCrossBorder ? 0 : walletSend
     ? (wq?.displayChannelCost ?? wq?.channelCost ?? 0)
-    : (pq?.displayChannelCost ?? 0)
+    : pq?.provider === "grid"
+      ? Math.max(
+          0,
+          Math.round(
+            ((pq.totalDebited ?? 0) - youSendAmount - (pq.processingFee ?? pq.easnerFee ?? 0)) *
+              1_000_000,
+          ) / 1_000_000,
+        )
+      : (pq?.displayChannelCost ?? 0)
   const networkFee = walletSend ? (wq?.networkFee ?? 0) : 0
   const totalDebited = isYcCrossBorder
     ? (yc?.localPayIn ?? state.sendAmount)
@@ -1185,6 +1209,8 @@ export default function SendConfirmPage() {
           showFeeBreakdown={
             !easenetSend &&
             (quoteReady ||
+              hasPayoutReviewSnapshot(pq) ||
+              hasWalletReviewSnapshot(wq) ||
               shouldShowPayoutReviewFeeRow({
                 processingFee: easnerFee,
                 exchangeFee,
@@ -1210,6 +1236,13 @@ export default function SendConfirmPage() {
             ? "Quote expired — go back and continue again for a fresh quote."
             : `Quote valid for ${quoteCountdown.label}`}
         </div>
+      ) : null}
+      {!easenetSend &&
+      !isYcCrossBorder &&
+      !quoteReady &&
+      (payoutQuoteLoading || walletQuoteLoading) &&
+      !quoteCountdown.expired ? (
+        <p className="text-xs text-muted-foreground">Updating quote…</p>
       ) : null}
 
       {authorizeError ? (
@@ -1238,6 +1271,11 @@ export default function SendConfirmPage() {
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Sending…
+            </>
+          ) : !easenetSend && !quoteReady && (payoutQuoteLoading || walletQuoteLoading) ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Updating quote…
             </>
           ) : (
             SEND_REVIEW_CONFIRM_CTA

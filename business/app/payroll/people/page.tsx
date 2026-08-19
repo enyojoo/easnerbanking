@@ -28,6 +28,7 @@ import { usePayrollCapabilities, usePayrollPeople, usePayrollSettings } from "@/
 import { useDeletePayrollPerson, useInvitePayrollPerson, useUpdatePayrollPerson } from "@/hooks/mutations/use-payroll"
 import { usePayrollListState } from "@/hooks/use-payroll-list-state"
 import { formatCurrency } from "@/lib/utils"
+import { profileImageSrc } from "@/lib/image-cache"
 import type { PayrollPerson } from "@/lib/payroll/types"
 
 type Filter = "all" | "ready" | "awaiting" | "attention" | "inactive"
@@ -132,7 +133,7 @@ export default function PayrollPeoplePage() {
               {people.map((person) => (
                 <TableRow key={person.id}>
                   <TableCell><PayrollDetailLink kind="person" id={person.id} href={`/payroll/people/${person.id}?returnTo=${encodeURIComponent(returnTo)}`} className="flex items-center gap-3">
-                    <Avatar><AvatarImage src={person.avatarUrl ?? undefined} /><AvatarFallback>{person.fullName.slice(0, 1)}</AvatarFallback></Avatar>
+                    <Avatar><AvatarImage src={profileImageSrc(person.avatarUrl)} /><AvatarFallback>{person.fullName.slice(0, 1)}</AvatarFallback></Avatar>
                     <span className="min-w-0"><span className="block truncate font-medium">{person.fullName}</span><span className="block truncate text-xs text-muted-foreground">{person.easetag ? `@${person.easetag.replace(/^@/, "")}` : person.email || person.internalReference || "Manual setup"}</span></span>
                   </PayrollDetailLink></TableCell>
                   <TableCell className="capitalize">{person.type}</TableCell>
@@ -152,7 +153,7 @@ export default function PayrollPeoplePage() {
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
                   <PayrollDetailLink kind="person" id={person.id} href={`/payroll/people/${person.id}?returnTo=${encodeURIComponent(returnTo)}`} className="flex min-w-0 flex-1 items-center gap-3">
-                    <Avatar className="h-11 w-11"><AvatarImage src={person.avatarUrl ?? undefined} /><AvatarFallback>{person.fullName.slice(0, 1)}</AvatarFallback></Avatar>
+                    <Avatar className="h-11 w-11"><AvatarImage src={profileImageSrc(person.avatarUrl)} /><AvatarFallback>{person.fullName.slice(0, 1)}</AvatarFallback></Avatar>
                     <span className="min-w-0"><span className="block truncate font-medium">{person.fullName}</span><span className="block truncate text-xs capitalize text-muted-foreground">{person.type}</span></span>
                   </PayrollDetailLink>
                   <PersonActions person={person} returnTo={returnTo} canPrepare={canPrepare} pending={updatingPersonIds.has(person.id)} onInvite={() => void updatePersonAction(person, "invite")} onToggle={() => void updatePersonAction(person, "toggle")} onDelete={() => setDeleteTarget(person)} />

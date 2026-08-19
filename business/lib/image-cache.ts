@@ -1,10 +1,53 @@
 import { warmImageUrl } from "@easner/shared"
 
-const IMAGE_CACHE_TTL_DAYS = 30
-const IMAGE_CACHE_TTL_MS = IMAGE_CACHE_TTL_DAYS * 24 * 60 * 60 * 1000
+const VERSION_STORAGE_KEY = "easner_image_ver_v1"
+const versionMemory = new Map<string, string>()
 
-function cacheBucket(nowMs: number = Date.now()): string {
-  return String(Math.floor(nowMs / IMAGE_CACHE_TTL_MS))
+function imageIdentityKey(url: string): string {
+  try {
+    const parsed = new URL(url)
+    parsed.search = ""
+    parsed.hash = ""
+    return parsed.toString()
+  } catch {
+    return url.split("#", 1)[0]?.split("?", 1)[0] ?? url
+  }
+}
+
+function readVersionMap(): Record<string, string> {
+  if (typeof window === "undefined") return {}
+  try {
+    const raw = localStorage.getItem(VERSION_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== "object") return {}
+    return parsed as Record<string, string>
+  } catch {
+    return {}
+  }
+}
+
+function rememberVersion(identity: string, version: string): void {
+  if (!identity || !version) return
+  versionMemory.set(identity, version)
+  if (typeof window === "undefined") return
+  try {
+    const next = { ...readVersionMap(), [identity]: version }
+    localStorage.setItem(VERSION_STORAGE_KEY, JSON.stringify(next))
+  } catch {
+    // quota / private mode
+  }
+}
+
+function rememberedVersion(identity: string): string | null {
+  const fromMemory = versionMemory.get(identity)
+  if (fromMemory) return fromMemory
+  const fromLs = readVersionMap()[identity]
+  if (typeof fromLs === "string" && fromLs.trim()) {
+    versionMemory.set(identity, fromLs)
+    return fromLs
+  }
+  return null
 }
 
 function applyVersion(url: string, paramName: string, version: string): string {
@@ -19,19 +62,47 @@ function applyVersion(url: string, paramName: string, version: string): string {
   }
 }
 
+function readParam(url: string, paramName: string): string | null {
+  try {
+    const parsed = new URL(url)
+    const value = parsed.searchParams.get(paramName)
+    return value && value.trim() ? value : null
+  } catch {
+    const needle = `${encodeURIComponent(paramName)}=`
+    const query = url.split("#", 1)[0]?.split("?", 2)[1] ?? ""
+    for (const part of query.split("&")) {
+      if (part.startsWith(needle)) {
+        const value = decodeURIComponent(part.slice(needle.length))
+        return value.trim() ? value : null
+      }
+    }
+    return null
+  }
+}
+
+/**
+ * Long-lived browser cache: keep a stable version query param.
+ * Revalidate by changing the param (upload bust) — not a rotating time bucket.
+ */
 function normalizeImageUrl(value: unknown, paramName: string): string | null {
   if (typeof value !== "string") return null
   const trimmed = value.trim()
   if (!trimmed) return null
-  const needle = `${encodeURIComponent(paramName)}=`
-  if (trimmed.includes(`?${needle}`) || trimmed.includes(`&${needle}`)) return trimmed
-  return applyVersion(trimmed, paramName, cacheBucket())
+  const existing = readParam(trimmed, paramName)
+  if (existing) {
+    rememberVersion(imageIdentityKey(trimmed), existing)
+    return trimmed
+  }
+  const stored = rememberedVersion(imageIdentityKey(trimmed))
+  if (stored) return applyVersion(trimmed, paramName, stored)
+  return trimmed
 }
 
 function bustImageUrl(value: unknown, paramName: string, version = String(Date.now())): string | null {
   if (typeof value !== "string") return null
   const trimmed = value.trim()
   if (!trimmed) return null
+  rememberVersion(imageIdentityKey(trimmed), version)
   return applyVersion(trimmed, paramName, version)
 }
 
@@ -59,4 +130,8 @@ export function warmProfileImageUrl(value: unknown): void {
 export function warmBusinessLogoUrl(value: unknown): void {
   const url = normalizeBusinessLogoUrl(value)
   if (url) warmImageUrl(url)
+}
+
+export function profileImageSrc(value: unknown): string | undefined {
+  return normalizeProfileImageUrl(value) ?? undefined
 }

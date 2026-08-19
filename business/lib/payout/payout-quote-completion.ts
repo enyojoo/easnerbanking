@@ -5,8 +5,11 @@ export function isCompleteLockedPayoutQuote(quote: PayoutQuoteResult | null | un
   if (new Date(quote.expiresAt).getTime() <= Date.now()) return false
   if (quote.quotePhase === "preview") return false
   if (quote.quotePhase === "locked") {
+    if (quote.provider === "grid") {
+      return Boolean(quote.lockId && quote.grid?.quoteId)
+    }
     return Boolean(
-      quote.lockId || quote.yc?.sendId || quote.grid?.quoteId || quote.settlement?.sessionId,
+      quote.lockId || quote.yc?.sendId || quote.settlement?.sessionId,
     )
   }
   return Boolean(quote.settlement?.sessionId && quote.settlement.cryptoAuthorizedAmount)

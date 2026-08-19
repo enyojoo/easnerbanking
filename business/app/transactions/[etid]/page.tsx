@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { TransactionDetailsPanel } from "@/components/transaction-details-panel"
 import { useTransactionDetail } from "@/hooks/queries/use-transactions"
+import { useQueryFirstLoad } from "@/lib/query/loading-state"
 import {
   normalizeEasnerTransactionIdForLookup,
   resolveTransactionDetailReturnPath,
@@ -25,7 +26,9 @@ export default function TransactionDetailByEtidPage() {
     if (returnPath) router.replace(returnPath)
     else router.back()
   }
-  const { data, isError, error } = useTransactionDetail(idForQuery)
+  const detailQuery = useTransactionDetail(idForQuery)
+  const { data, isError, error } = detailQuery
+  const firstLoad = useQueryFirstLoad(detailQuery)
 
   if (!decoded.trim() || !idForQuery) {
     return (
@@ -44,7 +47,7 @@ export default function TransactionDetailByEtidPage() {
     )
   }
 
-  const showLoading = !data && !isError
+  const showLoading = firstLoad && !isError
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">

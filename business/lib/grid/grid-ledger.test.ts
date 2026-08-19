@@ -44,6 +44,29 @@ describe("buildGridBalancePayoutOutMetadata", () => {
     expect(typeof meta.transaction_started_at).toBe("string")
     expect(meta.payout_review).toEqual(meta.review_snapshot)
     expect(meta.crypto_authorized_amount).toBe("1.501175")
+    expect(meta.processing_fee_pending).toBeUndefined()
+    expect(meta.payout_review).toEqual(
+      expect.objectContaining({
+        you_send_amount: 1.501175,
+        total_debited: 1.56,
+        receive_amount: 2000,
+        transfer_method: "Bank transfer",
+      }),
+    )
+  })
+
+  it("queues the fee-wallet sweep like YC/Noah when Easner revenue is collected", () => {
+    const meta = buildGridBalancePayoutOutMetadata({
+      ...baseInput,
+      pricing: {
+        ...baseInput.pricing,
+        processingFee: 0.014445,
+        marginAmount: 0.007222,
+        totalDebited: 1.523926,
+      },
+    })
+    expect(meta.processing_fee_pending).toBe(true)
+    expect(meta.margin_capture_mode).toBe("fee_wallet_deferred")
   })
 })
 

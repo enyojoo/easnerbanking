@@ -1,5 +1,6 @@
 "use client"
 
+import type { QueryClient } from "@tanstack/react-query"
 import { useAuth } from "@/lib/auth-context"
 import { CACHE_KEYS } from "@/lib/cache"
 import { listRecipients } from "@/lib/recipients-store"
@@ -7,6 +8,14 @@ import type { Beneficiary } from "@/lib/recipient-types"
 import { useCachedData } from "@/lib/use-cached-data"
 
 export const RECIPIENTS_CACHE_TTL_MS = 60 * 60 * 1000
+
+export function recipientsCompatQueryKey(userId: string) {
+  return ["business", "compat-cache", CACHE_KEYS.RECIPIENTS(userId)] as const
+}
+
+export function invalidateRecipientsCache(queryClient: QueryClient, userId: string) {
+  return queryClient.invalidateQueries({ queryKey: recipientsCompatQueryKey(userId) })
+}
 
 async function fetchRecipientsSafe(userId: string): Promise<Beneficiary[]> {
   try {

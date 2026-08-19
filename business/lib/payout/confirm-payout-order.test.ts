@@ -87,7 +87,7 @@ describe("isCompleteLockedPayoutQuote", () => {
     ).toBe(true)
   })
 
-  it("accepts locked Grid review quotes with lockId even without a live Grid quoteId", () => {
+  it("requires a live Grid quoteId on locked Grid review quotes", () => {
     expect(
       isCompleteLockedPayoutQuote(
         sampleQuote({
@@ -99,6 +99,21 @@ describe("isCompleteLockedPayoutQuote", () => {
             customerId: "",
             externalAccountId: "",
             cryptoAmount: 1,
+          },
+        }),
+      ),
+    ).toBe(false)
+    expect(
+      isCompleteLockedPayoutQuote(
+        sampleQuote({
+          lockId: "lock-grid-1",
+          provider: "grid",
+          grid: {
+            quoteId: "Quote:live",
+            sequenceId: "grid_quote_Quote:live",
+            customerId: "Customer:1",
+            externalAccountId: "ExternalAccount:1",
+            cryptoAmount: 1.5,
           },
         }),
       ),

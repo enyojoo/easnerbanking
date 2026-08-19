@@ -25,6 +25,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { dataCache, CACHE_KEYS, notifyTerminalPayoutSetupUpdated } from "@/lib/cache"
+import { invalidateRecipientsCache } from "@/hooks/use-recipients-cached"
+import { useQueryClient } from "@tanstack/react-query"
 import { useAuth } from "@/lib/auth-context"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -82,6 +84,7 @@ export function TerminalPayoutSetupPanel({
   className,
 }: TerminalPayoutSetupPanelProps) {
   const { user } = useAuth()
+  const queryClient = useQueryClient()
   const { data: setup, setData: setSetupData, loading: setupLoading, refetch } =
     useTerminalPayoutSetupCached()
   const [showAddPanel, setShowAddPanel] = useState(false)
@@ -125,7 +128,7 @@ export function TerminalPayoutSetupPanel({
           return false
         }
         if (user?.id) {
-          dataCache.invalidate(CACHE_KEYS.RECIPIENTS(user.id))
+          void invalidateRecipientsCache(queryClient, user.id)
         }
         await afterPayoutMutation()
         return true
@@ -134,7 +137,7 @@ export function TerminalPayoutSetupPanel({
         return false
       }
     },
-    [afterPayoutMutation, user?.id],
+    [afterPayoutMutation, queryClient, user?.id],
   )
 
   useEffect(() => {

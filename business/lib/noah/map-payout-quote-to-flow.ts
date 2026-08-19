@@ -2,6 +2,20 @@ import { payoutReceiveAmountsMatch, resolvePayoutQuoteSettlement } from "@easner
 import type { PayoutQuoteResult } from "@/lib/noah/payout-quote"
 import type { SendFlowState } from "@/lib/send-flow-session"
 
+/** Grid Review/details sent amount is live `POST /quotes` sending, not Office FX principal. */
+export function payoutQuoteReviewYouSendAmount(
+  pq: SendFlowState["payoutQuote"] | undefined,
+  fallbackSendAmount = 0,
+): number {
+  if (pq?.provider === "grid") {
+    const crypto = Number(pq.gridCryptoAmount ?? pq.cryptoAuthorizedAmount ?? pq.noahSendAmount)
+    if (Number.isFinite(crypto) && crypto > 0) return crypto
+  }
+  const principal = pq?.customerPrincipal ?? pq?.sendAmount
+  if (principal != null && Number.isFinite(principal) && principal > 0) return principal
+  return fallbackSendAmount
+}
+
 export function mapPayoutQuoteToFlowState(
   state: SendFlowState,
   q: PayoutQuoteResult,
@@ -93,7 +107,8 @@ export function isPayoutQuoteFresh(
   if (new Date(pq.expiresAt).getTime() <= Date.now()) return false
   if (pq.quotePhase === "preview") return false
   if (pq.quotePhase === "locked") {
-    return Boolean(pq.lockId || pq.ycSendId || pq.gridQuoteId)
+    if (pq.provider === "grid") return Boolean(pq.lockId && pq.gridQuoteId)
+    return Boolean(pq.lockId || pq.ycSendId)
   }
   return true
 }

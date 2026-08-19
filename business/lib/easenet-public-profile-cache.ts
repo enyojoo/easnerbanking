@@ -1,4 +1,5 @@
 import { normalizeEasetag } from "@/lib/easetag-validation"
+import { normalizeProfileImageUrl } from "@/lib/image-cache"
 import type { PayeeAccountKind } from "@/lib/easner-brand"
 
 export type CachedEasenetPublicProfile = {
@@ -9,19 +10,19 @@ export type CachedEasenetPublicProfile = {
 
 type StoredEntry = CachedEasenetPublicProfile & { storedAt: number }
 
-/** Keep snapshots long enough that reopening pickers feels instant; still refreshes eventually. */
-const TTL_MS = 7 * 24 * 60 * 60 * 1000
+/** Keep snapshots long enough that pickers feel instant; hydrated rows still revalidate in the background. */
+const TTL_MS = 30 * 24 * 60 * 60 * 1000
 
 const store = new Map<string, StoredEntry>()
 
 function storageKey(tag: string): string {
-  return `easenet_pp_v1:${tag}`
+  return `easenet_pp_v2:${tag}`
 }
 
-function readFromSessionStorage(tag: string): StoredEntry | null {
+function readFromLocalStorage(tag: string): StoredEntry | null {
   if (typeof window === "undefined") return null
   try {
-    const raw = sessionStorage.getItem(storageKey(tag))
+    const raw = localStorage.getItem(storageKey(tag))
     if (!raw) return null
     const parsed = JSON.parse(raw) as StoredEntry
     if (
@@ -30,11 +31,11 @@ function readFromSessionStorage(tag: string): StoredEntry | null {
       typeof parsed.fullName !== "string" ||
       (parsed.accountKind !== "business" && parsed.accountKind !== "personal")
     ) {
-      sessionStorage.removeItem(storageKey(tag))
+      localStorage.removeItem(storageKey(tag))
       return null
     }
     if (Date.now() - parsed.storedAt > TTL_MS) {
-      sessionStorage.removeItem(storageKey(tag))
+      localStorage.removeItem(storageKey(tag))
       return null
     }
     return parsed
@@ -43,19 +44,19 @@ function readFromSessionStorage(tag: string): StoredEntry | null {
   }
 }
 
-function writeToSessionStorage(tag: string, entry: StoredEntry): void {
+function writeToLocalStorage(tag: string, entry: StoredEntry): void {
   if (typeof window === "undefined") return
   try {
-    sessionStorage.setItem(storageKey(tag), JSON.stringify(entry))
+    localStorage.setItem(storageKey(tag), JSON.stringify(entry))
   } catch {
     // quota / private mode
   }
 }
 
-function removeFromSessionStorage(tag: string): void {
+function removeFromLocalStorage(tag: string): void {
   if (typeof window === "undefined") return
   try {
-    sessionStorage.removeItem(storageKey(tag))
+    localStorage.removeItem(storageKey(tag))
   } catch {
     // ignore
   }
@@ -66,20 +67,20 @@ export function readEasenetPublicProfileCache(rawTag: string): CachedEasenetPubl
   if (!tag) return null
   let e: StoredEntry | undefined = store.get(tag)
   if (!e) {
-    const fromSession = readFromSessionStorage(tag)
-    if (fromSession) {
-      store.set(tag, fromSession)
-      e = fromSession
+    const fromLs = readFromLocalStorage(tag)
+    if (fromLs) {
+      store.set(tag, fromLs)
+      e = fromLs
     }
   }
   if (!e) return null
   if (Date.now() - e.storedAt > TTL_MS) {
     store.delete(tag)
-    removeFromSessionStorage(tag)
+    removeFromLocalStorage(tag)
     return null
   }
   return {
-    avatarUrl: e.avatarUrl,
+    avatarUrl: normalizeProfileImageUrl(e.avatarUrl),
     fullName: e.fullName,
     accountKind: e.accountKind,
   }
@@ -88,7 +89,19 @@ export function readEasenetPublicProfileCache(rawTag: string): CachedEasenetPubl
 export function writeEasenetPublicProfileCache(rawTag: string, data: CachedEasenetPublicProfile): void {
   const tag = normalizeEasetag(String(rawTag || "").trim())
   if (!tag) return
-  const entry: StoredEntry = { ...data, storedAt: Date.now() }
+  const entry: StoredEntry = {
+    avatarUrl: normalizeProfileImageUrl(data.avatarUrl),
+    fullName: data.fullName,
+    accountKind: data.accountKind,
+    storedAt: Date.now(),
+  }
   store.set(tag, entry)
-  writeToSessionStorage(tag, entry)
+  writeToLocalStorage(tag, entry)
+}
+
+export function invalidateEasenetPublicProfileCache(rawTag: string): void {
+  const tag = normalizeEasetag(String(rawTag || "").trim())
+  if (!tag) return
+  store.delete(tag)
+  removeFromLocalStorage(tag)
 }

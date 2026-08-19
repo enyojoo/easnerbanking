@@ -27,6 +27,7 @@ import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { useAuth } from "@/lib/auth-context"
 import { CACHE_KEYS } from "@/lib/cache"
 import { useCachedData } from "@/lib/use-cached-data"
+import { personalSettingsStore } from "@/lib/personal-settings-store"
 import { ProfilePhotoField } from "@/components/profile-photo-field"
 import {
   AlertDialog,
@@ -266,6 +267,15 @@ export function SettingsPersonalTab() {
       if (res.ok) {
         const next = (await res.json()) as PersonalSettingsResponse
         setPersonalData(next)
+        if (user?.id && next.personal) {
+          personalSettingsStore.applyPersonal(user.id, {
+            fullName: next.personal.fullName ?? "",
+            email: next.personal.email ?? "",
+            phone: next.personal.phone ?? "",
+            dateOfBirth: next.personal.dateOfBirth ?? "",
+            avatarUrl: next.personal.avatarUrl ?? null,
+          })
+        }
       }
       setEditingSection(null)
     } finally {

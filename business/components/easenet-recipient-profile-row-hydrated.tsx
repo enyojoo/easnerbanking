@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useState } from "react"
 import { fetchEasenetProfileByTag } from "@/lib/easenet-profile"
+import { warmProfileImageUrl } from "@/lib/image-cache"
 import {
   readEasenetPublicProfileCache,
   writeEasenetPublicProfileCache,
@@ -25,7 +26,8 @@ type Props = {
 
 /**
  * Fills missing Easetag avatars from the public API. Persists resolved profiles (memory +
- * sessionStorage) so revisiting Settings /send pickers does not refetch or flash empty avatars.
+ * localStorage) so revisiting Settings /send pickers does not flash empty avatars; still
+ * revalidates in the background when the row mounts.
  */
 export function EasenetRecipientProfileRowHydrated({
   fullName,
@@ -40,7 +42,7 @@ export function EasenetRecipientProfileRowHydrated({
 }: Props) {
   const [remote, setRemote] = useState<CachedEasenetPublicProfile | null>(null)
 
-  // Apply saved avatar from cache before paint (sessionStorage survives reloads; avoids Radix
+  // Apply saved avatar from cache before paint (localStorage survives reloads; avoids Radix
   // avatar fallback flash when the initializer does not run again after SSR hydration).
   useLayoutEffect(() => {
     const propAvatar = String(avatarUrl || "").trim()
@@ -50,29 +52,14 @@ export function EasenetRecipientProfileRowHydrated({
         fullName,
         accountKind: accountKind === "business" ? "business" : "personal",
       })
-      // Warm image cache before first paint (prevents AvatarImage empty flash).
-      if (typeof window !== "undefined") {
-        try {
-          const img = new Image()
-          img.src = propAvatar
-        } catch {
-          // ignore
-        }
-      }
+      warmProfileImageUrl(propAvatar)
       setRemote(null)
       return
     }
 
     const cached = readEasenetPublicProfileCache(easetag)
     if (cached) {
-      if (typeof window !== "undefined" && cached.avatarUrl) {
-        try {
-          const img = new Image()
-          img.src = cached.avatarUrl
-        } catch {
-          // ignore
-        }
-      }
+      warmProfileImageUrl(cached.avatarUrl)
       setRemote(cached)
     } else {
       setRemote(null)
@@ -91,14 +78,7 @@ export function EasenetRecipientProfileRowHydrated({
         accountKind: res.accountKind,
       }
       writeEasenetPublicProfileCache(easetag, next)
-      if (typeof window !== "undefined" && next.avatarUrl) {
-        try {
-          const img = new Image()
-          img.src = next.avatarUrl
-        } catch {
-          // ignore
-        }
-      }
+      warmProfileImageUrl(next.avatarUrl)
       setRemote(next)
     })()
     return () => {

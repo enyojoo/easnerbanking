@@ -17,10 +17,12 @@ import {
 } from "@/lib/processing-fee/fee-wallet-sweep"
 import {
   captureGlobalPayoutProcessingFeeIfPending,
+  captureGridBalancePayoutProcessingFeeIfPending,
   captureWalletSendFeeLegIfPending,
   captureYcBalancePayoutProcessingFeeIfPending,
 } from "@/lib/processing-fee/capture-pending-processing-fee"
 import {
+  isGridBalancePayoutLedgerMeta,
   isNoahGlobalPayoutLedgerMeta,
   isYcBalancePayoutLedgerMeta,
 } from "@/lib/processing-fee/payout-fee-ledger-routing"
@@ -486,6 +488,12 @@ export async function reconcilePendingFeeCaptures(
       })
     } else if (isYcBalancePayoutLedgerMeta(meta)) {
       result = await captureYcBalancePayoutProcessingFeeIfPending(admin, {
+        transactionId: String(row.id),
+        userId,
+        businessId,
+      })
+    } else if (isGridBalancePayoutLedgerMeta(meta)) {
+      result = await captureGridBalancePayoutProcessingFeeIfPending(admin, {
         transactionId: String(row.id),
         userId,
         businessId,

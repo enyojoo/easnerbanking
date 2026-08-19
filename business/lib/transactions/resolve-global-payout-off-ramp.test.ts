@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 
-vi.mock("@easner/shared", () => ({
+vi.mock("@easner/shared", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@easner/shared")>()),
   buildGlobalPayoutLifecycle: () => [
     { id: "processing", title: "Processing", description: "...", state: "current", occurredAt: null },
     { id: "completed", title: "Completed", description: "...", state: "upcoming", occurredAt: null },
@@ -50,12 +51,6 @@ vi.mock("@easner/shared", () => ({
     (String(row.metadata?.payout_type ?? "").toLowerCase() === "global_fiat" ||
       String(row.metadata?.grid_mode ?? "").toLowerCase() === "balance_payout"),
   TLC_LOCAL_TRANSFER_METHOD: "Local Transfer",
-  rawPayoutReviewFromMetadata: (meta: Record<string, unknown> | null | undefined) => {
-    if (!meta || typeof meta !== "object") return null
-    if (meta.payout_review && typeof meta.payout_review === "object") return meta.payout_review
-    if (meta.review_snapshot && typeof meta.review_snapshot === "object") return meta.review_snapshot
-    return null
-  },
 }))
 
 vi.mock("@/lib/noah/global-payout-ledger", () => ({
@@ -170,6 +165,43 @@ describe("resolveGlobalPayoutOffRampDetail", () => {
     expect(resolved?.payoutReview?.receive_amount).toBe(2000)
     expect(resolved?.payoutReview?.total_debited).toBe(1.56)
     expect(resolved?.payoutReview?.you_send_amount).toBe(1.5)
+  })
+
+  it("overlays Grid executed send onto a stale Office payout_review", () => {
+    const resolved = resolveGlobalPayoutOffRampDetail({
+      direction: "out",
+      status: "settled",
+      amount: 1.52,
+      currency: "USD",
+      metadata: {
+        payout_type: "global_fiat",
+        payout_provider: "grid",
+        grid_mode: "balance_payout",
+        receive_amount: 2000,
+        receive_currency: "NGN",
+        beneficiary_name: "Samuel Enyojo Odiba",
+        crypto_authorized_amount: "1.502259",
+        noah_send_amount: "1.502259",
+        total_debited: 1.523926,
+        processing_fee: 0.014445,
+        margin_amount: 0.007222,
+        channel_cost: 0.057787,
+        payout_review: {
+          you_send_amount: 1.444472,
+          total_debited: 1.466139,
+          receive_amount: 2000,
+          receive_currency: "NGN",
+          send_currency: "USD",
+          transfer_method: "Local transfer",
+          exchange_rate: 1384.59,
+          processing_fee: 0.014445,
+          exchange_fee: 0.007222,
+          processing_time: "Within minutes",
+        },
+      },
+    })
+    expect(resolved?.payoutReview?.you_send_amount).toBe(1.502259)
+    expect(resolved?.payoutReview?.total_debited).toBe(1.523926)
   })
 
   it("attaches payoutReview from Grid review_snapshot when payout_type is missing", () => {

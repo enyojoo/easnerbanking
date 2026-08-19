@@ -3,7 +3,7 @@
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { dataCache, CACHE_KEYS } from "@/lib/cache"
-import { warmProfileImageUrl } from "@/lib/image-cache"
+import { normalizeProfileImageUrl, warmProfileImageUrl } from "@/lib/image-cache"
 
 export type PersonalSettings = {
   fullName: string
@@ -108,7 +108,7 @@ class PersonalSettingsStore {
         email: p.email ?? "",
         phone: p.phone ?? "",
         dateOfBirth: p.dateOfBirth ?? "",
-        avatarUrl: typeof p.avatarUrl === "string" && p.avatarUrl.trim() ? p.avatarUrl : null,
+        avatarUrl: normalizeProfileImageUrl(p.avatarUrl),
       },
       lastUpdated: Date.now(),
     }
@@ -159,6 +159,25 @@ class PersonalSettingsStore {
       })
 
     return this.loadingPromise
+  }
+
+  applyPersonal(userId: string, personal: PersonalSettings): void {
+    const next: StoreData = {
+      personal: {
+        fullName: personal.fullName ?? "",
+        email: personal.email ?? "",
+        phone: personal.phone ?? "",
+        dateOfBirth: personal.dateOfBirth ?? "",
+        avatarUrl: normalizeProfileImageUrl(personal.avatarUrl),
+      },
+      lastUpdated: Date.now(),
+    }
+    this.currentUserId = userId
+    this.data = next
+    this.saveToLocalStorage(userId, next)
+    dataCache.set(CACHE_KEYS.PERSONAL_SETTINGS(userId), next, CACHE_TTL_MS)
+    warmProfileImageUrl(next.personal.avatarUrl)
+    this.notify()
   }
 
   invalidate(userId: string) {

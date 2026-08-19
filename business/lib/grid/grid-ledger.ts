@@ -1,3 +1,4 @@
+import { overlayGridExecutedPayoutReview } from "@easner/shared"
 import type { GlobalPayoutReviewSnapshot } from "@/lib/noah/build-payout-execute-snapshot"
 import { destinationMetadata } from "@/lib/destination-reference"
 import { mergeGlobalPayoutLifecycleMetadata } from "@/lib/noah/bank-onramp-tx"
@@ -34,6 +35,23 @@ export function buildGridBalancePayoutOutMetadata(input: {
     input.cryptoAuthorizedAmount != null && Number.isFinite(input.cryptoAuthorizedAmount)
       ? input.cryptoAuthorizedAmount
       : null
+  const executedReview = overlayGridExecutedPayoutReview(
+    {
+      payout_provider: "grid",
+      grid_mode: "balance_payout",
+      ...(cryptoAuthorized != null && cryptoAuthorized > 0
+        ? { crypto_authorized_amount: String(cryptoAuthorized), noah_send_amount: String(cryptoAuthorized) }
+        : {}),
+      total_debited: input.pricing.totalDebited,
+      processing_fee: input.pricing.processingFee,
+      margin_amount: input.pricing.marginAmount,
+      channel_cost: input.pricing.channelCost,
+      ...(input.pricing.customerRate != null ? { customer_rate: input.pricing.customerRate } : {}),
+    },
+    (input.reviewSnapshot ?? {}) as Record<string, unknown>,
+  )
+  const reviewSnapshot =
+    Object.keys(executedReview).length > 0 ? executedReview : input.reviewSnapshot
   return {
     easner_payout_id: input.easnerPayoutId,
     easner_transaction_id: input.easnerTransactionId,
@@ -64,6 +82,9 @@ export function buildGridBalancePayoutOutMetadata(input: {
     channel_cost: input.pricing.channelCost,
     customer_rate: input.pricing.customerRate,
     margin_capture_mode: "fee_wallet_deferred",
+    ...((input.pricing.processingFee + input.pricing.marginAmount) > 0.000_001
+      ? { processing_fee_pending: true }
+      : {}),
     ...(cryptoAuthorized != null && cryptoAuthorized > 0
       ? {
           crypto_authorized_amount: String(cryptoAuthorized),
@@ -74,8 +95,8 @@ export function buildGridBalancePayoutOutMetadata(input: {
     ...(input.senderName
       ? { sender_name: input.senderName, business_name: input.senderName }
       : {}),
-    ...(input.reviewSnapshot
-      ? { payout_review: input.reviewSnapshot, review_snapshot: input.reviewSnapshot }
+    ...(reviewSnapshot
+      ? { payout_review: reviewSnapshot, review_snapshot: reviewSnapshot }
       : {}),
     ...(recipientName
       ? {

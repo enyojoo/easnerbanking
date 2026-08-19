@@ -93,11 +93,11 @@ import {
 } from "@/lib/wallet-send-quote-cache"
 import {
   ensurePayoutOrderConfirmed,
+  ensurePayoutQuoteStashed,
   isCompletePayoutQuoteLocked,
   isStashedPayoutQuoteFresh,
   payoutQuoteToFlowState,
   peekLastPayoutQuoteError,
-  stashPayoutQuotePreview,
   type PayoutQuoteStashMeta,
 } from "@/lib/payout-quote-cache"
 import { coerceBeneficiaryEasenetDisplay, type RecipientUpsertInput } from "@/lib/recipients-store"
@@ -136,6 +136,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+
+const noahSendRateCache = new Map<string, NoahWalletRateRow[]>()
+const providerSendRateCache = new Map<string, number>()
 
 function formatAmountForDisplay(raw: string): string {
   if (!raw || raw === ".") return raw || ""
@@ -193,9 +196,6 @@ export default function SendPage() {
   const [paymentPurpose, setPaymentPurpose] = useState("")
   const [amountFieldError, setAmountFieldError] = useState<string | null>(null)
   const [sourceSheetOpen, setSourceSheetOpen] = useState(false)
-  const payoutQuoteCacheRef = useRef<{ key: string; quote: PayoutQuoteResult } | null>(null)
-  const payoutQuoteInflightRef = useRef<Promise<PayoutQuoteResult | null> | null>(null)
-  const payoutQuoteInflightKeyRef = useRef("")
   const [payoutQuotePreview, setPayoutQuotePreview] = useState<PayoutQuoteResult | null>(null)
   const walletQuoteCacheRef = useRef<{ key: string; quote: WalletSendQuoteResult } | null>(null)
   const walletQuoteInflightRef = useRef<Promise<WalletSendQuoteResult | null> | null>(null)
@@ -216,7 +216,6 @@ export default function SendPage() {
     (next: Beneficiary | null, options?: { draftRecipientPersist?: RecipientUpsertInput }) => {
       setRecipient(next)
       setDraftRecipientPersist(options?.draftRecipientPersist)
-      payoutQuoteCacheRef.current = null
       walletQuoteCacheRef.current = null
     },
     [],
@@ -230,7 +229,6 @@ export default function SendPage() {
     const resolved = await resolveDraftRecipient(recipient, persist)
     setRecipient(resolved)
     setDraftRecipientPersist(undefined)
-    payoutQuoteCacheRef.current = null
     walletQuoteCacheRef.current = null
     return resolved
   }, [recipient])
@@ -644,9 +642,6 @@ export default function SendPage() {
   }, [recipient, sourceAccountId, paymentMethod, suggestedAccount])
 
   useEffect(() => {
-    payoutQuoteCacheRef.current = null
-    payoutQuoteInflightRef.current = null
-    payoutQuoteInflightKeyRef.current = ""
     setPayoutQuotePreview(null)
     walletQuoteCacheRef.current = null
     walletQuoteInflightRef.current = null
@@ -756,8 +751,15 @@ export default function SendPage() {
       }
       return
     }
+    const cached = noahSendRateCache.get(dest)
+    if (cached?.length) {
+      setNoahRateRows(cached)
+      setNoahFxRates(noahWalletRowsToRateMap(cached))
+      setNoahRatesLoading(false)
+    } else {
+      setNoahRatesLoading(true)
+    }
     let cancelled = false
-    setNoahRatesLoading(true)
     void (async () => {
       try {
         const res = await fetchWithSession(noahSendRatesQueryPath(dest))
@@ -766,10 +768,11 @@ export default function SendPage() {
         }
         if (!res.ok || cancelled) return
         const rows = data.rates || []
+        noahSendRateCache.set(dest, rows)
         setNoahRateRows(rows)
         setNoahFxRates(noahWalletRowsToRateMap(rows))
       } catch {
-        if (!cancelled) {
+        if (!cancelled && !noahSendRateCache.get(dest)?.length) {
           setNoahFxRates({})
           setNoahRateRows([])
         }
@@ -784,6 +787,11 @@ export default function SendPage() {
 
   useEffect(() => {
     const dest = (recipient?.currency || "").trim().toUpperCase()
+    const send = String(sendCurrency || "").trim().toUpperCase()
+    const pairKey =
+      balancePayoutProvider && dest && send
+        ? `${balancePayoutProvider}:${send}:${dest}`
+        : ""
     if (
       !isProviderBalancePayout ||
       !balancePayoutProvider ||
@@ -792,6 +800,10 @@ export default function SendPage() {
     ) {
       setProviderPayoutCustomerRate(null)
       return
+    }
+    const cached = providerSendRateCache.get(pairKey)
+    if (cached != null && cached > 0) {
+      setProviderPayoutCustomerRate(cached)
     }
     let cancelled = false
     void (async () => {
@@ -803,16 +815,21 @@ export default function SendPage() {
           rates?: Array<{ from_currency: string; to_currency: string; rate: number }>
         }
         if (!res.ok || cancelled) return
-        const send = String(sendCurrency || "").trim().toUpperCase()
         const mapped = mapProviderBalancePayoutRateRows(balancePayoutProvider, data.rates ?? [])
         const row = mapped.find(
           (r) =>
             String(r.from_currency || "").toUpperCase() === send &&
             String(r.to_currency || "").toUpperCase() === dest,
         )
-        setProviderPayoutCustomerRate(row?.rate ?? null)
+        const nextRate = row?.rate ?? null
+        if (nextRate != null && nextRate > 0) {
+          providerSendRateCache.set(pairKey, nextRate)
+          setProviderPayoutCustomerRate(nextRate)
+        } else if (!cached) {
+          setProviderPayoutCustomerRate(null)
+        }
       } catch {
-        if (!cancelled) setProviderPayoutCustomerRate(null)
+        if (!cancelled && !cached) setProviderPayoutCustomerRate(null)
       }
     })()
     return () => {
@@ -1195,11 +1212,6 @@ export default function SendPage() {
     ].join("|")
   }, [recipient?.id, amountEntryMode, displaySendAmount, displayReceiveAmount, sendCurrency])
 
-  const payoutQuoteCacheKey = useMemo(() => {
-    if (!payoutQuotePrefetchKey) return ""
-    return [payoutQuotePrefetchKey, note.trim(), paymentPurpose.trim()].join("|")
-  }, [payoutQuotePrefetchKey, note, paymentPurpose])
-
   const [debouncedWalletQuoteCacheKey, walletQuotePrefetchControls] =
     useDebouncedValue(walletQuoteCacheKey)
   const [debouncedPayoutQuotePrefetchKey, payoutQuotePrefetchControls] = useDebouncedValue(
@@ -1238,87 +1250,6 @@ export default function SendPage() {
   const [debouncedCrossBorderBankQuotePrefetchKey] = useDebouncedValue(
     crossBorderBankQuotePrefetchKey,
   )
-
-  const fetchPayoutQuote = useCallback(async (): Promise<PayoutQuoteResult | null> => {
-    if (!needsPayoutQuoteBeforeConfirm || !payoutQuoteCacheKey || !recipient?.id) return null
-    const cached = payoutQuoteCacheRef.current
-    if (cached?.key === payoutQuoteCacheKey) return cached.quote
-    if (
-      payoutQuoteInflightRef.current &&
-      payoutQuoteInflightKeyRef.current === payoutQuoteCacheKey
-    ) {
-      return payoutQuoteInflightRef.current
-    }
-
-    const promise = (async () => {
-      try {
-        const activeRecipient = await ensureRecipientPersisted()
-        if (!activeRecipient?.id || isDraftRecipientId(activeRecipient.id)) return null
-        const headers: Record<string, string> = { "Content-Type": "application/json" }
-        if (businessId) headers["X-Easner-Account-Scope"] = "business"
-        const res = await fetchWithSession("/api/payouts/quote", {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            recipientId: activeRecipient.id,
-            receiveAmount: displayReceiveAmount,
-            sourceBalanceCurrency: sendCurrency,
-            amountEntryMode,
-            ...(amountEntryMode === "send" && displaySendAmount > 0
-              ? { sendAmount: displaySendAmount }
-              : {}),
-            ...(note.trim() ? { note: note.trim() } : {}),
-            ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
-          }),
-        })
-        const data = (await res.json().catch(() => ({}))) as {
-          ok?: boolean
-          quote?: PayoutQuoteResult
-        }
-        if (!res.ok || !data.ok || !data.quote) return null
-        payoutQuoteCacheRef.current = { key: payoutQuoteCacheKey, quote: data.quote }
-        setPayoutQuotePreview(data.quote)
-        const previewMeta: PayoutQuoteStashMeta = {
-          recipientId: activeRecipient.id,
-          amountEntryMode,
-          entryAmount:
-            amountEntryMode === "send" && displaySendAmount > 0
-              ? displaySendAmount
-              : displayReceiveAmount,
-          receiveCurrency,
-          sourceBalanceCurrency: sendCurrency,
-          ...(note.trim() ? { note: note.trim() } : {}),
-          ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
-        }
-        stashPayoutQuotePreview(data.quote, previewMeta)
-        return data.quote
-      } catch {
-        setPayoutQuotePreview(null)
-        return null
-      }
-    })()
-
-    payoutQuoteInflightKeyRef.current = payoutQuoteCacheKey
-    payoutQuoteInflightRef.current = promise
-    try {
-      return await promise
-    } finally {
-      payoutQuoteInflightRef.current = null
-      payoutQuoteInflightKeyRef.current = ""
-    }
-  }, [
-    needsPayoutQuoteBeforeConfirm,
-    payoutQuoteCacheKey,
-    recipient?.id,
-    displayReceiveAmount,
-    displaySendAmount,
-    amountEntryMode,
-    sendCurrency,
-    note,
-    paymentPurpose,
-    businessId,
-    ensureRecipientPersisted,
-  ])
 
   const fetchWalletQuote = useCallback(async (): Promise<WalletSendQuoteResult | null> => {
     if (!needsWalletQuoteBeforeConfirm || !walletQuoteCacheKey || !recipient?.id) return null
@@ -1405,7 +1336,6 @@ export default function SendPage() {
     if (!payoutQuotePrefetchReady) return
     if (amountFieldMode === "payment_purpose" && !paymentPurpose.trim()) return
     if (amountFieldMode === "note" && !payoutHints?.reference_optional && !note.trim()) return
-    void fetchPayoutQuote()
     const meta: PayoutQuoteStashMeta = {
       recipientId: recipient.id,
       amountEntryMode,
@@ -1418,14 +1348,17 @@ export default function SendPage() {
       ...(note.trim() ? { note: note.trim() } : {}),
       ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
     }
-    void ensurePayoutOrderConfirmed(meta, businessId)
+    void (async () => {
+      const preview = await ensurePayoutQuoteStashed(meta, businessId)
+      if (preview) setPayoutQuotePreview(preview)
+      void ensurePayoutOrderConfirmed(meta, businessId)
+    })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     needsPayoutQuoteBeforeConfirm,
     debouncedPayoutQuotePrefetchKey,
     recipient?.id,
     payoutQuotePrefetchReady,
-    payoutQuoteCacheKey,
   ])
 
   useEffect(() => {

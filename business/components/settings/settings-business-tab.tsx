@@ -87,7 +87,7 @@ type BusinessSettingsForm = {
 
 export function SettingsBusinessTab() {
   const profile = useBusinessProfile()
-  const loading = profile.isLoading
+  const loading = profile.isLoading && !profile.hasData
   const {
     currencies: baseCurrencies,
     loading: baseCurrenciesLoading,

@@ -3,6 +3,7 @@ import type { PayoutQuoteResult } from "./payout-quote"
 import {
   isPayoutQuoteFresh,
   mapPayoutQuoteToFlowState,
+  payoutQuoteReviewYouSendAmount,
 } from "./map-payout-quote-to-flow"
 import type { SendFlowState } from "../send-flow-session"
 
@@ -93,5 +94,32 @@ describe("YC payout quote flow mapping", () => {
     expect(mapped.payoutQuote?.receiveAmount).toBe(2010.25)
     expect(mapped.payoutQuote?.requestedReceiveAmount).toBe(2000)
     expect(isPayoutQuoteFresh(mapped.payoutQuote, 2000, "recipient-1")).toBe(true)
+  })
+})
+
+describe("payoutQuoteReviewYouSendAmount", () => {
+  it("uses Grid live sending amount instead of Office FX principal", () => {
+    expect(
+      payoutQuoteReviewYouSendAmount({
+        receiveAmount: 2000,
+        sendAmount: 1.444472,
+        sendCurrency: "USD",
+        totalDebited: 1.523926,
+        noahFee: 0,
+        noahFeeCurrency: "USD",
+        easnerFee: 0.014445,
+        easnerFeeCurrency: "USD",
+        formSessionId: "grid_quote_1",
+        cryptoAuthorizedAmount: "1.502259",
+        cryptoCurrency: "USDC",
+        expiresAt: "2099-01-01T00:00:00.000Z",
+        customerPrincipal: 1.444472,
+        provider: "grid",
+        gridCryptoAmount: 1.502259,
+        gridQuoteId: "Quote:abc",
+        lockId: "lock-1",
+        quotePhase: "locked",
+      }),
+    ).toBe(1.502259)
   })
 })

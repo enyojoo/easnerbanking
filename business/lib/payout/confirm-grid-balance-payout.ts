@@ -193,6 +193,7 @@ export async function attachLiveGridQuoteToLockSession(input: {
   await input.admin
     .from("payout_lock_sessions")
     .update({
+      pricing_json: { ...pricing, lockId: undefined },
       provider_payload_json: {
         ...payload,
         quoteId: locked.quoteId,

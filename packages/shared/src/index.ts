@@ -713,7 +713,11 @@ export type {
   GlobalPayoutReviewSnapshot,
 } from "./transactions/global-payout-types"
 export { displayPayoutReceiveAmount } from "./transactions/global-payout-types"
-export { rawPayoutReviewFromMetadata } from "./transactions/payout-review-from-metadata"
+export {
+  isGridBalancePayoutMetadata,
+  overlayGridExecutedPayoutReview,
+  rawPayoutReviewFromMetadata,
+} from "./transactions/payout-review-from-metadata"
 export type {
   BalanceMoveDirection,
   BalanceMoveReviewSnapshot,

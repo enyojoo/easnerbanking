@@ -19,6 +19,7 @@ import { PayrollSubpageShell } from "@/components/payroll/payroll-subpage-shell"
 import { usePayrollCapabilities, usePayrollPerson, usePayrollSettings } from "@/hooks/queries/use-payroll"
 import { useDeletePayrollPerson, useInvitePayrollPerson, useUpdatePayrollPerson } from "@/hooks/mutations/use-payroll"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import { profileImageSrc } from "@/lib/image-cache"
 import { safePayrollReturnTo } from "@/lib/payroll/navigation"
 import { PAYROLL_SUBPAGE_COPY } from "@/lib/copy/business-ui-copy"
 
@@ -60,7 +61,7 @@ export default function PayrollPersonDetailPage() {
     current={person.fullName}
     title={person.fullName}
     description={PAYROLL_SUBPAGE_COPY.personDetail}
-    leading={<Avatar className="h-14 w-14"><AvatarImage src={person.avatarUrl ?? undefined} /><AvatarFallback>{person.fullName.slice(0, 1)}</AvatarFallback></Avatar>}
+    leading={<Avatar className="h-14 w-14"><AvatarImage src={profileImageSrc(person.avatarUrl)} /><AvatarFallback>{person.fullName.slice(0, 1)}</AvatarFallback></Avatar>}
     status={<PayrollStatusBadge status={person.status !== "active" ? person.status : person.readinessStatus} />}
     actions={canPrepare ? <>
         <Button variant="outline" asChild><Link href={`/payroll/people/${person.id}/edit`}><Pencil className="mr-2 h-4 w-4" />Edit</Link></Button>

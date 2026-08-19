@@ -28,6 +28,31 @@ function transactionIdsMatchLookup(txId: string, rowId: string): boolean {
   return a.toLowerCase() === b.toLowerCase()
 }
 
+function isTransactionsListQueryKey(key: unknown): boolean {
+  return Array.isArray(key) && key.includes("transactions") && key.includes("list")
+}
+
+function isTransactionsDetailQueryKey(key: unknown, txId: string): boolean {
+  if (!Array.isArray(key) || !key.includes("transactions") || !key.includes("detail")) return false
+  const last = key[key.length - 1]
+  return typeof last === "string" && transactionIdsMatchLookup(txId, last)
+}
+
+function transactionFromListPages(
+  data: InfiniteData<TransactionsPage> | undefined,
+  txId: string,
+): TransactionWithSource | undefined {
+  if (!data?.pages?.length) return undefined
+  for (const page of data.pages) {
+    for (const t of page.transactions) {
+      if (transactionIdsMatchLookup(txId, t.id) || transactionIdsMatchLookup(txId, t.reference ?? "")) {
+        return t
+      }
+    }
+  }
+  return undefined
+}
+
 /**
  * Find a row from any in-memory transactions list query (any filters) to seed detail UI.
  */
@@ -41,12 +66,41 @@ export function findTransactionInCachedLists(
     exact: false,
   })
   for (const [, data] of entries) {
-    if (!data?.pages?.length) continue
-    for (const page of data.pages) {
-      for (const t of page.transactions) {
-        if (transactionIdsMatchLookup(txId, t.id)) return t
-      }
-    }
+    const hit = transactionFromListPages(data, txId)
+    if (hit) return hit
+  }
+  return undefined
+}
+
+/**
+ * Seed detail across a scope change (userId → businessId after profile hydrate)
+ * or persist restore, so stale navigation does not flash a spinner.
+ */
+export function findCachedTransactionForDetail(
+  queryClient: QueryClient,
+  txId: string,
+  scope?: Scope | null,
+): TransactionWithSource | undefined {
+  if (scope) {
+    const exact = queryClient.getQueryData<TransactionWithSource>(qk.transactions.detail(scope, txId))
+    if (exact) return exact
+    const fromScopeList = findTransactionInCachedLists(queryClient, scope, txId)
+    if (fromScopeList) return fromScopeList
+  }
+
+  const details = queryClient.getQueriesData<TransactionWithSource>({
+    predicate: (query) => isTransactionsDetailQueryKey(query.queryKey, txId),
+  })
+  for (const [, data] of details) {
+    if (data && typeof data === "object" && "id" in data) return data
+  }
+
+  const lists = queryClient.getQueriesData<InfiniteData<TransactionsPage>>({
+    predicate: (query) => isTransactionsListQueryKey(query.queryKey),
+  })
+  for (const [, data] of lists) {
+    const hit = transactionFromListPages(data, txId)
+    if (hit) return hit
   }
   return undefined
 }
@@ -66,6 +120,7 @@ export function getTransactionDetailPrefetchOptions(scope: Scope, txId: string) 
     queryFn: () => fetchBusinessTransactionDetail(txId),
     staleTime: 60_000,
     gcTime: 30 * 60_000,
+    refetchOnMount: "always",
     meta: { safePersist: true, webPersist: "reduced", freshness: "operational" as const },
   }
 }
@@ -136,9 +191,11 @@ export function useTransactionDetail(txId: string | null) {
     }),
     enabled: Boolean(opts),
     placeholderData: (previousData) => {
-      if (previousData) return previousData
-      if (!scope || !txId) return undefined
-      return findTransactionInCachedLists(queryClient, scope, txId)
+      if (previousData && txId && transactionIdsMatchLookup(txId, previousData.id)) {
+        return previousData
+      }
+      if (!txId) return undefined
+      return findCachedTransactionForDetail(queryClient, txId, scope)
     },
   })
 }

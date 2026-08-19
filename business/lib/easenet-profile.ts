@@ -2,6 +2,7 @@
 
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { normalizeEasetag } from "@/lib/easetag-validation"
+import { warmProfileImageUrl } from "@/lib/image-cache"
 import { writeEasenetPublicProfileCache } from "@/lib/easenet-public-profile-cache"
 
 import type { PayeeAccountKind } from "@/lib/easner-brand"
@@ -86,14 +87,6 @@ export async function fetchEasenetProfileByTag(rawTag: string): Promise<EasenetP
     fullName: profile.fullName,
     accountKind: profile.accountKind,
   })
-  // Warm browser image cache (best-effort).
-  if (typeof window !== "undefined" && profile.avatarUrl) {
-    try {
-      const img = new Image()
-      img.src = profile.avatarUrl
-    } catch {
-      // ignore
-    }
-  }
+  warmProfileImageUrl(profile.avatarUrl)
   return profile
 }

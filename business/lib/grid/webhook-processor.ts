@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { reverseGlobalPayoutWalletDebitForEasnerPayoutId } from "@/lib/noah/global-payout-ledger"
+import { captureGridBalancePayoutProcessingFeeIfPending } from "@/lib/processing-fee/capture-pending-processing-fee"
+import { isEasnerRevenueAlreadySwept } from "@/lib/processing-fee/fee-wallet-sweep"
 import { buildGridRefundExpectedPatch, mergeGridPayoutLifecycle } from "./grid-ledger"
 import { gridMoneyToMajor } from "./webhook-amount"
 import type { GridWebhookEvent } from "./types"
@@ -116,6 +118,16 @@ export async function handleGridBalancePayoutWebhook(
     baseCurrency: "USD",
     asset: "USDC",
   })
+
+  if (terminalSuccess && !isEasnerRevenueAlreadySwept(metadata)) {
+    await captureGridBalancePayoutProcessingFeeIfPending(admin, {
+      transactionId: String(tx.id),
+      userId: String(tx.user_id),
+      businessId: tx.business_id ? String(tx.business_id) : null,
+    }).catch((e) => {
+      console.warn("grid_balance_payout_processing_fee_capture:", e)
+    })
+  }
 
   if (terminalFailed) {
     const easnerPayoutId = String(metadata.easner_payout_id ?? prior.easner_payout_id ?? "").trim()

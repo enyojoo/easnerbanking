@@ -37,7 +37,7 @@ import {
 import { resolveReportingAmountForFeed } from "@easner/shared"
 
 export function DashboardPageClient() {
-  const { data: rows, error: transactionsError, refetch: refetchTransactions } =
+  const { data: rows, loading: listLoading, error: transactionsError, refetch: refetchTransactions } =
     useTransactionsCached()
   const {
     balances,
@@ -113,6 +113,7 @@ export function DashboardPageClient() {
   const recentTransactions = useMemo(() => {
     return [...rows].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 6)
   }, [rows])
+  const showActivitySkeleton = listLoading && recentTransactions.length === 0
 
   const usdBal = parseBalanceString(balances.USD)
   const eurBal = parseBalanceString(balances.EUR)
@@ -286,7 +287,13 @@ export function DashboardPageClient() {
         </div>
         <Card>
           <CardContent className="p-0">
-            {recentTransactions.length === 0 ?
+            {showActivitySkeleton ?
+              <div className="space-y-1 p-4">
+                <div className="h-16 animate-pulse rounded-md bg-muted" />
+                <div className="h-16 animate-pulse rounded-md bg-muted" />
+                <div className="h-16 animate-pulse rounded-md bg-muted" />
+              </div>
+            : recentTransactions.length === 0 ?
               <div className="py-8 text-center text-sm text-muted-foreground">No transactions yet</div>
             : <div className="divide-y">
                 {recentTransactions.map((txn) => {

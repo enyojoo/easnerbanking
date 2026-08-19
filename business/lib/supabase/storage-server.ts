@@ -26,6 +26,7 @@ export async function uploadPublicImage(params: {
   const { error: uploadError } = await admin.storage.from(bucket).upload(path, bytes, {
     contentType,
     upsert: true,
+    cacheControl: "31536000",
   })
 
   if (uploadError) {

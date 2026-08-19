@@ -53,7 +53,8 @@ export function useInvoiceDetail(invoiceId: string | null) {
     gcTime: 30 * 60_000,
     refetchOnMount: true,
     // Prefer the live list row so status changes on /invoices show instantly on detail open.
-    placeholderData: () => {
+    placeholderData: (previousData) => {
+      if (previousData?.id === invoiceId) return previousData
       if (!scope || !invoiceId) return undefined
       const envelope = queryClient.getQueryData<{ invoices: Invoice[] }>(
         qk.invoices.list(scope, {}),

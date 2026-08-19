@@ -31,6 +31,7 @@ import type { PayrollPersonType } from "@/lib/payroll/types"
 import type { RecipientUpsertInput } from "@/lib/recipients-store"
 import type { PayrollExternalReceivingMethodInput } from "@/lib/payroll/types"
 import { formatCurrency } from "@/lib/utils"
+import { profileImageSrc } from "@/lib/image-cache"
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -245,7 +246,7 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
               <div>
                 <div className="flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center">
                   <Avatar className="h-12 w-12">
-                    <AvatarImage src={person.avatarUrl ?? undefined} />
+                    <AvatarImage src={profileImageSrc(person.avatarUrl)} />
                     <AvatarFallback>{person.fullName.slice(0, 1)}</AvatarFallback>
                   </Avatar>
                   <div className="min-w-0 flex-1">

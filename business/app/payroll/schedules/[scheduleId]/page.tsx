@@ -37,7 +37,7 @@ export default function PayrollScheduleDetailPage() {
   const updateSchedule = useUpsertPayrollSchedule()
   const [deleteOpen, setDeleteOpen] = useState(false)
   const schedule = schedulesQuery.data?.find((item) => item.id === scheduleId)
-  if ((schedulesQuery.isPending && !schedule) || (peopleQuery.isPending && !peopleQuery.data)) {
+  if ((schedulesQuery.isPending && !schedule) || (peopleQuery.isPending && peopleQuery.data === undefined)) {
     return <PayrollDetailSkeleton sidebar={false} />
   }
   if (!schedule) return <div><p className="font-medium">Schedule not found.</p><Button className="mt-4" variant="outline" asChild><Link href="/payroll/schedules">Back to Schedules</Link></Button></div>

@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { EasenetRecipientSubtitle } from "@/components/easenet-recipient-subtitle"
 import type { PayeeAccountKind } from "@/lib/easner-brand"
 import { cn } from "@/lib/utils"
+import { normalizeProfileImageUrl } from "@/lib/image-cache"
 
 function easenetInitials(name: string): string {
   return (
@@ -40,14 +41,15 @@ export function EasenetRecipientProfileRow({
   subtitleClassName?: string
   subtitleWrapperClassName?: string
 }) {
+  const photoUrl = normalizeProfileImageUrl(avatarUrl)
   const subtitleCn = subtitleClassName ?? "text-sm text-muted-foreground"
   return (
     <div className={cn("flex min-w-0 items-center gap-3", className)}>
       <div className="relative mr-1 shrink-0">
-        {avatarUrl ? (
+        {photoUrl ? (
           <Avatar className="h-10 w-10 border border-border">
             <AvatarImage
-              src={avatarUrl}
+              src={photoUrl}
               alt=""
               loading="eager"
               decoding="async"
