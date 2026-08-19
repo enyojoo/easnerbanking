@@ -54,6 +54,15 @@ export function deriveBankDepositPaymentRail(ctx: BankDepositSchemeContext): str
   const fromId = pmId ? parseRailTokenFromPaymentMethodId(pmId) : null
   if (fromId) return fromId
 
+  const payloadSource = payload.source && typeof payload.source === "object"
+    ? (payload.source as Record<string, unknown>)
+    : null
+  const railHint = String(
+    payload.paymentRail ?? payload.payment_rail ?? payloadSource?.paymentRail ?? payloadSource?.payment_rail ?? "",
+  ).trim()
+  const fromHint = railHint ? parseRailFromPaymentMethodType(railHint) : null
+  if (fromHint) return fromHint
+
   const fp = payload.FiatPayment as Record<string, unknown> | undefined
   const currency = String(
     meta.fiat_deposit_currency ?? fp?.FiatCurrency ?? meta.settled_currency ?? "USD",

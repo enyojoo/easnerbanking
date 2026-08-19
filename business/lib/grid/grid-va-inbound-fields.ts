@@ -35,9 +35,12 @@ export function extractGridVaInboundSharedFields(data: Record<string, unknown>):
   const rawName = firstString([
     data.senderName,
     data.sender_name,
+    data.accountHolderName,
     originator?.name,
     originator?.fullName,
     originator?.legalName,
+    originator?.accountHolderName,
+    originator?.account_holder_name,
     originatorName?.fullName,
     [originatorName?.firstName, originatorName?.lastName].filter(Boolean).join(" "),
   ])
@@ -46,6 +49,7 @@ export function extractGridVaInboundSharedFields(data: Record<string, unknown>):
     data.paymentRail,
     data.payment_rail,
     originator?.paymentRail,
+    originator?.payment_rail,
     data.paymentMethod,
     data.payment_method,
   ])
@@ -55,6 +59,7 @@ export function extractGridVaInboundSharedFields(data: Record<string, unknown>):
     data.memo,
     data.reference,
     data.paymentReference,
+    originator?.traceNumber,
   ])
   const fee =
     gridMoneyToMajor(data.feeAmount) ??

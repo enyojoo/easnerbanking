@@ -3,7 +3,9 @@ export function isGlobalPayoutOffRampFlow(
   metadata: Record<string, unknown> | null | undefined,
 ): boolean {
   if (!metadata || typeof metadata !== "object") return false
-  return String(metadata.payout_type ?? "").toLowerCase() === "global_fiat"
+  if (String(metadata.payout_type ?? "").toLowerCase() === "global_fiat") return true
+  if (String(metadata.flow ?? "").toLowerCase() === "global_fiat_offramp") return true
+  return String(metadata.grid_mode ?? "").toLowerCase() === "balance_payout"
 }
 
 export function isGlobalPayoutOffRampOutRow(row: {

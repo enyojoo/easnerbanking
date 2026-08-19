@@ -130,6 +130,32 @@ describe("buildInboundReceiveDetailRows", () => {
     expect(labels.at(-1)).toBe(REVIEW_ROW_LABELS.when)
   })
 
+  it("Grid VA funding reads sender and ACH from stored webhook payload", () => {
+    const snapshot = resolveInboundReceiveDetail({
+      direction: "in",
+      provider: "grid",
+      metadata: {
+        flow: "bank_onramp",
+        grid_va_inbound: true,
+        fiat_deposit_amount: 1,
+        fiat_deposit_currency: "USD",
+      },
+      payload: {
+        source: {
+          paymentRail: "ACH",
+          accountHolderName: "Bridge Building",
+        },
+        receivedAmount: { amount: 100, currency: { code: "USD", decimals: 2 } },
+      },
+      ledger_created_at: "2026-08-19T04:01:26.000Z",
+    })
+    expect(snapshot?.kind).toBe("va_funding")
+    const map = rowMap(buildInboundReceiveDetailRows(snapshot!, { surface: "detail" }))
+    expect(map[REVIEW_ROW_LABELS.sender]).toBe("Bridge Building")
+    expect(map[REVIEW_ROW_LABELS.creditTo]).toBe("USD Balance")
+    expect(map[REVIEW_ROW_LABELS.depositMethod]).toBe("ACH")
+  })
+
   it("Grid VA funding uses the same Credited to card as Noah", () => {
     const snapshot = resolveInboundReceiveDetail({
       direction: "in",

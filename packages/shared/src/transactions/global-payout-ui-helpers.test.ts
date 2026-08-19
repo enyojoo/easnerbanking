@@ -121,6 +121,15 @@ describe("resolveOutboundTransactionListLabel", () => {
     ).toBe("Samuel Odiba Enyojo")
   })
 
+  it("shows recipient name only for Grid balance payouts without payout_type", () => {
+    expect(
+      resolveOutboundTransactionListLabel({
+        name: "Samuel Enyojo Odiba",
+        metadata: { grid_mode: "balance_payout" },
+      }),
+    ).toBe("Samuel Enyojo Odiba")
+  })
+
   it("keeps Sent to prefix for non-global outbound sends", () => {
     expect(
       resolveOutboundTransactionListLabel({

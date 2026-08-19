@@ -63,7 +63,6 @@ async function main() {
     .select("id, metadata")
     .eq("provider", "grid")
     .eq("direction", "out")
-    .filter("metadata->>payout_type", "eq", "global_fiat")
 
   if (payoutErr) {
     console.error(payoutErr.message)
@@ -72,6 +71,11 @@ async function main() {
 
   for (const row of payouts ?? []) {
     const meta = asRecord(row.metadata)
+    const isBalancePayout =
+      String(meta.payout_type ?? "").toLowerCase() === "global_fiat" ||
+      String(meta.flow ?? "").toLowerCase() === "global_fiat_offramp" ||
+      String(meta.grid_mode ?? "").toLowerCase() === "balance_payout"
+    if (!isBalancePayout) continue
     if (meta.payout_review && typeof meta.payout_review === "object") continue
     const review = reconstructPayoutReview(meta)
     if (!review) continue

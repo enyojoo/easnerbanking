@@ -116,8 +116,11 @@ export function deriveEasnerInboundRemitterDisplayName(input: {
     payload.recipientName,
     payload.senderName,
     payload.originatorName,
+    payload.accountHolderName,
     (payload.source as Record<string, unknown> | undefined)?.sender_name,
     (payload.source as Record<string, unknown> | undefined)?.originator_name,
+    (payload.source as Record<string, unknown> | undefined)?.accountHolderName,
+    (payload.source as Record<string, unknown> | undefined)?.account_holder_name,
     (payload.source as Record<string, unknown> | undefined)?.company_name,
   ]
 

@@ -47,7 +47,8 @@ vi.mock("@easner/shared", () => ({
   }),
   isGlobalPayoutOffRampOutRow: (row: { direction?: unknown; metadata?: Record<string, unknown> | null }) =>
     String(row.direction ?? "").toLowerCase() === "out" &&
-    String(row.metadata?.payout_type ?? "").toLowerCase() === "global_fiat",
+    (String(row.metadata?.payout_type ?? "").toLowerCase() === "global_fiat" ||
+      String(row.metadata?.grid_mode ?? "").toLowerCase() === "balance_payout"),
   TLC_LOCAL_TRANSFER_METHOD: "Local Transfer",
   rawPayoutReviewFromMetadata: (meta: Record<string, unknown> | null | undefined) => {
     if (!meta || typeof meta !== "object") return null
@@ -169,5 +170,40 @@ describe("resolveGlobalPayoutOffRampDetail", () => {
     expect(resolved?.payoutReview?.receive_amount).toBe(2000)
     expect(resolved?.payoutReview?.total_debited).toBe(1.56)
     expect(resolved?.payoutReview?.you_send_amount).toBe(1.5)
+  })
+
+  it("attaches payoutReview from Grid review_snapshot when payout_type is missing", () => {
+    const resolved = resolveGlobalPayoutOffRampDetail({
+      direction: "out",
+      status: "failed",
+      amount: 1.55,
+      currency: "USD",
+      metadata: {
+        grid_mode: "balance_payout",
+        receive_amount: 2000,
+        receive_currency: "NGN",
+        beneficiary_name: "Samuel Enyojo Odiba",
+        review_snapshot: {
+          you_send_amount: 1.441128,
+          total_debited: 1.546737,
+          receive_amount: 2000,
+          receive_currency: "NGN",
+          send_currency: "USD",
+          transfer_method: "Local transfer",
+          exchange_rate: 1387.8017774965165,
+          processing_fee: 0.014411,
+          exchange_fee: 0.030023,
+          processing_time: "Within minutes",
+        },
+        recipient_snapshot: {
+          full_name: "Samuel Enyojo Odiba",
+          bank_name: "Kuda",
+          account_number: "2067816945",
+        },
+      },
+    })
+    expect(resolved?.payoutReview?.receive_amount).toBe(2000)
+    expect(resolved?.payoutReview?.total_debited).toBe(1.546737)
+    expect(resolved?.recipientSnapshot?.full_name).toBe("Samuel Enyojo Odiba")
   })
 })
