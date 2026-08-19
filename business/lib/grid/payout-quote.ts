@@ -1,5 +1,6 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import {
+  computeYcBalancePayoutPricing,
   computeYcBalancePayoutPricingBeforeSend,
   computePayoutQuoteDisplayProcessingFee,
   normalizeGlobalPayoutQuoteReceiveAmount,
@@ -31,15 +32,254 @@ import {
   quantizeGridUsdcMajor,
 } from "./quote-request"
 import { gridFetch } from "./http"
-import { hydrateGridQuotePaymentInstructions, resolveGridQuoteFundingAddress } from "./quote-funding"
+import {
+  hydrateGridQuotePaymentInstructions,
+  resolveGridQuoteFundingAddress,
+  retrieveGridQuote,
+} from "./quote-funding"
 import { buildPayoutQuoteKey } from "@/lib/payout/payout-quote-key"
 import { quoteFiatProcessingFeeBps } from "@/lib/processing-fee/quote-processing-fee-bps"
-import { getGridQuoteTtlMs } from "./config"
+import {
+  getGridPayoutMarginBps,
+  getGridQuoteTtlMs,
+  gridQuoteNeedsRefresh,
+  resolveGridQuoteExpiresAt,
+} from "./config"
 import type { GridQuote } from "./types"
 
-function roundUsd(n: number): number {
+function roundUsdc(n: number): number {
   if (!Number.isFinite(n)) return 0
-  return Math.round(n * 100) / 100
+  return Math.round(n * 1_000_000) / 1_000_000
+}
+
+/** Locked Grid payout: send exactly Grid totalSendingAmount; Easner 1% + FX margin on top. No YC 2% pad. */
+export function computeGridLockedBalancePayoutPricing(input: {
+  receiveAmount: number
+  customerRate: number
+  gridSendingUsd: number
+  gridMidLocalPerUsd?: number
+  gridFeesUsd?: number
+  processingFeeBps: number
+}): ReturnType<typeof computeYcBalancePayoutPricing> {
+  const sending = quantizeGridUsdcMajor(input.gridSendingUsd)
+  const ycMidUsd =
+    input.gridMidLocalPerUsd != null && input.gridMidLocalPerUsd > 0
+      ? roundUsdc(input.receiveAmount / input.gridMidLocalPerUsd)
+      : undefined
+  const gridFees = Number(input.gridFeesUsd ?? 0)
+  return computeYcBalancePayoutPricing({
+    receiveAmount: input.receiveAmount,
+    customerRate: input.customerRate,
+    ycFloorUsd: sending,
+    ycMidUsd,
+    networkFeeAmountUsd: gridFees > 0 ? gridFees : 0,
+    serviceFeeAmountUsd: 0,
+    processingFeeBps: input.processingFeeBps,
+  })
+}
+
+export function buildGridEasnerFeeSlice(input: {
+  quoteId: string
+  expiresAt: string
+  customerRate: number
+  receiveAmount: number
+  receiveCurrency: string
+  sourceCurrency: string
+  pricing: {
+    customerPrincipal: number
+    marginAmount: number
+    processingFee: number
+    channelCost: number
+  }
+}): NonNullable<PayoutQuoteResult["easner"]> {
+  const userFee = roundUsdc(
+    input.pricing.marginAmount + input.pricing.processingFee + input.pricing.channelCost,
+  )
+  return {
+    quoteId: input.quoteId,
+    expiresAt: input.expiresAt,
+    providerRate: input.customerRate,
+    effectiveRate: input.customerRate,
+    destinationAmount: input.receiveAmount,
+    fxMarkupBps: getGridPayoutMarginBps(),
+    payinFeeAmount: 0,
+    payoutFeeAmount: roundUsdc(input.pricing.processingFee + input.pricing.channelCost),
+    totalFeeAmount: userFee,
+    sourceAmount: input.pricing.customerPrincipal,
+    sourceCurrency: input.sourceCurrency,
+    destinationCurrency: input.receiveCurrency,
+    pricingTotals: {
+      total_easner_fee: input.pricing.marginAmount,
+      total_user_fee: userFee,
+      total_recipient_amount: input.receiveAmount,
+    },
+  }
+}
+
+function gridQuoteSequenceId(quoteId: string): string {
+  return `grid_quote_${String(quoteId).replace(/[^a-zA-Z0-9:_-]/g, "")}`
+}
+
+function gridPayoutQuoteIsStale(quote: Pick<GridQuote, "expiresAt" | "status">): boolean {
+  const status = String(quote.status ?? "").trim().toUpperCase()
+  if (status === "EXPIRED" || status === "FAILED" || status === "CANCELLED" || status === "CANCELED") {
+    return true
+  }
+  return gridQuoteNeedsRefresh(quote.expiresAt)
+}
+
+export function applyLiveGridQuoteToLockedPricing(input: {
+  quote: GridQuote
+  receiveAmount: number
+  customerRate: number
+  processingFeeBps: number
+  gridMidLocalPerUsd?: number
+  fallbackSendingUsd: number
+  originalTotalDebited?: number
+}): {
+  cryptoAmount: number
+  pricing: ReturnType<typeof computeGridLockedBalancePayoutPricing>
+} {
+  const sending =
+    gridQuoteSendingAmountMajor(input.quote) ??
+    (input.fallbackSendingUsd > 0 ? input.fallbackSendingUsd : 0)
+  const pricing = computeGridLockedBalancePayoutPricing({
+    receiveAmount: input.receiveAmount,
+    customerRate: input.customerRate,
+    gridSendingUsd: sending,
+    gridMidLocalPerUsd: input.gridMidLocalPerUsd,
+    gridFeesUsd: gridQuoteFeesUsd(input.quote),
+    processingFeeBps: input.processingFeeBps,
+  })
+  const cryptoAmount = quantizeGridUsdcMajor(sending > 0 ? sending : pricing.customerPrincipal)
+  if (input.originalTotalDebited != null && Number.isFinite(input.originalTotalDebited)) {
+    pricing.totalDebited = roundUsdc(Math.max(input.originalTotalDebited, pricing.totalDebited))
+  }
+  return { cryptoAmount, pricing }
+}
+
+export async function ensureFreshGridBalancePayoutQuote(input: {
+  quoteId: string
+  customerId?: string
+  externalAccountId?: string
+  receiveCurrency: string
+  receiveAmount: number
+  paymentPurpose?: string
+  customerRate: number
+  processingFeeBps: number
+  originalTotalDebited: number
+  originalCryptoAmount: number
+  originalFundingAddress: string
+  originalMarginAmount?: number
+  originalProcessingFee?: number
+}): Promise<
+  | {
+      ok: true
+      quoteId: string
+      sequenceId: string
+      fundingAddress: string
+      cryptoAmount: number
+      totalDebited: number
+      channelCost: number
+      expiresAt: string
+      refreshed: boolean
+    }
+  | { ok: false; error: string }
+> {
+  const originalQuoteId = String(input.quoteId || "").trim()
+  const originalFunding = String(input.originalFundingAddress || "").trim()
+  const originalCrypto = quantizeGridUsdcMajor(input.originalCryptoAmount)
+  const customerId = String(input.customerId || "").trim()
+  const externalAccountId = String(input.externalAccountId || "").trim()
+
+  let live: GridQuote | null = null
+  try {
+    live = await retrieveGridQuote(originalQuoteId)
+  } catch (e) {
+    console.warn(
+      "[grid] payout quote retrieve before send failed:",
+      e instanceof Error ? e.message : e,
+    )
+  }
+
+  const shouldRefresh = live == null || gridPayoutQuoteIsStale(live)
+  if (shouldRefresh) {
+    if (!customerId || !externalAccountId) {
+      return { ok: false, error: "Grid quote expired. Go back and review again." }
+    }
+    const quoteBody = buildGridBalancePayoutQuoteBody({
+      customerId,
+      externalAccountId,
+      receiveCurrency: input.receiveCurrency,
+      lockedReceiveMinor: gridMinorUnits(input.receiveAmount, 2),
+      purposeOfPayment: input.paymentPurpose,
+    })
+    try {
+      live = await gridFetch<GridQuote>({
+        method: "POST",
+        path: "/quotes",
+        json: quoteBody,
+        idempotencyKey: buildGridIdempotencyKey(`grid_quote_refresh_${originalQuoteId}`, quoteBody),
+      })
+    } catch (e) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e.message : "Could not refresh Grid quote. Try again shortly.",
+      }
+    }
+  }
+
+  if (!live) {
+    return { ok: false, error: "Grid quote expired. Go back and review again." }
+  }
+
+  const hydrated = await hydrateGridQuotePaymentInstructions(live)
+  const fundingAddress = resolveGridQuoteFundingAddress(hydrated) || originalFunding
+  if (!fundingAddress) {
+    return { ok: false, error: "Grid payout funding instructions are unavailable. Try again shortly." }
+  }
+
+  const applied = applyLiveGridQuoteToLockedPricing({
+    quote: hydrated,
+    receiveAmount: input.receiveAmount,
+    customerRate: input.customerRate,
+    processingFeeBps: input.processingFeeBps,
+    fallbackSendingUsd: originalCrypto,
+    originalTotalDebited: input.originalTotalDebited,
+  })
+  if (!(applied.cryptoAmount > 0)) {
+    return { ok: false, error: "Grid payout quote is incomplete. Review again." }
+  }
+
+  const marginAmount = roundUsdc(
+    input.originalMarginAmount != null && Number.isFinite(input.originalMarginAmount)
+      ? Math.max(0, input.originalMarginAmount)
+      : applied.pricing.marginAmount,
+  )
+  const processingFee = roundUsdc(
+    input.originalProcessingFee != null && Number.isFinite(input.originalProcessingFee)
+      ? Math.max(0, input.originalProcessingFee)
+      : applied.pricing.processingFee,
+  )
+  const totalDebited = roundUsdc(
+    Math.max(
+      input.originalTotalDebited,
+      applied.cryptoAmount + marginAmount + processingFee,
+    ),
+  )
+
+  const quoteId = String(hydrated.id || originalQuoteId).trim()
+  return {
+    ok: true,
+    quoteId,
+    sequenceId: gridQuoteSequenceId(quoteId),
+    fundingAddress,
+    cryptoAmount: applied.cryptoAmount,
+    totalDebited,
+    channelCost: applied.pricing.channelCost,
+    expiresAt: resolveGridQuoteExpiresAt(hydrated.expiresAt),
+    refreshed: shouldRefresh || quoteId !== originalQuoteId,
+  }
 }
 
 export type LockGridBalancePayoutQuoteInput = {
@@ -154,7 +394,7 @@ export async function buildGridBalancePayoutPreview(input: {
     throw new Error(limitCheck.message)
   }
 
-  const provisionalCrypto = roundUsd(quoteReceiveAmount / customerRate)
+  const provisionalCrypto = quantizeGridUsdcMajor(quoteReceiveAmount / customerRate)
   const feeSubject =
     input.userId != null
       ? { userId: input.userId, businessId: input.businessId ?? null }
@@ -170,7 +410,7 @@ export async function buildGridBalancePayoutPreview(input: {
     customerRate,
     provisionalCryptoUsd: provisionalCrypto,
     ycMidUsd:
-      gridMidLocalPerUsd > 0 ? roundUsd(quoteReceiveAmount / gridMidLocalPerUsd) : undefined,
+      gridMidLocalPerUsd > 0 ? roundUsdc(quoteReceiveAmount / gridMidLocalPerUsd) : undefined,
     processingFeeBps,
   })
 
@@ -220,25 +460,15 @@ export async function buildGridBalancePayoutPreview(input: {
     displayProcessingFee,
     settlement,
     noah: buildLegacyNoahSettlementFromLeg(settlement) as PayoutQuoteResult["noah"],
-    easner: {
+    easner: buildGridEasnerFeeSlice({
       quoteId: sequenceId,
       expiresAt,
-      providerRate: customerRate,
-      effectiveRate: customerRate,
-      destinationAmount: quoteReceiveAmount,
-      fxMarkupBps: 50,
-      payinFeeAmount: 0,
-      payoutFeeAmount: pricing.channelCost,
-      totalFeeAmount: pricing.marginAmount + pricing.channelCost,
-      sourceAmount: pricing.customerPrincipal,
+      customerRate,
+      receiveAmount: quoteReceiveAmount,
+      receiveCurrency,
       sourceCurrency: sourceBalanceCurrency,
-      destinationCurrency: receiveCurrency,
-      pricingTotals: {
-        total_easner_fee: pricing.marginAmount,
-        total_user_fee: pricing.marginAmount + pricing.channelCost,
-        total_recipient_amount: quoteReceiveAmount,
-      },
-    },
+      pricing,
+    }),
     pricingQuoteId: sequenceId,
     expiresAt,
     executionModel: "turnkey_workflow",
@@ -339,7 +569,7 @@ export async function lockGridBalancePayoutQuote(
     throw new Error(limitCheck.message)
   }
 
-  const provisionalCrypto = roundUsd(quoteReceiveAmount / customerRate)
+  const provisionalCrypto = quantizeGridUsdcMajor(quoteReceiveAmount / customerRate)
 
   const quoteBody = buildGridBalancePayoutQuoteBody({
     customerId,
@@ -369,36 +599,24 @@ export async function lockGridBalancePayoutQuote(
     quoteExchangeRate: hydratedQuote.exchangeRate,
     previewCustomerRate: customerRate,
   })
-  const lockedCryptoUsd = gridQuoteSendingAmountMajor(hydratedQuote) ?? provisionalCrypto
-  const gridFeesUsd = gridQuoteFeesUsd(hydratedQuote)
   const processingFeeBps = await quoteFiatProcessingFeeBps(
     admin,
     { countryCode, currencyCode: receiveCurrency, rail },
     "pay_out",
     { userId: input.userId, businessId: input.businessId ?? null },
   )
-  const pricing = computeYcBalancePayoutPricingBeforeSend({
+  const applied = applyLiveGridQuoteToLockedPricing({
+    quote: hydratedQuote,
     receiveAmount: quoteReceiveAmount,
     customerRate: lockedCustomerRate,
-    provisionalCryptoUsd: lockedCryptoUsd > 0 ? lockedCryptoUsd : provisionalCrypto,
-    ycMidUsd:
-      gridMidLocalPerUsd > 0
-        ? roundUsd(quoteReceiveAmount / gridMidLocalPerUsd)
-        : undefined,
     processingFeeBps,
+    gridMidLocalPerUsd: gridMidLocalPerUsd > 0 ? gridMidLocalPerUsd : undefined,
+    fallbackSendingUsd: provisionalCrypto,
   })
-  if (gridFeesUsd > 0) {
-    pricing.channelCost = roundUsd(pricing.channelCost + gridFeesUsd)
-    pricing.totalDebited = roundUsd(pricing.totalDebited + gridFeesUsd)
-  }
-
-  const cryptoAmount =
-    lockedCryptoUsd > 0
-      ? quantizeGridUsdcMajor(lockedCryptoUsd)
-      : roundUsd(pricing.customerPrincipal)
-  const sequenceId = `grid_quote_${String(hydratedQuote.id).replace(/[^a-zA-Z0-9:_-]/g, "")}`
-  const expiresAt =
-    hydratedQuote.expiresAt ?? new Date(Date.now() + getGridQuoteTtlMs()).toISOString()
+  const pricing = applied.pricing
+  const cryptoAmount = applied.cryptoAmount
+  const sequenceId = gridQuoteSequenceId(String(hydratedQuote.id))
+  const expiresAt = resolveGridQuoteExpiresAt(hydratedQuote.expiresAt)
 
   return {
     quoteId: String(hydratedQuote.id),
@@ -467,25 +685,15 @@ export function buildGridLockedPayoutQuoteResult(input: {
     displayProcessingFee,
     settlement,
     noah: buildLegacyNoahSettlementFromLeg(settlement) as PayoutQuoteResult["noah"],
-    easner: {
+    easner: buildGridEasnerFeeSlice({
       quoteId: locked.sequenceId,
       expiresAt: locked.expiresAt,
-      providerRate: locked.pricing.customerRate,
-      effectiveRate: locked.pricing.customerRate,
-      destinationAmount: locked.receiveAmount,
-      fxMarkupBps: 50,
-      payinFeeAmount: 0,
-      payoutFeeAmount: locked.pricing.channelCost,
-      totalFeeAmount: locked.pricing.marginAmount + locked.pricing.channelCost,
-      sourceAmount: locked.pricing.customerPrincipal,
+      customerRate: locked.pricing.customerRate,
+      receiveAmount: locked.receiveAmount,
+      receiveCurrency: locked.receiveCurrency,
       sourceCurrency: sourceBalanceCurrency,
-      destinationCurrency: locked.receiveCurrency,
-      pricingTotals: {
-        total_easner_fee: locked.pricing.marginAmount,
-        total_user_fee: locked.pricing.marginAmount + locked.pricing.channelCost,
-        total_recipient_amount: locked.receiveAmount,
-      },
-    },
+      pricing: locked.pricing,
+    }),
     pricingQuoteId: locked.sequenceId,
     expiresAt: locked.expiresAt,
     executionModel: "turnkey_workflow",

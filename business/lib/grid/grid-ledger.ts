@@ -41,6 +41,7 @@ export function buildGridBalancePayoutOutMetadata(input: {
     flow: "global_fiat_offramp",
     payout_provider: "grid",
     grid_mode: "balance_payout",
+    transaction_started_at: new Date().toISOString(),
     grid_quote_id: input.quoteId,
     grid_sequence_id: input.sequenceId,
     grid_customer_id: input.customerId,

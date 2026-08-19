@@ -206,6 +206,7 @@ async function buildYellowcardBalancePayoutQuoteFromRow(input: {
 async function buildGridBalancePayoutQuoteFromRow(input: {
   admin: ReturnType<typeof createSupabaseAdmin>
   userId: string
+  businessId?: string | null
   recipientId?: string
   row: RecipientSellPrepareRow
   receiveFiatAmount: number
@@ -223,6 +224,7 @@ async function buildGridBalancePayoutQuoteFromRow(input: {
   return buildGridBalancePayoutPreview({
     admin: input.admin,
     userId: input.userId,
+    businessId: input.businessId ?? null,
     recipient: input.row,
     recipientId: input.recipientId,
     receiveFiatAmount: input.receiveFiatAmount,
@@ -909,12 +911,14 @@ export async function buildPayoutQuote(input: {
         return buildGridBalancePayoutQuoteFromRow({
           admin,
           userId: input.userId,
+          businessId: input.businessId,
           recipientId: input.recipientId,
           row,
           receiveFiatAmount: input.receiveFiatAmount,
           sourceBalanceCurrency: input.sourceBalanceCurrency,
           amountEntryMode: input.amountEntryMode,
           sendBudget: input.sendBudget,
+          paymentPurpose: input.prepareOverrides?.paymentPurpose,
         })
       }
       if (provider.id !== "noah") {

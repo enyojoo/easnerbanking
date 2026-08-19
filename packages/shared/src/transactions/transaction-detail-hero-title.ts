@@ -37,15 +37,18 @@ export function formatTransactionDetailHeroTitle(input: TransactionDetailHeroTit
   ) return raw
   if (input.direction === "in" && isEasetagReceiveTitle(raw)) return raw
 
+  const inboundRaw = String(input.counterpartyName ?? "")
+    .trim()
+    .replace(/^Deposit from\s+/i, "")
   const name = formatDisplayPersonName(
-    input.direction === "out" ? normalizedOutboundName : input.counterpartyName,
+    input.direction === "out" ? normalizedOutboundName : inboundRaw,
   )
   if (input.direction === "out") {
     return name || String(input.productFallback || "Transfer").trim() || "Transfer"
   }
   const productFallback = String(input.productFallback || "Bank Deposit").trim() || "Bank Deposit"
-  if (name && !isEasnerProductReceiveTitle(input.counterpartyName)) {
-    return `Deposit from ${name}`
+  if (name && !isEasnerProductReceiveTitle(inboundRaw)) {
+    return name
   }
   if (isEasnerProductReceiveTitle(productFallback)) return productFallback
   return productFallback

@@ -95,6 +95,7 @@ describe("buildTransactionReceiptDetailRows", () => {
       currency: "USD",
       balanceLabel: "USD Balance",
     })
+    expect(rows.some((row) => row.label === REVIEW_ROW_LABELS.sender)).toBe(false)
   })
 })
 

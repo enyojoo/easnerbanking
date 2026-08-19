@@ -17,13 +17,22 @@ describe("formatTransactionDetailHeroTitle", () => {
     ).toBe("Samuel Odiba Enyojo")
   })
 
-  it("formats inbound deposit hero", () => {
+  it("formats inbound deposit hero as remitter name", () => {
     expect(
       formatTransactionDetailHeroTitle({
         direction: "in",
         counterpartyName: "GREY",
       }),
-    ).toBe("Deposit from Grey")
+    ).toBe("Grey")
+  })
+
+  it("strips a stored Deposit from prefix on inbound heroes", () => {
+    expect(
+      formatTransactionDetailHeroTitle({
+        direction: "in",
+        counterpartyName: "Deposit from Bridge Building",
+      }),
+    ).toBe("Bridge Building")
   })
 
   it("preserves Easetag receive hero without Deposit from prefix", () => {

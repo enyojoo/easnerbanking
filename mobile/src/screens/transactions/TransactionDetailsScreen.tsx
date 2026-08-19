@@ -545,7 +545,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       return businessName ? `Payment from ${businessName}` : 'Payroll payment'
     }
     let heroTitle = String(transaction.display_hero_title || '').trim()
-    if (heroTitle.startsWith('Deposit from ') && isEasetagReceiveTitle(heroTitle.replace(/^Deposit from /i, ''))) {
+    if (heroTitle.startsWith('Deposit from ')) {
       heroTitle = heroTitle.replace(/^Deposit from /i, '')
     }
     if (heroTitle) return heroTitle.replace(/^Transfer to\s+/i, '')

@@ -1,4 +1,4 @@
-import { getGridQuoteTtlMs } from "@/lib/grid/config"
+import { getGridQuoteTtlMs, gridQuoteNeedsRefresh } from "@/lib/grid/config"
 import {
   buildGridLockedPayoutQuoteResult,
   lockGridBalancePayoutQuote,
@@ -48,7 +48,11 @@ export async function confirmGridBalancePayoutOrder(
     userId: input.userId,
     quoteKey,
   })
-  if (existing && existing.provider === "grid") {
+  if (
+    existing &&
+    existing.provider === "grid" &&
+    !gridQuoteNeedsRefresh(existing.expires_at)
+  ) {
     return lockedQuoteFromSession(existing)
   }
 

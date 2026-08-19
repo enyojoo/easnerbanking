@@ -19,9 +19,10 @@ export function classifyGridOutgoingPayoutWebhook(input: {
   ) {
     return "failed"
   }
-  if (type.includes("OUTGOING_PAYMENT.COMPLETED") || status === "COMPLETED") {
-    return "settled"
-  }
+  // Funding INCOMING.COMPLETED must not settle the payout — bank OUTGOING is the terminal success.
+  if (type.includes("INCOMING") && !type.includes("OUTGOING")) return "pending"
+  if (type.includes("OUTGOING_PAYMENT.COMPLETED")) return "settled"
+  if (status === "COMPLETED") return "settled"
   return "pending"
 }
 

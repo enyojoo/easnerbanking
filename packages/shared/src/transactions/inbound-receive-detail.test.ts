@@ -121,13 +121,15 @@ describe("buildInboundReceiveDetailRows", () => {
     const rows = buildInboundReceiveDetailRows(snapshot!, { surface: "detail" })
     const map = rowMap(rows)
     expect(map[REVIEW_ROW_LABELS.depositMethod]).toBe("Wire")
-    expect(map[REVIEW_ROW_LABELS.sender]).toBe("Acme Corp")
+    expect(map[REVIEW_ROW_LABELS.sender]).toBeUndefined()
     expect(map[REVIEW_ROW_LABELS.amountCredited]).toBe("+$50")
     expect(map[REVIEW_ROW_LABELS.creditTo]).toBe("USD Balance")
     expect(map[REVIEW_ROW_LABELS.narration]).toBe("Invoice 42")
     const labels = rows.filter((r) => r.label).map((r) => r.label)
     expect(labels.at(-2)).toBe(REVIEW_ROW_LABELS.depositMethod)
     expect(labels.at(-1)).toBe(REVIEW_ROW_LABELS.when)
+    const emailMap = rowMap(buildInboundReceiveEmailDetailRows(snapshot!))
+    expect(emailMap[REVIEW_ROW_LABELS.sender]).toBe("Acme Corp")
   })
 
   it("Grid VA funding reads sender and ACH from stored webhook payload", () => {
@@ -151,9 +153,12 @@ describe("buildInboundReceiveDetailRows", () => {
     })
     expect(snapshot?.kind).toBe("va_funding")
     const map = rowMap(buildInboundReceiveDetailRows(snapshot!, { surface: "detail" }))
-    expect(map[REVIEW_ROW_LABELS.sender]).toBe("Bridge Building")
+    expect(map[REVIEW_ROW_LABELS.sender]).toBeUndefined()
     expect(map[REVIEW_ROW_LABELS.creditTo]).toBe("USD Balance")
     expect(map[REVIEW_ROW_LABELS.depositMethod]).toBe("ACH")
+    expect(rowMap(buildInboundReceiveEmailDetailRows(snapshot!))[REVIEW_ROW_LABELS.sender]).toBe(
+      "Bridge Building",
+    )
   })
 
   it("Grid VA funding uses the same Credited to card as Noah", () => {
@@ -174,7 +179,7 @@ describe("buildInboundReceiveDetailRows", () => {
     expect(snapshot?.kind).toBe("va_funding")
     const map = rowMap(buildInboundReceiveDetailRows(snapshot!, { surface: "detail" }))
     expect(map[REVIEW_ROW_LABELS.creditTo]).toBe("USD Balance")
-    expect(map[REVIEW_ROW_LABELS.sender]).toBe("Acme Corp")
+    expect(map[REVIEW_ROW_LABELS.sender]).toBeUndefined()
   })
 
   it("skips Stripe collection settlement as VA funding", () => {

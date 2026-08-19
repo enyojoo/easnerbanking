@@ -27,6 +27,7 @@ import { hashRecipientSnapshot } from "@/lib/payout/recipient-snapshot-hash"
 import { isPayoutLockOnReviewEnabled } from "@/lib/payout/payout-lock-flags"
 import { executeGridBalancePayoutTurnkeyLeg } from "@/lib/grid/payout-execute"
 import { buildGridBalancePayoutOutMetadata, mergeGridPayoutLifecycle } from "@/lib/grid/grid-ledger"
+import { ensureFreshGridBalancePayoutQuote } from "@/lib/grid/payout-quote"
 
 async function readAvailableBalance(
   admin: SupabaseClient,
@@ -138,17 +139,54 @@ export async function executeGridBalancePayout(
     if (existing) return existing
   }
 
-  const totalDebited = Number(input.pricing.totalDebited)
+  let quoteId = String(input.grid.quoteId || "").trim()
+  let fundingAddress = String(input.grid.fundingAddress || "").trim()
+  let cryptoAmount = Number(input.grid.cryptoAmount ?? input.pricing.customerPrincipal)
+  let sequenceId = String(input.grid.sequenceId || quoteId).trim()
+  let totalDebited = Number(input.pricing.totalDebited)
+  let channelCost = Number(input.pricing.channelCost)
+  if (!quoteId || !fundingAddress || !(cryptoAmount > 0)) {
+    return { ok: false, error: "Grid payout quote is incomplete. Review again." }
+  }
   if (!Number.isFinite(totalDebited) || totalDebited <= 0) {
     return { ok: false, error: "Invalid total debited for Grid payout." }
   }
 
-  const quoteId = String(input.grid.quoteId || "").trim()
-  const fundingAddress = String(input.grid.fundingAddress || "").trim()
-  const cryptoAmount = Number(input.grid.cryptoAmount ?? input.pricing.customerPrincipal)
-  const sequenceId = String(input.grid.sequenceId || quoteId).trim()
-  if (!quoteId || !fundingAddress || !(cryptoAmount > 0)) {
-    return { ok: false, error: "Grid payout quote is incomplete. Review again." }
+  const customerRate =
+    Number(input.pricing.customerRate) > 0
+      ? Number(input.pricing.customerRate)
+      : fiatAmount > 0 && Number(input.pricing.customerPrincipal) > 0
+        ? fiatAmount / Number(input.pricing.customerPrincipal)
+        : 0
+  const principal = Number(input.pricing.customerPrincipal)
+  const processingFee = Number(input.pricing.processingFee)
+  const processingFeeBps =
+    principal > 0 ? (processingFee > 0 ? Math.round((processingFee / principal) * 10_000) : 0) : 100
+
+  if (customerRate > 0) {
+    const liveQuote = await ensureFreshGridBalancePayoutQuote({
+      quoteId,
+      customerId: input.grid.customerId,
+      externalAccountId: input.grid.externalAccountId,
+      receiveCurrency: fiatCurrency,
+      receiveAmount: fiatAmount,
+      customerRate,
+      processingFeeBps,
+      originalTotalDebited: totalDebited,
+      originalCryptoAmount: cryptoAmount,
+      originalFundingAddress: fundingAddress,
+      originalMarginAmount: Number(input.pricing.marginAmount),
+      originalProcessingFee: processingFee,
+    })
+    if (!liveQuote.ok) {
+      return { ok: false, error: liveQuote.error }
+    }
+    quoteId = liveQuote.quoteId
+    sequenceId = liveQuote.sequenceId || sequenceId
+    fundingAddress = liveQuote.fundingAddress
+    cryptoAmount = liveQuote.cryptoAmount
+    totalDebited = liveQuote.totalDebited
+    channelCost = liveQuote.channelCost
   }
 
   const { available } = await readAvailableBalance(admin, {
@@ -222,7 +260,11 @@ export async function executeGridBalancePayout(
     idempotencyKey,
     fundingAddress,
     cryptoAuthorizedAmount: cryptoAmount,
-    pricing: input.pricing,
+    pricing: {
+      ...input.pricing,
+      totalDebited,
+      channelCost,
+    },
   })
 
   const pendingPtid = pendingGlobalPayoutProviderTransactionId(easnerPayoutId)
@@ -336,6 +378,43 @@ export async function executeGridBalancePayout(
 
   // REALTIME_FUNDING quotes auto-execute once the funding address is fully funded.
   // Posting /execute before confirmation races Grid and is not required.
+  // Mark processing as soon as USDC is broadcast — same as YC after the Turnkey leg.
+  const { data: txAfter } = await admin
+    .from("transactions")
+    .select("metadata")
+    .eq("id", transactionId)
+    .maybeSingle()
+  const priorMeta =
+    txAfter?.metadata && typeof txAfter.metadata === "object"
+      ? (txAfter.metadata as Record<string, unknown>)
+      : metadata
+  await upsertLedgerTransaction(admin, {
+    userId,
+    businessId,
+    provider: "grid",
+    providerTransactionId: pendingPtid,
+    status: "processing",
+    amount: totalDebited,
+    currency: "USD",
+    direction: "out",
+    metadata: mergeGridPayoutLifecycle(
+      {
+        ...priorMeta,
+        turnkey_send_id: chainSend.turnkeySendId ?? priorMeta.turnkey_send_id,
+        grid_funding_tx_hash: chainSend.txHash,
+      },
+      { processing_at: now },
+    ),
+    occurredAt: now,
+    txHash: chainSend.txHash ?? undefined,
+    baseCurrency: "USD",
+    asset: "USDC",
+  })
+  await admin
+    .from("grid_transfers")
+    .update({ status: "processing", updated_at: now })
+    .eq("transaction_id", transactionId)
+    .eq("mode", "balance_payout")
 
   if (lockId) {
     await markPayoutLockSessionExecuted(admin, lockId).catch(() => {})

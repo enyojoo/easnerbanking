@@ -46,4 +46,17 @@ describe("classifyGridOutgoingPayoutWebhook", () => {
       }),
     ).toBe("pending")
   })
+
+  it("does not settle on funding INCOMING_PAYMENT.COMPLETED", () => {
+    expect(
+      classifyGridOutgoingPayoutWebhook({
+        eventType: "INCOMING_PAYMENT.COMPLETED",
+        status: "COMPLETED",
+      }),
+    ).toBe("pending")
+  })
+
+  it("still treats a bare COMPLETED status as settled for receipt checks", () => {
+    expect(classifyGridOutgoingPayoutWebhook({ status: "COMPLETED" })).toBe("settled")
+  })
 })

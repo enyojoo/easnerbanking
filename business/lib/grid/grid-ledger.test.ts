@@ -41,6 +41,7 @@ describe("buildGridBalancePayoutOutMetadata", () => {
     expect(meta.flow).toBe("global_fiat_offramp")
     expect(meta.payout_provider).toBe("grid")
     expect(meta.grid_mode).toBe("balance_payout")
+    expect(typeof meta.transaction_started_at).toBe("string")
     expect(meta.payout_review).toEqual(meta.review_snapshot)
     expect(meta.crypto_authorized_amount).toBe("1.501175")
   })

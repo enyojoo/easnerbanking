@@ -618,7 +618,8 @@ export function buildInboundReceiveDetailRows(
       break
     }
     case "va_funding": {
-      pushSenderRow(rows, snapshot)
+      // In-app hero / list already show sender_name; keep Sender on email only.
+      if (surface === "email") pushSenderRow(rows, snapshot)
       if (snapshot.processingFee) {
         pushIf(
           rows,

@@ -55,7 +55,7 @@ export async function handleGridBalancePayoutWebhook(
   await admin
     .from("grid_transfers")
     .update({
-      status: terminalSuccess ? "settled" : terminalFailed ? "failed" : transfer.status,
+      status: terminalSuccess ? "settled" : terminalFailed ? "failed" : "processing",
       grid_transaction_id: String(
         input.transactionId ?? gridWebhookTransactionId(webhookData(input.event)) ?? "",
       ),
@@ -65,11 +65,22 @@ export async function handleGridBalancePayoutWebhook(
 
   const { data: tx } = await admin
     .from("transactions")
-    .select("id,user_id,business_id,metadata,amount,provider,provider_transaction_id")
+    .select("id,user_id,business_id,metadata,amount,provider,provider_transaction_id,status")
     .eq("id", transfer.transaction_id)
     .maybeSingle()
 
   if (!tx?.id) return { handled: true }
+
+  const priorStatus = String(tx.status ?? "").toLowerCase()
+  const nextStatus = terminalSuccess
+    ? "settled"
+    : terminalFailed
+      ? "failed"
+      : priorStatus === "settled"
+        ? "settled"
+        : priorStatus === "failed"
+          ? "failed"
+          : "processing"
 
   const prior =
     tx.metadata && typeof tx.metadata === "object" ? (tx.metadata as Record<string, unknown>) : {}
@@ -97,7 +108,7 @@ export async function handleGridBalancePayoutWebhook(
     businessId: tx.business_id ? String(tx.business_id) : null,
     provider: "grid",
     providerTransactionId: String(tx.provider_transaction_id ?? quoteId),
-    status: txStatus,
+    status: nextStatus,
     amount: Number(tx.amount ?? 0),
     currency: "USD",
     direction: "out",
@@ -293,6 +304,8 @@ export async function applyGridWebhookSideEffects(
     if (xb.handled) return
     const fund = await handleGridFundBalanceWebhook(admin, { event, quoteId, status })
     if (fund.handled) return
+    const payout = await handleGridBalancePayoutWebhook(admin, { event, quoteId, transactionId, status })
+    if (payout.handled) return
     // Connect settlement (originator EASNER) before generic VA bank on-ramp
     const { handleGridStripeSettlementWebhook } = await import("./stripe-settlement-webhook")
     const stripeSettlement = await handleGridStripeSettlementWebhook(admin, { event })

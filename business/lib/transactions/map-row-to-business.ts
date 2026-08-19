@@ -93,6 +93,7 @@ function deriveCounterpartyName(input: {
     payload.senderName,
     payload.originatorName,
     (payload.source as Record<string, unknown> | undefined)?.sender_name,
+    (payload.source as Record<string, unknown> | undefined)?.accountHolderName,
     (payload.source as Record<string, unknown> | undefined)?.originator_name,
   ]
   for (const value of candidates) {
@@ -293,6 +294,10 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
         ? counterpartyNameRaw
         : undefined
 
+  const inboundHeroName =
+    dirRaw === "in" && !isVerification && !isYcFundBalance
+      ? bankLabel ?? counterpartyNameRaw
+      : undefined
   const displayHeroTitle =
     displaySource?.displayHeroTitle ??
     (stripeInvoiceSettlementDetail
@@ -301,15 +306,13 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
         ? bankDepositDetail.displayHeroTitle
         : ycDepositTitle
           ? ycDepositTitle
-          : noahVaDepositTitle
-            ? noahVaDepositTitle
-            : bankLabel && dirRaw === "in"
-              ? formatTransactionDetailHeroTitle({
-                  direction: "in",
-                  counterpartyName: bankLabel,
-                  productFallback: noahVaDepositTitle ?? "Bank Deposit",
-                })
-              : undefined)
+          : inboundHeroName
+            ? formatTransactionDetailHeroTitle({
+                direction: "in",
+                counterpartyName: inboundHeroName,
+                productFallback: noahVaDepositTitle ?? "Bank Deposit",
+              })
+            : noahVaDepositTitle)
   const sendNote =
     typeof meta?.send_note === "string"
       ? meta.send_note.trim()

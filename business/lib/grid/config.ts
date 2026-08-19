@@ -43,11 +43,33 @@ export function getGridPayoutMarginBps(): number {
   return parsed
 }
 
-/** Quote TTL used for lock sessions (ms). */
+/** Quote TTL used for lock sessions when Grid does not return a future expiresAt (ms). */
 export function getGridQuoteTtlMs(): number {
   const parsed = Number.parseInt(process.env.GRID_QUOTE_TTL_MS || String(15 * 60 * 1000), 10)
   if (!Number.isFinite(parsed) || parsed <= 0) return 15 * 60 * 1000
   return parsed
+}
+
+/** Refresh the Grid quote at execute if fewer than this many ms remain. */
+export function getGridQuoteRefreshBufferMs(): number {
+  return 45_000
+}
+
+export function gridQuoteNeedsRefresh(expiresAt?: string | null): boolean {
+  const ms = expiresAt ? Date.parse(String(expiresAt)) : Number.NaN
+  if (!Number.isFinite(ms)) return true
+  return ms - Date.now() <= getGridQuoteRefreshBufferMs()
+}
+
+/** Prefer Grid's real rate-lock expiry when it is still in the future (YC parity). */
+export function resolveGridQuoteExpiresAt(preferred?: string | null): string {
+  if (preferred) {
+    const ms = new Date(preferred).getTime()
+    if (Number.isFinite(ms) && ms > Date.now()) {
+      return new Date(ms).toISOString()
+    }
+  }
+  return new Date(Date.now() + getGridQuoteTtlMs()).toISOString()
 }
 
 /** Return URL after hosted Grid KYB (SumSub) completes. */
