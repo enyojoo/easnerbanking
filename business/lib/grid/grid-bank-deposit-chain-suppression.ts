@@ -64,7 +64,7 @@ export async function findPendingGridVaBankDepositForInboundAmount(
 
   let q = admin
     .from("transactions")
-    .select("id,metadata,amount,currency,provider_transaction_id")
+    .select("id,metadata,amount,currency,provider_transaction_id,tx_hash")
     .eq("provider", "grid")
     .eq("direction", "in")
     .eq("status", "settled")
@@ -76,7 +76,10 @@ export async function findPendingGridVaBankDepositForInboundAmount(
 
   for (const row of rows ?? []) {
     const meta = (row.metadata as Record<string, unknown> | undefined) ?? {}
-    if (meta.wallet_balance_credit_key) continue
+    const onChain =
+      String(row.tx_hash ?? "").trim() ||
+      (typeof meta.grid_on_chain_tx_hash === "string" ? meta.grid_on_chain_tx_hash.trim() : "")
+    if (onChain) continue
     const ledger = String(meta.wallet_ledger_currency ?? row.currency ?? "USD").toUpperCase()
     if (ledger !== currency) continue
     const amount = Number(row.amount ?? 0)

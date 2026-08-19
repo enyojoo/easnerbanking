@@ -53,12 +53,22 @@ export function extractGridOnChainTxHash(data: Record<string, unknown> | undefin
     ).trim()
     if (hash) return hash
   }
-  const direct = [
-    data.transactionHash,
-    data.txHash,
-    data.onChainTxHash,
-    (data.destination as Record<string, unknown> | undefined)?.transactionHash,
-  ]
+  const dest = data.destination
+  if (dest && typeof dest === "object") {
+    const destRec = dest as Record<string, unknown>
+    const onChain = destRec.onChainTransaction
+    if (onChain && typeof onChain === "object") {
+      const nested = String(
+        (onChain as Record<string, unknown>).transactionHash ??
+          (onChain as Record<string, unknown>).hash ??
+          "",
+      ).trim()
+      if (nested) return nested
+    }
+    const destHash = String(destRec.transactionHash ?? "").trim()
+    if (destHash) return destHash
+  }
+  const direct = [data.transactionHash, data.txHash, data.onChainTxHash]
   for (const value of direct) {
     const hash = String(value ?? "").trim()
     if (hash) return hash

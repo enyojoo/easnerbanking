@@ -144,14 +144,8 @@ export async function matchPayoutToSettlements(
     const payoutAmount = typeof payout.amount === "number" ? payout.amount : 0
     if (payoutAmount > 0) {
       const pending = await listPendingSettlementsForAccount(admin, opts.stripeAccountId)
-      let remaining = payoutAmount
-      for (const candidate of pending) {
-        const net = Number(candidate.row.net_cents ?? 0)
-        if (net <= 0) continue
-        if (net - remaining > 2) continue
+      for (const candidate of greedyPackSettlements(pending, payoutAmount)) {
         collect(toMatched(candidate.source, candidate.row, null))
-        remaining -= net
-        if (remaining <= 2) break
       }
     }
   }
@@ -184,6 +178,57 @@ async function listPendingSettlementsForAccount(
     ...(invoiceRows ?? []).map((row) => ({ source: "invoice_stripe" as const, row })),
     ...(checkoutRows ?? []).map((row) => ({ source: "checkout_stripe" as const, row })),
   ].sort((a, b) => String(a.row.created_at ?? "").localeCompare(String(b.row.created_at ?? "")))
+}
+
+const OPEN_SETTLEMENT_PHASES = ["payment_received", "payout_sent"] as const
+
+/** Open invoice + checkout settlements for a business, oldest first. */
+export async function listPendingSettlementsForBusiness(
+  admin: SupabaseClient,
+  businessId: string,
+): Promise<{ source: SettlementSource; row: Record<string, unknown> }[]> {
+  const [{ data: invoiceRows }, { data: checkoutRows }] = await Promise.all([
+    admin
+      .from(SETTLEMENT_TABLES.invoice_stripe)
+      .select(`${SETTLEMENT_COLUMNS},invoice_id,created_at`)
+      .eq("business_id", businessId)
+      .in("phase", [...OPEN_SETTLEMENT_PHASES])
+      .order("created_at", { ascending: true })
+      .limit(100),
+    admin
+      .from(SETTLEMENT_TABLES.checkout_stripe)
+      .select(`${SETTLEMENT_COLUMNS},created_at`)
+      .eq("business_id", businessId)
+      .in("phase", [...OPEN_SETTLEMENT_PHASES])
+      .order("created_at", { ascending: true })
+      .limit(100),
+  ])
+
+  return [
+    ...(invoiceRows ?? []).map((row) => ({ source: "invoice_stripe" as const, row })),
+    ...(checkoutRows ?? []).map((row) => ({ source: "checkout_stripe" as const, row })),
+  ].sort((a, b) => String(a.row.created_at ?? "").localeCompare(String(b.row.created_at ?? "")))
+}
+
+/** FIFO pack of open settlements whose nets sum to inbound cents (Connect Grid hop). */
+export function greedyPackSettlements(
+  pending: { source: SettlementSource; row: Record<string, unknown> }[],
+  amountCents: number,
+  toleranceCents = 2,
+): { source: SettlementSource; row: Record<string, unknown> }[] {
+  if (!(amountCents > 0)) return []
+  const packed: { source: SettlementSource; row: Record<string, unknown> }[] = []
+  let remaining = amountCents
+  for (const candidate of pending) {
+    const net = Number(candidate.row.net_cents ?? 0)
+    if (net <= 0) continue
+    if (net - remaining > toleranceCents) continue
+    packed.push(candidate)
+    remaining -= net
+    if (remaining <= toleranceCents) break
+  }
+  if (Math.abs(remaining) > toleranceCents) return []
+  return packed
 }
 
 /**

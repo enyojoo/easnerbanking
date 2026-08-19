@@ -14,6 +14,11 @@ const mocks = vi.hoisted(() => ({
   upsertLedger: vi.fn(),
   applyDelta: vi.fn(),
   enqueueSweep: vi.fn(),
+  findGridVa: vi.fn(),
+  findPendingGridVa: vi.fn(),
+  findPendingGridSweep: vi.fn(),
+  reconcileGridVa: vi.fn(),
+  settleGridSweep: vi.fn(),
 }))
 
 vi.mock("@/lib/noah/noah-bank-onramp-chain-suppression", () => ({
@@ -63,6 +68,17 @@ vi.mock("@/lib/relay-deposit/relay-deposit-suppression", () => ({
 }))
 vi.mock("@/lib/relay-deposit/settle-relay-deposit", () => ({
   reconcileRelayDepositCreditForSolanaTx: mocks.reconcileRelay,
+}))
+vi.mock("@/lib/grid/grid-bank-deposit-chain-suppression", () => ({
+  findGridVaBankDepositChainSettlementForSuppression: mocks.findGridVa,
+  findPendingGridVaBankDepositForInboundAmount: mocks.findPendingGridVa,
+}))
+vi.mock("@/lib/grid/grid-bank-deposit-credit", () => ({
+  reconcileGridVaBankDepositCreditForSolanaTx: mocks.reconcileGridVa,
+}))
+vi.mock("@/lib/grid/va-turnkey-sweep", () => ({
+  findPendingGridVaTurnkeySweepForInboundAmount: mocks.findPendingGridSweep,
+  settleGridVaTurnkeySweepForSolanaTx: mocks.settleGridSweep,
 }))
 vi.mock("@/lib/turnkey/ledger-inbound-exists", () => ({
   turnkeyInboundLedgerRowExists: vi.fn().mockResolvedValue(false),
@@ -119,6 +135,11 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     mocks.linkNoahPayInHash.mockResolvedValue(undefined)
     mocks.findRelay.mockResolvedValue(null)
     mocks.reconcileRelay.mockResolvedValue({ credited: false })
+    mocks.findGridVa.mockResolvedValue(null)
+    mocks.findPendingGridVa.mockResolvedValue(null)
+    mocks.findPendingGridSweep.mockResolvedValue(null)
+    mocks.reconcileGridVa.mockResolvedValue({ credited: false })
+    mocks.settleGridSweep.mockResolvedValue(undefined)
   })
 
   it("suppresses relay Tron vault inbound and reconciles relay credit", async () => {
@@ -218,6 +239,50 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     expect(result.kind).toBe("suppressed_easetag")
     expect(mocks.upsertLedger).not.toHaveBeenCalled()
     expect(mocks.updateEasetag).toHaveBeenCalled()
+  })
+
+  it("suppresses pending Grid VA Turnkey sweep and settles hash", async () => {
+    mocks.findPendingGridSweep.mockResolvedValue({ transferId: "sweep-1" })
+    const admin = { from: vi.fn() }
+
+    const result = await applyTurnkeyInboundLedgerEvent(admin as never, {
+      ...baseInput,
+      businessId: "biz-1",
+      txHash: "hash-grid-sweep",
+    })
+    expect(result.kind).toBe("suppressed_noah")
+    expect(mocks.settleGridSweep).toHaveBeenCalledWith(admin, {
+      transferId: "sweep-1",
+      solanaTxHash: "hash-grid-sweep",
+    })
+    expect(mocks.upsertLedger).not.toHaveBeenCalled()
+  })
+
+  it("settles the Grid VA sweep when a pending bank deposit matches first", async () => {
+    mocks.findPendingGridVa.mockResolvedValue({
+      transactionId: "grid-pay-1",
+      gridTransactionId: "Transaction:in-1",
+    })
+    mocks.findPendingGridSweep.mockResolvedValue({ transferId: "sweep-2" })
+    const admin = {
+      from: vi.fn(() => ({
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({}),
+      })),
+    }
+
+    const result = await applyTurnkeyInboundLedgerEvent(admin as never, {
+      ...baseInput,
+      businessId: "biz-1",
+      txHash: "hash-grid-payin",
+    })
+    expect(result.kind).toBe("suppressed_noah")
+    expect(mocks.reconcileGridVa).toHaveBeenCalled()
+    expect(mocks.settleGridSweep).toHaveBeenCalledWith(admin, {
+      transferId: "sweep-2",
+      solanaTxHash: "hash-grid-payin",
+    })
+    expect(mocks.upsertLedger).not.toHaveBeenCalled()
   })
 
   it("suppresses YC fund balance vault delivery without upsert", async () => {

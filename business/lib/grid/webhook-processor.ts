@@ -237,6 +237,9 @@ export async function applyGridWebhookSideEffects(
   if (type.includes("OUTGOING")) {
     const xb = await handleGridCrossBorderSendWebhook(admin, { event, quoteId, transactionId, status })
     if (xb.handled) return
+    const { settleGridVaTurnkeySweepFromOutgoing } = await import("./va-turnkey-sweep")
+    const sweep = await settleGridVaTurnkeySweepFromOutgoing(admin, { event })
+    if (sweep.handled) return
     await handleGridBalancePayoutWebhook(admin, { event, quoteId, transactionId, status })
     return
   }
@@ -246,12 +249,18 @@ export async function applyGridWebhookSideEffects(
     if (xb.handled) return
     const fund = await handleGridFundBalanceWebhook(admin, { event, quoteId, status })
     if (fund.handled) return
-    const { handleGridVaInboundDepositWebhook } = await import("./grid-va-inbound-webhook")
-    const vaInbound = await handleGridVaInboundDepositWebhook(admin, { event })
-    if (vaInbound.handled) return
-    // Quote-less INCOMING: Stripe invoice settlement payout to Grid VA
+    // Connect settlement (originator EASNER) before generic VA bank on-ramp
     const { handleGridStripeSettlementWebhook } = await import("./stripe-settlement-webhook")
-    await handleGridStripeSettlementWebhook(admin, { event })
+    const stripeSettlement = await handleGridStripeSettlementWebhook(admin, { event })
+    if (stripeSettlement.handled) {
+      const { startGridVaTurnkeySweepFromInbound } = await import("./va-turnkey-sweep")
+      await startGridVaTurnkeySweepFromInbound(admin, { event }).catch((e) => {
+        console.warn("[grid] connect va turnkey sweep enqueue failed:", e instanceof Error ? e.message : e)
+      })
+      return
+    }
+    const { handleGridVaInboundDepositWebhook } = await import("./grid-va-inbound-webhook")
+    await handleGridVaInboundDepositWebhook(admin, { event })
     return
   }
 

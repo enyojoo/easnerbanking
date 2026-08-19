@@ -1,8 +1,39 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { gridFetch } from "./http"
 import { buildGridIdempotencyKey } from "./idempotency"
+import { normalizeGridCustomerId } from "./quote-request"
 import { getTurnkeyDepositAddressesForBusiness } from "@/lib/wallet/turnkey-deposit-addresses"
 import type { GridExternalAccount } from "./types"
+
+export function buildTurnkeyUsdcExternalAccountPayload(input: {
+  businessId: string
+  gridCustomerId: string
+  solanaAddress: string
+}): {
+  customerId: string
+  currency: "USDC"
+  platformAccountId: string
+  ownershipType: "FIRST_PARTY"
+  accountInfo: { accountType: "SOLANA_WALLET"; assetType: "USDC"; address: string }
+} {
+  return {
+    customerId: normalizeGridCustomerId(input.gridCustomerId),
+    currency: "USDC",
+    platformAccountId: `turnkey_sol_usdc_${input.businessId}`,
+    ownershipType: "FIRST_PARTY",
+    accountInfo: {
+      accountType: "SOLANA_WALLET",
+      assetType: "USDC",
+      address: input.solanaAddress.trim(),
+    },
+  }
+}
+
+function accountInfoAddress(row: GridExternalAccount): string {
+  const info = row.accountInfo
+  if (!info || typeof info !== "object") return ""
+  return String((info as Record<string, unknown>).address ?? "").trim()
+}
 
 /** Register customer Turnkey Solana USDC as Grid external account (settlement destination). */
 export async function registerTurnkeyUsdcExternalAccount(input: {
@@ -11,38 +42,74 @@ export async function registerTurnkeyUsdcExternalAccount(input: {
   userId: string
   gridCustomerId: string
 }): Promise<string | null> {
-  const deposits = await getTurnkeyDepositAddressesForBusiness(input.admin, input.businessId)
-  const usdcAddress = String(deposits?.USD?.address ?? "").trim()
-  if (!usdcAddress) return null
-
-  const platformAccountId = `turnkey_usdc_${input.businessId}`
-  const payload = {
-    customerId: input.gridCustomerId,
-    currency: "USDC",
-    platformAccountId,
-    accountInfo: {
-      accountType: "SOLANA_WALLET",
-      assetType: "USDC",
-      address: usdcAddress,
-    },
+  void input.userId
+  const deposits = await getTurnkeyDepositAddressesForBusiness(input.admin, input.businessId, {
+    mode: "fast",
+  })
+  const vaultPubkey = String(deposits?.USD?.ownerAddress ?? "").trim()
+  const ata = String(deposits?.USD?.address ?? "").trim()
+  const preferred = vaultPubkey || ata
+  if (!preferred) {
+    console.warn("[grid] turnkey USDC external account skipped: no Solana vault", {
+      businessId: input.businessId,
+    })
+    return null
   }
 
+  const customerId = normalizeGridCustomerId(input.gridCustomerId)
+  const platformAccountId = `turnkey_sol_usdc_${input.businessId}`
   const existing = await gridFetch<{ data?: GridExternalAccount[] }>({
     method: "GET",
-    path: `/customers/external-accounts?customerId=${encodeURIComponent(input.gridCustomerId)}&currency=USDC`,
-  }).catch(() => ({ data: [] as GridExternalAccount[] }))
+    path: `/customers/external-accounts?customerId=${encodeURIComponent(customerId)}&limit=100`,
+  }).catch((e) => {
+    console.warn("[grid] list USDC external accounts failed:", e instanceof Error ? e.message : e)
+    return { data: [] as GridExternalAccount[] }
+  })
 
+  const wanted = new Set([preferred, vaultPubkey, ata].filter(Boolean))
   const match = (existing.data ?? []).find((row) => {
-    const info = row.accountInfo as Record<string, unknown> | undefined
-    return String(info?.address ?? "") === usdcAddress
+    if (String(row.platformAccountId ?? "") === platformAccountId && row.id) return true
+    return wanted.has(accountInfoAddress(row))
   })
   if (match?.id) return match.id
 
-  const created = await gridFetch<GridExternalAccount>({
-    method: "POST",
-    path: "/customers/external-accounts",
-    json: payload,
-    idempotencyKey: buildGridIdempotencyKey(`grid_turnkey_usdc_${input.businessId}`, payload),
-  })
-  return created.id ?? null
+  const candidates = [...new Set([vaultPubkey, ata].filter(Boolean))]
+  let lastError: unknown = null
+  for (const address of candidates) {
+    const payload = buildTurnkeyUsdcExternalAccountPayload({
+      businessId: input.businessId,
+      gridCustomerId: customerId,
+      solanaAddress: address,
+    })
+    try {
+      const created = await gridFetch<GridExternalAccount>({
+        method: "POST",
+        path: "/customers/external-accounts",
+        json: payload,
+        idempotencyKey: buildGridIdempotencyKey(`grid_turnkey_sol_usdc_${input.businessId}`, payload),
+      })
+      if (created.id) return created.id
+    } catch (e) {
+      lastError = e
+      const message = e instanceof Error ? e.message : String(e)
+      if (/already exists/i.test(message)) {
+        const retry = await gridFetch<{ data?: GridExternalAccount[] }>({
+          method: "GET",
+          path: `/customers/external-accounts?customerId=${encodeURIComponent(customerId)}&limit=100`,
+        }).catch(() => ({ data: [] as GridExternalAccount[] }))
+        const found = (retry.data ?? []).find(
+          (row) => String(row.platformAccountId ?? "") === platformAccountId && row.id,
+        )
+        if (found?.id) return found.id
+      }
+      console.warn("[grid] register Turnkey USDC external account failed", {
+        businessId: input.businessId,
+        address,
+        error: e instanceof Error ? e.message : e,
+      })
+    }
+  }
+
+  if (lastError) return null
+  return null
 }

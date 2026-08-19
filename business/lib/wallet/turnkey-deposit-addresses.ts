@@ -160,6 +160,7 @@ export async function getTurnkeyDepositAddressesForContext(
 export async function getTurnkeyDepositAddressesForBusiness(
   admin: SupabaseClient,
   businessId: string,
+  opts?: { mode?: "fast" | "ensure" },
 ): Promise<TurnkeyDepositAddressesResponse> {
   const noahId = noahCustomerIdFromBusinessId(businessId)
 
@@ -181,8 +182,8 @@ export async function getTurnkeyDepositAddressesForBusiness(
   }
 
   const [usd, eur] = await Promise.all([
-    depositLineForVault(admin, ownerId, usdcVault),
-    depositLineForVault(admin, ownerId, eurcVault),
+    depositLineForVault(admin, ownerId, usdcVault, opts),
+    depositLineForVault(admin, ownerId, eurcVault, opts),
   ])
 
   return { USD: usd, EUR: eur }

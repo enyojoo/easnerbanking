@@ -1,9 +1,28 @@
 import { describe, expect, it } from "vitest"
 import {
   buildStripeInvoiceSettlementLifecycle,
+  inferStripeSettlementRail,
   resolveStripeCollectionListDisplay,
   stripeCollectionSettlementTitle,
 } from "./stripe-invoice-settlement-lifecycle"
+
+describe("inferStripeSettlementRail", () => {
+  it("does not treat a later VA→Turnkey sweep as the Stripe payout rail", () => {
+    expect(
+      inferStripeSettlementRail({
+        source: "invoice_stripe",
+        grid_turnkey_sweep_status: "settled",
+      }),
+    ).toBeNull()
+    expect(
+      inferStripeSettlementRail({
+        source: "invoice_stripe",
+        grid_transaction_id: "Transaction:abc",
+        grid_turnkey_sweep_status: "settled",
+      }),
+    ).toBe("grid_va")
+  })
+})
 
 describe("stripeCollectionSettlementTitle", () => {
   it("uses Invoice #number for invoice settlements", () => {
@@ -91,5 +110,25 @@ describe("buildStripeInvoiceSettlementLifecycle", () => {
       settledAt: "2026-08-03T00:00:00.000Z",
     })
     expect(steps.every((s) => s.state === "complete")).toBe(true)
+  })
+
+  it("infers grid_va rail from Connect credit metadata without settlement_rail", () => {
+    const steps = buildStripeInvoiceSettlementLifecycle({
+      status: "settled",
+      metadata: {
+        source: "invoice_stripe",
+        settlement_phase: "credited",
+        grid_transaction_id: "Transaction:01a0182e-5173-da6a-0000-d7235d231cb8",
+        stripe_connect_va_originator: "EASNER",
+        credited_at: "2026-08-19T10:43:21.545Z",
+        on_chain_settled_at: "2026-08-19T11:06:19.759Z",
+      },
+      createdAt: "2026-08-17T19:26:20.012Z",
+      settledAt: "2026-08-19T10:43:21.545Z",
+    })
+    expect(steps[1].description).toMatch(/bank account/i)
+    expect(steps[2].state).toBe("complete")
+    expect(steps[2].occurredAt).toBe("2026-08-19T10:43:21.545Z")
+    expect(steps[2].description).toMatch(/on-chain settlement completed/i)
   })
 })

@@ -131,5 +131,13 @@ export async function handleGridVaInboundDepositWebhook(
     onChainSettledAt: occurredAt,
   })
 
+  const { startGridVaTurnkeySweepFromInbound } = await import("./va-turnkey-sweep")
+  await startGridVaTurnkeySweepFromInbound(admin, {
+    event: input.event,
+    ledgerTransactionId: transactionId,
+  }).catch((e) => {
+    console.warn("[grid] va turnkey sweep enqueue failed:", e instanceof Error ? e.message : e)
+  })
+
   return { handled: true }
 }

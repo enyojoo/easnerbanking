@@ -113,6 +113,27 @@ vi.mock("@easner/shared", () => ({
     String(meta?.source ?? "").toLowerCase() === "invoice_stripe",
   isStripeCollectionSettlementMetadata: (meta?: Record<string, unknown> | null) =>
     ["invoice_stripe", "checkout_stripe"].includes(String(meta?.source ?? "").toLowerCase()),
+  inferStripeSettlementRail: (meta?: Record<string, unknown> | null) => {
+    const rail = String(meta?.settlement_rail ?? "").toLowerCase()
+    if (rail === "grid_va" || rail === "turnkey_stablecoin") return rail
+    if (meta?.turnkey_inbound_matched === true) return "turnkey_stablecoin"
+    if (
+      String(meta?.stripe_connect_va_originator ?? "").toUpperCase() === "EASNER" ||
+      String(meta?.grid_transaction_id ?? "").trim()
+    ) {
+      return "grid_va"
+    }
+    return null
+  },
+  stripeSettlementRailLabel: (rail: string | null) =>
+    rail === "grid_va" ? "Bank account" : rail === "turnkey_stablecoin" ? "Stablecoin" : null,
+  isStripeCollectionSettlementLifecycle: (lifecycle?: Array<{ id: string }> | null) =>
+    Boolean(
+      lifecycle?.some(
+        (step) =>
+          step.id === "payment_received" || step.id === "clearing" || step.id === "available",
+      ),
+    ),
   stripeCollectionSettlementTitle: (meta?: Record<string, unknown> | null) =>
     String(meta?.source ?? "").toLowerCase() === "invoice_stripe"
       ? `Invoice #${String(meta?.invoice_number ?? "")}`
@@ -358,6 +379,71 @@ describe("mapRowToBusinessTransaction", () => {
     expect(item.amount).toBe(56888)
     expect(item.fee).toBe(0)
     expect(item.lifecycle?.some((s) => s.id === "payment_received")).toBe(true)
+  })
+
+  it("keeps Stripe Connect invoices as book transfers after an on-chain sweep hash", () => {
+    const item = mapRowToBusinessTransaction({
+      id: "b27b7b76-0235-4291-a8cd-87c9104b2511",
+      easner_transaction_id: "ETID94909659",
+      provider: "stripe",
+      provider_transaction_id: "pi_3U5WAmFtxW9Zk3ZB0C9YWvRi",
+      status: "settled",
+      amount: 1,
+      currency: "USD",
+      direction: "in",
+      tx_hash: "2KsnZY5nJkGjasrFufMGJXoPLM12R8dbs8bk9GfU4ZGcshD7XBXoMjntXEnoZGqxk27oSrvV1bQDpVbCe5gTLHro",
+      settled_at: "2026-08-19T10:43:21.545Z",
+      metadata: {
+        source: "invoice_stripe",
+        headline: "Invoice #EINV-47929786BA35 payment",
+        invoice_id: "48cd305d-5363-4580-8a7c-eb2178826de5",
+        invoice_number: "EINV-47929786BA35",
+        settlement_phase: "credited",
+        credited_at: "2026-08-19T10:43:21.545Z",
+        grid_transaction_id: "Transaction:01a0182e-5173-da6a-0000-d7235d231cb8",
+        stripe_connect_va_originator: "EASNER",
+        on_chain_settled_at: "2026-08-19T11:06:19.759Z",
+        gross_cents: 100,
+        net_cents: 100,
+        fee_cents: 0,
+      },
+      created_at: "2026-08-17T19:26:20.012Z",
+    })
+
+    expect(item.type).toBe("book")
+    expect(item.lifecycle?.some((s) => s.id === "payment_received")).toBe(true)
+    expect(item.lifecycle?.some((s) => s.id === "available")).toBe(true)
+    expect(item.settlementRailLabel).toBe("Bank account")
+    expect(item.paymentRail).toBeUndefined()
+  })
+
+  it("keeps Stripe checkout and payment-link collections as book transfers after a hash", () => {
+    const item = mapRowToBusinessTransaction({
+      id: "uuid-checkout",
+      easner_transaction_id: "ETID61951425",
+      provider: "stripe",
+      status: "settled",
+      amount: 0.67,
+      currency: "USD",
+      direction: "in",
+      tx_hash: "OnChainHashCheckout",
+      metadata: {
+        source: "checkout_stripe",
+        headline: "Testing",
+        collection_source: "link",
+        settlement_phase: "credited",
+        settlement_rail: "grid_va",
+        fee_cents: 33,
+        net_cents: 67,
+        gross_cents: 100,
+        collection_channel: "payment_link",
+      },
+      created_at: "2026-08-19T00:00:00.000Z",
+    })
+
+    expect(item.type).toBe("book")
+    expect(item.lifecycle?.some((s) => s.id === "available")).toBe(true)
+    expect(item.settlementRailLabel).toBe("Bank account")
   })
 
   it("lists Stripe collection payment amount (gross), not net credited", () => {

@@ -4,8 +4,11 @@
 
 - Customers pay **Easner** (platform MoR) — Easner appears on the card statement.
 - Destination charges transfer net funds to the merchant’s **connected account**.
-- Connected account auto-payouts (daily) to the merchant’s **Grid VA**.
-- Grid inbound credits the merchant’s **Easner wallet balance** (existing Hop 3).
+- Connected account auto-payouts to the merchant’s **Grid VA**. ACH originator **EASNER**
+  is a Connect payout (match to Incoming invoice / link / checkout). Originator
+  **Bridge Building** is a Stripe Dashboard / platform payout — keep as a bank deposit.
+- Grid `INCOMING_PAYMENT.COMPLETED` is the settlement signal (Hop 3). `payout.paid` on
+  connected accounts is optional enrichment; the platform webhook often never receives it.
 
 Connect onboarding, destination charges, zero platform fee, and daily payouts are **built into the app** whenever Stripe invoice payments are enabled (keys present). No extra env flags.
 
@@ -14,7 +17,8 @@ Connect onboarding, destination charges, zero platform fee, and daily payouts ar
 1. Confirm Connect: Buyers purchase from you · sellers paid individually · embedded.
 2. Platform statement descriptor prefix: **EASNER**.
 3. Webhook `/api/webhooks/stripe`:
-   - Enable **Listen to events on Connected accounts**.
+   - **Listen to events on Connected accounts** is optional (onboarding + `payout.paid` metadata).
+     Connect Incoming is closed from Grid, not from `payout.paid`.
    - Events: `account.updated`, `account.external_account.created`, `account.external_account.updated`,
      `account.external_account.deleted`, `capability.updated`, `checkout.session.completed`,
      `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.succeeded`,
@@ -84,15 +88,17 @@ The status API discovers and links the account on load.
 ## E2E test (test mode)
 
 1. Complete merchant Connect setup.
-2. Pay invoice → Hop 1: invoice paid, Incoming, `payment_received`.
+2. Pay invoice → Hop 1: invoice paid, Incoming, `payment_received` (`transfer.created` on the platform).
 3. Confirm transfer on connected account in Stripe Dashboard.
-4. Wait/trigger payout → Hop 2: `payout_sent`.
-5. Grid inbound → Hop 3: balance credited, ledger settled.
+4. When the connected-account payout hits the Grid VA, Grid webhook originator is **EASNER**.
+   Hop 3: pack that inbound to open `payment_received` nets (FIFO), credit wallet once, settle
+   the Stripe ledger. Do **not** post a second Bank Deposit.
+5. A **Bridge Building** ACH on the same VA is a Dashboard payout — leave it as a bank deposit.
 
 ## Monitoring
 
-- Confirm `event_inbox` receives **`account.updated`** for Connect onboarding (not just checkout events).
-  Enable **Listen to events on Connected accounts** on the platform webhook.
+- Confirm `event_inbox` receives Grid `INCOMING_PAYMENT.COMPLETED` for Connect (originator EASNER).
+  `payout.paid` may be absent; that is expected unless connected-account events are enabled.
 - Status syncs from Stripe on Settings load; Grid VA payout linking runs automatically after verification.
 - Payout destination reconciliation re-asserts the Grid VA as default when Stripe Dashboard edits drift.
 
@@ -112,12 +118,17 @@ Edits in embedded onboarding or the Stripe Dashboard are pulled back on the next
 
 ```bash
 npx tsx scripts/stripe-connect-reconcile-settlements.ts
+npx tsx scripts/stripe-connect-reconcile-settlements.ts --heal
 ```
 
 Alerts:
 
 - `payment_received` older than 7 days
 - `payout_sent` older than 14 days without `credited`
+
+`--heal` credits invoice `ETID94909659` from Grid EASNER inbound `ETID97792716`, **deletes**
+that mistaken bank-deposit row, and does **not** credit the wallet again. Leaves Bridge Building
+`ETID27341688` as a Dashboard deposit.
 
 ## Support notes
 
@@ -132,7 +143,7 @@ Alerts:
 
 Payment Links and the website embed share the invoice settlement rail: one session creator
 (`createOnlineCheckoutSession`), destination charges with `application_fee_amount`, and the
-same payout → Grid VA → balance hops. Settlements land in `checkout_stripe_settlements` and
+same Grid VA hop. Settlements land in `checkout_stripe_settlements` and
 the ledger source is `checkout_stripe`.
 
 Before enabling for a merchant:

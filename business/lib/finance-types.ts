@@ -72,6 +72,8 @@ export interface Transaction {
   autopayoutConfigId?: string
   displayCurrency?: string
   paymentRail?: string
+  /** Stripe Connect collection: Bank account | Stablecoin */
+  settlementRailLabel?: string
   counterpartyName?: string
   txHash?: string
   walletAddress?: string

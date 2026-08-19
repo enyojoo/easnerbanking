@@ -1,7 +1,9 @@
 import {
   buildStripeInvoiceSettlementLifecycle,
+  inferStripeSettlementRail,
   isStripeCollectionSettlementMetadata,
   stripeCollectionSettlementTitle,
+  stripeSettlementRailLabel,
   type StripeInvoiceSettlementLifecycleStep,
 } from "@easner/shared"
 import { resolveLedgerWhenAtFromRow } from "@/lib/ledger/ledger-occurred-at"
@@ -38,15 +40,6 @@ function centsToMajor(cents: unknown): number {
   const n = typeof cents === "number" ? cents : Number(cents)
   if (!Number.isFinite(n)) return 0
   return n / 100
-}
-
-function settlementRailLabel(raw: unknown): string | null {
-  const s = String(raw ?? "")
-    .trim()
-    .toLowerCase()
-  if (s === "grid_va") return "Bank account"
-  if (s === "turnkey_stablecoin") return "Stablecoin"
-  return null
 }
 
 export function resolveStripeInvoiceSettlementDetail(
@@ -93,6 +86,6 @@ export function resolveStripeInvoiceSettlementDetail(
     paymentMethod,
     customerName,
     customerEmail,
-    settlementRailLabel: settlementRailLabel(meta.settlement_rail),
+    settlementRailLabel: stripeSettlementRailLabel(inferStripeSettlementRail(meta)),
   }
 }

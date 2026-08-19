@@ -223,7 +223,10 @@ export async function refreshGridBusinessReceiveRails(input: {
         businessId: input.businessId,
         userId: input.userId,
         gridCustomerId,
-      }).catch(() => null)
+      }).catch((e) => {
+        console.warn("[grid] register Turnkey USDC external account after KYB failed:", e instanceof Error ? e.message : e)
+        return null
+      })
     }
   } catch {
     externalAccountId = null

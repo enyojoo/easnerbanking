@@ -8,6 +8,7 @@ import {
   gridQuoteFeesUsd,
   gridQuoteSendingAmountMajor,
   pickGridInternalAccountForCurrency,
+  buildGridVaTurnkeySweepQuoteBody,
 } from "./quote-request"
 
 describe("buildGridRealtimeFundingSource", () => {
@@ -114,6 +115,31 @@ describe("buildGridCrossBorderQuoteBody", () => {
       lockedCurrencySide: "RECEIVING",
       purposeOfPayment: "GIFT",
       destination: { accountId: "ExternalAccount:dest" },
+    })
+  })
+})
+
+describe("buildGridVaTurnkeySweepQuoteBody", () => {
+  it("debits INTERNAL_FIAT and immediately executes to first-party Turnkey USDC", () => {
+    expect(
+      buildGridVaTurnkeySweepQuoteBody({
+        sourceInternalAccountId: "InternalAccount:usd",
+        turnkeyExternalAccountId: "ExternalAccount:turnkey",
+        lockedSendMinor: 100,
+      }),
+    ).toEqual({
+      source: {
+        sourceType: "ACCOUNT",
+        accountId: "InternalAccount:usd",
+      },
+      destination: {
+        destinationType: "ACCOUNT",
+        accountId: "ExternalAccount:turnkey",
+      },
+      lockedCurrencyAmount: 100,
+      lockedCurrencySide: "SENDING",
+      immediatelyExecute: true,
+      purposeOfPayment: "SELF",
     })
   })
 })

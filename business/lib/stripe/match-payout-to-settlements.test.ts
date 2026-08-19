@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type Stripe from "stripe"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { matchPayoutToSettlements } from "./match-payout-to-settlements"
+import { greedyPackSettlements, matchPayoutToSettlements } from "./match-payout-to-settlements"
 
 const balanceTransactionsList = vi.fn()
 
@@ -166,5 +166,24 @@ describe("matchPayoutToSettlements", () => {
       settlementId: "set_link",
       balanceTransactionId: null,
     })
+  })
+})
+
+describe("greedyPackSettlements", () => {
+  it("takes the oldest $1 when packing a $1 inbound", () => {
+    const packed = greedyPackSettlements(
+      [
+        {
+          source: "invoice_stripe",
+          row: { id: "old", net_cents: 100, created_at: "2026-08-17T00:00:00Z" },
+        },
+        {
+          source: "checkout_stripe",
+          row: { id: "new", net_cents: 100, created_at: "2026-08-19T00:00:00Z" },
+        },
+      ],
+      100,
+    )
+    expect(packed.map((p) => p.row.id)).toEqual(["old"])
   })
 })

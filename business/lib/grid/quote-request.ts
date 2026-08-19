@@ -185,6 +185,22 @@ export function buildGridFundBalanceQuoteBody(input: {
   }
 }
 
+/** VA on-ramp: debit INTERNAL_FIAT USD → first-party Turnkey Solana USDC. */
+export function buildGridVaTurnkeySweepQuoteBody(input: {
+  sourceInternalAccountId: string
+  turnkeyExternalAccountId: string
+  lockedSendMinor: number
+}) {
+  return {
+    source: buildGridAccountSource({ accountId: input.sourceInternalAccountId }),
+    destination: buildGridAccountDestination(input.turnkeyExternalAccountId),
+    lockedCurrencyAmount: input.lockedSendMinor,
+    lockedCurrencySide: "SENDING" as const,
+    immediatelyExecute: true,
+    purposeOfPayment: "SELF" as const,
+  }
+}
+
 /** Cross-border send: local currency pay-in → recipient external account. */
 export function buildGridCrossBorderQuoteBody(input: {
   customerId: string

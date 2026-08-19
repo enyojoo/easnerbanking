@@ -260,16 +260,15 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     : row.base_currency != null
       ? String(row.base_currency)
       : undefined
-  const paymentRail =
-    stripeInvoiceSettlementDetail?.settlementRailLabel ??
-    (String(
-      meta?.payment_rail ??
-        meta?.source_payment_rail ??
-        meta?.destination_payment_rail ??
-        row.chain ??
-        "",
-    ).trim() ||
-      undefined)
+  const paymentRail = stripeInvoiceSettlementDetail
+    ? undefined
+    : (String(
+        meta?.payment_rail ??
+          meta?.source_payment_rail ??
+          meta?.destination_payment_rail ??
+          row.chain ??
+          "",
+      ).trim() || undefined)
   const isEasetagP2p = String(meta?.source ?? "").toLowerCase() === "easetag_p2p"
   const easetagHandle =
     isEasetagP2p
@@ -319,11 +318,12 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
         : ""
 
   const hasStablecoinSignals =
-    paymentRail != null ||
-    row.chain != null ||
-    row.asset != null ||
-    row.tx_hash != null ||
-    row.wallet_address != null
+    !stripeInvoiceSettlementDetail &&
+    (paymentRail != null ||
+      row.chain != null ||
+      row.asset != null ||
+      row.tx_hash != null ||
+      row.wallet_address != null)
   const type = hasStablecoinSignals ? ("stablecoin" as const) : ("book" as const)
 
   const inboundReceive =
@@ -504,6 +504,9 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
               : {}),
             ...(stripeInvoiceSettlementDetail.customerEmail
               ? { customerEmail: stripeInvoiceSettlementDetail.customerEmail }
+              : {}),
+            ...(stripeInvoiceSettlementDetail.settlementRailLabel
+              ? { settlementRailLabel: stripeInvoiceSettlementDetail.settlementRailLabel }
               : {}),
             ledgerCreatedAt,
           }

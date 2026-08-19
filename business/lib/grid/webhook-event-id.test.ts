@@ -77,6 +77,17 @@ describe("gridWebhookCustomerId", () => {
   })
 })
 
+describe("gridWebhookDestinationAccountId", () => {
+  it("reads destination.accountId", async () => {
+    const { gridWebhookDestinationAccountId } = await import("@/lib/grid/webhook-event-id")
+    expect(
+      gridWebhookDestinationAccountId({
+        destination: { accountId: "InternalAccount:usd-1" },
+      }),
+    ).toBe("InternalAccount:usd-1")
+  })
+})
+
 describe("gridWebhookEventType", () => {
   it("reads eventType or type", () => {
     expect(gridWebhookEventType({ eventType: "INCOMING_PAYMENT.COMPLETED" })).toBe(

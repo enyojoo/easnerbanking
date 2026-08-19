@@ -4,6 +4,11 @@ import { retrieveGridQuote } from "./quote-funding"
 import { creditGridFundBalanceFromWebhook } from "./fund-balance-credit"
 import { handleGridCrossBorderSendWebhook } from "./webhook-processor"
 import type { GridWebhookEvent } from "./types"
+import {
+  GRID_VA_TURNKEY_SWEEP_MODE,
+  enqueueMissingGridVaTurnkeySweeps,
+  executeGridVaTurnkeySweep,
+} from "./va-turnkey-sweep"
 
 export type StuckGridFundBalanceRow = {
   id: string
@@ -38,7 +43,7 @@ export async function listStuckGridFundBalanceTransfers(
   const { data: rows } = await admin
     .from("grid_transfers")
     .select("id,transaction_id,mode,status,grid_quote_id,grid_transaction_id,expires_at")
-    .in("mode", ["fund_balance", "cross_border_send"])
+    .in("mode", ["fund_balance", "cross_border_send", GRID_VA_TURNKEY_SWEEP_MODE])
     .in("status", STUCK_STATUSES)
     .lt("updated_at", cutoff)
     .order("updated_at", { ascending: true })
@@ -74,7 +79,12 @@ async function markTransferFailed(admin: SupabaseClient, row: StuckGridFundBalan
 export async function processStuckGridFundBalanceTransfers(
   admin: SupabaseClient,
   opts: { limit?: number; olderThanMs?: number } = {},
-): Promise<{ processed: number; completed: number; failed: number }> {
+): Promise<{ processed: number; completed: number; failed: number; healed?: number }> {
+  const healed = await enqueueMissingGridVaTurnkeySweeps(admin, opts).catch((e) => {
+    console.warn("[grid] va turnkey sweep heal failed:", e instanceof Error ? e.message : e)
+    return { enqueued: 0 }
+  })
+
   const jobs = await listStuckGridFundBalanceTransfers(admin, opts)
   let processed = 0
   let completed = 0
@@ -82,6 +92,14 @@ export async function processStuckGridFundBalanceTransfers(
 
   for (const row of jobs) {
     processed += 1
+
+    if (row.mode === GRID_VA_TURNKEY_SWEEP_MODE) {
+      const result = await executeGridVaTurnkeySweep(admin, row.id)
+      if (result.ok) completed += 1
+      else failed += 1
+      continue
+    }
+
     const quoteId = String(row.grid_quote_id ?? "").trim()
     if (row.expires_at && Date.parse(row.expires_at) < Date.now()) {
       await markTransferFailed(admin, row, "quote_expired")
@@ -140,5 +158,5 @@ export async function processStuckGridFundBalanceTransfers(
     }
   }
 
-  return { processed, completed, failed }
+  return { processed, completed, failed, healed: healed.enqueued }
 }

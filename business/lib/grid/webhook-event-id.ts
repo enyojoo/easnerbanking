@@ -35,6 +35,20 @@ export function gridWebhookCustomerId(data: Record<string, unknown> | undefined)
   return fromField || id
 }
 
+export function gridWebhookDestinationAccountId(data: Record<string, unknown> | undefined): string {
+  if (!data) return ""
+  const dest = data.destination
+  if (dest && typeof dest === "object") {
+    const fromDest = String((dest as Record<string, unknown>).accountId ?? "").trim()
+    if (fromDest) return fromDest
+  }
+  for (const key of ["destinationAccountId", "internalAccountId", "accountId"] as const) {
+    const value = String(data[key] ?? "").trim()
+    if (value.startsWith("InternalAccount:")) return value
+  }
+  return ""
+}
+
 export function gridWebhookEventId(payload: Record<string, unknown>): string {
   const eventType = gridWebhookEventType(payload)
   const topId = String(payload.id ?? payload.eventId ?? "").trim()

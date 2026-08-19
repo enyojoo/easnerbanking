@@ -22,6 +22,39 @@ export function isGridVaBankDepositMetadata(metadata: unknown): boolean {
   return meta.flow === "bank_onramp" && meta.payout_provider === "grid" && meta.grid_va_inbound === true
 }
 
+async function attachGridVaOnChainHash(
+  admin: SupabaseClient,
+  input: {
+    transactionId: string
+    priorMeta: Record<string, unknown>
+    solanaTxHash: string
+    onChainSettledAt?: string | null
+  },
+): Promise<void> {
+  const hash = String(input.solanaTxHash || "").trim()
+  if (!hash) return
+  const already = String(input.priorMeta.grid_on_chain_tx_hash ?? input.priorMeta.tx_hash ?? "").trim()
+  if (already === hash && input.priorMeta.on_chain_settled_at) return
+
+  const settledAt = input.onChainSettledAt?.trim() || new Date().toISOString()
+  const merged = mergeBankDepositLifecycleMetadata(input.priorMeta, {
+    on_chain_settled_at: settledAt,
+  })
+  await admin
+    .from("transactions")
+    .update({
+      tx_hash: hash,
+      metadata: {
+        ...merged,
+        grid_on_chain_tx_hash: hash,
+        grid_turnkey_sweep_status: "settled",
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.transactionId)
+  await notifyGridBankDepositPayInSettledPush(admin, input.transactionId).catch(() => undefined)
+}
+
 async function turnkeySettledInboundAppliedBalanceForHashes(
   admin: SupabaseClient,
   hashes: string[],
@@ -70,6 +103,14 @@ export async function tryCreditGridVaBankDepositWallet(
     .maybeSingle()
   const priorMeta = (priorCredit?.metadata as Record<string, unknown> | undefined) ?? {}
   if (priorMeta.wallet_balance_credit_key === creditKey) {
+    if (input.solanaTxHash) {
+      await attachGridVaOnChainHash(admin, {
+        transactionId: input.transactionId,
+        priorMeta,
+        solanaTxHash: input.solanaTxHash,
+        onChainSettledAt: input.onChainSettledAt,
+      })
+    }
     return { credited: false, skippedReason: "already_credited" }
   }
 
@@ -105,10 +146,12 @@ export async function tryCreditGridVaBankDepositWallet(
     delta: input.creditAmount,
   })
 
-  const onChainSettledAt = input.onChainSettledAt?.trim() || new Date().toISOString()
+  const chainSettledAt = input.solanaTxHash
+    ? input.onChainSettledAt?.trim() || new Date().toISOString()
+    : null
   const merged = mergeBankDepositLifecycleMetadata(priorMeta, {
-    on_chain_settled_at: onChainSettledAt,
-    grid_on_chain_tx_hash: input.solanaTxHash ?? undefined,
+    fiat_settled_at: input.onChainSettledAt?.trim() || new Date().toISOString(),
+    ...(chainSettledAt ? { on_chain_settled_at: chainSettledAt } : {}),
   })
 
   await admin
@@ -119,13 +162,17 @@ export async function tryCreditGridVaBankDepositWallet(
         wallet_balance_credit_key: creditKey,
         settled_stablecoin_amount: input.creditAmount,
         wallet_ledger_currency: input.ledgerCurrency,
+        grid_turnkey_sweep_status: input.solanaTxHash ? "settled" : "pending",
+        ...(input.solanaTxHash ? { grid_on_chain_tx_hash: input.solanaTxHash } : {}),
       },
       ...(input.solanaTxHash ? { tx_hash: input.solanaTxHash } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq("id", input.transactionId)
 
-  await notifyGridBankDepositPayInSettledPush(admin, input.transactionId).catch(() => undefined)
+  if (chainSettledAt) {
+    await notifyGridBankDepositPayInSettledPush(admin, input.transactionId).catch(() => undefined)
+  }
 
   return { credited: true }
 }
@@ -185,7 +232,10 @@ export async function reconcileGridVaBankDepositCreditForSolanaTx(
     payInRow =
       (rows ?? []).find((row) => {
         const meta = (row.metadata as Record<string, unknown> | undefined) ?? {}
-        if (meta.wallet_balance_credit_key) return false
+        const onChain =
+          String((row as { tx_hash?: string | null }).tx_hash ?? "").trim() ||
+          (typeof meta.grid_on_chain_tx_hash === "string" ? meta.grid_on_chain_tx_hash.trim() : "")
+        if (onChain) return false
         const amount = Number(row.amount ?? 0)
         const ledger = String(meta.wallet_ledger_currency ?? row.currency ?? "USD").toUpperCase()
         return ledger === currency && Math.abs(amount - opts.inboundAmount!) < 0.02

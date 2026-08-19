@@ -67,3 +67,44 @@ describe("findGridVaBankDepositChainSettlementForSuppression", () => {
     expect(found).toBeNull()
   })
 })
+
+describe("findPendingGridVaBankDepositForInboundAmount", () => {
+  it("matches a credited VA deposit that still has no on-chain hash", async () => {
+    const { findPendingGridVaBankDepositForInboundAmount } = await import("./grid-bank-deposit-chain-suppression")
+    const rows = [
+      {
+        id: "tx-credited",
+        amount: 1,
+        currency: "USD",
+        provider_transaction_id: "Transaction:in-1",
+        tx_hash: null,
+        metadata: {
+          flow: "bank_onramp",
+          payout_provider: "grid",
+          grid_va_inbound: true,
+          wallet_balance_credit_key: "grid_va_inbound:Transaction:in-1",
+          wallet_ledger_currency: "USD",
+        },
+      },
+    ]
+    const from = vi.fn(() => {
+      const api: Record<string, unknown> = {}
+      const chain = () => api
+      api.select = vi.fn(chain)
+      api.eq = vi.fn(chain)
+      api.is = vi.fn(chain)
+      api.filter = vi.fn(chain)
+      api.order = vi.fn(chain)
+      api.limit = vi.fn(async () => ({ data: rows }))
+      return api
+    })
+    const found = await findPendingGridVaBankDepositForInboundAmount(
+      { from } as unknown as SupabaseClient,
+      { userId: "user-1", businessId: "biz-1", amount: 1, currency: "USD" },
+    )
+    expect(found).toEqual({
+      transactionId: "tx-credited",
+      gridTransactionId: "Transaction:in-1",
+    })
+  })
+})

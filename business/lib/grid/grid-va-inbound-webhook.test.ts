@@ -15,6 +15,11 @@ vi.mock("./grid-bank-deposit-credit", () => ({
   reconcileGridVaBankDepositCreditForSolanaTx: (...args: unknown[]) => mockReconcile(...args),
 }))
 
+const mockSweep = vi.fn().mockResolvedValue({ ok: true })
+vi.mock("./va-turnkey-sweep", () => ({
+  startGridVaTurnkeySweepFromInbound: (...args: unknown[]) => mockSweep(...args),
+}))
+
 vi.mock("@/lib/business/org-owner", () => ({
   resolveBusinessOrgOwnerUserId: vi.fn().mockResolvedValue("owner-user"),
 }))
@@ -61,6 +66,10 @@ describe("handleGridVaInboundDepositWebhook", () => {
       }),
     )
     expect(mockCredit).toHaveBeenCalled()
+    expect(mockSweep).toHaveBeenCalledWith(
+      admin,
+      expect.objectContaining({ ledgerTransactionId: "tx-1" }),
+    )
   })
 
   it("is idempotent when wallet credit already applied", async () => {
@@ -80,6 +89,7 @@ describe("handleGridVaInboundDepositWebhook", () => {
     expect(handled).toEqual({ handled: true })
     expect(mockUpsert).toHaveBeenCalled()
     expect(mockCredit).toHaveBeenCalled()
+    expect(mockSweep).toHaveBeenCalled()
   })
 
   it("ignores events without a resolvable business", async () => {

@@ -113,6 +113,7 @@ export async function tryMatchTurnkeyStripeSettlement(
           metadata: {
             ...prior,
             settlement_phase: "credited",
+            settlement_rail: "turnkey_stablecoin",
             credited_at: now,
             grid_transfer_id: transferId,
             turnkey_inbound_matched: true,

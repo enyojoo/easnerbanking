@@ -28,6 +28,48 @@ function readIso(meta: Record<string, unknown>, key: string): string | null {
   return s || null
 }
 
+function isTruthyFlag(value: unknown): boolean {
+  if (value === true) return true
+  const s = String(value ?? "").trim().toLowerCase()
+  return s === "true" || s === "1"
+}
+
+/** Rail Stripe actually paid out on — not the later Grid VA → Turnkey sweep. */
+export function inferStripeSettlementRail(
+  meta: Record<string, unknown> | null | undefined,
+): StripeSettlementRail | null {
+  if (!meta) return null
+  const railRaw = String(meta.settlement_rail ?? "").trim().toLowerCase()
+  if (railRaw === "grid_va" || railRaw === "turnkey_stablecoin") {
+    return railRaw
+  }
+  if (isTruthyFlag(meta.turnkey_inbound_matched)) {
+    return "turnkey_stablecoin"
+  }
+  const originator = String(meta.stripe_connect_va_originator ?? "").trim().toUpperCase()
+  const gridTx = String(meta.grid_transaction_id ?? "").trim()
+  if (originator === "EASNER" || gridTx) {
+    return "grid_va"
+  }
+  return null
+}
+
+export function stripeSettlementRailLabel(rail: StripeSettlementRail | null): string | null {
+  if (rail === "grid_va") return "Bank account"
+  if (rail === "turnkey_stablecoin") return "Stablecoin"
+  return null
+}
+
+export function isStripeCollectionSettlementLifecycle(
+  lifecycle: ReadonlyArray<{ id: string }> | null | undefined,
+): boolean {
+  if (!lifecycle?.length) return false
+  return lifecycle.some(
+    (step) =>
+      step.id === "payment_received" || step.id === "clearing" || step.id === "available",
+  )
+}
+
 function normalizeLedgerStatus(status: string): string {
   const s = String(status || "").trim().toLowerCase()
   if (s === "settled") return "settled"
@@ -57,6 +99,13 @@ function clearingDescription(rail: StripeSettlementRail | null): string {
     return "Payout is on the way to your bank account."
   }
   return "Payout is clearing to your Easner account."
+}
+
+function availableDescription(meta: Record<string, unknown>): string {
+  if (readIso(meta, "on_chain_settled_at")) {
+    return "Funds are available in your account balance. On-chain settlement completed."
+  }
+  return "Funds are now available in your account balance."
 }
 
 export type BuildStripeInvoiceSettlementLifecycleInput = {
@@ -157,11 +206,7 @@ export function buildStripeInvoiceSettlementLifecycle(
   const meta = input.metadata ?? {}
   const ledgerStatus = normalizeLedgerStatus(input.status)
   const phase = normalizePhase(meta)
-  const railRaw = String(meta.settlement_rail ?? "").trim().toLowerCase()
-  const rail: StripeSettlementRail | null =
-    railRaw === "grid_va" || railRaw === "turnkey_stablecoin"
-      ? (railRaw as StripeSettlementRail)
-      : null
+  const rail = inferStripeSettlementRail(meta)
 
   const paymentReceivedAt =
     readIso(meta, "payment_received_at") ?? input.createdAt ?? null
@@ -225,7 +270,7 @@ export function buildStripeInvoiceSettlementLifecycle(
     {
       id: "available",
       title: "Available",
-      description: "Funds are now available in your account balance.",
+      description: availableDescription(meta),
       state: availableState,
       occurredAt: availableAt,
     },

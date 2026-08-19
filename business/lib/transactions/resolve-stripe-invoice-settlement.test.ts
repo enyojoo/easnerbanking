@@ -71,6 +71,64 @@ describe("resolveStripeInvoiceSettlementDetail", () => {
     expect(detail?.customerEmail).toBe("ada@example.com")
   })
 
+  it("infers bank-account settlement rail from Grid Connect credit metadata", () => {
+    const detail = resolveStripeInvoiceSettlementDetail({
+      status: "settled",
+      amount: 1,
+      currency: "USD",
+      settled_at: "2026-08-19T10:43:21.545Z",
+      tx_hash: "2KsnZY5nJkGjasrFufMGJXoPLM12R8dbs8bk9GfU4ZGcshD7XBXoMjntXEnoZGqxk27oSrvV1bQDpVbCe5gTLHro",
+      metadata: {
+        source: "invoice_stripe",
+        invoice_id: "48cd305d-5363-4580-8a7c-eb2178826de5",
+        invoice_number: "EINV-47929786BA35",
+        settlement_phase: "credited",
+        credited_at: "2026-08-19T10:43:21.545Z",
+        grid_transaction_id: "Transaction:01a0182e-5173-da6a-0000-d7235d231cb8",
+        stripe_connect_va_originator: "EASNER",
+        on_chain_settled_at: "2026-08-19T11:06:19.759Z",
+        fee_cents: 0,
+        gross_cents: 100,
+        net_cents: 100,
+      },
+    })
+
+    expect(detail?.settlementRailLabel).toBe("Bank account")
+    expect(detail?.lifecycle.find((s) => s.id === "clearing")?.description).toMatch(/bank account/i)
+    expect(detail?.lifecycle.find((s) => s.id === "available")?.state).toBe("complete")
+    expect(detail?.lifecycle.find((s) => s.id === "available")?.occurredAt).toBe(
+      "2026-08-19T10:43:21.545Z",
+    )
+    expect(detail?.lifecycle.find((s) => s.id === "available")?.description).toMatch(
+      /on-chain settlement completed/i,
+    )
+  })
+
+  it("maps checkout_stripe collections onto the same settlement lifecycle", () => {
+    const detail = resolveStripeInvoiceSettlementDetail({
+      status: "settled",
+      amount: 0.67,
+      currency: "USD",
+      metadata: {
+        source: "checkout_stripe",
+        headline: "Testing",
+        collection_source: "link",
+        settlement_phase: "credited",
+        settlement_rail: "turnkey_stablecoin",
+        credited_at: "2026-08-19T00:00:00.000Z",
+        fee_cents: 33,
+        gross_cents: 100,
+        net_cents: 67,
+      },
+    })
+
+    expect(detail).not.toBeNull()
+    expect(detail?.displayTitle).toBe("Testing")
+    expect(detail?.invoiceId).toBeNull()
+    expect(detail?.settlementRailLabel).toBe("Stablecoin")
+    expect(detail?.lifecycle.every((s) => s.state === "complete")).toBe(true)
+  })
+
   it("returns null for non-invoice rows", () => {
     expect(
       resolveStripeInvoiceSettlementDetail({

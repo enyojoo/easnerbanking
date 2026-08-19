@@ -19,6 +19,10 @@ import {
   findPendingGridVaBankDepositForInboundAmount,
 } from "@/lib/grid/grid-bank-deposit-chain-suppression"
 import { reconcileGridVaBankDepositCreditForSolanaTx } from "@/lib/grid/grid-bank-deposit-credit"
+import {
+  findPendingGridVaTurnkeySweepForInboundAmount,
+  settleGridVaTurnkeySweepForSolanaTx,
+} from "@/lib/grid/va-turnkey-sweep"
 import { tryCompleteDepositSplitFromUserVaultInbound } from "@/lib/deposit-omnibus/execute-deposit-split"
 import { tryCompleteYcFundBalanceFromUserVaultInbound } from "@/lib/yellowcard/execute-yc-fund-balance-split"
 import { isDepositSplitEnabled } from "@/lib/deposit-omnibus/config"
@@ -60,6 +64,29 @@ export type TurnkeyInboundLedgerResult =
   | { kind: "suppressed_easetag" }
   | { kind: "applied"; transactionId: string | null }
   | { kind: "skipped" }
+
+async function settleMatchingGridVaTurnkeySweep(
+  admin: SupabaseClient,
+  input: {
+    userId: string
+    businessId: string | null
+    amount: number
+    currency: string
+    txHash: string
+  },
+): Promise<void> {
+  const pendingSweep = await findPendingGridVaTurnkeySweepForInboundAmount(admin, {
+    userId: input.userId,
+    businessId: input.businessId,
+    amount: input.amount,
+    currency: input.currency,
+  })
+  if (!pendingSweep) return
+  await settleGridVaTurnkeySweepForSolanaTx(admin, {
+    transferId: pendingSweep.transferId,
+    solanaTxHash: input.txHash,
+  }).catch(() => {})
+}
 
 /**
  * Shared Turnkey inbound ledger path: Noah/Easetag suppression, upsert, balance delta, sweep.
@@ -127,6 +154,13 @@ export async function applyTurnkeyInboundLedgerEvent(
           inboundAmount: input.amount,
           ledgerCurrency: String(input.currency ?? "USD").toUpperCase() === "EUR" ? "EUR" : "USD",
         }).catch(() => {})
+        await settleMatchingGridVaTurnkeySweep(admin, {
+          userId,
+          businessId,
+          amount: input.amount,
+          currency: input.currency,
+          txHash,
+        })
         return { kind: "suppressed_noah" }
       }
 
@@ -207,6 +241,29 @@ export async function applyTurnkeyInboundLedgerEvent(
           businessId,
           inboundAmount: input.amount,
           ledgerCurrency: String(input.currency ?? "USD").toUpperCase() === "EUR" ? "EUR" : "USD",
+        }).catch(() => {})
+        await settleMatchingGridVaTurnkeySweep(admin, {
+          userId,
+          businessId,
+          amount: input.amount,
+          currency: input.currency,
+          txHash,
+        })
+      }
+      return { kind: "suppressed_noah" }
+    }
+
+    const pendingSweep = await findPendingGridVaTurnkeySweepForInboundAmount(admin, {
+      userId,
+      businessId,
+      amount: input.amount,
+      currency: input.currency,
+    })
+    if (pendingSweep) {
+      if (txHash) {
+        await settleGridVaTurnkeySweepForSolanaTx(admin, {
+          transferId: pendingSweep.transferId,
+          solanaTxHash: txHash,
         }).catch(() => {})
       }
       return { kind: "suppressed_noah" }

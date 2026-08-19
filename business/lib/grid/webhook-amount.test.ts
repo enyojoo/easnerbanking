@@ -33,12 +33,12 @@ describe("resolveGridVaInboundWalletCredit", () => {
 })
 
 describe("extractGridOnChainTxHash", () => {
-  it("reads reconciliationInstructions.transactionHash", () => {
+  it("reads destination.onChainTransaction.transactionHash", () => {
     expect(
       extractGridOnChainTxHash({
-        reconciliationInstructions: { transactionHash: "abc123" },
+        destination: { onChainTransaction: { transactionHash: "solanaSig" } },
       }),
-    ).toBe("abc123")
+    ).toBe("solanaSig")
   })
 })
 

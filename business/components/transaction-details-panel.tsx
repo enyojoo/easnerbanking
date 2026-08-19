@@ -29,6 +29,7 @@ import {
   computeDisplayProcessingFee,
   formatAccountBalanceLabel,
   formatTransactionWhen,
+  isStripeCollectionSettlementLifecycle,
   isVerificationDepositMetadata,
   pickVisibleProcessingFee,
   resolveLedgerWhenAt,
@@ -38,6 +39,14 @@ import {
   isPayoutReviewFeeVisible,
   useYcPayInExpiredDetailRefetch,
 } from "@easner/shared"
+
+function isStripeCollectionSettlementTransaction(transaction: Transaction): boolean {
+  return (
+    Boolean(transaction.invoiceId) ||
+    Boolean(transaction.settlementRailLabel) ||
+    isStripeCollectionSettlementLifecycle(transaction.lifecycle)
+  )
+}
 
 function resolveTransactionDetailWhenAt(transaction: Transaction): string | null {
   return (
@@ -79,8 +88,10 @@ function TransactionDetailActions({
     !showLifecycleTracker &&
     (Boolean(transaction.transferId) || transaction.id.startsWith("ETID")) &&
     (transaction.status === "pending" || transaction.status === "processing")
+  const isStripeInvoiceSettlement = isStripeCollectionSettlementTransaction(transaction)
   const description = transaction.description.toLowerCase()
   const isStablecoinDeposit =
+    !isStripeInvoiceSettlement &&
     transaction.direction === "credit" &&
     (transaction.type === "stablecoin" ||
       description.startsWith("stablecoin") ||
@@ -142,15 +153,7 @@ function TransactionSummaryDetails({
 }) {
   const cardLast4 = transaction.cardLast4
   const descLower = transaction.description.toLowerCase()
-  const isStripeInvoiceSettlement =
-    Boolean(transaction.invoiceId) ||
-    descLower === "invoice payment" ||
-    Boolean(
-      transaction.lifecycle?.some(
-        (step) =>
-          step.id === "payment_received" || step.id === "clearing" || step.id === "available",
-      ),
-    )
+  const isStripeInvoiceSettlement = isStripeCollectionSettlementTransaction(transaction)
   const isStablecoin =
     !isStripeInvoiceSettlement &&
     (transaction.type === "stablecoin" ||
@@ -216,6 +219,13 @@ function TransactionSummaryDetails({
           </TransactionDetailSummaryRow>
         ) : isStripeInvoiceSettlement && transaction.paymentScheme ? (
           <TransactionDetailSummaryRow label="Payment method" value={transaction.paymentScheme} />
+        ) : null}
+
+        {isStripeInvoiceSettlement && transaction.settlementRailLabel ? (
+          <TransactionDetailSummaryRow
+            label="Settles to"
+            value={transaction.settlementRailLabel}
+          />
         ) : null}
 
         {isStripeInvoiceSettlement && transaction.customerName ? (
@@ -383,16 +393,18 @@ export function TransactionDetailsPanel({
     )
   // Stablecoin deposits settle on-chain in a single event, so the Processing → Completed
   // tracker would always render both steps complete. Skip it (bank deposits keep it).
+  // Stripe Connect collections keep Settlement status even after an on-chain sweep hash
+  // is written onto the same ledger row.
+  const isStripeInvoiceSettlement = isStripeCollectionSettlementTransaction(transaction)
   const isStablecoinDeposit =
-    transaction.type === "stablecoin" && transaction.direction === "credit"
+    !isStripeInvoiceSettlement &&
+    transaction.type === "stablecoin" &&
+    transaction.direction === "credit"
   const isEasetagReceive =
     transaction.paymentScheme === "Easetag" ||
     transaction.inboundReceive?.kind === "easetag_receive"
   const showLifecycleTracker =
     Boolean(transaction.lifecycle?.length) && !isStablecoinDeposit && !isEasetagReceive
-  const isStripeInvoiceSettlement = transaction.lifecycle?.some(
-    (step) => step.id === "payment_received" || step.id === "clearing" || step.id === "available",
-  )
   const lifecycleTitle = isGlobalPayout
     ? "Transfer status"
     : isStripeInvoiceSettlement
