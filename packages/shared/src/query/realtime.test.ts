@@ -313,3 +313,26 @@ describe("attachRealtime INSERT prepend path", () => {
     qc.clear()
   })
 })
+
+describe("attachRealtime business collections", () => {
+  const BUSINESS: Scope = { kind: "business", userId: "user-1", orgId: "org-1" }
+
+  it("invalidates Incoming and Payment Links when a checkout settlement arrives", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const mock = buildMockSupabase()
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries")
+    const detach = attachRealtime({ qc, scope: BUSINESS, supabase: mock.supabase, batchMs: 0 })
+
+    mock.triggerInsert({ id: "set_1", business_id: "org-1" }, "checkout_stripe_settlements")
+    await new Promise((r) => setTimeout(r, 5))
+
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: qk.wallets.incoming(BUSINESS) }),
+    )
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: qk.collections.paymentLinks.root(BUSINESS) }),
+    )
+    detach()
+    qc.clear()
+  })
+})

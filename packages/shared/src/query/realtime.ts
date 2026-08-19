@@ -461,6 +461,30 @@ export function attachRealtime({
   // NOTE: approvals were planned but are not present in all Supabase schemas.
   // Do not subscribe to a non-existent table; reintroduce when the table lands.
 
+  // --- Stripe collections (business Incoming + Payment Links) ----------------
+  if (scope.kind === "business") {
+    const refreshIncomingAndLinks = () => {
+      markRecentMoneyActivity()
+      qc.invalidateQueries({ queryKey: qk.wallets.incoming(scope), refetchType: "active" })
+      qc.invalidateQueries({ queryKey: qk.collections.paymentLinks.root(scope), refetchType: "active" })
+    }
+    for (const table of [
+      "checkout_stripe_settlements",
+      "invoice_stripe_settlements",
+      "payment_links",
+    ] as const) {
+      channel.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table, filter: scopeFilter },
+        () => {
+          health.lastEventAt = Date.now()
+          emit()
+          batcher.schedule(qk.wallets.incoming(scope), refreshIncomingAndLinks)
+        },
+      )
+    }
+  }
+
   // --- cards -----------------------------------------------------------------
   channel.on(
     "postgres_changes",

@@ -116,12 +116,12 @@ export function walletBalancesQueryOptions(scope: Scope, queryClient: QueryClien
 
 export function incomingBalancesQueryOptions(scope: Scope) {
   return {
-    queryKey: [...qk.wallets.root(scope), "incoming-balances"] as const,
+    queryKey: qk.wallets.incoming(scope),
     queryFn: async () => {
       const res = await apiFetch<{ balances?: IncomingBalances }>("/api/business/incoming-balances")
       return (res.balances ?? {}) as IncomingBalances
     },
-    staleTime: 60_000,
+    staleTime: 15_000,
     gcTime: 10 * 60_000,
     meta: { safePersist: false, webPersist: "reduced", freshness: "operational" as const },
   }

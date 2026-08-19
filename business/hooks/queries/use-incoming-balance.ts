@@ -1,27 +1,36 @@
 "use client"
 
 import { useQuery } from "@tanstack/react-query"
+import { pollingIntervalFor } from "@easner/shared"
 import { useScope } from "@/lib/query/scope"
+import { useRealtimeHealth } from "@/lib/query/realtime-health-context"
+import { useDocumentVisibility } from "@/lib/query/use-document-visibility"
 import { incomingBalancesQueryOptions, type IncomingBalances } from "@/lib/query/workspace-prefetch"
 
 export type { IncomingBalances }
 
 /**
- * Unsettled Stripe invoice settlement totals by currency (Incoming on Accounts).
+ * Unsettled Stripe invoice + checkout settlement totals by currency (Incoming on Accounts).
  * SUM(net_cents) WHERE phase IN ('payment_received','payout_sent').
  */
 export function useIncomingBalances() {
   const { scope } = useScope()
+  const realtimeHealth = useRealtimeHealth()
+  const tabVisible = useDocumentVisibility()
   const options = scope ? incomingBalancesQueryOptions(scope) : null
 
   return useQuery<IncomingBalances>({
     ...(options ?? {
       queryKey: ["wallets", "incoming-balances", "disabled"] as const,
       queryFn: async (): Promise<IncomingBalances> => ({}),
-      staleTime: 60_000,
+      staleTime: 15_000,
       gcTime: 10 * 60_000,
     }),
     enabled: Boolean(scope),
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchInterval: tabVisible ? pollingIntervalFor("operational", realtimeHealth) : false,
+    refetchIntervalInBackground: false,
   })
 }
 

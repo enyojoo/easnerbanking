@@ -15,5 +15,7 @@ export async function refetchBusinessMoneyQueries(qc: QueryClient, scope: Scope 
   await Promise.all([
     qc.refetchQueries({ queryKey: qk.transactions.root(scope), type: "all" }),
     qc.refetchQueries({ queryKey: qk.wallets.root(scope), type: "all" }),
+    qc.refetchQueries({ queryKey: qk.wallets.incoming(scope), type: "all" }),
+    qc.refetchQueries({ queryKey: qk.collections.paymentLinks.root(scope), type: "all" }),
   ])
 }

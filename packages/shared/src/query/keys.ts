@@ -70,6 +70,7 @@ export const qk = {
       [...scopeKey(scope), "wallets", walletId] as const,
     balance: (scope: Scope, walletId: string) =>
       [...scopeKey(scope), "wallets", walletId, "balance"] as const,
+    incoming: (scope: Scope) => [...scopeKey(scope), "wallets", "incoming-balances"] as const,
   },
   transactions: {
     root: (scope: Scope) => [...scopeKey(scope), "transactions"] as const,

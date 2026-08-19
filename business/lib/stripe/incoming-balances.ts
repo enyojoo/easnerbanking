@@ -5,7 +5,7 @@ export type IncomingSettlementRow = {
 }
 
 /**
- * Sum unsettled Stripe invoice settlements per currency (major units).
+ * Sum unsettled Stripe invoice + checkout settlements per currency (major units).
  * Skips rows whose ledger transaction was removed (manual ops cleanup).
  */
 export function sumIncomingBalances(
