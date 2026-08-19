@@ -44,6 +44,7 @@ import {
   activityLabelForNotification,
   buildTransactionNotificationHeadlines,
 } from "./transaction-notification-headlines"
+import { sanitizeCustomerFacingFailureReason } from "./sanitize-customer-facing-failure-reason"
 
 /** Appended to failed outbound push copy when debited funds are restored. */
 export const FAILED_OUTBOUND_FUNDS_RETURNED_PUSH =
@@ -336,6 +337,7 @@ export function deriveTransactionNotification(
   const amountText = formatMoneyDisplay(Math.abs(input.amount || 0), input.currency)
   const meta = input.metadata ?? null
   const outcome = input.outcome ?? "success"
+  const failureReason = sanitizeCustomerFacingFailureReason(input.failureReason)
   const paymentRail = String(
     meta?.payment_rail ?? meta?.source_payment_rail ?? meta?.destination_payment_rail ?? "",
   )
@@ -352,7 +354,7 @@ export function deriveTransactionNotification(
     paymentRail: paymentRail || undefined,
     transactionId: input.transactionId,
     easnerTransactionId: input.easnerTransactionId,
-    failureReason: input.failureReason,
+    failureReason,
   }
 
   if (
@@ -383,8 +385,8 @@ export function deriveTransactionNotification(
   if (outcome === "failed") {
     if (isBalanceConvertMetadata(meta)) {
       const activityLabel = balanceConvertListProductLabel()
-      const body = input.failureReason
-        ? `Your move of ${amountText} could not be completed. ${input.failureReason}`
+      const body = failureReason
+        ? `Your move of ${amountText} could not be completed. ${failureReason}`
         : `Your move of ${amountText} could not be completed.`
       return finalizeDescriptor(
         {
@@ -406,11 +408,11 @@ export function deriveTransactionNotification(
       })
       const body = withFailedOutboundBody(
         payout.recipientName
-          ? input.failureReason
-            ? `Could not send ${payout.amountDisplay} to ${payout.recipientName}. ${input.failureReason}`
+          ? failureReason
+            ? `Could not send ${payout.amountDisplay} to ${payout.recipientName}. ${failureReason}`
             : `Could not send ${payout.amountDisplay} to ${payout.recipientName}.`
-          : input.failureReason
-            ? `Your ${payout.notificationActivityLabel.toLowerCase()} could not be completed. ${input.failureReason}`
+          : failureReason
+            ? `Your ${payout.notificationActivityLabel.toLowerCase()} could not be completed. ${failureReason}`
             : `Your ${payout.notificationActivityLabel.toLowerCase()} could not be completed.`,
         direction,
         outcome,
@@ -432,8 +434,8 @@ export function deriveTransactionNotification(
     if (direction === "in" && meta && isYcFundBalanceDepositMetadata(meta)) {
       const review = normalizeYcFundBalanceDepositReview(meta.deposit_review)
       const activityLabel = resolveYcFundBalanceNotificationActivityLabelFromMetadata(meta, review)
-      const body = input.failureReason
-        ? `Your ${activityLabel} could not be completed. ${input.failureReason}`
+      const body = failureReason
+        ? `Your ${activityLabel} could not be completed. ${failureReason}`
         : `Your ${activityLabel} could not be completed.`
       return finalizeDescriptor(
         {
@@ -459,8 +461,8 @@ export function deriveTransactionNotification(
         meta?.fiat_deposit_currency ?? meta?.settled_currency ?? input.currency ?? "USD",
       )
       const activityLabel = resolveVaFundingNotificationActivityLabel(currency)
-      const body = input.failureReason
-        ? `Your ${activityLabel} could not be completed. ${input.failureReason}`
+      const body = failureReason
+        ? `Your ${activityLabel} could not be completed. ${failureReason}`
         : `Your ${activityLabel} could not be completed.`
       return finalizeDescriptor(
         {
@@ -482,8 +484,8 @@ export function deriveTransactionNotification(
     })
     const kind = inferFailedKind({ isCard, direction, outboundEasetag, inboundEasetag })
     const body = withFailedOutboundBody(
-      input.failureReason
-        ? `Your ${category.toLowerCase()} could not be completed. ${input.failureReason}`
+      failureReason
+        ? `Your ${category.toLowerCase()} could not be completed. ${failureReason}`
         : `Your ${category.toLowerCase()} could not be completed.`,
       direction,
       outcome,

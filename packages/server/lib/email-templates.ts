@@ -2,7 +2,7 @@
 
 import { personalMobileTransactionUrl } from "@easner/shared/mobile-personal-links"
 import { resolveMobileAppStoreUrls } from "@easner/shared/mobile-app-store-urls"
-import { formatTransactionWhen, renderGridReceiptDisclosureHtml } from "@easner/shared"
+import { formatTransactionWhen, renderGridReceiptDisclosureHtml, sanitizeCustomerFacingFailureReason } from "@easner/shared"
 import {
   easnerUserGreetingParagraphHtml,
   formatEasnerUserGreetingPlain,
@@ -146,8 +146,9 @@ function transactionFailedTemplate(): EmailTemplate {
     subject: (data: TransactionEmailData) => transactionEmailSubject(data),
     preheader: (data: TransactionEmailData) => data.body,
     html: (data: TransactionEmailData, audience = "personal") => {
-      const reason = data.failureReason
-        ? `<p class="confirmation-text"><strong>Reason:</strong> ${data.failureReason}</p>`
+      const failureReason = sanitizeCustomerFacingFailureReason(data.failureReason)
+      const reason = failureReason
+        ? `<p class="confirmation-text"><strong>Reason:</strong> ${failureReason}</p>`
         : ""
       const content = `
         ${transactionEmailIntroHtml(data)}
@@ -161,7 +162,8 @@ function transactionFailedTemplate(): EmailTemplate {
       }, { audience, preheader: data.body, showPreferencesLink: false })
     },
     text: (data: TransactionEmailData, audience = "personal") => {
-      return `${data.title}\n\n${transactionEmailIntroText(data)}${data.failureReason ? `\nReason: ${data.failureReason}` : ""}\n\nContact support: ${EASNER_CONTACT_URL}`
+      const reason = sanitizeCustomerFacingFailureReason(data.failureReason)
+      return `${data.title}\n\n${transactionEmailIntroText(data)}${reason ? `\nReason: ${reason}` : ""}\n\nContact support: ${EASNER_CONTACT_URL}`
     },
   }
 }

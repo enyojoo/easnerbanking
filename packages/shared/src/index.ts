@@ -622,6 +622,7 @@ export {
   pushTransactionDetailAliasIds,
   type PushTransactionSnapshotRow,
 } from "./transactions/push-transaction-snapshot"
+export { sanitizeCustomerFacingFailureReason } from "./transactions/sanitize-customer-facing-failure-reason"
 export {
   deriveTransactionNotification,
   descriptorToPushContent,

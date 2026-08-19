@@ -180,3 +180,39 @@ describe("deriveTransactionNotification balance convert", () => {
     expect(descriptor.body).toBe("Your move of $500 could not be completed.")
   })
 })
+
+describe("deriveTransactionNotification failed Grid payout", () => {
+  it("omits QUOTE_EXECUTION_FAILED from customer copy", () => {
+    const descriptor = deriveTransactionNotification({
+      provider: "grid",
+      direction: "out",
+      amount: 1.55,
+      currency: "USD",
+      outcome: "failed",
+      failureReason: "QUOTE_EXECUTION_FAILED",
+      metadata: {
+        grid_mode: "balance_payout",
+        receive_amount: 2000,
+        receive_currency: "NGN",
+        payout_review: {
+          you_send_amount: 1.44,
+          total_debited: 1.55,
+          exchange_fee: 0.03,
+          processing_fee: 0.01,
+          exchange_rate: 1387.8,
+          send_currency: "USD",
+          receive_amount: 2000,
+          receive_currency: "NGN",
+          transfer_method: "Local transfer",
+          processing_time: "Within minutes",
+        },
+        recipient_snapshot: { full_name: "Samuel Enyojo Odiba" },
+      },
+    })
+    expect(descriptor.body).toContain("Could not send")
+    expect(descriptor.body).toContain("Samuel Enyojo Odiba")
+    expect(descriptor.body).toContain("Any debited funds have been returned to your balance.")
+    expect(descriptor.body).not.toContain("QUOTE_EXECUTION_FAILED")
+    expect(descriptor.failureReason).toBeUndefined()
+  })
+})

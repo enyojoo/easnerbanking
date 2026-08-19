@@ -69,6 +69,15 @@ describe("emailTemplates", () => {
     expect(html).toContain("https://www.easner.com/contact")
   })
 
+  it("failed transfer email omits provider error codes from Reason", () => {
+    const html = emailTemplates.transactionFailed.html(
+      { ...templateFixtures.transactionFailed, failureReason: "QUOTE_EXECUTION_FAILED" },
+      "personal",
+    )
+    expect(html).not.toContain("QUOTE_EXECUTION_FAILED")
+    expect(html).not.toContain("<strong>Reason:</strong>")
+  })
+
   it("security alert emails use Hey greeting and contact page CTA", () => {
     const html = emailTemplates.mfaEnabled.html(
       templateFixtures.mfaEnabled as SecurityAlertEmailData,
