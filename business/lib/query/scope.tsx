@@ -4,7 +4,11 @@ import * as React from "react"
 import type { BusinessScope } from "@easner/shared"
 import { useAuth } from "@/lib/auth-context"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import { readBusinessStartupSnapshot, probeStoredSupabaseSession } from "@/lib/query/web-persist"
+import {
+  EMPTY_STORED_SUPABASE_SESSION_PROBE,
+  readBusinessStartupSnapshot,
+  probeStoredSupabaseSession,
+} from "@/lib/query/web-persist"
 
 /**
  * Client-side scope context for the Easner Business app.
@@ -31,11 +35,7 @@ const ScopeContext = React.createContext<BusinessScopeContextValue | undefined>(
 
 export function BusinessScopeProvider({ children }: { children: React.ReactNode }) {
   const { user, sessionUserId } = useAuth()
-  const [bootProbe] = React.useState(() =>
-    typeof window !== "undefined"
-      ? probeStoredSupabaseSession()
-      : { userId: null as string | null, likelyAuthenticated: false },
-  )
+  const [bootProbe, setBootProbe] = React.useState(EMPTY_STORED_SUPABASE_SESSION_PROBE)
   const bootUserId = bootProbe.likelyAuthenticated ? bootProbe.userId : null
   const scopeUserId = user?.id ?? sessionUserId ?? bootUserId
   const [override, setOverride] = React.useState<BusinessScope | null>(null)
@@ -44,6 +44,10 @@ export function BusinessScopeProvider({ children }: { children: React.ReactNode 
     userId: string
     businessId: string | null
   } | null>(null)
+
+  React.useLayoutEffect(() => {
+    setBootProbe(probeStoredSupabaseSession())
+  }, [])
 
   const seededOrgId = React.useMemo(() => {
     if (!scopeUserId) return null

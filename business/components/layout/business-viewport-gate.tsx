@@ -1,6 +1,7 @@
 "use client"
 
 import type { ReactNode } from "react"
+import { Suspense } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
 import { DesktopMinViewportGate } from "@/components/layout/desktop-min-viewport-gate"
 import { parseSettingsVerificationFlow } from "@/lib/compliance/cutover-comms"
@@ -18,7 +19,7 @@ function bypassesDesktopViewportGate(pathname: string, flow: string | null, host
   return false
 }
 
-export function BusinessViewportGate({
+function BusinessViewportGateInner({
   children,
   hostname,
 }: {
@@ -28,10 +29,30 @@ export function BusinessViewportGate({
   const pathname = usePathname() ?? ""
   const searchParams = useSearchParams()
   const flow = searchParams.get("flow")
-  const host =
-    hostname ?? (typeof window !== "undefined" ? window.location.hostname : null)
+  const host = hostname ?? null
   if (bypassesDesktopViewportGate(pathname, flow, host)) {
     return <>{children}</>
   }
   return <DesktopMinViewportGate product="business">{children}</DesktopMinViewportGate>
+}
+
+export function BusinessViewportGate({
+  children,
+  hostname,
+}: {
+  children: ReactNode
+  hostname?: string | null
+}) {
+  const pathname = usePathname() ?? ""
+  const host = hostname ?? null
+  if (isPublicSurfacePath(pathname, host)) {
+    return <>{children}</>
+  }
+  // Own Suspense so `useSearchParams` does not empty the root layout
+  // (`<Suspense fallback={null}>` → React #418 on /dashboard).
+  return (
+    <Suspense fallback={<DesktopMinViewportGate product="business">{children}</DesktopMinViewportGate>}>
+      <BusinessViewportGateInner hostname={hostname}>{children}</BusinessViewportGateInner>
+    </Suspense>
+  )
 }

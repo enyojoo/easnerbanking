@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react"
 import type { User } from "@supabase/supabase-js"
 import { clearBusinessAppSessionCookie } from "@/lib/app-session-client"
 import { ensureBusinessAppSession } from "@/lib/app-session-client"
@@ -34,7 +34,10 @@ import {
   stashSignupBlockedMessage,
 } from "@/lib/auth/signup-blocked-message"
 import { runBusinessBootstrapClient } from "@/lib/auth/run-business-bootstrap-client"
-import { probeStoredSupabaseSession } from "@/lib/query/web-persist"
+import {
+  EMPTY_STORED_SUPABASE_SESSION_PROBE,
+  probeStoredSupabaseSession,
+} from "@/lib/query/web-persist"
 import { redirectToWorkspaceLogin } from "@/lib/auth/workspace-login-redirect"
 
 function parseAuthFragment(hash: string): Record<string, string> {
@@ -72,11 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
-  const [storedProbe] = useState(() =>
-    typeof window !== "undefined"
-      ? probeStoredSupabaseSession()
-      : { userId: null as string | null, likelyAuthenticated: false },
-  )
+  const [storedProbe, setStoredProbe] = useState(EMPTY_STORED_SUPABASE_SESSION_PROBE)
   const canBootstrapWorkspace = storedProbe.likelyAuthenticated
   const sessionUserId = user?.id ?? (canBootstrapWorkspace ? storedProbe.userId : null)
   const bootstrapFullName = useMemo(() => {
@@ -87,6 +86,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         : [user.user_metadata?.first_name, user.user_metadata?.last_name].filter(Boolean).join(" ")
     return String(fullNameFromMeta ?? "").trim()
   }, [user])
+
+  useLayoutEffect(() => {
+    setStoredProbe(probeStoredSupabaseSession())
+  }, [])
 
   useEffect(() => {
     setMounted(true)

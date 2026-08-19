@@ -30,10 +30,7 @@ import {
 import { isSettingsVerificationFlowLocation } from "@/lib/compliance/cutover-comms"
 
 function useHostedVerificationFlowOpen() {
-  const [open, setOpen] = useState(() => {
-    if (typeof window === "undefined") return false
-    return isSettingsVerificationFlowLocation(window.location.pathname, window.location.search)
-  })
+  const [open, setOpen] = useState(false)
 
   useEffect(() => {
     const read = () => {

@@ -112,6 +112,12 @@ export type StoredSupabaseSessionProbe = {
   likelyAuthenticated: boolean
 }
 
+/** SSR-safe probe. Reading localStorage during render causes React #418 hydration mismatches. */
+export const EMPTY_STORED_SUPABASE_SESSION_PROBE: StoredSupabaseSessionProbe = {
+  userId: null,
+  likelyAuthenticated: false,
+}
+
 /** Synchronous read of Supabase auth storage — used for instant login redirect vs optimistic cache boot. */
 export function probeStoredSupabaseSession(): StoredSupabaseSessionProbe {
   if (typeof window === "undefined") {

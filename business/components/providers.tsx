@@ -47,9 +47,10 @@ import {
 export function Providers({ children }: { children: React.ReactNode }) {
   const queryClient = getBrowserQueryClient()
   const { user } = useAuth()
-  const restoredSessionUserId = React.useMemo(() => {
+  const [restoredSessionUserId, setRestoredSessionUserId] = React.useState<string | null>(null)
+  React.useLayoutEffect(() => {
     const probe = probeStoredSupabaseSession()
-    return probe.likelyAuthenticated ? probe.userId : null
+    setRestoredSessionUserId(probe.likelyAuthenticated ? probe.userId : null)
   }, [])
   const persistedUserId = user?.id ?? restoredSessionUserId
   const persister = React.useMemo(

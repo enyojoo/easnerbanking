@@ -49,13 +49,14 @@ export function AppSurfaceLayout({ children }: { children: React.ReactNode }) {
     setClientReady(true)
   }, [])
 
-  const storedSessionLikelyValid = clientReady
-    ? probeStoredSupabaseSession().likelyAuthenticated
-    : canBootstrapWorkspace
+  const storedSessionLikelyValid =
+    clientReady && probeStoredSupabaseSession().likelyAuthenticated
 
+  // First paint must match SSR (empty shell). Reading localStorage before
+  // `clientReady` is the React #418 hydration mismatch on /dashboard.
   const canShowWorkspace =
     Boolean(user) ||
-    ((isLoading || !clientReady) && (canBootstrapWorkspace || storedSessionLikelyValid))
+    (clientReady && isLoading && (canBootstrapWorkspace || storedSessionLikelyValid))
 
   const definitivelyLoggedOut =
     clientReady &&
