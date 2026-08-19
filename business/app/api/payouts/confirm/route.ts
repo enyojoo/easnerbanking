@@ -46,6 +46,7 @@ export async function POST(request: Request) {
     sourceBalanceCurrency?: string
     note?: string
     paymentPurpose?: string
+    liveQuote?: boolean
   } | null
 
   const amountEntryMode = body?.amountEntryMode === "send" ? "send" : "receive"
@@ -124,6 +125,7 @@ export async function POST(request: Request) {
         note: typeof body?.note === "string" ? body.note.trim() : undefined,
         purpose: typeof body?.paymentPurpose === "string" ? body.paymentPurpose.trim() : undefined,
         idempotencyKey: `send_lock:${operationUserId}:${recipientId}:${Date.now()}`,
+        gridLiveQuote: body?.liveQuote === true,
       },
     )
     return NextResponse.json({ ok: true, quote: locked.rawQuote })

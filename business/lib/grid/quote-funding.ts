@@ -51,13 +51,17 @@ export async function resolveGridPlatformUsdcFundingInstructions(): Promise<
 
 /**
  * Ensure quote carries Solana USDC funding instructions for balance payout.
- * Tries create response → GET quote → customer USDC internal account.
+ * Create response, then GET quote. Do not fall back to platform USDC deposit
+ * instructions — those are not this quote's REALTIME_FUNDING address.
  */
-export async function hydrateGridQuotePaymentInstructions(quote: GridQuote): Promise<GridQuote> {
+export async function hydrateGridQuotePaymentInstructions(
+  quote: GridQuote,
+  opts?: { skipRetrieve?: boolean },
+): Promise<GridQuote> {
   if (extractGridFundingSolanaAddress(quote)) return quote
 
   const quoteId = String(quote.id ?? "").trim()
-  if (quoteId) {
+  if (!opts?.skipRetrieve && quoteId) {
     try {
       const retrieved = await retrieveGridQuote(quoteId)
       const retrievedFunding = retrieved.fundingPaymentInstructions
@@ -67,25 +71,13 @@ export async function hydrateGridQuotePaymentInstructions(quote: GridQuote): Pro
         ...(retrievedFunding ? { fundingPaymentInstructions: retrievedFunding } : {}),
       }
       if (extractGridFundingSolanaAddress(merged)) return merged
-      quote = merged
+      return merged
     } catch (e) {
       console.warn(
         "[grid] quote retrieve for funding instructions failed:",
         e instanceof Error ? e.message : e,
       )
     }
-  }
-
-  try {
-    const platform = await resolveGridPlatformUsdcFundingInstructions()
-    if (platform && extractGridFundingSolanaAddress({ paymentInstructions: platform })) {
-      return { ...quote, paymentInstructions: platform }
-    }
-  } catch (e) {
-    console.warn(
-      "[grid] platform USDC funding instructions lookup failed:",
-      e instanceof Error ? e.message : e,
-    )
   }
 
   return quote

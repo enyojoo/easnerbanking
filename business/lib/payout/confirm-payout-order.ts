@@ -3,7 +3,7 @@ import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { buildPayoutQuote } from "@/lib/noah/payout-quote"
 import { selectProviderForCorridor } from "@/lib/payout-providers"
 import { resolveRecipientPayoutCountry, type RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
-import { confirmGridBalancePayoutOrder } from "@/lib/payout/confirm-grid-balance-payout"
+import { confirmGridBalancePayoutOrder, prefetchGridBalancePayoutLiveQuote } from "@/lib/payout/confirm-grid-balance-payout"
 import { confirmNoahPayoutOrder } from "@/lib/payout/confirm-noah-payout"
 import { confirmYcBalancePayoutOrder } from "@/lib/payout/confirm-yc-balance-payout"
 import { isPayoutLockOnReviewEnabled } from "@/lib/payout/payout-lock-flags"
@@ -25,6 +25,8 @@ export type ConfirmPayoutOrderInput = {
   note?: string
   paymentPurpose?: string
   recipient: RecipientSellPrepareRow
+  /** Background Grid POST /quotes. Review confirm must not set this. */
+  gridLiveQuote?: boolean
 }
 
 export async function confirmPayoutOrder(
@@ -63,26 +65,15 @@ export async function confirmPayoutOrder(
       : undefined
 
   if (providerId === "grid" && isPayoutLockOnReviewEnabled("grid")) {
-    const { data: userRow } = await admin
-      .from("users")
-      .select(
-        "residence_country,kyc_id_type,kyc_id_number,ng_local_id_type,ng_local_id_number,full_name,phone,email,date_of_birth,kyc_address_street,kyc_address_city,kyc_address_country",
-      )
-      .eq("id", kycUserId)
-      .maybeSingle()
-
-    return confirmGridBalancePayoutOrder({
-      admin,
-      userId: kycUserId,
-      businessId: input.businessId,
-      recipientId: input.recipientId,
-      destinationRef: input.destinationRef,
-      recipient,
-      receiveFiatAmount: input.receiveAmount,
-      sourceBalanceCurrency: input.sourceBalanceCurrency,
-      amountEntryMode,
-      sendBudget,
-      senderProfile: {
+    if (input.gridLiveQuote) {
+      const { data: userRow } = await admin
+        .from("users")
+        .select(
+          "residence_country,kyc_id_type,kyc_id_number,ng_local_id_type,ng_local_id_number,full_name,phone,email,date_of_birth,kyc_address_street,kyc_address_city,kyc_address_country",
+        )
+        .eq("id", kycUserId)
+        .maybeSingle()
+      const senderProfile = {
         residenceCountry: userRow?.residence_country,
         kycIdType: userRow?.kyc_id_type,
         kycIdNumber: userRow?.kyc_id_number,
@@ -95,7 +86,34 @@ export async function confirmPayoutOrder(
         addressStreet: userRow?.kyc_address_street,
         addressCity: userRow?.kyc_address_city,
         addressCountry: userRow?.kyc_address_country,
-      },
+      }
+      await prefetchGridBalancePayoutLiveQuote({
+        admin,
+        userId: kycUserId,
+        businessId: input.businessId,
+        recipientId: input.recipientId,
+        destinationRef: input.destinationRef,
+        recipient,
+        receiveFiatAmount: input.receiveAmount,
+        sourceBalanceCurrency: input.sourceBalanceCurrency,
+        amountEntryMode,
+        sendBudget,
+        senderProfile,
+        paymentPurpose: input.paymentPurpose,
+      })
+    }
+
+    return confirmGridBalancePayoutOrder({
+      admin,
+      userId: kycUserId,
+      businessId: input.businessId,
+      recipientId: input.recipientId,
+      destinationRef: input.destinationRef,
+      recipient,
+      receiveFiatAmount: input.receiveAmount,
+      sourceBalanceCurrency: input.sourceBalanceCurrency,
+      amountEntryMode,
+      sendBudget,
       paymentPurpose: input.paymentPurpose,
     })
   }

@@ -55,10 +55,21 @@ export function getGridQuoteRefreshBufferMs(): number {
   return 45_000
 }
 
+/** Reuse a confirm lock while the Grid quote is still valid. Do not use the 45s execute buffer — Grid quotes are often ~60s, so that buffer forced a second 20s POST /quotes. */
+export function getGridQuoteConfirmReuseBufferMs(): number {
+  return 5_000
+}
+
 export function gridQuoteNeedsRefresh(expiresAt?: string | null): boolean {
   const ms = expiresAt ? Date.parse(String(expiresAt)) : Number.NaN
   if (!Number.isFinite(ms)) return true
   return ms - Date.now() <= getGridQuoteRefreshBufferMs()
+}
+
+export function gridQuoteCanReuseOnConfirm(expiresAt?: string | null): boolean {
+  const ms = expiresAt ? Date.parse(String(expiresAt)) : Number.NaN
+  if (!Number.isFinite(ms)) return false
+  return ms - Date.now() > getGridQuoteConfirmReuseBufferMs()
 }
 
 /** Prefer Grid's real rate-lock expiry when it is still in the future (YC parity). */

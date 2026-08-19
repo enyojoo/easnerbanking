@@ -97,6 +97,7 @@ import {
   isStashedPayoutQuoteFresh,
   payoutQuoteToFlowState,
   peekLastPayoutQuoteError,
+  prefetchGridLivePayoutQuote,
   stashPayoutQuotePreview,
   type PayoutQuoteStashMeta,
 } from "@/lib/payout-quote-cache"
@@ -1403,8 +1404,6 @@ export default function SendPage() {
     )
       return
     if (!payoutQuotePrefetchReady) return
-    if (amountFieldMode === "payment_purpose" && !paymentPurpose.trim()) return
-    if (amountFieldMode === "note" && !payoutHints?.reference_optional && !note.trim()) return
     void fetchPayoutQuote()
     const meta: PayoutQuoteStashMeta = {
       recipientId: recipient.id,
@@ -1419,6 +1418,7 @@ export default function SendPage() {
       ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
     }
     void ensurePayoutOrderConfirmed(meta, businessId)
+    prefetchGridLivePayoutQuote(meta, businessId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     needsPayoutQuoteBeforeConfirm,

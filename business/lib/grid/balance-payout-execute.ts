@@ -151,6 +151,38 @@ export async function executeGridBalancePayout(
     return { ok: false, error: "Invalid total debited for Grid payout." }
   }
 
+  const useLockOnReview = isPayoutLockOnReviewEnabled("grid")
+  const lockId = String(input.lockId || "").trim()
+  if (useLockOnReview) {
+    if (!lockId) {
+      return { ok: false, error: "Payout lock expired or invalid. Go back and review again." }
+    }
+    const lockRow = await getPayoutLockSession(admin, { lockId, userId })
+    if (!lockRow || lockRow.provider !== "grid") {
+      return { ok: false, error: "Payout lock expired or invalid. Go back and review again." }
+    }
+    if (
+      lockRow.destination_ref !==
+      (input.destinationRef || `recipient:${recipientId}`)
+    ) {
+      return { ok: false, error: "Payout lock does not match this recipient." }
+    }
+    const snapshotHash = hashRecipientSnapshot(recipientRow)
+    if (lockRow.recipient_snapshot_hash !== snapshotHash) {
+      return { ok: false, error: "Recipient details changed. Go back and review again." }
+    }
+    const payload = lockRow.provider_payload_json ?? {}
+    quoteId = String(payload.quoteId || quoteId).trim()
+    sequenceId = String(payload.sequenceId || sequenceId).trim()
+    customerId = String(payload.customerId || customerId).trim()
+    externalAccountId = String(payload.externalAccountId || externalAccountId).trim()
+    fundingAddress = String(payload.fundingAddress || fundingAddress).trim()
+    const payloadCrypto = Number(payload.cryptoAmount)
+    if (Number.isFinite(payloadCrypto) && payloadCrypto > 0) {
+      cryptoAmount = payloadCrypto
+    }
+  }
+
   const customerRate =
     Number(input.pricing.customerRate) > 0
       ? Number(input.pricing.customerRate)
@@ -162,7 +194,7 @@ export async function executeGridBalancePayout(
   const processingFeeBps =
     principal > 0 ? (processingFee > 0 ? Math.round((processingFee / principal) * 10_000) : 0) : 100
 
-  if (!quoteId || !fundingAddress) {
+  if (!quoteId) {
     const { data: userRow } = await admin
       .from("users")
       .select(
@@ -207,7 +239,7 @@ export async function executeGridBalancePayout(
         error: e instanceof Error ? e.message : "Could not lock Grid quote for send.",
       }
     }
-  } else if (customerRate > 0) {
+  } else {
     const liveQuote = await ensureFreshGridBalancePayoutQuote({
       quoteId,
       customerId,
@@ -244,28 +276,6 @@ export async function executeGridBalancePayout(
   })
   if (available < totalDebited) {
     return { ok: false, error: "insufficient_balance" }
-  }
-
-  const useLockOnReview = isPayoutLockOnReviewEnabled("grid")
-  const lockId = String(input.lockId || "").trim()
-  if (useLockOnReview) {
-    if (!lockId) {
-      return { ok: false, error: "Payout lock expired or invalid. Go back and review again." }
-    }
-    const lockRow = await getPayoutLockSession(admin, { lockId, userId })
-    if (!lockRow || lockRow.provider !== "grid") {
-      return { ok: false, error: "Payout lock expired or invalid. Go back and review again." }
-    }
-    if (
-      lockRow.destination_ref !==
-      (input.destinationRef || `recipient:${recipientId}`)
-    ) {
-      return { ok: false, error: "Payout lock does not match this recipient." }
-    }
-    const snapshotHash = hashRecipientSnapshot(recipientRow)
-    if (lockRow.recipient_snapshot_hash !== snapshotHash) {
-      return { ok: false, error: "Recipient details changed. Go back and review again." }
-    }
   }
 
   const ctx = await resolveNoahAccountContextFromLedgerScope(admin, { userId, businessId })

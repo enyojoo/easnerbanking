@@ -109,7 +109,10 @@ export function isStashedPayoutQuoteFresh(meta: PayoutQuoteStashMeta): boolean {
   return quoteMetaKey(stashedMeta) === quoteMetaKey(meta)
 }
 
-function buildConfirmBody(meta: PayoutQuoteStashMeta): Record<string, unknown> {
+function buildConfirmBody(
+  meta: PayoutQuoteStashMeta,
+  opts?: { liveQuote?: boolean },
+): Record<string, unknown> {
   return {
     recipientId: meta.recipientId,
     receiveAmount: meta.amountEntryMode === "receive" ? meta.entryAmount : undefined,
@@ -118,6 +121,7 @@ function buildConfirmBody(meta: PayoutQuoteStashMeta): Record<string, unknown> {
     sourceBalanceCurrency: meta.sourceBalanceCurrency,
     ...(meta.note ? { note: meta.note } : {}),
     ...(meta.paymentPurpose ? { paymentPurpose: meta.paymentPurpose } : {}),
+    ...(opts?.liveQuote ? { liveQuote: true } : {}),
   }
 }
 
@@ -215,6 +219,35 @@ export async function ensurePayoutOrderConfirmed(
   })
 
   return inflightConfirm
+}
+
+let inflightGridLiveQuote: Promise<void> | null = null
+let inflightGridLiveQuoteKey = ""
+
+/** Background Grid POST /quotes so PIN can reuse the lock. Does not block Continue. */
+export function prefetchGridLivePayoutQuote(
+  meta: PayoutQuoteStashMeta,
+  businessId?: string | null,
+): void {
+  const key = `${quoteMetaKey(meta)}|live`
+  if (inflightGridLiveQuote && inflightGridLiveQuoteKey === key) return
+  inflightGridLiveQuoteKey = key
+  inflightGridLiveQuote = (async () => {
+    try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" }
+      if (businessId) headers["X-Easner-Account-Scope"] = "business"
+      await fetchWithSession("/api/payouts/confirm", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(buildConfirmBody(meta, { liveQuote: true })),
+      })
+    } catch {
+      // PIN will create the live quote if this prefetch fails.
+    }
+  })().finally(() => {
+    inflightGridLiveQuote = null
+    inflightGridLiveQuoteKey = ""
+  })
 }
 
 /** Preview when needed, then confirm only if the provider requires a lock step. */

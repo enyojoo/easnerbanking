@@ -20,6 +20,7 @@ export type GridFetchOptions = {
   formData?: FormData
   headers?: Record<string, string>
   idempotencyKey?: string
+  timeoutMs?: number
 }
 
 function buildBasicAuthHeader(): string {
@@ -61,6 +62,9 @@ export async function gridFetch<T>(opts: GridFetchOptions): Promise<T> {
     method: opts.method,
     headers,
     ...(formData ? { body: formData } : jsonBody ? { body: jsonBody } : {}),
+    ...(opts.timeoutMs && opts.timeoutMs > 0
+      ? { signal: AbortSignal.timeout(opts.timeoutMs) }
+      : {}),
   })
 
   const text = await res.text()
