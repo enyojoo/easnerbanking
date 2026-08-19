@@ -89,6 +89,7 @@ export function GridKybPeopleStep({
   function openExisting(person: KybPersonPacket) {
     const nationality = resolveCountryIso2(person.nationality)
     const addressCountry = resolveCountryIso2(person.addressCountry)
+    const countryOfIssuance = resolveCountryIso2(person.countryOfIssuance)
     setForm({
       firstName: person.firstName,
       middleName: person.middleName,
@@ -108,11 +109,10 @@ export function GridKybPeopleStep({
       roles: person.roles,
       idType: resolveGridKybOwnerIdType({
         idType: person.idType,
-        nationality,
-        addressCountry,
+        countryOfIssuance,
       }),
       identifier: person.identifier,
-      countryOfIssuance: resolveCountryIso2(person.countryOfIssuance),
+      countryOfIssuance,
     })
     setEditingId(person.id)
   }
@@ -334,33 +334,40 @@ export function GridKybPeopleStep({
                 disabled={disabled}
               />
             </div>
-            <div className="space-y-2">
-              <Label>ID type</Label>
-              <GridKybEnumSelect
-                value={form.idType}
-                onChange={(idType) => patchForm({ idType })}
-                options={gridKybIdTypeOptionsForPerson(form)}
-                placeholder="Select ID type"
-                disabled={disabled}
-                invalid={Boolean(idTypeError)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>ID number</Label>
-              <Input className={SETTINGS_INPUT_CLASS} value={form.identifier} onChange={(e) => patchForm({ identifier: e.target.value })} disabled={disabled} />
-            </div>
-            <div className="space-y-2">
-              <Label>ID issuing country</Label>
+          </div>
+          <div className="grid grid-cols-1 gap-4 min-[720px]:grid-cols-[minmax(0,1.15fr)_max-content_minmax(0,1.15fr)]">
+            <div className="min-w-0 space-y-2">
+              <Label>Tax ID country</Label>
               <GridKybCountrySelect
                 value={form.countryOfIssuance}
                 onChange={(countryOfIssuance) => patchForm({ countryOfIssuance })}
-                placeholder="Select issuing country"
+                placeholder="Select country"
                 catalog="all"
                 disabled={disabled}
                 invalid={Boolean(idTypeError)}
               />
             </div>
+            <div className="space-y-2 min-[720px]:w-[13.75rem]">
+              <Label>Tax ID type</Label>
+              <GridKybEnumSelect
+                value={form.idType}
+                onChange={(idType) => patchForm({ idType })}
+                options={gridKybIdTypeOptionsForPerson(form)}
+                placeholder="Tax ID type"
+                disabled={disabled}
+                invalid={Boolean(idTypeError)}
+                nowrap
+              />
+            </div>
+            <div className="min-w-0 space-y-2">
+              <Label>Tax ID number</Label>
+              <Input className={SETTINGS_INPUT_CLASS} value={form.identifier} onChange={(e) => patchForm({ identifier: e.target.value })} disabled={disabled} />
+            </div>
           </div>
+          {idTypeError ? <p className="text-sm text-destructive">{idTypeError.reason}</p> : null}
+          <p className="text-sm text-muted-foreground">
+            Use this person’s tax ID. Passport, driver’s license, and national ID go in the upload below.
+          </p>
           <div className={cn(addressError && "rounded-xl ring-1 ring-destructive/40 p-3")}>
             <BusinessAddressFields
               countryCode={form.addressCountry}

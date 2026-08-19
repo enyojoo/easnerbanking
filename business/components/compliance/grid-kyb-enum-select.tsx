@@ -18,6 +18,9 @@ type Props = {
   placeholder: string
   disabled?: boolean
   invalid?: boolean
+  className?: string
+  /** Keep the selected label on one line (tax ID type). */
+  nowrap?: boolean
 }
 
 export function GridKybEnumSelect({
@@ -28,6 +31,8 @@ export function GridKybEnumSelect({
   placeholder,
   disabled,
   invalid,
+  className,
+  nowrap,
 }: Props) {
   const [open, setOpen] = useState(false)
   const selected = options.find((option) => option.value.toUpperCase() === value.trim().toUpperCase())
@@ -43,9 +48,9 @@ export function GridKybEnumSelect({
           aria-expanded={open}
           disabled={disabled}
           aria-invalid={invalid || undefined}
-          className={cn(SETTINGS_COMBOBOX_TRIGGER_CLASS, invalid && "border-destructive")}
+          className={cn(SETTINGS_COMBOBOX_TRIGGER_CLASS, invalid && "border-destructive", className)}
         >
-          <span className={cn("truncate", !selected && "text-muted-foreground")}>
+          <span className={cn(nowrap ? "whitespace-nowrap" : "truncate", !selected && "text-muted-foreground")}>
             {selected?.label ?? placeholder}
           </span>
           <ChevronDown className="size-4 shrink-0 opacity-50" />

@@ -236,11 +236,11 @@ export function personWritePayload(input: {
   const identifier = encryptKybPii(input.person.identifier)
   const nationality = String(input.person.nationality ?? "").trim()
   const addressCountry = String(input.person.addressCountry ?? "").trim()
+  const countryOfIssuance = String(input.person.countryOfIssuance ?? "").trim()
   const idType =
     resolveGridKybOwnerIdType({
       idType: input.person.idType ?? input.person.id_type,
-      nationality,
-      addressCountry,
+      countryOfIssuance,
     }) || null
   return {
     application_id: input.applicationId,
@@ -263,7 +263,7 @@ export function personWritePayload(input: {
     id_type: idType,
     identifier_ciphertext: identifier.ciphertext,
     identifier_key_id: identifier.keyId,
-    country_of_issuance: String(input.person.countryOfIssuance ?? "").trim() || null,
+    country_of_issuance: countryOfIssuance || null,
     updated_at: new Date().toISOString(),
   }
 }

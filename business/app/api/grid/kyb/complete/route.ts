@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
 import {
   gridKybApplicationStatusFromVerification,
+  gridKybOwnerIdTypeForGrid,
   mapGridKybVerificationErrors,
-  resolveGridKybOwnerIdType,
 } from "@easner/shared"
 import { requireKybContext } from "../_context"
 import {
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
 
     const people = await listKybPeople(ctx.admin, application.id, true)
     for (const person of people) {
-      const idType = resolveGridKybOwnerIdType(person)
+      const idType = gridKybOwnerIdTypeForGrid(person)
       if (idType && idType !== person.idType) {
         person.idType = idType
         await ctx.admin

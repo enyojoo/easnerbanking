@@ -2,7 +2,7 @@ import { gridFetch } from "./http"
 import { normalizeGridCustomerId } from "./quote-request"
 import { gridBusinessCustomerUpdatePayload } from "./customer-update-payload"
 import { gridAddressFromKybCompany, gridBusinessInfoFromKybCompany } from "./kyb-company-to-grid"
-import { resolveGridKybOwnerIdType, type GridKybCompanyDraft } from "@easner/shared"
+import { gridKybOwnerIdTypeForGrid, type GridKybCompanyDraft } from "@easner/shared"
 import type { KybDocumentRow, KybPersonRow } from "./kyb-application-store"
 
 export async function patchGridBusinessKybCustomer(input: {
@@ -24,7 +24,7 @@ export async function patchGridBusinessKybCustomer(input: {
 
 function ownerPersonalInfo(person: KybPersonRow): Record<string, unknown> {
   const addressCountry = person.addressCountry.trim().toUpperCase() || person.nationality.trim().toUpperCase()
-  const idType = resolveGridKybOwnerIdType(person) || undefined
+  const idType = gridKybOwnerIdTypeForGrid(person) || undefined
   return {
     firstName: person.firstName.trim(),
     lastName: person.lastName.trim(),

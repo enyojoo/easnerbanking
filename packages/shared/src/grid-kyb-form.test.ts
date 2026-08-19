@@ -9,6 +9,7 @@ import {
   gridKybApplicationIsEditable,
   gridKybApplicationStatusFromVerification,
   gridKybIdTypeOptionsForPerson,
+  gridKybOwnerIdTypeForGrid,
   gridKybWizardReadiness,
   mapGridKybVerificationErrors,
   normalizeGridKybIdType,
@@ -164,31 +165,46 @@ describe("resolveGridKybOwnerIdType", () => {
     expect(normalizeGridKybIdType("Non-U.S. tax ID")).toBe("NON_US_TAX_ID")
   })
 
-  it("forces NON_US_TAX_ID for non-US owners even if SSN was stored", () => {
+  it("uses tax ID country, not nationality, for the form value", () => {
     expect(
       resolveGridKybOwnerIdType({
         idType: "SSN",
+        countryOfIssuance: "US",
+      }),
+    ).toBe("SSN")
+    expect(
+      resolveGridKybOwnerIdType({
+        idType: "SSN",
+        countryOfIssuance: "NG",
+      }),
+    ).toBe("NON_US_TAX_ID")
+    expect(resolveGridKybOwnerIdType({ idType: "ITIN", countryOfIssuance: "US" })).toBe("ITIN")
+  })
+
+  it("still sends NON_US_TAX_ID to Grid when nationality is not US", () => {
+    expect(
+      gridKybOwnerIdTypeForGrid({
+        idType: "SSN",
+        countryOfIssuance: "US",
         nationality: "NG",
-        addressCountry: "NG",
       }),
     ).toBe("NON_US_TAX_ID")
     expect(
-      resolveGridKybOwnerIdType({
-        idType: "",
-        nationality: "GB",
-        addressCountry: "",
+      gridKybOwnerIdTypeForGrid({
+        idType: "ITIN",
+        countryOfIssuance: "US",
+        nationality: "US",
       }),
-    ).toBe("NON_US_TAX_ID")
+    ).toBe("ITIN")
   })
 
-  it("keeps US tax types for US owners", () => {
-    expect(resolveGridKybOwnerIdType({ idType: "ITIN", nationality: "US" })).toBe("ITIN")
-    expect(resolveGridKybOwnerIdType({ idType: "NON_US_TAX_ID", nationality: "US" })).toBe("SSN")
-  })
-
-  it("only offers Non-U.S. tax ID for Nigerian owners", () => {
-    expect(gridKybIdTypeOptionsForPerson({ nationality: "NG" }).map((row) => row.value)).toEqual([
+  it("only offers Non-U.S. tax ID when the tax ID country is not US", () => {
+    expect(gridKybIdTypeOptionsForPerson({ countryOfIssuance: "NG" }).map((row) => row.value)).toEqual([
       "NON_US_TAX_ID",
+    ])
+    expect(gridKybIdTypeOptionsForPerson({ countryOfIssuance: "US" }).map((row) => row.value)).toEqual([
+      "SSN",
+      "ITIN",
     ])
     expect(GRID_KYB_ID_TYPES.some((row) => row.value === "EIN")).toBe(false)
   })

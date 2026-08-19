@@ -159,35 +159,45 @@ export function normalizeGridKybIdType(raw: string | null | undefined): GridKybI
 }
 
 /**
- * Grid rejects US tax idTypes for non-US owners:
- * "Non-US beneficial owners must use NON_US_TAX_ID as the idType."
+ * Tax ID type from the tax ID country (`countryOfIssuance`).
+ * Passport / national ID are uploaded separately, not this field.
  */
 export function resolveGridKybOwnerIdType(input: {
   idType?: string | null
-  nationality?: string | null
-  addressCountry?: string | null
+  countryOfIssuance?: string | null
 }): GridKybIdType | "" {
-  const nationality = iso2Country(input.nationality)
-  const addressCountry = iso2Country(input.addressCountry)
-  const country = nationality || addressCountry
+  const issuance = iso2Country(input.countryOfIssuance)
   const normalized = normalizeGridKybIdType(input.idType)
-  if (country && country !== "US") return "NON_US_TAX_ID"
-  if (country === "US") return normalized === "NON_US_TAX_ID" ? "SSN" : normalized || "SSN"
+  if (issuance && issuance !== "US") return "NON_US_TAX_ID"
+  if (issuance === "US") return normalized === "NON_US_TAX_ID" ? "SSN" : normalized || "SSN"
   return normalized
 }
 
 export function gridKybIdTypeOptionsForPerson(input: {
-  nationality?: string | null
-  addressCountry?: string | null
+  countryOfIssuance?: string | null
 }): readonly GridKybSelectOption<GridKybIdType>[] {
-  const country = iso2Country(input.nationality) || iso2Country(input.addressCountry)
-  if (country && country !== "US") {
+  const issuance = iso2Country(input.countryOfIssuance)
+  if (issuance && issuance !== "US") {
     return GRID_KYB_ID_TYPES.filter((row) => row.value === "NON_US_TAX_ID")
   }
-  if (country === "US") {
+  if (issuance === "US") {
     return GRID_KYB_ID_TYPES.filter((row) => row.value !== "NON_US_TAX_ID")
   }
   return GRID_KYB_ID_TYPES
+}
+
+/**
+ * Grid still rejects SSN/ITIN when nationality is not US, even if the tax ID
+ * country is US. Apply that only when sending to Grid, not when rendering the form.
+ */
+export function gridKybOwnerIdTypeForGrid(input: {
+  idType?: string | null
+  countryOfIssuance?: string | null
+  nationality?: string | null
+}): GridKybIdType | "" {
+  const nationality = iso2Country(input.nationality)
+  if (nationality && nationality !== "US") return "NON_US_TAX_ID"
+  return resolveGridKybOwnerIdType(input)
 }
 
 export type GridKybSourceOfFundsId =
@@ -641,7 +651,7 @@ export function filterResolvedGridKybErrorPointers(input: {
       if (targets.length === 0) return true
       const requiresNonUsTaxId = /NON_US_TAX_ID/i.test(pointer.reason)
       if (requiresNonUsTaxId) {
-        return targets.some((person) => resolveGridKybOwnerIdType(person) !== "NON_US_TAX_ID")
+        return targets.some((person) => gridKybOwnerIdTypeForGrid(person) !== "NON_US_TAX_ID")
       }
       return targets.some((person) => !personFieldIsFilled(person, field))
     }
