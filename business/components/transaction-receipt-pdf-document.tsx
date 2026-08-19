@@ -14,6 +14,7 @@ import {
 import { buildTransactionReceiptDetailRows, isPayoutReviewFeeVisible, type ReceiptVisualRow } from "@easner/shared"
 import type { Transaction } from "@/lib/finance-types"
 import { formatCurrency } from "@/lib/utils"
+import { resolveTransactionDetailHeroAmount } from "@/lib/transactions/resolve-transaction-detail-hero"
 import { PdfReceiptVisualRow } from "@/lib/receipt-pdf-visual-rows"
 
 /** Business palette — matches the original PDF tokens (blue primary, neutral text/borders). */
@@ -395,10 +396,9 @@ export function TransactionReceiptPDFDocument({
   cardLast4,
 }: TransactionReceiptPDFDocumentProps) {
   const isCredit = transaction.direction === "credit"
-
-  const heroCurrency = transaction.displayCurrency || transaction.postedCurrency || "USD"
+  const hero = resolveTransactionDetailHeroAmount(transaction)
   const amountStr =
-    (isCredit ? "+" : "-") + formatCurrency(Math.abs(transaction.amount), heroCurrency)
+    (isCredit ? "+" : "-") + formatCurrency(hero.amount, hero.currency)
 
   const statusLabel = statusLabels[transaction.status] ?? transaction.status
   const dateText = formatReceiptTimestamp(transaction.date)

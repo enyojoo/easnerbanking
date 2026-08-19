@@ -100,6 +100,56 @@ export function stripeCollectionSettlementTitle(
   return headline || "Online payment"
 }
 
+function centsToMajor(cents: unknown): number {
+  const n = typeof cents === "number" ? cents : Number(cents)
+  if (!Number.isFinite(n) || n <= 0) return 0
+  return n / 100
+}
+
+export type StripeCollectionListDisplay = {
+  displayAmount: number
+  displayCurrency: string
+  ledgerAmount: number
+  ledgerCurrency: string
+  displayDescription: string
+  displayHeroTitle: string
+}
+
+/**
+ * Feed and hero show what the customer paid (`gross_cents`), not the net credit.
+ * Ledger/account impact stay on `net_cents` / row.amount.
+ */
+export function resolveStripeCollectionListDisplay(
+  row: Record<string, unknown>,
+): StripeCollectionListDisplay | null {
+  const dir = String(row.direction ?? "").toLowerCase()
+  if (dir !== "in" && dir !== "credit") return null
+  const meta = (row.metadata as Record<string, unknown> | null | undefined) ?? {}
+  if (!isStripeCollectionSettlementMetadata(meta)) return null
+
+  const gross = centsToMajor(meta.gross_cents)
+  if (gross <= 0) return null
+
+  const net = centsToMajor(meta.net_cents)
+  const ledgerAmount =
+    net > 0
+      ? net
+      : typeof row.amount === "number"
+        ? row.amount
+        : Number(row.amount) || gross
+  const ledgerCurrency = String(row.currency ?? "USD").toUpperCase()
+  const title = stripeCollectionSettlementTitle(meta)
+
+  return {
+    displayAmount: gross,
+    displayCurrency: ledgerCurrency,
+    ledgerAmount,
+    ledgerCurrency,
+    displayDescription: title,
+    displayHeroTitle: title,
+  }
+}
+
 export function buildStripeInvoiceSettlementLifecycle(
   input: BuildStripeInvoiceSettlementLifecycleInput,
 ): StripeInvoiceSettlementLifecycleStep[] {

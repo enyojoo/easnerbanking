@@ -435,7 +435,8 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   const heroAmountLabel = useMemo(() => {
     if (!transaction) return ''
     const amount = Number(
-      transaction.display_amount ??
+      transaction.deposit_amount ??
+        transaction.display_amount ??
         transaction.posted_amount ??
         transaction.final_amount ??
         transaction.settled_amount ??

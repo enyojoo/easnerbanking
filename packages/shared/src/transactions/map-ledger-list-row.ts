@@ -41,6 +41,7 @@ import {
 import { resolveAccountImpactAmount } from "./account-impact-reporting"
 import { formatOutboundTransferTitle } from "./transaction-detail-hero-title"
 import { isRelayTronDepositMetadata, resolveRelayTronDepositListDisplay } from "./relay-tron-deposit"
+import { resolveStripeCollectionListDisplay } from "./stripe-invoice-settlement-lifecycle"
 
 // ---------------------------------------------------------------------------
 // Display id helpers (pure — no generation dependency)
@@ -376,7 +377,12 @@ export function mapLedgerRowToMobileListItem(row: Record<string, unknown>): Reco
     globalPayout || walletSend ? null : resolveYcCrossBorderListDisplay(row)
   const relayDeposit =
     globalPayout || walletSend || ycCrossBorder ? null : resolveRelayTronDepositListDisplay(row)
-  const payoutDisplay = globalPayout ?? walletSend ?? ycCrossBorder ?? relayDeposit
+  const stripeCollection =
+    globalPayout || walletSend || ycCrossBorder || relayDeposit
+      ? null
+      : resolveStripeCollectionListDisplay(row)
+  const payoutDisplay =
+    globalPayout ?? walletSend ?? ycCrossBorder ?? relayDeposit ?? stripeCollection
   const displayAmount = payoutDisplay?.displayAmount ?? amount
   const displayCurrency = payoutDisplay?.displayCurrency ?? currency
   const displayName = payoutDisplay?.displayDescription ?? name

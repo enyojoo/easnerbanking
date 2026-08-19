@@ -256,16 +256,6 @@ function TransactionSummaryDetails({
 
         {isStripeInvoiceSettlement ? (
           <>
-            {stripeGross > 0 ? (
-              <TransactionDetailSummaryRow
-                label={REVIEW_ROW_LABELS.depositAmount}
-                value={formatReviewRowMoneyDisplay(
-                  REVIEW_ROW_LABELS.depositAmount,
-                  stripeGross,
-                  displayCurrency,
-                )}
-              />
-            ) : null}
             <TransactionDetailSummaryRow
               label={REVIEW_ROW_LABELS.processingFee}
               value={formatReviewRowMoneyDisplay(

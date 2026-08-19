@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   buildStripeInvoiceSettlementLifecycle,
+  resolveStripeCollectionListDisplay,
   stripeCollectionSettlementTitle,
 } from "./stripe-invoice-settlement-lifecycle"
 
@@ -16,6 +17,32 @@ describe("stripeCollectionSettlementTitle", () => {
 
   it("falls back to Invoice when the number is missing", () => {
     expect(stripeCollectionSettlementTitle({ source: "invoice_stripe" })).toBe("Invoice")
+  })
+})
+
+describe("resolveStripeCollectionListDisplay", () => {
+  it("uses gross cents as the list/hero amount", () => {
+    expect(
+      resolveStripeCollectionListDisplay({
+        direction: "in",
+        amount: 0.67,
+        currency: "USD",
+        metadata: {
+          source: "invoice_stripe",
+          invoice_number: "EINV-1",
+          gross_cents: 100,
+          net_cents: 67,
+          fee_cents: 33,
+        },
+      }),
+    ).toEqual({
+      displayAmount: 1,
+      displayCurrency: "USD",
+      ledgerAmount: 0.67,
+      ledgerCurrency: "USD",
+      displayDescription: "Invoice #EINV-1",
+      displayHeroTitle: "Invoice #EINV-1",
+    })
   })
 })
 

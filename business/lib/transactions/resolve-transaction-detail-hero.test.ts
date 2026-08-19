@@ -38,4 +38,20 @@ describe("resolveTransactionDetailHeroAmount", () => {
       currency: "USD",
     })
   })
+
+  it("shows the customer payment amount for Stripe collections", () => {
+    const transaction = {
+      direction: "credit",
+      amount: 0.67,
+      displayCurrency: "USD",
+      depositAmount: 1,
+      postedAmount: 0.67,
+      postedCurrency: "USD",
+    } as unknown as Transaction
+
+    expect(resolveTransactionDetailHeroAmount(transaction)).toEqual({
+      amount: 1,
+      currency: "USD",
+    })
+  })
 })

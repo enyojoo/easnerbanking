@@ -189,6 +189,28 @@ describe("mapLedgerRowToMobileListItem", () => {
     expect(item.source_type).toBe("relay_tron_deposit")
   })
 
+  it("shows Stripe collection gross on the feed, not net credit", () => {
+    const item = mapLedgerRowToMobileListItem(
+      baseRow({
+        direction: "in",
+        provider: "stripe",
+        amount: 0.67,
+        currency: "USD",
+        metadata: {
+          source: "checkout_stripe",
+          headline: "Donations",
+          gross_cents: 100,
+          fee_cents: 33,
+          net_cents: 67,
+        },
+      }),
+    )
+    expect(item.amount).toBe(1)
+    expect(item.display_amount).toBe(1)
+    expect(item.account_impact_amount).toBe(0.67)
+    expect(item.display_hero_title).toBe("Donations")
+  })
+
   it("produces sender_display_name from bank deposit metadata", () => {
     const item = mapLedgerRowToMobileListItem(
       baseRow({

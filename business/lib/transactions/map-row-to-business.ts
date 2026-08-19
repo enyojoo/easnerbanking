@@ -245,9 +245,11 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     : String(row.currency ?? "USD")
   const listAmount = displaySource
     ? displaySource.displayAmount
-    : typeof row.amount === "number"
-      ? row.amount
-      : Number(row.amount) || 0
+    : stripeInvoiceSettlementDetail && stripeInvoiceSettlementDetail.grossAmount > 0
+      ? stripeInvoiceSettlementDetail.grossAmount
+      : typeof row.amount === "number"
+        ? row.amount
+        : Number(row.amount) || 0
   const listBaseAmount = displaySource
     ? displaySource.ledgerAmount
     : typeof row.base_amount === "number"

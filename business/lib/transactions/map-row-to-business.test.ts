@@ -355,7 +355,35 @@ describe("mapRowToBusinessTransaction", () => {
     expect(item.reference).toBe("ETID50120581")
     expect(item.postedAmount).toBe(56888)
     expect(item.depositAmount).toBe(56888)
+    expect(item.amount).toBe(56888)
     expect(item.fee).toBe(0)
     expect(item.lifecycle?.some((s) => s.id === "payment_received")).toBe(true)
+  })
+
+  it("lists Stripe collection payment amount (gross), not net credited", () => {
+    const item = mapRowToBusinessTransaction({
+      id: "uuid-checkout",
+      easner_transaction_id: "ETID61951425",
+      provider: "stripe",
+      status: "settled",
+      amount: 0.67,
+      currency: "USD",
+      direction: "in",
+      metadata: {
+        source: "checkout_stripe",
+        headline: "Testing",
+        fee_cents: 33,
+        net_cents: 67,
+        gross_cents: 100,
+        collection_channel: "payment_link",
+      },
+      created_at: "2026-08-19T00:00:00.000Z",
+    })
+
+    expect(item.amount).toBe(1)
+    expect(item.depositAmount).toBe(1)
+    expect(item.postedAmount).toBe(0.67)
+    expect(item.fee).toBe(0.33)
+    expect(item.accountImpactAmount).toBe(0.67)
   })
 })

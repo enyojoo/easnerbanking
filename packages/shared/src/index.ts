@@ -656,9 +656,11 @@ export {
   isStripeCollectionSettlementMetadata,
   isStripeInvoiceSettlementMetadata,
   stripeCollectionSettlementTitle,
+  resolveStripeCollectionListDisplay,
 } from "./transactions/stripe-invoice-settlement-lifecycle"
 export type {
   BuildStripeInvoiceSettlementLifecycleInput,
+  StripeCollectionListDisplay,
   StripeInvoiceSettlementLifecycleStep,
   StripeInvoiceSettlementLifecycleStepId,
   StripeInvoiceSettlementLifecycleStepState,

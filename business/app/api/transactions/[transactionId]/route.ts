@@ -49,6 +49,7 @@ import {
   resolveLedgerWhenAt,
   resolveAccountImpactAmount,
   resolveYcCrossBorderListDisplay,
+  resolveStripeCollectionListDisplay,
   resolveYcPayInFeedStatus,
   ledgerTransactionStatusDisplayForRow,
 } from "@easner/shared"
@@ -113,14 +114,15 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
     ycCrossBorderReceive > 0
       ? String(meta?.receive_currency ?? "").toUpperCase()
       : ""
+  const stripeCollection = resolveStripeCollectionListDisplay(row)
   const presentationAmount =
     ycCrossBorderReceive > 0 && ycCrossBorderCurrency
       ? ycCrossBorderReceive
-      : null
+      : stripeCollection?.displayAmount ?? null
   const presentationCurrency =
     ycCrossBorderReceive > 0 && ycCrossBorderCurrency
       ? ycCrossBorderCurrency
-      : ""
+      : stripeCollection?.displayCurrency ?? ""
   const metaForName = row.metadata as Record<string, unknown> | null | undefined
   const payloadForName = row.payload as Record<string, unknown> | null | undefined
   const name =
@@ -140,7 +142,7 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
     ledger_row_id,
     type: transaction_type,
     transaction_type,
-    amount,
+    amount: stripeCollection?.displayAmount ?? amount,
     currency,
     ...(presentationAmount != null && presentationCurrency
       ? {
@@ -153,7 +155,12 @@ function mapLedgerRowToMobileItem(row: Record<string, unknown>): Record<string, 
           display_description: ycCrossBorderDisplay.displayDescription,
           display_hero_title: ycCrossBorderDisplay.displayHeroTitle,
         }
-      : {}),
+      : stripeCollection
+        ? {
+            display_description: stripeCollection.displayDescription,
+            display_hero_title: stripeCollection.displayHeroTitle,
+          }
+        : {}),
     ...(accountImpact
       ? {
           account_impact_amount: accountImpact.amount,
@@ -234,11 +241,16 @@ function mapLedgerRowToMobileDetail(row: Record<string, unknown>): Record<string
         undefined
       : undefined
   const feeAmount =
-    typeof meta?.fee_amount === "number" && Number.isFinite(meta.fee_amount) ? meta.fee_amount : undefined
+    typeof meta?.fee_amount === "number" && Number.isFinite(meta.fee_amount)
+      ? meta.fee_amount
+      : Number.isFinite(Number(meta?.fee_cents))
+        ? Number(meta?.fee_cents) / 100
+        : undefined
+  const stripeCollection = resolveStripeCollectionListDisplay(row)
   const settledAmount =
     typeof meta?.settled_amount === "number" && Number.isFinite(meta.settled_amount)
       ? meta.settled_amount
-      : undefined
+      : stripeCollection?.ledgerAmount
   const settledCurrency =
     meta?.settled_currency != null
       ? String(meta.settled_currency)
@@ -251,8 +263,15 @@ function mapLedgerRowToMobileDetail(row: Record<string, unknown>): Record<string
     transaction_product,
     sender_display_name,
     noah_transaction_id: easnerId || undefined,
-    final_amount: settledAmount ?? base.amount,
+    final_amount: settledAmount ?? (stripeCollection ? stripeCollection.ledgerAmount : base.amount),
     ...(feeAmount != null ? { fee_amount: feeAmount } : {}),
+    ...(stripeCollection
+      ? {
+          deposit_amount: stripeCollection.displayAmount,
+          posted_amount: stripeCollection.ledgerAmount,
+          posted_currency: stripeCollection.ledgerCurrency,
+        }
+      : {}),
     ...(settledAmount != null
       ? {
           settled_amount: settledAmount,
