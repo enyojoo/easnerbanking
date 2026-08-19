@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server"
-import { gridKybApplicationStatusFromVerification, mapGridKybVerificationErrors } from "@easner/shared"
+import {
+  gridKybApplicationStatusFromVerification,
+  mapGridKybVerificationErrors,
+  resolveGridKybOwnerIdType,
+} from "@easner/shared"
 import { requireKybContext } from "../_context"
 import {
   ensureKybApplication,
@@ -54,6 +58,14 @@ export async function POST(request: Request) {
 
     const people = await listKybPeople(ctx.admin, application.id, true)
     for (const person of people) {
+      const idType = resolveGridKybOwnerIdType(person)
+      if (idType && idType !== person.idType) {
+        person.idType = idType
+        await ctx.admin
+          .from("business_kyb_people")
+          .update({ id_type: idType, updated_at: new Date().toISOString() })
+          .eq("id", person.id)
+      }
       const gridId = await upsertGridBeneficialOwner({ customerId, person })
       if (gridId !== person.gridBeneficialOwnerId) {
         await ctx.admin

@@ -30,7 +30,7 @@ export function GridKybEnumSelect({
   invalid,
 }: Props) {
   const [open, setOpen] = useState(false)
-  const selected = options.find((option) => option.value === value)
+  const selected = options.find((option) => option.value.toUpperCase() === value.trim().toUpperCase())
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -60,7 +60,7 @@ export function GridKybEnumSelect({
               {options.map((option) => (
                 <CommandItem
                   key={option.value}
-                  value={`${option.label} ${option.value} ${option.aliases ?? ""}`}
+                  value={`${option.value} ${option.label} ${option.aliases ?? ""}`}
                   onSelect={() => {
                     onChange(option.value)
                     setOpen(false)

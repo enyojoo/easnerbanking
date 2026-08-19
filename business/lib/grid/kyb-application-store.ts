@@ -4,6 +4,8 @@ import {
   gridBeneficialOwnerIdFromResource,
   gridBeneficialOwnerIdsFromVerificationErrors,
   gridKybApplicationStatusFromVerification,
+  normalizeGridKybIdType,
+  resolveGridKybOwnerIdType,
   type GridKybApplicationStatus,
   type GridKybCompanyDraft,
   type GridKybVerificationError,
@@ -154,7 +156,7 @@ export function mapKybPersonRow(row: Record<string, unknown>, includeIdentifier:
         ? null
         : Number(row.ownership_percentage),
     roles: Array.isArray(row.roles) ? row.roles.map((role) => String(role)) : [],
-    idType: String(row.id_type ?? ""),
+    idType: normalizeGridKybIdType(String(row.id_type ?? "")),
     identifier: includeIdentifier ? decryptKybPii(String(row.identifier_ciphertext ?? "")) : "",
     countryOfIssuance: String(row.country_of_issuance ?? ""),
     gridBeneficialOwnerId: row.grid_beneficial_owner_id ? String(row.grid_beneficial_owner_id) : null,
@@ -229,9 +231,17 @@ export async function listKybDocuments(
 export function personWritePayload(input: {
   applicationId: string
   businessId: string
-  person: Partial<KybPersonRow> & { firstName?: string; lastName?: string }
+  person: Partial<KybPersonRow> & { firstName?: string; lastName?: string; id_type?: string | null }
 }) {
   const identifier = encryptKybPii(input.person.identifier)
+  const nationality = String(input.person.nationality ?? "").trim()
+  const addressCountry = String(input.person.addressCountry ?? "").trim()
+  const idType =
+    resolveGridKybOwnerIdType({
+      idType: input.person.idType ?? input.person.id_type,
+      nationality,
+      addressCountry,
+    }) || null
   return {
     application_id: input.applicationId,
     business_id: input.businessId,
@@ -241,16 +251,16 @@ export function personWritePayload(input: {
     email: String(input.person.email ?? "").trim() || null,
     phone: String(input.person.phone ?? "").trim() || null,
     birth_date: String(input.person.birthDate ?? "").trim() || null,
-    nationality: String(input.person.nationality ?? "").trim() || null,
+    nationality: nationality || null,
     address_line1: String(input.person.addressLine1 ?? "").trim() || null,
     address_line2: String(input.person.addressLine2 ?? "").trim() || null,
     city: String(input.person.city ?? "").trim() || null,
     state: String(input.person.state ?? "").trim() || null,
     postal_code: String(input.person.postalCode ?? "").trim() || null,
-    address_country: String(input.person.addressCountry ?? "").trim() || null,
+    address_country: addressCountry || null,
     ownership_percentage: input.person.ownershipPercentage ?? null,
     roles: Array.isArray(input.person.roles) ? input.person.roles : [],
-    id_type: String(input.person.idType ?? "").trim() || null,
+    id_type: idType,
     identifier_ciphertext: identifier.ciphertext,
     identifier_key_id: identifier.keyId,
     country_of_issuance: String(input.person.countryOfIssuance ?? "").trim() || null,

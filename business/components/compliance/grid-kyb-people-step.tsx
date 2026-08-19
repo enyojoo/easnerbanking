@@ -4,9 +4,10 @@ import { useRef, useState } from "react"
 import { AlertTriangle, Loader2, Plus } from "lucide-react"
 import {
   GRID_KYB_DOCUMENT_CATEGORIES,
-  GRID_KYB_ID_TYPES,
   GRID_KYB_OWNER_ROLES,
+  gridKybIdTypeOptionsForPerson,
   gridKybOwnerResourceMatches,
+  resolveGridKybOwnerIdType,
   type GridKybErrorPointer,
 } from "@easner/shared"
 import { Button } from "@/components/ui/button"
@@ -69,12 +70,25 @@ export function GridKybPeopleStep({
   const [error, setError] = useState<string | null>(null)
   const idUploadRef = useRef<GridKybDocumentUploadHandle>(null)
 
+  function patchForm(
+    patch: Partial<typeof emptyPerson> | ((prev: typeof emptyPerson) => Partial<typeof emptyPerson>),
+  ) {
+    setForm((prev) => {
+      const next = { ...prev, ...(typeof patch === "function" ? patch(prev) : patch) }
+      const idType = resolveGridKybOwnerIdType(next)
+      if (idType && idType !== next.idType) next.idType = idType
+      return next
+    })
+  }
+
   function openNew() {
     setForm(emptyPerson)
     setEditingId("new")
   }
 
   function openExisting(person: KybPersonPacket) {
+    const nationality = resolveCountryIso2(person.nationality)
+    const addressCountry = resolveCountryIso2(person.addressCountry)
     setForm({
       firstName: person.firstName,
       middleName: person.middleName,
@@ -82,17 +96,21 @@ export function GridKybPeopleStep({
       email: person.email,
       phone: person.phone,
       birthDate: person.birthDate,
-      nationality: resolveCountryIso2(person.nationality),
+      nationality,
       addressLine1: person.addressLine1,
       addressLine2: person.addressLine2,
       city: person.city,
       state: person.state,
       postalCode: person.postalCode,
-      addressCountry: resolveCountryIso2(person.addressCountry),
+      addressCountry,
       ownershipPercentage:
         person.ownershipPercentage == null ? "" : String(person.ownershipPercentage),
       roles: person.roles,
-      idType: person.idType,
+      idType: resolveGridKybOwnerIdType({
+        idType: person.idType,
+        nationality,
+        addressCountry,
+      }),
       identifier: person.identifier,
       countryOfIssuance: resolveCountryIso2(person.countryOfIssuance),
     })
@@ -110,6 +128,7 @@ export function GridKybPeopleStep({
         nationality: resolveCountryIso2(form.nationality) || form.nationality,
         addressCountry: resolveCountryIso2(form.addressCountry) || form.addressCountry,
         countryOfIssuance: resolveCountryIso2(form.countryOfIssuance) || form.countryOfIssuance,
+        idType: resolveGridKybOwnerIdType(form),
         ownershipPercentage:
           parsedOwnership != null && Number.isFinite(parsedOwnership) ? parsedOwnership : null,
       }
@@ -249,15 +268,15 @@ export function GridKybPeopleStep({
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label>First name</Label>
-              <Input className={SETTINGS_INPUT_CLASS} value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} disabled={disabled} />
+              <Input className={SETTINGS_INPUT_CLASS} value={form.firstName} onChange={(e) => patchForm({ firstName: e.target.value })} disabled={disabled} />
             </div>
             <div className="space-y-2">
               <Label>Middle name (optional)</Label>
-              <Input className={SETTINGS_INPUT_CLASS} value={form.middleName} onChange={(e) => setForm({ ...form, middleName: e.target.value })} disabled={disabled} />
+              <Input className={SETTINGS_INPUT_CLASS} value={form.middleName} onChange={(e) => patchForm({ middleName: e.target.value })} disabled={disabled} />
             </div>
             <div className="space-y-2">
               <Label>Last name</Label>
-              <Input className={SETTINGS_INPUT_CLASS} value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} disabled={disabled} />
+              <Input className={SETTINGS_INPUT_CLASS} value={form.lastName} onChange={(e) => patchForm({ lastName: e.target.value })} disabled={disabled} />
             </div>
             <div className="space-y-2">
               <Label>Email</Label>
@@ -265,7 +284,7 @@ export function GridKybPeopleStep({
                 type="email"
                 className={cn(SETTINGS_INPUT_CLASS, emailError && "border-destructive")}
                 value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                onChange={(e) => patchForm({ email: e.target.value })}
                 disabled={disabled}
               />
               {emailError ? <p className="text-sm text-destructive">{emailError.reason}</p> : null}
@@ -276,7 +295,7 @@ export function GridKybPeopleStep({
                 type="tel"
                 className={cn(SETTINGS_INPUT_CLASS, phoneError && "border-destructive")}
                 value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                onChange={(e) => patchForm({ phone: e.target.value })}
                 disabled={disabled}
               />
               {phoneError ? <p className="text-sm text-destructive">{phoneError.reason}</p> : null}
@@ -287,7 +306,7 @@ export function GridKybPeopleStep({
                 type="date"
                 className={cn(SETTINGS_INPUT_CLASS, birthDateError && "border-destructive")}
                 value={form.birthDate}
-                onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
+                onChange={(e) => patchForm({ birthDate: e.target.value })}
                 disabled={disabled}
               />
               {birthDateError ? <p className="text-sm text-destructive">{birthDateError.reason}</p> : null}
@@ -296,7 +315,7 @@ export function GridKybPeopleStep({
               <Label>Nationality</Label>
               <GridKybCountrySelect
                 value={form.nationality}
-                onChange={(nationality) => setForm({ ...form, nationality })}
+                onChange={(nationality) => patchForm({ nationality })}
                 placeholder="Select nationality"
                 catalog="all"
                 disabled={disabled}
@@ -310,7 +329,7 @@ export function GridKybPeopleStep({
                 className={SETTINGS_INPUT_CLASS}
                 inputMode="decimal"
                 value={form.ownershipPercentage}
-                onChange={(e) => setForm({ ...form, ownershipPercentage: e.target.value })}
+                onChange={(e) => patchForm({ ownershipPercentage: e.target.value })}
                 placeholder="e.g. 25"
                 disabled={disabled}
               />
@@ -319,8 +338,8 @@ export function GridKybPeopleStep({
               <Label>ID type</Label>
               <GridKybEnumSelect
                 value={form.idType}
-                onChange={(idType) => setForm({ ...form, idType })}
-                options={GRID_KYB_ID_TYPES}
+                onChange={(idType) => patchForm({ idType })}
+                options={gridKybIdTypeOptionsForPerson(form)}
                 placeholder="Select ID type"
                 disabled={disabled}
                 invalid={Boolean(idTypeError)}
@@ -328,13 +347,13 @@ export function GridKybPeopleStep({
             </div>
             <div className="space-y-2">
               <Label>ID number</Label>
-              <Input className={SETTINGS_INPUT_CLASS} value={form.identifier} onChange={(e) => setForm({ ...form, identifier: e.target.value })} disabled={disabled} />
+              <Input className={SETTINGS_INPUT_CLASS} value={form.identifier} onChange={(e) => patchForm({ identifier: e.target.value })} disabled={disabled} />
             </div>
             <div className="space-y-2">
               <Label>ID issuing country</Label>
               <GridKybCountrySelect
                 value={form.countryOfIssuance}
-                onChange={(countryOfIssuance) => setForm({ ...form, countryOfIssuance })}
+                onChange={(countryOfIssuance) => patchForm({ countryOfIssuance })}
                 placeholder="Select issuing country"
                 catalog="all"
                 disabled={disabled}
@@ -352,17 +371,14 @@ export function GridKybPeopleStep({
                 postalCode: form.postalCode,
               }}
               onChange={(patch) =>
-                setForm((prev) => ({
-                  ...prev,
+                patchForm((prev) => ({
                   addressLine1: patch.line1 ?? prev.addressLine1,
                   city: patch.city ?? prev.city,
                   state: patch.state ?? prev.state,
                   postalCode: patch.postalCode ?? prev.postalCode,
                 }))
               }
-              onCountryCodeChange={(addressCountry) =>
-                setForm((prev) => ({ ...prev, addressCountry }))
-              }
+              onCountryCodeChange={(addressCountry) => patchForm({ addressCountry })}
               disabled={disabled}
               editing={!disabled}
             />
@@ -373,7 +389,7 @@ export function GridKybPeopleStep({
             <Input
               className={SETTINGS_INPUT_CLASS}
               value={form.addressLine2}
-              onChange={(e) => setForm({ ...form, addressLine2: e.target.value })}
+              onChange={(e) => patchForm({ addressLine2: e.target.value })}
               placeholder="Suite, unit, etc."
               disabled={disabled}
             />
@@ -387,12 +403,11 @@ export function GridKybPeopleStep({
                     checked={form.roles.includes(role.value)}
                     disabled={disabled}
                     onCheckedChange={(checked) =>
-                      setForm({
-                        ...form,
+                      patchForm((prev) => ({
                         roles: checked
-                          ? [...form.roles, role.value]
-                          : form.roles.filter((value) => value !== role.value),
-                      })
+                          ? [...prev.roles, role.value]
+                          : prev.roles.filter((value) => value !== role.value),
+                      }))
                     }
                   />
                   {role.label}

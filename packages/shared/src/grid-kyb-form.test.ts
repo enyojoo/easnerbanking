@@ -5,10 +5,14 @@ import {
   filterResolvedGridKybErrorPointers,
   firstGridKybErrorSection,
   GRID_KYB_ENTITY_TYPES,
+  GRID_KYB_ID_TYPES,
   gridKybApplicationIsEditable,
   gridKybApplicationStatusFromVerification,
+  gridKybIdTypeOptionsForPerson,
   gridKybWizardReadiness,
   mapGridKybVerificationErrors,
+  normalizeGridKybIdType,
+  resolveGridKybOwnerIdType,
   resolveGridKybSourceOfFunds,
   sourceOfFundsIdFromStored,
 } from "./grid-kyb-form"
@@ -154,6 +158,42 @@ describe("mergeGridKybCompanyDraft", () => {
   })
 })
 
+describe("resolveGridKybOwnerIdType", () => {
+  it("maps cmdk-lowercased non_us_tax_id to Grid's enum", () => {
+    expect(normalizeGridKybIdType("non_us_tax_id")).toBe("NON_US_TAX_ID")
+    expect(normalizeGridKybIdType("Non-U.S. tax ID")).toBe("NON_US_TAX_ID")
+  })
+
+  it("forces NON_US_TAX_ID for non-US owners even if SSN was stored", () => {
+    expect(
+      resolveGridKybOwnerIdType({
+        idType: "SSN",
+        nationality: "NG",
+        addressCountry: "NG",
+      }),
+    ).toBe("NON_US_TAX_ID")
+    expect(
+      resolveGridKybOwnerIdType({
+        idType: "",
+        nationality: "GB",
+        addressCountry: "",
+      }),
+    ).toBe("NON_US_TAX_ID")
+  })
+
+  it("keeps US tax types for US owners", () => {
+    expect(resolveGridKybOwnerIdType({ idType: "ITIN", nationality: "US" })).toBe("ITIN")
+    expect(resolveGridKybOwnerIdType({ idType: "NON_US_TAX_ID", nationality: "US" })).toBe("SSN")
+  })
+
+  it("only offers Non-U.S. tax ID for Nigerian owners", () => {
+    expect(gridKybIdTypeOptionsForPerson({ nationality: "NG" }).map((row) => row.value)).toEqual([
+      "NON_US_TAX_ID",
+    ])
+    expect(GRID_KYB_ID_TYPES.some((row) => row.value === "EIN")).toBe(false)
+  })
+})
+
 describe("filterResolvedGridKybErrorPointers", () => {
   it("drops company field pointers once the field is filled", () => {
     const remaining = filterResolvedGridKybErrorPointers({
@@ -239,6 +279,33 @@ describe("filterResolvedGridKybErrorPointers", () => {
       documents: [{ personId: "p1", category: "identity" }],
     })
     expect(remaining).toEqual([])
+  })
+
+  it("keeps the NON_US_TAX_ID pointer until the owner is actually a non-US tax ID", () => {
+    const pointers = mapGridKybVerificationErrors([
+      {
+        type: "INVALID_FIELD",
+        field: "personalInfo.idType",
+        reason: "Non-US beneficial owners must use NON_US_TAX_ID as the idType.",
+        resourceId: "BeneficialOwner:abc",
+      },
+    ])
+    expect(
+      filterResolvedGridKybErrorPointers({
+        pointers,
+        company: emptyGridKybCompanyDraft(),
+        people: [{ id: "p1", gridBeneficialOwnerId: "abc", roles: ["UBO"], idType: "SSN" }],
+        documents: [],
+      }),
+    ).toHaveLength(1)
+    expect(
+      filterResolvedGridKybErrorPointers({
+        pointers,
+        company: emptyGridKybCompanyDraft(),
+        people: [{ id: "p1", gridBeneficialOwnerId: "abc", roles: ["UBO"], nationality: "NG", idType: "SSN" }],
+        documents: [],
+      }),
+    ).toEqual([])
   })
 })
 

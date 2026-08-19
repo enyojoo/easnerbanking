@@ -132,9 +132,63 @@ export const GRID_KYB_OWNER_ROLES = [
 export const GRID_KYB_ID_TYPES = [
   { value: "SSN", label: "SSN" },
   { value: "ITIN", label: "ITIN" },
-  { value: "EIN", label: "EIN" },
   { value: "NON_US_TAX_ID", label: "Non-U.S. tax ID" },
 ] as const satisfies readonly GridKybSelectOption[]
+
+export type GridKybIdType = (typeof GRID_KYB_ID_TYPES)[number]["value"]
+
+const GRID_KYB_ID_TYPE_VALUES = GRID_KYB_ID_TYPES.map((row) => row.value) as GridKybIdType[]
+
+function iso2Country(value: string | null | undefined): string {
+  return String(value ?? "").trim().toUpperCase()
+}
+
+/** Grid's closed beneficial-owner tax idType enum. Accepts cmdk-lowercased values. */
+export function normalizeGridKybIdType(raw: string | null | undefined): GridKybIdType | "" {
+  const compact = String(raw ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/U\.S\.?/g, "US")
+    .replace(/[.\s-]+/g, "_")
+    .replace(/_+/g, "_")
+  if (!compact) return ""
+  if (GRID_KYB_ID_TYPE_VALUES.includes(compact as GridKybIdType)) return compact as GridKybIdType
+  if (compact === "US_SSN") return "SSN"
+  if (compact.includes("TAX") && (compact.includes("NON_US") || compact.includes("NONUS"))) return "NON_US_TAX_ID"
+  return ""
+}
+
+/**
+ * Grid rejects US tax idTypes for non-US owners:
+ * "Non-US beneficial owners must use NON_US_TAX_ID as the idType."
+ */
+export function resolveGridKybOwnerIdType(input: {
+  idType?: string | null
+  nationality?: string | null
+  addressCountry?: string | null
+}): GridKybIdType | "" {
+  const nationality = iso2Country(input.nationality)
+  const addressCountry = iso2Country(input.addressCountry)
+  const country = nationality || addressCountry
+  const normalized = normalizeGridKybIdType(input.idType)
+  if (country && country !== "US") return "NON_US_TAX_ID"
+  if (country === "US") return normalized === "NON_US_TAX_ID" ? "SSN" : normalized || "SSN"
+  return normalized
+}
+
+export function gridKybIdTypeOptionsForPerson(input: {
+  nationality?: string | null
+  addressCountry?: string | null
+}): readonly GridKybSelectOption<GridKybIdType>[] {
+  const country = iso2Country(input.nationality) || iso2Country(input.addressCountry)
+  if (country && country !== "US") {
+    return GRID_KYB_ID_TYPES.filter((row) => row.value === "NON_US_TAX_ID")
+  }
+  if (country === "US") {
+    return GRID_KYB_ID_TYPES.filter((row) => row.value !== "NON_US_TAX_ID")
+  }
+  return GRID_KYB_ID_TYPES
+}
 
 export type GridKybSourceOfFundsId =
   | "revenue_from_operations"
@@ -546,6 +600,7 @@ function personFieldIsFilled(person: GridKybPointerPerson, field: string): boole
     identifier: person.identifier,
     countryOfIssuance: person.countryOfIssuance,
   }
+  if (key === "idType") return Boolean(normalizeGridKybIdType(person.idType))
   return Boolean(String(aliases[key] ?? "").trim())
 }
 
@@ -584,6 +639,10 @@ export function filterResolvedGridKybErrorPointers(input: {
       const field = pointer.field
       const targets = peopleForPointer(people, pointer.resourceId)
       if (targets.length === 0) return true
+      const requiresNonUsTaxId = /NON_US_TAX_ID/i.test(pointer.reason)
+      if (requiresNonUsTaxId) {
+        return targets.some((person) => resolveGridKybOwnerIdType(person) !== "NON_US_TAX_ID")
+      }
       return targets.some((person) => !personFieldIsFilled(person, field))
     }
     const reason = pointer.reason.toLowerCase()
