@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises"
-import { dirname, join } from "node:path"
+import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { ImageResponse } from "next/og"
 
@@ -22,27 +22,36 @@ const COLORS = {
   muted: "#5F665F",
 } as const
 
-const businessDir = join(dirname(fileURLToPath(import.meta.url)), "../..")
-const monorepoRoot = join(businessDir, "..")
+/**
+ * Literal `import.meta.url` targets so the bundler copies these into the
+ * serverless function. `readFile(join(__dirname, …))` misses them at runtime
+ * even though file-convention OG images prerender the same assets at build.
+ */
+const FONT_UNBOUNDED = new URL("../../assets/og-fonts/unbounded-latin-700-normal.woff", import.meta.url)
+const FONT_INTER = new URL("../../assets/og-fonts/inter-latin-400-normal.woff", import.meta.url)
+const LOGO_PNG = new URL("../../assets/easner-logo.png", import.meta.url)
 
 export interface OgImageContent {
   headline: string | string[]
   subhead?: string
 }
 
-async function loadBundledFont(packagePath: string) {
-  const fileName = packagePath.includes("unbounded")
-    ? "unbounded-latin-700-normal.woff"
-    : packagePath.includes("inter")
-      ? "inter-latin-400-normal.woff"
-      : null
+async function loadAsset(url: URL, fallbackRel: string): Promise<Buffer> {
+  try {
+    return await readFile(fileURLToPath(url))
+  } catch {
+    // fall through
+  }
 
-  const candidates = [
-    ...(fileName ? [join(businessDir, "assets/og-fonts", fileName)] : []),
-    join(businessDir, "node_modules", packagePath),
-    join(monorepoRoot, "node_modules", packagePath),
-  ]
+  try {
+    const res = await fetch(url)
+    if (res.ok) return Buffer.from(await res.arrayBuffer())
+  } catch {
+    // fall through
+  }
 
+  const cwd = process.cwd()
+  const candidates = [join(cwd, fallbackRel), join(cwd, "business", fallbackRel)]
   for (const path of candidates) {
     try {
       return await readFile(path)
@@ -51,12 +60,7 @@ async function loadBundledFont(packagePath: string) {
     }
   }
 
-  throw new Error(`Font not found: ${packagePath}`)
-}
-
-async function loadEasnerLogoDataUrl() {
-  const logo = await readFile(join(businessDir, "assets/easner-logo.png"))
-  return `data:image/png;base64,${logo.toString("base64")}`
+  throw new Error(`OG asset not found: ${fallbackRel}`)
 }
 
 function truncate(text: string, maxLength: number) {
@@ -76,10 +80,14 @@ let ogAssetsPromise: Promise<OgAssets> | null = null
 function loadOgAssets(): Promise<OgAssets> {
   if (!ogAssetsPromise) {
     ogAssetsPromise = Promise.all([
-      loadBundledFont("@fontsource/unbounded/files/unbounded-latin-700-normal.woff"),
-      loadBundledFont("@fontsource/inter/files/inter-latin-400-normal.woff"),
-      loadEasnerLogoDataUrl(),
-    ]).then(([unbounded, inter, logoSrc]) => ({ unbounded, inter, logoSrc }))
+      loadAsset(FONT_UNBOUNDED, "assets/og-fonts/unbounded-latin-700-normal.woff"),
+      loadAsset(FONT_INTER, "assets/og-fonts/inter-latin-400-normal.woff"),
+      loadAsset(LOGO_PNG, "assets/easner-logo.png"),
+    ]).then(([unbounded, inter, logo]) => ({
+      unbounded,
+      inter,
+      logoSrc: `data:image/png;base64,${logo.toString("base64")}`,
+    }))
   }
   return ogAssetsPromise
 }
@@ -181,10 +189,14 @@ export async function createOgImage({ headline, subhead }: OgImageContent) {
     ),
     {
       ...OG_SIZE,
+      headers: {
+        "Cache-Control": "public, max-age=3600, s-maxage=86400",
+        "Content-Type": OG_CONTENT_TYPE,
+      },
       fonts: [
         { name: "Unbounded", data: unbounded, weight: 700, style: "normal" },
         { name: "Inter", data: inter, weight: 400, style: "normal" },
       ],
-    }
+    },
   )
 }

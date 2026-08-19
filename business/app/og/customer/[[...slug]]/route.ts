@@ -2,7 +2,7 @@ import { headers } from "next/headers"
 import { pickPublicHostname } from "@/lib/customer-hosts"
 import { invoiceSeo } from "@/lib/seo/content/invoice"
 import { payCustomerSeo } from "@/lib/seo/content/pay-customer"
-import { createOgImage, OG_CONTENT_TYPE } from "@/lib/seo/og-image"
+import { createOgImage } from "@/lib/seo/og-image"
 import { resolvePublicCustomerSeo } from "@/lib/seo/public-customer-metadata"
 
 export const runtime = "nodejs"
@@ -44,9 +44,16 @@ export async function GET(
   }
 }
 
-export async function HEAD() {
+export async function HEAD(
+  request: Request,
+  context: { params: Promise<{ slug?: string[] }> },
+) {
+  const res = await GET(request, context)
   return new Response(null, {
-    status: 200,
-    headers: { "Content-Type": OG_CONTENT_TYPE },
+    status: res.status,
+    headers: {
+      "Content-Type": res.headers.get("Content-Type") ?? "image/png",
+      "Cache-Control": res.headers.get("Cache-Control") ?? "public, max-age=3600",
+    },
   })
 }

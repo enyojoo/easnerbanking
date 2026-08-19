@@ -24,6 +24,10 @@ const nextConfig = {
       "./assets/easner-logo.png",
       "./assets/og-fonts/**",
     ],
+    "/og/customer/[[...slug]]/route": [
+      "./assets/easner-logo.png",
+      "./assets/og-fonts/**",
+    ],
     "/og/pay/opengraph-image": [
       "./assets/easner-logo.png",
       "./assets/og-fonts/**",
