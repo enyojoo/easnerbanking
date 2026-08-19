@@ -388,17 +388,6 @@ export function GridKybPeopleStep({
             disabled={disabled}
             editing={!disabled}
           />
-          <div className="space-y-2">
-            <Label htmlFor="owner-address-2">Address line 2 (optional)</Label>
-            <Input
-              id="owner-address-2"
-              className={SETTINGS_INPUT_CLASS}
-              value={form.addressLine2}
-              onChange={(e) => patchForm({ addressLine2: e.target.value })}
-              placeholder="Suite, unit, etc."
-              disabled={disabled}
-            />
-          </div>
           {addressError ? <p className="text-sm text-destructive">{addressError.reason}</p> : null}
           <div className="space-y-2">
             <Label>Roles</Label>

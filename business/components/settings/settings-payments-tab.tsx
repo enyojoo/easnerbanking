@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
 import { CreditCard } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -17,11 +16,8 @@ import {
   useCheckoutSettings,
 } from "@/hooks/use-checkout-settings"
 import { useBusinessProfile, patchCachedBusinessProfile } from "@/lib/use-business-profile"
-import { SETTINGS_CONNECT_FLOW_PARAM } from "@/lib/compliance/cutover-comms"
 import { COLLECTIONS_COPY, PAYMENTS_SETTINGS_COPY } from "@/lib/copy/business-ui-copy"
 import type { CheckoutFeeMode } from "@/lib/stripe/checkout-fee-mode"
-import { connectSetupChecklist } from "@/lib/stripe/connect-panel-ux"
-import { readCachedConnectStatus } from "@/lib/stripe/connect-status-cache"
 
 export function SettingsPaymentsTab() {
   const profile = useBusinessProfile()
@@ -30,7 +26,6 @@ export function SettingsPaymentsTab() {
 
   const masterEnabled =
     checkoutData?.settings.onlinePaymentsEnabled ?? profile.onlinePaymentsEnabled !== false
-  const connectReady = checkoutData?.readiness.ready === true
   const showSkeleton = checkoutLoading && !checkoutData
 
   const setMasterEnabled = async (enabled: boolean) => {
@@ -58,10 +53,6 @@ export function SettingsPaymentsTab() {
     toast.success("Saved.")
     await refetch()
   }
-
-  const cachedConnect = readCachedConnectStatus(profile.businessId)
-  const checklist = cachedConnect ? connectSetupChecklist(cachedConnect) : []
-  const pendingItems = checklist.filter((item) => !item.done)
 
   return (
     <div className="space-y-6">
@@ -95,24 +86,6 @@ export function SettingsPaymentsTab() {
             <p className="rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
               {PAYMENTS_SETTINGS_COPY.masterOffHint}
             </p>
-          ) : !connectReady && !showSkeleton ? (
-            <div className="space-y-3 rounded-lg border bg-muted/30 p-3 text-sm">
-              <p className="text-muted-foreground">
-                {checkoutData?.readiness.reason || PAYMENTS_SETTINGS_COPY.setupRequiredHint}
-              </p>
-              {pendingItems.length > 0 ? (
-                <ul className="space-y-1 text-muted-foreground">
-                  {pendingItems.slice(0, 4).map((item) => (
-                    <li key={item.label}>· {item.label}</li>
-                  ))}
-                </ul>
-              ) : null}
-              <Button asChild size="sm">
-                <Link href={`/settings?tab=verification&flow=${SETTINGS_CONNECT_FLOW_PARAM}`}>
-                  {PAYMENTS_SETTINGS_COPY.continueVerification}
-                </Link>
-              </Button>
-            </div>
           ) : null}
         </CardContent>
       </Card>

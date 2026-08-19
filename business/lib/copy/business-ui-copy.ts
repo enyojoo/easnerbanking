@@ -559,8 +559,6 @@ export const PAYMENTS_SETTINGS_COPY = {
   masterSwitch: "Accept card and bank payments",
   masterSwitchHelp: "Turns Pay online, card and bank links, and website checkout on or off.",
   masterOffHint: "Customers cannot pay by card or bank while this is off.",
-  setupRequiredHint: "Finish verification to start accepting card and bank.",
-  continueVerification: "Continue in Verification",
   feesTitle: "Processing fees",
   feesIntro: "Applies to every card and bank payment you collect.",
   payoutTitle: "Payout and settlement",

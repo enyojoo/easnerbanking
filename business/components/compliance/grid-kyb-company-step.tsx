@@ -132,17 +132,6 @@ export function GridKybCompanyStep({ company, onChange, errors, disabled }: Prop
         disabled={disabled}
         editing={!disabled}
       />
-      <div className="space-y-2">
-        <Label htmlFor="kyb-address-2">Address line 2 (optional)</Label>
-        <Input
-          id="kyb-address-2"
-          className={SETTINGS_INPUT_CLASS}
-          value={company.addressLine2}
-          onChange={(event) => onChange({ addressLine2: event.target.value })}
-          placeholder="Suite, unit, etc."
-          disabled={disabled}
-        />
-      </div>
 
       <div className="space-y-4">
         <div className="space-y-2">
