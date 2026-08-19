@@ -1,19 +1,29 @@
-import { getGridQuoteTtlMs, gridQuoteNeedsRefresh } from "@/lib/grid/config"
+import { gridQuoteNeedsRefresh } from "@/lib/grid/config"
 import {
   buildGridLockedPayoutQuoteResult,
   lockGridBalancePayoutQuote,
 } from "@/lib/grid/payout-quote"
+import type { GridPersonProfile } from "@/lib/grid/kyc-metadata"
 import type { PayoutQuoteResult } from "@/lib/noah/payout-quote"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
 import {
   findReusablePayoutLockSession,
   lockedQuoteFromSession,
   upsertPayoutLockSession,
+  type PayoutLockSessionRow,
 } from "@/lib/payout/payout-lock-session"
 import { buildPayoutQuoteKey } from "@/lib/payout/payout-quote-key"
 import { hashRecipientSnapshot } from "@/lib/payout/recipient-snapshot-hash"
-import type { GridPersonProfile } from "@/lib/grid/kyc-metadata"
 import type { SupabaseClient } from "@supabase/supabase-js"
+
+function isReusableLiveGridLock(row: PayoutLockSessionRow): boolean {
+  if (row.provider !== "grid") return false
+  const payload = row.provider_payload_json ?? {}
+  const quoteId = String(payload.quoteId ?? "").trim()
+  const fundingAddress = String(payload.fundingAddress ?? "").trim()
+  if (!quoteId || !fundingAddress) return false
+  return !gridQuoteNeedsRefresh(row.expires_at)
+}
 
 export type ConfirmGridBalancePayoutInput = {
   admin: SupabaseClient
@@ -30,6 +40,10 @@ export type ConfirmGridBalancePayoutInput = {
   paymentPurpose?: string
 }
 
+/**
+ * Same as Noah confirm: lock the provider quote here so review shows actuals.
+ * PIN only funds (and refreshes if the Grid quote is inside the 45s buffer).
+ */
 export async function confirmGridBalancePayoutOrder(
   input: ConfirmGridBalancePayoutInput,
 ): Promise<PayoutQuoteResult> {
@@ -48,11 +62,7 @@ export async function confirmGridBalancePayoutOrder(
     userId: input.userId,
     quoteKey,
   })
-  if (
-    existing &&
-    existing.provider === "grid" &&
-    !gridQuoteNeedsRefresh(existing.expires_at)
-  ) {
+  if (existing && isReusableLiveGridLock(existing)) {
     return lockedQuoteFromSession(existing)
   }
 
@@ -68,9 +78,6 @@ export async function confirmGridBalancePayoutOrder(
     senderProfile: input.senderProfile,
     paymentPurpose: input.paymentPurpose,
   })
-
-  const receiveCurrency = String(input.recipient.currency || "").trim().toUpperCase()
-  const expiresAt = locked.expiresAt ?? new Date(Date.now() + getGridQuoteTtlMs()).toISOString()
 
   const pricing = buildGridLockedPayoutQuoteResult({
     locked,
@@ -94,9 +101,9 @@ export async function confirmGridBalancePayoutOrder(
       customerId: locked.customerId,
       externalAccountId: locked.externalAccountId,
       cryptoAmount: locked.cryptoAmount,
-      fundingAddress: locked.fundingAddress,
+      fundingAddress: locked.fundingAddress ?? "",
     },
-    expiresAt,
+    expiresAt: locked.expiresAt,
   })
 
   return buildGridLockedPayoutQuoteResult({

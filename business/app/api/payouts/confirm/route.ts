@@ -4,18 +4,17 @@ import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { mapNoahPayoutUserError } from "@/lib/noah/noah-prepare-errors"
 import { logNoahPayoutFailure } from "@/lib/noah/log-noah-payout-failure"
-import { payoutCorridorGate } from "@/lib/payout-corridor-validation"
-import { validatePayoutQuoteAmountLimits } from "@/lib/payout-quote-limit-check"
 import {
   normalizePayoutReceiveAmount,
   normalizePayoutReceiveAmountForCurrency,
+  resolvePrimaryPayoutProvider,
 } from "@easner/shared"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
 import { sendDestinationFromRow } from "@/lib/send-destination"
 import { lockSendDestination } from "@/lib/send-destination-operations"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
-import { selectProviderForCorridor, NoProviderForCorridorError } from "@/lib/payout-providers"
+import { loadCorridorRouting } from "@/lib/payout-providers"
 import { requirePayoutProviderEnv } from "@/lib/payout-providers/require-provider-env"
 import type { PayoutEnvProviderId } from "@/lib/payout-providers/require-provider-env"
 import { asYcPayoutError } from "@/lib/yellowcard/payout-errors"
@@ -81,57 +80,26 @@ export async function POST(request: Request) {
     receiveAmount,
   )
 
-  const gate = await payoutCorridorGate(
-    admin,
-    {
-      country_code: String(rec.country_code || "").toUpperCase(),
-      currency: String(rec.currency || "").toUpperCase(),
-      bank_name: rec.bank_name,
-      mobile_provider: rec.mobile_provider,
-      wallet_network: rec.wallet_network,
-    },
-    { requireExecutableProviderChannel: true },
-  )
-  if (gate) return gate
-
-  try {
-    const provider = await selectProviderForCorridor(admin, {
-      countryCode: String(rec.country_code || "").toUpperCase(),
-      currencyCode: String(rec.currency || "").toUpperCase(),
-      rail:
-        rec.mobile_provider || String(rec.bank_name || "").toLowerCase().includes("mobile money")
-          ? "mobile_money"
-          : "bank_transfer",
-      mobileProvider: rec.mobile_provider,
-      bankName: rec.bank_name,
-      businessId: noahCtxResult.scope === "business" ? noahCtxResult.businessId : null,
-      userId: user.id,
-    })
-    const envProvider: PayoutEnvProviderId =
-      provider.id === "yellowcard" || provider.id === "grid" ? provider.id : "noah"
-    const envGate = requirePayoutProviderEnv(envProvider)
-    if (envGate) return envGate
-  } catch (e) {
-    if (e instanceof NoProviderForCorridorError) {
-      return NextResponse.json(
-        { ok: false, error: e.message, code: "PAYOUT_PROVIDER_UNAVAILABLE" },
-        { status: 400 },
-      )
-    }
-    throw e
-  }
-
-  const limitCheck = await validatePayoutQuoteAmountLimits({
-    admin,
-    gateRow: recipientRow,
-    receiveAmount,
-    sourceBalanceCurrency,
-    amountEntryMode,
-    sendBudget: amountEntryMode === "send" && sendAmountRaw > 0 ? sendAmountRaw : undefined,
+  const rail =
+    rec.mobile_provider || String(rec.bank_name || "").toLowerCase().includes("mobile money")
+      ? ("mobile_money" as const)
+      : ("bank_transfer" as const)
+  const routing = await loadCorridorRouting(admin, {
+    countryCode: String(rec.country_code || "").toUpperCase(),
+    currencyCode: String(rec.currency || "").toUpperCase(),
+    rail,
   })
-  if (!limitCheck.ok) {
-    return NextResponse.json({ ok: false, error: limitCheck.message }, { status: 400 })
+  const primary = resolvePrimaryPayoutProvider(routing)
+  if (!primary) {
+    return NextResponse.json(
+      { ok: false, error: "Payout provider is not available for this corridor.", code: "PAYOUT_PROVIDER_UNAVAILABLE" },
+      { status: 400 },
+    )
   }
+  const envProvider: PayoutEnvProviderId =
+    primary === "yellowcard" || primary === "grid" ? primary : "noah"
+  const envGate = requirePayoutProviderEnv(envProvider)
+  if (envGate) return envGate
 
   try {
     const businessId = noahCtxResult.scope === "business" ? noahCtxResult.businessId : null

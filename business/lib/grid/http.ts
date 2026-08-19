@@ -97,15 +97,36 @@ export async function gridFetch<T>(opts: GridFetchOptions): Promise<T> {
   return parsed as T
 }
 
+const GRID_LIST_MAX_PAGES = 20
+
+export function resolveGridListNextCursor(input: {
+  nextCursor?: string | null
+  cursor?: string | null
+  previousCursor?: string
+  rowCount: number
+}): string | undefined {
+  if (input.rowCount <= 0) return undefined
+  const next = input.nextCursor
+    ? String(input.nextCursor)
+    : input.cursor
+      ? String(input.cursor)
+      : ""
+  if (!next || next === input.previousCursor) return undefined
+  return next
+}
+
 /** Paginate Grid list endpoints with `data` + optional cursor. */
 export async function gridFetchAllPages<T>(input: {
   path: string
   query?: Record<string, string | number | boolean | undefined>
   mapPage: (payload: { data?: T[]; cursor?: string | null }) => T[]
+  /** Cap pages so a sticky cursor cannot hang quote/confirm for tens of seconds. */
+  maxPages?: number
 }): Promise<T[]> {
   const out: T[] = []
   let cursor: string | undefined
-  do {
+  const maxPages = input.maxPages ?? GRID_LIST_MAX_PAGES
+  for (let pageIndex = 0; pageIndex < maxPages; pageIndex++) {
     const params = new URLSearchParams()
     for (const [k, v] of Object.entries(input.query ?? {})) {
       if (v != null && String(v).trim()) params.set(k, String(v))
@@ -121,12 +142,16 @@ export async function gridFetchAllPages<T>(input: {
       method: "GET",
       path,
     })
-    out.push(...input.mapPage(page))
-    cursor = page.nextCursor
-      ? String(page.nextCursor)
-      : page.cursor
-        ? String(page.cursor)
-        : undefined
-  } while (cursor)
+    const rows = input.mapPage(page)
+    out.push(...rows)
+    const next = resolveGridListNextCursor({
+      nextCursor: page.nextCursor,
+      cursor: page.cursor,
+      previousCursor: cursor,
+      rowCount: rows.length,
+    })
+    if (!next) break
+    cursor = next
+  }
   return out
 }

@@ -1,7 +1,6 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import {
   computeYcBalancePayoutPricing,
-  computeYcBalancePayoutPricingBeforeSend,
   computePayoutQuoteDisplayProcessingFee,
   normalizeGlobalPayoutQuoteReceiveAmount,
   normalizePayoutReceiveAmount,
@@ -46,6 +45,35 @@ import {
   resolveGridQuoteExpiresAt,
 } from "./config"
 import type { GridQuote } from "./types"
+
+function storedGridExternalAccountId(recipient: RecipientSellPrepareRow): string | null {
+  const meta = recipient.metadata
+  const obj = meta && typeof meta === "object" ? (meta as Record<string, unknown>) : {}
+  const id = String(obj.grid_external_account_id ?? "").trim()
+  return id || null
+}
+
+function persistRecipientGridExternalAccount(
+  admin: ReturnType<typeof createSupabaseAdmin>,
+  recipient: RecipientSellPrepareRow,
+  externalAccountId: string,
+): void {
+  const recipientId = String(recipient.id ?? "").trim()
+  if (!recipientId) return
+  const meta = recipient.metadata
+  const obj = meta && typeof meta === "object" ? { ...(meta as Record<string, unknown>) } : {}
+  if (String(obj.grid_external_account_id ?? "").trim() === externalAccountId) return
+  obj.grid_external_account_id = externalAccountId
+  void admin
+    .from("recipients")
+    .update({ metadata: obj, updated_at: new Date().toISOString() })
+    .eq("id", recipientId)
+    .then(({ error }) => {
+      if (error) {
+        console.warn("[grid] persist recipient external account failed:", error.message)
+      }
+    })
+}
 
 function roundUsdc(n: number): number {
   if (!Number.isFinite(n)) return 0
@@ -315,11 +343,11 @@ export type LockGridBalancePayoutQuoteResult = {
     channelCost: number
     customerRate: number
   }
-  quote: GridQuote
+  quote?: GridQuote
 }
 
 /**
- * DB-only Grid payout preview (no Grid API). Lock happens on `/confirm`.
+ * Amount-screen Grid preview (Office rates, no Grid API). Confirm locks POST /quotes.
  */
 export async function buildGridBalancePayoutPreview(input: {
   admin?: ReturnType<typeof createSupabaseAdmin>
@@ -405,12 +433,11 @@ export async function buildGridBalancePayoutPreview(input: {
     "pay_out",
     feeSubject,
   )
-  const pricing = computeYcBalancePayoutPricingBeforeSend({
+  const pricing = computeGridLockedBalancePayoutPricing({
     receiveAmount: quoteReceiveAmount,
     customerRate,
-    provisionalCryptoUsd: provisionalCrypto,
-    ycMidUsd:
-      gridMidLocalPerUsd > 0 ? roundUsdc(quoteReceiveAmount / gridMidLocalPerUsd) : undefined,
+    gridSendingUsd: provisionalCrypto,
+    gridMidLocalPerUsd: gridMidLocalPerUsd > 0 ? gridMidLocalPerUsd : undefined,
     processingFeeBps,
   })
 
@@ -481,6 +508,7 @@ export async function buildGridBalancePayoutPreview(input: {
 
 /**
  * Lock a Grid balance payout quote: ensure customer + external account, POST /quotes.
+ * Called from confirm (review actuals, Noah parity). Execute only if the lock is missing/stale.
  */
 export async function lockGridBalancePayoutQuote(
   input: LockGridBalancePayoutQuoteInput,
@@ -501,6 +529,8 @@ export async function lockGridBalancePayoutQuote(
       ? ("mobile_money" as const)
       : ("bank_transfer" as const)
 
+  const storedExternalAccountId = storedGridExternalAccountId(input.recipient)
+  const lockStartedAt = Date.now()
   const [customerResult, gridCandidates, rates, processingFeeBps] = await Promise.all([
     ensureGridCustomer({
       admin,
@@ -508,12 +538,15 @@ export async function lockGridBalancePayoutQuote(
       businessId: input.businessId,
       scope: input.businessId ? "business" : "individual",
       profile: input.senderProfile,
+      skipLiveLookup: true,
     }),
-    loadGridRecipientBankCandidates(admin, {
-      countryCode,
-      currencyCode: receiveCurrency,
-      rail,
-    }),
+    storedExternalAccountId
+      ? Promise.resolve({ bankNames: [] as string[], momoProviders: [] })
+      : loadGridRecipientBankCandidates(admin, {
+          countryCode,
+          currencyCode: receiveCurrency,
+          rail,
+        }),
     listGridRates(admin, { destinations: [receiveCurrency], status: "active" }, {
       backgroundRefresh: false,
     }),
@@ -526,14 +559,17 @@ export async function lockGridBalancePayoutQuote(
   ])
   const { customerId } = customerResult
 
-  const externalAccount = await createGridExternalAccount({
-    customerId,
-    recipient: input.recipient,
-    profile: input.senderProfile,
-    rail,
-    gridBankCandidates: gridCandidates.bankNames,
-    gridMomoCandidates: gridCandidates.momoProviders,
-  })
+  let externalAccount = storedExternalAccountId
+    ? { id: storedExternalAccountId }
+    : await createGridExternalAccount({
+        customerId,
+        recipient: input.recipient,
+        profile: input.senderProfile,
+        rail,
+        gridBankCandidates: gridCandidates.bankNames,
+        gridMomoCandidates: gridCandidates.momoProviders,
+      })
+  persistRecipientGridExternalAccount(admin, input.recipient, externalAccount.id)
 
   const payoutRate = findGridBalancePayoutRate(rates, receiveCurrency)
   const customerRate = payoutRate?.rate ?? 0
@@ -588,12 +624,44 @@ export async function lockGridBalancePayoutQuote(
     lockedReceiveMinor: gridMinorUnits(quoteReceiveAmount, 2),
     purposeOfPayment: input.paymentPurpose,
   })
-  const quote = await gridFetch<GridQuote>({
-    method: "POST",
-    path: "/quotes",
-    json: quoteBody,
-    idempotencyKey: buildGridIdempotencyKey(`grid_quote_${customerId}`, quoteBody),
-  })
+  let quote: GridQuote
+  try {
+    quote = await gridFetch<GridQuote>({
+      method: "POST",
+      path: "/quotes",
+      json: quoteBody,
+      idempotencyKey: buildGridIdempotencyKey(`grid_quote_${customerId}`, quoteBody),
+    })
+  } catch (e) {
+    if (!storedExternalAccountId) throw e
+    const freshCandidates = await loadGridRecipientBankCandidates(admin, {
+      countryCode,
+      currencyCode: receiveCurrency,
+      rail,
+    })
+    externalAccount = await createGridExternalAccount({
+      customerId,
+      recipient: input.recipient,
+      profile: input.senderProfile,
+      rail,
+      gridBankCandidates: freshCandidates.bankNames,
+      gridMomoCandidates: freshCandidates.momoProviders,
+    })
+    persistRecipientGridExternalAccount(admin, input.recipient, externalAccount.id)
+    const retryBody = buildGridBalancePayoutQuoteBody({
+      customerId,
+      externalAccountId: externalAccount.id,
+      receiveCurrency,
+      lockedReceiveMinor: gridMinorUnits(quoteReceiveAmount, 2),
+      purposeOfPayment: input.paymentPurpose,
+    })
+    quote = await gridFetch<GridQuote>({
+      method: "POST",
+      path: "/quotes",
+      json: retryBody,
+      idempotencyKey: buildGridIdempotencyKey(`grid_quote_${customerId}`, retryBody),
+    })
+  }
 
   const hydratedQuote = await hydrateGridQuotePaymentInstructions(quote)
   const fundingAddress = resolveGridQuoteFundingAddress(hydratedQuote)
@@ -621,6 +689,11 @@ export async function lockGridBalancePayoutQuote(
   const cryptoAmount = applied.cryptoAmount
   const sequenceId = gridQuoteSequenceId(String(hydratedQuote.id))
   const expiresAt = resolveGridQuoteExpiresAt(hydratedQuote.expiresAt)
+  console.info("[grid] payout lock", {
+    ms: Date.now() - lockStartedAt,
+    reusedExternalAccount: Boolean(storedExternalAccountId),
+    quoteId: String(hydratedQuote.id),
+  })
 
   return {
     quoteId: String(hydratedQuote.id),

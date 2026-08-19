@@ -27,7 +27,7 @@ import { hashRecipientSnapshot } from "@/lib/payout/recipient-snapshot-hash"
 import { isPayoutLockOnReviewEnabled } from "@/lib/payout/payout-lock-flags"
 import { executeGridBalancePayoutTurnkeyLeg } from "@/lib/grid/payout-execute"
 import { buildGridBalancePayoutOutMetadata, mergeGridPayoutLifecycle } from "@/lib/grid/grid-ledger"
-import { ensureFreshGridBalancePayoutQuote } from "@/lib/grid/payout-quote"
+import { ensureFreshGridBalancePayoutQuote, lockGridBalancePayoutQuote } from "@/lib/grid/payout-quote"
 
 async function readAvailableBalance(
   admin: SupabaseClient,
@@ -145,9 +145,8 @@ export async function executeGridBalancePayout(
   let sequenceId = String(input.grid.sequenceId || quoteId).trim()
   let totalDebited = Number(input.pricing.totalDebited)
   let channelCost = Number(input.pricing.channelCost)
-  if (!quoteId || !fundingAddress || !(cryptoAmount > 0)) {
-    return { ok: false, error: "Grid payout quote is incomplete. Review again." }
-  }
+  let customerId = String(input.grid.customerId || "").trim()
+  let externalAccountId = String(input.grid.externalAccountId || "").trim()
   if (!Number.isFinite(totalDebited) || totalDebited <= 0) {
     return { ok: false, error: "Invalid total debited for Grid payout." }
   }
@@ -163,11 +162,56 @@ export async function executeGridBalancePayout(
   const processingFeeBps =
     principal > 0 ? (processingFee > 0 ? Math.round((processingFee / principal) * 10_000) : 0) : 100
 
-  if (customerRate > 0) {
+  if (!quoteId || !fundingAddress) {
+    const { data: userRow } = await admin
+      .from("users")
+      .select(
+        "residence_country,kyc_id_type,kyc_id_number,ng_local_id_type,ng_local_id_number,full_name,phone,email,date_of_birth,kyc_address_street,kyc_address_city,kyc_address_country",
+      )
+      .eq("id", userId)
+      .maybeSingle()
+    try {
+      const locked = await lockGridBalancePayoutQuote({
+        admin,
+        userId,
+        businessId,
+        recipient: recipientRow,
+        receiveFiatAmount: fiatAmount,
+        sourceBalanceCurrency: "USD",
+        senderProfile: {
+          residenceCountry: userRow?.residence_country,
+          kycIdType: userRow?.kyc_id_type,
+          kycIdNumber: userRow?.kyc_id_number,
+          ngLocalIdType: userRow?.ng_local_id_type,
+          ngLocalIdNumber: userRow?.ng_local_id_number,
+          fullName: userRow?.full_name,
+          phone: userRow?.phone,
+          email: userRow?.email,
+          dateOfBirth: userRow?.date_of_birth,
+          addressStreet: userRow?.kyc_address_street,
+          addressCity: userRow?.kyc_address_city,
+          addressCountry: userRow?.kyc_address_country,
+        },
+      })
+      quoteId = locked.quoteId
+      sequenceId = locked.sequenceId || sequenceId
+      fundingAddress = String(locked.fundingAddress || "")
+      cryptoAmount = locked.cryptoAmount
+      customerId = locked.customerId
+      externalAccountId = locked.externalAccountId
+      totalDebited = Math.max(totalDebited, locked.pricing.totalDebited)
+      channelCost = locked.pricing.channelCost
+    } catch (e) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e.message : "Could not lock Grid quote for send.",
+      }
+    }
+  } else if (customerRate > 0) {
     const liveQuote = await ensureFreshGridBalancePayoutQuote({
       quoteId,
-      customerId: input.grid.customerId,
-      externalAccountId: input.grid.externalAccountId,
+      customerId,
+      externalAccountId,
       receiveCurrency: fiatCurrency,
       receiveAmount: fiatAmount,
       customerRate,
@@ -187,6 +231,10 @@ export async function executeGridBalancePayout(
     cryptoAmount = liveQuote.cryptoAmount
     totalDebited = liveQuote.totalDebited
     channelCost = liveQuote.channelCost
+  }
+
+  if (!quoteId || !fundingAddress || !(cryptoAmount > 0)) {
+    return { ok: false, error: "Grid payout quote is incomplete. Review again." }
   }
 
   const { available } = await readAvailableBalance(admin, {
@@ -247,8 +295,8 @@ export async function executeGridBalancePayout(
     easnerTransactionId,
     quoteId,
     sequenceId,
-    customerId: input.grid.customerId,
-    externalAccountId: input.grid.externalAccountId,
+    customerId,
+    externalAccountId,
     fiatAmount,
     fiatCurrency,
     countryCode,
@@ -312,8 +360,8 @@ export async function executeGridBalancePayout(
     quoted_receive: fiatAmount,
     customer_rate: input.pricing.customerRate ?? null,
     grid_quote_id: quoteId,
-    external_account_id: input.grid.externalAccountId ?? null,
-    grid_customer_id: input.grid.customerId ?? null,
+    external_account_id: externalAccountId || null,
+    grid_customer_id: customerId || null,
     settlement_info: { fundingAddress, cryptoAmount },
     metadata: { easner_payout_id: easnerPayoutId },
   })

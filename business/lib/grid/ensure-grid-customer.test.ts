@@ -295,4 +295,21 @@ describe("ensureGridCustomer", () => {
     expect(result.customerId).toBe(STORED_CUSTOMER)
     expect(result.platformCustomerId).toBe(CANONICAL_EI)
   })
+
+  it("skips the live Grid GET when skipLiveLookup is set", async () => {
+    const admin = mockAdminForBusiness(STORED_CUSTOMER)
+    const result = await ensureGridCustomer({
+      admin: admin as never,
+      userId: USER_ID,
+      scope: "individual",
+      skipLiveLookup: true,
+      profile: {
+        fullName: "Jane Doe",
+        residenceCountry: "US",
+        email: "jane@example.com",
+      },
+    })
+    expect(result.customerId).toBe(STORED_CUSTOMER)
+    expect(mockGridFetch).not.toHaveBeenCalled()
+  })
 })

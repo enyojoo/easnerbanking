@@ -180,18 +180,15 @@ export function lockedQuoteFromSession(row: PayoutLockSessionRow): PayoutQuoteRe
     requiresConfirm: false,
   }
   if (row.provider === "grid") {
-    const fundingAddress = String(payload.fundingAddress ?? "").trim()
-    if (fundingAddress) {
-      quote.grid = {
-        ...(quote.grid ?? {
-          quoteId: String(payload.quoteId ?? ""),
-          sequenceId: String(payload.sequenceId ?? ""),
-          customerId: String(payload.customerId ?? ""),
-          externalAccountId: String(payload.externalAccountId ?? ""),
-          cryptoAmount: Number(payload.cryptoAmount ?? 0),
-        }),
-        fundingAddress,
-      }
+    quote.grid = {
+      quoteId: String(payload.quoteId ?? quote.grid?.quoteId ?? ""),
+      sequenceId: String(payload.sequenceId ?? quote.grid?.sequenceId ?? ""),
+      customerId: String(payload.customerId ?? quote.grid?.customerId ?? ""),
+      externalAccountId: String(payload.externalAccountId ?? quote.grid?.externalAccountId ?? ""),
+      cryptoAmount: Number(payload.cryptoAmount ?? quote.grid?.cryptoAmount ?? 0),
+      ...(String(payload.fundingAddress ?? "").trim()
+        ? { fundingAddress: String(payload.fundingAddress).trim() }
+        : {}),
     }
   }
   return quote

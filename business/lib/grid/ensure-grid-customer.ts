@@ -122,6 +122,8 @@ export async function ensureGridCustomer(input: {
   businessId?: string | null
   scope?: "individual" | "business"
   profile: GridPersonProfile
+  /** Skip Grid GET/PATCH when we already have a stored customer id (payout confirm hot path). */
+  skipLiveLookup?: boolean
 }): Promise<{ customerId: string; platformCustomerId: string }> {
   const platformCustomerId = gridPlatformCustomerIdForSubject({
     userId: input.userId,
@@ -134,6 +136,9 @@ export async function ensureGridCustomer(input: {
   const stored = await readStoredGridCustomerId(input.admin, input)
   if (stored) {
     const customerId = normalizeGridCustomerId(stored)
+    if (input.skipLiveLookup) {
+      return { customerId, platformCustomerId }
+    }
     try {
       const customer = await gridFetch<GridCustomer>({
         method: "GET",

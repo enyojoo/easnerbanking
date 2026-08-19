@@ -17,14 +17,24 @@ export async function retrieveGridQuote(quoteId: string): Promise<GridQuote> {
   })
 }
 
+const PLATFORM_USDC_FUNDING_TTL_MS = 30 * 60_000
+let cachedPlatformUsdcFunding: { at: number; instructions: GridPaymentInstruction[] } | null = null
+
 /** Standing USDC internal-account deposit instructions (JIT funding fallback). */
 export async function resolveGridPlatformUsdcFundingInstructions(): Promise<
   GridPaymentInstruction[] | null
 > {
+  if (
+    cachedPlatformUsdcFunding &&
+    Date.now() - cachedPlatformUsdcFunding.at < PLATFORM_USDC_FUNDING_TTL_MS
+  ) {
+    return cachedPlatformUsdcFunding.instructions
+  }
   const rows = await gridFetchAllPages<GridInternalAccountRow>({
     path: "/customers/internal-accounts",
     query: { currency: "USDC", type: "INTERNAL_CRYPTO" },
     mapPage: (page) => page.data ?? [],
+    maxPages: 1,
   })
   const active =
     rows.find(
@@ -34,7 +44,9 @@ export async function resolveGridPlatformUsdcFundingInstructions(): Promise<
     ) ?? rows[0]
   const instructions = active?.fundingPaymentInstructions
   if (!instructions) return null
-  return Array.isArray(instructions) ? instructions : [instructions]
+  const list = Array.isArray(instructions) ? instructions : [instructions]
+  cachedPlatformUsdcFunding = { at: Date.now(), instructions: list }
+  return list
 }
 
 /**

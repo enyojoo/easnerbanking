@@ -1403,6 +1403,8 @@ export default function SendPage() {
     )
       return
     if (!payoutQuotePrefetchReady) return
+    if (amountFieldMode === "payment_purpose" && !paymentPurpose.trim()) return
+    if (amountFieldMode === "note" && !payoutHints?.reference_optional && !note.trim()) return
     void fetchPayoutQuote()
     const meta: PayoutQuoteStashMeta = {
       recipientId: recipient.id,
