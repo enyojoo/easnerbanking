@@ -62,6 +62,8 @@ describe("handleGridVaInboundDepositWebhook", () => {
         metadata: expect.objectContaining({
           flow: "bank_onramp",
           grid_va_inbound: true,
+          deposit_kind: "funding",
+          fee_amount: 0,
         }),
       }),
     )
@@ -90,6 +92,37 @@ describe("handleGridVaInboundDepositWebhook", () => {
     expect(mockUpsert).toHaveBeenCalled()
     expect(mockCredit).toHaveBeenCalled()
     expect(mockSweep).toHaveBeenCalled()
+  })
+
+  it("classifies sub-$1 inbound as verification and skips credit and sweep", async () => {
+    const admin = makeAdmin("biz-1")
+    const handled = await handleGridVaInboundDepositWebhook(admin, {
+      event: {
+        eventType: "INCOMING_PAYMENT.COMPLETED",
+        data: {
+          id: "Transaction:verify",
+          customerId: "Customer:grid-1",
+          status: "COMPLETED",
+          senderName: "Chase",
+          paymentRail: "ACH",
+          receivedAmount: { amount: 32, currency: { code: "USD", decimals: 2 } },
+        },
+      },
+    })
+    expect(handled).toEqual({ handled: true })
+    expect(mockUpsert).toHaveBeenCalledWith(
+      admin,
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          deposit_kind: "verification",
+          sender_name: "Chase",
+          source_payment_rail: "ach",
+        }),
+      }),
+    )
+    expect(mockCredit).not.toHaveBeenCalled()
+    expect(mockSweep).not.toHaveBeenCalled()
+    expect(mockReconcile).not.toHaveBeenCalled()
   })
 
   it("ignores events without a resolvable business", async () => {

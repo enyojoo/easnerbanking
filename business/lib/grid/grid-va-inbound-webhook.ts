@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import {
+  classifyVerificationDepositFromFiatDeposit,
+  formatVerificationBankDisplayName,
+} from "@easner/shared"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
+import { extractGridVaInboundSharedFields } from "./grid-va-inbound-fields"
 import { gridWebhookCustomerId, gridWebhookTransactionId } from "./webhook-event-id"
 import type { GridWebhookEvent } from "./types"
 import {
@@ -48,7 +53,7 @@ async function resolveBusinessSubject(
 }
 
 /**
- * Quote-less Grid INCOMING to a business VA: Noah-style bank on-ramp ledger row + wallet credit.
+ * Quote-less Grid INCOMING to a business VA: shared VA funding or verification product.
  */
 export async function handleGridVaInboundDepositWebhook(
   admin: SupabaseClient,
@@ -72,10 +77,18 @@ export async function handleGridVaInboundDepositWebhook(
   const gridTransactionId = gridWebhookTransactionId(data)
   if (!gridTransactionId) return { handled: false }
 
+  const depositKind = classifyVerificationDepositFromFiatDeposit({
+    fiatAmount: credit.fiatAmount,
+  })
+  const isVerification = depositKind === "verification"
+  const fields = extractGridVaInboundSharedFields(data)
   const solanaTxHash = extractGridOnChainTxHash(data)
   const occurredAt = String(
     data.settledAt ?? data.updatedAt ?? data.createdAt ?? new Date().toISOString(),
   ).trim()
+  const verificationBankName = isVerification
+    ? formatVerificationBankDisplayName(fields.senderName) || fields.senderName || null
+    : null
 
   const metadata: Record<string, unknown> = {
     flow: "bank_onramp",
@@ -85,10 +98,23 @@ export async function handleGridVaInboundDepositWebhook(
     grid_customer_id: customerId,
     fiat_deposit_amount: credit.fiatAmount,
     fiat_deposit_currency: credit.fiatCurrency,
-    settled_stablecoin_amount: credit.amount,
+    settled_stablecoin_amount: isVerification ? 0 : credit.amount,
     wallet_ledger_currency: credit.ledgerCurrency,
+    posted_amount: credit.fiatAmount,
+    posted_currency: credit.fiatCurrency,
+    fee_amount: fields.feeAmount,
+    sender_name: fields.senderName || undefined,
+    source_payment_rail: fields.sourcePaymentRail,
+    deposit_scheme_label: fields.depositSchemeLabel,
+    ...(fields.narration ? { narration: fields.narration, reference: fields.narration } : {}),
     source: "grid_webhook_incoming",
     ...(solanaTxHash ? { grid_on_chain_tx_hash: solanaTxHash } : {}),
+    ...(isVerification
+      ? {
+          deposit_kind: "verification",
+          verification_bank_name: verificationBankName,
+        }
+      : { deposit_kind: "funding" }),
   }
 
   const { transactionId } = await upsertLedgerTransaction(admin, {
@@ -97,17 +123,21 @@ export async function handleGridVaInboundDepositWebhook(
     provider: "grid",
     providerTransactionId: gridTransactionId,
     status: "settled",
-    amount: credit.amount,
-    currency: credit.ledgerCurrency,
+    amount: isVerification ? credit.fiatAmount : credit.amount,
+    currency: isVerification ? credit.fiatCurrency : credit.ledgerCurrency,
     direction: "in",
     payload: data,
     metadata,
     occurredAt,
     settledAt: occurredAt,
-    baseCurrency: credit.ledgerCurrency,
-    asset: credit.ledgerCurrency === "EUR" ? "EURC" : "USDC",
-    txHash: solanaTxHash,
+    baseCurrency: isVerification ? credit.fiatCurrency : credit.ledgerCurrency,
+    asset: isVerification ? credit.fiatCurrency : credit.ledgerCurrency === "EUR" ? "EURC" : "USDC",
+    txHash: isVerification ? undefined : solanaTxHash,
   })
+
+  if (isVerification) {
+    return { handled: true }
+  }
 
   if (solanaTxHash) {
     await reconcileGridVaBankDepositCreditForSolanaTx(admin, {

@@ -16,8 +16,8 @@ import {
   toEasnerTransactionPrimaryLabel,
   isYcFundBalanceDepositMetadata,
   resolveYcFundBalanceDepositDisplayTitle,
-  isNoahVaFundingDeposit,
-  resolveNoahVaFundingDepositTitleFromMeta,
+  isVaFundingDeposit,
+  resolveVaFundingDepositTitleFromMeta,
   resolveInboundReceiveDetail,
   resolvePayoutReviewFlow,
   resolveRelayTronDepositListDisplay,
@@ -138,8 +138,8 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     !isVerification &&
     !isYcFundBalance &&
     dirRaw === "in" &&
-    isNoahVaFundingDeposit({ provider, direction: "in", metadata: meta })
-      ? resolveNoahVaFundingDepositTitleFromMeta(meta ?? {})
+    isVaFundingDeposit({ provider, direction: "in", metadata: meta })
+      ? resolveVaFundingDepositTitleFromMeta(meta ?? {})
       : undefined
   const globalPayoutDetail = resolveGlobalPayoutOffRampDetail(row)
   const balanceMoveReview =

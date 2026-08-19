@@ -3,6 +3,7 @@ import { formatMoneyDisplay } from "../format-money-display"
 import { truncateMiddle } from "../payout-recipient-subtitle"
 import { isGlobalPayoutOffRampFlow } from "./global-payout-flow"
 import { displayPayoutReceiveAmount, type GlobalPayoutReviewSnapshot } from "./global-payout-types"
+import { rawPayoutReviewFromMetadata } from "./payout-review-from-metadata"
 import {
   getGlobalPayoutProcessingTime,
   getGlobalPayoutTransferMethod,
@@ -17,11 +18,11 @@ import {
   toEasnerTransactionProductCategory,
 } from "./product-label"
 import {
-  isNoahVaFundingDeposit,
+  isVaFundingDeposit,
   isYcFundBalanceDepositMetadata,
   normalizeYcFundBalanceDepositReview,
-  resolveNoahVaFundingNotificationActivityLabel,
-  resolveNoahVaFundingDepositTitleFromMeta,
+  resolveVaFundingNotificationActivityLabel,
+  resolveVaFundingDepositTitleFromMeta,
   resolveYcFundBalanceNotificationActivityLabelFromMetadata,
 } from "./yc-deposit-display"
 import {
@@ -197,7 +198,7 @@ function buildWalletSendBody(input: {
   amountText: string
 }): string {
   const meta = input.metadata ?? null
-  const payoutReview = normalizePayoutReviewSnapshot(meta?.payout_review)
+  const payoutReview = normalizePayoutReviewSnapshot(rawPayoutReviewFromMetadata(meta))
   const receiveAmount =
     (payoutReview ? displayPayoutReceiveAmount(payoutReview) : undefined) ??
     (typeof meta?.receive_amount === "number" ? meta.receive_amount : input.amount)
@@ -237,7 +238,7 @@ function buildGlobalPayoutOutContext(input: {
   sentBody: string
 } {
   const meta = input.meta
-  const payoutReview = normalizePayoutReviewSnapshot(meta?.payout_review)
+  const payoutReview = normalizePayoutReviewSnapshot(rawPayoutReviewFromMetadata(meta))
   const recipientSnapshot = meta?.recipient_snapshot as Record<string, unknown> | undefined
   const receiveAmount =
     (payoutReview ? displayPayoutReceiveAmount(payoutReview) : undefined) ??
@@ -448,7 +449,7 @@ export function deriveTransactionNotification(
 
     if (
       direction === "in" &&
-      isNoahVaFundingDeposit({
+      isVaFundingDeposit({
         provider: input.provider,
         direction: "in",
         metadata: meta,
@@ -457,7 +458,7 @@ export function deriveTransactionNotification(
       const currency = String(
         meta?.fiat_deposit_currency ?? meta?.settled_currency ?? input.currency ?? "USD",
       )
-      const activityLabel = resolveNoahVaFundingNotificationActivityLabel(currency)
+      const activityLabel = resolveVaFundingNotificationActivityLabel(currency)
       const body = input.failureReason
         ? `Your ${activityLabel} could not be completed. ${input.failureReason}`
         : `Your ${activityLabel} could not be completed.`
@@ -467,7 +468,7 @@ export function deriveTransactionNotification(
           kind: "bank_deposit",
           body,
           pushBody: body,
-          category: resolveNoahVaFundingDepositTitleFromMeta(meta ?? {}),
+          category: resolveVaFundingDepositTitleFromMeta(meta ?? {}),
         },
         activityLabel,
       )
@@ -809,7 +810,7 @@ export function deriveTransactionNotification(
     if (inboundSnapshot && inboundSnapshot.kind !== "easetag_receive" && inboundSnapshot.kind !== "stablecoin") {
       const notification = resolveInboundReceiveNotification(inboundSnapshot)
       const kind =
-        inboundSnapshot.kind === "noah_verification" ? "bank_verification_credit" : "bank_deposit"
+        inboundSnapshot.kind === "bank_verification" ? "bank_verification_credit" : "bank_deposit"
       return finalizeDescriptor(
         {
           ...base,
@@ -823,7 +824,7 @@ export function deriveTransactionNotification(
             : {}),
         },
         notification.activityLabel,
-        inboundSnapshot.kind === "noah_verification" ? { successUsesCompleteSuffix: false } : undefined,
+        inboundSnapshot.kind === "bank_verification" ? { successUsesCompleteSuffix: false } : undefined,
       )
     }
 
@@ -876,7 +877,7 @@ export function deriveTransactionNotification(
     }
     if (
       meta &&
-      isNoahVaFundingDeposit({
+      isVaFundingDeposit({
         provider: input.provider,
         direction: "in",
         metadata: meta,
@@ -885,7 +886,7 @@ export function deriveTransactionNotification(
       const currency = String(
         meta.fiat_deposit_currency ?? meta.settled_currency ?? input.currency ?? "USD",
       )
-      const activityLabel = resolveNoahVaFundingNotificationActivityLabel(currency)
+      const activityLabel = resolveVaFundingNotificationActivityLabel(currency)
       const fiatAmount = Number(meta.fiat_deposit_amount ?? input.amount ?? 0)
       const sender = deriveEasnerInboundRemitterDisplayName({
         metadata: meta,
@@ -907,7 +908,7 @@ export function deriveTransactionNotification(
               : amountText,
           body: pushBody,
           pushBody,
-          category: resolveNoahVaFundingDepositTitleFromMeta(meta),
+          category: resolveVaFundingDepositTitleFromMeta(meta),
           ...(sender ? { counterpartyLabel: "Sender", counterpartyName: sender } : {}),
         },
         activityLabel,

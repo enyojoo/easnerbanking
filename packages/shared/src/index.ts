@@ -95,9 +95,14 @@ export {
   GRID_RECEIPT_DISCLOSURES,
   FOREIGN_REMITTANCE_DISCLOSURE,
   buildGridReceiptEmailDetailRows,
+  withGridVaFundingReceiptIdentityRows,
+  classifyGridEmailProduct,
   renderGridReceiptDisclosureHtml,
 } from "./grid/grid-receipt-disclosures"
-export type { GridReceiptEmailDetailInput } from "./grid/grid-receipt-disclosures"
+export type {
+  GridReceiptEmailDetailInput,
+  GridEmailProduct,
+} from "./grid/grid-receipt-disclosures"
 export {
   computeDisplayProcessingFee,
   computeFootedDisplayProcessingFee,
@@ -707,6 +712,7 @@ export type {
   GlobalPayoutReviewSnapshot,
 } from "./transactions/global-payout-types"
 export { displayPayoutReceiveAmount } from "./transactions/global-payout-types"
+export { rawPayoutReviewFromMetadata } from "./transactions/payout-review-from-metadata"
 export type {
   BalanceMoveDirection,
   BalanceMoveReviewSnapshot,
@@ -775,11 +781,15 @@ export {
   resolveYcCrossBorderLocalPayInBreakdown,
   resolveYcCrossBorderLocalPayInBreakdownForDisplay,
   inferResidenceCountryFromLocalCurrency,
+  isVaFundingDeposit,
   isNoahVaFundingDeposit,
   isYcFundBalanceDepositMetadata,
   normalizeYcFundBalanceDepositReview,
   normalizeYcPayInRail,
   reconstructYcFundBalanceDepositReview,
+  resolveVaFundingDepositTitle,
+  resolveVaFundingDepositTitleFromMeta,
+  resolveVaFundingNotificationActivityLabel,
   resolveNoahVaFundingDepositTitle,
   resolveNoahVaFundingDepositTitleFromMeta,
   resolveNoahVaFundingNotificationActivityLabel,

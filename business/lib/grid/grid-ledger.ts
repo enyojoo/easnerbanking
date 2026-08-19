@@ -1,5 +1,6 @@
 import type { GlobalPayoutReviewSnapshot } from "@/lib/noah/build-payout-execute-snapshot"
 import { destinationMetadata } from "@/lib/destination-reference"
+import { mergeGlobalPayoutLifecycleMetadata } from "@/lib/noah/bank-onramp-tx"
 
 export function buildGridBalancePayoutOutMetadata(input: {
   easnerPayoutId: string
@@ -15,6 +16,7 @@ export function buildGridBalancePayoutOutMetadata(input: {
   recipientSnapshot: Record<string, unknown>
   reviewSnapshot?: GlobalPayoutReviewSnapshot | null
   sendNote?: string
+  senderName?: string
   idempotencyKey?: string
   fundingAddress?: string
   cryptoAuthorizedAmount?: number
@@ -68,7 +70,12 @@ export function buildGridBalancePayoutOutMetadata(input: {
         }
       : {}),
     ...(input.sendNote ? { note: input.sendNote } : {}),
-    ...(input.reviewSnapshot ? { review_snapshot: input.reviewSnapshot } : {}),
+    ...(input.senderName
+      ? { sender_name: input.senderName, business_name: input.senderName }
+      : {}),
+    ...(input.reviewSnapshot
+      ? { payout_review: input.reviewSnapshot, review_snapshot: input.reviewSnapshot }
+      : {}),
     ...(recipientName
       ? {
           beneficiary_name: recipientName,
@@ -79,11 +86,38 @@ export function buildGridBalancePayoutOutMetadata(input: {
   }
 }
 
+function compactDefined(patch: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(patch)) {
+    if (value !== undefined) out[key] = value
+  }
+  return out
+}
+
 export function mergeGridPayoutLifecycle(
   prior: Record<string, unknown>,
   patch: Record<string, unknown>,
 ): Record<string, unknown> {
-  return { ...prior, ...patch, grid_lifecycle: { ...(prior.grid_lifecycle as object), ...patch } }
+  const defined = compactDefined(patch)
+  const {
+    processing_at: processingAt,
+    completed_at: completedAt,
+    failed_at: failedAt,
+    ...rest
+  } = defined
+  const withSharedLifecycle = mergeGlobalPayoutLifecycleMetadata(prior, {
+    processing_at: typeof processingAt === "string" ? processingAt : undefined,
+    completed_at: typeof completedAt === "string" ? completedAt : undefined,
+    failed_at: typeof failedAt === "string" ? failedAt : undefined,
+  })
+  return {
+    ...withSharedLifecycle,
+    ...rest,
+    grid_lifecycle: {
+      ...((prior.grid_lifecycle as object | undefined) ?? {}),
+      ...defined,
+    },
+  }
 }
 
 export function buildGridRefundExpectedPatch(

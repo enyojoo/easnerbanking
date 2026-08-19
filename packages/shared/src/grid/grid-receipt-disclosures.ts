@@ -3,6 +3,10 @@
  * @see https://docs.lightspark.com/payouts-and-b2b/payment-flow/receipts
  */
 
+import { isStripeCollectionSettlementMetadata } from "../transactions/stripe-invoice-settlement-lifecycle"
+import { isVerificationDepositMetadata } from "../transactions/verification-deposit"
+import { isVaFundingDeposit } from "../transactions/yc-deposit-display"
+
 export const GRID_RECEIPT_DISCLOSURES = {
   moneyTransmitter: "Lightspark Payments, LLC",
   nmlsId: "2429193",
@@ -60,8 +64,8 @@ export function buildGridReceiptEmailDetailRows(
   input: GridReceiptEmailDetailInput,
 ): { label: string; value: string }[] {
   const rows: { label: string; value: string }[] = []
-  pushRow(rows, "Grid transaction ID", input.gridTransactionId)
-  pushRow(rows, "Easner reference", input.easnerTransactionId)
+  pushRow(rows, "Transaction ID", input.easnerTransactionId)
+  pushRow(rows, "Reference ID", input.gridTransactionId)
   pushRow(rows, "Sender", input.senderName)
   pushRow(rows, "Recipient", input.recipientName)
   pushRow(rows, "Transaction type", input.transactionType)
@@ -73,6 +77,50 @@ export function buildGridReceiptEmailDetailRows(
   pushRow(rows, "Exchange rate", input.exchangeRateDisplay)
   pushRow(rows, "When", input.settledAtDisplay)
   return rows
+}
+
+/** Prepend ETID then Grid Reference ID onto shared VA funding inbound rows. */
+export function withGridVaFundingReceiptIdentityRows(
+  rows: { label: string; value: string }[],
+  input: { easnerTransactionId?: string | null; gridReferenceId?: string | null },
+): { label: string; value: string }[] {
+  const out: { label: string; value: string }[] = []
+  pushRow(out, "Transaction ID", input.easnerTransactionId)
+  pushRow(out, "Reference ID", input.gridReferenceId)
+  for (const row of rows) {
+    if (row.label === "Transaction ID" || row.label === "Reference ID") continue
+    out.push(row)
+  }
+  return out
+}
+
+export type GridEmailProduct = "payout" | "va_funding" | "bank_verification"
+
+export function classifyGridEmailProduct(input: {
+  provider?: string | null
+  direction?: string | null
+  metadata?: Record<string, unknown> | null
+}): GridEmailProduct | null {
+  if (String(input.provider ?? "").trim().toLowerCase() !== "grid") return null
+  const dir = String(input.direction ?? "").trim().toLowerCase()
+  const meta = input.metadata ?? {}
+  if (dir === "out" || dir === "debit") {
+    const payoutType = String(meta.payout_type ?? "").trim().toLowerCase()
+    const mode = String(meta.grid_mode ?? meta.mode ?? "").trim().toLowerCase()
+    if (mode === "fund_balance") return null
+    if (payoutType === "global_fiat" || mode === "balance_payout" || mode === "cross_border_send") {
+      return "payout"
+    }
+    return null
+  }
+  if (dir === "in" || dir === "credit") {
+    if (isStripeCollectionSettlementMetadata(meta)) return null
+    if (isVerificationDepositMetadata(meta) || String(meta.deposit_kind ?? "").toLowerCase() === "verification") {
+      return "bank_verification"
+    }
+    if (isVaFundingDeposit({ provider: "grid", direction: "in", metadata: meta })) return "va_funding"
+  }
+  return null
 }
 
 /** HTML footer block with verbatim Lightspark disclosures. */

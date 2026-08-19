@@ -74,7 +74,7 @@ describe("buildTransactionReceiptDetailRows", () => {
     const rows = buildTransactionReceiptDetailRows({
       direction: "in",
       inboundReceive: {
-        kind: "noah_va_funding",
+        kind: "va_funding",
         displayTitle: "Bank deposit",
         transactionId: "ETID1",
         whenAt: new Date().toISOString(),

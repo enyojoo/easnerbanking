@@ -187,6 +187,17 @@ export async function executeGridBalancePayout(
     return { ok: false, error: "Could not resolve wallet context for Grid payout." }
   }
 
+  let senderName: string | undefined
+  if (businessId) {
+    const { data: biz } = await admin
+      .from("businesses")
+      .select("display_name,legal_name,name")
+      .eq("id", businessId)
+      .maybeSingle()
+    senderName =
+      String(biz?.display_name ?? biz?.legal_name ?? biz?.name ?? "").trim() || undefined
+  }
+
   const easnerPayoutId = randomUUID()
   const easnerTransactionId = generateTransactionId()
   const now = new Date().toISOString()
@@ -207,6 +218,7 @@ export async function executeGridBalancePayout(
     recipientSnapshot,
     reviewSnapshot,
     sendNote,
+    senderName,
     idempotencyKey,
     fundingAddress,
     cryptoAuthorizedAmount: cryptoAmount,

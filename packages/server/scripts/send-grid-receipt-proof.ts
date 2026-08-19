@@ -66,8 +66,8 @@ function buildProofs(): TransactionEmailData[] {
       gridTransactionId: "Transaction:019542f5-b3e7-1d02-0000-000000000041",
       includeForeignRemittanceDisclosure: false,
       detailRows: [
-        { label: "Grid transaction ID", value: "Transaction:019542f5-b3e7-1d02-0000-000000000041" },
-        { label: "Easner reference", value: "ET-GRID-USD-PAYIN-001" },
+        { label: "Transaction ID", value: "ET-GRID-USD-PAYIN-001" },
+        { label: "Reference ID", value: "Transaction:019542f5-b3e7-1d02-0000-000000000041" },
         { label: "Sender", value: "Acme Corp operating account" },
         { label: "Recipient", value: "Acme Corp (Easner USD balance)" },
         { label: "Transaction type", value: "INCOMING - USD pay-in / fund balance" },
@@ -100,8 +100,8 @@ function buildProofs(): TransactionEmailData[] {
       gridTransactionId: "Transaction:019542f5-b3e7-1d02-0000-000000000042",
       includeForeignRemittanceDisclosure: true,
       detailRows: [
-        { label: "Grid transaction ID", value: "Transaction:019542f5-b3e7-1d02-0000-000000000042" },
-        { label: "Easner reference", value: "ET-GRID-USD-PHP-001" },
+        { label: "Transaction ID", value: "ET-GRID-USD-PHP-001" },
+        { label: "Reference ID", value: "Transaction:019542f5-b3e7-1d02-0000-000000000042" },
         { label: "Sender", value: "Acme Corp" },
         { label: "Recipient", value: "Juan Dela Cruz" },
         { label: "Transaction type", value: "OUTGOING - USD balance payout to PHP" },

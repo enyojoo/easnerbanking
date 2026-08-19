@@ -4,8 +4,8 @@ import {
   toEasnerTransactionProductCategory,
 } from "./product-label"
 import {
-  isNoahVaFundingDeposit,
-  resolveNoahVaFundingDepositTitleFromMeta,
+  isVaFundingDeposit,
+  resolveVaFundingDepositTitleFromMeta,
 } from "./yc-deposit-display"
 
 describe("product labels for deposits", () => {
@@ -36,8 +36,9 @@ describe("product labels for deposits", () => {
         metadata: meta,
       }),
     ).toBe("US Bank Deposit")
-    expect(isNoahVaFundingDeposit({ provider: "noah", direction: "in", metadata: meta })).toBe(true)
-    expect(resolveNoahVaFundingDepositTitleFromMeta(meta)).toBe("US Bank Deposit")
+    expect(isVaFundingDeposit({ provider: "noah", direction: "in", metadata: meta })).toBe(true)
+    expect(isVaFundingDeposit({ provider: "grid", direction: "in", metadata: meta })).toBe(true)
+    expect(resolveVaFundingDepositTitleFromMeta(meta)).toBe("US Bank Deposit")
   })
 
   it("verification deposit keeps existing label", () => {
@@ -49,7 +50,7 @@ describe("product labels for deposits", () => {
         metadata: meta,
       }),
     ).toBe("Bank verification deposit")
-    expect(isNoahVaFundingDeposit({ provider: "noah", direction: "in", metadata: meta })).toBe(false)
+    expect(isVaFundingDeposit({ provider: "noah", direction: "in", metadata: meta })).toBe(false)
   })
 
   it("Stripe invoice settlement → Invoice #number (not Bank Deposit)", () => {

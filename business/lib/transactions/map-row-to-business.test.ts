@@ -27,9 +27,9 @@ vi.mock("@easner/shared", () => ({
   isVerificationDepositMetadata: () => false,
   isYcFundBalanceDepositMetadata: (meta?: Record<string, unknown> | null) =>
     String(meta?.yc_mode ?? "") === "fund_balance",
-  isNoahVaFundingDeposit: () => false,
+  isVaFundingDeposit: () => false,
   resolveYcFundBalanceDepositDisplayTitle: () => undefined,
-  resolveNoahVaFundingDepositTitleFromMeta: () => undefined,
+  resolveVaFundingDepositTitleFromMeta: () => undefined,
   resolveInboundReceiveDetail: () => null,
   resolveLedgerWhenAt: (input: { occurredAt?: string | null; createdAt?: string | null }) =>
     input.occurredAt ?? input.createdAt ?? null,

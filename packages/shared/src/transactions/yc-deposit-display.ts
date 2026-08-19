@@ -6,6 +6,7 @@ import {
   isVerificationDepositMetadata,
   isYcFundBalanceDepositMetadata,
 } from "./deposit-metadata-guards"
+import { isStripeCollectionSettlementMetadata } from "./stripe-invoice-settlement-lifecycle"
 import type { YcFundBalanceDepositReviewSnapshot, YcPayInRail } from "./global-deposit-types"
 
 const LOCAL_CURRENCY_TO_COUNTRY: Record<string, string> = {
@@ -426,8 +427,8 @@ export function resolveYcFundBalanceDepositDisplayTitle(
   })
 }
 
-/** Noah virtual-account inbound funding (USD/EUR ACH/wire onramp). */
-export function resolveNoahVaFundingDepositTitle(currency: string): string {
+/** Same-currency virtual-account inbound funding (USD/EUR ACH/wire). */
+export function resolveVaFundingDepositTitle(currency: string): string {
   const c = String(currency ?? "").trim().toUpperCase()
   if (c === "USD") return "US Bank Deposit"
   if (c === "EUR") return "EU Bank Deposit"
@@ -435,7 +436,10 @@ export function resolveNoahVaFundingDepositTitle(currency: string): string {
   return "Bank Deposit"
 }
 
-export function isNoahVaFundingDeposit(input: {
+/** @deprecated Use {@link resolveVaFundingDepositTitle}. */
+export const resolveNoahVaFundingDepositTitle = resolveVaFundingDepositTitle
+
+export function isVaFundingDeposit(input: {
   provider?: string | null
   direction?: string | null
   metadata?: Record<string, unknown> | null
@@ -443,16 +447,20 @@ export function isNoahVaFundingDeposit(input: {
   const provider = String(input.provider ?? "").trim().toLowerCase()
   const direction = String(input.direction ?? "").trim().toLowerCase()
   const meta = input.metadata ?? {}
-  if (provider !== "noah") return false
+  if (provider !== "noah" && provider !== "grid") return false
   if (direction && direction !== "in") return false
   if (isVerificationDepositMetadata(meta)) return false
   if (meta.deposit_kind === "verification") return false
   if (isYcFundBalanceDepositMetadata(meta)) return false
   if (String(meta.source ?? "").toLowerCase() === "api_yellowcard_fund_balance") return false
+  if (isStripeCollectionSettlementMetadata(meta)) return false
   return isBankOnrampDepositFlow(meta)
 }
 
-export function resolveNoahVaFundingDepositTitleFromMeta(
+/** @deprecated Use {@link isVaFundingDeposit}. */
+export const isNoahVaFundingDeposit = isVaFundingDeposit
+
+export function resolveVaFundingDepositTitleFromMeta(
   meta: Record<string, unknown> | null | undefined,
 ): string {
   const record = meta ?? {}
@@ -461,10 +469,16 @@ export function resolveNoahVaFundingDepositTitleFromMeta(
   )
     .trim()
     .toUpperCase()
-  return resolveNoahVaFundingDepositTitle(currency)
+  return resolveVaFundingDepositTitle(currency)
 }
 
-export function resolveNoahVaFundingNotificationActivityLabel(currency: string): string {
-  return resolveNoahVaFundingDepositTitle(currency)
-    .replace(/\sBank\sDeposit$/i, " bank deposit")
+/** @deprecated Use {@link resolveVaFundingDepositTitleFromMeta}. */
+export const resolveNoahVaFundingDepositTitleFromMeta = resolveVaFundingDepositTitleFromMeta
+
+export function resolveVaFundingNotificationActivityLabel(currency: string): string {
+  return resolveVaFundingDepositTitle(currency).replace(/\sBank\sDeposit$/i, " bank deposit")
 }
+
+/** @deprecated Use {@link resolveVaFundingNotificationActivityLabel}. */
+export const resolveNoahVaFundingNotificationActivityLabel =
+  resolveVaFundingNotificationActivityLabel

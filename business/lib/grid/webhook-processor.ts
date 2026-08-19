@@ -76,11 +76,15 @@ export async function handleGridBalancePayoutWebhook(
   const sent = gridMoneyToMajor(webhookData(input.event)?.sentAmount)
   let metadata = mergeGridPayoutLifecycle(prior, {
     grid_webhook_status: status || type,
-    grid_transaction_id: input.transactionId,
-    settled_at: terminalSuccess ? now : undefined,
-    failure_reason: terminalFailed
-      ? String(input.event.data?.failureReason ?? status)
-      : undefined,
+    ...(input.transactionId ? { grid_transaction_id: input.transactionId } : {}),
+    ...(terminalSuccess || terminalFailed ? {} : { processing_at: now }),
+    ...(terminalSuccess ? { completed_at: now, settled_at: now } : {}),
+    ...(terminalFailed
+      ? {
+          failed_at: now,
+          failure_reason: String(input.event.data?.failureReason ?? status),
+        }
+      : {}),
   })
   if (terminalFailed) {
     metadata = buildGridRefundExpectedPatch(metadata, {

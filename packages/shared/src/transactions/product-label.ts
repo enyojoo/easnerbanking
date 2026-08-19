@@ -5,9 +5,9 @@
 import { formatDisplayPersonName } from "../format-display-name"
 import { deriveBankDepositInboundDisplayLabel } from "./bank-deposit-inbound-label"
 import {
-  isNoahVaFundingDeposit,
+  isVaFundingDeposit,
   isYcFundBalanceDepositMetadata,
-  resolveNoahVaFundingDepositTitleFromMeta,
+  resolveVaFundingDepositTitleFromMeta,
   resolveYcFundBalanceDepositDisplayTitle,
 } from "./yc-deposit-display"
 import {
@@ -208,13 +208,13 @@ export function toEasnerTransactionProductCategory(input: {
   }
   if (
     direction === "in" &&
-    isNoahVaFundingDeposit({
+    isVaFundingDeposit({
       provider: input.provider,
       direction: "in",
       metadata: meta,
     })
   ) {
-    return resolveNoahVaFundingDepositTitleFromMeta(meta)
+    return resolveVaFundingDepositTitleFromMeta(meta)
   }
   if (direction === "in" && isStripeInvoiceSettlementMetadata(meta)) {
     return "Invoice payment"
@@ -283,13 +283,13 @@ export function toEasnerTransactionPrimaryLabel(input: {
   }
   if (
     direction === "in" &&
-    isNoahVaFundingDeposit({
+    isVaFundingDeposit({
       provider: input.provider,
       direction: "in",
       metadata: meta,
     })
   ) {
-    return resolveNoahVaFundingDepositTitleFromMeta(meta)
+    return resolveVaFundingDepositTitleFromMeta(meta)
   }
   if (direction === "in" && isStripeCollectionSettlementMetadata(meta)) {
     return stripeCollectionSettlementTitle(meta)

@@ -15,13 +15,13 @@ import { isBankOnrampDepositFlow } from "./bank-deposit-lifecycle"
 import { deriveBankDepositSchemeLabel } from "./bank-deposit-scheme"
 import type { YcFundBalanceDepositReviewSnapshot } from "./global-deposit-types"
 import {
-  isNoahVaFundingDeposit,
+  isVaFundingDeposit,
   isYcFundBalanceDepositMetadata,
   normalizeYcFundBalanceDepositReview,
   reconstructYcFundBalanceDepositReview,
   resolveYcFundBalanceLocalPayInBreakdown,
-  resolveNoahVaFundingDepositTitleFromMeta,
-  resolveNoahVaFundingNotificationActivityLabel,
+  resolveVaFundingDepositTitleFromMeta,
+  resolveVaFundingNotificationActivityLabel,
   resolveYcFundBalanceDepositDisplayTitle,
   resolveYcFundBalanceNotificationActivityLabelFromMetadata,
 } from "./yc-deposit-display"
@@ -32,11 +32,12 @@ import {
   deriveVerificationBankName,
   isVerificationDepositMetadata,
 } from "./verification-deposit"
+import { isStripeCollectionSettlementMetadata } from "./stripe-invoice-settlement-lifecycle"
 
 export type InboundReceiveKind =
   | "yc_fund_balance"
-  | "noah_va_funding"
-  | "noah_verification"
+  | "va_funding"
+  | "bank_verification"
   | "stablecoin"
   | "easetag_receive"
 
@@ -208,7 +209,7 @@ function readEasetagHandle(meta: Record<string, unknown>): string {
   return raw ? raw.replace(/^@+/, "") : ""
 }
 
-/** Priority: easetag → verification → yc_fund_balance → stablecoin → noah_va_funding */
+/** Priority: easetag → verification → yc_fund_balance → stablecoin → va_funding */
 export function classifyInboundReceiveKind(
   input: InboundReceiveResolveInput,
 ): InboundReceiveKind | null {
@@ -218,14 +219,15 @@ export function classifyInboundReceiveKind(
   const meta = input.metadata ?? {}
 
   if (isEasetagInbound(input)) return "easetag_receive"
-  if (isVerificationDepositMetadata(meta)) return "noah_verification"
+  if (isVerificationDepositMetadata(meta)) return "bank_verification"
   if (input.deposit_review || isYcFundBalanceDepositMetadata(meta)) return "yc_fund_balance"
+  if (isStripeCollectionSettlementMetadata(meta)) return null
   if (isStablecoinInbound(input)) return "stablecoin"
   if (
-    isNoahVaFundingDeposit({ provider: input.provider, direction: "in", metadata: meta }) ||
+    isVaFundingDeposit({ provider: input.provider, direction: "in", metadata: meta }) ||
     isBankOnrampDepositFlow(meta)
   ) {
-    return "noah_va_funding"
+    return "va_funding"
   }
   return null
 }
@@ -236,7 +238,7 @@ export function resolveCreditDestination(
 ): InboundReceiveCreditDestination {
   const c = String(currency ?? "USD").trim().toUpperCase() || "USD"
   const balanceLabel = `${c} Balance`
-  if (kind === "noah_verification") {
+  if (kind === "bank_verification") {
     return {
       label: "credit_for",
       balanceLabel,
@@ -252,9 +254,9 @@ function resolveDisplayTitle(kind: InboundReceiveKind, input: InboundReceiveReso
   switch (kind) {
     case "yc_fund_balance":
       return resolveYcFundBalanceDepositDisplayTitle(meta)
-    case "noah_va_funding":
-      return resolveNoahVaFundingDepositTitleFromMeta(meta)
-    case "noah_verification":
+    case "va_funding":
+      return resolveVaFundingDepositTitleFromMeta(meta)
+    case "bank_verification":
       return "Bank verification deposit"
     case "stablecoin":
       return "Stablecoin deposit"
@@ -380,7 +382,7 @@ export function resolveInboundReceiveDetail(
     }
   }
 
-  if (kind === "noah_verification") {
+  if (kind === "bank_verification") {
     const creditedCurrency = String(
       input.posted_currency ?? input.settled_currency ?? input.currency ?? meta.settled_currency ?? "USD",
     ).toUpperCase()
@@ -404,7 +406,7 @@ export function resolveInboundReceiveDetail(
     }
   }
 
-  if (kind === "noah_va_funding") {
+  if (kind === "va_funding") {
     const creditedCurrency = String(
       input.posted_currency ??
         input.settled_currency ??
@@ -432,7 +434,7 @@ export function resolveInboundReceiveDetail(
     return {
       kind,
       displayTitle: resolveDisplayTitle(kind, input),
-      notificationActivityLabel: resolveNoahVaFundingNotificationActivityLabel(creditedCurrency),
+      notificationActivityLabel: resolveVaFundingNotificationActivityLabel(creditedCurrency),
       transactionId,
       whenAt,
       amountCredited: { amount: creditedAmount, currency: creditedCurrency },
@@ -527,7 +529,7 @@ function pushSenderRow(rows: InboundReceiveDetailRow[], snapshot: InboundReceive
 /** Amount credited is already in the hero for VA/crypto without a fee delta; local pay-in always shows it. */
 function shouldShowAmountCreditedRow(snapshot: InboundReceiveDetailSnapshot): boolean {
   if (snapshot.kind === "yc_fund_balance") return true
-  if (snapshot.kind === "noah_verification" || snapshot.kind === "easetag_receive") return false
+  if (snapshot.kind === "bank_verification" || snapshot.kind === "easetag_receive") return false
   return Boolean(snapshot.processingFee && snapshot.processingFee.amount > 0)
 }
 
@@ -615,7 +617,7 @@ export function buildInboundReceiveDetailRows(
       pushCreditDestination(rows, snapshot.creditDestination)
       break
     }
-    case "noah_va_funding": {
+    case "va_funding": {
       pushSenderRow(rows, snapshot)
       if (snapshot.processingFee) {
         pushIf(
@@ -633,7 +635,7 @@ export function buildInboundReceiveDetailRows(
       if (surface !== "receipt") pushIf(rows, REVIEW_ROW_LABELS.narration, snapshot.narration)
       break
     }
-    case "noah_verification": {
+    case "bank_verification": {
       pushSenderRow(rows, snapshot)
       pushCreditDestination(rows, snapshot.creditDestination)
       if (includeVerificationHint && snapshot.creditDestination?.hint) {
@@ -745,13 +747,13 @@ export function formatInboundDepositReceivedNotificationBody(
         ? `You've received ${receivedText} via ${scheme}`
         : `You've received ${receivedText}`
     }
-    case "noah_verification": {
+    case "bank_verification": {
       const bank = String(snapshot.sender ?? "").trim()
       return bank
         ? `You've received ${receivedText} from ${bank}`
         : `You've received ${receivedText}`
     }
-    case "noah_va_funding":
+    case "va_funding":
     case "stablecoin": {
       const sender = String(snapshot.sender ?? "").trim()
       if (sender) return `You've received ${receivedText} from ${sender}`
@@ -777,7 +779,7 @@ export function resolveInboundReceiveNotification(
   let successBody = formatInboundDepositReceivedNotificationBody(snapshot)
 
   switch (snapshot.kind) {
-    case "noah_verification":
+    case "bank_verification":
       successTitle = "Bank verification deposit complete"
       break
     case "stablecoin":
@@ -787,7 +789,7 @@ export function resolveInboundReceiveNotification(
     case "easetag_receive":
       activityLabel = "Easetag deposit"
       break
-    case "noah_va_funding":
+    case "va_funding":
       successTitle = `${activityLabel} complete`
       break
     default:

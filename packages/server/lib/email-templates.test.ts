@@ -278,8 +278,8 @@ describe("emailTemplates", () => {
       gridTransactionId: "Transaction:019542f5-b3e7-1d02-0000-000000000030",
       includeForeignRemittanceDisclosure: true,
       detailRows: [
-        { label: "Grid transaction ID", value: "Transaction:019542f5-b3e7-1d02-0000-000000000030" },
-        { label: "Easner reference", value: "ET-1001" },
+        { label: "Transaction ID", value: "ET-1001" },
+        { label: "Reference ID", value: "Transaction:019542f5-b3e7-1d02-0000-000000000030" },
         { label: "Sender", value: "Acme Corp" },
         { label: "Recipient", value: "Sofía Herrera" },
       ],

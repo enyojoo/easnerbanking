@@ -15,6 +15,9 @@ import {
   type GlobalPayoutReviewSnapshot,
   type NotificationOutcome,
   isYcFundBalanceDepositMetadata,
+  rawPayoutReviewFromMetadata,
+  withGridVaFundingReceiptIdentityRows,
+  classifyGridEmailProduct,
   normalizeBalanceMoveReviewSnapshot,
   normalizeYcFundBalanceDepositReview,
   reconstructYcFundBalanceDepositReview,
@@ -109,7 +112,7 @@ function buildEmailDetailRows(
     metadata: meta,
   })
     ? resolveWalletSendPayoutReview(meta, input.amount, input.currency)
-    : readValidPayoutReview(meta.payout_review)
+    : readValidPayoutReview(rawPayoutReviewFromMetadata(meta))
   if (payoutReview) {
     const snap = meta.recipient_snapshot as Record<string, unknown> | undefined
     const rows = buildTransactionEmailDetailRows({
@@ -208,10 +211,6 @@ function buildEmailDetailRows(
   return undefined
 }
 
-function isGridMoneyTransmissionProvider(provider: string | null | undefined): boolean {
-  return String(provider ?? "").trim().toLowerCase() === "grid"
-}
-
 function moneyDisplayFromMeta(
   amount: unknown,
   currency: unknown,
@@ -237,7 +236,7 @@ function buildGridEmailDetailRows(
   if (!gridTransactionId) return undefined
 
   const snap = meta.recipient_snapshot as Record<string, unknown> | undefined
-  const payoutReview = readValidPayoutReview(meta.payout_review)
+  const payoutReview = readValidPayoutReview(rawPayoutReviewFromMetadata(meta))
   const senderName =
     firstString([
       meta.sender_name,
@@ -254,16 +253,14 @@ function buildGridEmailDetailRows(
       descriptor.counterpartyName,
     ]) || undefined
 
-  const transferAmount =
-    moneyDisplayFromMeta(
-      payoutReview?.you_send_amount ?? meta.send_amount ?? meta.transfer_amount ?? input.amount,
-      payoutReview?.send_currency ?? meta.send_currency ?? input.currency,
-      descriptor.amountDisplay,
-    ) || descriptor.amountDisplay
+  const transferAmount = moneyDisplayFromMeta(
+    payoutReview?.you_send_amount ?? meta.customer_principal ?? meta.send_amount,
+    payoutReview?.send_currency ?? meta.send_currency ?? "USD",
+  )
 
-  const totalToRecipient = moneyDisplayFromMeta(
-    payoutReview?.receive_amount ?? meta.receive_amount ?? meta.total_to_recipient,
-    payoutReview?.receive_currency ?? meta.receive_currency ?? meta.destination_currency,
+  const totalToRecipient = descriptor.amountDisplay?.trim() || moneyDisplayFromMeta(
+    payoutReview?.receive_amount ?? meta.receive_amount ?? meta.fiat_amount,
+    payoutReview?.receive_currency ?? meta.receive_currency ?? meta.fiat_currency,
   )
 
   const fees = moneyDisplayFromMeta(
@@ -276,7 +273,7 @@ function buildGridEmailDetailRows(
 
   const total = moneyDisplayFromMeta(
     payoutReview?.total_debited ?? meta.total_debited ?? meta.total,
-    payoutReview?.send_currency ?? meta.send_currency ?? input.currency,
+    payoutReview?.send_currency ?? meta.send_currency ?? "USD",
     transferAmount,
   )
 
@@ -344,13 +341,19 @@ function descriptorToEmailData(
     process.env.NEXT_PUBLIC_APP_URL ||
     "https://business.easner.com"
   const id = input.easnerTransactionId || input.transactionId
-  const isGrid =
-    isGridMoneyTransmissionProvider(input.provider) && (input.outcome ?? "success") === "success"
   const meta = (input.metadata ?? {}) as Record<string, unknown>
-  const gridTransactionId = isGrid
+  const gridProduct =
+    (input.outcome ?? "success") === "success"
+      ? classifyGridEmailProduct({
+          provider: input.provider,
+          direction: input.direction ?? descriptor.direction,
+          metadata: meta,
+        })
+      : null
+  const isGridReceipt = gridProduct === "payout" || gridProduct === "va_funding"
+  const gridTransactionId = isGridReceipt
     ? firstString([meta.grid_transaction_id, meta.provider_transaction_id])
     : undefined
-  const mode = firstString([meta.grid_mode, meta.yc_mode, meta.mode])
   const recvCurForDisclosure = firstString([
     meta.receive_currency,
     meta.fiat_currency,
@@ -358,10 +361,19 @@ function descriptorToEmailData(
   ])
   const sendCurForDisclosure = firstString([meta.send_currency, input.currency, "USD"])
   const includeForeignRemittance =
-    isGrid &&
-    (mode === "cross_border_send" ||
-      mode === "balance_payout" ||
-      Boolean(recvCurForDisclosure && sendCurForDisclosure && recvCurForDisclosure !== sendCurForDisclosure))
+    gridProduct === "payout" &&
+    Boolean(recvCurForDisclosure && sendCurForDisclosure && recvCurForDisclosure !== sendCurForDisclosure)
+
+  const sharedRows = buildEmailDetailRows(descriptor, input)
+  let detailRows = sharedRows
+  if (gridProduct === "payout") {
+    detailRows = buildGridEmailDetailRows(descriptor, input) ?? sharedRows
+  } else if (gridProduct === "va_funding") {
+    detailRows = withGridVaFundingReceiptIdentityRows(sharedRows ?? [], {
+      easnerTransactionId: input.easnerTransactionId ?? input.transactionId,
+      gridReferenceId: gridTransactionId,
+    })
+  }
 
   return {
     transactionId: input.transactionId,
@@ -388,9 +400,7 @@ function descriptorToEmailData(
       audience === "business"
         ? `${businessBase}/transactions/${encodeURIComponent(id)}`
         : personalMobileTransactionUrl(id, process.env.NEXT_PUBLIC_MOBILE_APP_URL),
-    detailRows: isGrid
-      ? buildGridEmailDetailRows(descriptor, input) ?? buildEmailDetailRows(descriptor, input)
-      : buildEmailDetailRows(descriptor, input),
+    detailRows,
     createdAt:
       input.createdAt ??
       firstString([
@@ -401,7 +411,7 @@ function descriptorToEmailData(
       ]),
     firstName,
     audience,
-    isGridMoneyTransmissionReceipt: isGrid,
+    isGridMoneyTransmissionReceipt: isGridReceipt,
     gridTransactionId,
     includeForeignRemittanceDisclosure: includeForeignRemittance,
   }

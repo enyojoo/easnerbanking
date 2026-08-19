@@ -9,6 +9,7 @@ import {
   getGlobalPayoutProcessingTime,
   isGlobalPayoutOffRampOutRow,
   TLC_LOCAL_TRANSFER_METHOD,
+  rawPayoutReviewFromMetadata,
   type GlobalPayoutLifecycleStep,
   type GlobalPayoutRecipientSnapshot,
   type GlobalPayoutReviewSnapshot,
@@ -97,7 +98,7 @@ function mergePayoutReviewDisplayProcessingFeeLocal(
     if (fromMeta != null && fromMeta > 0) {
       merged = { ...merged, display_processing_fee_local: fromMeta }
     } else {
-      const raw = meta.payout_review
+      const raw = rawPayoutReviewFromMetadata(meta)
       if (raw && typeof raw === "object") {
         const fromRaw = roundFiat(Number((raw as Record<string, unknown>).display_processing_fee_local))
         if (fromRaw != null && fromRaw > 0) {
@@ -134,7 +135,7 @@ function derivePayoutReview(
   ledgerAmount: number,
   ledgerCurrency: string,
 ): GlobalPayoutReviewSnapshot | null {
-  const fromMeta = normalizePayoutReviewSnapshot(meta.payout_review)
+  const fromMeta = normalizePayoutReviewSnapshot(rawPayoutReviewFromMetadata(meta))
   if (fromMeta && !needsPayoutReviewReconstruction(fromMeta)) {
     return mergePayoutReviewDisplayProcessingFeeLocal(fromMeta, meta)
   }

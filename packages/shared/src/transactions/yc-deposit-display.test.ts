@@ -7,7 +7,7 @@ import {
   resolveYcFundBalanceLocalPayInBreakdownForDisplay,
   computeYcFundBalancePrincipalLocalPayIn,
   inferResidenceCountryFromLocalCurrency,
-  isNoahVaFundingDeposit,
+  isVaFundingDeposit,
   normalizeYcFundBalanceDepositReview,
   reconstructYcFundBalanceDepositReview,
   resolveNoahVaFundingDepositTitle,
@@ -168,7 +168,7 @@ describe("inferResidenceCountryFromLocalCurrency", () => {
   })
 })
 
-describe("Noah VA funding titles", () => {
+describe("VA funding titles", () => {
   it("USD → US Bank Deposit", () => {
     expect(resolveNoahVaFundingDepositTitle("USD")).toBe("US Bank Deposit")
   })
@@ -179,7 +179,7 @@ describe("Noah VA funding titles", () => {
 
   it("detects Noah VA funding rows", () => {
     expect(
-      isNoahVaFundingDeposit({
+      isVaFundingDeposit({
         provider: "noah",
         direction: "in",
         metadata: { flow: "bank_onramp", fiat_deposit_currency: "USD" },
@@ -187,12 +187,26 @@ describe("Noah VA funding titles", () => {
     ).toBe(true)
   })
 
-  it("excludes YC fund_balance", () => {
+  it("detects Grid VA funding rows and excludes verification and Stripe settlement", () => {
     expect(
-      isNoahVaFundingDeposit({
-        provider: "noah",
+      isVaFundingDeposit({
+        provider: "grid",
         direction: "in",
-        metadata: { flow: "bank_onramp", yc_mode: "fund_balance" },
+        metadata: { flow: "bank_onramp", fiat_deposit_currency: "USD" },
+      }),
+    ).toBe(true)
+    expect(
+      isVaFundingDeposit({
+        provider: "grid",
+        direction: "in",
+        metadata: { flow: "bank_onramp", deposit_kind: "verification" },
+      }),
+    ).toBe(false)
+    expect(
+      isVaFundingDeposit({
+        provider: "grid",
+        direction: "in",
+        metadata: { flow: "bank_onramp", source: "invoice_stripe", invoice_id: "inv_1" },
       }),
     ).toBe(false)
   })

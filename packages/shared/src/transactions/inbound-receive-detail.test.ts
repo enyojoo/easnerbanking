@@ -29,7 +29,7 @@ describe("classifyInboundReceiveKind", () => {
         direction: "in",
         metadata: { deposit_kind: "verification", activity_type: "fund_balance" },
       }),
-    ).toBe("noah_verification")
+    ).toBe("bank_verification")
   })
 
   it("classifies yc fund_balance from deposit_review", () => {
@@ -54,14 +54,14 @@ describe("classifyInboundReceiveKind", () => {
 
 describe("resolveCreditDestination", () => {
   it("uses credit_for for verification", () => {
-    const dest = resolveCreditDestination("USD", "noah_verification")
+    const dest = resolveCreditDestination("USD", "bank_verification")
     expect(dest.label).toBe("credit_for")
     expect(dest.balanceLabel).toBe("USD Balance")
     expect(dest.hint).toBeTruthy()
   })
 
   it("uses credit_to for funding deposits", () => {
-    expect(resolveCreditDestination("EUR", "noah_va_funding").label).toBe("credit_to")
+    expect(resolveCreditDestination("EUR", "va_funding").label).toBe("credit_to")
   })
 })
 
@@ -117,7 +117,7 @@ describe("buildInboundReceiveDetailRows", () => {
       },
       ledger_created_at: "2026-01-15T12:00:00.000Z",
     })
-    expect(snapshot?.kind).toBe("noah_va_funding")
+    expect(snapshot?.kind).toBe("va_funding")
     const rows = buildInboundReceiveDetailRows(snapshot!, { surface: "detail" })
     const map = rowMap(rows)
     expect(map[REVIEW_ROW_LABELS.depositMethod]).toBe("Wire")
@@ -128,6 +128,37 @@ describe("buildInboundReceiveDetailRows", () => {
     const labels = rows.filter((r) => r.label).map((r) => r.label)
     expect(labels.at(-2)).toBe(REVIEW_ROW_LABELS.depositMethod)
     expect(labels.at(-1)).toBe(REVIEW_ROW_LABELS.when)
+  })
+
+  it("Grid VA funding uses the same Credited to card as Noah", () => {
+    const snapshot = resolveInboundReceiveDetail({
+      direction: "in",
+      provider: "grid",
+      metadata: {
+        flow: "bank_onramp",
+        grid_va_inbound: true,
+        posted_amount: 50,
+        posted_currency: "USD",
+        fee_amount: 0,
+        deposit_scheme_label: "ACH",
+        sender_name: "ACME CORP",
+      },
+      ledger_created_at: "2026-01-15T12:00:00.000Z",
+    })
+    expect(snapshot?.kind).toBe("va_funding")
+    const map = rowMap(buildInboundReceiveDetailRows(snapshot!, { surface: "detail" }))
+    expect(map[REVIEW_ROW_LABELS.creditTo]).toBe("USD Balance")
+    expect(map[REVIEW_ROW_LABELS.sender]).toBe("Acme Corp")
+  })
+
+  it("skips Stripe collection settlement as VA funding", () => {
+    expect(
+      classifyInboundReceiveKind({
+        direction: "in",
+        provider: "grid",
+        metadata: { flow: "bank_onramp", source: "invoice_stripe", invoice_id: "inv_1" },
+      }),
+    ).toBeNull()
   })
 
   it("Noah VA funding with a $0 fee still shows the processing fee row", () => {
@@ -144,7 +175,7 @@ describe("buildInboundReceiveDetailRows", () => {
       },
       ledger_created_at: "2026-01-15T12:00:00.000Z",
     })
-    expect(snapshot?.kind).toBe("noah_va_funding")
+    expect(snapshot?.kind).toBe("va_funding")
     expect(snapshot?.processingFee).toEqual({ amount: 0, currency: "USD" })
     const map = rowMap(buildInboundReceiveDetailRows(snapshot!, { surface: "detail" }))
     expect(map[REVIEW_ROW_LABELS.processingFee]).toMatch(/^\$0/)
@@ -163,7 +194,7 @@ describe("buildInboundReceiveDetailRows", () => {
       },
       ledger_created_at: "2026-01-15T12:00:00.000Z",
     })
-    expect(snapshot?.kind).toBe("noah_verification")
+    expect(snapshot?.kind).toBe("bank_verification")
     const rows = buildInboundReceiveDetailRows(snapshot!, { surface: "detail" })
     expect(rows.some((r) => r.label === REVIEW_ROW_LABELS.creditFor)).toBe(true)
     expect(rows.some((r) => r.label === REVIEW_ROW_LABELS.amountCredited)).toBe(false)
