@@ -523,6 +523,8 @@ export type TransactionDetailRow = {
   statusClass?: string
   /** Hosted PNG or data URL — renders brand chip beside `value` in HTML email. */
   brandIconSrc?: string | null
+  /** Named wallets (Cash App, Klarna, …): label then chip, not chip then mask. */
+  labelBeforeBrandIcon?: boolean
 }
 
 function paymentBrandIconEmailHtml(src: string): string | null {
@@ -541,7 +543,10 @@ function detailValueHtml(row: TransactionDetailRow): string {
   }
   const iconHtml = row.brandIconSrc ? paymentBrandIconEmailHtml(row.brandIconSrc) : null
   if (!iconHtml) return escapeHtml(row.value)
-  return `<table role="presentation" cellpadding="0" cellspacing="0" align="right" style="margin-left:auto;"><tr><td style="padding-right:8px;vertical-align:middle;line-height:0;">${iconHtml}</td><td style="vertical-align:middle;font-weight:500;">${escapeHtml(row.value)}</td></tr></table>`
+  const valueTd = `<td style="vertical-align:middle;font-weight:500;">${escapeHtml(row.value)}</td>`
+  const iconTd = `<td style="padding-${row.labelBeforeBrandIcon ? "left" : "right"}:8px;vertical-align:middle;line-height:0;">${iconHtml}</td>`
+  const cells = row.labelBeforeBrandIcon ? `${valueTd}${iconTd}` : `${iconTd}${valueTd}`
+  return `<table role="presentation" cellpadding="0" cellspacing="0" align="right" style="margin-left:auto;"><tr>${cells}</tr></table>`
 }
 
 export function generateTransactionDetailsTable(

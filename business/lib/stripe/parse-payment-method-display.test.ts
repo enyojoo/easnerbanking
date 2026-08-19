@@ -169,4 +169,10 @@ describe("formatPaymentMethodText / icon key", () => {
     expect(shouldShowStripePaymentMethod({ type: "us_bank_account" })).toBe(true)
     expect(formatPaymentMethodListLabel({ type: "us_bank_account" })).toBe("Bank")
   })
+
+  it("names Cash App beside the chip when there is no last4", () => {
+    expect(formatPaymentMethodTextBesideIcon({ type: "cashapp" })).toBe("Cash App")
+    expect(formatPaymentMethodText({ type: "cashapp" })).toBe("Cash App")
+    expect(shouldShowStripePaymentMethod({ type: "cashapp" })).toBe(true)
+  })
 })

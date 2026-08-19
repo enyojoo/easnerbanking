@@ -47,6 +47,28 @@ describe("resolveInvoiceEmailPaymentMethod", () => {
     expect(resolved!.plainText).toContain("4242")
   })
 
+  it("returns Cash App label in front of the chip when there is no last4", () => {
+    const resolved = resolveInvoiceEmailPaymentMethod({
+      ...paidStripeInvoice,
+      paymentInfo: {
+        paidAt: "2026-08-03T04:54:00.000Z",
+        method: "stripe",
+        stripe: {
+          paymentIntentId: "pi_1",
+          paymentMethodType: "cashapp",
+          grossCents: 100,
+          feeCents: 0,
+          netCents: 100,
+          settlementPhase: "payment_received",
+        },
+      },
+    })
+    expect(resolved!.plainText).toBe("Cash App")
+    expect(resolved!.htmlText).toBe("Cash App")
+    expect(resolved!.labelBeforeBrandIcon).toBe(true)
+    expect(resolved!.brandIconSrc).toMatch(/\/payment-brands\/cashapp\.png$/)
+  })
+
   it("returns plain labels for cash payments", () => {
     const resolved = resolveInvoiceEmailPaymentMethod({
       ...paidStripeInvoice,

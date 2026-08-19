@@ -6,6 +6,7 @@ import {
   hasPaymentBrandIcon,
   paymentMethodIconKey,
   paymentBrandPngEmailUrl,
+  paymentMethodShowsNameBeforeIcon,
 } from "@/lib/stripe/payment-method-display"
 
 export type InvoiceEmailPaymentMethodDisplay = {
@@ -15,6 +16,7 @@ export type InvoiceEmailPaymentMethodDisplay = {
   htmlText: string
   /** Hosted PNG URL for email clients (inline data URIs are blocked by Gmail/Outlook). */
   brandIconSrc?: string
+  labelBeforeBrandIcon?: boolean
 }
 
 /** Payment method row for customer invoice emails — matches receipt PDF / in-app chip layout. */
@@ -39,6 +41,7 @@ export function resolveInvoiceEmailPaymentMethod(
       plainText,
       htmlText,
       ...(brandIconSrc ? { brandIconSrc } : {}),
+      ...(paymentMethodShowsNameBeforeIcon(pm) ? { labelBeforeBrandIcon: true } : {}),
     }
   }
 

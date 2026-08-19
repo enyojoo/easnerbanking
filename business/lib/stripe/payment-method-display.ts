@@ -163,7 +163,26 @@ export function formatPaymentMethodTextBesideIcon(
 
   if (type === "sepa_debit") return mask ?? ""
   if (type === "link") return mask ?? ""
+  if (type === "klarna") return "Klarna"
+  if (type === "cashapp" || type === "cash_app") return "Cash App"
+  if (type === "amazon_pay") return "Amazon Pay"
+  if (type === "alipay") return "Alipay"
   return mask ?? ""
+}
+
+/** Named wallets with no last4: label sits in front of the brand chip. */
+export function paymentMethodShowsNameBeforeIcon(
+  pm: StripePaymentMethodDisplay | null | undefined,
+): boolean {
+  if (!pm?.type) return false
+  const type = pm.type.toLowerCase()
+  return (
+    type === "cashapp" ||
+    type === "cash_app" ||
+    type === "klarna" ||
+    type === "amazon_pay" ||
+    type === "alipay"
+  )
 }
 
 /** Short list label (e.g. "Visa" / "Card") when full mask is not needed. */

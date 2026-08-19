@@ -50,6 +50,7 @@ function invoicePaidDetailRows(invoice: Invoice): TransactionDetailRow[] {
       label: "Payment method",
       value: paymentMethod.htmlText,
       brandIconSrc: paymentMethod.brandIconSrc,
+      ...(paymentMethod.labelBeforeBrandIcon ? { labelBeforeBrandIcon: true } : {}),
     })
   }
   const paidAt = invoice.paymentInfo?.paidAt
@@ -322,6 +323,7 @@ function invoiceRefundDetailRows(invoice: Invoice): TransactionDetailRow[] {
         label: "Payment method",
         value: pm.htmlText,
         brandIconSrc: pm.brandIconSrc,
+        ...(pm.labelBeforeBrandIcon ? { labelBeforeBrandIcon: true } : {}),
       })
     }
   }
