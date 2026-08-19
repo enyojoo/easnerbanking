@@ -9,7 +9,7 @@ import { formatSendRateLabel } from "../format-exchange-rate"
 import { formatTransactionWhen } from "../format-transaction-when"
 import { computeDisplayProcessingFee } from "../payout-processing-fee"
 import { REVIEW_ROW_LABELS } from "../review-row-labels"
-import { isPayoutReviewFeeVisible } from "../payout-review-display"
+import { isPayoutReviewFeeVisible, pickVisibleProcessingFee } from "../payout-review-display"
 import { formatMaskedSenderDisplay } from "../payout-recipient-subtitle"
 import { isBankOnrampDepositFlow } from "./bank-deposit-lifecycle"
 import { deriveBankDepositSchemeLabel } from "./bank-deposit-scheme"
@@ -351,9 +351,10 @@ export function resolveInboundReceiveDetail(
     })
     const feeLocalRaw = Number(meta.display_processing_fee_local)
     const feeLocal =
-      Number.isFinite(feeLocalRaw) && feeLocalRaw > 0 ? feeLocalRaw : breakdown.feeLocal
-    const feeAmount = feeLocal > 0 ? feeLocal : displayProcessingFeeUsd
-    const feeCurrency = feeLocal > 0 ? review.local_currency : "USD"
+      pickVisibleProcessingFee(feeLocalRaw, breakdown.feeLocal) ?? breakdown.feeLocal
+    const useLocalFee = isPayoutReviewFeeVisible(feeLocal)
+    const feeAmount = useLocalFee ? feeLocal : displayProcessingFeeUsd
+    const feeCurrency = useLocalFee ? review.local_currency : "USD"
 
     return {
       kind,
@@ -441,7 +442,9 @@ export function resolveInboundReceiveDetail(
       ...(fiatDepositAmount != null
         ? { depositAmount: { amount: fiatDepositAmount, currency: fiatDepositCurrency } }
         : {}),
-      ...(feeAmount > 0 ? { processingFee: { amount: feeAmount, currency: feeCurrency } } : {}),
+      ...(Number.isFinite(feeAmount)
+        ? { processingFee: { amount: feeAmount, currency: feeCurrency } }
+        : {}),
       ...(readMetaString(meta, "reference") || readMetaString(meta, "narration") || input.reference
         ? {
             narration:
@@ -480,7 +483,9 @@ export function resolveInboundReceiveDetail(
       scheme: deriveStablecoinSchemeLabel(input),
       ...resolveSenderFields(input),
       ...(depositAmount ? { depositAmount } : {}),
-      ...(feeAmount > 0 ? { processingFee: { amount: feeAmount, currency: feeCurrency } } : {}),
+      ...(Number.isFinite(feeAmount)
+        ? { processingFee: { amount: feeAmount, currency: feeCurrency } }
+        : {}),
       ...(note ? { note } : {}),
     }
   }

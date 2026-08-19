@@ -3,9 +3,11 @@ import {
   hasPayoutCrossCurrencyFx,
   hasWalletSendFxDisplay,
   isPayoutReviewFeeVisible,
+  pickVisibleProcessingFee,
   shouldShowGlobalPayoutProcessingFee,
   shouldShowPayoutExchangeFee,
   shouldShowPayoutProcessingFee,
+  shouldShowPayoutReviewFeeRow,
   shouldShowPayoutReviewProcessingFee,
   shouldShowWalletSendProcessingFee,
   shouldShowWalletSendNetworkFee,
@@ -13,10 +15,15 @@ import {
 } from "./payout-review-display"
 
 describe("payout-review-display", () => {
-  it("treats dust amounts as not visible", () => {
-    expect(isPayoutReviewFeeVisible(0)).toBe(false)
+  it("shows a $0 processing fee and still hides dust", () => {
+    expect(isPayoutReviewFeeVisible(0)).toBe(true)
     expect(isPayoutReviewFeeVisible(0.005)).toBe(false)
     expect(isPayoutReviewFeeVisible(0.006)).toBe(true)
+    expect(isPayoutReviewFeeVisible(null)).toBe(false)
+    expect(pickVisibleProcessingFee(undefined, 0)).toBe(0)
+    expect(shouldShowPayoutReviewFeeRow({ processingFee: 0 })).toBe(true)
+    expect(shouldShowPayoutReviewFeeRow({})).toBe(false)
+    expect(shouldShowPayoutReviewFeeRow({ processingFee: null, exchangeFee: null })).toBe(false)
   })
 
   it("never shows a standalone exchange fee row (folded into Processing fee)", () => {
@@ -38,7 +45,7 @@ describe("payout-review-display", () => {
 
   it("shows processing and network fees when positive", () => {
     expect(shouldShowPayoutProcessingFee(2)).toBe(true)
-    expect(shouldShowPayoutProcessingFee(0)).toBe(false)
+    expect(shouldShowPayoutProcessingFee(0)).toBe(true)
     expect(shouldShowPayoutNetworkFee(0.01)).toBe(true)
     expect(shouldShowPayoutNetworkFee(null)).toBe(false)
   })

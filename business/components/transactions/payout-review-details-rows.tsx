@@ -11,6 +11,7 @@ import {
   hasPayoutCrossCurrencyFx,
   hasWalletSendFxDisplay,
   normalizeTransferMethodLabel,
+  pickVisibleProcessingFee,
   shouldShowPayoutReviewFeeRow,
   REVIEW_ROW_LABELS,
   reviewPrimaryAmountLabel,
@@ -111,10 +112,8 @@ export function PayoutReviewDetailsRows({
     exchangeFee: payoutReview.exchange_fee,
   })
   const localPayInFee =
-    reviewFlow === "local_pay_in" &&
-    payoutReview.display_processing_fee_local != null &&
-    payoutReview.display_processing_fee_local > 0
-      ? payoutReview.display_processing_fee_local
+    reviewFlow === "local_pay_in"
+      ? pickVisibleProcessingFee(payoutReview.display_processing_fee_local)
       : null
   const feeDisplayAmount =
     reviewFlow === "local_pay_in"

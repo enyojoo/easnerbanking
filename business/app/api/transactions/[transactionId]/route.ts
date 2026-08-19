@@ -13,6 +13,7 @@ import {
 } from "@/lib/easner-transaction-id"
 import { mapRowToBusinessTransaction } from "@/lib/transactions/map-row-to-business"
 import { healStripeInvoicePaymentMetadata } from "@/lib/stripe/heal-invoice-payment-metadata"
+import { healCheckoutCollectionMetadata } from "@/lib/stripe/heal-checkout-collection-metadata"
 import { isStripeInvoiceSettlementMetadata } from "@easner/shared"
 import {
   attachBankDepositDetailFieldsAsync,
@@ -490,6 +491,17 @@ export async function GET(request: Request, routeCtx: Props) {
       })
       if (healed.healed) {
         ledgerRec = { ...ledgerRec, metadata: healed.metadata }
+      }
+    } else if (String(metaForHeal.source ?? "").toLowerCase() === "checkout_stripe") {
+      const healed = await healCheckoutCollectionMetadata(admin, {
+        ledgerRowId: String(ledgerRec.id),
+        metadata: metaForHeal,
+      })
+      if (healed.healed) {
+        ledgerRec = { ...ledgerRec, metadata: healed.metadata }
+        if (typeof healed.metadata.net_cents === "number") {
+          ledgerRec = { ...ledgerRec, amount: healed.metadata.net_cents / 100 }
+        }
       }
     }
   }

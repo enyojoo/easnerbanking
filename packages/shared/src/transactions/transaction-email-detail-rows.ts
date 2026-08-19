@@ -22,6 +22,7 @@ import {
   hasPayoutCrossCurrencyFx,
   hasWalletSendFxDisplay,
   isPayoutReviewFeeVisible,
+  pickVisibleProcessingFee,
 } from "../payout-review-display"
 import { normalizeTransferMethodLabel } from "./payout-transfer-method"
 import { displayPayoutReceiveAmount, type GlobalPayoutReviewSnapshot } from "./global-payout-types"
@@ -85,10 +86,8 @@ function buildPayoutRows(review: GlobalPayoutReviewSnapshot, input: TransactionE
   })
   const reviewFlow = input.payoutReviewFlow ?? "balance_payout"
   const localPayInFee =
-    reviewFlow === "local_pay_in" &&
-    review.display_processing_fee_local != null &&
-    review.display_processing_fee_local > 0
-      ? review.display_processing_fee_local
+    reviewFlow === "local_pay_in"
+      ? pickVisibleProcessingFee(review.display_processing_fee_local)
       : null
   const feeAmount =
     reviewFlow === "local_pay_in"
@@ -214,7 +213,7 @@ function buildPayoutRows(review: GlobalPayoutReviewSnapshot, input: TransactionE
 function buildDepositRows(deposit: NonNullable<TransactionEmailDetailInput["deposit"]>): TransactionEmailDetailRow[] {
   const rows: TransactionEmailDetailRow[] = []
   pushIf(rows, REVIEW_ROW_LABELS.sender, deposit.senderDisplay)
-  if (deposit.feeAmount != null && deposit.feeAmount > 0) {
+  if (deposit.feeAmount != null && isPayoutReviewFeeVisible(deposit.feeAmount)) {
     pushIf(
       rows,
       REVIEW_ROW_LABELS.processingFee,
@@ -251,11 +250,7 @@ function buildYcFundBalanceDepositRows(
   const breakdown = resolveYcFundBalanceLocalPayInBreakdown(review)
   const feeLocal =
     feeLocalOverride ??
-    (review.display_processing_fee_local != null && review.display_processing_fee_local > 0
-      ? review.display_processing_fee_local
-      : breakdown.feeLocal > 0
-        ? breakdown.feeLocal
-        : null)
+    pickVisibleProcessingFee(review.display_processing_fee_local, breakdown.feeLocal)
   const displayProcessingFee = computeDisplayProcessingFee({
     processingFee: review.processing_fee,
     exchangeFee: review.exchange_fee,

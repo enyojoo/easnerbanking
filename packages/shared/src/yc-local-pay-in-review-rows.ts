@@ -1,7 +1,7 @@
 import { formatMoneyDisplay } from "./format-money-display"
 import { formatReviewRowMoneyDisplay } from "./format-review-row-money"
 import { formatSendRateLabel } from "./format-exchange-rate"
-import { shouldShowPayoutReviewFeeRow } from "./payout-review-display"
+import { isPayoutReviewFeeVisible, shouldShowPayoutReviewFeeRow } from "./payout-review-display"
 import { computeFootedDisplayProcessingFee } from "./payout-processing-fee"
 import {
   REVIEW_ROW_LABELS,
@@ -85,10 +85,10 @@ export function buildYcLocalPayInReviewRows(input: {
   }
 
   const showFee =
-    processingFeeLocal > 0 ||
+    isPayoutReviewFeeVisible(processingFeeLocal) ||
     shouldShowPayoutReviewFeeRow({
-      processingFee: input.processingFeeUsd ?? 0,
-      exchangeFee: input.exchangeFeeUsd ?? 0,
+      processingFee: input.processingFeeUsd,
+      exchangeFee: input.exchangeFeeUsd,
     })
 
   if (
@@ -108,7 +108,7 @@ export function buildYcLocalPayInReviewRows(input: {
     })
   }
 
-  if (showFee && processingFeeLocal > 0) {
+  if (showFee && isPayoutReviewFeeVisible(processingFeeLocal)) {
     rows.push({
       id: "processing-fee",
       label: REVIEW_ROW_LABELS.processingFee,

@@ -1,10 +1,30 @@
 import { isDirectTurnkeyWalletCorridor } from "./wallet-send-limits"
 import { computeDisplayProcessingFee } from "./payout-processing-fee"
 
-/** Hide fee rows at or below half a cent in USD/EUR (confirm + transaction details). */
+/** Hide positive dust at or below half a cent in USD/EUR. Exact $0 still shows. */
 export const PAYOUT_REVIEW_FEE_VISIBLE_EPSILON = 0.005
 
 export function isPayoutReviewFeeVisible(amount: number | null | undefined): boolean {
+  if (amount == null || !Number.isFinite(amount)) return false
+  if (amount === 0) return true
+  return amount > PAYOUT_REVIEW_FEE_VISIBLE_EPSILON
+}
+
+/** First candidate that should appear as Processing fee, including an explicit $0. */
+export function pickVisibleProcessingFee(
+  ...candidates: Array<number | null | undefined>
+): number | null {
+  for (const amount of candidates) {
+    if (isPayoutReviewFeeVisible(amount)) return Number(amount)
+  }
+  return null
+}
+
+function hasKnownFeePart(amount: number | null | undefined): boolean {
+  return amount != null && Number.isFinite(amount)
+}
+
+function isPositiveFeeVisible(amount: number | null | undefined): boolean {
   if (amount == null || !Number.isFinite(amount)) return false
   return amount > PAYOUT_REVIEW_FEE_VISIBLE_EPSILON
 }
@@ -66,6 +86,9 @@ export function shouldShowPayoutReviewFeeRow(input: {
   processingFee?: number | null
   exchangeFee?: number | null
 }): boolean {
+  if (!hasKnownFeePart(input.processingFee) && !hasKnownFeePart(input.exchangeFee)) {
+    return false
+  }
   return isPayoutReviewFeeVisible(computeDisplayProcessingFee(input))
 }
 
@@ -109,7 +132,7 @@ export function shouldShowPayoutReviewProcessingFee(input: {
 }
 
 export function shouldShowPayoutNetworkFee(networkFee: number | null | undefined): boolean {
-  return isPayoutReviewFeeVisible(networkFee)
+  return isPositiveFeeVisible(networkFee)
 }
 
 /** Wallet send: Solana gas is Turnkey-sponsored; LI.FI `networkFee` is not a user charge. */

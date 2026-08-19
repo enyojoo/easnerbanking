@@ -169,6 +169,24 @@ describe("buildYcLocalPayInReviewRows", () => {
     expect(rows.find((r) => r.id === "deposit-amount")?.value).toBe("₦3,572.87")
     expect(rows.find((r) => r.id === "processing-fee")?.value).toBe("₦106.09")
   })
+
+  it("shows an explicit ₦0 processing fee on local pay-in review", () => {
+    const rows = buildYcLocalPayInReviewRows({
+      mode: "fund_balance",
+      phase: "locked",
+      rail: "bank_transfer",
+      payInCurrency: "NGN",
+      receiveCurrency: "USD",
+      customerRate: 1500,
+      localPayIn: 1500,
+      receiveAmount: 1,
+      usdCredit: 1,
+      principalLocal: 1500,
+      processingFeeLocal: 0,
+      processingFeeUsd: 0,
+    })
+    expect(rows.find((r) => r.id === "processing-fee")?.value).toBe("₦0")
+  })
 })
 
 describe("buildYcLocalPayInCompleteRows", () => {

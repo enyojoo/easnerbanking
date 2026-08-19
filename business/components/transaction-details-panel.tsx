@@ -20,19 +20,22 @@ import { DepositReviewDetailsRows } from "@/components/transactions/deposit-revi
 import { MoveReviewDetailsRows } from "@/components/accounts/move-review-details-rows"
 import { InboundReceiveDetailsRows } from "@/components/transactions/inbound-receive-details-rows"
 import { CreditDestinationRow } from "@/components/transactions/credit-destination-row"
-import { TransactionDetailSummaryRow } from "@/components/transactions/transaction-detail-summary-row"
+import { TransactionDetailSummaryRow, TRANSACTION_DETAIL_MONEY_VALUE_CLASS } from "@/components/transactions/transaction-detail-summary-row"
 import { StripePaymentMethodRow } from "@/components/stripe-payment-method-row"
 import { useScope } from "@/lib/query/scope"
 import { getTransactionDetailPrefetchOptions } from "@/hooks/queries/use-transactions"
 import {
   REVIEW_ROW_LABELS,
   computeDisplayProcessingFee,
+  formatAccountBalanceLabel,
   formatTransactionWhen,
   isVerificationDepositMetadata,
+  pickVisibleProcessingFee,
   resolveLedgerWhenAt,
   resolvePayoutReviewFlow,
   shouldShowReviewTotalDebited,
   formatReviewRowMoneyDisplay,
+  isPayoutReviewFeeVisible,
   useYcPayInExpiredDetailRefetch,
 } from "@easner/shared"
 
@@ -179,6 +182,11 @@ function TransactionSummaryDetails({
       : null
   const settled = transaction.status === "completed"
   const whenAt = resolveTransactionDetailWhenAt(transaction)
+  const creditLabel = settled
+    ? REVIEW_ROW_LABELS.amountCredited
+    : REVIEW_ROW_LABELS.amountToCredit
+  const stripeGross = grossAmount != null && grossAmount > 0 ? grossAmount : netAmount
+  const stripeFee = transaction.fee ?? Math.max(0, stripeGross - netAmount)
 
   return (
     <Card className="border-border shadow-sm">
@@ -202,15 +210,6 @@ function TransactionSummaryDetails({
           </div>
         </TransactionDetailSummaryRow>
 
-        {isStripeInvoiceSettlement &&
-        grossAmount != null &&
-        Math.abs(grossAmount - netAmount) > 0.0001 ? (
-          <TransactionDetailSummaryRow
-            label="Payment amount"
-            value={formatReviewRowMoneyDisplay("Payment amount", grossAmount, displayCurrency)}
-          />
-        ) : null}
-
         {isStripeInvoiceSettlement && transaction.stripePaymentMethod ? (
           <TransactionDetailSummaryRow label="Payment method">
             <StripePaymentMethodRow pm={transaction.stripePaymentMethod} />
@@ -225,10 +224,6 @@ function TransactionSummaryDetails({
 
         {isStripeInvoiceSettlement && transaction.customerEmail ? (
           <TransactionDetailSummaryRow label="Email" value={transaction.customerEmail} />
-        ) : null}
-
-        {isStripeInvoiceSettlement && transaction.paymentRail ? (
-          <TransactionDetailSummaryRow label="Settling to" value={transaction.paymentRail} />
         ) : null}
 
         {!isStripeInvoiceSettlement && transaction.paymentScheme ? (
@@ -259,54 +254,78 @@ function TransactionSummaryDetails({
           <TransactionDetailSummaryRow label="Narration" value={transaction.narration} />
         ) : null}
 
-        {transaction.fee !== undefined && transaction.fee > 0 ? (
-          <TransactionDetailSummaryRow
-            label={REVIEW_ROW_LABELS.processingFee}
-            value={formatReviewRowMoneyDisplay(
-              REVIEW_ROW_LABELS.processingFee,
-              transaction.fee,
-              transaction.displayCurrency || "USD",
-            )}
-          />
-        ) : null}
+        {isStripeInvoiceSettlement ? (
+          <>
+            {stripeGross > 0 ? (
+              <TransactionDetailSummaryRow
+                label={REVIEW_ROW_LABELS.depositAmount}
+                value={formatReviewRowMoneyDisplay(
+                  REVIEW_ROW_LABELS.depositAmount,
+                  stripeGross,
+                  displayCurrency,
+                )}
+              />
+            ) : null}
+            <TransactionDetailSummaryRow
+              label={REVIEW_ROW_LABELS.processingFee}
+              value={formatReviewRowMoneyDisplay(
+                REVIEW_ROW_LABELS.processingFee,
+                stripeFee,
+                displayCurrency,
+              )}
+            />
+            <TransactionDetailSummaryRow
+              label={creditLabel}
+              value={formatReviewRowMoneyDisplay(creditLabel, netAmount, displayCurrency)}
+              valueClassName={TRANSACTION_DETAIL_MONEY_VALUE_CLASS}
+            />
+            <CreditDestinationRow
+              label={REVIEW_ROW_LABELS.creditTo}
+              currency={displayCurrency}
+              balanceLabel={formatAccountBalanceLabel(displayCurrency)}
+            />
+          </>
+        ) : (
+          <>
+            {transaction.fee !== undefined && isPayoutReviewFeeVisible(transaction.fee) ? (
+              <TransactionDetailSummaryRow
+                label={REVIEW_ROW_LABELS.processingFee}
+                value={formatReviewRowMoneyDisplay(
+                  REVIEW_ROW_LABELS.processingFee,
+                  transaction.fee,
+                  transaction.displayCurrency || "USD",
+                )}
+              />
+            ) : null}
 
-        {!isStripeInvoiceSettlement &&
-        transaction.postedAmount != null &&
-        transaction.postedAmount > 0 ? (
-          <TransactionDetailSummaryRow
-            label={REVIEW_ROW_LABELS.amountCredited}
-            value={formatReviewRowMoneyDisplay(
-              REVIEW_ROW_LABELS.amountCredited,
-              transaction.postedAmount,
-              displayCurrency,
-            )}
-          />
-        ) : null}
+            {transaction.postedAmount != null && transaction.postedAmount > 0 ? (
+              <TransactionDetailSummaryRow
+                label={REVIEW_ROW_LABELS.amountCredited}
+                value={formatReviewRowMoneyDisplay(
+                  REVIEW_ROW_LABELS.amountCredited,
+                  transaction.postedAmount,
+                  displayCurrency,
+                )}
+              />
+            ) : null}
 
-        {!isStripeInvoiceSettlement &&
-        isDeposit &&
-        transaction.postedAmount != null &&
-        transaction.postedAmount > 0 ? (
-          <CreditDestinationRow
-            label={
-              isVerificationDepositMetadata(
-                (transaction as { metadata?: Record<string, unknown> }).metadata,
-              )
-                ? REVIEW_ROW_LABELS.creditFor
-                : REVIEW_ROW_LABELS.creditTo
-            }
-            currency={displayCurrency}
-            balanceLabel={`${displayCurrency} Balance`}
-          />
-        ) : null}
-
-        {isStripeInvoiceSettlement && settled ? (
-          <CreditDestinationRow
-            label={REVIEW_ROW_LABELS.creditTo}
-            currency={displayCurrency}
-            balanceLabel={`${displayCurrency} Balance`}
-          />
-        ) : null}
+            {isDeposit &&
+            transaction.postedAmount != null &&
+            transaction.postedAmount > 0 ? (
+              <CreditDestinationRow
+                label={
+                  isVerificationDepositMetadata(
+                    (transaction as { metadata?: Record<string, unknown> }).metadata,
+                  )
+                    ? REVIEW_ROW_LABELS.creditFor
+                    : REVIEW_ROW_LABELS.creditTo
+                }
+                currency={displayCurrency}
+                balanceLabel={formatAccountBalanceLabel(displayCurrency)}
+              />
+            ) : null}
+          </>
+        )}
 
         {transaction.sendNote ? (
           <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.note} value={transaction.sendNote} />
@@ -427,15 +446,14 @@ export function TransactionDetailsPanel({
 
   const tlcDetailFee =
     payoutReviewFlow === "local_pay_in" && transaction.payoutReview
-      ? transaction.payoutReview.display_processing_fee_local != null &&
-        transaction.payoutReview.display_processing_fee_local > 0
-        ? transaction.payoutReview.display_processing_fee_local
-        : Number(transaction.metadata?.display_processing_fee_local) > 0
-          ? Number(transaction.metadata.display_processing_fee_local)
-          : computeDisplayProcessingFee({
-              processingFee: transaction.payoutReview.processing_fee,
-              exchangeFee: transaction.payoutReview.exchange_fee,
-            })
+      ? pickVisibleProcessingFee(
+          transaction.payoutReview.display_processing_fee_local,
+          Number(transaction.metadata?.display_processing_fee_local),
+        ) ??
+        computeDisplayProcessingFee({
+          processingFee: transaction.payoutReview.processing_fee,
+          exchangeFee: transaction.payoutReview.exchange_fee,
+        })
       : 0
 
   return (

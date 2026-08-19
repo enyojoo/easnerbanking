@@ -1,4 +1,5 @@
 import { computeDisplayProcessingFee } from "../payout-processing-fee"
+import { isPayoutReviewFeeVisible } from "../payout-review-display"
 import { resolveReceiveCountryName } from "../receive-cash-method-labels"
 import {
   isBankOnrampDepositFlow,
@@ -136,7 +137,7 @@ export function resolveYcFundBalanceLocalPayInBreakdown(
   const feeFromDisplay =
     review.display_processing_fee_local != null &&
     Number.isFinite(review.display_processing_fee_local) &&
-    review.display_processing_fee_local > 0
+    isPayoutReviewFeeVisible(review.display_processing_fee_local)
       ? roundLocal(review.display_processing_fee_local)
       : null
   const totalLocal = roundLocal(review.local_pay_in)
@@ -320,7 +321,7 @@ export function normalizeYcFundBalanceDepositReview(
       "",
     pay_in_rail: payInRail,
     ...(Number.isFinite(Number(o.display_processing_fee_local)) &&
-    Number(o.display_processing_fee_local) > 0
+    isPayoutReviewFeeVisible(Number(o.display_processing_fee_local))
       ? { display_processing_fee_local: Number(o.display_processing_fee_local) }
       : {}),
   }
@@ -362,7 +363,7 @@ export function buildYcFundBalanceDepositReviewSnapshot(input: {
     pay_in_rail: payInRail,
     ...(input.displayProcessingFeeLocal != null &&
     Number.isFinite(input.displayProcessingFeeLocal) &&
-    input.displayProcessingFeeLocal > 0
+    isPayoutReviewFeeVisible(input.displayProcessingFeeLocal)
       ? { display_processing_fee_local: input.displayProcessingFeeLocal }
       : {}),
   }

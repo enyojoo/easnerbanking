@@ -20,6 +20,7 @@ import { Check, Loader2 } from "lucide-react"
 import { cn, formatCurrency } from "@/lib/utils"
 import { easnerStripeElementsAppearance } from "@/lib/stripe/elements-appearance"
 import { getStripeJs } from "@/lib/stripe/load-stripe-js"
+import { paymentElementBillingFields } from "@/lib/stripe/payment-element-billing-fields"
 import { onlinePaymentTabHint } from "@/lib/invoices/invoice-payment-copy"
 import { COLLECTIONS_COPY } from "@/lib/copy/business-ui-copy"
 
@@ -227,6 +228,15 @@ function CheckoutSurface({
               setEmail(event.target.value)
               if (error === COLLECTIONS_COPY.payerEmailRequired) setError(null)
             }}
+            onBlur={() => {
+              if (checkoutState.type !== "success" || !isValidEmail(resolvedEmail)) return
+              const checkout = checkoutState.checkout as typeof checkoutState.checkout & {
+                updateEmail?: (value: string) => Promise<unknown>
+              }
+              if (typeof checkout.updateEmail === "function") {
+                void checkout.updateEmail(resolvedEmail)
+              }
+            }}
             aria-invalid={Boolean(error) && !emailReady}
           />
         </div>
@@ -272,15 +282,7 @@ function CheckoutSurface({
             ...(prefillName
               ? { defaultValues: { billingDetails: { name: prefillName } } }
               : {}),
-            fields: {
-              billingDetails: {
-                name: "always",
-                ...(collectEmail || knownEmail ? { email: "never" as const } : {}),
-              },
-              card: {
-                billingDetails: { name: "always" },
-              },
-            },
+            fields: paymentElementBillingFields({ collectEmail, knownEmail }),
           }}
         />
 

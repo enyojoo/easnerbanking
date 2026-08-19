@@ -11,7 +11,7 @@ import {
   Line,
   Polyline,
 } from "@react-pdf/renderer"
-import { buildTransactionReceiptDetailRows, type ReceiptVisualRow } from "@easner/shared"
+import { buildTransactionReceiptDetailRows, isPayoutReviewFeeVisible, type ReceiptVisualRow } from "@easner/shared"
 import type { Transaction } from "@/lib/finance-types"
 import { formatCurrency } from "@/lib/utils"
 import { PdfReceiptVisualRow } from "@/lib/receipt-pdf-visual-rows"
@@ -188,7 +188,7 @@ function buildReceiptDetailRows(transaction: Transaction, cardLast4?: string): R
   if (!isStablecoin && transaction.reference) {
     rows.push({ kind: "text", label: "Reference", value: transaction.reference })
   }
-  if (transaction.fee !== undefined && transaction.fee > 0) {
+  if (transaction.fee !== undefined && isPayoutReviewFeeVisible(transaction.fee)) {
     rows.push({
       kind: "text",
       label: "Processing fee",

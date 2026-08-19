@@ -355,6 +355,7 @@ describe("mapRowToBusinessTransaction", () => {
     expect(item.reference).toBe("ETID50120581")
     expect(item.postedAmount).toBe(56888)
     expect(item.depositAmount).toBe(56888)
+    expect(item.fee).toBe(0)
     expect(item.lifecycle?.some((s) => s.id === "payment_received")).toBe(true)
   })
 })

@@ -116,7 +116,7 @@ describe("buildTransactionEmailDetailRows", () => {
     expect(map["Narration"]).toBe("Invoice 42")
   })
 
-  it("organic stablecoin deposit with $0 fee hides the Processing fee row", () => {
+  it("organic stablecoin deposit with $0 fee still shows the Processing fee row", () => {
     const rows = buildTransactionEmailDetailRows({
       direction: "in",
       deposit: {
@@ -128,7 +128,7 @@ describe("buildTransactionEmailDetailRows", () => {
       },
     })
     const map = rowMap(rows)
-    expect(map["Processing fee"]).toBeUndefined()
+    expect(map["Processing fee"]).toBe("$0")
     expect(map["Amount credited"]).toBe("+$50")
   })
 
@@ -224,6 +224,7 @@ describe("buildTransactionEmailDetailRows", () => {
     })
     expect(rows.map((r) => r.label)).toEqual([
       "Sent amount",
+      "Processing fee",
       "Exchange rate",
       "Total debited",
       "Debited from",

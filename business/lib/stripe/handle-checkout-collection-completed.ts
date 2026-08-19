@@ -51,6 +51,37 @@ function hasReceiptClaim(metadata: Record<string, unknown>): boolean {
   )
 }
 
+async function patchLedgerPayerIdentity(
+  admin: SupabaseClient,
+  ledgerTransactionId: string | null | undefined,
+  identity: { email: string | null; name: string | null },
+): Promise<void> {
+  const email = identity.email?.trim() || ""
+  const name = identity.name?.trim() || ""
+  if (!ledgerTransactionId || (!email && !name)) return
+
+  const { data: row } = await admin
+    .from("transactions")
+    .select("metadata")
+    .eq("id", ledgerTransactionId)
+    .maybeSingle()
+  if (!row?.metadata || typeof row.metadata !== "object") return
+
+  const meta = asMetadata(row.metadata)
+  let changed = false
+  if (email && !String(meta.customer_email ?? "").trim()) {
+    meta.customer_email = email
+    changed = true
+  }
+  if (name && !String(meta.customer_name ?? "").trim()) {
+    meta.customer_name = name
+    changed = true
+  }
+  if (!changed) return
+
+  await admin.from("transactions").update({ metadata: meta }).eq("id", ledgerTransactionId)
+}
+
 /**
  * Easner receipts send only on `checkout.session.completed`. The same
  * settlement also arrives as `payment_intent.succeeded`; sending on both
@@ -142,15 +173,23 @@ export async function handleCheckoutCollectionCompleted(
 
   const {
     feeCents,
+    applicationFeeCents,
     chargeId,
     chargedAt,
     paymentMethodType,
     paymentMethod,
     transferId,
     connectedAccountId,
+    payerEmail,
+    payerName,
   } = await resolveFeeAndTransfer(getStripe(), input.paymentIntentId, {
     sessionPaymentMethodTypes: input.sessionPaymentMethodTypes,
   })
+
+  const customerEmail = input.customerEmail?.trim() || payerEmail
+  const customerName = input.customerName?.trim() || payerName
+  /** Merchant net uses Connect application fee, not Stripe's platform processing fee. */
+  const merchantFeeCents = applicationFeeCents != null ? applicationFeeCents : feeCents
 
   const paidAt =
     chargedAt ||
@@ -158,7 +197,7 @@ export async function handleCheckoutCollectionCompleted(
 
   const { data: existing } = await admin
     .from("checkout_stripe_settlements")
-    .select("id, phase")
+    .select("id, phase, ledger_transaction_id")
     .eq("stripe_payment_intent_id", input.paymentIntentId)
     .maybeSingle()
   if (existing?.id && existing.phase !== "failed") {
@@ -180,12 +219,25 @@ export async function handleCheckoutCollectionCompleted(
           .maybeSingle()
         retryLabel = typeof link?.label === "string" ? link.label : null
       }
+      const to =
+        customerEmail ||
+        (typeof priorSession?.customer_email === "string" ? priorSession.customer_email : null)
+      await patchLedgerPayerIdentity(admin, existing.ledger_transaction_id, {
+        email: to,
+        name: customerName,
+      })
+      if (priorSession?.id && to && !String(priorSession.customer_email ?? "").trim()) {
+        await admin
+          .from("online_checkout_sessions")
+          .update({ customer_email: to, updated_at: paidAt })
+          .eq("id", priorSession.id)
+      }
       await sendPayerReceiptIfNeeded(admin, event, {
         sessionRowId: priorSession?.id ? String(priorSession.id) : null,
         metadata: priorSession?.metadata,
         businessId: input.businessId,
-        to: input.customerEmail || (typeof priorSession?.customer_email === "string" ? priorSession.customer_email : null),
-        customerName: input.customerName,
+        to,
+        customerName,
         amountCents: input.amountTotal,
         currency: input.currency.toUpperCase(),
         description: receiptDescription(input.source, retryLabel),
@@ -197,7 +249,7 @@ export async function handleCheckoutCollectionCompleted(
   }
 
   const grossCents = input.amountTotal
-  const netCents = Math.max(0, grossCents - feeCents)
+  const netCents = Math.max(0, grossCents - merchantFeeCents)
   const currency = input.currency.toUpperCase()
 
   const sessionMatch = input.sessionId
@@ -224,10 +276,10 @@ export async function handleCheckoutCollectionCompleted(
       stripe_payment_intent_id: input.paymentIntentId,
       ...(input.subscriptionId ? { stripe_subscription_id: input.subscriptionId } : {}),
       gross_cents: grossCents,
-      fee_cents: feeCents,
+      fee_cents: merchantFeeCents,
       net_cents: netCents,
       payment_method_type: paymentMethodType,
-      ...(input.customerEmail ? { customer_email: input.customerEmail } : {}),
+      ...(customerEmail ? { customer_email: customerEmail } : {}),
       ...(connectedAccountId ? { stripe_connected_account_id: connectedAccountId } : {}),
       ...(typeof event.livemode === "boolean" ? { livemode: event.livemode } : {}),
       completed_at: paidAt,
@@ -268,7 +320,7 @@ export async function handleCheckoutCollectionCompleted(
       amount_cents: grossCents,
       currency,
       ...(paymentLinkId ? { payment_link_id: paymentLinkId } : {}),
-      ...(input.customerEmail ? { customer_email: input.customerEmail } : {}),
+      ...(customerEmail ? { customer_email: customerEmail } : {}),
       paid_at: paidAt,
       livemode: !isStripeTest,
     },
@@ -314,12 +366,12 @@ export async function handleCheckoutCollectionCompleted(
       settlement_phase: "payment_received",
       payment_received_at: paidAt,
       gross_cents: grossCents,
-      fee_cents: feeCents,
+      fee_cents: merchantFeeCents,
       net_cents: netCents,
       payment_method_type: paymentMethodType,
       ...(paymentMethod ? { payment_method: paymentMethod } : {}),
-      ...(input.customerEmail ? { customer_email: input.customerEmail } : {}),
-      ...(input.customerName ? { customer_name: input.customerName } : {}),
+      ...(customerEmail ? { customer_email: customerEmail } : {}),
+      ...(customerName ? { customer_name: customerName } : {}),
       stripe_connected_account_id: connectedAccountId,
       stripe_transfer_id: transferId,
       headline,
@@ -340,7 +392,7 @@ export async function handleCheckoutCollectionCompleted(
       stripe_transfer_id: transferId,
       stripe_subscription_id: input.subscriptionId,
       gross_cents: grossCents,
-      fee_cents: feeCents,
+      fee_cents: merchantFeeCents,
       net_cents: netCents,
       currency,
       phase: "payment_received",
@@ -359,9 +411,9 @@ export async function handleCheckoutCollectionCompleted(
     metadata: sessionRow && "metadata" in sessionRow ? sessionRow.metadata : null,
     businessId: input.businessId,
     to:
-      input.customerEmail ||
+      customerEmail ||
       (sessionRow && typeof sessionRow.customer_email === "string" ? sessionRow.customer_email : null),
-    customerName: input.customerName,
+    customerName,
     amountCents: grossCents,
     currency,
     description: receiptDescription(input.source, linkLabel),

@@ -8,6 +8,7 @@ import {
   formatReviewRowMoneyDisplay,
   formatTransactionWhen,
   isYcFundBalanceDepositMetadata,
+  isPayoutReviewFeeVisible,
   resolveInboundReceiveDetail,
   resolvePayoutReviewFlow,
   REVIEW_ROW_LABELS,
@@ -106,7 +107,7 @@ export function OfficeTransactionDetailPanel({ transaction }: Props) {
         ),
       })
     }
-    if (fee > 0 && payoutReview.send_currency) {
+    if (isPayoutReviewFeeVisible(fee) && payoutReview.send_currency) {
       detailRows.push({
         label: REVIEW_ROW_LABELS.processingFee,
         value: formatReviewRowMoneyDisplay(

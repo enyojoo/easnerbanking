@@ -79,6 +79,8 @@ import {
   hasPayoutCrossCurrencyFx,
   hasWalletSendFxDisplay,
   shouldShowPayoutReviewFeeRow,
+  isPayoutReviewFeeVisible,
+  pickVisibleProcessingFee,
   REVIEW_ROW_LABELS,
   isRelayTronDepositMetadata,
   resolveInboundReceiveDetail,
@@ -888,12 +890,10 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   )
   const payoutLocalFee =
     payoutReviewFlow === 'local_pay_in'
-      ? transaction.payout_review?.display_processing_fee_local != null &&
-        transaction.payout_review.display_processing_fee_local > 0
-        ? transaction.payout_review.display_processing_fee_local
-        : Number(transaction.metadata?.display_processing_fee_local) > 0
-          ? Number(transaction.metadata.display_processing_fee_local)
-          : null
+      ? pickVisibleProcessingFee(
+          transaction.payout_review?.display_processing_fee_local,
+          Number(transaction.metadata?.display_processing_fee_local),
+        )
       : null
   const payoutDisplayProcessingFee = transaction.payout_review
     ? payoutLocalFee ??
@@ -903,13 +903,10 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       })
     : 0
   const ycDepositReview = transaction.deposit_review
-  const ycFeeLocal =
-    ycDepositReview?.display_processing_fee_local != null &&
-    ycDepositReview.display_processing_fee_local > 0
-      ? ycDepositReview.display_processing_fee_local
-      : Number(transaction.metadata?.display_processing_fee_local) > 0
-        ? Number(transaction.metadata?.display_processing_fee_local)
-        : null
+  const ycFeeLocal = pickVisibleProcessingFee(
+    ycDepositReview?.display_processing_fee_local,
+    Number(transaction.metadata?.display_processing_fee_local),
+  )
   const ycDisplayProcessingFee = ycDepositReview
     ? ycFeeLocal ??
       computeDisplayProcessingFee({
@@ -1209,7 +1206,8 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                   transaction.transaction_type === 'receive' &&
                   transaction.source_type === 'virtual_account' && (
                   <>
-                    {transaction.fee_amount != null && transaction.fee_amount > 0 && (
+                    {transaction.fee_amount != null &&
+                      isPayoutReviewFeeVisible(transaction.fee_amount) && (
                       <TransactionDetailSummaryRow
                         label={REVIEW_ROW_LABELS.processingFee}
                         value={formatAmount(transaction.fee_amount, transaction.currency, false)}

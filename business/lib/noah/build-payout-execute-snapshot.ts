@@ -2,6 +2,7 @@ import {
   formatDisplayPersonName,
   getGlobalPayoutProcessingTime,
   getGlobalPayoutTransferMethod,
+  isPayoutReviewFeeVisible,
   type GlobalPayoutRecipientSnapshot,
   type GlobalPayoutReviewSnapshot,
 } from "@easner/shared"
@@ -74,7 +75,7 @@ export function normalizePayoutReviewSnapshot(
       ? { execution_model: o.execution_model }
       : {}),
     ...(Number.isFinite(Number(o.display_processing_fee_local)) &&
-    Number(o.display_processing_fee_local) > 0
+    isPayoutReviewFeeVisible(Number(o.display_processing_fee_local))
       ? { display_processing_fee_local: Number(o.display_processing_fee_local) }
       : {}),
     ...(Number.isFinite(Number(o.principal_local_pay_in)) &&

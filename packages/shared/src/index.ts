@@ -139,6 +139,7 @@ export {
   hasWalletSendFxDisplay,
   isBalanceStablecoinParity,
   isPayoutReviewFeeVisible,
+  pickVisibleProcessingFee,
   PAYOUT_REVIEW_FEE_VISIBLE_EPSILON,
   shouldShowPayoutExchangeFee,
   shouldShowPayoutExchangeRate,

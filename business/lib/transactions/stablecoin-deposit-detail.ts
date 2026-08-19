@@ -60,7 +60,7 @@ export function attachStablecoinDepositDetailFields(
           receipt_final_amount: postedAmount,
         }
       : {}),
-    ...(feeAmount > 0 ? { fee_amount: feeAmount } : {}),
+    ...(Number.isFinite(feeAmount) ? { fee_amount: feeAmount } : {}),
     ...(processingAt ? { processing_at: processingAt } : {}),
     ...(completedAt ? { completed_at: completedAt } : {}),
     ...(ledgerCreatedAt ? { ledger_created_at: ledgerCreatedAt } : {}),

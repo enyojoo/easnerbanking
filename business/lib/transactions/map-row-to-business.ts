@@ -473,7 +473,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
                   paymentScheme: bankDepositDetail.depositSchemeLabel,
                   narration: bankDepositDetail.narration ?? undefined,
                 }),
-            fee: bankDepositDetail.feeAmount || undefined,
+            fee: bankDepositDetail.feeAmount != null ? bankDepositDetail.feeAmount : undefined,
             ledgerCreatedAt: bankDepositDetail.ledgerCreatedAt ?? ledgerCreatedAt,
           }
         : stripeInvoiceSettlementDetail
@@ -489,10 +489,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
                 ? stripeInvoiceSettlementDetail.netAmount
                 : undefined,
             postedCurrency: currencyCode,
-            fee:
-              stripeInvoiceSettlementDetail.feeAmount > 0
-                ? stripeInvoiceSettlementDetail.feeAmount
-                : undefined,
+            fee: stripeInvoiceSettlementDetail.feeAmount,
             paymentScheme:
               stripeInvoiceSettlementDetail.paymentMethodText ??
               stripeInvoiceSettlementDetail.paymentMethodLabel ??
@@ -520,8 +517,11 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
             postedCurrency: stablecoinDepositDetail.postedCurrency,
             paymentScheme: stablecoinDepositDetail.schemeLabel,
             // Parity with mobile: surface the deposit fee so the "Processing fee" row
-            // renders in-app and on the receipt (hidden automatically when 0).
-            fee: stablecoinDepositDetail.feeAmount || undefined,
+            // renders in-app and on the receipt (including an explicit $0).
+            fee:
+              stablecoinDepositDetail.feeAmount != null
+                ? stablecoinDepositDetail.feeAmount
+                : undefined,
             ledgerCreatedAt: stablecoinDepositDetail.ledgerCreatedAt ?? ledgerCreatedAt,
           }
         : globalPayoutList

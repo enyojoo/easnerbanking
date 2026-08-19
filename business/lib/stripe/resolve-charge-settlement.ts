@@ -6,7 +6,13 @@ import {
 import type { StripePaymentMethodDisplay } from "@/lib/stripe/parse-payment-method-display"
 
 export type ResolvedChargeSettlement = {
+  /** Stripe processing on the platform charge (`balance_transaction.fee`). */
   feeCents: number
+  /**
+   * Connect application fee kept by the platform. `0` when Easner absorbs.
+   * Null when Stripe did not set `application_fee_amount` on the PaymentIntent.
+   */
+  applicationFeeCents: number | null
   chargeId: string | null
   /** Charge.created as ISO — the paid-at Stripe receipts use. */
   chargedAt: string | null
@@ -14,6 +20,9 @@ export type ResolvedChargeSettlement = {
   paymentMethod: StripePaymentMethodDisplay | null
   transferId: string | null
   connectedAccountId: string | null
+  /** From charge/PM billing details or PaymentIntent.receipt_email. */
+  payerEmail: string | null
+  payerName: string | null
 }
 
 export function paymentMethodIsComplete(pm: StripePaymentMethodDisplay | null): boolean {
@@ -23,6 +32,36 @@ export function paymentMethodIsComplete(pm: StripePaymentMethodDisplay | null): 
     return Boolean(pm.bankName || pm.last4)
   }
   return true
+}
+
+function trimmedNonEmpty(value: unknown): string | null {
+  if (typeof value !== "string") return null
+  const s = value.trim()
+  return s ? s : null
+}
+
+function emailFromUnknown(value: unknown): string | null {
+  const s = trimmedNonEmpty(value)
+  return s && s.includes("@") ? s : null
+}
+
+/** Session webhooks carry email; PI.succeeded usually does not — fall back to the charge. */
+export function payerIdentityFromPaymentIntent(pi: Stripe.PaymentIntent): {
+  payerEmail: string | null
+  payerName: string | null
+} {
+  const charge =
+    typeof pi.latest_charge === "object" && pi.latest_charge ? pi.latest_charge : null
+  const pm =
+    typeof pi.payment_method === "object" && pi.payment_method ? pi.payment_method : null
+  const payerEmail =
+    emailFromUnknown(pi.receipt_email) ||
+    emailFromUnknown(charge && "billing_details" in charge ? charge.billing_details?.email : null) ||
+    emailFromUnknown(pm && "billing_details" in pm ? pm.billing_details?.email : null)
+  const payerName =
+    trimmedNonEmpty(charge && "billing_details" in charge ? charge.billing_details?.name : null) ||
+    trimmedNonEmpty(pm && "billing_details" in pm ? pm.billing_details?.name : null)
+  return { payerEmail, payerName }
 }
 
 function inferPaymentMethodTypeFromSession(types: string[] | null | undefined): string | null {
@@ -56,6 +95,8 @@ export async function resolveFeeAndTransfer(
         ? charge.balance_transaction
         : null
     const feeCents = bt && typeof bt.fee === "number" ? bt.fee : 0
+    const applicationFeeCents =
+      typeof pi.application_fee_amount === "number" ? pi.application_fee_amount : null
 
     let paymentMethod = parsePaymentMethodDisplayFromCharge(charge)
     let paymentMethodType =
@@ -102,25 +143,33 @@ export async function resolveFeeAndTransfer(
           ? new Date(pi.created * 1000).toISOString()
           : null
 
+    const { payerEmail, payerName } = payerIdentityFromPaymentIntent(pi)
+
     return {
       feeCents,
+      applicationFeeCents,
       chargeId,
       chargedAt,
       paymentMethodType,
       paymentMethod,
       transferId,
       connectedAccountId: connectedFromPi || connectedFromMeta,
+      payerEmail,
+      payerName,
     }
   } catch (e) {
     console.warn("[stripe] fee resolve failed:", e)
     return {
       feeCents: 0,
+      applicationFeeCents: null,
       chargeId: null,
       chargedAt: null,
       paymentMethodType: null,
       paymentMethod: null,
       transferId: null,
       connectedAccountId: null,
+      payerEmail: null,
+      payerName: null,
     }
   }
 }

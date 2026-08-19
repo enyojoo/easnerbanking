@@ -130,7 +130,7 @@ describe("buildInboundReceiveDetailRows", () => {
     expect(labels.at(-1)).toBe(REVIEW_ROW_LABELS.when)
   })
 
-  it("Noah VA funding without fee omits amount credited on detail", () => {
+  it("Noah VA funding with a $0 fee still shows the processing fee row", () => {
     const snapshot = resolveInboundReceiveDetail({
       direction: "in",
       provider: "noah",
@@ -145,8 +145,9 @@ describe("buildInboundReceiveDetailRows", () => {
       ledger_created_at: "2026-01-15T12:00:00.000Z",
     })
     expect(snapshot?.kind).toBe("noah_va_funding")
-    expect(snapshot?.processingFee).toBeUndefined()
+    expect(snapshot?.processingFee).toEqual({ amount: 0, currency: "USD" })
     const map = rowMap(buildInboundReceiveDetailRows(snapshot!, { surface: "detail" }))
+    expect(map[REVIEW_ROW_LABELS.processingFee]).toMatch(/^\$0/)
     expect(map[REVIEW_ROW_LABELS.amountCredited]).toBeUndefined()
   })
 
@@ -239,8 +240,9 @@ describe("buildInboundReceiveDetailRows", () => {
       posted_currency: "USD",
       created_at: "2026-01-15T12:00:00.000Z",
     })
-    expect(snapshot?.processingFee).toBeUndefined()
+    expect(snapshot?.processingFee).toEqual({ amount: 0, currency: "USD" })
     const map = rowMap(buildInboundReceiveDetailRows(snapshot!, { surface: "detail" }))
+    expect(map[REVIEW_ROW_LABELS.processingFee]).toMatch(/^\$0/)
     expect(map[REVIEW_ROW_LABELS.amountCredited]).toBeUndefined()
   })
 

@@ -45,7 +45,11 @@ const LINK_ID = "44444444-4444-4444-8444-444444444444"
 
 type Recorded = { table: string; op: string; payload: Record<string, unknown> }
 
-function mockAdmin(opts?: { existingSettlement?: boolean; sessionMetadata?: Record<string, unknown> }) {
+function mockAdmin(opts?: {
+  existingSettlement?: boolean
+  sessionMetadata?: Record<string, unknown>
+  ledgerMetadata?: Record<string, unknown>
+}) {
   const writes: Recorded[] = []
 
   const admin = {
@@ -54,7 +58,12 @@ function mockAdmin(opts?: { existingSettlement?: boolean; sessionMetadata?: Reco
         eq: () => ({
           maybeSingle: async () => {
             if (table === "checkout_stripe_settlements" && opts?.existingSettlement) {
-              return { data: { id: SETTLEMENT_ID, phase: "payment_received" } }
+              return { data: { id: SETTLEMENT_ID, phase: "payment_received", ledger_transaction_id: "ledger_1" } }
+            }
+            if (table === "transactions") {
+              return {
+                data: { metadata: opts?.ledgerMetadata ?? { source: "checkout_stripe" } },
+              }
             }
             if (table === "online_checkout_sessions") {
               return {
@@ -132,6 +141,7 @@ describe("payment link settlement", () => {
       id: "pi_test_1",
       metadata: { easner_stripe_connected_account_id: "acct_123" },
       transfer_data: { destination: "acct_123" },
+      application_fee_amount: 320,
       latest_charge: {
         id: "ch_test_1",
         created: Math.floor(Date.parse("2026-08-18T23:00:37.000Z") / 1000),
@@ -263,5 +273,89 @@ describe("payment link settlement", () => {
       }),
     )
     expect(deliverCheckoutPayerReceiptEmail).not.toHaveBeenCalled()
+  })
+
+  it("stores charge billing email when payment_intent.succeeded arrives before the session webhook", async () => {
+    paymentIntentsRetrieve.mockResolvedValue({
+      id: "pi_test_1",
+      metadata: { easner_stripe_connected_account_id: "acct_123" },
+      transfer_data: { destination: "acct_123" },
+      latest_charge: {
+        id: "ch_test_1",
+        created: Math.floor(Date.parse("2026-08-19T00:04:08.000Z") / 1000),
+        transfer: "tr_test_1",
+        balance_transaction: { fee: 0 },
+        billing_details: { email: "card-payer@example.com", name: "Card Payer" },
+        payment_method_details: { type: "card", card: { brand: "visa", last4: "0736" } },
+      },
+    })
+    const { admin } = mockAdmin()
+    const event = paymentLinkSessionEvent()
+    event.id = "evt_3U5wzCFtxW9Zk3ZB0Ms7EjkX"
+    event.type = "payment_intent.succeeded"
+    event.data = {
+      object: {
+        id: "pi_test_1",
+        amount: 100,
+        amount_received: 100,
+        currency: "usd",
+        metadata: (event.data.object as { metadata: Record<string, string> }).metadata,
+      },
+    } as Stripe.Event["data"]
+
+    const result = await handleStripeCheckoutCompleted(admin, event)
+    expect(result.handled).toBe(true)
+    const ledgerArgs = upsertLedgerTransaction.mock.calls[0][1]
+    expect(ledgerArgs.metadata).toMatchObject({
+      customer_email: "card-payer@example.com",
+      customer_name: "Card Payer",
+    })
+    expect(deliverCheckoutPayerReceiptEmail).not.toHaveBeenCalled()
+  })
+
+  it("backfills ledger email when checkout.session.completed follows payment_intent.succeeded", async () => {
+    const { admin, writes } = mockAdmin({
+      existingSettlement: true,
+      ledgerMetadata: { source: "checkout_stripe", headline: "Payment link — Donations" },
+    })
+
+    const result = await handleStripeCheckoutCompleted(admin, paymentLinkSessionEvent())
+    expect(result.handled).toBe(true)
+
+    const txUpdate = writes.find((w) => w.table === "transactions" && w.op === "update")
+    expect(txUpdate?.payload.metadata).toMatchObject({
+      source: "checkout_stripe",
+      customer_email: "buyer@example.com",
+      customer_name: "Buyer",
+    })
+  })
+
+  it("credits the listed amount when Easner absorbs (application fee 0)", async () => {
+    paymentIntentsRetrieve.mockResolvedValue({
+      id: "pi_test_1",
+      application_fee_amount: 0,
+      metadata: { easner_stripe_connected_account_id: "acct_123" },
+      transfer_data: { destination: "acct_123" },
+      latest_charge: {
+        id: "ch_test_1",
+        created: Math.floor(Date.parse("2026-08-19T00:04:08.000Z") / 1000),
+        transfer: "tr_test_1",
+        balance_transaction: { fee: 33 },
+        payment_method_details: { type: "card", card: { brand: "visa", last4: "0736" } },
+      },
+    })
+    const { admin } = mockAdmin()
+    const event = paymentLinkSessionEvent()
+    ;(event.data.object as { amount_total: number }).amount_total = 100
+
+    const result = await handleStripeCheckoutCompleted(admin, event)
+    expect(result.handled).toBe(true)
+    const ledgerArgs = upsertLedgerTransaction.mock.calls[0][1]
+    expect(ledgerArgs.amount).toBe(1)
+    expect(ledgerArgs.metadata).toMatchObject({
+      fee_cents: 0,
+      net_cents: 100,
+      gross_cents: 100,
+    })
   })
 })

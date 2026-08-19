@@ -142,7 +142,7 @@ export async function GET() {
             var payment = checkout.createPaymentElement({
               fields: {
                 billingDetails: { name: "always", email: "never" },
-                card: { billingDetails: { name: "always" } },
+                card: { billingDetails: { name: "always", email: "never" } },
               },
               defaultValues: mountName ? { billingDetails: { name: mountName } } : undefined,
             });

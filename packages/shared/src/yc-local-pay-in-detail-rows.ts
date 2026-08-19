@@ -3,7 +3,7 @@ import { formatReviewRowMoneyDisplay } from "./format-review-row-money"
 import { formatSendRateLabel } from "./format-exchange-rate"
 import { formatPayoutRecipientSubtitle } from "./payout-recipient-subtitle"
 import { computeFootedDisplayProcessingFee } from "./payout-processing-fee"
-import { isPayoutReviewFeeVisible } from "./payout-review-display"
+import { isPayoutReviewFeeVisible, pickVisibleProcessingFee } from "./payout-review-display"
 import { hasPayoutCrossCurrencyFx } from "./payout-review-display"
 import {
   REVIEW_ROW_LABELS,
@@ -54,10 +54,7 @@ export function buildCrossBorderSendDetailRows(input: {
   const principalLocal = resolveCrossBorderPrincipalLocalPayIn(payoutReview)
   const amountPaid = payoutReview.total_debited
   const preciseFeeLocal =
-    payoutReview.display_processing_fee_local != null &&
-    payoutReview.display_processing_fee_local > 0
-      ? payoutReview.display_processing_fee_local
-      : displayProcessingFee
+    pickVisibleProcessingFee(payoutReview.display_processing_fee_local) ?? displayProcessingFee
   const feeLocal = computeFootedDisplayProcessingFee({
     sendingAmount: principalLocal,
     totalDebited: amountPaid,
