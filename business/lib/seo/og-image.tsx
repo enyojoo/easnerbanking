@@ -37,21 +37,15 @@ export interface OgImageContent {
 }
 
 async function loadAsset(url: URL, fallbackRel: string): Promise<Buffer> {
+  const candidates: string[] = []
   try {
-    return await readFile(fileURLToPath(url))
+    candidates.push(fileURLToPath(url))
   } catch {
-    // fall through
+    // webpack may emit a non-file URL; fall through to cwd copies
   }
-
-  try {
-    const res = await fetch(url)
-    if (res.ok) return Buffer.from(await res.arrayBuffer())
-  } catch {
-    // fall through
-  }
-
   const cwd = process.cwd()
-  const candidates = [join(cwd, fallbackRel), join(cwd, "business", fallbackRel)]
+  candidates.push(join(cwd, fallbackRel), join(cwd, "business", fallbackRel))
+
   for (const path of candidates) {
     try {
       return await readFile(path)
