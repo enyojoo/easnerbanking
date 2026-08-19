@@ -4,6 +4,7 @@ import {
   extractNoahGlobalPayoutPayOutEnrichment,
   extractNoahRefundHintsFromOrchestrationIn,
   inboundMatchesGlobalPayoutRefundAmount,
+  isGlobalPayoutOutRow,
   isNoahGlobalPayoutOrchestrationInLeg,
   isNoahGlobalPayoutOrchestrationInLegShape,
   isNoahGlobalPayoutRefundOutLeg,
@@ -241,6 +242,23 @@ describe("pickRefundAmountCandidatesFromGlobalPayoutMeta", () => {
     expect(candidates[0]).toBeCloseTo(1.99993, 6)
     expect(candidates[candidates.length - 1]).toBeCloseTo(2.014657, 6)
     expect(inboundMatchesGlobalPayoutRefundAmount(1.99993, meta, 1.99)).toBe(true)
+  })
+
+  it("matches a Grid refund amount from grid_refund_amount", () => {
+    const meta = {
+      grid_refund_amount: 1.5,
+      crypto_authorized_amount: "1.501175",
+      total_debited: 1.56,
+    }
+    expect(inboundMatchesGlobalPayoutRefundAmount(1.5, meta, 1.56)).toBe(true)
+  })
+})
+
+describe("isGlobalPayoutOutRow", () => {
+  it("recognizes Grid balance payouts even without payout_type on older rows", () => {
+    expect(isGlobalPayoutOutRow({ grid_mode: "balance_payout", payout_provider: "grid" })).toBe(
+      true,
+    )
   })
 })
 

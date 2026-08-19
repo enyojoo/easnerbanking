@@ -1,8 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { gridFetch } from "./http"
+import { isSuccessfulGridTransactionStatus } from "./webhook-status"
+
+function asMeta(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? { ...(value as Record<string, unknown>) } : {}
+}
 
 /**
  * Confirm receipt delivery to Grid after SendGrid succeeds.
+ * Never confirm a failed or refunded Grid payout.
  * @see https://docs.lightspark.com/payouts-and-b2b/payment-flow/receipts
  */
 export async function confirmGridReceiptDelivery(input: {
@@ -17,12 +23,24 @@ export async function confirmGridReceiptDelivery(input: {
     return { confirmed: false, skipped: true }
   }
 
-  const meta =
-    input.metadata && typeof input.metadata === "object"
-      ? { ...input.metadata }
-      : ({} as Record<string, unknown>)
-
+  const meta = asMeta(input.metadata)
   if (typeof meta.grid_receipt_delivered_at === "string" && meta.grid_receipt_delivered_at.trim()) {
+    return { confirmed: false, skipped: true }
+  }
+  if (
+    meta.grid_refund_expected === true ||
+    String(meta.failure_reason ?? "").trim() ||
+    String(meta.grid_webhook_status ?? "").toUpperCase().includes("FAIL") ||
+    String(meta.grid_webhook_status ?? "").toUpperCase().includes("REFUND")
+  ) {
+    return { confirmed: false, skipped: true }
+  }
+
+  const remote = await gridFetch<{ status?: string }>({
+    method: "GET",
+    path: `/transactions/${encodeURIComponent(gridTransactionId)}`,
+  })
+  if (!isSuccessfulGridTransactionStatus(remote?.status)) {
     return { confirmed: false, skipped: true }
   }
 

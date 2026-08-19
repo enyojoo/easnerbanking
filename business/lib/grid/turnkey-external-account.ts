@@ -2,11 +2,12 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { gridFetch } from "./http"
 import { buildGridIdempotencyKey } from "./idempotency"
 import { normalizeGridCustomerId } from "./quote-request"
-import { getTurnkeyDepositAddressesForBusiness } from "@/lib/wallet/turnkey-deposit-addresses"
+import { getTurnkeyDepositAddressesForBusiness, getTurnkeyDepositAddressesForContext } from "@/lib/wallet/turnkey-deposit-addresses"
+import { noahCustomerIdFromUserId } from "@/lib/noah/customer-id"
 import type { GridExternalAccount } from "./types"
 
 export function buildTurnkeyUsdcExternalAccountPayload(input: {
-  businessId: string
+  platformAccountId: string
   gridCustomerId: string
   solanaAddress: string
 }): {
@@ -19,7 +20,7 @@ export function buildTurnkeyUsdcExternalAccountPayload(input: {
   return {
     customerId: normalizeGridCustomerId(input.gridCustomerId),
     currency: "USDC",
-    platformAccountId: `turnkey_sol_usdc_${input.businessId}`,
+    platformAccountId: input.platformAccountId,
     ownershipType: "FIRST_PARTY",
     accountInfo: {
       accountType: "SOLANA_WALLET",
@@ -38,26 +39,39 @@ function accountInfoAddress(row: GridExternalAccount): string {
 /** Register customer Turnkey Solana USDC as Grid external account (settlement destination). */
 export async function registerTurnkeyUsdcExternalAccount(input: {
   admin: SupabaseClient
-  businessId: string
+  businessId?: string | null
   userId: string
   gridCustomerId: string
 }): Promise<string | null> {
-  void input.userId
-  const deposits = await getTurnkeyDepositAddressesForBusiness(input.admin, input.businessId, {
-    mode: "fast",
-  })
+  const businessId = String(input.businessId ?? "").trim()
+  const deposits = businessId
+    ? await getTurnkeyDepositAddressesForBusiness(input.admin, businessId, { mode: "fast" })
+    : await getTurnkeyDepositAddressesForContext(
+        input.admin,
+        {
+          scope: "individual",
+          customerType: "Individual",
+          subjectBusinessId: null,
+          subjectUserId: input.userId,
+          noahCustomerId: noahCustomerIdFromUserId(input.userId),
+        },
+        { mode: "fast" },
+      )
   const vaultPubkey = String(deposits?.USD?.ownerAddress ?? "").trim()
   const ata = String(deposits?.USD?.address ?? "").trim()
   const preferred = vaultPubkey || ata
   if (!preferred) {
     console.warn("[grid] turnkey USDC external account skipped: no Solana vault", {
-      businessId: input.businessId,
+      businessId: businessId || null,
+      userId: input.userId,
     })
     return null
   }
 
   const customerId = normalizeGridCustomerId(input.gridCustomerId)
-  const platformAccountId = `turnkey_sol_usdc_${input.businessId}`
+  const platformAccountId = businessId
+    ? `turnkey_sol_usdc_${businessId}`
+    : `turnkey_sol_usdc_user_${input.userId}`
   const existing = await gridFetch<{ data?: GridExternalAccount[] }>({
     method: "GET",
     path: `/customers/external-accounts?customerId=${encodeURIComponent(customerId)}&limit=100`,
@@ -77,7 +91,7 @@ export async function registerTurnkeyUsdcExternalAccount(input: {
   let lastError: unknown = null
   for (const address of candidates) {
     const payload = buildTurnkeyUsdcExternalAccountPayload({
-      businessId: input.businessId,
+      platformAccountId,
       gridCustomerId: customerId,
       solanaAddress: address,
     })
@@ -86,7 +100,7 @@ export async function registerTurnkeyUsdcExternalAccount(input: {
         method: "POST",
         path: "/customers/external-accounts",
         json: payload,
-        idempotencyKey: buildGridIdempotencyKey(`grid_turnkey_sol_usdc_${input.businessId}`, payload),
+        idempotencyKey: buildGridIdempotencyKey(`grid_turnkey_sol_usdc_${platformAccountId}`, payload),
       })
       if (created.id) return created.id
     } catch (e) {
@@ -103,7 +117,7 @@ export async function registerTurnkeyUsdcExternalAccount(input: {
         if (found?.id) return found.id
       }
       console.warn("[grid] register Turnkey USDC external account failed", {
-        businessId: input.businessId,
+        platformAccountId,
         address,
         error: e instanceof Error ? e.message : e,
       })

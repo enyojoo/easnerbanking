@@ -7,7 +7,7 @@ describe("buildTurnkeyUsdcExternalAccountPayload", () => {
   it("registers the vault pubkey as first-party Solana USDC", () => {
     expect(
       buildTurnkeyUsdcExternalAccountPayload({
-        businessId: "biz-1",
+        platformAccountId: "turnkey_sol_usdc_biz-1",
         gridCustomerId: "Customer:abc",
         solanaAddress: "VaultPubkey111",
       }),

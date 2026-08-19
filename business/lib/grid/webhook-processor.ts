@@ -1,11 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
-import { mergeGridPayoutLifecycle } from "./grid-ledger"
+import { reverseGlobalPayoutWalletDebitForEasnerPayoutId } from "@/lib/noah/global-payout-ledger"
+import { buildGridRefundExpectedPatch, mergeGridPayoutLifecycle } from "./grid-ledger"
+import { gridMoneyToMajor } from "./webhook-amount"
 import type { GridWebhookEvent } from "./types"
 import {
   gridWebhookQuoteId,
   gridWebhookTransactionId,
 } from "./webhook-event-id"
+import { classifyGridOutgoingPayoutWebhook } from "./webhook-status"
+
+export { classifyGridOutgoingPayoutWebhook } from "./webhook-status"
 
 function eventType(payload: GridWebhookEvent): string {
   return String(payload.eventType ?? payload.type ?? "").trim().toUpperCase()
@@ -41,16 +46,10 @@ export async function handleGridBalancePayoutWebhook(
   if (!transfer?.transaction_id) return { handled: false }
 
   const status = String(input.status ?? input.event.data?.status ?? "").toUpperCase()
-  const terminalSuccess =
-    status.includes("COMPLETED") ||
-    eventType(input.event).includes("OUTGOING_PAYMENT.COMPLETED") ||
-    eventType(input.event).includes("COMPLETED")
-  const terminalFailed =
-    status.includes("FAILED") ||
-    eventType(input.event).includes("OUTGOING_PAYMENT.FAILED") ||
-    eventType(input.event).includes("FAILED")
-
-  const txStatus = terminalSuccess ? "settled" : terminalFailed ? "failed" : "pending"
+  const type = eventType(input.event)
+  const txStatus = classifyGridOutgoingPayoutWebhook({ eventType: type, status })
+  const terminalSuccess = txStatus === "settled"
+  const terminalFailed = txStatus === "failed"
   const now = new Date().toISOString()
 
   await admin
@@ -74,12 +73,20 @@ export async function handleGridBalancePayoutWebhook(
 
   const prior =
     tx.metadata && typeof tx.metadata === "object" ? (tx.metadata as Record<string, unknown>) : {}
-  const metadata = mergeGridPayoutLifecycle(prior, {
-    grid_webhook_status: status || eventType(input.event),
+  const sent = gridMoneyToMajor(webhookData(input.event)?.sentAmount)
+  let metadata = mergeGridPayoutLifecycle(prior, {
+    grid_webhook_status: status || type,
     grid_transaction_id: input.transactionId,
     settled_at: terminalSuccess ? now : undefined,
-    failure_reason: terminalFailed ? String(input.event.data?.failureReason ?? status) : undefined,
+    failure_reason: terminalFailed
+      ? String(input.event.data?.failureReason ?? status)
+      : undefined,
   })
+  if (terminalFailed) {
+    metadata = buildGridRefundExpectedPatch(metadata, {
+      refundAmount: sent && sent.amount > 0 ? sent.amount : null,
+    })
+  }
 
   await upsertLedgerTransaction(admin, {
     userId: String(tx.user_id),
@@ -94,6 +101,33 @@ export async function handleGridBalancePayoutWebhook(
     baseCurrency: "USD",
     asset: "USDC",
   })
+
+  if (terminalFailed) {
+    const easnerPayoutId = String(metadata.easner_payout_id ?? prior.easner_payout_id ?? "").trim()
+    if (easnerPayoutId) {
+      await reverseGlobalPayoutWalletDebitForEasnerPayoutId(admin, { easnerPayoutId }).catch(() => {})
+    }
+    const customerId = String(prior.grid_customer_id ?? metadata.grid_customer_id ?? "").trim()
+    if (easnerPayoutId && customerId) {
+      const { startGridPayoutRefundTurnkeySweep } = await import("./payout-refund-sweep")
+      await startGridPayoutRefundTurnkeySweep(admin, {
+        userId: String(tx.user_id),
+        businessId: tx.business_id ? String(tx.business_id) : null,
+        customerId,
+        easnerPayoutId,
+        payoutLedgerTransactionId: String(tx.id),
+        failedGridTransactionId: String(
+          input.transactionId ?? gridWebhookTransactionId(webhookData(input.event)) ?? "",
+        ).trim(),
+        requestedAmountUsdc: sent && sent.amount > 0 ? sent.amount : Number(prior.crypto_authorized_amount ?? 0),
+      }).catch((e) => {
+        console.warn(
+          "[grid] payout refund sweep enqueue failed:",
+          e instanceof Error ? e.message : e,
+        )
+      })
+    }
+  }
 
   return { handled: true }
 }
@@ -125,11 +159,14 @@ export async function handleGridCrossBorderSendWebhook(
   const type = eventType(input.event)
   const incomingComplete =
     type.includes("INCOMING_PAYMENT.COMPLETED") ||
-    (status.includes("COMPLETED") && type.includes("INCOMING"))
+    (status.includes("COMPLETED") && type.includes("INCOMING") && !type.includes("REFUND"))
   const outgoingComplete =
-    type.includes("OUTGOING_PAYMENT.COMPLETED") ||
-    (status.includes("COMPLETED") && type.includes("OUTGOING"))
-  const terminalFailed = status.includes("FAILED") || type.includes("FAILED")
+    type.includes("OUTGOING_PAYMENT.COMPLETED") && !type.includes("REFUND")
+  const terminalFailed =
+    type.includes("REFUND") ||
+    status.includes("FAILED") ||
+    type.includes("OUTGOING_PAYMENT.FAILED") ||
+    type.includes("FAILED")
 
   const now = new Date().toISOString()
   let txStatus = "pending"
@@ -201,10 +238,10 @@ export async function handleGridFundBalanceWebhook(
   if (!transfer?.transaction_id) return { handled: false }
 
   const status = String(input.status ?? input.event.data?.status ?? "").toUpperCase()
+  const type = eventType(input.event)
   const terminalSuccess =
-    status.includes("COMPLETED") ||
-    eventType(input.event).includes("INCOMING_PAYMENT.COMPLETED") ||
-    eventType(input.event).includes("COMPLETED")
+    type.includes("INCOMING_PAYMENT.COMPLETED") ||
+    (status === "COMPLETED" && type.includes("INCOMING") && !type.includes("REFUND"))
 
   if (!terminalSuccess) return { handled: true }
 
@@ -240,6 +277,9 @@ export async function applyGridWebhookSideEffects(
     const { settleGridVaTurnkeySweepFromOutgoing } = await import("./va-turnkey-sweep")
     const sweep = await settleGridVaTurnkeySweepFromOutgoing(admin, { event })
     if (sweep.handled) return
+    const { settleGridPayoutRefundSweepFromOutgoing } = await import("./payout-refund-sweep")
+    const refundSweep = await settleGridPayoutRefundSweepFromOutgoing(admin, { event })
+    if (refundSweep.handled) return
     await handleGridBalancePayoutWebhook(admin, { event, quoteId, transactionId, status })
     return
   }

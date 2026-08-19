@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   findPendingGridSweep: vi.fn(),
   reconcileGridVa: vi.fn(),
   settleGridSweep: vi.fn(),
+  findPendingGridRefundSweep: vi.fn(),
+  settleGridRefundSweep: vi.fn(),
 }))
 
 vi.mock("@/lib/noah/noah-bank-onramp-chain-suppression", () => ({
@@ -80,6 +82,10 @@ vi.mock("@/lib/grid/va-turnkey-sweep", () => ({
   findPendingGridVaTurnkeySweepForInboundAmount: mocks.findPendingGridSweep,
   settleGridVaTurnkeySweepForSolanaTx: mocks.settleGridSweep,
 }))
+vi.mock("@/lib/grid/payout-refund-sweep", () => ({
+  findPendingGridPayoutRefundSweepForInboundAmount: mocks.findPendingGridRefundSweep,
+  settleGridPayoutRefundSweepForSolanaTx: mocks.settleGridRefundSweep,
+}))
 vi.mock("@/lib/turnkey/ledger-inbound-exists", () => ({
   turnkeyInboundLedgerRowExists: vi.fn().mockResolvedValue(false),
 }))
@@ -140,6 +146,8 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     mocks.findPendingGridSweep.mockResolvedValue(null)
     mocks.reconcileGridVa.mockResolvedValue({ credited: false })
     mocks.settleGridSweep.mockResolvedValue(undefined)
+    mocks.findPendingGridRefundSweep.mockResolvedValue(null)
+    mocks.settleGridRefundSweep.mockResolvedValue(undefined)
   })
 
   it("suppresses relay Tron vault inbound and reconciles relay credit", async () => {

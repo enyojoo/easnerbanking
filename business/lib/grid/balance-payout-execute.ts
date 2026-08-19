@@ -1,5 +1,6 @@
 /**
- * Execute Grid balance_payout: debit wallet → Turnkey USDC → Grid funding address → execute quote.
+ * Execute Grid balance_payout: debit wallet → Turnkey USDC → Grid funding address.
+ * REALTIME_FUNDING quotes auto-execute once the funding address is fully funded.
  */
 import { randomUUID } from "crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
@@ -7,6 +8,8 @@ import { generateTransactionId } from "@/lib/transaction-id"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import {
   applyGlobalPayoutWalletDebitForEasnerPayoutId,
+  findGlobalPayoutNoahRowByEasnerPayoutId,
+  pendingGlobalPayoutProviderTransactionId,
   reverseGlobalPayoutWalletDebitForEasnerPayoutId,
 } from "@/lib/noah/global-payout-ledger"
 import { resolveNoahAccountContextFromLedgerScope } from "@/lib/processing-fee/capture-pending-processing-fee"
@@ -22,10 +25,8 @@ import {
 } from "@/lib/payout/payout-lock-session"
 import { hashRecipientSnapshot } from "@/lib/payout/recipient-snapshot-hash"
 import { isPayoutLockOnReviewEnabled } from "@/lib/payout/payout-lock-flags"
-import { gridFetch } from "@/lib/grid/http"
 import { executeGridBalancePayoutTurnkeyLeg } from "@/lib/grid/payout-execute"
 import { buildGridBalancePayoutOutMetadata, mergeGridPayoutLifecycle } from "@/lib/grid/grid-ledger"
-import type { GridQuote } from "@/lib/grid/types"
 
 async function readAvailableBalance(
   admin: SupabaseClient,
@@ -37,10 +38,6 @@ async function readAvailableBalance(
   const { data, error } = await q.maybeSingle()
   if (error) return { available: 0, err: error.message }
   return { available: Number(data?.available_balance ?? 0) }
-}
-
-function gridPendingPayoutProviderTransactionId(easnerPayoutId: string): string {
-  return `grid_payout_pending_${easnerPayoutId}`
 }
 
 export type ExecuteGridBalancePayoutInput = {
@@ -212,10 +209,11 @@ export async function executeGridBalancePayout(
     sendNote,
     idempotencyKey,
     fundingAddress,
+    cryptoAuthorizedAmount: cryptoAmount,
     pricing: input.pricing,
   })
 
-  const pendingPtid = gridPendingPayoutProviderTransactionId(easnerPayoutId)
+  const pendingPtid = pendingGlobalPayoutProviderTransactionId(easnerPayoutId)
   const upsert = await upsertLedgerTransaction(admin, {
     userId,
     businessId,
@@ -268,6 +266,10 @@ export async function executeGridBalancePayout(
 
   try {
     await applyGlobalPayoutWalletDebitForEasnerPayoutId(admin, { easnerPayoutId })
+    const debited = await findGlobalPayoutNoahRowByEasnerPayoutId(admin, easnerPayoutId)
+    if (debited?.metadata.balance_delta_applied !== true) {
+      throw new Error("wallet_debit_failed")
+    }
   } catch (e) {
     const debitError = e instanceof Error ? e.message : "wallet_debit_failed"
     await upsertLedgerTransaction(admin, {
@@ -320,16 +322,8 @@ export async function executeGridBalancePayout(
     return { ok: false, error: chainSend.error || "Grid funding transfer failed." }
   }
 
-  try {
-    await gridFetch<GridQuote>({
-      method: "POST",
-      path: `/quotes/${encodeURIComponent(quoteId)}/execute`,
-      idempotencyKey: idempotencyKey || easnerPayoutId,
-    })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "grid_execute_failed"
-    console.warn("[grid] quote execute after fund (non-fatal if JIT auto-executes):", msg)
-  }
+  // REALTIME_FUNDING quotes auto-execute once the funding address is fully funded.
+  // Posting /execute before confirmation races Grid and is not required.
 
   if (lockId) {
     await markPayoutLockSessionExecuted(admin, lockId).catch(() => {})

@@ -42,7 +42,7 @@ describe("confirmGridReceiptDelivery", () => {
   })
 
   it("POSTs confirm and stamps metadata", async () => {
-    mockGridFetch.mockResolvedValueOnce({})
+    mockGridFetch.mockResolvedValueOnce({ status: "COMPLETED" }).mockResolvedValueOnce({})
     const eq = vi.fn().mockResolvedValue({ error: null })
     const update = vi.fn().mockReturnValue({ eq })
     const admin = { from: vi.fn(() => ({ update })) }
@@ -57,6 +57,10 @@ describe("confirmGridReceiptDelivery", () => {
 
     expect(result).toEqual({ confirmed: true, skipped: false })
     expect(mockGridFetch).toHaveBeenCalledWith({
+      method: "GET",
+      path: "/transactions/Transaction%3Aabc",
+    })
+    expect(mockGridFetch).toHaveBeenCalledWith({
       method: "POST",
       path: "/transactions/Transaction%3Aabc/confirm",
       json: { receiptDeliveryConfirmedAt: "2026-08-12T12:00:00.000Z" },
@@ -68,5 +72,27 @@ describe("confirmGridReceiptDelivery", () => {
         }),
       }),
     )
+  })
+
+  it("skips confirm when Grid says the payout failed", async () => {
+    mockGridFetch.mockResolvedValueOnce({ status: "FAILED" })
+    const result = await confirmGridReceiptDelivery({
+      admin: { from: vi.fn() } as never,
+      ledgerTransactionId: "tx-1",
+      gridTransactionId: "Transaction:abc",
+    })
+    expect(result).toEqual({ confirmed: false, skipped: true })
+    expect(mockGridFetch).toHaveBeenCalledTimes(1)
+  })
+
+  it("skips confirm when ledger metadata already marks a refund", async () => {
+    const result = await confirmGridReceiptDelivery({
+      admin: { from: vi.fn() } as never,
+      ledgerTransactionId: "tx-1",
+      gridTransactionId: "Transaction:abc",
+      metadata: { grid_refund_expected: true, failure_reason: "QUOTE_EXECUTION_FAILED" },
+    })
+    expect(result).toEqual({ confirmed: false, skipped: true })
+    expect(mockGridFetch).not.toHaveBeenCalled()
   })
 })

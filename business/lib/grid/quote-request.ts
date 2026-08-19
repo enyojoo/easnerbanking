@@ -24,7 +24,7 @@ type GridInternalAccountRow = {
   id: string
   status?: string
   type?: string
-  balance?: { currency?: { code?: string } }
+  balance?: { amount?: number; currency?: { code?: string; decimals?: number } }
 }
 
 export function normalizeGridCustomerId(customerId: string): string {
@@ -60,6 +60,12 @@ export function resolveGridCurrencyDecimals(
   const code = String(currency?.code ?? "").trim().toUpperCase()
   if (code === "USDC" || code === "USDT") return 6
   return 2
+}
+
+/** Keep USDC quote send amounts at 6 decimals so Turnkey does not underfund Grid. */
+export function quantizeGridUsdcMajor(amount: number): number {
+  if (!Number.isFinite(amount) || amount <= 0) return 0
+  return Math.round(amount * 1_000_000) / 1_000_000
 }
 
 export function gridQuoteSendingAmountMajor(quote: Pick<GridQuote, "totalSendingAmount" | "sendingCurrency">): number | null {
@@ -146,6 +152,28 @@ export async function resolveGridCustomerInternalAccountId(input: {
   return pickGridInternalAccountForCurrency(rows, currency)
 }
 
+export async function loadGridCustomerInternalAccount(input: {
+  customerId: string
+  currency: string
+}): Promise<{ id: string; balanceMajor: number } | null> {
+  const customerId = normalizeGridCustomerId(input.customerId)
+  const currency = normalizeGridCurrency(input.currency)
+  if (!customerId || !currency) return null
+
+  const rows = await gridFetchAllPages<GridInternalAccountRow>({
+    path: "/customers/internal-accounts",
+    query: { customerId, currency },
+    mapPage: (page) => page.data ?? [],
+  })
+  const id = pickGridInternalAccountForCurrency(rows, currency)
+  if (!id) return null
+  const row = rows.find((candidate) => String(candidate.id ?? "").trim() === id)
+  const decimals = resolveGridCurrencyDecimals(row?.balance?.currency)
+  const minor = Number(row?.balance?.amount ?? 0)
+  const balanceMajor = Number.isFinite(minor) ? gridMajorUnits(minor, decimals) : 0
+  return { id, balanceMajor }
+}
+
 /** Balance payout: debit USDC via realtime funding → fiat external account. */
 export function buildGridBalancePayoutQuoteBody(input: {
   customerId: string
@@ -199,6 +227,15 @@ export function buildGridVaTurnkeySweepQuoteBody(input: {
     immediatelyExecute: true,
     purposeOfPayment: "SELF" as const,
   }
+}
+
+/** Failed payout refund: debit INTERNAL_CRYPTO USDC → first-party Turnkey Solana USDC. */
+export function buildGridUsdcRefundSweepQuoteBody(input: {
+  sourceInternalAccountId: string
+  turnkeyExternalAccountId: string
+  lockedSendMinor: number
+}) {
+  return buildGridVaTurnkeySweepQuoteBody(input)
 }
 
 /** Cross-border send: local currency pay-in → recipient external account. */

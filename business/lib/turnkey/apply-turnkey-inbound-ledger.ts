@@ -23,6 +23,10 @@ import {
   findPendingGridVaTurnkeySweepForInboundAmount,
   settleGridVaTurnkeySweepForSolanaTx,
 } from "@/lib/grid/va-turnkey-sweep"
+import {
+  findPendingGridPayoutRefundSweepForInboundAmount,
+  settleGridPayoutRefundSweepForSolanaTx,
+} from "@/lib/grid/payout-refund-sweep"
 import { tryCompleteDepositSplitFromUserVaultInbound } from "@/lib/deposit-omnibus/execute-deposit-split"
 import { tryCompleteYcFundBalanceFromUserVaultInbound } from "@/lib/yellowcard/execute-yc-fund-balance-split"
 import { isDepositSplitEnabled } from "@/lib/deposit-omnibus/config"
@@ -219,6 +223,57 @@ export async function applyTurnkeyInboundLedgerEvent(
       return { kind: "suppressed_noah" }
     }
 
+    const refundSuppressed = await findGlobalPayoutRefundForInboundSuppression(admin, {
+      txHash,
+      userId,
+      businessId,
+      amount: input.amount,
+      currency: input.currency,
+    })
+    if (refundSuppressed) {
+      if (txHash) {
+        await persistGlobalPayoutRefundTxHashOnOutRow(admin, {
+          outRowId: refundSuppressed.outRowId,
+          txHash,
+        }).catch(() => {})
+        const pendingRefundSweep = await findPendingGridPayoutRefundSweepForInboundAmount(admin, {
+          userId,
+          businessId,
+          amount: input.amount,
+          currency: input.currency,
+        }).catch(() => null)
+        if (pendingRefundSweep) {
+          await settleGridPayoutRefundSweepForSolanaTx(admin, {
+            transferId: pendingRefundSweep.transferId,
+            solanaTxHash: txHash,
+          }).catch(() => {})
+        }
+      }
+      return { kind: "suppressed_noah" }
+    }
+
+    const pendingRefundSweep = await findPendingGridPayoutRefundSweepForInboundAmount(admin, {
+      userId,
+      businessId,
+      amount: input.amount,
+      currency: input.currency,
+    })
+    if (pendingRefundSweep) {
+      if (txHash) {
+        await settleGridPayoutRefundSweepForSolanaTx(admin, {
+          transferId: pendingRefundSweep.transferId,
+          solanaTxHash: txHash,
+        }).catch(() => {})
+        if (pendingRefundSweep.payoutLedgerTransactionId) {
+          await persistGlobalPayoutRefundTxHashOnOutRow(admin, {
+            outRowId: pendingRefundSweep.payoutLedgerTransactionId,
+            txHash,
+          }).catch(() => {})
+        }
+      }
+      return { kind: "suppressed_noah" }
+    }
+
     const pendingGridVa = await findPendingGridVaBankDepositForInboundAmount(admin, {
       userId,
       businessId,
@@ -264,23 +319,6 @@ export async function applyTurnkeyInboundLedgerEvent(
         await settleGridVaTurnkeySweepForSolanaTx(admin, {
           transferId: pendingSweep.transferId,
           solanaTxHash: txHash,
-        }).catch(() => {})
-      }
-      return { kind: "suppressed_noah" }
-    }
-
-    const refundSuppressed = await findGlobalPayoutRefundForInboundSuppression(admin, {
-      txHash,
-      userId,
-      businessId,
-      amount: input.amount,
-      currency: input.currency,
-    })
-    if (refundSuppressed) {
-      if (txHash) {
-        await persistGlobalPayoutRefundTxHashOnOutRow(admin, {
-          outRowId: refundSuppressed.outRowId,
-          txHash,
         }).catch(() => {})
       }
       return { kind: "suppressed_noah" }

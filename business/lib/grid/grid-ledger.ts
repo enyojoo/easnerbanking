@@ -17,6 +17,7 @@ export function buildGridBalancePayoutOutMetadata(input: {
   sendNote?: string
   idempotencyKey?: string
   fundingAddress?: string
+  cryptoAuthorizedAmount?: number
   pricing: {
     totalDebited: number
     customerPrincipal: number
@@ -27,9 +28,15 @@ export function buildGridBalancePayoutOutMetadata(input: {
   }
 }): Record<string, unknown> {
   const recipientName = String(input.recipientSnapshot.full_name ?? "").trim()
+  const cryptoAuthorized =
+    input.cryptoAuthorizedAmount != null && Number.isFinite(input.cryptoAuthorizedAmount)
+      ? input.cryptoAuthorizedAmount
+      : null
   return {
     easner_payout_id: input.easnerPayoutId,
     easner_transaction_id: input.easnerTransactionId,
+    payout_type: "global_fiat",
+    flow: "global_fiat_offramp",
     payout_provider: "grid",
     grid_mode: "balance_payout",
     grid_quote_id: input.quoteId,
@@ -54,6 +61,12 @@ export function buildGridBalancePayoutOutMetadata(input: {
     channel_cost: input.pricing.channelCost,
     customer_rate: input.pricing.customerRate,
     margin_capture_mode: "fee_wallet_deferred",
+    ...(cryptoAuthorized != null && cryptoAuthorized > 0
+      ? {
+          crypto_authorized_amount: String(cryptoAuthorized),
+          noah_send_amount: String(cryptoAuthorized),
+        }
+      : {}),
     ...(input.sendNote ? { note: input.sendNote } : {}),
     ...(input.reviewSnapshot ? { review_snapshot: input.reviewSnapshot } : {}),
     ...(recipientName
@@ -71,4 +84,21 @@ export function mergeGridPayoutLifecycle(
   patch: Record<string, unknown>,
 ): Record<string, unknown> {
   return { ...prior, ...patch, grid_lifecycle: { ...(prior.grid_lifecycle as object), ...patch } }
+}
+
+export function buildGridRefundExpectedPatch(
+  prior: Record<string, unknown> | null | undefined,
+  opts?: { refundAmount?: number | null; refundTxHash?: string | null },
+): Record<string, unknown> {
+  return {
+    ...(prior ?? {}),
+    grid_refund_expected: true,
+    noah_refund_expected: true,
+    ...(opts?.refundAmount != null && Number.isFinite(opts.refundAmount) && opts.refundAmount > 0
+      ? { grid_refund_amount: opts.refundAmount, noah_refund_amount: opts.refundAmount }
+      : {}),
+    ...(opts?.refundTxHash
+      ? { grid_refund_tx_hash: opts.refundTxHash, noah_refund_tx_hash: opts.refundTxHash }
+      : {}),
+  }
 }

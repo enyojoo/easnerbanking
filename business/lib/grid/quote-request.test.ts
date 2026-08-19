@@ -8,6 +8,8 @@ import {
   gridQuoteFeesUsd,
   gridQuoteSendingAmountMajor,
   pickGridInternalAccountForCurrency,
+  quantizeGridUsdcMajor,
+  buildGridUsdcRefundSweepQuoteBody,
   buildGridVaTurnkeySweepQuoteBody,
 } from "./quote-request"
 
@@ -119,6 +121,31 @@ describe("buildGridCrossBorderQuoteBody", () => {
   })
 })
 
+describe("buildGridUsdcRefundSweepQuoteBody", () => {
+  it("debits Grid USDC internal to first-party Turnkey USDC", () => {
+    expect(
+      buildGridUsdcRefundSweepQuoteBody({
+        sourceInternalAccountId: "InternalAccount:usdc",
+        turnkeyExternalAccountId: "ExternalAccount:turnkey",
+        lockedSendMinor: 1_500_000,
+      }),
+    ).toEqual({
+      source: {
+        sourceType: "ACCOUNT",
+        accountId: "InternalAccount:usdc",
+      },
+      destination: {
+        destinationType: "ACCOUNT",
+        accountId: "ExternalAccount:turnkey",
+      },
+      lockedCurrencyAmount: 1_500_000,
+      lockedCurrencySide: "SENDING",
+      immediatelyExecute: true,
+      purposeOfPayment: "SELF",
+    })
+  })
+})
+
 describe("buildGridVaTurnkeySweepQuoteBody", () => {
   it("debits INTERNAL_FIAT and immediately executes to first-party Turnkey USDC", () => {
     expect(
@@ -211,5 +238,12 @@ describe("gridQuoteSendingAmountMajor", () => {
         sendingCurrency: { code: "NGN", decimals: 2 },
       }),
     ).toBe(50_000)
+  })
+})
+
+describe("quantizeGridUsdcMajor", () => {
+  it("keeps 6 decimal USDC send amounts instead of rounding to cents", () => {
+    expect(quantizeGridUsdcMajor(1.501175)).toBe(1.501175)
+    expect(Math.round(1.501175 * 100) / 100).toBe(1.5)
   })
 })

@@ -214,4 +214,20 @@ describe("reverseGlobalPayoutWalletDebitForEasnerPayoutId", () => {
     expect(getMetadata().balance_delta_applied).toBe(true)
     expect(getMetadata().balance_delta_reversed).toBe(true)
   })
+
+  it("does not credit USD for a Grid payout that never applied a wallet debit", async () => {
+    const { admin, easnerPayoutId } = createPayoutAdmin({
+      grid_mode: "balance_payout",
+      payout_provider: "grid",
+      turnkey_send_id: "sha256:grid",
+      grid_funding_tx_hash: "sig-fund",
+    })
+
+    const reversed = await reverseGlobalPayoutWalletDebitForEasnerPayoutId(admin, {
+      easnerPayoutId,
+    })
+
+    expect(reversed).toBe(false)
+    expect(applyWalletBalanceDelta).not.toHaveBeenCalled()
+  })
 })

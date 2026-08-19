@@ -28,6 +28,7 @@ import {
   buildGridBalancePayoutQuoteBody,
   gridQuoteFeesUsd,
   gridQuoteSendingAmountMajor,
+  quantizeGridUsdcMajor,
 } from "./quote-request"
 import { gridFetch } from "./http"
 import { hydrateGridQuotePaymentInstructions, resolveGridQuoteFundingAddress } from "./quote-funding"
@@ -391,7 +392,10 @@ export async function lockGridBalancePayoutQuote(
     pricing.totalDebited = roundUsd(pricing.totalDebited + gridFeesUsd)
   }
 
-  const cryptoAmount = roundUsd(lockedCryptoUsd > 0 ? lockedCryptoUsd : pricing.customerPrincipal)
+  const cryptoAmount =
+    lockedCryptoUsd > 0
+      ? quantizeGridUsdcMajor(lockedCryptoUsd)
+      : roundUsd(pricing.customerPrincipal)
   const sequenceId = `grid_quote_${String(hydratedQuote.id).replace(/[^a-zA-Z0-9:_-]/g, "")}`
   const expiresAt =
     hydratedQuote.expiresAt ?? new Date(Date.now() + getGridQuoteTtlMs()).toISOString()

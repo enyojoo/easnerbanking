@@ -8,10 +8,15 @@ import {
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { normalizeDirection } from "@/lib/ledger/transactions"
 
-const GLOBAL_PAYOUT_PROVIDERS = ["noah", "yellowcard"] as const
+const GLOBAL_PAYOUT_PROVIDERS = ["noah", "yellowcard", "grid"] as const
+const LEGACY_GRID_PENDING_PTID_PREFIX = "grid_payout_pending_"
 
 export function pendingGlobalPayoutProviderTransactionId(easnerPayoutId: string): string {
   return `global_payout_pending:${easnerPayoutId}`
+}
+
+export function pendingGridPayoutProviderTransactionId(easnerPayoutId: string): string {
+  return `${LEGACY_GRID_PENDING_PTID_PREFIX}${easnerPayoutId}`
 }
 
 export function isNoahGlobalPayoutSellTx(tx: Record<string, unknown>): boolean {
@@ -84,6 +89,7 @@ export function pickRefundAmountCandidatesFromGlobalPayoutMeta(
   }
   push(meta.noah_refund_amount)
   push(meta.yc_refund_amount)
+  push(meta.grid_refund_amount)
   push(meta.noah_send_amount)
   push(meta.crypto_authorized_amount)
   push(meta.noah_floor)
@@ -119,9 +125,14 @@ export async function persistGlobalPayoutRefundTxHashOnOutRow(
   if (!row?.metadata || typeof row.metadata !== "object") return
 
   const prior = row.metadata as Record<string, unknown>
-  if (String(prior.noah_refund_tx_hash ?? "").trim() === txHash) return
+  const already =
+    String(prior.noah_refund_tx_hash ?? "").trim() === txHash ||
+    String(prior.yc_refund_tx_hash ?? "").trim() === txHash ||
+    String(prior.grid_refund_tx_hash ?? "").trim() === txHash
+  if (already) return
 
   const isYc = prior.payout_provider === "yellowcard" || prior.yc_mode === "balance_payout"
+  const isGrid = prior.payout_provider === "grid" || prior.grid_mode === "balance_payout"
   await admin
     .from("transactions")
     .update({
@@ -133,6 +144,12 @@ export async function persistGlobalPayoutRefundTxHashOnOutRow(
           ? {
               yc_refund_expected: true,
               yc_refund_tx_hash: txHash,
+            }
+          : {}),
+        ...(isGrid
+          ? {
+              grid_refund_expected: true,
+              grid_refund_tx_hash: txHash,
             }
           : {}),
       },
@@ -212,7 +229,7 @@ export async function findGlobalPayoutRefundForInboundSuppression(
   const select = "id, metadata, amount, currency, status"
 
   if (txHash) {
-    for (const hashKey of ["noah_refund_tx_hash", "yc_refund_tx_hash"] as const) {
+    for (const hashKey of ["noah_refund_tx_hash", "yc_refund_tx_hash", "grid_refund_tx_hash"] as const) {
       let byRefundHash = admin
         .from("transactions")
         .select(select)
@@ -243,15 +260,23 @@ export async function findGlobalPayoutRefundForInboundSuppression(
     .eq("direction", "out")
     .in("status", ["failed", "cancelled"])
     .gte("created_at", sinceIso)
-    .or("metadata->>payout_type.eq.global_fiat,metadata->>flow.eq.global_fiat_offramp")
+    .or(
+      "metadata->>payout_type.eq.global_fiat,metadata->>flow.eq.global_fiat_offramp,metadata->>grid_mode.eq.balance_payout",
+    )
   recentQ = applyLedgerScope(recentQ, scope)
   const { data: failedRows } = await recentQ.limit(20)
 
   const sortedRows = [...(failedRows ?? [])].sort((a, b) => {
     const aMeta = (a.metadata as Record<string, unknown> | undefined) ?? {}
     const bMeta = (b.metadata as Record<string, unknown> | undefined) ?? {}
-    const aExpected = aMeta.noah_refund_expected === true || aMeta.yc_refund_expected === true
-    const bExpected = bMeta.noah_refund_expected === true || bMeta.yc_refund_expected === true
+    const aExpected =
+      aMeta.noah_refund_expected === true ||
+      aMeta.yc_refund_expected === true ||
+      aMeta.grid_refund_expected === true
+    const bExpected =
+      bMeta.noah_refund_expected === true ||
+      bMeta.yc_refund_expected === true ||
+      bMeta.grid_refund_expected === true
     if (aExpected === bExpected) return 0
     return aExpected ? -1 : 1
   })
@@ -264,7 +289,9 @@ export async function findGlobalPayoutRefundForInboundSuppression(
 
     if (txHash) {
       const expected =
-        String(meta.noah_refund_tx_hash ?? "").trim() || String(meta.yc_refund_tx_hash ?? "").trim()
+        String(meta.noah_refund_tx_hash ?? "").trim() ||
+        String(meta.yc_refund_tx_hash ?? "").trim() ||
+        String(meta.grid_refund_tx_hash ?? "").trim()
       if (expected && expected === txHash) {
         return { easnerPayoutId, outRowId: String(row.id) }
       }
@@ -278,7 +305,11 @@ export async function findGlobalPayoutRefundForInboundSuppression(
     if (!inboundMatchesGlobalPayoutRefundAmount(inboundAmount, meta, Number(row.amount ?? 0))) continue
 
     const outboundHash = String(
-      meta.turnkey_tx_hash ?? meta.noah_on_chain_tx_hash ?? meta.yc_crypto_deposit_tx_hash ?? "",
+      meta.turnkey_tx_hash ??
+        meta.noah_on_chain_tx_hash ??
+        meta.yc_crypto_deposit_tx_hash ??
+        meta.grid_funding_tx_hash ??
+        "",
     ).trim()
     if (txHash && outboundHash && txHash === outboundHash) continue
 
@@ -313,6 +344,9 @@ export function mergeGlobalPayoutLedgerReservationFlags(
 /** Execute reserved wallet balance when Turnkey send left the wallet (even if metadata flag was wiped). */
 export function globalPayoutWalletDebitEvidence(meta: Record<string, unknown>): boolean {
   if (meta.balance_delta_applied === true) return true
+  // Grid debit is recorded only via the flag. A Turnkey funding send must not imply a USD debit
+  // (early Grid payouts sent USDC without applying wallet_balances).
+  if (meta.payout_provider === "grid" || meta.grid_mode === "balance_payout") return false
   const sendId = String(meta.turnkey_send_id ?? "").trim()
   const txHash = String(meta.turnkey_tx_hash ?? meta.noah_on_chain_tx_hash ?? "").trim()
   return !!(sendId || txHash)
@@ -383,7 +417,9 @@ export async function listGlobalPayoutsFailedWithoutReversal(
     .in("provider", [...GLOBAL_PAYOUT_PROVIDERS])
     .eq("direction", "out")
     .in("status", ["failed", "cancelled"])
-    .or("metadata->>payout_type.eq.global_fiat,metadata->>flow.eq.global_fiat_offramp")
+    .or(
+      "metadata->>payout_type.eq.global_fiat,metadata->>flow.eq.global_fiat_offramp,metadata->>grid_mode.eq.balance_payout",
+    )
     .limit(500)
 
   if (error) throw error
@@ -544,7 +580,9 @@ export async function collectGlobalPayoutRefundTxHashesForScope(
     .eq("direction", "out")
     .in("status", ["failed", "cancelled"])
     .gte("created_at", sinceIso)
-    .or("metadata->>payout_type.eq.global_fiat,metadata->>flow.eq.global_fiat_offramp")
+    .or(
+      "metadata->>payout_type.eq.global_fiat,metadata->>flow.eq.global_fiat_offramp,metadata->>grid_mode.eq.balance_payout",
+    )
   q = applyLedgerScope(q, scope)
   const { data: rows } = await q.limit(80)
 
@@ -927,6 +965,20 @@ export async function findPendingGlobalPayoutByExternalId(
     return { id: String(byPtid.id), metadata: (byPtid.metadata || {}) as Record<string, unknown> }
   }
 
+  const legacyGridPtid = pendingGridPayoutProviderTransactionId(key)
+  const { data: byLegacyGridPtid } = await admin
+    .from("transactions")
+    .select("id, metadata")
+    .eq("provider", "grid")
+    .eq("provider_transaction_id", legacyGridPtid)
+    .maybeSingle()
+  if (byLegacyGridPtid?.id) {
+    return {
+      id: String(byLegacyGridPtid.id),
+      metadata: (byLegacyGridPtid.metadata || {}) as Record<string, unknown>,
+    }
+  }
+
   const { data: byMeta } = await admin
     .from("transactions")
     .select("id, metadata")
@@ -945,9 +997,13 @@ function readEasnerPayoutIdFromNoahMeta(meta: Record<string, unknown>): string |
   return id || null
 }
 
-/** User-facing global payout OUT row (Noah or Yellowcard). */
+/** User-facing global payout OUT row (Noah, Yellowcard, or Grid). */
 export function isGlobalPayoutOutRow(meta: Record<string, unknown>): boolean {
-  return meta.payout_type === "global_fiat" || meta.flow === "global_fiat_offramp"
+  return (
+    meta.payout_type === "global_fiat" ||
+    meta.flow === "global_fiat_offramp" ||
+    meta.grid_mode === "balance_payout"
+  )
 }
 
 /** @deprecated Prefer {@link isGlobalPayoutOutRow} — kept for existing call sites/tests. */
