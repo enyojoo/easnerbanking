@@ -118,55 +118,55 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
   return (
     <div className="space-y-4 rounded-2xl border bg-card p-4">
       <div>
-        <p className="text-xs text-muted-foreground">Upload document</p>
         <h3 className="text-base font-semibold">{title}</h3>
       </div>
-      <div className="space-y-2">
-        <Label>Document type</Label>
-        <GridKybEnumSelect
-          value={documentType}
-          onChange={setDocumentType}
-          options={options}
-          placeholder="Select document type"
-          disabled={disabled}
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor={`issuing-country-${category}`}>Issuing country</Label>
-        <GridKybCountrySelect
-          id={`issuing-country-${category}`}
-          value={issuingCountry}
-          onChange={setIssuingCountry}
-          placeholder="Select issuing country"
-          catalog="all"
-          disabled={disabled}
-        />
-      </div>
-      {extraFields?.issuingAuthority ? (
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label>Issuing authority</Label>
-          <Input
-            className={SETTINGS_INPUT_CLASS}
-            value={issuingAuthority}
-            onChange={(event) => setIssuingAuthority(event.target.value)}
-            placeholder="e.g. California DMV, U.S. Department of State"
+          <Label>Document type</Label>
+          <GridKybEnumSelect
+            value={documentType}
+            onChange={setDocumentType}
+            options={options}
+            placeholder="Select document type"
             disabled={disabled}
           />
         </div>
-      ) : null}
-      {extraFields?.documentNumber ? (
         <div className="space-y-2">
-          <Label>Document number</Label>
-          <p className="text-xs text-muted-foreground">Enter the number shown on the ID.</p>
-          <Input
-            className={SETTINGS_INPUT_CLASS}
-            value={documentNumber}
-            onChange={(event) => setDocumentNumber(event.target.value)}
-            placeholder="Passport number, license number, or similar ID"
+          <Label htmlFor={`issuing-country-${category}`}>Issuing country</Label>
+          <GridKybCountrySelect
+            id={`issuing-country-${category}`}
+            value={issuingCountry}
+            onChange={setIssuingCountry}
+            placeholder="Select issuing country"
+            catalog="all"
             disabled={disabled}
           />
         </div>
-      ) : null}
+        {extraFields?.issuingAuthority ? (
+          <div className="space-y-2">
+            <Label>Issuing authority</Label>
+            <Input
+              className={SETTINGS_INPUT_CLASS}
+              value={issuingAuthority}
+              onChange={(event) => setIssuingAuthority(event.target.value)}
+              placeholder="e.g. California DMV, U.S. Department of State"
+              disabled={disabled}
+            />
+          </div>
+        ) : null}
+        {extraFields?.documentNumber ? (
+          <div className="space-y-2">
+            <Label>Document number</Label>
+            <Input
+              className={SETTINGS_INPUT_CLASS}
+              value={documentNumber}
+              onChange={(event) => setDocumentNumber(event.target.value)}
+              placeholder="Passport number, license number, or similar ID"
+              disabled={disabled}
+            />
+          </div>
+        ) : null}
+      </div>
       <div className="space-y-2">
         <Label>File</Label>
         {existingDocuments.length || file ? (
