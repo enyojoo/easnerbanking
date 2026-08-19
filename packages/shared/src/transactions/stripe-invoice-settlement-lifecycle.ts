@@ -113,6 +113,7 @@ export type StripeCollectionListDisplay = {
   ledgerCurrency: string
   displayDescription: string
   displayHeroTitle: string
+  transactionProduct?: string
 }
 
 /**
