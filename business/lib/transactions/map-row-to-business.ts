@@ -390,7 +390,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     ...(ycPayInPaymentDetails ? { ycPayInPaymentDetails } : {}),
     direction,
     source: "account" as const,
-    reference: stripeInvoiceSettlementDetail?.invoiceReference ?? easnerId,
+    reference: easnerId,
     ...(stripeInvoiceSettlementDetail?.invoiceId
       ? { invoiceId: stripeInvoiceSettlementDetail.invoiceId }
       : {}),

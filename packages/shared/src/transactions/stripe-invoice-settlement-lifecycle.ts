@@ -91,7 +91,11 @@ export function isStripeCollectionSettlementMetadata(
 export function stripeCollectionSettlementTitle(
   meta: Record<string, unknown> | null | undefined,
 ): string {
-  if (isStripeInvoiceSettlementMetadata(meta)) return "Invoice payment"
+  if (isStripeInvoiceSettlementMetadata(meta)) {
+    const invoiceNumber =
+      typeof meta?.invoice_number === "string" ? meta.invoice_number.trim() : ""
+    return invoiceNumber ? `Invoice #${invoiceNumber}` : "Invoice"
+  }
   const headline = typeof meta?.headline === "string" ? meta.headline.trim() : ""
   return headline || "Online payment"
 }

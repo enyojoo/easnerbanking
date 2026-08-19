@@ -21,8 +21,6 @@ export type ResolvedStripeInvoiceSettlement = {
   displayTitle: string
   invoiceId: string | null
   invoiceNumber: string | null
-  /** List subtitle / detail — e.g. Invoice #EINV-… */
-  invoiceReference: string | null
   feeAmount: number
   grossAmount: number
   netAmount: number
@@ -87,7 +85,6 @@ export function resolveStripeInvoiceSettlementDetail(
     displayTitle: stripeCollectionSettlementTitle(meta),
     invoiceId: typeof meta.invoice_id === "string" && meta.invoice_id.trim() ? meta.invoice_id.trim() : null,
     invoiceNumber,
-    invoiceReference: invoiceNumber ? `Invoice #${invoiceNumber}` : null,
     feeAmount: centsToMajor(meta.fee_cents),
     grossAmount: centsToMajor(meta.gross_cents),
     netAmount: centsToMajor(meta.net_cents),

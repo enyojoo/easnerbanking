@@ -20,6 +20,7 @@ import {
 } from "./verification-deposit"
 import {
   isStripeCollectionSettlementMetadata,
+  isStripeInvoiceSettlementMetadata,
   stripeCollectionSettlementTitle,
 } from "./stripe-invoice-settlement-lifecycle"
 import { isRelayTronDepositMetadata } from "./relay-tron-deposit"
@@ -214,6 +215,9 @@ export function toEasnerTransactionProductCategory(input: {
     })
   ) {
     return resolveNoahVaFundingDepositTitleFromMeta(meta)
+  }
+  if (direction === "in" && isStripeInvoiceSettlementMetadata(meta)) {
+    return "Invoice payment"
   }
   if (direction === "in" && isStripeCollectionSettlementMetadata(meta)) {
     return stripeCollectionSettlementTitle(meta)

@@ -100,11 +100,14 @@ vi.mock("@easner/shared", () => ({
       displayHeroTitle: title,
     }
   },
+  isRelayTronDepositMetadata: () => false,
+  resolveRelayTronDepositListDisplay: () => null,
+  normalizeBalanceMoveReviewSnapshot: () => null,
   toEasnerTransactionPrimaryLabel: (input: {
     metadata?: Record<string, unknown> | null
   }) =>
     String(input.metadata?.source ?? "").toLowerCase() === "invoice_stripe"
-      ? "Invoice payment"
+      ? `Invoice #${String(input.metadata?.invoice_number ?? "")}`
       : "Bank Deposit",
   isStripeInvoiceSettlementMetadata: (meta?: Record<string, unknown> | null) =>
     String(meta?.source ?? "").toLowerCase() === "invoice_stripe",
@@ -112,7 +115,7 @@ vi.mock("@easner/shared", () => ({
     ["invoice_stripe", "checkout_stripe"].includes(String(meta?.source ?? "").toLowerCase()),
   stripeCollectionSettlementTitle: (meta?: Record<string, unknown> | null) =>
     String(meta?.source ?? "").toLowerCase() === "invoice_stripe"
-      ? "Invoice payment"
+      ? `Invoice #${String(meta?.invoice_number ?? "")}`
       : String(meta?.headline ?? "") || "Online payment",
   buildStripeInvoiceSettlementLifecycle: () => [
     {
@@ -306,7 +309,7 @@ describe("mapRowToBusinessTransaction", () => {
     expect(item.statusLabel).toBe("Processing")
   })
 
-  it("maps Stripe invoice settlement as Invoice payment (not Bank Deposit)", () => {
+  it("maps Stripe invoice settlement title as Invoice #number (not Bank Deposit)", () => {
     const item = mapRowToBusinessTransaction({
       id: "27505420-c56c-4c1c-b47e-1f8b4a1f7440",
       easner_transaction_id: "ETID50120581",
@@ -338,8 +341,8 @@ describe("mapRowToBusinessTransaction", () => {
       created_at: "2026-08-04T15:18:03.973Z",
     })
 
-    expect(item.description).toBe("Invoice payment")
-    expect(item.displayHeroTitle).toBe("Invoice payment")
+    expect(item.description).toBe("Invoice #EINV-C792A19D610A")
+    expect(item.displayHeroTitle).toBe("Invoice #EINV-C792A19D610A")
     expect(item.paymentScheme).toBe("Visa •••• 4242")
     expect(item.stripePaymentMethod).toMatchObject({
       type: "card",
@@ -349,7 +352,7 @@ describe("mapRowToBusinessTransaction", () => {
     expect(item.customerEmail).toBe("payer@example.com")
     expect(item.customerName).toBe("Payer Name")
     expect(item.invoiceId).toBe("775370a7-d508-4812-8488-ea59d938a9b2")
-    expect(item.reference).toBe("Invoice #EINV-C792A19D610A")
+    expect(item.reference).toBe("ETID50120581")
     expect(item.postedAmount).toBe(56888)
     expect(item.depositAmount).toBe(56888)
     expect(item.lifecycle?.some((s) => s.id === "payment_received")).toBe(true)

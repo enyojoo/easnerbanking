@@ -24,7 +24,8 @@ describe("resolveStripeInvoiceSettlementDetail", () => {
 
     expect(detail).not.toBeNull()
     expect(detail?.invoiceId).toBe("775370a7-d508-4812-8488-ea59d938a9b2")
-    expect(detail?.invoiceReference).toBe("Invoice #EINV-C792A19D610A")
+    expect(detail?.invoiceNumber).toBe("EINV-C792A19D610A")
+    expect(detail?.displayTitle).toBe("Invoice #EINV-C792A19D610A")
     expect(detail?.paymentMethodLabel).toBe("Card")
     expect(detail?.paymentMethodText).toBe("Card")
     expect(detail?.settlementRailLabel).toBe("Bank account")

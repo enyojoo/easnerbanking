@@ -1,5 +1,23 @@
 import { describe, expect, it } from "vitest"
-import { buildStripeInvoiceSettlementLifecycle } from "./stripe-invoice-settlement-lifecycle"
+import {
+  buildStripeInvoiceSettlementLifecycle,
+  stripeCollectionSettlementTitle,
+} from "./stripe-invoice-settlement-lifecycle"
+
+describe("stripeCollectionSettlementTitle", () => {
+  it("uses Invoice #number for invoice settlements", () => {
+    expect(
+      stripeCollectionSettlementTitle({
+        source: "invoice_stripe",
+        invoice_number: "EINV-47929786BA35",
+      }),
+    ).toBe("Invoice #EINV-47929786BA35")
+  })
+
+  it("falls back to Invoice when the number is missing", () => {
+    expect(stripeCollectionSettlementTitle({ source: "invoice_stripe" })).toBe("Invoice")
+  })
+})
 
 describe("buildStripeInvoiceSettlementLifecycle", () => {
   it("starts at payment received", () => {

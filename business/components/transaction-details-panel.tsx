@@ -169,12 +169,6 @@ function TransactionSummaryDetails({
     (isBank || isStablecoin || isCard || isEasetag) &&
     Boolean(transaction.counterpartyName) &&
     (isDeposit || !showLifecycleTracker)
-  const invoiceReference =
-    transaction.reference &&
-    transaction.reference !== transaction.id &&
-    !transaction.reference.startsWith("ETID")
-      ? transaction.reference
-      : null
   const netAmount =
     transaction.postedAmount != null && transaction.postedAmount > 0
       ? transaction.postedAmount
@@ -207,10 +201,6 @@ function TransactionSummaryDetails({
             </Button>
           </div>
         </TransactionDetailSummaryRow>
-
-        {isStripeInvoiceSettlement && invoiceReference ? (
-          <TransactionDetailSummaryRow label="Invoice" value={invoiceReference} />
-        ) : null}
 
         {isStripeInvoiceSettlement &&
         grossAmount != null &&
