@@ -115,6 +115,83 @@ describe("mapGridKybVerificationErrors", () => {
       ]),
     ).toBe("company")
   })
+
+  it("points Document quality and fraud errors at People, not Company", () => {
+    const documents = [
+      {
+        personId: "p1",
+        category: "identity",
+        gridDocumentId: "01a01f5a-0000-0000-0000-000000000001",
+      },
+    ]
+    const errors = [
+      {
+        type: "POOR_QUALITY_DOCUMENT",
+        reason: "The uploaded photo is of poor quality and appears edited with software.",
+        resourceId: "Document:01a01f5a-0000-0000-0000-000000000001",
+      },
+      {
+        type: "SUSPECTED_FRAUD_DOCUMENT",
+        reason: "This image looks like a screenshot.",
+        resourceId: "Document:01a01f5a-0000-0000-0000-000000000001",
+      },
+      {
+        type: "MISSING_IDENTITY_DOCUMENT",
+        reason: "Identity document is required",
+        resourceId: "BeneficialOwner:01a01e60-e5d3-8887-0000-ff32c8090c49",
+      },
+    ]
+    const pointers = mapGridKybVerificationErrors(errors, documents)
+    expect(pointers.map((row) => row.section)).toEqual(["people", "people", "people"])
+    expect(pointers[0]).toMatchObject({
+      documentCategory: "identity",
+      gridDocumentId: "01a01f5a-0000-0000-0000-000000000001",
+    })
+    expect(firstGridKybErrorSection(errors, documents)).toBe("people")
+    expect(
+      filterResolvedGridKybErrorPointers({
+        pointers,
+        company: emptyGridKybCompanyDraft(),
+        people: [
+          {
+            id: "p1",
+            gridBeneficialOwnerId: "01a01e60-e5d3-8887-0000-ff32c8090c49",
+            roles: ["UBO"],
+            firstName: "Anne",
+            lastName: "Ayanbadejo",
+          },
+        ],
+        documents,
+      }),
+    ).toHaveLength(3)
+
+    const replaced = filterResolvedGridKybErrorPointers({
+      pointers,
+      company: emptyGridKybCompanyDraft(),
+      people: [
+        {
+          id: "p1",
+          gridBeneficialOwnerId: "01a01e60-e5d3-8887-0000-ff32c8090c49",
+          roles: ["UBO"],
+          firstName: "Anne",
+          lastName: "Ayanbadejo",
+        },
+      ],
+      documents: [{ personId: "p1", category: "identity", gridDocumentId: null }],
+    })
+    expect(replaced).toEqual([])
+  })
+
+  it("does not park unmapped company-without-field leftovers", () => {
+    expect(
+      filterResolvedGridKybErrorPointers({
+        pointers: [{ section: "company", reason: "Unknown Grid error", resourceId: "Document:abc" }],
+        company: emptyGridKybCompanyDraft(),
+        people: [{ id: "p1", gridBeneficialOwnerId: "abc", roles: ["UBO"] }],
+        documents: [{ personId: "p1", category: "identity" }],
+      }),
+    ).toEqual([])
+  })
 })
 
 describe("gridKybApplicationStatusFromVerification", () => {
@@ -132,14 +209,15 @@ describe("gridKybApplicationStatusFromVerification", () => {
     ).toBe("in_review")
   })
 
-  it("treats Grid review job states as in_review", () => {
+  it("treats Grid review job states as submitted and still editable", () => {
     expect(
       gridKybApplicationStatusFromVerification({ verificationStatus: "IN_PROGRESS" }),
-    ).toBe("in_review")
+    ).toBe("submitted")
     expect(
       gridKybApplicationStatusFromVerification({ verificationStatus: "READY_FOR_VERIFICATION" }),
-    ).toBe("in_review")
-    expect(gridKybApplicationIsEditable("submitted")).toBe(false)
+    ).toBe("submitted")
+    expect(gridKybApplicationIsEditable("submitted")).toBe(true)
+    expect(gridKybApplicationIsEditable("in_review")).toBe(false)
   })
 })
 
@@ -257,6 +335,32 @@ describe("filterResolvedGridKybErrorPointers", () => {
     expect(remaining).toEqual([])
   })
 
+  it("keeps missing-identity until a rejected Grid file is replaced", () => {
+    const pointers = mapGridKybVerificationErrors(
+      [
+        {
+          type: "MISSING_IDENTITY_DOCUMENT",
+          reason: "Identity document is required",
+          resourceId: "BeneficialOwner:abc",
+        },
+        {
+          type: "POOR_QUALITY_DOCUMENT",
+          reason: "Poor quality",
+          resourceId: "Document:rej-1",
+        },
+      ],
+      [{ personId: "p1", category: "identity", gridDocumentId: "rej-1" }],
+    )
+    expect(
+      filterResolvedGridKybErrorPointers({
+        pointers,
+        company: emptyGridKybCompanyDraft(),
+        people: [{ id: "p1", gridBeneficialOwnerId: "abc", roles: ["UBO"] }],
+        documents: [{ personId: "p1", category: "identity", gridDocumentId: "rej-1" }],
+      }).some((row) => row.documentCategory === "identity"),
+    ).toBe(true)
+  })
+
   it("clears the Grid missing-identity pointer once the sole owner has an ID file", () => {
     const remaining = filterResolvedGridKybErrorPointers({
       pointers: mapGridKybVerificationErrors([
@@ -361,5 +465,18 @@ describe("gridKybWizardReadiness", () => {
     }
     expect(gridKybWizardReadiness({ ...base, remainingPointers: 2 })).toBe("needs_attention")
     expect(gridKybWizardReadiness({ ...base, remainingPointers: 0 })).toBe("ready_to_submit")
+  })
+
+  it("stays needs_attention when Grid job is submitted but pointers remain", () => {
+    expect(
+      gridKybWizardReadiness({
+        status: "submitted",
+        remainingPointers: 1,
+        company: { ...emptyGridKybCompanyDraft(), legalName: "Acme" },
+        peopleCount: 1,
+        hasIdentityDocument: true,
+        hasCompanyDocument: true,
+      }),
+    ).toBe("needs_attention")
   })
 })

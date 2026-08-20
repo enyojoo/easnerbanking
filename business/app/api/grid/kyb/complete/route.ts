@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server"
 import {
+  gridDocumentIdFromResource,
   gridKybApplicationStatusFromVerification,
   gridKybOwnerIdTypeForGrid,
   mapGridKybVerificationErrors,
+  rejectedGridDocumentIdsFromErrors,
 } from "@easner/shared"
 import { requireKybContext } from "../_context"
 import {
@@ -19,6 +21,7 @@ import {
 import {
   patchGridBusinessKybCustomer,
   submitGridKybVerification,
+  deleteGridKybDocument,
   uploadGridKybDocument,
   upsertGridBeneficialOwner,
 } from "@/lib/grid/kyb-grid-writes"
@@ -77,8 +80,11 @@ export async function POST(request: Request) {
     }
 
     const documents = await listKybDocuments(ctx.admin, application.id, true)
+    const rejectedIds = new Set(rejectedGridDocumentIdsFromErrors(application.last_errors))
     for (const document of documents) {
-      if (document.gridDocumentId) continue
+      const existingGridId = gridDocumentIdFromResource(document.gridDocumentId)
+      const rejected = Boolean(existingGridId && rejectedIds.has(existingGridId))
+      if (existingGridId && !rejected) continue
       const downloaded = await ctx.admin.storage.from(KYB_DOCUMENTS_BUCKET).download(document.storagePath)
       if (downloaded.error || !downloaded.data) {
         return NextResponse.json({ error: "Could not read an uploaded document." }, { status: 400 })
@@ -90,6 +96,11 @@ export async function POST(request: Request) {
       if (!holder) {
         return NextResponse.json({ error: "Upload owner details before their ID document." }, { status: 400 })
       }
+      if (existingGridId) {
+        await deleteGridKybDocument(existingGridId).catch((error) => {
+          console.warn("[grid/kyb/complete] Grid delete:", error)
+        })
+      }
       const gridDocumentId = await uploadGridKybDocument({
         documentHolder: holder,
         document,
@@ -100,6 +111,7 @@ export async function POST(request: Request) {
         .from("business_kyb_documents")
         .update({ grid_document_id: gridDocumentId, updated_at: new Date().toISOString() })
         .eq("id", document.id)
+      document.gridDocumentId = gridDocumentId
     }
 
     const verification = await submitGridKybVerification(customerId)
@@ -139,7 +151,7 @@ export async function POST(request: Request) {
       status,
       localStatus: synced.status,
       errors: verification.errors,
-      errorPointers: mapGridKybVerificationErrors(verification.errors),
+      errorPointers: mapGridKybVerificationErrors(verification.errors, documents),
       gridCustomerId: customerId,
       verificationId: verification.id,
     })

@@ -7,8 +7,8 @@ import {
 } from "@/lib/grid/kyb-application-store"
 import { encryptKybPii } from "@/lib/grid/kyb-pii-crypto"
 import { deleteGridKybDocument } from "@/lib/grid/kyb-grid-writes"
+import { normalizeKybDocumentBytes } from "@/lib/grid/kyb-document-file"
 
-const ALLOWED_TYPES = new Set(["application/pdf", "image/jpeg", "image/png"])
 const MAX_BYTES = 10 * 1024 * 1024
 
 export async function POST(request: Request) {
@@ -23,10 +23,16 @@ export async function POST(request: Request) {
   if (file.size > MAX_BYTES) {
     return NextResponse.json({ error: "Maximum file size is 10 MB." }, { status: 400 })
   }
-  const contentType = file.type || "application/octet-stream"
-  if (!ALLOWED_TYPES.has(contentType)) {
-    return NextResponse.json({ error: "Use PDF, JPEG, or PNG." }, { status: 400 })
+  const rawBytes = Buffer.from(await file.arrayBuffer())
+  const normalized = await normalizeKybDocumentBytes({
+    bytes: rawBytes,
+    contentType: file.type || "application/octet-stream",
+    fileName: file.name,
+  })
+  if ("error" in normalized) {
+    return NextResponse.json({ error: normalized.error }, { status: 400 })
   }
+  const { bytes, contentType, fileName } = normalized
 
   const category = String(form.get("category") ?? "").trim()
   if (!category) return NextResponse.json({ error: "Document category is required" }, { status: 400 })
@@ -38,14 +44,21 @@ export async function POST(request: Request) {
   const side = String(form.get("side") ?? "").trim() || null
   const ext = contentType === "application/pdf" ? "pdf" : contentType === "image/png" ? "png" : "jpg"
   const storagePath = `${ctx.businessId}/${application.id}/${crypto.randomUUID()}.${ext}`
-  const bytes = Buffer.from(await file.arrayBuffer())
 
   const { error: uploadError } = await ctx.admin.storage.from(KYB_DOCUMENTS_BUCKET).upload(storagePath, bytes, {
     contentType,
     upsert: false,
   })
   if (uploadError) {
-    return NextResponse.json({ error: uploadError.message || "Upload failed" }, { status: 400 })
+    console.error("[grid/kyb/documents] storage upload:", {
+      bucket: KYB_DOCUMENTS_BUCKET,
+      storagePath,
+      message: uploadError.message,
+    })
+    return NextResponse.json(
+      { error: uploadError.message || "Could not store the file. Try a JPEG or PNG under 10 MB." },
+      { status: 400 },
+    )
   }
 
   const { data, error } = await ctx.admin
@@ -61,9 +74,9 @@ export async function POST(request: Request) {
       document_number_ciphertext: documentNumber.ciphertext,
       document_number_key_id: documentNumber.keyId,
       storage_path: storagePath,
-      file_name: file.name,
+      file_name: fileName,
       content_type: contentType,
-      byte_size: file.size,
+      byte_size: bytes.length,
       side,
     })
     .select("*")

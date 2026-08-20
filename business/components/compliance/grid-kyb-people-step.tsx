@@ -1,10 +1,11 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { AlertTriangle, Loader2, Plus } from "lucide-react"
 import {
   GRID_KYB_DOCUMENT_CATEGORIES,
   GRID_KYB_OWNER_ROLES,
+  gridDocumentIdFromResource,
   gridKybIdTypeOptionsForPerson,
   gridKybOwnerResourceMatches,
   resolveGridKybOwnerIdType,
@@ -23,6 +24,7 @@ import {
   sanitizeSubdivisionForCountry,
 } from "@easner/shared/postal-address-form"
 import { cn } from "@/lib/utils"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 import type { KybDocumentPacket, KybPersonPacket } from "@/lib/grid/kyb-packet-types"
 import { GridKybEnumSelect } from "./grid-kyb-enum-select"
 import { BusinessAddressFields } from "@/components/settings/business-address-fields"
@@ -75,6 +77,7 @@ export function GridKybPeopleStep({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const idUploadRef = useRef<GridKybDocumentUploadHandle>(null)
+  const autoOpenedRef = useRef(false)
 
   function patchForm(
     patch: Partial<typeof emptyPerson> | ((prev: typeof emptyPerson) => Partial<typeof emptyPerson>),
@@ -163,7 +166,7 @@ export function GridKybPeopleStep({
         ownershipPercentage:
           parsedOwnership != null && Number.isFinite(parsedOwnership) ? parsedOwnership : null,
       }
-      const res = await fetch("/api/grid/kyb/owners", {
+      const res = await fetchWithSession("/api/grid/kyb/owners", {
         method: editingId && editingId !== "new" ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editingId && editingId !== "new" ? { id: editingId, ...payload } : payload),
@@ -190,18 +193,33 @@ export function GridKybPeopleStep({
   const identityDocsFor = (personId: string | null | undefined) =>
     documents.filter((doc) => doc.category === "identity" && doc.personId && doc.personId === personId)
 
+  function pointerTargetsPerson(
+    error: GridKybErrorPointer,
+    person: Pick<KybPersonPacket, "id" | "gridBeneficialOwnerId">,
+  ) {
+    const docs = identityDocsFor(person.id)
+    const pointerDocId = gridDocumentIdFromResource(error.gridDocumentId || error.resourceId)
+    if (error.gridDocumentId || error.resourceId?.startsWith("Document:")) {
+      if (docs.some((doc) => gridDocumentIdFromResource(doc.gridDocumentId) === pointerDocId)) return true
+      const ownedBySomeone = documents.some(
+        (doc) => gridDocumentIdFromResource(doc.gridDocumentId) === pointerDocId && doc.personId,
+      )
+      if (!ownedBySomeone && error.documentCategory === "identity") return true
+      return false
+    }
+    if (error.resourceId) {
+      if (gridKybOwnerResourceMatches(person, error.resourceId)) return true
+      return !people.some((row) => gridKybOwnerResourceMatches(row, error.resourceId))
+    }
+    if (error.documentCategory === "identity") return true
+    return true
+  }
+
   function peopleErrorsFor(person: Pick<KybPersonPacket, "id" | "gridBeneficialOwnerId"> | null) {
     return errors.filter((error) => {
       if (error.section !== "people") return false
-      if (error.resourceId) {
-        if (!person) return false
-        if (gridKybOwnerResourceMatches(person, error.resourceId)) return true
-        return !people.some((row) => gridKybOwnerResourceMatches(row, error.resourceId))
-      }
-      if (error.documentCategory === "identity" && person) {
-        return identityDocsFor(person.id).length === 0
-      }
-      return true
+      if (!person) return true
+      return pointerTargetsPerson(error, person)
     })
   }
 
@@ -227,8 +245,54 @@ export function GridKybPeopleStep({
   )
   const identityError =
     selectedErrors.find((error) => error.documentCategory === "identity") ||
-    errors.find((error) => error.section === "people" && error.documentCategory === "identity")
+    (selected
+      ? errors.find(
+          (error) =>
+            error.section === "people" &&
+            error.documentCategory === "identity" &&
+            pointerTargetsPerson(error, selected),
+        )
+      : errors.find((error) => error.section === "people" && error.documentCategory === "identity"))
   const idTypeError = fieldError("idType") || fieldError("identifier") || fieldError("countryOfIssuance")
+  const identityRejected = Boolean(
+    identityError?.gridDocumentId || identityError?.resourceId?.startsWith("Document:"),
+  )
+
+  useEffect(() => {
+    if (autoOpenedRef.current || editingId) return
+    const flagged =
+      people.find((person) => peopleErrorsFor(person).some((error) => error.documentCategory === "identity")) ??
+      people.find((person) => peopleErrorsFor(person).length > 0)
+    if (!flagged) return
+    autoOpenedRef.current = true
+    openExisting(flagged)
+  }, [people, errors, editingId])
+
+  const identityUpload = (
+    <div id="owner-id-upload" className={cn(identityError && "rounded-xl ring-1 ring-amber-400/70")}>
+      <GridKybDocumentUpload
+        key={selected?.id ?? "new"}
+        ref={idUploadRef}
+        title="Owner ID document"
+        category="identity"
+        acceptedDocumentTypes={
+          identityError?.acceptedDocumentTypes ?? GRID_KYB_DOCUMENT_CATEGORIES.identity.acceptedDocumentTypes
+        }
+        extraFields={{ personId: selected?.id, issuingAuthority: true, documentNumber: true }}
+        existingDocuments={identityDocsFor(selected?.id)}
+        onRemoveExisting={onRemoveDocument}
+        disabled={disabled}
+        hideSubmit
+        rejected={identityRejected}
+        rejectionReason={identityError?.reason}
+        fileHint="PDF, JPEG, PNG, or HEIC. If you upload an image, photograph the physical ID — not a screenshot or a crop from Photos."
+        onUploaded={async (doc) => {
+          if (doc) onDocumentAdded(doc)
+          await onReload()
+        }}
+      />
+    </div>
+  )
 
   return (
     <div className="space-y-6">
@@ -296,6 +360,7 @@ export function GridKybPeopleStep({
         </div>
       ) : (
         <div className="space-y-4">
+          {identityUpload}
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label>First name</Label>
@@ -440,30 +505,6 @@ export function GridKybPeopleStep({
                 </label>
               ))}
             </div>
-          </div>
-          {identityError ? (
-            <p className="text-sm text-amber-700 dark:text-amber-400">{identityError.reason}</p>
-          ) : null}
-          <div className={cn(identityError && "rounded-xl ring-1 ring-amber-400/70")}>
-            <GridKybDocumentUpload
-              key={selected?.id ?? "new"}
-              ref={idUploadRef}
-              title="Upload owner ID document"
-              category="identity"
-              acceptedDocumentTypes={
-                errors.find((error) => error.documentCategory === "identity")?.acceptedDocumentTypes ??
-                GRID_KYB_DOCUMENT_CATEGORIES.identity.acceptedDocumentTypes
-              }
-              extraFields={{ personId: selected?.id, issuingAuthority: true, documentNumber: true }}
-              existingDocuments={identityDocsFor(selected?.id)}
-              onRemoveExisting={onRemoveDocument}
-              disabled={disabled}
-              hideSubmit
-              onUploaded={async (doc) => {
-                if (doc) onDocumentAdded(doc)
-                await onReload()
-              }}
-            />
           </div>
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <div className="flex gap-2">

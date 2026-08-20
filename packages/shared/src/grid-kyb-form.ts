@@ -433,6 +433,7 @@ export type GridKybErrorPointer = {
   field?: string
   documentCategory?: GridKybDocumentCategory
   resourceId?: string
+  gridDocumentId?: string
   reason: string
   acceptedDocumentTypes?: string[]
 }
@@ -446,13 +447,57 @@ const DOCUMENT_ERROR_TO_CATEGORY: Record<string, GridKybDocumentCategory> = {
   MISSING_GOOD_STANDING_DOCUMENT: "good_standing",
 }
 
-export function mapGridKybVerificationError(error: GridKybVerificationError): GridKybErrorPointer | null {
+export function gridDocumentIdFromResource(resourceId: string | null | undefined): string {
+  const raw = String(resourceId ?? "").trim()
+  if (!raw) return ""
+  return raw.replace(/^Document:/i, "").trim()
+}
+
+export function gridKybErrorIsDocumentQuality(type: string | null | undefined): boolean {
+  const t = String(type ?? "").trim().toUpperCase()
+  if (!t) return false
+  if (t.includes("POOR_QUALITY")) return true
+  if (t.includes("SUSPECTED_FRAUD")) return true
+  if (t.includes("EXPIRED") && t.includes("DOCUMENT")) return true
+  if (t === "INVALID_DOCUMENT") return true
+  return false
+}
+
+export function rejectedGridDocumentIdsFromErrors(
+  errors: GridKybVerificationError[] | null | undefined,
+): string[] {
+  const ids = new Set<string>()
+  for (const error of Array.isArray(errors) ? errors : []) {
+    if (!gridKybErrorIsDocumentQuality(error.type)) continue
+    const id = gridDocumentIdFromResource(error.resourceId)
+    if (id) ids.add(id)
+  }
+  return [...ids]
+}
+
+function lookupDocumentForError(
+  resourceId: string | undefined,
+  documents: GridKybPointerDocument[] | null | undefined,
+): GridKybPointerDocument | undefined {
+  const documentId = gridDocumentIdFromResource(resourceId)
+  if (!documentId) return undefined
+  return (documents ?? []).find((row) => gridDocumentIdFromResource(row.gridDocumentId) === documentId)
+}
+
+export function mapGridKybVerificationError(
+  error: GridKybVerificationError,
+  documents?: GridKybPointerDocument[] | null,
+): GridKybErrorPointer | null {
   const type = String(error.type ?? "").trim().toUpperCase()
   const reason = String(error.reason ?? "").trim() || "This item needs attention."
   const resourceId = String(error.resourceId ?? "").trim() || undefined
   const accepted = Array.isArray(error.acceptedDocumentTypes)
     ? error.acceptedDocumentTypes.map((row) => String(row).trim()).filter(Boolean)
     : undefined
+  const gridDocumentId = resourceId?.startsWith("Document:")
+    ? gridDocumentIdFromResource(resourceId) || undefined
+    : undefined
+  const joined = lookupDocumentForError(resourceId, documents)
 
   if (type === "MISSING_FIELD" || type === "INVALID_FIELD") {
     const field = String(error.field ?? "").trim()
@@ -462,12 +507,35 @@ export function mapGridKybVerificationError(error: GridKybVerificationError): Gr
     return { section: "company", field: field || undefined, resourceId, reason }
   }
 
+  if (gridKybErrorIsDocumentQuality(type) && (gridDocumentId || resourceId?.startsWith("Document:"))) {
+    const category = (joined?.category || "").trim()
+    if (joined?.personId || category === "identity" || !joined) {
+      return {
+        section: "people",
+        documentCategory: "identity",
+        resourceId,
+        gridDocumentId,
+        reason,
+        acceptedDocumentTypes: accepted,
+      }
+    }
+    return {
+      section: "documents",
+      documentCategory: (category as GridKybDocumentCategory) || undefined,
+      resourceId,
+      gridDocumentId,
+      reason,
+      acceptedDocumentTypes: accepted,
+    }
+  }
+
   const documentCategory = DOCUMENT_ERROR_TO_CATEGORY[type]
   if (documentCategory === "identity" || resourceId?.startsWith("BeneficialOwner:")) {
     return {
       section: "people",
       documentCategory: documentCategory ?? "identity",
       resourceId,
+      gridDocumentId,
       reason,
       acceptedDocumentTypes: accepted,
     }
@@ -477,26 +545,44 @@ export function mapGridKybVerificationError(error: GridKybVerificationError): Gr
       section: "documents",
       documentCategory,
       resourceId,
+      gridDocumentId,
       reason,
       acceptedDocumentTypes: accepted,
     }
   }
 
   if (type.startsWith("MISSING_") && type.endsWith("_DOCUMENT")) {
-    return { section: "documents", resourceId, reason, acceptedDocumentTypes: accepted }
+    return { section: "documents", resourceId, gridDocumentId, reason, acceptedDocumentTypes: accepted }
   }
 
-  return { section: "company", resourceId, reason }
+  if (resourceId?.startsWith("Document:")) {
+    return {
+      section: "people",
+      documentCategory: "identity",
+      resourceId,
+      gridDocumentId,
+      reason,
+      acceptedDocumentTypes: accepted,
+    }
+  }
+
+  return { section: "company", field: undefined, resourceId, gridDocumentId, reason }
 }
 
-export function mapGridKybVerificationErrors(errors: GridKybVerificationError[] | null | undefined): GridKybErrorPointer[] {
+export function mapGridKybVerificationErrors(
+  errors: GridKybVerificationError[] | null | undefined,
+  documents?: GridKybPointerDocument[] | null,
+): GridKybErrorPointer[] {
   return (Array.isArray(errors) ? errors : [])
-    .map(mapGridKybVerificationError)
+    .map((error) => mapGridKybVerificationError(error, documents))
     .filter((row): row is GridKybErrorPointer => Boolean(row))
 }
 
-export function firstGridKybErrorSection(errors: GridKybVerificationError[] | null | undefined): GridKybFormSection {
-  return mapGridKybVerificationErrors(errors)[0]?.section ?? "company"
+export function firstGridKybErrorSection(
+  errors: GridKybVerificationError[] | null | undefined,
+  documents?: GridKybPointerDocument[] | null,
+): GridKybFormSection {
+  return mapGridKybVerificationErrors(errors, documents)[0]?.section ?? "company"
 }
 
 function lastFieldSegment(field: string): string {
@@ -557,6 +643,7 @@ export type GridKybPointerPerson = {
 export type GridKybPointerDocument = {
   personId: string | null
   category: string
+  gridDocumentId?: string | null
 }
 
 export function gridBeneficialOwnerIdFromResource(resourceId: string | null | undefined): string {
@@ -636,10 +723,53 @@ function personFieldIsFilled(person: GridKybPointerPerson, field: string): boole
 function peopleForPointer(
   people: GridKybPointerPerson[],
   resourceId: string | null | undefined,
+  documents?: GridKybPointerDocument[],
 ): GridKybPointerPerson[] {
   if (!resourceId) return people
+  if (resourceId.startsWith("Document:")) {
+    const documentId = gridDocumentIdFromResource(resourceId)
+    const joined = (documents ?? []).find(
+      (row) => gridDocumentIdFromResource(row.gridDocumentId) === documentId && row.personId,
+    )
+    if (joined?.personId) {
+      const matched = people.filter((row) => row.id === joined.personId)
+      if (matched.length > 0) return matched
+    }
+    return people
+  }
   const matched = people.filter((row) => gridKybOwnerResourceMatches(row, resourceId))
   return matched.length > 0 ? matched : people
+}
+
+function rejectedGridDocumentIdSet(pointers: GridKybErrorPointer[]): Set<string> {
+  const ids = new Set<string>()
+  for (const pointer of pointers) {
+    const id = gridDocumentIdFromResource(pointer.gridDocumentId)
+    if (id) ids.add(id)
+  }
+  return ids
+}
+
+function documentIsAcceptedReplacement(
+  document: GridKybPointerDocument,
+  rejectedIds: Set<string>,
+): boolean {
+  const gridId = gridDocumentIdFromResource(document.gridDocumentId)
+  if (!gridId) return true
+  return !rejectedIds.has(gridId)
+}
+
+function personHasAcceptedIdentity(
+  documents: GridKybPointerDocument[],
+  personId: string,
+  rejectedIds: Set<string>,
+): boolean {
+  return documents.some(
+    (row) =>
+      row.category === "identity" &&
+      row.personId === personId &&
+      documentIsAcceptedReplacement(row, rejectedIds),
+  )
 }
 
 export function filterResolvedGridKybErrorPointers(input: {
@@ -649,24 +779,40 @@ export function filterResolvedGridKybErrorPointers(input: {
   documents: GridKybPointerDocument[]
 }): GridKybErrorPointer[] {
   const { pointers, company, people, documents } = input
+  const rejectedIds = rejectedGridDocumentIdSet(pointers)
   return pointers.filter((pointer) => {
+    const pointerDocumentId = gridDocumentIdFromResource(pointer.gridDocumentId || pointer.resourceId)
+    if (pointer.gridDocumentId || (pointer.resourceId?.startsWith("Document:") && pointer.documentCategory)) {
+      const stillStored = documents.some(
+        (row) => gridDocumentIdFromResource(row.gridDocumentId) === pointerDocumentId,
+      )
+      if (pointerDocumentId && stillStored && rejectedIds.has(pointerDocumentId)) {
+        return true
+      }
+      if (pointerDocumentId && !stillStored && pointer.gridDocumentId) {
+        return false
+      }
+    }
     if (pointer.documentCategory === "identity") {
-      const identityDocs = documents.filter((row) => row.category === "identity")
-      if (identityDocs.length === 0) return true
-      if (people.length <= 1) return false
-      const targets = peopleForPointer(people, pointer.resourceId)
-      if (targets.length === 0) return false
-      return targets.some((person) => !identityDocs.some((row) => row.personId === person.id))
+      const targets = peopleForPointer(people, pointer.resourceId, documents)
+      if (people.length === 0) return true
+      if (targets.length === 0) return !documents.some((row) => row.category === "identity")
+      return targets.some((person) => !personHasAcceptedIdentity(documents, person.id, rejectedIds))
     }
     if (pointer.documentCategory) {
-      return !documents.some((row) => !row.personId && row.category === pointer.documentCategory)
+      return !documents.some(
+        (row) =>
+          !row.personId &&
+          row.category === pointer.documentCategory &&
+          documentIsAcceptedReplacement(row, rejectedIds),
+      )
     }
     if (pointer.section === "company" && pointer.field) {
       return !gridKybCompanyFieldIsFilled(company, pointer.field)
     }
     if (pointer.section === "people" && pointer.field) {
       const field = pointer.field
-      const targets = peopleForPointer(people, pointer.resourceId)
+      const targets = peopleForPointer(people, pointer.resourceId, documents)
       if (targets.length === 0) return true
       const requiresNonUsTaxId = /NON_US_TAX_ID/i.test(pointer.reason)
       if (requiresNonUsTaxId) {
@@ -682,17 +828,17 @@ export function filterResolvedGridKybErrorPointers(input: {
       return !people.some((row) => row.roles.includes("CONTROL_PERSON"))
     }
     if (pointer.section === "people") {
-      const identityDocs = documents.filter((row) => row.category === "identity")
-      const targets = peopleForPointer(people, pointer.resourceId)
+      const targets = peopleForPointer(people, pointer.resourceId, documents)
       if (targets.length === 0) return true
       return targets.some(
         (person) =>
           !person.firstName?.trim() ||
           !person.lastName?.trim() ||
-          !identityDocs.some((row) => row.personId === person.id),
+          !personHasAcceptedIdentity(documents, person.id, rejectedIds),
       )
     }
-    return true
+    if (pointer.section === "company" && !pointer.field) return false
+    return pointer.section !== "company"
   })
 }
 
@@ -713,8 +859,8 @@ export function gridKybWizardReadiness(input: {
 }): GridKybWizardReadiness {
   const status = input.status ?? "draft"
   if (status === "approved") return "approved"
-  if (status === "in_review" || status === "submitted") return "in_review"
   if (input.remainingPointers > 0) return "needs_attention"
+  if (status === "in_review") return "in_review"
   const ready =
     Boolean(input.company.legalName.trim()) &&
     input.peopleCount > 0 &&
@@ -742,21 +888,25 @@ export function gridKybApplicationStatusFromVerification(input: {
   if (local === "rejected" || verification === "REJECTED") return "rejected"
   if (local === "hold") return "hold"
   if (verification === "RESOLVE_ERRORS") return "resolve_errors"
-  if (
-    verification === "PENDING_MANUAL_REVIEW" ||
-    verification === "IN_PROGRESS" ||
-    verification === "READY_FOR_VERIFICATION" ||
-    local === "pending"
-  ) {
-    return "in_review"
+  if (verification === "PENDING_MANUAL_REVIEW") return "in_review"
+  if (verification === "IN_PROGRESS" || verification === "READY_FOR_VERIFICATION") {
+    return "submitted"
   }
+  if (local === "pending") return "in_review"
   if (local === "in_progress") return "submitted"
   return "draft"
 }
 
 export function gridKybApplicationIsEditable(status: string | null | undefined): boolean {
   const s = String(status ?? "").trim().toLowerCase()
-  return s === "draft" || s === "resolve_errors" || s === "rejected" || s === "hold" || s === ""
+  return (
+    s === "draft" ||
+    s === "resolve_errors" ||
+    s === "rejected" ||
+    s === "hold" ||
+    s === "submitted" ||
+    s === ""
+  )
 }
 
 export type GridKybCompanyDraft = {

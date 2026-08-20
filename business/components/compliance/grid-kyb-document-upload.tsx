@@ -3,10 +3,12 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react"
 import { Loader2, X } from "lucide-react"
 import { GRID_KYB_DOCUMENT_TYPE_LABELS } from "@easner/shared"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { SETTINGS_INPUT_CLASS } from "@/lib/settings-control-surface"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 import type { KybDocumentPacket } from "@/lib/grid/kyb-packet-types"
 import { GridKybEnumSelect } from "./grid-kyb-enum-select"
 import { GridKybCountrySelect } from "./grid-kyb-country-select"
@@ -25,6 +27,9 @@ type Props = {
   hideSubmit?: boolean
   existingDocuments?: KybDocumentPacket[]
   onRemoveExisting?: (id: string) => Promise<void>
+  fileHint?: string
+  rejected?: boolean
+  rejectionReason?: string
 }
 
 export type GridKybDocumentUploadHandle = {
@@ -32,18 +37,23 @@ export type GridKybDocumentUploadHandle = {
   submit: (personId?: string) => Promise<KybDocumentPacket | undefined>
 }
 
+const FILE_ACCEPT = "application/pdf,image/jpeg,image/png,image/heic,image/heif,.heic,.heif,.jpg,.jpeg,.png,.pdf"
+
 export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Props>(function GridKybDocumentUpload(
   {
-  title,
-  acceptedDocumentTypes,
-  disabled,
-  onUploaded,
-  extraFields,
-  category,
-  hideSubmit,
-  existingDocuments = [],
-  onRemoveExisting,
-}: Props,
+    title,
+    acceptedDocumentTypes,
+    disabled,
+    onUploaded,
+    extraFields,
+    category,
+    hideSubmit,
+    existingDocuments = [],
+    onRemoveExisting,
+    fileHint,
+    rejected,
+    rejectionReason,
+  }: Props,
   ref,
 ) {
   const inputRef = useRef<HTMLInputElement>(null)
@@ -54,7 +64,6 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
   const [issuingCountry, setIssuingCountry] = useState(latestExisting?.issuingCountry ?? "")
   const [issuingAuthority, setIssuingAuthority] = useState(latestExisting?.issuingAuthority ?? "")
   const [documentNumber, setDocumentNumber] = useState(latestExisting?.documentNumber ?? "")
-  const [fileName, setFileName] = useState("No file chosen")
   const [file, setFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -74,35 +83,47 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
     label: GRID_KYB_DOCUMENT_TYPE_LABELS[value] ?? value,
   }))
   const hasStoredFile = existingDocuments.length > 0
-  const showFilePicker = !hasStoredFile && !file
-  const showUpload = Boolean(file) && !hasStoredFile && (!hideSubmit || Boolean(extraFields?.personId))
+  const showUpload = Boolean(file) && !hideSubmit && !saving
+  const needsReplacement = Boolean(rejected || rejectionReason)
 
-  async function upload(personId = extraFields?.personId) {
-    if (!file) {
+  async function removeExistingRows() {
+    if (!onRemoveExisting) return
+    for (const doc of existingDocuments) {
+      setRemovingId(doc.id)
+      try {
+        await onRemoveExisting(doc.id)
+      } finally {
+        setRemovingId(null)
+      }
+    }
+  }
+
+  async function upload(personId = extraFields?.personId, nextFile = file) {
+    if (!nextFile) {
       setError("Choose a file.")
       throw new Error("Choose a file.")
     }
     setSaving(true)
     setError(null)
     try {
+      if (existingDocuments.length) await removeExistingRows()
       const form = new FormData()
-      form.set("file", file)
+      form.set("file", nextFile)
       form.set("category", category)
       form.set("documentType", documentType)
       form.set("issuingCountry", issuingCountry)
       if (personId) form.set("personId", personId)
       if (issuingAuthority) form.set("issuingAuthority", issuingAuthority)
       if (documentNumber) form.set("documentNumber", documentNumber)
-      const res = await fetch("/api/grid/kyb/documents", { method: "POST", body: form })
+      const res = await fetchWithSession("/api/grid/kyb/documents", { method: "POST", body: form })
       const json = (await res.json().catch(() => ({}))) as { error?: string; document?: KybDocumentPacket }
-      if (!res.ok) throw new Error(json.error || "Upload failed")
+      if (!res.ok) throw new Error(json.error || "Could not store the file.")
       setFile(null)
-      setFileName("No file chosen")
       if (inputRef.current) inputRef.current.value = ""
-      if (!hideSubmit) await onUploaded(json.document)
+      await onUploaded(json.document)
       return json.document
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Upload failed"
+      const message = err instanceof Error ? err.message : "Could not store the file."
       setError(message)
       throw err instanceof Error ? err : new Error(message)
     } finally {
@@ -167,73 +188,110 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
           </div>
         ) : null}
       </div>
-      <div className="space-y-2">
-        <Label>File</Label>
-        {existingDocuments.length || file ? (
-          <div className="flex flex-wrap gap-1.5">
-            {existingDocuments.map((doc) => (
-              <button
-                key={doc.id}
-                type="button"
-                disabled={disabled || removingId === doc.id}
-                onClick={() => {
-                  if (!onRemoveExisting) return
-                  setRemovingId(doc.id)
-                  void onRemoveExisting(doc.id)
-                    .catch((err) => setError(err instanceof Error ? err.message : "Could not remove document"))
-                    .finally(() => setRemovingId(null))
-                }}
-                className="inline-flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-xs"
-              >
-                {removingId === doc.id ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
-                <span className="max-w-[12rem] truncate">{doc.fileName}</span>
-                <X className="size-3 text-muted-foreground" />
-              </button>
-            ))}
-            {file ? (
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => {
-                  setFile(null)
-                  setFileName("No file chosen")
-                  if (inputRef.current) inputRef.current.value = ""
-                }}
-                className="inline-flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-xs"
-              >
-                <span className="max-w-[12rem] truncate">{file.name}</span>
-                <X className="size-3 text-muted-foreground" />
-              </button>
+      <div
+        className={cn(
+          "space-y-3 rounded-xl border p-3",
+          needsReplacement
+            ? "border-amber-400/80 bg-amber-50/70 dark:bg-amber-950/20"
+            : "border-border bg-muted/30",
+        )}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <Label>File</Label>
+            {needsReplacement ? (
+              <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
+                {rejectionReason || "This file was rejected. Replace it with a clearer PDF or image of the ID."}
+              </p>
             ) : null}
           </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">No file chosen</p>
-        )}
-        {showFilePicker ? (
-          <>
-            <div className="flex flex-wrap items-center gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={disabled}
-                onClick={() => inputRef.current?.click()}
+          <Button
+            type="button"
+            variant={needsReplacement ? "primary" : "outline"}
+            size="sm"
+            className="shrink-0"
+            disabled={disabled || saving}
+            onClick={() => inputRef.current?.click()}
+          >
+            {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+            {saving ? "Uploading…" : hasStoredFile || file ? "Replace file" : "Choose file"}
+          </Button>
+        </div>
+        {existingDocuments.length || file ? (
+          <ul className="space-y-1.5">
+            {existingDocuments.map((doc) => (
+              <li
+                key={doc.id}
+                className="flex items-center gap-2 rounded-lg border bg-background px-2.5 py-1.5 text-sm"
               >
-                Choose file
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">PDF, JPEG, or PNG. Maximum file size is 10 MB.</p>
-          </>
-        ) : null}
+                <span className="min-w-0 flex-1 truncate">{doc.fileName}</span>
+                {needsReplacement ? (
+                  <span className="shrink-0 text-xs font-medium text-amber-700 dark:text-amber-400">
+                    Needs a new file
+                  </span>
+                ) : null}
+                {onRemoveExisting ? (
+                  <button
+                    type="button"
+                    aria-label={`Remove ${doc.fileName}`}
+                    disabled={disabled || removingId === doc.id || saving}
+                    onClick={() => {
+                      setRemovingId(doc.id)
+                      void onRemoveExisting(doc.id)
+                        .catch((err) => setError(err instanceof Error ? err.message : "Could not remove document"))
+                        .finally(() => setRemovingId(null))
+                    }}
+                    className="rounded-md p-0.5 text-muted-foreground hover:text-foreground"
+                  >
+                    {removingId === doc.id ? (
+                      <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                    ) : (
+                      <X className="size-3.5" />
+                    )}
+                  </button>
+                ) : null}
+              </li>
+            ))}
+            {file ? (
+              <li className="flex items-center gap-2 rounded-lg border bg-background px-2.5 py-1.5 text-sm">
+                <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                {saving ? <span className="text-xs text-muted-foreground">Uploading…</span> : null}
+                <button
+                  type="button"
+                  aria-label="Clear selected file"
+                  disabled={disabled || saving}
+                  onClick={() => {
+                    setFile(null)
+                    if (inputRef.current) inputRef.current.value = ""
+                  }}
+                  className="rounded-md p-0.5 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </li>
+            ) : null}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground">No file chosen yet.</p>
+        )}
+        <p className="text-xs text-muted-foreground">
+          {fileHint || "PDF, JPEG, or PNG. Maximum file size is 10 MB."}
+        </p>
         <input
           ref={inputRef}
           type="file"
-          accept="application/pdf,image/jpeg,image/png"
+          accept={FILE_ACCEPT}
           className="hidden"
           onChange={(event) => {
             const next = event.target.files?.[0] ?? null
             setFile(next)
-            setFileName(next?.name ?? "No file chosen")
+            setError(null)
+            if (!next) return
+            if (extraFields?.personId) {
+              void upload(extraFields.personId, next)
+              return
+            }
+            if (!hideSubmit) void upload(undefined, next)
           }}
         />
       </div>

@@ -107,7 +107,7 @@ export async function GET(request: Request) {
       storagePath: undefined,
     })),
     errors: application.last_errors,
-    errorPointers: mapGridKybVerificationErrors(application.last_errors),
+    errorPointers: mapGridKybVerificationErrors(application.last_errors, documents),
     gridCustomerId: application.grid_customer_id,
     submittedAt: application.submitted_at,
   })

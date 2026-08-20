@@ -22,7 +22,9 @@ type Props = {
 }
 
 export function GridKybDocumentsStep({ documents, errors, disabled, onReload, onUploaded, onRemove }: Props) {
-  const [openCategory, setOpenCategory] = useState<GridKybDocumentCategory | null>(null)
+  const [openCategory, setOpenCategory] = useState<GridKybDocumentCategory | null>(
+    () => errors.find((row) => row.section === "documents" && row.documentCategory)?.documentCategory ?? null,
+  )
 
   return (
     <div className="space-y-6">
@@ -46,7 +48,8 @@ export function GridKybDocumentsStep({ documents, errors, disabled, onReload, on
                 <span className="flex-1">
                   <span className="block text-sm font-medium">{meta.label}</span>
                   <span className="text-xs text-muted-foreground">
-                    {uploaded.length ? uploaded.map((doc) => doc.fileName).join(", ") : meta.caption}
+                    {error?.reason ||
+                      (uploaded.length ? uploaded.map((doc) => doc.fileName).join(", ") : meta.caption)}
                   </span>
                 </span>
                 <ChevronRight className="size-4 text-muted-foreground" />
@@ -60,6 +63,9 @@ export function GridKybDocumentsStep({ documents, errors, disabled, onReload, on
                     existingDocuments={uploaded}
                     onRemoveExisting={onRemove}
                     disabled={disabled}
+                    rejected={Boolean(error?.gridDocumentId)}
+                    rejectionReason={error?.reason}
+                    fileHint="PDF, JPEG, PNG, or HEIC. Maximum file size is 10 MB."
                     onUploaded={async (document) => {
                       if (document) onUploaded(document)
                       await onReload()

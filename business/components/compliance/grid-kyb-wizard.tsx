@@ -19,6 +19,7 @@ import { GRID_KYB_WIZARD_COPY } from "@/lib/copy/business-ui-copy"
 import { cn } from "@/lib/utils"
 import type { KybDocumentPacket, KybPacket } from "@/lib/grid/kyb-packet-types"
 import { fetchKybPacket, KYB_PACKET_QUERY_KEY } from "@/lib/grid/kyb-packet-query"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 import { useQueryClient } from "@tanstack/react-query"
 import { qk } from "@easner/shared"
 import { useMaybeScope } from "@/lib/query/scope"
@@ -51,7 +52,9 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
     ),
   )
   const [section, setSection] = useState<GridKybFormSection>(() =>
-    initialPacket.errorPointers?.length ? firstGridKybErrorSection(initialPacket.errors) : "company",
+    initialPacket.errorPointers?.length
+      ? firstGridKybErrorSection(initialPacket.errors, initialPacket.documents)
+      : "company",
   )
   const [pendingCta, setPendingCta] = useState<"exit" | "next" | "complete" | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -77,7 +80,7 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
       setCompany((prev) => mergeGridKybCompanyDraft(prev, json.company, "prefer-incoming"))
     }
     if (!hydratedSectionRef.current && json.errorPointers?.length) {
-      setSection(firstGridKybErrorSection(json.errors))
+      setSection(firstGridKybErrorSection(json.errors, json.documents))
     }
     hydratedSectionRef.current = true
     return json
@@ -123,7 +126,7 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
   }, [status, pointers.length, company, packet])
 
   async function saveCompany() {
-    const res = await fetch("/api/grid/kyb/company", {
+    const res = await fetchWithSession("/api/grid/kyb/company", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(company),
@@ -157,14 +160,31 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
     setError(null)
     try {
       await saveCompany()
-      const res = await fetch("/api/grid/kyb/complete", { method: "POST" })
+      const res = await fetchWithSession("/api/grid/kyb/complete", { method: "POST" })
       const json = (await res.json().catch(() => ({}))) as {
         error?: string
         status?: string
         errors?: KybPacket["errors"]
       }
       if (!res.ok) throw new Error(json.error || "Could not submit verification")
-      await load()
+      let next = await load()
+      for (let i = 0; i < 5; i += 1) {
+        const nextStatus = String(next.status ?? "").toLowerCase()
+        if (
+          nextStatus === "resolve_errors" ||
+          nextStatus === "hold" ||
+          nextStatus === "in_review" ||
+          (next.errorPointers?.length ?? 0) > 0
+        ) {
+          break
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1500))
+        next = await load()
+      }
+      if (next.errorPointers?.length) {
+        hydratedSectionRef.current = true
+        setSection(firstGridKybErrorSection(next.errors, next.documents))
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not submit verification")
     } finally {
@@ -205,7 +225,9 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
   }
 
   async function removeDocument(id: string) {
-    const res = await fetch(`/api/grid/kyb/documents?id=${encodeURIComponent(id)}`, { method: "DELETE" })
+    const res = await fetchWithSession(`/api/grid/kyb/documents?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    })
     if (!res.ok) {
       const json = (await res.json().catch(() => ({}))) as { error?: string }
       const message = json.error || "Could not remove document"
@@ -215,7 +237,7 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
     forgetDocument(id)
   }
 
-  if ((status === "in_review" || status === "submitted") && !editable) {
+  if (status === "in_review" && !editable) {
     return (
       <div className="flex h-full min-h-0 flex-col bg-background">
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b px-2 py-2 sm:px-4">
@@ -262,6 +284,11 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
         <div className="mx-auto max-w-2xl">
           {error ? <p className="mb-4 text-sm text-destructive">{error}</p> : null}
+          {status === "submitted" && pointers.length === 0 ? (
+            <p className="mb-4 text-sm text-muted-foreground">
+              We’re checking your documents now. If the ID file is unclear, you’ll be able to replace it here.
+            </p>
+          ) : null}
           {section === "company" ? (
             <GridKybCompanyStep
               company={company}

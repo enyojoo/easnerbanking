@@ -232,7 +232,7 @@ export function BusinessVerificationSection({
   const tier1FinalReject = tier1RejectionType === "Final" || rejectionDisplay?.isFinal === true
   const tier1UnderReview = tier1StatusIsInReview(tier1VerificationStatus)
   const tier1InProgress = tier1VerificationStatus === "in_progress"
-  const packetWaiting = kybPacket?.status === "in_review" || kybPacket?.status === "submitted"
+  const packetWaiting = kybPacket?.status === "in_review"
   const tier1AwaitingReview =
     !tier1Rejected && !tier1OnHold && (tier1UnderReview || packetWaiting)
   const hasGridCustomer = Boolean(noahKybCustomerId?.trim())
