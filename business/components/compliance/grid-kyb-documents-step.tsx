@@ -8,6 +8,7 @@ import {
   type GridKybErrorPointer,
 } from "@easner/shared"
 import { GRID_KYB_WIZARD_COPY } from "@/lib/copy/business-ui-copy"
+import { cn } from "@/lib/utils"
 import type { KybDocumentPacket } from "@/lib/grid/kyb-packet-types"
 import { GridKybDocumentUpload } from "./grid-kyb-document-upload"
 import { useState } from "react"
@@ -38,16 +39,19 @@ export function GridKybDocumentsStep({ documents, errors, disabled, onReload, on
           const uploaded = documents.filter((doc) => doc.category === category && !doc.personId)
           const error = errors.find((row) => row.documentCategory === category)
           return (
-            <div key={category} className="rounded-2xl border bg-card">
+            <div
+              key={category}
+              className={cn("rounded-2xl border bg-card", error && "border-destructive")}
+            >
               <button
                 type="button"
                 className="flex w-full items-center gap-3 px-4 py-3 text-left"
                 onClick={() => setOpenCategory(openCategory === category ? null : category)}
               >
-                {error ? <AlertTriangle className="size-4 text-amber-600" /> : <span className="size-4" />}
+                {error ? <AlertTriangle className="size-4 text-destructive" /> : <span className="size-4" />}
                 <span className="flex-1">
                   <span className="block text-sm font-medium">{meta.label}</span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className={cn("text-xs", error ? "text-destructive" : "text-muted-foreground")}>
                     {error?.reason ||
                       (uploaded.length ? uploaded.map((doc) => doc.fileName).join(", ") : meta.caption)}
                   </span>

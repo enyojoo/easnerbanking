@@ -272,6 +272,7 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
               className={cn(
                 "rounded-full px-2.5 py-1.5 text-sm sm:px-3",
                 section === item.id ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+                counts[item.id] ? "ring-1 ring-destructive" : "",
               )}
             >
               {item.label}

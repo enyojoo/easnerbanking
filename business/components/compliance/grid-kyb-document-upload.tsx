@@ -137,7 +137,12 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
   }))
 
   return (
-    <div className="space-y-4 rounded-2xl border bg-card p-4">
+    <div
+      className={cn(
+        "space-y-4 rounded-lg border bg-card p-4",
+        needsReplacement && "border-destructive",
+      )}
+    >
       <div>
         <h3 className="text-base font-semibold">{title}</h3>
       </div>
@@ -190,17 +195,17 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
       </div>
       <div
         className={cn(
-          "space-y-3 rounded-xl border p-3",
+          "space-y-3 rounded-md border p-3",
           needsReplacement
-            ? "border-amber-400/80 bg-amber-50/70 dark:bg-amber-950/20"
+            ? "border-destructive bg-destructive/5"
             : "border-border bg-muted/30",
         )}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <Label>File</Label>
+            <Label>Upload file</Label>
             {needsReplacement ? (
-              <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
+              <p className="mt-1 text-sm text-destructive">
                 {rejectionReason || "This file was rejected. Replace it with a clearer PDF or image of the ID."}
               </p>
             ) : null}
@@ -226,7 +231,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
               >
                 <span className="min-w-0 flex-1 truncate">{doc.fileName}</span>
                 {needsReplacement ? (
-                  <span className="shrink-0 text-xs font-medium text-amber-700 dark:text-amber-400">
+                  <span className="shrink-0 text-xs font-medium text-destructive">
                     Needs a new file
                   </span>
                 ) : null}

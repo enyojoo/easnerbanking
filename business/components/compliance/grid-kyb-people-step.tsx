@@ -269,7 +269,7 @@ export function GridKybPeopleStep({
   }, [people, errors, editingId])
 
   const identityUpload = (
-    <div id="owner-id-upload" className={cn(identityError && "rounded-xl ring-1 ring-amber-400/70")}>
+    <div id="owner-id-upload">
       <GridKybDocumentUpload
         key={selected?.id ?? "new"}
         ref={idUploadRef}
@@ -332,7 +332,7 @@ export function GridKybPeopleStep({
                 onClick={() => openExisting(person)}
                 className={cn(
                   "flex w-full items-center justify-between rounded-2xl border bg-card px-4 py-3 text-left",
-                  needsAttention && "border-amber-300",
+                  needsAttention && "border-destructive",
                 )}
               >
                 <span>
@@ -340,7 +340,7 @@ export function GridKybPeopleStep({
                     {person.firstName} {person.lastName}
                   </span>
                   {needsAttention ? (
-                    <span className="text-xs text-amber-700 dark:text-amber-400">
+                    <span className="text-xs text-destructive">
                       {personErrors[0]?.reason || (needsId ? "Needs ID document" : "Needs attention")}
                     </span>
                   ) : identityDocsFor(person.id).length ? (
@@ -353,14 +353,13 @@ export function GridKybPeopleStep({
                     <span className="text-xs text-muted-foreground">{person.roles.join(", ") || "Owner"}</span>
                   )}
                 </span>
-                {needsAttention ? <AlertTriangle className="size-4 text-amber-600" /> : null}
+                {needsAttention ? <AlertTriangle className="size-4 text-destructive" /> : null}
               </button>
             )
           })}
         </div>
       ) : (
         <div className="space-y-4">
-          {identityUpload}
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label>First name</Label>
@@ -506,6 +505,7 @@ export function GridKybPeopleStep({
               ))}
             </div>
           </div>
+          {identityUpload}
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <div className="flex gap-2">
             <Button type="button" size="sm" disabled={disabled || saving} onClick={() => void save()}>
