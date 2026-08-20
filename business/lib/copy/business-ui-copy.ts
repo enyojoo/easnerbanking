@@ -130,7 +130,6 @@ export const COLLECTIONS_COPY = {
   masterOffBody: "Turn them on in Payments settings to accept card and bank.",
   masterOffCta: "Open Payments settings",
   setupTitle: "Finish setup to accept card and bank",
-  setupCta: "Continue in Verification",
   setupProgress: "Setup",
   of: "of",
   statusTest: "Test mode",
@@ -424,8 +423,6 @@ export const ONBOARDING_STEP_COPY = {
   fundAfterVerification: "Available after verification",
   fundPending: "Add money to start sending.",
   fundComplete: "Balance received",
-  payrollPending: "Add who you pay and how they get paid.",
-  payrollReceivingPending: "Confirm receiving methods for your people.",
 } as const
 
 export const BANNER_COPY = {

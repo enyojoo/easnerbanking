@@ -10,7 +10,6 @@ import { isBusinessInfoStepComplete } from "@/lib/business-tab-completion"
 import { ensureBusinessOperationalAddressCountriesRegistered } from "@/lib/address/register-lib-address-countries"
 import { parseBalanceString } from "@/hooks/use-business-account-rows"
 import { useWalletBalances } from "@/hooks/queries/use-wallets"
-import { usePayrollOverview } from "@/hooks/queries/use-payroll"
 import { ONBOARDING_STEP_COPY } from "@/lib/copy/business-ui-copy"
 import { useMfaStatus } from "@/hooks/use-mfa-status"
 
@@ -59,7 +58,7 @@ type StepVisual = "complete" | "error" | "pending"
 
 /**
  * Sidebar onboarding progress – driven only by the signed-in account's live
- * profile / payroll / wallet data (same isolation model as balances).
+ * profile / wallet data (same isolation model as balances).
  * No sticky localStorage: that leaked completed steps across account switches.
  */
 export function BusinessOnboardingChecklist() {
@@ -67,7 +66,6 @@ export function BusinessOnboardingChecklist() {
   const userId = user?.id ?? null
   const profile = useBusinessProfile()
   const walletQuery = useWalletBalances()
-  const payrollOverviewQuery = usePayrollOverview()
   const [expanded, setExpanded] = useState(false)
   const walletReady = Boolean(walletQuery.isSuccess || walletQuery.isFetched)
   const funded =
@@ -105,23 +103,12 @@ export function BusinessOnboardingChecklist() {
   const step2Done = mfaStatus.verified
   const step3Done = profile.tier1Complete
   const verifyKind = tier1VerificationKind(profile.tier1Complete, profile.tier1VerificationStatus)
-  const payrollActiveCount = payrollOverviewQuery.data?.activeCount ?? 0
-  const payrollNeedsReceiving = (payrollOverviewQuery.data?.needsDestinationCount ?? 0) > 0
-  const payrollNeedsAttention = (payrollOverviewQuery.data?.attentionCount ?? 0) > 0
-  /** Payroll settings default from base currency; step completes once someone is added and pay-ready. */
-  const step4Done =
-    payrollActiveCount >= 1 && !payrollNeedsReceiving && !payrollNeedsAttention
-  const step5Done = profile.tier1Complete && funded
+  const step4Done = profile.tier1Complete && funded
 
   const refreshBalances = useCallback(async () => {
     if (!userId) return
     await walletQuery.refetch()
   }, [userId, walletQuery])
-
-  const refreshPayroll = useCallback(async () => {
-    if (!userId) return
-    await payrollOverviewQuery.refetch()
-  }, [payrollOverviewQuery, userId])
 
   useEffect(() => {
     if (!userId) return
@@ -131,14 +118,13 @@ export function BusinessOnboardingChecklist() {
   useEffect(() => {
     const onVis = () => {
       if (document.visibilityState === "visible") {
-        void refreshPayroll()
         void refreshBalances()
         mfaStatus.refresh({ force: true })
       }
     }
     document.addEventListener("visibilitychange", onVis)
     return () => document.removeEventListener("visibilitychange", onVis)
-  }, [mfaStatus.refresh, refreshBalances, refreshPayroll])
+  }, [mfaStatus.refresh, refreshBalances])
 
   useEffect(() => {
     const onAccounts = () => {
@@ -150,15 +136,14 @@ export function BusinessOnboardingChecklist() {
 
   useEffect(() => {
     if (expanded) {
-      void refreshPayroll()
       void refreshBalances()
       mfaStatus.refresh({ force: true })
     }
-  }, [expanded, mfaStatus.refresh, refreshBalances, refreshPayroll])
+  }, [expanded, mfaStatus.refresh, refreshBalances])
 
-  const completedCount = [step1Done, step2Done, step3Done, step4Done, step5Done].filter(Boolean).length
-  const allDone = completedCount === 5
-  const pct = Math.round((completedCount / 5) * 100)
+  const completedCount = [step1Done, step2Done, step3Done, step4Done].filter(Boolean).length
+  const allDone = completedCount === 4
+  const pct = Math.round((completedCount / 4) * 100)
 
   const step3Visual: StepVisual = step3Done ? "complete" : verifyKind === "rejected" ? "error" : "pending"
 
@@ -194,39 +179,23 @@ export function BusinessOnboardingChecklist() {
         visual: step3Visual,
       },
       {
-        id: "payroll",
-        title: "Set up Payroll",
-        subtitle: step4Done
-          ? payrollActiveCount === 1
-            ? "1 person ready for payroll"
-            : `${payrollActiveCount} people ready for payroll`
-          : payrollActiveCount >= 1
-            ? ONBOARDING_STEP_COPY.payrollReceivingPending
-            : ONBOARDING_STEP_COPY.payrollPending,
-        href: "/payroll",
-        visual: step4Done ? ("complete" as const) : ("pending" as const),
-      },
-      {
         id: "fund",
         title: "Fund your account",
         subtitle: !profile.tier1Complete
           ? ONBOARDING_STEP_COPY.fundAfterVerification
-          : step5Done
+          : step4Done
             ? ONBOARDING_STEP_COPY.fundComplete
             : ONBOARDING_STEP_COPY.fundPending,
         href: "/accounts",
-        visual: !profile.tier1Complete ? ("pending" as const) : step5Done ? ("complete" as const) : ("pending" as const),
+        visual: !profile.tier1Complete ? ("pending" as const) : step4Done ? ("complete" as const) : ("pending" as const),
       },
     ],
     [
-      payrollActiveCount,
-      profile.onboardingComplete,
       profile.tier1Complete,
       step1Done,
       step2Done,
       step3Done,
       step4Done,
-      step5Done,
       verifyKind,
       step3Visual,
     ],
@@ -267,7 +236,7 @@ export function BusinessOnboardingChecklist() {
             <h2 className="min-w-0 flex-1 text-xs font-semibold leading-snug text-foreground">
               Complete your account setup
             </h2>
-            <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{completedCount}/5</span>
+            <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{completedCount}/4</span>
           </div>
           <ul className="flex flex-col gap-2.5">
             {steps.map((step) => (
