@@ -14,6 +14,12 @@ interface UseCachedDataOptions<T> {
   persistKey?: string
   persistMaxAgeMs?: number
   onError?: (error: unknown) => void
+  refetchInterval?:
+    | number
+    | false
+    | ((query: { state: { data: T | undefined } }) => number | false)
+  refetchOnWindowFocus?: boolean | "always" | ((query: { state: { data: T | undefined } }) => boolean | "always")
+  refetchOnMount?: boolean | "always" | ((query: { state: { data: T | undefined } }) => boolean | "always")
 }
 
 /**
@@ -31,6 +37,9 @@ export function useCachedData<T>({
   persistKey,
   persistMaxAgeMs = 30 * 24 * 60 * 60 * 1000,
   onError,
+  refetchInterval = false,
+  refetchOnWindowFocus,
+  refetchOnMount,
 }: UseCachedDataOptions<T>) {
   const queryClient = useQueryClient()
   const queryKey = useMemo(
@@ -76,6 +85,9 @@ export function useCachedData<T>({
     staleTime: ttlMs,
     gcTime: Math.max(ttlMs * 2, 30_000),
     initialData: persistedInitial,
+    refetchInterval,
+    refetchOnWindowFocus,
+    refetchOnMount,
     meta: { safePersist: true, webPersist: "none", freshness: "operational" },
   })
 

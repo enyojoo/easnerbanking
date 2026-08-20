@@ -152,6 +152,22 @@ export interface AttachRealtimeOptions {
    * for transaction detail navigation.
    */
   transactionListRowId?: (row: unknown) => string
+  /**
+   * KYC/KYB identity rows live outside TanStack Query on some surfaces
+   * (business profile cache, mobile AuthContext). Called after the shared
+   * verification query is invalidated so those stores can refetch/patch.
+   */
+  onIdentityChange?: (event: IdentityChangeEvent) => void
+}
+
+export type IdentityChangeEvent = {
+  table:
+    | "businesses"
+    | "business_kyb_applications"
+    | "users"
+    | "business_stripe_connect_accounts"
+    | "business_checkout_settings"
+  row: Record<string, unknown>
 }
 
 function defaultFilter(scope: Scope): string | undefined {
@@ -320,6 +336,49 @@ function scheduleTransactionRowPatch(
   })
 }
 
+const IDENTITY_STATUS_FIELDS = [
+  "verification_status",
+  "noah_kyc_status",
+  "verification_rejection_reasons",
+  "kyb_verified_at",
+  "kyc_verified_at",
+  "grid_customer_id",
+  "status",
+  "last_errors",
+] as const
+
+function identityFieldsChanged(
+  prev: Record<string, unknown> | undefined,
+  next: Record<string, unknown>,
+): boolean {
+  if (!prev) return true
+  return IDENTITY_STATUS_FIELDS.some((key) => {
+    if (!(key in next)) return false
+    return prev[key] !== next[key]
+  })
+}
+
+function scheduleIdentityRefresh(
+  qc: QueryClient,
+  scope: Scope,
+  batcher: Batcher,
+  table: IdentityChangeEvent["table"],
+  row: Record<string, unknown>,
+  onIdentityChange: ((event: IdentityChangeEvent) => void) | undefined,
+): void {
+  const key = qk.verification.root(scope)
+  batcher.schedule(key, () => {
+    qc.invalidateQueries({ queryKey: key, refetchType: "active" })
+    qc.invalidateQueries({ queryKey: qk.auth.profile(), refetchType: "active" })
+    if (scope.kind === "business") {
+      qc.invalidateQueries({ queryKey: qk.org.detail(scope.orgId), refetchType: "active" })
+      qc.invalidateQueries({ queryKey: qk.collections.connectStatus(scope), refetchType: "active" })
+      qc.invalidateQueries({ queryKey: qk.collections.checkoutSettings.root(scope), refetchType: "active" })
+    }
+    onIdentityChange?.({ table, row })
+  })
+}
+
 function mapLedgerStatusForList(
   st: string,
   metadata?: unknown,
@@ -347,6 +406,7 @@ export function attachRealtime({
   filter,
   mapTransactionInsert,
   transactionListRowId,
+  onIdentityChange,
 }: AttachRealtimeOptions): () => void {
   const batcher = createBatcher(batchMs)
   const scopeFilter = filter ?? defaultFilter(scope)
@@ -501,6 +561,90 @@ export function attachRealtime({
       })
     },
   )
+
+  // --- KYC / KYB identity ----------------------------------------------------
+  // Webhook handlers persist partner status to these tables; the verification
+  // tab and status banner must update without a full reload.
+  if (scope.kind === "business") {
+    channel.on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "businesses",
+        filter: `id=eq.${scope.orgId}`,
+      },
+      (p) => {
+        const row = (p.new ?? {}) as Record<string, unknown>
+        if (!identityFieldsChanged(p.old as Record<string, unknown> | undefined, row)) return
+        health.lastEventAt = Date.now()
+        emit()
+        scheduleIdentityRefresh(qc, scope, batcher, "businesses", row, onIdentityChange)
+      },
+    )
+    channel.on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "business_kyb_applications",
+        filter: `business_id=eq.${scope.orgId}`,
+      },
+      (p) => {
+        const row = ((p.new ?? p.old) ?? {}) as Record<string, unknown>
+        health.lastEventAt = Date.now()
+        emit()
+        scheduleIdentityRefresh(qc, scope, batcher, "business_kyb_applications", row, onIdentityChange)
+      },
+    )
+    channel.on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "business_stripe_connect_accounts",
+        filter: `business_id=eq.${scope.orgId}`,
+      },
+      (p) => {
+        const row = ((p.new ?? p.old) ?? {}) as Record<string, unknown>
+        health.lastEventAt = Date.now()
+        emit()
+        scheduleIdentityRefresh(qc, scope, batcher, "business_stripe_connect_accounts", row, onIdentityChange)
+      },
+    )
+    channel.on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "business_checkout_settings",
+        filter: `business_id=eq.${scope.orgId}`,
+      },
+      (p) => {
+        const row = ((p.new ?? p.old) ?? {}) as Record<string, unknown>
+        health.lastEventAt = Date.now()
+        emit()
+        scheduleIdentityRefresh(qc, scope, batcher, "business_checkout_settings", row, onIdentityChange)
+      },
+    )
+  } else {
+    channel.on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "users",
+        filter: `id=eq.${scope.userId}`,
+      },
+      (p) => {
+        const row = (p.new ?? {}) as Record<string, unknown>
+        if (!identityFieldsChanged(p.old as Record<string, unknown> | undefined, row)) return
+        health.lastEventAt = Date.now()
+        emit()
+        scheduleIdentityRefresh(qc, scope, batcher, "users", row, onIdentityChange)
+      },
+    )
+  }
 
   // --- user preferences (personal only) --------------------------------------
   if (scope.kind === "personal") {

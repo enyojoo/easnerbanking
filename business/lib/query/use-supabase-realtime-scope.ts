@@ -2,7 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { attachRealtime, scopesEqual, type RealtimeHealth, type Scope, type SupabaseLikeClient } from "@easner/shared"
+import {
+  attachRealtime,
+  scopesEqual,
+  type IdentityChangeEvent,
+  type RealtimeHealth,
+  type Scope,
+  type SupabaseLikeClient,
+} from "@easner/shared"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { mapRowToBusinessTransaction } from "@/lib/transactions/map-row-to-business"
 
@@ -15,7 +22,10 @@ import { mapRowToBusinessTransaction } from "@/lib/transactions/map-row-to-busin
  * - One channel per scope across the entire app; individual screens never
  *   open their own `postgres_changes` listeners.
  */
-export function useSupabaseRealtimeScope(scope: Scope | null) {
+export function useSupabaseRealtimeScope(
+  scope: Scope | null,
+  options?: { onIdentityChange?: (event: IdentityChangeEvent) => void },
+) {
   const qc = useQueryClient()
   const [health, setHealth] = useState<RealtimeHealth>({
     subscribed: false,
@@ -23,6 +33,8 @@ export function useSupabaseRealtimeScope(scope: Scope | null) {
     lastError: null,
   })
   const scopeRef = useRef<Scope | null>(null)
+  const onIdentityChangeRef = useRef(options?.onIdentityChange)
+  onIdentityChangeRef.current = options?.onIdentityChange
 
   const supabase = useMemo<SupabaseLikeClient | null>(() => {
     if (typeof window === "undefined") return null
@@ -39,6 +51,7 @@ export function useSupabaseRealtimeScope(scope: Scope | null) {
       scope,
       supabase,
       onHealth: setHealth,
+      onIdentityChange: (event) => onIdentityChangeRef.current?.(event),
       mapTransactionInsert: (row) => {
         try {
           return mapRowToBusinessTransaction(row)

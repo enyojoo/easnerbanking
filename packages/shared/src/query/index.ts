@@ -37,6 +37,7 @@ export type {
   RealtimeHealth,
   VersionedRecord,
   AttachRealtimeOptions,
+  IdentityChangeEvent,
 } from "./realtime"
 
 export {

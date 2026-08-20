@@ -110,6 +110,7 @@ export const qk = {
       testPayments: (scope: Scope) =>
         [...scopeKey(scope), "collections", "checkout-settings", "test-payments"] as const,
     },
+    connectStatus: (scope: Scope) => [...scopeKey(scope), "collections", "connect-status"] as const,
   },
   invoices: {
     root: (scope: Scope) => [...scopeKey(scope), "invoices"] as const,
@@ -160,6 +161,10 @@ export const qk = {
     root: ["settings"] as const,
     communication: (userId: string) =>
       ["settings", "communication", userId] as const,
+  },
+  verification: {
+    root: (scope: Scope) => [...scopeKey(scope), "verification"] as const,
+    packet: (scope: Scope) => [...scopeKey(scope), "verification", "packet"] as const,
   },
   notifications: {
     root: (userId: string) => ["notifications", userId] as const,

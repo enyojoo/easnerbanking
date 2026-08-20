@@ -5,6 +5,9 @@ import { isStripePublishableConfigured } from "@/lib/stripe/public-enabled"
 
 const STORAGE_PREFIX = "easner:stripe-connect-status:"
 
+/** Dispatched after Connect status is written so Verification / Invoices update live. */
+export const CONNECT_STATUS_UPDATED_EVENT = "easner-connect-status-updated"
+
 export type CachedConnectStatus = {
   enabled: boolean
   connectEnabled: boolean
@@ -103,6 +106,13 @@ export function writeCachedConnectStatus(
   }
 }
 
+function emitConnectStatusUpdated(status: ConnectStatusPayload): void {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(
+    new CustomEvent<ConnectStatusPayload>(CONNECT_STATUS_UPDATED_EVENT, { detail: status }),
+  )
+}
+
 export function clearCachedConnectStatus(businessId: string | null | undefined): void {
   if (businessId) {
     const existing = memoryByBusinessId.get(businessId)
@@ -134,6 +144,7 @@ export async function fetchAndCacheConnectStatus(
       const json = (await res.json()) as ConnectStatusPayload
       if (!res.ok) return null
       writeCachedConnectStatus(businessId, json)
+      emitConnectStatusUpdated(json)
       return json
     } catch {
       return null

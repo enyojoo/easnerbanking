@@ -336,3 +336,130 @@ describe("attachRealtime business collections", () => {
     qc.clear()
   })
 })
+
+describe("attachRealtime identity / verification", () => {
+  const BUSINESS: Scope = { kind: "business", orgId: "org-1", entityId: "org-1" }
+  const PERSONAL: Scope = { kind: "personal", userId: "user-123" }
+
+  it("invalidates verification queries when businesses.verification_status updates", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const mock = buildMockSupabase()
+    const onIdentityChange = vi.fn()
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries")
+    const detach = attachRealtime({
+      qc,
+      scope: BUSINESS,
+      supabase: mock.supabase,
+      batchMs: 0,
+      onIdentityChange,
+    })
+
+    mock.triggerUpdate(
+      { id: "org-1", verification_status: "hold", updated_at: "2026-08-20T08:55:31Z" },
+      "businesses",
+    )
+    await new Promise((r) => setTimeout(r, 5))
+
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: qk.verification.root(BUSINESS) }),
+    )
+    expect(onIdentityChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        table: "businesses",
+        row: expect.objectContaining({ verification_status: "hold" }),
+      }),
+    )
+    detach()
+    qc.clear()
+  })
+
+  it("invalidates verification queries when a KYB application row changes", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const mock = buildMockSupabase()
+    const onIdentityChange = vi.fn()
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries")
+    const detach = attachRealtime({
+      qc,
+      scope: BUSINESS,
+      supabase: mock.supabase,
+      batchMs: 0,
+      onIdentityChange,
+    })
+
+    mock.triggerUpdate(
+      { id: "app-1", business_id: "org-1", status: "resolve_errors" },
+      "business_kyb_applications",
+    )
+    await new Promise((r) => setTimeout(r, 5))
+
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: qk.verification.root(BUSINESS) }),
+    )
+    expect(onIdentityChange).toHaveBeenCalledWith(
+      expect.objectContaining({ table: "business_kyb_applications" }),
+    )
+    detach()
+    qc.clear()
+  })
+
+  it("refreshes personal KYC when users.verification_status updates", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const mock = buildMockSupabase()
+    const onIdentityChange = vi.fn()
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries")
+    const detach = attachRealtime({
+      qc,
+      scope: PERSONAL,
+      supabase: mock.supabase,
+      batchMs: 0,
+      onIdentityChange,
+    })
+
+    mock.triggerUpdate(
+      { id: "user-123", verification_status: "approved", noah_kyc_status: "approved" },
+      "users",
+    )
+    await new Promise((r) => setTimeout(r, 5))
+
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: qk.verification.root(PERSONAL) }),
+    )
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: qk.auth.profile() }),
+    )
+    expect(onIdentityChange).toHaveBeenCalledWith(
+      expect.objectContaining({ table: "users" }),
+    )
+    detach()
+    qc.clear()
+  })
+
+  it("invalidates Connect status when the Stripe Connect account row changes", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const mock = buildMockSupabase()
+    const onIdentityChange = vi.fn()
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries")
+    const detach = attachRealtime({
+      qc,
+      scope: BUSINESS,
+      supabase: mock.supabase,
+      batchMs: 0,
+      onIdentityChange,
+    })
+
+    mock.triggerUpdate(
+      { id: "row-1", business_id: "org-1", onboarding_status: "active", payouts_enabled: true },
+      "business_stripe_connect_accounts",
+    )
+    await new Promise((r) => setTimeout(r, 5))
+
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: qk.collections.connectStatus(BUSINESS) }),
+    )
+    expect(onIdentityChange).toHaveBeenCalledWith(
+      expect.objectContaining({ table: "business_stripe_connect_accounts" }),
+    )
+    detach()
+    qc.clear()
+  })
+})

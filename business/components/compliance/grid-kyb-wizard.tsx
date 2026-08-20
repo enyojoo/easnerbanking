@@ -20,6 +20,8 @@ import { cn } from "@/lib/utils"
 import type { KybDocumentPacket, KybPacket } from "@/lib/grid/kyb-packet-types"
 import { fetchKybPacket, KYB_PACKET_QUERY_KEY } from "@/lib/grid/kyb-packet-query"
 import { useQueryClient } from "@tanstack/react-query"
+import { qk } from "@easner/shared"
+import { useMaybeScope } from "@/lib/query/scope"
 import { GridKybCompanyStep } from "./grid-kyb-company-step"
 import { GridKybPeopleStep } from "./grid-kyb-people-step"
 import { GridKybDocumentsStep } from "./grid-kyb-documents-step"
@@ -39,6 +41,7 @@ const SECTIONS: { id: GridKybFormSection; label: string }[] = [
 
 export function GridKybWizard({ onClose, initialCompany, initialPacket, initialInReview = false }: Props) {
   const queryClient = useQueryClient()
+  const scope = useMaybeScope()
   const [packet, setPacketState] = useState<KybPacket>(initialPacket)
   const [company, setCompany] = useState<GridKybCompanyDraft>(() =>
     mergeGridKybCompanyDraft(
@@ -60,10 +63,11 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
       setPacketState((prev) => {
         const resolved = typeof next === "function" ? next(prev) : next
         queryClient.setQueryData(KYB_PACKET_QUERY_KEY, resolved)
+        if (scope) queryClient.setQueryData(qk.verification.packet(scope), resolved)
         return resolved
       })
     },
-    [queryClient],
+    [queryClient, scope],
   )
 
   const load = useCallback(async () => {

@@ -10,6 +10,7 @@ import { BusinessScopeProvider, useScope } from "@/lib/query/scope"
 import { getBrowserQueryClient } from "@/lib/query/query-client"
 import { useSupabaseRealtimeScope } from "@/lib/query/use-supabase-realtime-scope"
 import { RealtimeHealthProvider } from "@/lib/query/realtime-health-context"
+import { applyBusinessIdentityRealtime } from "@/lib/query/apply-identity-realtime"
 import { useAuth } from "@/lib/auth-context"
 import { ensureBusinessAppSession } from "@/lib/app-session-client"
 import {
@@ -91,7 +92,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
 function ScopeRealtimeBridge({ children }: { children: React.ReactNode }) {
   const { scope } = useScope()
-  const health = useSupabaseRealtimeScope(scope)
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
+  const onIdentityChange = React.useCallback(
+    (event: Parameters<typeof applyBusinessIdentityRealtime>[2]) => {
+      if (!scope) return
+      applyBusinessIdentityRealtime(queryClient, scope, event, user?.id)
+    },
+    [queryClient, scope, user?.id],
+  )
+  const health = useSupabaseRealtimeScope(scope, { onIdentityChange })
   return <RealtimeHealthProvider value={health}>{children}</RealtimeHealthProvider>
 }
 

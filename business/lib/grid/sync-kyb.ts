@@ -29,6 +29,34 @@ function verificationStatusForKybEmail(status: VerificationStatus): KybEmailStat
   return "not_started"
 }
 
+function mergeGridKybRejectionReasons(
+  customer: Record<string, unknown>,
+  verifications: GridVerificationSummary[],
+  gridStatusRaw: string | null,
+  localStatus: VerificationStatus,
+): ReturnType<typeof extractGridCustomerRejectionReasons> {
+  const fromCustomer = extractGridCustomerRejectionReasons(customer, gridStatusRaw)
+  const verificationErrors = verifications.flatMap((row) =>
+    Array.isArray(row.errors) ? row.errors : [],
+  )
+  const fromVerifications = extractGridCustomerRejectionReasons(
+    { errors: verificationErrors },
+    null,
+  )
+  const merged = [...fromCustomer]
+  for (const row of fromVerifications) {
+    const message = String(row.message ?? row.reason ?? row.publicComment ?? "").trim()
+    if (!message) continue
+    if (merged.some((existing) => String(existing.message ?? existing.reason ?? existing.publicComment ?? "").trim() === message)) {
+      continue
+    }
+    merged.push(row)
+  }
+  if (merged.length > 0) return merged
+  if (localStatus === "hold") return extractGridCustomerRejectionReasons({}, "HOLD")
+  return fromCustomer
+}
+
 export async function fetchGridCustomer(customerId: string): Promise<GridCustomer & Record<string, unknown>> {
   return gridFetch<GridCustomer & Record<string, unknown>>({
     method: "GET",
@@ -113,7 +141,7 @@ export async function syncGridBusinessKybToSupabase(input: {
   const gridStatusRaw = String(customer.kybStatus ?? customer.kycStatus ?? "").trim() || null
   const rejectionReasons =
     status === "rejected" || status === "hold"
-      ? extractGridCustomerRejectionReasons(customer, gridStatusRaw)
+      ? mergeGridKybRejectionReasons(customer, verifications, gridStatusRaw, status)
       : null
 
   const verifiedAt = input.occurredAt ?? new Date().toISOString()

@@ -287,6 +287,61 @@ describe("syncGridBusinessKybToSupabase", () => {
     )
   })
 
+  it("maps document-quality RESOLVE_ERRORS to hold and emails action-needed", async () => {
+    mockFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { verification_status: "pending" },
+          }),
+        }),
+      }),
+      update: mockBusinessUpdate,
+    })
+    mockGridReads(
+      {
+        kybStatus: "PENDING",
+        beneficialOwners: [{ kycStatus: "PENDING", roles: ["UBO"] }],
+      },
+      [
+        {
+          verificationStatus: "RESOLVE_ERRORS",
+          errors: [
+            { type: "POOR_QUALITY_DOCUMENT", reason: "The uploaded photo is of poor quality" },
+            {
+              type: "SUSPECTED_FRAUD_DOCUMENT",
+              reason: "The uploaded image appears to be a screenshot rather than a photo of the document",
+            },
+          ],
+        },
+      ],
+    )
+
+    await syncGridBusinessKybToSupabase({
+      admin: mockAdmin as never,
+      businessId: "biz-1",
+      userId: "user-1",
+      customerId: "Customer:abc",
+    })
+
+    expect(mockPersistVerificationStatus).toHaveBeenCalledWith(
+      mockAdmin,
+      expect.objectContaining({
+        status: "hold",
+        rejectionReasons: expect.arrayContaining([
+          expect.objectContaining({ message: "The uploaded photo is of poor quality" }),
+        ]),
+      }),
+    )
+    expect(mockNotifyBusinessKybStatusChange).toHaveBeenCalledWith(
+      mockAdmin,
+      "biz-1",
+      "under_review",
+      "action_needed",
+      expect.arrayContaining(["The uploaded photo is of poor quality"]),
+    )
+  })
+
   it("sends action-needed email when Grid KYB moves to hold", async () => {
     mockGridReads(
       {

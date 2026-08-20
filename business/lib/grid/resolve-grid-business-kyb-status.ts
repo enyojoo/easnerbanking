@@ -21,6 +21,13 @@ export type GridDocumentSummary = {
 
 const GRID_IDENTITY_DOCUMENT_TYPES = new Set(["PASSPORT", "DRIVERS_LICENSE", "NATIONAL_ID"])
 
+/** Form-still-incomplete Grid errors — keep the hosted KYB CTA, not action-needed. */
+const GRID_MID_FLOW_RESOLVE_ERROR_TYPES = new Set([
+  "MISSING_IDENTITY_DOCUMENT",
+  "MISSING_DOCUMENT",
+  "MISSING_FIELD",
+])
+
 export function gridDocumentIsIdentity(documentType: string | null | undefined): boolean {
   return GRID_IDENTITY_DOCUMENT_TYPES.has(normStatus(documentType))
 }
@@ -37,6 +44,21 @@ export function gridVerificationsMissingIdentityDocument(
 
 export function gridDocumentsIncludeIdentity(documents: GridDocumentSummary[]): boolean {
   return documents.some((doc) => gridDocumentIsIdentity(doc.documentType))
+}
+
+/**
+ * Grid asked the customer to fix submitted documents (poor quality, screenshot,
+ * suspected fraud, expired, etc.) — not merely "upload the UBO ID to continue".
+ */
+export function gridVerificationsRequireUserFix(verifications: GridVerificationSummary[]): boolean {
+  return verifications.some((v) => {
+    if (normStatus(v.verificationStatus) !== "RESOLVE_ERRORS") return false
+    const errors = Array.isArray(v.errors) ? v.errors : []
+    return errors.some((error) => {
+      const type = normStatus(error.type)
+      return Boolean(type) && !GRID_MID_FLOW_RESOLVE_ERROR_TYPES.has(type)
+    })
+  })
 }
 
 function normStatus(raw: string | null | undefined): string {
@@ -84,6 +106,11 @@ export function resolveGridBusinessKybLocalStatus(input: {
 
   const verifications = input.verifications ?? []
   const documents = input.documents ?? []
+
+  // Submitted docs failed Grid review — action-needed, even if an ID file exists.
+  if (gridVerificationsRequireUserFix(verifications)) {
+    return "hold"
+  }
 
   // Grid dashboard "owner needs ID" — keep the Settings CTA (View progress).
   if (gridVerificationsMissingIdentityDocument(verifications)) {

@@ -81,7 +81,7 @@ import {
   invoicePreviewPath,
 } from "@/lib/invoice-public-url"
 import { isInvoiceCustomerLinkShareable } from "@/lib/invoices/invoice-status"
-import { readCachedConnectStatus } from "@/lib/stripe/connect-status-cache"
+import { useLiveConnectStatus } from "@/lib/stripe/use-live-connect-status"
 import { resolveConnectPanelPhase } from "@/lib/stripe/connect-panel-ux"
 
 async function copyText(text: string): Promise<boolean> {
@@ -138,12 +138,13 @@ export default function InvoicesPage() {
     () => assessInvoiceBusinessReadinessFromProfile(profile),
     [addressMetaReady, profile],
   )
+  const liveConnect = useLiveConnectStatus(profile.businessId)
   const onlinePaymentsIncomplete = useMemo(() => {
     if (profile.invoiceSettings?.showOnlinePayment === false) return false
-    const cached = readCachedConnectStatus(profile.businessId)
+    const cached = liveConnect
     if (!cached) return false
     return resolveConnectPanelPhase(cached) !== "ready"
-  }, [profile.businessId, profile.invoiceSettings?.showOnlinePayment])
+  }, [liveConnect, profile.invoiceSettings?.showOnlinePayment])
   const invoicesQuery = useInvoicesList()
   const addInvoiceMut = useAddInvoice()
   const updateInvoiceMut = useUpdateInvoice()

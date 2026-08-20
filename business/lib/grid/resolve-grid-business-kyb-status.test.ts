@@ -146,6 +146,30 @@ describe("resolveGridBusinessKybLocalStatus", () => {
     ).toBe("in_progress")
   })
 
+  it("maps document-quality RESOLVE_ERRORS to hold even when an ID file exists", () => {
+    expect(
+      resolveGridBusinessKybLocalStatus({
+        customer: {
+          kybStatus: "PENDING",
+          beneficialOwners: [{ id: "BeneficialOwner:1", kycStatus: "PENDING" }],
+        },
+        verifications: [
+          {
+            verificationStatus: "RESOLVE_ERRORS",
+            errors: [
+              { type: "POOR_QUALITY_DOCUMENT", reason: "The uploaded photo is of poor quality" },
+              {
+                type: "SUSPECTED_FRAUD_DOCUMENT",
+                reason: "The uploaded image appears to be a screenshot rather than a photo of the document",
+              },
+            ],
+          },
+        ],
+        documents: [{ documentType: "PASSPORT", documentHolder: "BeneficialOwner:1" }],
+      }),
+    ).toBe("hold")
+  })
+
   it("treats PENDING with UBO identity document as pending even without a review webhook", () => {
     expect(
       resolveGridBusinessKybLocalStatus({

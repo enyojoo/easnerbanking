@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { attachRealtime, mapLedgerRowToMobileListItem, type RealtimeHealth } from '@easner/shared'
+import {
+  attachRealtime,
+  mapLedgerRowToMobileListItem,
+  type IdentityChangeEvent,
+  type RealtimeHealth,
+} from '@easner/shared'
 import { supabase } from '../lib/supabase'
 import { useMaybeScope } from './scope'
 
@@ -14,7 +19,9 @@ import { useMaybeScope } from './scope'
  *   - Unsubscribes on unmount.
  *   - Surfaces `health` for UI banners (e.g. "reconnecting…").
  */
-export function useSupabaseRealtimeScope(): RealtimeHealth {
+export function useSupabaseRealtimeScope(options?: {
+  onIdentityChange?: (event: IdentityChangeEvent) => void
+}): RealtimeHealth {
   const qc = useQueryClient()
   const scope = useMaybeScope()
   const scopeKey = scope ? `${scope.kind}:${scope.userId}` : null
@@ -24,6 +31,8 @@ export function useSupabaseRealtimeScope(): RealtimeHealth {
     lastError: null,
   })
   const lastScopeRef = useRef<string | null>(null)
+  const onIdentityChangeRef = useRef(options?.onIdentityChange)
+  onIdentityChangeRef.current = options?.onIdentityChange
 
   useEffect(() => {
     if (!scope) return
@@ -33,6 +42,7 @@ export function useSupabaseRealtimeScope(): RealtimeHealth {
       scope,
       supabase,
       onHealth: setHealth,
+      onIdentityChange: (event) => onIdentityChangeRef.current?.(event),
       mapTransactionInsert: (row) => {
         try {
           return mapLedgerRowToMobileListItem(row)

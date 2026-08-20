@@ -10,6 +10,9 @@ import { useCachedData } from "@/lib/use-cached-data"
 import { normalizeBusinessLogoUrl } from "@/lib/image-cache"
 import type { InvoiceReplyEmailSource } from "@/lib/invoices/invoice-reply-email"
 import type { InvoicePaymentDefaults } from "@/lib/b2b/types"
+import { isChannelHealthy, pollingIntervalFor } from "@easner/shared"
+import { useDocumentVisibility } from "@/lib/query/use-document-visibility"
+import { useRealtimeHealth } from "@/lib/query/realtime-health-context"
 
 export type BusinessProfile = {
   businessId: string | null
@@ -114,6 +117,28 @@ function countryCodeFromName(name: string | null | undefined): string | null {
   return found?.code ?? null
 }
 
+function verificationStatusNeedsLiveUpdates(status: string | null | undefined): boolean {
+  const s = String(status ?? "").toLowerCase().trim()
+  return s !== "approved"
+}
+
+function verificationLiveRefetchIntervalMs(
+  status: string | null | undefined,
+  visible: boolean,
+  health: ReturnType<typeof useRealtimeHealth>,
+): number | false {
+  if (!visible || !verificationStatusNeedsLiveUpdates(status)) return false
+  const s = String(status ?? "").toLowerCase()
+  if (!isChannelHealthy(health)) {
+    if (s === "in_progress" || s === "hold" || s === "rejected") return 15_000
+    if (s === "pending" || s.includes("review")) return 30_000
+    return pollingIntervalFor("operational", health)
+  }
+  if (s === "in_progress" || s === "hold" || s === "rejected") return 20_000
+  if (s === "pending" || s.includes("review")) return 60_000
+  return false
+}
+
 export async function updateBusinessProfile(payload: {
   businessName?: string
   easetag?: string | null
@@ -178,6 +203,8 @@ export function useBusinessProfile() {
   const PROFILE_CACHE_TTL_MS = 60 * 60 * 1000
   const PROFILE_PERSIST_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
   const cacheKey = profileUserId ? CACHE_KEYS.BUSINESS_PROFILE(profileUserId) : null
+  const realtimeHealth = useRealtimeHealth()
+  const tabVisible = useDocumentVisibility()
   const { data: profileData, setData, loading: isLoading } = useCachedData<BusinessProfile>({
     enabled: Boolean(sessionUserId ?? user?.id),
     cacheKey,
@@ -185,6 +212,18 @@ export function useBusinessProfile() {
     initialData: DEFAULT_PROFILE,
     ttlMs: PROFILE_CACHE_TTL_MS,
     persistMaxAgeMs: PROFILE_PERSIST_MAX_AGE_MS,
+    refetchInterval: (query) =>
+      verificationLiveRefetchIntervalMs(
+        query.state.data?.tier1VerificationStatus,
+        tabVisible,
+        realtimeHealth,
+      ),
+    refetchOnWindowFocus: (query) =>
+      verificationStatusNeedsLiveUpdates(query.state.data?.tier1VerificationStatus),
+    refetchOnMount: (query) =>
+      verificationStatusNeedsLiveUpdates(query.state.data?.tier1VerificationStatus)
+        ? "always"
+        : true,
     fetcher: async () => {
       const res = await fetchWithSession("/api/business/profile")
       if (!res.ok) throw new Error("Failed to load profile")

@@ -39,6 +39,7 @@ import {
   EASNER_STRIPE_CONNECT_TERMS_URL,
 } from "@/lib/stripe/connect/legal-urls"
 import {
+  CONNECT_STATUS_UPDATED_EVENT,
   fetchAndCacheConnectStatus,
   initialConnectStatus,
   readCachedConnectStatus,
@@ -188,6 +189,33 @@ export function SettingsStripeConnectPanel({
     window.addEventListener("focus", onFocus)
     return () => window.removeEventListener("focus", onFocus)
   }, [refreshStatus])
+
+  useEffect(() => {
+    const onLive = (event: Event) => {
+      const detail = (event as CustomEvent<ConnectStatusPayload | undefined>).detail
+      if (detail) applyStatus(detail)
+      else void refreshStatus()
+    }
+    window.addEventListener(CONNECT_STATUS_UPDATED_EVENT, onLive)
+    return () => window.removeEventListener(CONNECT_STATUS_UPDATED_EVENT, onLive)
+  }, [applyStatus, refreshStatus])
+
+  useEffect(() => {
+    if (status?.ready || !status?.stripeAccountId) return
+    const onVis = () => {
+      if (document.hidden) return
+      void refreshStatus()
+    }
+    const interval = window.setInterval(() => {
+      if (document.hidden) return
+      void refreshStatus()
+    }, 20_000)
+    document.addEventListener("visibilitychange", onVis)
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener("visibilitychange", onVis)
+    }
+  }, [refreshStatus, status?.ready, status?.stripeAccountId])
 
   useEffect(() => {
     return () => {

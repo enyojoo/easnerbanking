@@ -161,7 +161,11 @@ function ForegroundResumeRefresher({ children }: { children: React.ReactNode }) 
 }
 
 function RealtimeActive({ children }: { children: React.ReactNode }) {
-  const health = useSupabaseRealtimeScope()
+  const { refreshUserProfile } = useAuth()
+  const onIdentityChange = React.useCallback(() => {
+    void refreshUserProfile()
+  }, [refreshUserProfile])
+  const health = useSupabaseRealtimeScope({ onIdentityChange })
   return (
     <RealtimeHealthProvider value={health}>
       <ForegroundResumeRefresher>{children}</ForegroundResumeRefresher>
