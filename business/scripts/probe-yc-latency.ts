@@ -6,8 +6,8 @@
  *
  * Optional:
  *   YC_PROBE_RUNS=3
- *   YC_PROBE_LIVE_QUOTES=1   — also POST /receive and /send (production locks quotes; use carefully)
- *   YC_PROBE_CUSTOMER_UID=…  — required for live quote probes
+ *   YC_PROBE_LIVE_QUOTES=1   – also POST /receive and /send (production locks quotes; use carefully)
+ *   YC_PROBE_CUSTOMER_UID=…  – required for live quote probes
  */
 import { randomUUID } from "crypto"
 import { getYellowcardEnvironment, getYellowcardRelayUrl } from "../lib/yellowcard/config"
@@ -103,7 +103,7 @@ function printResult(r: TimedResult) {
 async function main() {
   console.log("=== YC API latency probe ===")
   console.log("environment:", getYellowcardEnvironment())
-  console.log("relay:", getYellowcardRelayUrl() || "(direct — no relay)")
+  console.log("relay:", getYellowcardRelayUrl() || "(direct – no relay)")
   console.log("runs per endpoint:", RUNS)
   console.log("live quote probes:", LIVE_QUOTES ? "yes" : "no (GET only)")
   console.log("")
@@ -131,7 +131,7 @@ async function main() {
   for (const r of results) printResult(r)
 
   if (!LIVE_QUOTES) {
-    console.log("\n--- POST endpoints (dummy payload — measures API round-trip; expect 4xx) ---")
+    console.log("\n--- POST endpoints (dummy payload – measures API round-trip; expect 4xx) ---")
     const channels = await listYellowcardChannels()
     const recv = channels.find(
       (c) =>

@@ -8,7 +8,7 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;")
 }
 
-/** Plain-text greeting — `Hey Sam,` or `Hey there,` when name is unknown. */
+/** Plain-text greeting – `Hey Sam,` or `Hey there,` when name is unknown. */
 export function formatEasnerUserGreetingPlain(firstName?: string | null): string {
   const name = String(firstName ?? "").trim()
   return name ? `Hey ${name},` : "Hey there,"
@@ -24,7 +24,7 @@ export function easnerUserGreetingParagraphHtml(firstName?: string | null): stri
   return `<p class="welcome-text">${formatEasnerUserGreetingHtml(firstName)}</p>`
 }
 
-/** External invoice customers — keep formal `Dear {name},`. */
+/** External invoice customers – keep formal `Dear {name},`. */
 export function customerGreetingParagraphHtml(customerName: string): string {
   const name = String(customerName ?? "").trim() || "Customer"
   return `<p class="welcome-text">Dear ${escapeHtml(name)},</p>`

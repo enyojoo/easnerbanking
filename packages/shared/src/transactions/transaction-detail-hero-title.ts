@@ -26,7 +26,7 @@ export function formatOutboundTransferTitle(
   return name
 }
 
-/** Detail hero copy — web + mobile (not list rows or push body). */
+/** Detail hero copy – web + mobile (not list rows or push body). */
 export function formatTransactionDetailHeroTitle(input: TransactionDetailHeroTitleInput): string {
   const raw = String(input.counterpartyName ?? "").trim()
   const normalizedOutboundName = raw.replace(/^Transfer to\s+/i, "")

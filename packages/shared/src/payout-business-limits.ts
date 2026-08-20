@@ -30,7 +30,7 @@ const PAYOUT_BUSINESS_MIN_BANK: Record<string, number> = {
   GHS: 10,
   RWF: 6000,
   ZAR: 10,
-  /** Africa — product floors when Noah schema omits MinAmount */
+  /** Africa – product floors when Noah schema omits MinAmount */
   TZS: 1000,
   UGX: 1000,
   ZMW: 10,

@@ -16,7 +16,7 @@ export type TotpEnrollSetup = {
   factorId: string
   qrDataUrl: string
   secret: string | null
-  /** GoTrue `key.URL()` when the API returns it — preferred for client-rendered QR. */
+  /** GoTrue `key.URL()` when the API returns it – preferred for client-rendered QR. */
   keyUri: string | null
 }
 
@@ -149,7 +149,7 @@ export async function beginTotpEnrollment(client: SupabaseClient): Promise<TotpE
 }
 
 /**
- * `mfa.listFactors` can fail until the in-memory session is ready. Used by settings / More — pair
+ * `mfa.listFactors` can fail until the in-memory session is ready. Used by settings / More – pair
  * with UI that does not cache "Unable to load" snapshots.
  */
 export async function listFactorsForMfaStatus(client: SupabaseClient) {

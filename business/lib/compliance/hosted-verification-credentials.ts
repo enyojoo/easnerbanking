@@ -215,14 +215,14 @@ export function preloadSumsubWebSdk(): void {
   void import("@sumsub/websdk")
 }
 
-/** Test helper — clears in-memory caches only (sessionStorage kept). */
+/** Test helper – clears in-memory caches only (sessionStorage kept). */
 export function __clearHostedCredentialsMemoryForTests(): void {
   credentialsCache.clear()
   resumeAvailableCache.clear()
   inFlightByBusinessId.clear()
 }
 
-/** Test helper — clears in-memory + session caches. */
+/** Test helper – clears in-memory + session caches. */
 export function __resetHostedCredentialsCacheForTests(): void {
   __clearHostedCredentialsMemoryForTests()
   if (typeof window === "undefined") return

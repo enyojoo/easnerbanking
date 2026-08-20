@@ -53,7 +53,7 @@ export const YC_SEND_LIMITS_FALLBACK: Record<string, YcCorridorLimitFallback> = 
   "ZA:ZAR:bank_transfer": { min: 200, max: 500_000 },
   "ZM:ZMW:bank_transfer": { min: 100, max: 15_000_000 },
   "ZM:ZMW:mobile_money": { min: 100, max: 500_000 },
-  /** Grid + major-currency corridors — channel JSON often omits limits */
+  /** Grid + major-currency corridors – channel JSON often omits limits */
   "AE:AED:bank_transfer": { min: 20 },
   "CA:CAD:bank_transfer": { min: 10 },
   "CN:CNY:bank_transfer": { min: 50 },
@@ -65,7 +65,7 @@ export const YC_SEND_LIMITS_FALLBACK: Record<string, YcCorridorLimitFallback> = 
   "IN:INR:bank_transfer": { min: 100 },
   "PH:PHP:bank_transfer": { min: 100 },
   "TH:THB:bank_transfer": { min: 50 },
-  /** Major currencies — YC channel JSON often omits limits */
+  /** Major currencies – YC channel JSON often omits limits */
   "FR:EUR:bank_transfer": { min: 10 },
   "US:USD:bank_transfer": { min: 20 },
   "EC:USD:bank_transfer": { min: 20 },
@@ -116,7 +116,7 @@ export const YC_RECEIVE_LIMITS_FALLBACK: Record<string, YcCorridorLimitFallback>
   "ZA:ZAR:bank_transfer": { min: 100, max: 500_000 },
   "ZM:ZMW:bank_transfer": { min: 100, max: 15_000_000 },
   "ZM:ZMW:mobile_money": { min: 100, max: 100_000 },
-  /** Grid + major-currency corridors — channel JSON often omits limits */
+  /** Grid + major-currency corridors – channel JSON often omits limits */
   "AE:AED:bank_transfer": { min: 20 },
   "CA:CAD:bank_transfer": { min: 10 },
   "CN:CNY:bank_transfer": { min: 50 },
@@ -127,7 +127,7 @@ export const YC_RECEIVE_LIMITS_FALLBACK: Record<string, YcCorridorLimitFallback>
   "IN:INR:bank_transfer": { min: 100 },
   "PH:PHP:bank_transfer": { min: 100 },
   "TH:THB:bank_transfer": { min: 50 },
-  /** Major currencies — YC channel JSON often omits limits */
+  /** Major currencies – YC channel JSON often omits limits */
   "FR:EUR:bank_transfer": { min: 10 },
   "EC:USD:bank_transfer": { min: 20 },
   "KH:USD:bank_transfer": { min: 20 },

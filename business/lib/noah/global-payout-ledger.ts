@@ -36,7 +36,7 @@ export function isNoahGlobalPayoutOrchestrationInLegShape(tx: Record<string, unk
 }
 
 /**
- * Noah received USDC/EURC from Turnkey before fiat payout — internal orchestration leg, not user-facing credit.
+ * Noah received USDC/EURC from Turnkey before fiat payout – internal orchestration leg, not user-facing credit.
  * Mirrors bank-on-ramp orchestration Out (Solana) which we suppress on the other side of the flow.
  */
 export function isNoahGlobalPayoutOrchestrationInLeg(tx: Record<string, unknown>): boolean {
@@ -44,7 +44,7 @@ export function isNoahGlobalPayoutOrchestrationInLeg(tx: Record<string, unknown>
 }
 
 /**
- * Noah Solana crypto OUT that returns USDC/EURC after a failed global fiat payout — not a user-facing row.
+ * Noah Solana crypto OUT that returns USDC/EURC after a failed global fiat payout – not a user-facing row.
  */
 export function isNoahGlobalPayoutRefundOutLeg(tx: Record<string, unknown>): boolean {
   if (String(tx.Direction ?? "").toUpperCase() !== "OUT") return false
@@ -212,7 +212,7 @@ export type GlobalPayoutRefundSuppression = {
 }
 
 /**
- * Turnkey inbound that mirrors Noah's post-failure USDC refund — suppress ledger row and balance delta.
+ * Turnkey inbound that mirrors Noah's post-failure USDC refund – suppress ledger row and balance delta.
  */
 export async function findGlobalPayoutRefundForInboundSuppression(
   admin: SupabaseClient,
@@ -1006,7 +1006,7 @@ export function isGlobalPayoutOutRow(meta: Record<string, unknown>): boolean {
   )
 }
 
-/** @deprecated Prefer {@link isGlobalPayoutOutRow} — kept for existing call sites/tests. */
+/** @deprecated Prefer {@link isGlobalPayoutOutRow} – kept for existing call sites/tests. */
 function isGlobalPayoutNoahOutRow(meta: Record<string, unknown>): boolean {
   return isGlobalPayoutOutRow(meta)
 }
@@ -1136,7 +1136,7 @@ export async function patchGlobalPayoutNoahTurnkeySettlement(
 /**
  * Debit wallet for a global fiat payout (idempotent).
  * Called at execute to reserve `available_balance`, or at Turnkey settle to patch `turnkey_settled`.
- * Noah payout row is the sole ledger record — no Turnkey OUT row required.
+ * Noah payout row is the sole ledger record – no Turnkey OUT row required.
  */
 export async function applyGlobalPayoutWalletDebitForEasnerPayoutId(
   admin: SupabaseClient,
@@ -1359,7 +1359,7 @@ export async function deleteNoahGlobalPayoutOrchestrationInLedgerRowIfPresent(
 }
 
 /**
- * Global payout orchestration IN: patch OUT only, delete any legacy IN row — no new IN ledger insert.
+ * Global payout orchestration IN: patch OUT only, delete any legacy IN row – no new IN ledger insert.
  */
 export async function handleNoahGlobalPayoutOrchestrationInWebhook(
   admin: SupabaseClient,

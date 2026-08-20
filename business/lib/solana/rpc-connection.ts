@@ -6,7 +6,7 @@ export function getSolanaRpcUrl(): string {
   return "https://api.mainnet-beta.solana.com"
 }
 
-/** Shared RPC client — no built-in 429 retry storm (web3.js defaults retry up to 4s backoff). */
+/** Shared RPC client – no built-in 429 retry storm (web3.js defaults retry up to 4s backoff). */
 export function createSolanaRpcConnection(): Connection {
   return new Connection(getSolanaRpcUrl(), {
     commitment: "confirmed",

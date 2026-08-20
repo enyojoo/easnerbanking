@@ -19,7 +19,7 @@ export function businessUsesGridVerification(
   return usesGridVerification(row)
 }
 
-/** Effective Tier 1 status — reads canonical `verification_status`. */
+/** Effective Tier 1 status – reads canonical `verification_status`. */
 export function businessTier1Status(row: BusinessVerificationFields | null | undefined): string | null {
   if (!row) return null
   const status = String(row.verification_status ?? "not_started").trim()

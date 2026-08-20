@@ -442,7 +442,7 @@ export function SettingsPersonalTab() {
                     readOnly
                     disabled
                     value={
-                      [verifiedIdentity.idType, verifiedIdDisplay].filter(Boolean).join(" · ") || "—"
+                      [verifiedIdentity.idType, verifiedIdDisplay].filter(Boolean).join(" · ") || "–"
                     }
                   />
                 </div>

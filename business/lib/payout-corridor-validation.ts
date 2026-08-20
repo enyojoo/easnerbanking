@@ -37,8 +37,8 @@ function isMobileRow(row: RecipientLike): boolean {
 export type PayoutCorridorGateOptions = {
   /**
    * When true, require a live executable provider for this corridor (Noah sell,
-   * Grid discovery, or YC send channel — whichever Office routes first).
-   * Use for quote/send only — not recipient save.
+   * Grid discovery, or YC send channel – whichever Office routes first).
+   * Use for quote/send only – not recipient save.
    */
   requireExecutableProviderChannel?: boolean
   /** @deprecated Use requireExecutableProviderChannel */

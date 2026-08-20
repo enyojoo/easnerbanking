@@ -101,7 +101,7 @@ export async function resolveWalletOwnerIdForEasnerContext(
 /**
  * Active Turnkey **vault** (wallet signer) for Noah on-chain workflows.
  * Noah/bridges must receive the vault pubkey so they create/fund the canonical SPL ATA
- * (owner = vault). Do not pass the derived ATA address — custodians may treat it as a
+ * (owner = vault). Do not pass the derived ATA address – custodians may treat it as a
  * wallet owner and fund a nested token account Turnkey cannot sign.
  */
 export async function resolveTurnkeyAddressForNoahPair(

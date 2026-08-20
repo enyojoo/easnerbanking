@@ -222,7 +222,7 @@ function moneyDisplayFromMeta(
   return fallbackDisplay?.trim() || undefined
 }
 
-/** Grid regulatory receipt rows — fiat only; no crypto/chain fields. */
+/** Grid regulatory receipt rows – fiat only; no crypto/chain fields. */
 function buildGridEmailDetailRows(
   descriptor: ReturnType<typeof deriveTransactionNotification>,
   input: DispatchTransactionNotificationInput,
@@ -430,7 +430,7 @@ export async function writeInAppNotificationRow(
     outcome: NotificationOutcome
   },
 ): Promise<void> {
-  // no-op — extension point for future in-app feed
+  // no-op – extension point for future in-app feed
 }
 
 /** Unified push + email dispatch for ledger transaction events. */
@@ -439,7 +439,7 @@ export async function dispatchTransactionNotification(
   input: DispatchTransactionNotificationInput,
 ): Promise<void> {
   const outcome = input.outcome ?? "success"
-  // Failed transfers restore debited funds — no separate reversal notifications.
+  // Failed transfers restore debited funds – no separate reversal notifications.
   if (outcome === "reversed") return
   const descriptor = deriveTransactionNotification({ ...input, outcome })
   const { title, body } = descriptorToPushContent(descriptor)
@@ -452,7 +452,7 @@ export async function dispatchTransactionNotification(
   const parsed = parseCommunicationPreferences(prefs)
   const audience = await resolveEmailAudience(admin, input.userId)
 
-  // Business is email-only — no Expo push.
+  // Business is email-only – no Expo push.
   if (audience !== "business" && sendPush && parsed.channels.push) {
     await sendTransactionSettledPush(admin, {
       userId: input.userId,

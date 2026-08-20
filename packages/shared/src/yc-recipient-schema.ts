@@ -127,7 +127,7 @@ const COP_ACCOUNT_TYPES: { value: string; label: string }[] = [
   { value: "dp", label: "Electronic deposit" },
 ]
 
-/** Static YC field defs per corridor — used by sync script and runtime fallback. */
+/** Static YC field defs per corridor – used by sync script and runtime fallback. */
 export const YC_STATIC_CORRIDOR_SCHEMAS: Record<string, YcCorridorSchemaHint> = {
   "NG:NGN": {
     status: "ready",
@@ -256,7 +256,7 @@ function gridMomoProviders(...labels: string[]): GridCorridorSchemaHint {
 }
 
 /**
- * Grid corridors with no discovery rows — field shapes from Grid external account API types.
+ * Grid corridors with no discovery rows – field shapes from Grid external account API types.
  * @see Grid `customers.externalAccounts.create` accountInfo variants (AED_ACCOUNT, CAD_ACCOUNT, …)
  */
 export const GRID_STATIC_CORRIDOR_SCHEMAS: Record<string, GridCorridorSchemaHint> = {
@@ -968,14 +968,14 @@ function uniqueStrings(values: Array<string | undefined | null>): string[] {
   return [...new Set(values.map((v) => String(v ?? "").trim()).filter(Boolean))]
 }
 
-/** Provider-scoped recipient UI options — primary Office provider when set, else union. */
+/** Provider-scoped recipient UI options – primary Office provider when set, else union. */
 export function resolveCorridorRecipientOptions(input: {
   countryCode: string
   currencyCode: string
   rail: "bank_transfer" | "mobile_money"
   fieldsSchema?: unknown
   providers?: unknown
-  /** Office primary payout provider — scopes banks/extras to that rail. */
+  /** Office primary payout provider – scopes banks/extras to that rail. */
   payoutProvider?: "noah" | "yellowcard" | "grid" | null
 }): CorridorRecipientOptions {
   const primary = input.payoutProvider ?? null

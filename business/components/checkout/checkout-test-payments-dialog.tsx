@@ -67,13 +67,13 @@ export function CheckoutTestPaymentsDialog({
                     <td className="py-2.5 pr-3 text-sm text-muted-foreground">
                       {row.completedAt
                         ? new Date(row.completedAt).toLocaleString()
-                        : "—"}
+                        : "–"}
                     </td>
                     <td className="py-2.5 pr-3 text-sm font-medium">
                       {formatMoneyDisplay(row.amountCents / 100, row.currency)}
                     </td>
                     <td className="truncate py-2.5 pr-3 text-sm text-muted-foreground">
-                      {row.customerEmail || "—"}
+                      {row.customerEmail || "–"}
                     </td>
                     <td className="py-2.5 text-sm text-muted-foreground">
                       {row.source === "payment_link"

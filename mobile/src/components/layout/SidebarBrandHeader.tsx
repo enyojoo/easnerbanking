@@ -5,7 +5,7 @@ import { CachedImage } from '../CachedImage'
 import { useThemeColors } from '../../contexts/ThemePaletteContext'
 import { HEADER_HEIGHT, spacing } from '../../theme'
 
-/** Consumer sidebar header — logo only (matches office sidebar). */
+/** Consumer sidebar header – logo only (matches office sidebar). */
 export function SidebarBrandHeader() {
   const palette = useThemeColors()
   const styles = useMemo(() => createStyles(palette), [palette])

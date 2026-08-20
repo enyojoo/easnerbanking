@@ -175,7 +175,7 @@ function defaultFilter(scope: Scope): string | undefined {
   return `user_id=eq.${scope.userId}`
 }
 
-/** Realtime filter for `public.transactions` — must match RLS scoping to avoid refetch storms. */
+/** Realtime filter for `public.transactions` – must match RLS scoping to avoid refetch storms. */
 function transactionsTableFilter(scope: Scope): string {
   if (scope.kind === "business") return `business_id=eq.${scope.orgId}`
   return `user_id=eq.${scope.userId}`
@@ -284,7 +284,7 @@ function scheduleTransactionInsert(
 
     const prepended = prependIntoFirstPage(qc, key, listRow, idFn)
     if (!prepended) {
-      // No warm cache yet — normal refetch on first mount will pick it up.
+      // No warm cache yet – normal refetch on first mount will pick it up.
       qc.invalidateQueries({ queryKey: key, refetchType: "active" })
       return
     }
@@ -436,7 +436,7 @@ export function attachRealtime({
          * Keep aggregate balances in sync without forcing a refetch.
          *
          * The wallets list query should not have to call Turnkey (or any provider)
-         * on every realtime balance tick — that can stampede external services
+         * on every realtime balance tick – that can stampede external services
          * and regress UX. When the payload includes a currency + balance-like
          * field, patch it into the list cache directly.
          */

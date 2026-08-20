@@ -37,7 +37,7 @@ export interface RecipientData {
   state?: string
   postalCode?: string
   metadata?: Record<string, unknown> | null
-  /** Client-only Easenet snapshot — not written to Supabase. */
+  /** Client-only Easenet snapshot – not written to Supabase. */
   payeeAvatarUrl?: string | null
   payeeAccountKind?: 'personal' | 'business'
 }
@@ -312,7 +312,7 @@ export const recipientService = {
   state?: string
   postalCode?: string
   metadata?: Record<string, unknown> | null
-  /** Client-only Easenet snapshot — not written to Supabase. */
+  /** Client-only Easenet snapshot – not written to Supabase. */
       payeeAvatarUrl?: string | null
       payeeAccountKind?: 'personal' | 'business'
     },

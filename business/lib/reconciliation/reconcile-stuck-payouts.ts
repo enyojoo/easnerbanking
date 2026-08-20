@@ -349,7 +349,7 @@ export async function reconcileStuckYcTransfers(
   stuckLeg2InProgress: number
   ycRefundExpected: number
 }> {
-  // Local TTL expiry + ledger fail — do not wait for amount-screen visits.
+  // Local TTL expiry + ledger fail – do not wait for amount-screen visits.
   const expiredPayIns = dryRun ? 0 : await expireStaleYcPayInTransfers(admin, { limit: 100 })
 
   const health = await countYcStuckHealth(admin, since)

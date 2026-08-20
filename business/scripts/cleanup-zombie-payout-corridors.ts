@@ -36,7 +36,7 @@ async function main() {
   }
 
   if (!execute) {
-    console.log("\nDry run — pass --execute to delete.")
+    console.log("\nDry run – pass --execute to delete.")
     return
   }
 

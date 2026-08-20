@@ -11,7 +11,7 @@ export const runtime = "nodejs"
 
 /**
  * Customer-facing global payout rates from `noah_rates` (Noah mid + Easner margin).
- * Used by business/mobile send preview — not live Noah /prices on every screen load.
+ * Used by business/mobile send preview – not live Noah /prices on every screen load.
  */
 export async function GET(request: Request) {
   const auth = await requireAuth(request)

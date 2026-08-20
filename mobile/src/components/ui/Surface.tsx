@@ -9,7 +9,7 @@ export type SurfaceProps = ViewProps & {
 }
 
 /**
- * Card-like surface: matches business `Card` — white/muted bg, semantic border, 8px radius.
+ * Card-like surface: matches business `Card` – white/muted bg, semantic border, 8px radius.
  */
 export function Surface({
   style,

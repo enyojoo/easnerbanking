@@ -25,7 +25,7 @@ type AccountCurrency = 'USD' | 'EUR' | 'GBP'
 type Props = {
   visible: boolean
   onClose: () => void
-  /** Receive screen currency — statement is only for this account */
+  /** Receive screen currency – statement is only for this account */
   accountCurrency: AccountCurrency
 }
 

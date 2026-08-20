@@ -39,7 +39,7 @@ function readRecord(value: unknown): Record<string, unknown> | null {
 
 function formatProviderLabel(provider: string | null | undefined): string {
   const raw = String(provider || "").trim()
-  if (!raw) return "—"
+  if (!raw) return "–"
   if (raw.toLowerCase() === "easner_internal") return "Easetag"
   if (raw.toLowerCase() === "yellowcard") return "Yellowcard"
   if (raw.toLowerCase() === "noah") return "Noah"
@@ -146,11 +146,11 @@ export function OfficeTransactionDetailPanel({ transaction }: Props) {
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
             <p className="text-gray-500">Display amount</p>
-            <p className="font-medium tabular-nums">{transaction.amountFormatted || "—"}</p>
+            <p className="font-medium tabular-nums">{transaction.amountFormatted || "–"}</p>
           </div>
           <div>
             <p className="text-gray-500">USD/EUR impact</p>
-            <p className="font-medium tabular-nums">{transaction.impactFormatted || transaction.balanceFormatted || "—"}</p>
+            <p className="font-medium tabular-nums">{transaction.impactFormatted || transaction.balanceFormatted || "–"}</p>
           </div>
         </div>
       </div>
@@ -169,11 +169,11 @@ export function OfficeTransactionDetailPanel({ transaction }: Props) {
       <div className="grid grid-cols-2 gap-3 text-sm">
         <div>
           <p className="text-gray-500">Easner ID</p>
-          <p className="font-mono text-xs break-all">{transaction.easner_transaction_id || "—"}</p>
+          <p className="font-mono text-xs break-all">{transaction.easner_transaction_id || "–"}</p>
         </div>
         <div>
           <p className="text-gray-500">Provider Tx ID</p>
-          <p className="font-mono text-xs break-all">{transaction.provider_transaction_id || "—"}</p>
+          <p className="font-mono text-xs break-all">{transaction.provider_transaction_id || "–"}</p>
         </div>
       </div>
     </div>

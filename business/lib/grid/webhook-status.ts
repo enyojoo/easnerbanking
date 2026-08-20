@@ -1,5 +1,5 @@
 /**
- * REFUND_COMPLETED includes "COMPLETED" — treat refunds as failure, never settled.
+ * REFUND_COMPLETED includes "COMPLETED" – treat refunds as failure, never settled.
  */
 export function classifyGridOutgoingPayoutWebhook(input: {
   eventType?: string | null
@@ -19,7 +19,7 @@ export function classifyGridOutgoingPayoutWebhook(input: {
   ) {
     return "failed"
   }
-  // Funding INCOMING.COMPLETED must not settle the payout — bank OUTGOING is the terminal success.
+  // Funding INCOMING.COMPLETED must not settle the payout – bank OUTGOING is the terminal success.
   if (type.includes("INCOMING") && !type.includes("OUTGOING")) return "pending"
   if (type.includes("OUTGOING_PAYMENT.COMPLETED")) return "settled"
   if (status === "COMPLETED") return "settled"

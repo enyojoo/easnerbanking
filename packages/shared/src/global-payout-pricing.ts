@@ -14,9 +14,9 @@ export type ComputeGlobalPayoutPricingInput = {
   noahMid: number
   noahFloor: number
   marginCaptureMode?: GlobalPayoutMarginCaptureMode
-  /** From Noah prepare Breakdown when present — preferred for channelCost. */
+  /** From Noah prepare Breakdown when present – preferred for channelCost. */
   prepareChannelFee?: number
-  /** From Noah prepare Breakdown when present — preferred for midNotional. */
+  /** From Noah prepare Breakdown when present – preferred for midNotional. */
   prepareRemaining?: number
   /** Easner processing fee in basis points (defaults to 100 = 1%). */
   processingFeeBps?: number

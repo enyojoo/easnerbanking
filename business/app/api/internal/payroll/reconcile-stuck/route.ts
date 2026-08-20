@@ -5,7 +5,7 @@ import { reconcilePayrollRunSettlements } from "@/lib/payroll/execute-run"
 import { sendPayrollStubEmailsForRun } from "@/lib/payroll/send-stub-email"
 import { sendPayrollRunSummaryEmail } from "@/lib/payroll/send-run-summary-email"
 
-/** Reconcile runs stuck in executing > 30 minutes — mark partial and leave line states as-is. */
+/** Reconcile runs stuck in executing > 30 minutes – mark partial and leave line states as-is. */
 export async function GET(request: Request) {
   try {
     assertInternalCronAuthorized(request)

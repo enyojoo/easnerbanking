@@ -23,7 +23,7 @@ export type CreateOnlineCheckoutSessionInput = {
   /** Amount the merchant listed; the customer charge is derived from the fee mode. */
   listedAmountCents: number
   currency: string
-  /** Shown on the payment sheet — never includes provider names. */
+  /** Shown on the payment sheet – never includes provider names. */
   productName: string
   productDescription?: string | null
   customerEmail?: string | null

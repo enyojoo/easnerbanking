@@ -12,7 +12,7 @@ export type PreviewInvoicePageResult =
   | { status: "not_found" }
   | { status: "ok"; payload: PublicInvoicePayload }
 
-/** Server load for `/invoice/preview/[id]` — same document as the customer view. */
+/** Server load for `/invoice/preview/[id]` – same document as the customer view. */
 export async function loadPreviewInvoicePage(invoiceId: string): Promise<PreviewInvoicePageResult> {
   const id = invoiceId.trim()
   if (!id) return { status: "not_found" }

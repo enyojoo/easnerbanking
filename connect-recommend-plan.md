@@ -1,12 +1,12 @@
 # Recommended Connect integration
 
-Product: **Online Checkout** for Easner Business — dashboard Payment Links (one-time, recurring, and stablecoin / QR Pay), website embed, later Checkout API. Sidebar: **Spending** then **Collections** (Invoices, Checkout, Links, Terminal). Card/bank funds settle to Easner Balance on the same destination-charge rail as invoice Pay online.
+Product: **Online Checkout** for Easner Business – dashboard Payment Links (one-time, recurring, and stablecoin / QR Pay), website embed, later Checkout API. Sidebar: **Spending** then **Collections** (Invoices, Checkout, Links, Terminal). Card/bank funds settle to Easner Balance on the same destination-charge rail as invoice Pay online.
 
 Decisions locked 2026-08-15. Visual companion: Cursor canvases `online-checkout-connect.canvas.tsx`, `collections-ux-spec.canvas.tsx`.
 
 ## Product offer (Easner Business)
 
-Bring **Collections** back in the sidebar. Group money-out under **Spending** (not Spend): Collections / Spending are parallel category nouns — inbound vs outbound. Spend reads as a verb next to Send.
+Bring **Collections** back in the sidebar. Group money-out under **Spending** (not Spend): Collections / Spending are parallel category nouns – inbound vs outbound. Spend reads as a verb next to Send.
 
 ### Information architecture (sidebar)
 
@@ -45,13 +45,13 @@ Operator routes: `/invoices`, `/checkout`, `/links`, `/send`, `/cards`, `/payrol
 | Website embed | Snippet + Easner session API (Online Checkout) | Payment Element on merchant.com | Yes |
 | Checkout API | Developers keys, webhooks | Custom cart | Follow-up, same backend |
 
-Do not give businesses Stripe keys or Stripe Dashboard. Do not send customers to `pay.stripe.com`. Card and bank Payment Links use Easner URLs that create Checkout Sessions on the platform. Stablecoin links reuse the existing QR Pay / autopayout rail into Easner Balance — not Stripe.
+Do not give businesses Stripe keys or Stripe Dashboard. Do not send customers to `pay.stripe.com`. Card and bank Payment Links use Easner URLs that create Checkout Sessions on the platform. Stablecoin links reuse the existing QR Pay / autopayout rail into Easner Balance – not Stripe.
 
-Recurring (card/bank) Payment Links use Stripe Billing on the platform (`mode: subscription`) with `transfer_data.destination` to the connected account. Easner owns cancel, pause, and failed-payment UX. Stripe Billing has a separate price list — see [stripe.com/billing/pricing](https://stripe.com/billing/pricing).
+Recurring (card/bank) Payment Links use Stripe Billing on the platform (`mode: subscription`) with `transfer_data.destination` to the connected account. Easner owns cancel, pause, and failed-payment UX. Stripe Billing has a separate price list – see [stripe.com/billing/pricing](https://stripe.com/billing/pricing).
 
 ### Online Checkout page (merchant checklist)
 
-Route: `/checkout` under Collections — not a Settings tab. Settings → Verification remains the single Connect onboarding. This page is the website-embed setup. Hide keys and live toggle until `resolveConnectReadyForCheckout` is true.
+Route: `/checkout` under Collections – not a Settings tab. Settings → Verification remains the single Connect onboarding. This page is the website-embed setup. Hide keys and live toggle until `resolveConnectReadyForCheckout` is true.
 
 | Step | Merchant action | Easner stores |
 | --- | --- | --- |
@@ -72,7 +72,7 @@ Sketch: Cursor canvas `online-checkout-settings.canvas.tsx`. Full domains + oper
 
 ## Customer domains & UX spec
 
-**Operator dashboard:** `business.easner.com` — Collections, Spending, Settings, Developers.
+**Operator dashboard:** `business.easner.com` – Collections, Spending, Settings, Developers.
 
 **Customer pay surfaces** use dedicated hosts so pay links are not confused with the business app:
 
@@ -84,7 +84,7 @@ Sketch: Cursor canvas `online-checkout-settings.canvas.tsx`. Full domains + oper
 | Website embed script | Merchant site | `js.easner.com/checkout.js` |
 | Session API | Merchant server | `api.easner.com` |
 
-**Online Checkout** does **not** host shoppers on `pay.easner.com`. Customers pay on the merchant’s site. `pay.easner.com` is for Payment Links, stablecoin charge sessions, and optional thank-you redirects — not website embed.
+**Online Checkout** does **not** host shoppers on `pay.easner.com`. Customers pay on the merchant’s site. `pay.easner.com` is for Payment Links, stablecoin charge sessions, and optional thank-you redirects – not website embed.
 
 ### URL patterns (locked)
 
@@ -97,22 +97,22 @@ pay.easner.com/{easetag}/{sessionId}             Stablecoin charge session
 pay.easner.com/thanks                            Default Payment Link success (optional per-link redirect)
 
 business.easner.com/checkout                     Online Checkout integration hub
-business.easner.com/links                        Payment Links — create & manage
+business.easner.com/links                        Payment Links – create & manage
 ```
 
-**No @easetag yet** — same hosts, shorter paths (matches today’s invoice behavior in `buildInvoiceCustomerViewPath`):
+**No @easetag yet** – same hosts, shorter paths (matches today’s invoice behavior in `buildInvoiceCustomerViewPath`):
 
 ```
-invoice.easner.com/{invoiceId}                   Single segment — invoice row UUID
-pay.easner.com/plink_{hex32}                     Payment Link — typed public id (see below)
-pay.easner.com/{sessionId}                       Stablecoin — terminal session UUID (standard shape)
+invoice.easner.com/{invoiceId}                   Single segment – invoice row UUID
+pay.easner.com/plink_{hex32}                     Payment Link – typed public id (see below)
+pay.easner.com/{sessionId}                       Stablecoin – terminal session UUID (standard shape)
 ```
 
-**Payment link public id (locked):** prefix `plink_` + 32 hex chars (UUID without dashes). Example: `plink_550e8400e29b41d4a716446655440000`. Never a raw UUID for links — that removes ambiguity with stablecoin session ids on one-segment `pay.easner.com` paths. Helper: `business/lib/payment-links/public-id.ts`.
+**Payment link public id (locked):** prefix `plink_` + 32 hex chars (UUID without dashes). Example: `plink_550e8400e29b41d4a716446655440000`. Never a raw UUID for links – that removes ambiguity with stablecoin session ids on one-segment `pay.easner.com` paths. Helper: `business/lib/payment-links/public-id.ts`.
 
 When the business later sets @easetag, **new** share links use the two-segment canonical form. Old one-segment links keep working (no broken emails or QR codes).
 
-### @easetag optional — how routing works
+### @easetag optional – how routing works
 
 `{easetag}` is **only in the URL when the business has set @easetag**. If not set, one-segment fallbacks still work.
 
@@ -135,7 +135,7 @@ Second segment on `pay.easner.com/{easetag}/…` disambiguates **without** a `/l
 **Migration (v1 or follow-up):**
 
 - `business.easner.com/invoice/…` → `invoice.easner.com/…`
-- `business.easner.com/qr-pay` — removed; use `/links`
+- `business.easner.com/qr-pay` – removed; use `/links`
 - `business.easner.com/pay/charge/{id}` → `pay.easner.com/{easetag}/{sessionId}` or `pay.easner.com/{sessionId}`
 - `business.easner.com/online-checkout` → `/checkout` (if introduced)
 - Do **not** use `business.easner.com/pay/…` for new card Payment Links
@@ -153,7 +153,7 @@ Bill known customers with terms
   → Collections → Invoices → customer gets invoice.easner.com/…
 ```
 
-### Online Checkout — operator UX
+### Online Checkout – operator UX
 
 **Not** “create a site.” **Connect your website.**
 
@@ -187,20 +187,20 @@ merchant.com/checkout
   → their server: webhook → fulfill
 ```
 
-### Payment Links — operator UX
+### Payment Links – operator UX
 
 **Route:** `business.easner.com/links` (absorbs QR Pay).
 
-**List:** active / archived — name, type (one-time / recurring / stablecoin), amount, link, payment count, created. **Create payment link** CTA.
+**List:** active / archived – name, type (one-time / recurring / stablecoin), amount, link, payment count, created. **Create payment link** CTA.
 
-**Create flow** — one form, sections (locked: **single form with rail toggle**, not separate nav products):
+**Create flow** – one form, sections (locked: **single form with rail toggle**, not separate nav products):
 
-1. **What are you collecting?** — One-time (card/bank) · Recurring (card/bank) · Stablecoin (QR/wallet)
-2. **Details** — label, amount, currency, description; if recurring: interval (month/year), optional trial
-3. **After payment** — default Easner thank-you on `pay.easner.com`; optional redirect URL
+1. **What are you collecting?** – One-time (card/bank) · Recurring (card/bank) · Stablecoin (QR/wallet)
+2. **Details** – label, amount, currency, description; if recurring: interval (month/year), optional trial
+3. **After payment** – default Easner thank-you on `pay.easner.com`; optional redirect URL
 4. **Create** → share sheet
 
-**Share sheet:** `https://pay.easner.com/{easetag}/{slug}` (or one-segment fallback) · copy link · download QR/placard · open preview · archive (edit label only if payments exist — void & recreate for amount changes)
+**Share sheet:** `https://pay.easner.com/{easetag}/{slug}` (or one-segment fallback) · copy link · download QR/placard · open preview · archive (edit label only if payments exist – void & recreate for amount changes)
 
 **Customer on pay.easner.com:** business logo + name · amount + description · card/bank = Payment Element · stablecoin = charge/QR flow · recurring = first payment + interval copy · success = thank-you or redirect. No Stripe URL. No merchant Stripe keys.
 
@@ -238,13 +238,13 @@ Negative balance liability: your platform (`losses_collector: "application"`)
 
 Easner is a white-label banking layer: businesses never see Stripe, and collected funds must land in Easner Balance via the Grid virtual-account payout, not stay in a seller Stripe balance. Dashboard none plus platform-owned pricing and negative balance liability is the allowed combination for that model. Existing connected accounts already use the equivalent v1 controller properties (`stripe_dashboard.type: none`, `fees.payer: application`, `losses.payments: application`). Reuse those accounts for Online Checkout. Create **new** accounts with Accounts v2; do not introduce legacy `type: custom | express | standard`.
 
-Each connected account needs recipient configuration (`configuration.recipient`) with `stripe_transfers` on `stripe_balance` requested, so the account can receive transfers from the platform. Marketplace-style recipient accounts should not request merchant configuration or `card_payments` for this charge pattern — that lengthens onboarding. Existing v1 rows currently request both `transfers` and `card_payments`; do not expand that for Checkout. Leave a later cleanup to drop unused `card_payments` if onboarding friction shows up.
+Each connected account needs recipient configuration (`configuration.recipient`) with `stripe_transfers` on `stripe_balance` requested, so the account can receive transfers from the platform. Marketplace-style recipient accounts should not request merchant configuration or `card_payments` for this charge pattern – that lengthens onboarding. Existing v1 rows currently request both `transfers` and `card_payments`; do not expand that for Checkout. Leave a later cleanup to drop unused `card_payments` if onboarding friction shows up.
 
 Compatibility: `dashboard: "none"` + `fees_collector: "application"` + `losses_collector: "application"` + destination charges is **allowed**.
 
 ### B. Charge pattern: destination charges
 
-The customer pays through Easner-provided checkout (hosted Payment Link or embed). Easner is merchant of record. Stripe charges the platform, then automatically transfers to the connected account, which already payouts daily to the Grid VA and credits Easner Balance. Direct charges would make the business merchant of record and treat the connected-account Stripe ledger as the primary balance — that breaks the invoice settlement path you asked to reuse.
+The customer pays through Easner-provided checkout (hosted Payment Link or embed). Easner is merchant of record. Stripe charges the platform, then automatically transfers to the connected account, which already payouts daily to the Grid VA and credits Easner Balance. Direct charges would make the business merchant of record and treat the connected-account Stripe ledger as the primary balance – that breaks the invoice settlement path you asked to reuse.
 
 Do not set `on_behalf_of` in v1. That would put the connected account on the card statement and as settlement merchant, with extra merchant KYC. Invoice Pay online already stays Easner merchant of record with a statement descriptor suffix. Match that for Checkout.
 
@@ -261,7 +261,7 @@ Flow:
 3. Business completes embedded `account_onboarding` in Settings.
 4. Stripe verifies identity and bank/payout requirements.
 5. Platform links the Grid virtual account as the external payout destination.
-6. Before any Checkout Session, gate on recipient `stripe_transfers` (and payouts) active, details submitted, no outstanding requirements, and VA linked — same `resolveConnectReadyForCheckout` gate as invoices.
+6. Before any Checkout Session, gate on recipient `stripe_transfers` (and payouts) active, details submitted, no outstanding requirements, and VA linked – same `resolveConnectReadyForCheckout` gate as invoices.
 7. `notification_banner` stays mounted so new requirements surface in-product. Live charges only when capabilities are active.
 
 ### D. Payments dashboard access for businesses
@@ -293,7 +293,7 @@ Verify capability statuses with `stripe.v2.core.accounts.retrieve(id)` before en
 
 - Destination: `configuration.recipient.capabilities.stripe_balance.stripe_transfers.status === 'active'`
 - Also check `configuration.recipient.capabilities.stripe_balance.payouts.status`
-- Do not use v1 `charges_enabled` / `payouts_enabled` as the source of truth for new gating (existing invoice code still reads those columns — migrate the gate when Accounts v2 lands)
+- Do not use v1 `charges_enabled` / `payouts_enabled` as the source of truth for new gating (existing invoice code still reads those columns – migrate the gate when Accounts v2 lands)
 
 Until v2 retrieve is wired, keep the current readiness check (details submitted, transfers enabled, payouts enabled, external account linked, Tier 1, Grid VA) so Checkout cannot start ahead of invoices.
 
@@ -304,7 +304,7 @@ Until v2 retrieve is wired, keep the current readiness check (details submitted,
 
   `application_fee_amount = stripe_processing_estimate + easner_platform_take_cents`
 
-  Today `easner_platform_take_cents = 0`, so the application fee equals the Stripe estimate only (`applicationFeeIncludes: "stripe_fee_estimate"`). That recovers processing from the destination transfer so the platform does not subsidize cards. Tomorrow, increase `easner_platform_take_cents` or a percent — same Checkout Session fields.
+  Today `easner_platform_take_cents = 0`, so the application fee equals the Stripe estimate only (`applicationFeeIncludes: "stripe_fee_estimate"`). That recovers processing from the destination transfer so the platform does not subsidize cards. Tomorrow, increase `easner_platform_take_cents` or a percent – same Checkout Session fields.
 - Recurring: `application_fee_percent = stripe_estimate_percent + easner_take_percent` with `easner_take_percent = 0` today. Billing add-ons: [stripe.com/billing/pricing](https://stripe.com/billing/pricing).
 - Customer pays Easner (platform merchant of record). Stripe processing is billed to the platform on destination charges. The connected account receives gross minus application fee; Grid VA payout credits Easner Balance with that net. Show **gross / processing / net** on the transaction. Rates: [stripe.com/pricing](https://stripe.com/pricing). Monitor the [Connect margin report](https://docs.stripe.com/connect/margin-reports.md).
 - Invoice Pay online currently omits `application_fee_amount` (full transfer; platform can eat Stripe). **Align invoices to the same helper** so Checkout, Payment Links, and invoices share economics.
@@ -346,18 +346,18 @@ Do not create a separate v1 Customer object in order to bill connected accounts.
 
 ### J. Implementation plan
 
-1. **Account setup** — Reuse `business_stripe_connect_accounts`. Keep dashboard none / platform fees / platform losses. New accounts via `/v2/core/accounts` with `configuration.recipient` and `stripe_transfers`. Do not add a second connected account per business for Checkout.
-2. **Onboarding** — Same Settings Connect panel, embedded `account_onboarding` + `notification_banner`. Checkout and card/bank Payment Links share `resolveConnectReadyForCheckout`. Stablecoin links keep the existing QR Pay / autopayout eligibility.
-3. **Nav & domains** — Enable Collections + Spending. Deploy `invoice.easner.com` and `pay.easner.com`. Redirect legacy invoice and `/pay/charge` URLs. QR Pay UI at `/links` only.
+1. **Account setup** – Reuse `business_stripe_connect_accounts`. Keep dashboard none / platform fees / platform losses. New accounts via `/v2/core/accounts` with `configuration.recipient` and `stripe_transfers`. Do not add a second connected account per business for Checkout.
+2. **Onboarding** – Same Settings Connect panel, embedded `account_onboarding` + `notification_banner`. Checkout and card/bank Payment Links share `resolveConnectReadyForCheckout`. Stablecoin links keep the existing QR Pay / autopayout eligibility.
+3. **Nav & domains** – Enable Collections + Spending. Deploy `invoice.easner.com` and `pay.easner.com`. Redirect legacy invoice and `/pay/charge` URLs. QR Pay UI at `/links` only.
 4. **Payments and fund flow**
    - Generalize `createInvoiceCheckoutSession` into `createOnlineCheckoutSession({ source: invoice | payment_link | embed })` with `ui_mode: "elements"`, `payment_intent_data.transfer_data.destination`, no `on_behalf_of`.
    - Payment Links dashboard at `/links` (absorbs QR Pay placards): amount, description, rail = card/bank vs stablecoin, one-time vs interval, copy URL or download placard, archive.
-   - One-time: Checkout Session `mode: "payment"` + `application_fee_amount = stripe_estimate + easner_take` (`easner_take = 0` today). Shared helper for invoices and Checkout — never omit the field.
+   - One-time: Checkout Session `mode: "payment"` + `application_fee_amount = stripe_estimate + easner_take` (`easner_take = 0` today). Shared helper for invoices and Checkout – never omit the field.
    - Recurring: Checkout Session `mode: "subscription"` + `subscription_data.transfer_data.destination` + `application_fee_percent = stripe_estimate_percent + easner_take_percent` (`easner_take_percent = 0` today). Prices and Customers live on the **platform**.
    - Website embed: Easner publishable key + `client_secret`; merchant never sees `acct_`.
    - Persist sessions in a source-agnostic table (nullable `invoice_id`). Credit ledger `source: checkout_stripe` vs `invoice_stripe` with the same payment_received → clearing → available phases.
-5. **Webhooks and gating** — Extend the existing checkout-completed and payout handlers; do not fork a second settlement machine. Verify signatures. Gate on v2 recipient transfer/payout capabilities when available.
-6. **Go-live** — Confirm transfers + payouts active, VA linked, refund + dispute path in Easner UI, Radar on the platform account, statement descriptor suffix = business name, margin report after first live traffic. Recurring: cancel/pause in dashboard and failed-payment customer messaging before launch. Nav: Collections and Spending live; QR Pay reachable only via Payment Links.
+5. **Webhooks and gating** – Extend the existing checkout-completed and payout handlers; do not fork a second settlement machine. Verify signatures. Gate on v2 recipient transfer/payout capabilities when available.
+6. **Go-live** – Confirm transfers + payouts active, VA linked, refund + dispute path in Easner UI, Radar on the platform account, statement descriptor suffix = business name, margin report after first live traffic. Recurring: cancel/pause in dashboard and failed-payment customer messaging before launch. Nav: Collections and Spending live; QR Pay reachable only via Payment Links.
 
 ### K. Risk and liability
 

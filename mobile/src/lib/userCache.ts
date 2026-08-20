@@ -1,5 +1,5 @@
 /**
- * User-scoped AsyncStorage cache helpers (plaintext — do not store PAN, secrets, or tokens).
+ * User-scoped AsyncStorage cache helpers (plaintext – do not store PAN, secrets, or tokens).
  *
  * ## TTL policy (ms)
  * | Domain | TTL | Rationale |
@@ -9,7 +9,7 @@
  * | Exchange rates | 5m | Volatile FX |
  * | Transaction detail | 7d | Immutable ledger snapshot; refreshed on invalidation / pull-to-refresh |
  * | Communication prefs | 5m | Settings; PATCH updates cache |
- * | Profile row (`AuthUser`) | n/a TTL | [`profileSnapshot.ts`](./profileSnapshot.ts) — instant header; refreshed with profile fetch |
+ * | Profile row (`AuthUser`) | n/a TTL | [`profileSnapshot.ts`](./profileSnapshot.ts) – instant header; refreshed with profile fetch |
  * | Recipients | 60m | Low-volatility directory |
  * | Payment methods | 60m | Metadata |
  * | Currencies | 24h | Rarely changes |
@@ -29,7 +29,7 @@ import {
 } from './background-feed-cache-keys'
 import { clearProfileSnapshot } from './profileSnapshot'
 
-/** Canonical TTLs — single source of truth for SWR windows. */
+/** Canonical TTLs – single source of truth for SWR windows. */
 export const CacheTTL = {
   CURRENCIES: 24 * 60 * 60 * 1000,
   EXCHANGE_RATES: 5 * 60 * 1000,

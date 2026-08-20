@@ -177,7 +177,7 @@ export function stripTurnkeyBalancePhaseFromEventId(eventId: string): string {
 }
 
 /**
- * Stable `provider_transaction_id` for a deposit — one row per on-chain transfer,
+ * Stable `provider_transaction_id` for a deposit – one row per on-chain transfer,
  * regardless of confirmed vs finalized webhook delivery.
  */
 export function turnkeyBalanceDepositProviderTransactionId(

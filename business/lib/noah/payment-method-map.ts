@@ -126,7 +126,7 @@ export type VirtualAccountDisplay = {
   currency: "usd" | "eur" | "gbp"
   accountNumber?: string
   routingNumber?: string
-  /** UK Faster Payments — often mapped from `routingNumber` in API responses */
+  /** UK Faster Payments – often mapped from `routingNumber` in API responses */
   sortCode?: string
   iban?: string
   bic?: string

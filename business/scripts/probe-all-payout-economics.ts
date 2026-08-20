@@ -6,10 +6,10 @@
  *
  * Env:
  *   PROBE_USER_ID, PROBE_NOAH_CUSTOMER_ID
- *   PROBE_OUTPUT — optional JSON path (default: docs/payout-economics-probe.json)
- *   PROBE_SEND_BUDGETS — comma amounts (default: 100,500,1000,5000)
- *   PROBE_SOURCES — USD,EUR (default both)
- *   PROBE_USE_USER_RECIPIENTS — 1 to prefer saved recipients (default: 1)
+ *   PROBE_OUTPUT – optional JSON path (default: docs/payout-economics-probe.json)
+ *   PROBE_SEND_BUDGETS – comma amounts (default: 100,500,1000,5000)
+ *   PROBE_SOURCES – USD,EUR (default both)
+ *   PROBE_USE_USER_RECIPIENTS – 1 to prefer saved recipients (default: 1)
  */
 
 import { mkdirSync, writeFileSync } from "fs"
@@ -31,7 +31,7 @@ import {
 const DEFAULT_USER_ID = "c7ace38e-be38-43e7-86e1-6e66b90d4243"
 const DEFAULT_NOAH_CUSTOMER_ID = "eind_c7ace38ebe3843e786e16e66b90d4243"
 
-/** Noah-accepted probe recipients (synthetic — prepare only, no execute). */
+/** Noah-accepted probe recipients (synthetic – prepare only, no execute). */
 const FIXTURE_RECIPIENTS: Record<string, RecipientSellPrepareRow> = {
   NGN: {
     country_code: "NG",

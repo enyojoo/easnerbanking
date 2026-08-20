@@ -45,7 +45,7 @@ export function easnerTransactionDisplayToUrlSegment(displayOrRawId: string): st
 
 export type TransactionDetailReturnTo = "dashboard" | "transactions"
 
-/** Next.js route `/transactions/...` — ETIDs use lowercase `etid` in the URL; UI copy stays uppercase `ETID`. */
+/** Next.js route `/transactions/...` – ETIDs use lowercase `etid` in the URL; UI copy stays uppercase `ETID`. */
 export function transactionWebDetailPath(
   transactionId: string,
   opts?: { returnTo?: TransactionDetailReturnTo },
@@ -76,7 +76,7 @@ export function ensureEasnerTransactionId(
 
 /**
  * Display/reference id for a ledger row: prefer persisted ETID (column + metadata), then stable ids.
- * Does not invent synthetic `ETID…` values — those come from DB (`transfer_easetag_p2p`) or `ensureEasnerTransactionId` at write time.
+ * Does not invent synthetic `ETID…` values – those come from DB (`transfer_easetag_p2p`) or `ensureEasnerTransactionId` at write time.
  */
 export function displayEasnerTransactionId(input: {
   easnerTransactionId?: string | null

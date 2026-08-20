@@ -100,5 +100,5 @@ export function YcLocalPayInCompleteSummary({
   )
 }
 
-/** Plan alias — web complete pay-in panel summary rows. */
+/** Plan alias – web complete pay-in panel summary rows. */
 export { YcLocalPayInCompleteSummary as YcLocalPayInComplete }

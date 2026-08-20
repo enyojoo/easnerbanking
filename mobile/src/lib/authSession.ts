@@ -5,7 +5,7 @@ import { supabase } from './supabase'
 /**
  * Resolves the current Supabase session from memory + local storage only.
  *
- * Never calls `auth.getUser()` (GET /auth/v1/user) — that network round-trip was
+ * Never calls `auth.getUser()` (GET /auth/v1/user) – that network round-trip was
  * slowing Expo web reload when storage hydration raced parallel API callers.
  *
  * Prefer this over raw `getSession()` when calling APIs right after sign-in or cold start.
@@ -90,7 +90,7 @@ export async function getSessionReliable(): Promise<Session | null> {
   return sessionResolveInflight
 }
 
-/** User id from local session only — avoids GET /auth/v1/user. */
+/** User id from local session only – avoids GET /auth/v1/user. */
 export async function getAuthUserId(userId?: string | null): Promise<string | null> {
   const trimmed = userId?.trim()
   if (trimmed) return trimmed

@@ -5,7 +5,7 @@ import { buildYcLocalPayInReviewRows } from "./yc-local-pay-in-review-rows"
 import { TLC_LOCAL_TRANSFER_METHOD } from "./review-row-labels"
 
 describe("buildCrossBorderSendDetailRows", () => {
-  it("shows transfer amount, fee, rate, amount paid — not recipient gets", () => {
+  it("shows transfer amount, fee, rate, amount paid – not recipient gets", () => {
     const rows = buildCrossBorderSendDetailRows({
       payoutReview: {
         you_send_amount: 94_606.3,

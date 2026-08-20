@@ -53,7 +53,7 @@ export type YcFundBalanceQuote = {
   sourceNetworkName?: string
 }
 
-/** User-entered amount anchor — solved pay-in/credit from YC may differ from preview. */
+/** User-entered amount anchor – solved pay-in/credit from YC may differ from preview. */
 export type FundBalanceQuoteStashMeta = {
   country: string
   currency: string
@@ -96,7 +96,7 @@ function quoteMetaKey(meta: FundBalanceQuoteStashMeta): string {
   ].join('|')
 }
 
-/** Preview quote from `/quote` — enough for review and Continue. */
+/** Preview quote from `/quote` – enough for review and Continue. */
 export function isUsableFundBalanceQuotePreview(
   quote: YcFundBalanceQuote | null | undefined,
 ): quote is YcFundBalanceQuote {
@@ -109,7 +109,7 @@ export function isUsableFundBalanceQuotePreview(
   )
 }
 
-/** Locked order from `/confirm` — required before pay-in instructions finalize. */
+/** Locked order from `/confirm` – required before pay-in instructions finalize. */
 export function isCompleteFundBalanceQuote(
   quote: YcFundBalanceQuote | null | undefined,
 ): quote is YcFundBalanceQuote {
@@ -194,7 +194,7 @@ export async function fetchFundBalanceQuote(meta: FundBalanceQuoteStashMeta): Pr
   return fetchFundBalanceQuotePreview(meta)
 }
 
-/** Deduped quote fetch — background prefetch and Continue/review gate. */
+/** Deduped quote fetch – background prefetch and Continue/review gate. */
 export async function ensureFundBalanceQuoteStashed(
   meta: FundBalanceQuoteStashMeta,
 ): Promise<YcFundBalanceQuote | null> {
@@ -332,7 +332,7 @@ async function loadPayInNetworks(country: string, currency: string): Promise<Pay
   return rails.momoNetworks ?? rails.networks ?? []
 }
 
-/** Idempotent prefetch — dedupes in-flight requests and writes cache on success. */
+/** Idempotent prefetch – dedupes in-flight requests and writes cache on success. */
 export async function ensurePayInNetworksCached(
   country: string,
   currency: string,

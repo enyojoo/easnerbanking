@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   }
 
   if (raw === "USD" || raw === "EUR") {
-    return NextResponse.json({ error: "USD and EUR are default accounts — use accounts page directly." }, { status: 400 })
+    return NextResponse.json({ error: "USD and EUR are default accounts – use accounts page directly." }, { status: 400 })
   }
 
   const acc = await resolveNoahAccountContext(request, user.id)

@@ -14,7 +14,7 @@ export const SIGNUP_EMAIL_BLOCK_MESSAGES: Readonly<Record<SignupEmailBlockCode, 
   DISPOSABLE_EMAIL:
     "Please use a permanent email address. Temporary or disposable email providers aren't allowed.",
   APPLE_PRIVATE_RELAY_EMAIL:
-    "Easner needs your real email address to open an account. When signing in with Apple, choose Share My Email — or create an account with your email address instead.",
+    "Easner needs your real email address to open an account. When signing in with Apple, choose Share My Email – or create an account with your email address instead.",
 }
 
 /** True when the email is an Apple Hide My Email relay address. */

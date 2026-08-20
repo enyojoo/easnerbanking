@@ -249,7 +249,7 @@ function buildFundBalanceMetadata(input: {
   })
 }
 
-/** @deprecated MoMo draft flow — quote API replaces this. Routes return 410. */
+/** @deprecated MoMo draft flow – quote API replaces this. Routes return 410. */
 export async function createFundBalanceDraft(ctx: FundBalanceSessionContext) {
   const { admin, kycUserId, businessId, currency, country, rail, userRow } = ctx
   if (rail !== "mobile_money") {
@@ -347,7 +347,7 @@ export async function createFundBalanceDraft(ctx: FundBalanceSessionContext) {
   }
 }
 
-/** MoMo authorize — submit YC receive with phone + network, finalize draft. */
+/** MoMo authorize – submit YC receive with phone + network, finalize draft. */
 export async function authorizeFundBalanceDraft(input: {
   admin: SupabaseClient
   kycUserId: string
@@ -384,7 +384,7 @@ export async function authorizeFundBalanceDraft(input: {
     )
   }
   if (transfer.expires_at && new Date(String(transfer.expires_at)).getTime() <= Date.now()) {
-    throw new FundBalanceSessionError("quote_expired", "Quote expired — start again", 400)
+    throw new FundBalanceSessionError("quote_expired", "Quote expired – start again", 400)
   }
 
   const currency = String(transfer.pay_in_currency ?? "").trim().toUpperCase()

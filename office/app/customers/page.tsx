@@ -70,8 +70,8 @@ export default function CustomersPage() {
                   ) : (
                     rows.map((c) => (
                       <TableRow key={c.id}>
-                        <TableCell>{c.name ?? "—"}</TableCell>
-                        <TableCell>{c.email ?? "—"}</TableCell>
+                        <TableCell>{c.name ?? "–"}</TableCell>
+                        <TableCell>{c.email ?? "–"}</TableCell>
                         <TableCell className="font-mono text-xs">{c.business_id}</TableCell>
                       </TableRow>
                     ))

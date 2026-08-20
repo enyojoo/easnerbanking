@@ -42,7 +42,7 @@ export async function POST(request: Request) {
   return drainWalletProvisioningBatch()
 }
 
-/** Same as POST — Vercel Cron invokes routes with GET. */
+/** Same as POST – Vercel Cron invokes routes with GET. */
 export async function GET(request: Request) {
   try {
     assertInternalCronAuthorized(request)

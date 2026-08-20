@@ -95,7 +95,7 @@ async function main() {
 
   const rootClient = getTurnkeyRootApiClient()
   if (!rootClient) {
-    console.error("\nRoot client unavailable — skip Turnkey API inventory")
+    console.error("\nRoot client unavailable – skip Turnkey API inventory")
     process.exit(1)
   }
 

@@ -41,7 +41,7 @@ export function CheckoutFeeModeSelector({
     return (
       <div className="rounded-lg border bg-muted/40 p-3 text-sm">
         <p className="font-medium text-foreground">
-          Managed by Easner — {checkoutFeeModeLabel(feeMode)}
+          Managed by Easner – {checkoutFeeModeLabel(feeMode)}
         </p>
         <p className="mt-1 text-muted-foreground">{checkoutFeeModeDescription(feeMode)}</p>
       </div>

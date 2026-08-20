@@ -10,7 +10,7 @@ export const FIXED_FOOTER_SCROLL_CLEARANCE = 72
  * Shell web: compact (DesktopShell already pads). Native / phone web: safe area + optional tab clearance.
  */
 export type ScrollBottomPaddingOptions = {
-  /** Tab root (Dashboard, More, …) — layout already reserves the tab bar; use minimal tail padding. */
+  /** Tab root (Dashboard, More, …) – layout already reserves the tab bar; use minimal tail padding. */
   tabScreen?: boolean
 }
 

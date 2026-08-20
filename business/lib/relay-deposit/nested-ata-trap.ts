@@ -17,7 +17,7 @@ export type NestedAtaTrapInspection = {
 
 /**
  * Relay mistakenly used the canonical SPL ATA as `recipient` instead of the vault pubkey.
- * Relay then funds a nested ATA whose owner is the ATA address — no signer exists.
+ * Relay then funds a nested ATA whose owner is the ATA address – no signer exists.
  */
 export async function inspectNestedAtaTrap(input: {
   vaultAddress: string

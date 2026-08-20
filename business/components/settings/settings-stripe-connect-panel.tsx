@@ -152,7 +152,7 @@ export function SettingsStripeConnectPanel({
   const clearInstanceAfterCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const startLockRef = useRef(false)
 
-  // Stripe Connect onboarding is a cross-origin iframe — parent activity listeners
+  // Stripe Connect onboarding is a cross-origin iframe – parent activity listeners
   // never see typing/clicks. Suspend idle PIN lock for the duration of the pane.
   useSuspendIdleLock(onboardingOpen || fullPageFlow)
 
@@ -311,7 +311,7 @@ export function SettingsStripeConnectPanel({
     if (next?.ready) {
       toast.success("Online payments are ready")
     } else if (next?.externalAccountLinked && next.detailsSubmitted) {
-      toast.success("Verification saved. Payout linked — finishing setup.")
+      toast.success("Verification saved. Payout linked – finishing setup.")
     } else if (next?.detailsSubmitted && next.hasGridVa && !next.externalAccountLinked) {
       toast.message("Verification saved. Tap Link payout to connect your virtual account.")
     } else {

@@ -1,4 +1,4 @@
-/** Yellowcard customer margin — same 0.5% as Noah payout margin. */
+/** Yellowcard customer margin – same 0.5% as Noah payout margin. */
 export const YC_PAYOUT_MARGIN = 0.5 / 100
 
 export function easnerYcMarginBps(margin = YC_PAYOUT_MARGIN): number {

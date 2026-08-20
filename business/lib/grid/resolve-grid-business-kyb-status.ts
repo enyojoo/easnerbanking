@@ -21,7 +21,7 @@ export type GridDocumentSummary = {
 
 const GRID_IDENTITY_DOCUMENT_TYPES = new Set(["PASSPORT", "DRIVERS_LICENSE", "NATIONAL_ID"])
 
-/** Form-still-incomplete Grid errors — keep the hosted KYB CTA, not action-needed. */
+/** Form-still-incomplete Grid errors – keep the hosted KYB CTA, not action-needed. */
 const GRID_MID_FLOW_RESOLVE_ERROR_TYPES = new Set([
   "MISSING_IDENTITY_DOCUMENT",
   "MISSING_DOCUMENT",
@@ -48,7 +48,7 @@ export function gridDocumentsIncludeIdentity(documents: GridDocumentSummary[]): 
 
 /**
  * Grid asked the customer to fix submitted documents (poor quality, screenshot,
- * suspected fraud, expired, etc.) — not merely "upload the UBO ID to continue".
+ * suspected fraud, expired, etc.) – not merely "upload the UBO ID to continue".
  */
 export function gridVerificationsRequireUserFix(verifications: GridVerificationSummary[]): boolean {
   return verifications.some((v) => {
@@ -74,7 +74,7 @@ function readBeneficialOwners(customer: Record<string, unknown>): Record<string,
 function verificationSignalsInReview(verifications: GridVerificationSummary[]): boolean {
   return verifications.some((v) => {
     const s = normStatus(v.verificationStatus)
-    // IN_PROGRESS / READY_FOR_VERIFICATION are job states — not proof the UBO ID is on Grid.
+    // IN_PROGRESS / READY_FOR_VERIFICATION are job states – not proof the UBO ID is on Grid.
     return s === "PENDING_MANUAL_REVIEW"
   })
 }
@@ -91,12 +91,12 @@ function allBeneficialOwnersApproved(beneficialOwners: Record<string, unknown>[]
 
 /**
  * Map Grid BUSINESS customer + optional verifications to canonical KYB status.
- * Hosted Sumsub `PENDING` often means mid-flow — distinguish from true in-review.
+ * Hosted Sumsub `PENDING` often means mid-flow – distinguish from true in-review.
  */
 export function resolveGridBusinessKybLocalStatus(input: {
   customer: Record<string, unknown>
   verifications?: GridVerificationSummary[]
-  /** Grid `/documents` — UBO ID upload does not show on the customer GET. */
+  /** Grid `/documents` – UBO ID upload does not show on the customer GET. */
   documents?: GridDocumentSummary[]
 }): VerificationStatus {
   const raw = normStatus(String(input.customer.kybStatus ?? input.customer.kycStatus ?? ""))
@@ -107,12 +107,12 @@ export function resolveGridBusinessKybLocalStatus(input: {
   const verifications = input.verifications ?? []
   const documents = input.documents ?? []
 
-  // Submitted docs failed Grid review — action-needed, even if an ID file exists.
+  // Submitted docs failed Grid review – action-needed, even if an ID file exists.
   if (gridVerificationsRequireUserFix(verifications)) {
     return "hold"
   }
 
-  // Grid dashboard "owner needs ID" — keep the Settings CTA (View progress).
+  // Grid dashboard "owner needs ID" – keep the Settings CTA (View progress).
   if (gridVerificationsMissingIdentityDocument(verifications)) {
     return "in_progress"
   }

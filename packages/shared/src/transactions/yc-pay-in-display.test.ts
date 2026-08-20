@@ -163,7 +163,7 @@ describe("yc pay-in display", () => {
       nowMs: Date.parse("2026-01-01T00:10:00.000Z"),
     })
     expect(steps[0]?.description).toBe(
-      "The time to complete this transfer has passed — contact support with your transaction ID.",
+      "The time to complete this transfer has passed – contact support with your transaction ID.",
     )
     expect(steps[0]?.showPaymentDetailsLink).toBe(false)
   })

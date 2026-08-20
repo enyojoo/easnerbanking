@@ -64,7 +64,7 @@ export interface Transaction {
   category?: string
   fee?: number
   reference?: string
-  /** Bank deposit ACH narration (e.g. "Sent from Grey") — separate from transaction id. */
+  /** Bank deposit ACH narration (e.g. "Sent from Grey") – separate from transaction id. */
   narration?: string
   transferId?: string
   invoiceId?: string
@@ -81,7 +81,7 @@ export interface Transaction {
   asset?: string
   chain?: string
   settledAt?: string
-  /** Ledger row creation time — detail "When" (distinct from list `date`). */
+  /** Ledger row creation time – detail "When" (distinct from list `date`). */
   ledgerCreatedAt?: string
   /** YC pay-in: user-facing when (attestation / webhook), not quote lock. */
   displayWhenAt?: string
@@ -93,7 +93,7 @@ export interface Transaction {
   ycPayInPaymentDetails?: YcPayInPaymentDetails | null
   /** YC pay-in deposit window expiry (ISO). */
   quoteExpiresAt?: string | null
-  /** Detail row label — e.g. Easetag P2P shows "Easetag". */
+  /** Detail row label – e.g. Easetag P2P shows "Easetag". */
   paymentScheme?: string
   /** Stripe invoice settlement: structured payment method for brand chip + mask. */
   stripePaymentMethod?: {
@@ -120,7 +120,7 @@ export interface Transaction {
   depositAmount?: number
   postedAmount?: number
   postedCurrency?: string
-  /** Global payout detail hero title — the recipient name. */
+  /** Global payout detail hero title – the recipient name. */
   displayHeroTitle?: string
   ledgerAmount?: number
   ledgerCurrency?: string

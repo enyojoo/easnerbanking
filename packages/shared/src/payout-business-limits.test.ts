@@ -61,7 +61,7 @@ describe("resolveEffectivePayoutMin", () => {
     ).toBe(10)
   })
 
-  /** Noah manifest mins (docs/noah-payout-manifest.json) — Easner must stay >= Noah. */
+  /** Noah manifest mins (docs/noah-payout-manifest.json) – Easner must stay >= Noah. */
   it("uses GHS 40 mobile min when above Noah channel floor", () => {
     expect(
       resolveEffectivePayoutMin({

@@ -4,7 +4,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 /**
- * Easner card — office admin variant. Mirrors business/components/ui/card.tsx.
+ * Easner card – office admin variant. Mirrors business/components/ui/card.tsx.
  */
 const cardVariants = cva(
   [

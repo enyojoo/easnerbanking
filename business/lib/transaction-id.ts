@@ -1,6 +1,6 @@
 /**
  * Display format: uppercase `ETID` + **8 decimal digits** (aligned with `transfer_easetag_p2p` + URLs).
- * The 8 digits are from **Web Crypto** (`getRandomValues`), not wall-clock time — avoids predictable
+ * The 8 digits are from **Web Crypto** (`getRandomValues`), not wall-clock time – avoids predictable
  * ids and reduces collision risk vs timestamp suffixes. Global uniqueness still ultimately requires
  * the DB to reject duplicates (e.g. unique on `easner_transaction_id`) if you need a hard guarantee.
  */

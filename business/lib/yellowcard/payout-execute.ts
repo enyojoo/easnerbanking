@@ -116,7 +116,7 @@ export async function executeYcBalancePayoutTurnkeyLeg(input: {
   }
 }
 
-/** YC SEND terminal success — settle payout, then capture fee wallet leg (Noah parity). */
+/** YC SEND terminal success – settle payout, then capture fee wallet leg (Noah parity). */
 export async function handleYcBalancePayoutSendComplete(input: {
   transactionId: string
   userId: string

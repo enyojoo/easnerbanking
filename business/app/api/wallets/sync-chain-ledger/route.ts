@@ -112,7 +112,7 @@ async function runOwnerLedgerSync(
 }
 
 /**
- * POST — ATA balance snapshot, Noah credit reconcile, and (on full scan) lightweight inbound ingest.
+ * POST – ATA balance snapshot, Noah credit reconcile, and (on full scan) lightweight inbound ingest.
  *
  * Cooldown calls only refresh balances + Noah credits (no Solana tx parse) to avoid RPC 429s.
  */

@@ -11,7 +11,7 @@ type WebViewportFrameProps = {
 
 /**
  * Web-only outer frame: phone chrome on mobile widths, centered column on tablet.
- * Desktop mode passes children through — DesktopShell handles layout.
+ * Desktop mode passes children through – DesktopShell handles layout.
  */
 export function WebViewportFrame({ children }: WebViewportFrameProps) {
   const palette = useThemeColors()

@@ -38,7 +38,7 @@ export async function deliverInvoiceReceiptEmail(
   let reply =
     (await resolveInvoiceReplyEmail(admin, input.businessId, actor))?.trim() || null
 
-  // Never skip the customer receipt solely because Reply-To is unset —
+  // Never skip the customer receipt solely because Reply-To is unset –
   // fall back to the platform From address so paid invoices still notify.
   if (!reply) {
     reply = resolveInvoiceFromEmail().email

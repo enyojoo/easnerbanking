@@ -11,7 +11,7 @@ export type RelayDepositAddressRow = {
 }
 
 /**
- * Relay `recipient` must be the Turnkey vault pubkey — not the SPL ATA.
+ * Relay `recipient` must be the Turnkey vault pubkey – not the SPL ATA.
  * Bridges create/fund the canonical ATA (owner = vault). Passing the ATA makes
  * Relay treat it as an owner and can fund a nested token account Turnkey won't see.
  */

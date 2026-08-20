@@ -120,7 +120,7 @@ export async function matchPayoutToSettlements(
               ? charge.payment_intent
               : charge.payment_intent?.id ?? ""
         } catch {
-          // On connected accounts the source may be a Transfer — handled by the fallback below.
+          // On connected accounts the source may be a Transfer – handled by the fallback below.
           continue
         }
       }

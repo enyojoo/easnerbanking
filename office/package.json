@@ -1,6 +1,6 @@
 {
   "name": "office",
-  "description": "Easner Office admin dashboard (Next.js) — manages mobile and business banking",
+  "description": "Easner Office admin dashboard (Next.js) – manages mobile and business banking",
   "version": "0.1.0",
   "private": true,
   "scripts": {

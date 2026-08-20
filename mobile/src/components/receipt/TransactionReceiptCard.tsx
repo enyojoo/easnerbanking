@@ -25,7 +25,7 @@ type Props = {
 
 /**
  * Fintech-style shareable receipt (Cash App / Revolut / Wise pattern): a portrait card
- * — not an A4 page — with brand header, status glyph, hero amount, and the same canonical
+ * – not an A4 page – with brand header, status glyph, hero amount, and the same canonical
  * detail rows shown in-app / on the business PDF. Previewed in the receipt sheet and
  * captured to a PNG. Footer matches the business PDF (support contact, no "Powered by").
  */

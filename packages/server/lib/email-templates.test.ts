@@ -317,4 +317,4 @@ describe("emailTemplates", () => {
   })
 })
 
-// Dark-mode email variant not implemented — snapshots deferred until email-theme supports it.
+// Dark-mode email variant not implemented – snapshots deferred until email-theme supports it.

@@ -27,7 +27,7 @@ async function main() {
   let reversed = 0
   for (const row of rows) {
     if (!row.easnerPayoutId) {
-      console.warn("skip — missing easner_payout_id", row.transactionId)
+      console.warn("skip – missing easner_payout_id", row.transactionId)
       continue
     }
     console.log({

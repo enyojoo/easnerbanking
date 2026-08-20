@@ -54,7 +54,7 @@ export type TopCurrencyRow = {
   code: string
   count: number
   totalAmount: number
-  /** Local payout fiat — informational; USD/EUR balance volume lives in volume KPIs. */
+  /** Local payout fiat – informational; USD/EUR balance volume lives in volume KPIs. */
   dataOnly?: boolean
 }
 
@@ -78,9 +78,9 @@ export type OfficeTxPresentation = {
 }
 
 function relativeTimeLabel(iso: string | null | undefined): string {
-  if (!iso) return "—"
+  if (!iso) return "–"
   const then = new Date(iso).getTime()
-  if (!Number.isFinite(then)) return "—"
+  if (!Number.isFinite(then)) return "–"
   const sec = Math.max(0, Math.floor((Date.now() - then) / 1000))
   if (sec < 60) return `${sec}s ago`
   const min = Math.floor(sec / 60)
@@ -114,7 +114,7 @@ function txRowAsRecord(tx: TxRow): Record<string, unknown> {
   return tx as Record<string, unknown>
 }
 
-/** Wallet impact for volume KPIs — mirrors business dashboard `resolveAccountImpactAmount`. */
+/** Wallet impact for volume KPIs – mirrors business dashboard `resolveAccountImpactAmount`. */
 export function resolveOfficeAccountImpact(tx: TxRow) {
   return resolveAccountImpactAmount(txRowAsRecord(tx))
 }
@@ -127,7 +127,7 @@ export function resolveOfficeYcMode(tx: TxRow): OfficeYcMode {
   return null
 }
 
-/** YC fund-balance pay-in — broader than metadata.yc_mode (deposit_review / source / flow). */
+/** YC fund-balance pay-in – broader than metadata.yc_mode (deposit_review / source / flow). */
 export function isOfficeYcFundBalancePayIn(tx: TxRow): boolean {
   if (normalizeDirection(tx.direction) !== "in") return false
   const meta = tx.metadata ?? {}
@@ -469,7 +469,7 @@ function isVerificationDepositTx(tx: TxRow): boolean {
   return isVerificationDepositMetadata(tx.metadata)
 }
 
-/** @deprecated Use volumeBalance KPI — kept for tests migrating off USD-only helper. */
+/** @deprecated Use volumeBalance KPI – kept for tests migrating off USD-only helper. */
 export function volumeUsdContribution(tx: TxRow): number {
   if (isVerificationDepositTx(tx)) return 0
   const usd = resolveOfficeReportingUsdAmount(tx)
@@ -488,13 +488,13 @@ function pushBucket(
   dataOnly = false,
 ) {
   const normalized = String(code || "").trim().toUpperCase()
-  if (!normalized || normalized === "—" || !Number.isFinite(amount) || amount <= 0) return
+  if (!normalized || normalized === "–" || !Number.isFinite(amount) || amount <= 0) return
   buckets.push({ code: normalized, flow, amount, dataOnly })
 }
 
 /**
  * Top-currency buckets for the dashboard table.
- * Pay-ins use display currency. Cross-currency payouts use local receive fiat only —
+ * Pay-ins use display currency. Cross-currency payouts use local receive fiat only –
  * linked USD/EUR balance legs are excluded here and counted in `volumeBalance` instead.
  */
 export function extractCurrencyBuckets(tx: TxRow): CurrencyBucket[] {
@@ -714,7 +714,7 @@ export function buildRecentTransactionsPreview(transactions: TxRow[], limit = 10
       return {
         id: tx.id,
         easner_transaction_id: tx.easner_transaction_id ?? null,
-        provider: String(tx.provider || "—"),
+        provider: String(tx.provider || "–"),
         direction,
         flowLabel: direction === "in" ? "Pay-in" : "Payout",
         status: normalizeStatus(tx.status),
@@ -723,9 +723,9 @@ export function buildRecentTransactionsPreview(transactions: TxRow[], limit = 10
         productLabel: resolveOfficeProductLabel(tx),
         ycMode: resolveOfficeYcMode(tx),
         payInRail: resolveOfficePayInRail(tx),
-        user: account.label || "—",
+        user: account.label || "–",
         userKind: account.kind,
-        who: account.label || "—",
+        who: account.label || "–",
         amount: pres.displayAmount,
         currency: pres.displayCurrency,
         amountFormatted,

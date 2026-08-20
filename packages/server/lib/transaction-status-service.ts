@@ -167,7 +167,7 @@ export class TransactionStatusService {
     _transaction: Transaction,
     _status: string,
   ): Promise<void> {
-    // Legacy remittance status emails retired — ledger dispatch handles notifications.
+    // Legacy remittance status emails retired – ledger dispatch handles notifications.
   }
 
   /**

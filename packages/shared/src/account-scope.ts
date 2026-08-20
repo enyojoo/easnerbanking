@@ -2,7 +2,7 @@
 export const EASNER_ACCOUNT_SCOPE_HEADER = "X-Easner-Account-Scope" as const
 
 /**
- * Legacy header name — still accepted by the API during client rollout.
+ * Legacy header name – still accepted by the API during client rollout.
  * @deprecated Prefer {@link EASNER_ACCOUNT_SCOPE_HEADER}
  */
 export const EASNER_ACCOUNT_SCOPE_HEADER_LEGACY = "X-Easner-Noah-Scope" as const

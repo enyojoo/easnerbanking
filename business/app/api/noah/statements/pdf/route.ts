@@ -40,7 +40,7 @@ export async function POST(request: Request) {
   const parsed = parseBody(body)
   if (!parsed) {
     return NextResponse.json(
-      { error: "Expected { from, to, currency } — ISO dates and account currency (USD, EUR, or GBP)" },
+      { error: "Expected { from, to, currency } – ISO dates and account currency (USD, EUR, or GBP)" },
       { status: 400 },
     )
   }

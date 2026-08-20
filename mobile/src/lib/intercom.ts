@@ -470,7 +470,7 @@ async function warmIntercomMessenger(session?: Session | null): Promise<boolean>
     } catch (e) {
       if (e instanceof Error && e.message === 'INTERCOM_JWT_UNAVAILABLE') {
         console.warn(
-          '[Intercom] No messenger JWT — check business INTERCOM_MESSENGER_API_SECRET and /api/intercom/jwt',
+          '[Intercom] No messenger JWT – check business INTERCOM_MESSENGER_API_SECRET and /api/intercom/jwt',
         )
         return false
       }
@@ -489,7 +489,7 @@ async function warmIntercomMessenger(session?: Session | null): Promise<boolean>
 /**
  * Sync Intercom identity with Supabase session.
  * Messenger Security: call `setUserJwt` before `loginUserWithUserAttributes` (fresh JWT on each sync).
- * Launcher stays hidden — Support screen opens the messenger via `presentIntercomMessenger`.
+ * Launcher stays hidden – Support screen opens the messenger via `presentIntercomMessenger`.
  */
 export async function syncIntercomSession(session: Session | null): Promise<void> {
   if (!isIntercomEnabled()) return

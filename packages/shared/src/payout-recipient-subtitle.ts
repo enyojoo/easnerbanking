@@ -66,7 +66,7 @@ function normalizeProviderLabel(raw: string | undefined): string {
   return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase()
 }
 
-/** Show phone as stored — Noah E.164 normalization runs only at sell/prepare, not in UI. */
+/** Show phone as stored – Noah E.164 normalization runs only at sell/prepare, not in UI. */
 export function formatMobilePhoneDisplay(phone: string | undefined | null): string {
   return String(phone || "").trim()
 }
@@ -86,7 +86,7 @@ export function truncateMiddle(s: string, start = 6, end = 6): string {
 }
 
 /**
- * Deposit "Sender" display — prefer a human name from metadata, otherwise mask the
+ * Deposit "Sender" display – prefer a human name from metadata, otherwise mask the
  * on-chain counterparty address (`0x1a2b...c3d4`) so sensitive data isn't shown in full.
  */
 export function formatMaskedSenderDisplay(input: {
@@ -136,7 +136,7 @@ function walletNetworkLabel(input: PayoutRecipientSubtitleInput): string {
 }
 
 /**
- * Subtitle parts for mobile money, bank, and wallet — `left • right`
+ * Subtitle parts for mobile money, bank, and wallet – `left • right`
  * (e.g. `GTBank • 0123 4567`, `MTN • +234…`, `Ethereum • 0x1a2b...c3d4`).
  */
 export function getPayoutRecipientSubtitleParts(

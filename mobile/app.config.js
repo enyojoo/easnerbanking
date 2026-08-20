@@ -141,7 +141,7 @@ module.exports = ({ config }) => {
 
   if (process.env.EAS_BUILD && !configuredApiUrl) {
     console.warn(
-      '[easner-mobile] EAS build has no EXPO_PUBLIC_API_URL / NEXT_PUBLIC_API_URL — profile & Easetag saves require the business app URL. Set it in EAS Environment variables and rebuild.'
+      '[easner-mobile] EAS build has no EXPO_PUBLIC_API_URL / NEXT_PUBLIC_API_URL – profile & Easetag saves require the business app URL. Set it in EAS Environment variables and rebuild.'
     )
   }
 
@@ -198,7 +198,7 @@ module.exports = ({ config }) => {
     (intercomAppId || intercomIosApiKey || intercomAndroidApiKey)
   ) {
     console.warn(
-      '[easner-mobile] Intercom env is incomplete — set EXPO_PUBLIC_INTERCOM_APP_ID, EXPO_PUBLIC_INTERCOM_IOS_API_KEY, and EXPO_PUBLIC_INTERCOM_ANDROID_API_KEY (or INTERCOM_* equivalents) for native messenger.'
+      '[easner-mobile] Intercom env is incomplete – set EXPO_PUBLIC_INTERCOM_APP_ID, EXPO_PUBLIC_INTERCOM_IOS_API_KEY, and EXPO_PUBLIC_INTERCOM_ANDROID_API_KEY (or INTERCOM_* equivalents) for native messenger.'
     )
   }
 

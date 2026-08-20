@@ -1,6 +1,6 @@
 /**
  * Display format: uppercase `ETID` + **8 decimal digits** (aligned with business + ledger P2P).
- * Uses `expo-crypto` on native — `globalThis.crypto.getRandomValues` is often unset before polyfills load.
+ * Uses `expo-crypto` on native – `globalThis.crypto.getRandomValues` is often unset before polyfills load.
  */
 
 import { getRandomBytes } from 'expo-crypto'

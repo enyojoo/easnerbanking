@@ -153,7 +153,7 @@ export async function applyStripeWebhookSideEffects(
       if (!chargeId) return
       const settlement = await findSettlementByCharge(admin, chargeId)
       if (!settlement) return
-      // Keep the phase — ops handles clawback — but record the event on the settlement.
+      // Keep the phase – ops handles clawback – but record the event on the settlement.
       await appendSettlementEvent(admin, settlement, event.id)
       // Tag invoice metadata for ops visibility
       if (settlement.invoiceId) {
@@ -212,7 +212,7 @@ export async function applyStripeWebhookSideEffects(
       }
       if (result.ok && result.skipped === "credited") {
         console.warn(
-          "[stripe] refund after credited — manual clawback required",
+          "[stripe] refund after credited – manual clawback required",
           result.invoiceId,
           charge.id,
         )

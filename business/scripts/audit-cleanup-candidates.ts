@@ -157,11 +157,11 @@ async function auditItem(
     (isGhost || !sb.walletOwner)
   const deleteNote = isGhost
     ? safeToDelete
-      ? "YES — ghost: delete Supabase rows + Turnkey sub-org"
-      : "NO — ghost has funds or unreadable balance"
+      ? "YES – ghost: delete Supabase rows + Turnkey sub-org"
+      : "NO – ghost has funds or unreadable balance"
     : safeToDelete
       ? "YES (zero balance, no DB link)"
-      : "NO — review"
+      : "NO – review"
   console.log("Safe to delete:", deleteNote)
   console.log("")
   return { ...item, tk, sb, vaultBal, safeToDelete }

@@ -129,7 +129,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
 
       haptics.success()
 
-      // Optional flow: opened from main stack (e.g. More) — gate is already "main"
+      // Optional flow: opened from main stack (e.g. More) – gate is already "main"
       if (!isMandatory) {
         navigation.goBack()
       }

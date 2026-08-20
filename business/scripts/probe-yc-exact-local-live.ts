@@ -91,7 +91,7 @@ async function main() {
   )
 
   if (!LIVE) {
-    console.log("\nDry run — set YC_PROBE_LIVE_SEND=confirm to submit. Nothing was sent.")
+    console.log("\nDry run – set YC_PROBE_LIVE_SEND=confirm to submit. Nothing was sent.")
     console.log(
       "Optional: YC_PROBE_LOCK_ONLY=1 locks with forceAccept=false then denies (no payout, no float needed).",
     )
@@ -101,7 +101,7 @@ async function main() {
   const lockOnly = process.env.YC_PROBE_LOCK_ONLY === "1" || process.env.YC_PROBE_LOCK_ONLY === "true"
   if (!lockOnly && availableBefore <= 0) {
     throw new Error(
-      "YC USD balance is 0 — top up, or set YC_PROBE_LOCK_ONLY=1 to lock+deny without paying.",
+      "YC USD balance is 0 – top up, or set YC_PROBE_LOCK_ONLY=1 to lock+deny without paying.",
     )
   }
 
@@ -175,14 +175,14 @@ async function main() {
   const sendId = String(sendRes.id ?? "").trim()
   if (lockOnly) {
     if (!exact) {
-      throw new Error(`YC did not lock exact localAmount — aborting (send ${sendId})`)
+      throw new Error(`YC did not lock exact localAmount – aborting (send ${sendId})`)
     }
     await yellowcardFetch({
       method: "POST",
       path: `/send/${encodeURIComponent(sendId)}/deny`,
       json: {},
     })
-    console.log(`denied send ${sendId} — no payout, float unchanged`)
+    console.log(`denied send ${sendId} – no payout, float unchanged`)
     const feeLocal = Number(sendRes.serviceFeeAmountLocal ?? 0)
     const amountUsd = Number(sendRes.amount ?? 0)
     const rate = Number(sendRes.rate ?? 0)

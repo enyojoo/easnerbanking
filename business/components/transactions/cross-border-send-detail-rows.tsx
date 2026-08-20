@@ -28,7 +28,7 @@ export function CrossBorderSendDetailRows({
   whenAt,
   recipientNode,
 }: Props) {
-  const whenLabel = whenAt ? formatTransactionRowDateTime(whenAt) : "—"
+  const whenLabel = whenAt ? formatTransactionRowDateTime(whenAt) : "–"
   const rows = buildCrossBorderSendDetailRows({
     payoutReview,
     recipientSnapshot,

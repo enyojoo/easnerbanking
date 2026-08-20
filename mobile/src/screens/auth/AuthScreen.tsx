@@ -41,7 +41,7 @@ import { useScreenDecorativeEnter } from '../../hooks/useScreenDecorativeEnter'
  * - /auth/login: Google → Or → email/password → forgot → Sign in → footer
  * - /auth/signup: terms → Google → Or → name/email/password → Create account → footer
  * Mobile switches login/signup via footer links (separate routes on web).
- * Form content sits on the page background — no inset card frame (unlike web’s bordered card).
+ * Form content sits on the page background – no inset card frame (unlike web’s bordered card).
  */
 type AuthMode = 'login' | 'signup'
 type SignupStep = 'form' | 'otp'
@@ -263,7 +263,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
         residenceCountry.trim().toUpperCase(),
       )
     } catch {
-      // Non-blocking — bootstrap may still receive country on next attempt.
+      // Non-blocking – bootstrap may still receive country on next attempt.
     }
   }
 

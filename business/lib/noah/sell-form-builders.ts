@@ -1,5 +1,5 @@
 /**
- * Noah Global Payout — map Easner recipient + send fields to sell/prepare Form objects.
+ * Noah Global Payout – map Easner recipient + send fields to sell/prepare Form objects.
  * @see https://github.com/noah-labs/public-schemas
  */
 
@@ -284,7 +284,7 @@ function prop(schema: Record<string, unknown> | undefined, key: string): unknown
   return (schema.properties as Record<string, unknown>)[key]
 }
 
-/** Identifier / mobile money — nested MobileMoneyDetails when schema requires it. */
+/** Identifier / mobile money – nested MobileMoneyDetails when schema requires it. */
 export function buildIdentifierSellForm(
   formSchema: Record<string, unknown> | undefined,
   data: IdentifierSellInput,

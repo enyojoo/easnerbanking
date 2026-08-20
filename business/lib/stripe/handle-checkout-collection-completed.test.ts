@@ -316,7 +316,7 @@ describe("payment link settlement", () => {
   it("backfills ledger email when checkout.session.completed follows payment_intent.succeeded", async () => {
     const { admin, writes } = mockAdmin({
       existingSettlement: true,
-      ledgerMetadata: { source: "checkout_stripe", headline: "Payment link — Donations" },
+      ledgerMetadata: { source: "checkout_stripe", headline: "Payment link – Donations" },
     })
 
     const result = await handleStripeCheckoutCompleted(admin, paymentLinkSessionEvent())

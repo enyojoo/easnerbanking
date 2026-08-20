@@ -438,14 +438,14 @@ export default function PayrollRunDetailPage() {
                 value={
                   run.payPeriodStart && run.payPeriodEnd
                     ? `${formatDate(run.payPeriodStart)} – ${formatDate(run.payPeriodEnd)}`
-                    : "—"
+                    : "–"
                 }
               />
-              <Detail label="Payday" value={run.payday ? formatDate(run.payday) : "—"} />
+              <Detail label="Payday" value={run.payday ? formatDate(run.payday) : "–"} />
               <Detail label="Amount" value={formatCurrency(run.totalSource, run.sourceCurrency)} />
               <Detail label="People" value={String(lines.length)} />
               <Detail label="Source account" value={`${run.sourceCurrency} account`} />
-              <Detail label="Receiving methods" value={railSummary || "—"} />
+              <Detail label="Receiving methods" value={railSummary || "–"} />
             </dl>
             {run.scheduleId ? (
               <p className="mt-5 rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">
@@ -486,7 +486,7 @@ export default function PayrollRunDetailPage() {
                     ? scheduledPaymentDisplay ?? "Loading payment time…"
                     : run.payday
                       ? formatDate(run.payday)
-                      : "—"
+                      : "–"
                 }
               />
             </dl>
@@ -602,7 +602,7 @@ export default function PayrollRunDetailPage() {
                   )}
                 />
                 <Detail label="People" value={String(run.approvalSnapshot.people.length)} />
-                <Detail label="Approved" value={run.approvedAt ? formatDate(run.approvedAt) : "—"} />
+                <Detail label="Approved" value={run.approvedAt ? formatDate(run.approvedAt) : "–"} />
               </dl>
             </section>
           ) : null}

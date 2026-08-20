@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Image } from 'expo-image'
 
-/** Default for all remote images — memory + disk so revisits and cold resume stay instant. */
+/** Default for all remote images – memory + disk so revisits and cold resume stay instant. */
 export const IMAGE_CACHE_POLICY = 'memory-disk' as const
 
 export type ImageCachePolicy = typeof IMAGE_CACHE_POLICY | 'disk' | 'memory' | 'none'
@@ -70,7 +70,7 @@ export async function prefetchImageUri(uri: string | null | undefined): Promise<
     await Image.prefetch(trimmed, { cachePolicy: IMAGE_CACHE_POLICY })
     markImageWarm(trimmed)
   } catch {
-    // ignore — network / decode errors should not break UI
+    // ignore – network / decode errors should not break UI
   }
 }
 

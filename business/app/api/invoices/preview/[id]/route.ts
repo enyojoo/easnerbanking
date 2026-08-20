@@ -4,7 +4,7 @@ import { requireBusinessOrg } from "@/lib/b2b/resolve-org"
 import { jsonPublicInvoiceFromRow } from "@/lib/invoices/json-public-invoice-from-row"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
-/** Authenticated business preview — same payload as public invoice view, scoped to org. */
+/** Authenticated business preview – same payload as public invoice view, scoped to org. */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireBusinessOrg(request)
   if (!ctx.ok) return ctx.response

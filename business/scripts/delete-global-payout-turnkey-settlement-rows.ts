@@ -43,7 +43,7 @@ async function main() {
   }
 
   console.log(
-    `${dryRun ? "[dry-run] " : ""}delete ${deleteIds.length} Turnkey global payout settlement row(s): ${deleteIds.join(", ") || "—"}`,
+    `${dryRun ? "[dry-run] " : ""}delete ${deleteIds.length} Turnkey global payout settlement row(s): ${deleteIds.join(", ") || "–"}`,
   )
 
   if (!dryRun && deleteIds.length) {

@@ -37,7 +37,7 @@ export async function resolveOrgOwnerUserId(
   return orgUsers?.[0]?.id ?? fallbackUserId
 }
 
-/** True when the user is the org owner (or has no org — full personal profile). */
+/** True when the user is the org owner (or has no org – full personal profile). */
 export async function resolveIsOrgOwnerForUser(
   admin: ReturnType<typeof createSupabaseAdmin>,
   userId: string,

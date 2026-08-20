@@ -204,7 +204,7 @@ function readGridBusinessTaxId(customer: GridCustomer & Record<string, unknown>)
 
 /**
  * Repair historic Grid stubs (shell taxId + country/incorporation) before hosted KYB.
- * Never delete/recreate — that wiped not-started and in-progress Grid customers.
+ * Never delete/recreate – that wiped not-started and in-progress Grid customers.
  */
 async function scrubGridBusinessKybStubFieldsIfNeeded(input: {
   customerId: string
@@ -270,7 +270,7 @@ async function syncGridBusinessTaxIdIfNeeded(input: {
   platformCustomerId: string
 }): Promise<GridCustomer> {
   const desired = normalizeStoredBusinessTaxId(input.profile.taxId)
-  // Only push a real org tax id — never "fix" Grid with another shell.
+  // Only push a real org tax id – never "fix" Grid with another shell.
   if (!desired || isGridShellBusinessTaxId(desired, input.platformCustomerId)) {
     return input.customer
   }
@@ -408,7 +408,7 @@ type EnsuredGridBusinessCustomer = {
 
 const ensureGridBusinessCustomerInflight = new Map<string, Promise<EnsuredGridBusinessCustomer>>()
 
-/** Test helper — drop in-process create lock. */
+/** Test helper – drop in-process create lock. */
 export function __resetEnsureGridBusinessCustomerInflightForTests(): void {
   ensureGridBusinessCustomerInflight.clear()
 }

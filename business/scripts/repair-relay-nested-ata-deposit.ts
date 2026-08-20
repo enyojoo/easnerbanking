@@ -363,7 +363,7 @@ async function main() {
         omnibusBalance,
         note: inspection.recoverableOnChain
           ? "Unexpected: nested funds appear recoverable on-chain"
-          : "Nested ATA trap — ledger credit + omnibus make-good",
+          : "Nested ATA trap – ledger credit + omnibus make-good",
       },
       null,
       2,

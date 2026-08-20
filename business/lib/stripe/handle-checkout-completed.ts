@@ -184,7 +184,7 @@ export async function handleStripeCheckoutCompleted(
   const { feeCents, chargeId, paymentMethodType, paymentMethod, transferId, connectedAccountId } =
     await resolveFeeAndTransfer(stripe, paymentIntentId, { sessionPaymentMethodTypes })
 
-  // Idempotent: settlement already exists — enrich payment method on later webhooks.
+  // Idempotent: settlement already exists – enrich payment method on later webhooks.
   const { data: existingSettlement } = await admin
     .from("invoice_stripe_settlements")
     .select("id, phase, ledger_transaction_id")

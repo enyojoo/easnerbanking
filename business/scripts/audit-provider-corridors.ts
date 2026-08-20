@@ -307,7 +307,7 @@ async function main() {
 
   if (currencyConflicts.length) {
     console.log(`\n=== MULTI-CURRENCY CONFLICT (${currencyConflicts.length}) ===`)
-    console.log("(DB allows one currency per country+rail — alternate live currencies blocked)")
+    console.log("(DB allows one currency per country+rail – alternate live currencies blocked)")
     currencyConflicts.forEach((g) => console.log(g))
   }
 

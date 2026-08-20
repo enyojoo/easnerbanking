@@ -193,7 +193,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
   const expectLocalCorridor =
     Boolean(localPayInCurrency) && verificationComplete && currency === 'USD'
-  // Instant from cache/optimistic rails — residence rarely changes.
+  // Instant from cache/optimistic rails – residence rarely changes.
   const showLocalTab = expectLocalCorridor && Boolean(receiveRails?.anyAvailable)
   const showCashTab = showBankTab || showLocalTab
   const showTabBar = showCashTab && showStablecoinTab

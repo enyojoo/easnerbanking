@@ -23,7 +23,7 @@ export interface ApprovalRow {
 /**
  * Approval queue for the active scope.
  *
- * 20s staleTime with a 60s background fallback — realtime events on
+ * 20s staleTime with a 60s background fallback – realtime events on
  * `approvals` narrow-invalidate this queue so the count badge and
  * inline list stay truthful without hammering the server.
  */

@@ -20,7 +20,7 @@ export type PersonalSettingsResponse = {
   sessionRefreshSuggested?: boolean
 }
 
-/** Persists to `users.full_name` via `PUT /api/settings/personal` (`fullName` only — matches DB). */
+/** Persists to `users.full_name` via `PUT /api/settings/personal` (`fullName` only – matches DB). */
 export interface UserProfileData {
   fullName?: string
   phone: string
@@ -102,7 +102,7 @@ export function personalFromUpdateProfileResult(result: unknown): PersonalSettin
   return null
 }
 
-/** GET `/api/settings/personal` — personal + verified identity block. */
+/** GET `/api/settings/personal` – personal + verified identity block. */
 export async function fetchPersonalSettings(userId: string): Promise<PersonalSettingsResponse | null> {
   const apiBase = getApiBaseUrl()
   await supabase.auth.refreshSession().catch(() => undefined)

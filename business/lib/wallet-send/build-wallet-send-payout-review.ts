@@ -10,7 +10,7 @@ function roundMoney(n: number): number {
   return Math.round(n * 1_000_000) / 1_000_000
 }
 
-/** Direct Turnkey is 1:1 — Sent must be receive principal, never fee-inclusive total. */
+/** Direct Turnkey is 1:1 – Sent must be receive principal, never fee-inclusive total. */
 function normalizeDirectYouSendAmount(input: {
   executionModel: WalletSendExecutionModel | undefined
   youSendAmount: number

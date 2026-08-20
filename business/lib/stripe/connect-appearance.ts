@@ -2,7 +2,7 @@
  * Stripe Connect embedded component appearance aligned with Easner business UI.
  * @see https://docs.stripe.com/connect/embedded-appearance-options
  *
- * Connect components cannot be restyled with CSS — only these appearance variables apply.
+ * Connect components cannot be restyled with CSS – only these appearance variables apply.
  */
 export function easnerStripeConnectAppearance() {
   const primary = "#0080cc"

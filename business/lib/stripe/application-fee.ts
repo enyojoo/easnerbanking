@@ -13,7 +13,7 @@ export type CheckoutAmounts = {
   feeMode: CheckoutFeeMode
   /** Amount listed by the merchant (the invoice total, link amount, or embed amount). */
   listedAmountCents: number
-  /** Amount charged to the customer — differs from listed only for buyer surcharge. */
+  /** Amount charged to the customer – differs from listed only for buyer surcharge. */
   customerAmountCents: number
   /** Surcharge added on top of the listed amount (0 unless buyer surcharge). */
   surchargeCents: number
@@ -23,7 +23,7 @@ export type CheckoutAmounts = {
   easnerTakeCents: number
   /** `application_fee_amount` for one-time payments. */
   applicationFeeCents: number
-  /** `application_fee_percent` for subscriptions — same economics expressed as a percent. */
+  /** `application_fee_percent` for subscriptions – same economics expressed as a percent. */
   applicationFeePercent: number
   /** What the merchant's Easner Balance should receive. */
   merchantNetCents: number

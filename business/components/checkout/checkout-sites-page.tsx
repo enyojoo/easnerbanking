@@ -188,10 +188,10 @@ export function CheckoutSitesPage() {
                     >
                       <td className="truncate p-4 font-mono text-xs">{site.origin}</td>
                       <td className="truncate p-4 text-sm text-muted-foreground">
-                        {site.successUrl || "—"}
+                        {site.successUrl || "–"}
                       </td>
                       <td className="truncate p-4 text-sm text-muted-foreground">
-                        {site.cancelUrl || "—"}
+                        {site.cancelUrl || "–"}
                       </td>
                       <td className="p-4 text-right" onClick={(event) => event.stopPropagation()}>
                         <div className="flex justify-end gap-1">

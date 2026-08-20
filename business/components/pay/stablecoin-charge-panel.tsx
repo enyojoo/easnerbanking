@@ -74,7 +74,7 @@ type Props = {
    * `customer` is the payer on pay.easner.com, which reads the payer-scoped API.
    */
   variant: "counter" | "customer"
-  /** Amount heading label — invoices and links describe the charge differently. */
+  /** Amount heading label – invoices and links describe the charge differently. */
   amountLabel?: string
 }
 

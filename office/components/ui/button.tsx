@@ -5,7 +5,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 /**
- * Easner button — office admin variant. Mirrors business/components/ui/button.tsx.
+ * Easner button – office admin variant. Mirrors business/components/ui/button.tsx.
  */
 const buttonVariants = cva(
   [

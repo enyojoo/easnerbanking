@@ -29,7 +29,7 @@ import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 export default function SupportScreen({ navigation }: NavigationProps) {
   const scrollBottomPadding = useScrollBottomPadding(spacing[4])
 
-  // Warm after the push animation (~180ms), not on focus — keeps open instant.
+  // Warm after the push animation (~180ms), not on focus – keeps open instant.
   useEffect(() => {
     const timer = setTimeout(() => {
       void prepareIntercomMessenger()

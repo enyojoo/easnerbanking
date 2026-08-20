@@ -196,7 +196,7 @@ describe("YC_STATIC_CORRIDOR_SCHEMAS", () => {
   })
 })
 
-describe("validateYcRecipientForCorridor — Noah-only schema", () => {
+describe("validateYcRecipientForCorridor – Noah-only schema", () => {
   const noahNgSchema = {
     channel_id: "ae1f871a-f2cd-5eab-84bf-5240091d9767",
     payment_method_type: "BankLocal",

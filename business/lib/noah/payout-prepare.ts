@@ -12,7 +12,7 @@ export type ChannelItem = {
   ID?: string
   PaymentMethodCategory?: string
   PaymentMethodType?: string
-  /** Mobile money network (e.g. MTN, AIRTELTIGO) — distinct channels share PaymentMethodType. */
+  /** Mobile money network (e.g. MTN, AIRTELTIGO) – distinct channels share PaymentMethodType. */
   Issuer?: string
   Country?: string
   FiatCurrency?: string
@@ -133,7 +133,7 @@ export function findIdentifierSellChannel(
 }
 
 /**
- * POST /transactions/sell/prepare — validates payout form and returns FormSessionID (+ optional PaymentMethodID).
+ * POST /transactions/sell/prepare – validates payout form and returns FormSessionID (+ optional PaymentMethodID).
  * Runs a follow-up prepare when needed so the form session is complete before sell (Noah Cob step).
  */
 export async function prepareSellTransaction(input: {

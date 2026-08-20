@@ -140,7 +140,7 @@ interface LedgerTransaction {
   updated_at: string
   completed_at?: string
   noah_created_at?: string
-  /** Product line for summary ("Bank Deposit", "Stablecoin Deposit", …) — separate from sender name. */
+  /** Product line for summary ("Bank Deposit", "Stablecoin Deposit", …) – separate from sender name. */
   transaction_product?: string
   /** Inbound bank: remitter / company / merchant (detail API). */
   sender_display_name?: string
@@ -226,7 +226,7 @@ function mergeTransactionSnapshots(
 export default function TransactionDetailsScreen({ navigation, route }: NavigationProps) {
   const footerPadding = useFixedFooterPadding(spacing[4])
   // The action bar (bottomContainer) is a normal-flow view below the ScrollView, so the
-  // scroll content only needs a small clearance above it — reserving the footer height
+  // scroll content only needs a small clearance above it – reserving the footer height
   // here too would leave a large empty gap below the last row (Share receipt).
   const scrollBottomPadding = spacing[6]
   const { transactionId, fromScreen, initialTransaction } = route.params as {
@@ -921,7 +921,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       processingFee: ycDepositReview.processing_fee,
       exchangeFee: ycDepositReview.exchange_fee,
     })
-  // Downloadable receipt (image) — completed payouts and supported deposits only.
+  // Downloadable receipt (image) – completed payouts and supported deposits only.
   // Stablecoin and Easetag deposits intentionally do not offer transaction receipts.
   const receiptRows =
     transaction.status === 'completed' && !isEasetagP2p && !isStablecoinReceive
@@ -1037,7 +1037,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
           contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPadding }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Hero — white SectionCard with 64px tinted icon, title, amount, status pill. */}
+          {/* Hero – white SectionCard with 64px tinted icon, title, amount, status pill. */}
           <Animated.View
             style={[
               styles.heroAnimated,
@@ -1094,7 +1094,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
               }]
             }}
           >
-            {/* Transaction Summary — rows render from existing transaction metadata only. */}
+            {/* Transaction Summary – rows render from existing transaction metadata only. */}
             <SectionCard style={styles.card}>
               <View style={styles.summaryRows}>
                 <TransactionDetailSummaryRow label={REVIEW_ROW_LABELS.transactionId}>
@@ -1155,7 +1155,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                   />
                 ) : null}
 
-                {/* Outbound Easetag — inbound uses InboundReceiveDetailRows; send was dropped in that unification. */}
+                {/* Outbound Easetag – inbound uses InboundReceiveDetailRows; send was dropped in that unification. */}
                 {isEasetagP2p && !inboundReceive ? (
                   <>
                     <TransactionDetailSummaryRow
@@ -1244,7 +1244,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
                   </>
                 )}
 
-                {/* Global payout send — review snapshot rows */}
+                {/* Global payout send – review snapshot rows */}
                 {isGlobalPayoutSend && transaction.payout_review ? (
                   payoutReviewFlow === 'local_pay_in' ? (
                     <CrossBorderSendDetailRows
@@ -1355,7 +1355,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
               </SectionCard>
             ) : null}
 
-            {/* Receipt (image) — completed, non-Easetag only. Business web keeps the PDF.
+            {/* Receipt (image) – completed, non-Easetag only. Business web keeps the PDF.
                 One entry that opens a preview + Share/Save sheet (the share sheet itself
                 includes Save to Photos/Files). */}
             {receiptEligible ? (
@@ -1430,7 +1430,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
           />
         ) : null}
 
-        {/* Bottom Actions — Send: Send again + Get help; Receive: Get help only. */}
+        {/* Bottom Actions – Send: Send again + Get help; Receive: Get help only. */}
         {transaction.transaction_type === 'send' ? (
           <View style={[styles.bottomContainer, { paddingBottom: Math.max(footerPadding, spacing[6]) }]}>
             <View style={styles.bottomActionsRow}>
@@ -1565,7 +1565,7 @@ const styles = StyleSheet.create({
     ...textStyles.titleSmall,
     color: colors.text.inverse,
   },
-  /** White hero — 64px tinted-blue icon, title, amount, status pill, all centered. */
+  /** White hero – 64px tinted-blue icon, title, amount, status pill, all centered. */
   heroAnimated: {
     marginTop: spacing[3],
     marginBottom: spacing[3],

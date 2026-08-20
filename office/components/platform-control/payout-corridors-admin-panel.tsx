@@ -45,7 +45,7 @@ type FiatDestinationRow = {
   crossBorderSupported: boolean
   crossBorderProvider: CrossBorderProviderId | null
   crossBorderSelection: FeatureSelection<CrossBorderProviderId>
-  /** Stable provider discovery badges — not affected by routing or enable toggles. */
+  /** Stable provider discovery badges – not affected by routing or enable toggles. */
   showNoahBadge: boolean
   showYcBadge: boolean
   showGridBadge: boolean
@@ -117,7 +117,7 @@ function rowSupportsNoahPayIn(row: PayoutCorridorAdminRow): boolean {
   return rowMetadata(row).noah_receive === true
 }
 
-/** Provider badges: discovery / capability only — never routing or *_enabled flags. */
+/** Provider badges: discovery / capability only – never routing or *_enabled flags. */
 function corridorShowsNoahBadge(row: PayoutCorridorAdminRow): boolean {
   const meta = rowMetadata(row)
   return (
@@ -346,7 +346,7 @@ function mergeCorridorUpdatesInCache(
     return list.map((r) => {
       const patch = byId.get(r.id)
       if (!patch) return r
-      // PATCH returns DB rows without live annotation fields — merge, do not replace.
+      // PATCH returns DB rows without live annotation fields – merge, do not replace.
       return { ...r, ...patch }
     })
   })
@@ -447,7 +447,7 @@ function crossBorderProviderLabel(provider: CrossBorderProviderId): string {
 }
 
 function buildProviderRouting(payoutProvider: ProviderId): RoutingEntry[] {
-  // Payout-only. Pay-in is stored on metadata.pay_in_provider — never as a
+  // Payout-only. Pay-in is stored on metadata.pay_in_provider – never as a
   // secondary provider_routing entry (that caused silent payout failover).
   return [{ provider: payoutProvider, priority: 1, settlement_asset: "USDC" }]
 }
@@ -499,7 +499,7 @@ function FeatureSelect<T extends string>(input: {
   onChange: (value: FeatureSelection<T>) => void
 }) {
   if (input.providers.length === 0) {
-    return <span className="text-xs text-muted-foreground">—</span>
+    return <span className="text-xs text-muted-foreground">–</span>
   }
 
   return (
@@ -794,9 +794,9 @@ export function PayoutCorridorsAdminPanel() {
       const corridorPart = p
         ? `${p.inserted} corridor${p.inserted === 1 ? "" : "s"} added, ${p.updated} updated`
         : null
-      const schemaPart = `schemas — Noah ${s.noah.updated}, YC ${s.yellowcard.updated}, Grid ${s.grid.updated}`
+      const schemaPart = `schemas – Noah ${s.noah.updated}, YC ${s.yellowcard.updated}, Grid ${s.grid.updated}`
       setSyncSummary(
-        corridorPart ? `Sync done — ${corridorPart}; ${schemaPart}` : `Sync done — ${schemaPart}`,
+        corridorPart ? `Sync done – ${corridorPart}; ${schemaPart}` : `Sync done – ${schemaPart}`,
       )
       await corridorsQuery.refetch()
     } catch (e) {
@@ -1065,7 +1065,7 @@ export function PayoutCorridorsAdminPanel() {
                             <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">Grid</span>
                           ) : null}
                           {!r.showNoahBadge && !r.showYcBadge && !r.showGridBadge ? (
-                            <span className="text-muted-foreground text-xs">—</span>
+                            <span className="text-muted-foreground text-xs">–</span>
                           ) : null}
                         </div>
                       </TableCell>

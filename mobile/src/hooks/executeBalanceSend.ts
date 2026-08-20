@@ -76,9 +76,9 @@ export type ExecuteBalanceSendInput = {
   calculatedTotalAmount: number
   receiveAmountValue: number
   selectedBalanceCurrency: string
-  /** Required for fiat Global Payout — from confirm screen quote (`/api/noah/payouts/quote`). */
+  /** Required for fiat Global Payout – from confirm screen quote (`/api/noah/payouts/quote`). */
   payoutSession?: PayoutPrepareSession
-  /** Required for wallet send — from confirm screen quote (`/api/wallets/send/quote`). */
+  /** Required for wallet send – from confirm screen quote (`/api/wallets/send/quote`). */
   walletSession?: WalletPrepareSession
   /** Persisted on transfer metadata for transaction detail / notifications. */
   reviewSnapshot?: Record<string, unknown>

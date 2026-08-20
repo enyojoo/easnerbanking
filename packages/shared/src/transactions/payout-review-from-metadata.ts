@@ -23,7 +23,7 @@ export function isGridBalancePayoutMetadata(
 
 /**
  * Grid execute stores live send/total on the metadata root. Nested `payout_review`
- * can still hold the Office estimate — overlay executed amounts so details match
+ * can still hold the Office estimate – overlay executed amounts so details match
  * what Grid actually sent.
  */
 export function overlayGridExecutedPayoutReview(

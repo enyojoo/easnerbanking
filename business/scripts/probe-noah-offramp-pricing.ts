@@ -6,9 +6,9 @@
  *   cd business && node --env-file=.env.local --import tsx scripts/probe-noah-offramp-pricing.ts
  *
  * Env:
- *   PROBE_NOAH_CUSTOMER_ID — Noah business customer ID (required for prepare probes)
- *   PROBE_NOAH_RECIPIENT_ID — NGN bank recipient (Easner recipients.id)
- *   PROBE_NOAH_RECIPIENT_ID_RWF_BANK / PROBE_NOAH_RECIPIENT_ID_RWF_MOBILE — optional RW probes
+ *   PROBE_NOAH_CUSTOMER_ID – Noah business customer ID (required for prepare probes)
+ *   PROBE_NOAH_RECIPIENT_ID – NGN bank recipient (Easner recipients.id)
+ *   PROBE_NOAH_RECIPIENT_ID_RWF_BANK / PROBE_NOAH_RECIPIENT_ID_RWF_MOBILE – optional RW probes
  */
 
 import { getNoahUsdCryptoTicker } from "../lib/noah/config"
@@ -206,7 +206,7 @@ async function main() {
       })),
     )
   } else {
-    console.warn("Skip NGN prepare — set PROBE_NOAH_CUSTOMER_ID + PROBE_NOAH_RECIPIENT_ID")
+    console.warn("Skip NGN prepare – set PROBE_NOAH_CUSTOMER_ID + PROBE_NOAH_RECIPIENT_ID")
     for (const ticket of TICKETS.NGN) {
       try {
         const prices = await probePrices("NGN", "NG", ticket)

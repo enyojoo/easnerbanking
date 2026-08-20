@@ -3,7 +3,7 @@
  */
 export const EXCLUDED_PAYOUT_CORRIDOR_COUNTRY_CODES = new Set(["XX"])
 
-/** Product exclusions — corridor targets we never provision or keep. */
+/** Product exclusions – corridor targets we never provision or keep. */
 const EXCLUDED_PAYOUT_CORRIDOR_TARGETS = new Set(["NG:NGN:mobile_money"])
 
 export function isExcludedPayoutCorridorCountry(countryCode: string): boolean {

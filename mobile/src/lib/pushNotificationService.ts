@@ -16,7 +16,7 @@ let notificationsLazy: NotificationsModule | null = null
 function getNotifications(): NotificationsModule | null {
   if (Platform.OS === 'web' || isExpoGo) return null
   if (!notificationsLazy) {
-    // Load only outside Expo Go — avoids SDK 53+ noisy warnings when remote push is unavailable there.
+    // Load only outside Expo Go – avoids SDK 53+ noisy warnings when remote push is unavailable there.
     notificationsLazy = require('expo-notifications') as NotificationsModule
     notificationsLazy.setNotificationHandler({
       handleNotification: async () => ({
@@ -216,7 +216,7 @@ class PushNotificationService {
     return Notifications.addNotificationResponseReceivedListener(listener)
   }
 
-  /** Tap that opened the app from quit — pair with `addNotificationResponseReceivedListener` for warm opens. */
+  /** Tap that opened the app from quit – pair with `addNotificationResponseReceivedListener` for warm opens. */
   async getLastNotificationResponse(): Promise<NotificationResponse | null> {
     const Notifications = getNotifications()
     if (!Notifications) return null

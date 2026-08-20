@@ -3,7 +3,7 @@ import Constants from 'expo-constants'
 const APPLE_SCRIPT_SRC =
   'https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js'
 
-/** Default Services ID — must exist in Apple Developer (Identifiers → Services IDs). */
+/** Default Services ID – must exist in Apple Developer (Identifiers → Services IDs). */
 export const DEFAULT_APPLE_WEB_CLIENT_ID = 'com.easner.mobile.web'
 
 const IOS_BUNDLE_ID =
@@ -164,7 +164,7 @@ export async function signInWithAppleWeb(): Promise<AppleWebSignInResult> {
 
   const redirectURI = getAppleWebRedirectUri()
 
-  // Omit nonce — matches native iOS. If Apple embeds a nonce in the id_token we must
+  // Omit nonce – matches native iOS. If Apple embeds a nonce in the id_token we must
   // pass the same raw value to Supabase; hosted GoTrue compares hex vs Apple's
   // base64url hash and fails with "Nonces mismatch" (supabase/auth#2378).
   window.AppleID!.auth.init({

@@ -30,7 +30,7 @@ type VaJson = {
 const ACCOUNT_SCOPE_HEADERS = { "X-Easner-Account-Scope": "business" } as const
 
 function maskTail(s: string | undefined, visible = 4): string {
-  if (!s) return "—"
+  if (!s) return "–"
   const t = s.replace(/\s/g, "")
   if (t.length <= visible) return t
   return `••••${t.slice(-visible)}`
@@ -238,8 +238,8 @@ export function useBusinessAccountRows() {
         id: `acc_${currency.toLowerCase()}`,
         currency,
         accountName: hasVa ? va?.accountHolderName || displayName : displayName,
-        bankName: hasVa ? va?.bankName || "—" : "—",
-        accountNumber: hasVa ? maskTail(va?.accountNumber ?? va?.iban) : "—",
+        bankName: hasVa ? va?.bankName || "–" : "–",
+        accountNumber: hasVa ? maskTail(va?.accountNumber ?? va?.iban) : "–",
         fullAccountNumber: hasVa ? va?.accountNumber ?? va?.iban ?? "" : "",
         routingNumber: currency === "USD" && hasVa ? va?.routingNumber : undefined,
         sortCode: currency === "GBP" && hasVa ? va?.sortCode ?? va?.routingNumber : undefined,

@@ -22,7 +22,7 @@ export type RecipientWritePayload = {
   metadata?: Record<string, unknown> | null
 }
 
-/** Subset for DBs missing newer recipient columns — still keeps corridor-critical fields. */
+/** Subset for DBs missing newer recipient columns – still keeps corridor-critical fields. */
 export function toRecipientLegacyPayload(payload: RecipientWritePayload) {
   return {
     country_code: payload.country_code || null,

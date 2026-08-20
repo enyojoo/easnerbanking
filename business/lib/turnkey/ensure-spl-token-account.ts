@@ -57,7 +57,7 @@ function buildCreateAtaUnsignedTxHex(input: {
 
 /**
  * Creates the canonical USDC/EURC ATA on Solana when missing.
- * Required before showing ATA as a deposit address — otherwise bridges may treat the ATA
+ * Required before showing ATA as a deposit address – otherwise bridges may treat the ATA
  * pubkey as a wallet owner and fund a nested token account Turnkey cannot sign.
  */
 export async function ensureStablecoinTokenAccountOnChain(input: {

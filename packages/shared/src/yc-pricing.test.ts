@@ -712,7 +712,7 @@ describe("yc send leg destination amount", () => {
         // net 1998.13
       }).ok,
     ).toBe(false)
-    // Production 1.48 path — net 2011.72 — must accept
+    // Production 1.48 path – net 2011.72 – must accept
     expect(
       checkYcSendLegDestinationAmountSufficient({
         quotedReceive: 2000,

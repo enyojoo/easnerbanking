@@ -42,7 +42,7 @@ export interface OtpCodeInputProps {
 }
 
 /**
- * Single invisible input over digit boxes — same pattern as web `OtpCodeInput` / PIN boxes.
+ * Single invisible input over digit boxes – same pattern as web `OtpCodeInput` / PIN boxes.
  */
 export function OtpCodeInput({
   id = 'otp-code',

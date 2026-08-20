@@ -1,5 +1,5 @@
 /**
- * Noah Business API — production configuration.
+ * Noah Business API – production configuration.
  * @see https://docs.noah.com/api-concepts/authentication/configuration
  */
 
@@ -69,18 +69,18 @@ function assertHttpsReturnUrl(url: string, envName: string): string {
   }
   if (!/^https:\/\//i.test(u)) {
     throw new Error(
-      `${envName} must start with https:// — Noah expects a full ReturnURL including https (Hosted Onboarding: https://docs.noah.com/recipes/onboarding/hosted-onboarding)`
+      `${envName} must start with https:// – Noah expects a full ReturnURL including https (Hosted Onboarding: https://docs.noah.com/recipes/onboarding/hosted-onboarding)`
     )
   }
   return u
 }
 
-/** Consumer (Individual) hosted KYC — same value as `ReturnURL` in the Noah request. */
+/** Consumer (Individual) hosted KYC – same value as `ReturnURL` in the Noah request. */
 export function getNoahReturnUrl(): string {
   const raw = process.env.NOAH_ONBOARDING_RETURN_URL?.trim()
   if (!raw) {
     throw new Error(
-      "NOAH_ONBOARDING_RETURN_URL is required — set it to https://<host>/auth/noah-complete?context=kyc (see Noah Hosted Onboarding recipe)."
+      "NOAH_ONBOARDING_RETURN_URL is required – set it to https://<host>/auth/noah-complete?context=kyc (see Noah Hosted Onboarding recipe)."
     )
   }
   return assertHttpsReturnUrl(raw, "NOAH_ONBOARDING_RETURN_URL")

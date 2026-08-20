@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireOfficeAdmin } from "@/lib/api/admin-auth"
 import { replayFailedNoahEventInbox } from "@/lib/webhooks/replay-event-inbox"
 
-/** @deprecated Prefer `POST /api/admin/event-inbox/replay` — same behavior (event_inbox). */
+/** @deprecated Prefer `POST /api/admin/event-inbox/replay` – same behavior (event_inbox). */
 export async function POST(request: Request) {
   const auth = await requireOfficeAdmin(request)
   if (!auth.ok) return auth.response

@@ -62,7 +62,7 @@ export async function POST(request: Request) {
 
     const hostedUrl = session.HostedURL as string | undefined
     if (hostedUrl) {
-      /* hosted session returned — customer may still be completing setup */
+      /* hosted session returned – customer may still be completing setup */
     }
 
     const subjectId =

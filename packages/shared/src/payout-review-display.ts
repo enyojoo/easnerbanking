@@ -61,7 +61,7 @@ export function hasWalletSendFxDisplay(
 }
 
 /**
- * Exchange fee is never shown as its own row — channel/route cost is folded into the
+ * Exchange fee is never shown as its own row – channel/route cost is folded into the
  * single "Processing fee" row via `computeDisplayProcessingFee`. Retained (always false)
  * so existing call sites compile; remove call sites over time.
  */
@@ -73,7 +73,7 @@ export function shouldShowPayoutExchangeFee(_input?: {
   return false
 }
 
-/** Exchange rate row shows our (Easner) rate — cross-currency corridors only. */
+/** Exchange rate row shows our (Easner) rate – cross-currency corridors only. */
 export function shouldShowPayoutExchangeRate(input: {
   sendCurrency: string
   receiveCurrency: string

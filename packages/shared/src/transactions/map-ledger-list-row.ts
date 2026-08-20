@@ -44,7 +44,7 @@ import { isRelayTronDepositMetadata, resolveRelayTronDepositListDisplay } from "
 import { resolveStripeCollectionListDisplay } from "./stripe-invoice-settlement-lifecycle"
 
 // ---------------------------------------------------------------------------
-// Display id helpers (pure — no generation dependency)
+// Display id helpers (pure – no generation dependency)
 // ---------------------------------------------------------------------------
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -63,7 +63,7 @@ export function readEasnerTransactionIdFromMetadata(metadata: unknown): string |
 /**
  * Display/reference id for a ledger list row.
  * Prefers the persisted ETID column, then metadata, then provider tx id, then DB uuid.
- * Does NOT generate synthetic ids — that remains a server-side concern.
+ * Does NOT generate synthetic ids – that remains a server-side concern.
  */
 export function displayEasnerTransactionIdForList(input: {
   easnerTransactionId?: string | null
@@ -158,7 +158,7 @@ function transferToTitle(
 }
 
 /**
- * Metadata-only global payout list display — used when `payload` is not loaded.
+ * Metadata-only global payout list display – used when `payload` is not loaded.
  * Recipient name, receive amount, and receive currency are denormalized at write time.
  */
 export function resolveGlobalPayoutListDisplay(

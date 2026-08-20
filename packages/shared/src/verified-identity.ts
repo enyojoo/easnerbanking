@@ -157,7 +157,7 @@ export function formatMaskedIdForDisplay(masked: string | null | undefined): str
   return raw
 }
 
-/** Single flowing address line — street, locality, country name (comma-separated). */
+/** Single flowing address line – street, locality, country name (comma-separated). */
 export function formatVerifiedAddressDisplay(
   identity: Pick<VerifiedIdentityPayload, "addressLines" | "addressCountry">,
 ): string {
@@ -177,7 +177,7 @@ export function buildVerifiedIdentityFromKycFields(
 ): VerifiedIdentityPayload {
   if (!row) return { visible: false }
 
-  // Org owner: same gate as Legal Entity — only after KYB is fully approved.
+  // Org owner: same gate as Legal Entity – only after KYB is fully approved.
   if (opts) {
     if (!opts.orgKybApproved) return { visible: false }
   } else if (!isProfileLockedFromKycFields(row)) {

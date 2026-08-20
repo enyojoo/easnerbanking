@@ -153,7 +153,7 @@ export function CryptoDestinationsAdminPanel() {
                       </div>
                     </TableCell>
                     <TableCell className="max-w-[320px] truncate text-xs font-mono text-muted-foreground">
-                      {Array.isArray(r.networks) ? (r.networks as string[]).join(", ") : "—"}
+                      {Array.isArray(r.networks) ? (r.networks as string[]).join(", ") : "–"}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">

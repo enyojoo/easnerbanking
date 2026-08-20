@@ -34,7 +34,7 @@ export type YcReceiveRailsResponse = {
   optimistic?: boolean
 }
 
-/** Network revalidate window — stale cache still shown instantly. */
+/** Network revalidate window – stale cache still shown instantly. */
 const RECEIVE_RAILS_CACHE_TTL_MS = 5 * 60_000
 const PAY_IN_RATES_CACHE_TTL_MS = 2 * 60_000
 const NG_VERIFY_CACHE_TTL_MS = 5 * 60_000
@@ -96,7 +96,7 @@ export function optimisticReceiveRails(
 
 /**
  * Rails for display: memory cache (incl. stale) → optimistic from residence.
- * Never null when country+currency are set — options appear instantly.
+ * Never null when country+currency are set – options appear instantly.
  */
 export function resolveReceiveRailsForDisplay(
   country: string | null | undefined,
@@ -416,7 +416,7 @@ export async function warmYcLocalDepositCaches(input: WarmYcLocalDepositInput): 
   await Promise.allSettled(tasks)
 }
 
-/** Awaitable warmup — call before Receive / Send local-currency UI so rows appear together. */
+/** Awaitable warmup – call before Receive / Send local-currency UI so rows appear together. */
 export async function ensureYcLocalDepositCachesReady(
   input: WarmYcLocalDepositInput | null | undefined,
 ): Promise<void> {

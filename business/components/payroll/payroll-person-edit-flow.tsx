@@ -258,9 +258,9 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
                       </span>
                     </div>
                     <p className="mt-1 truncate text-xs text-muted-foreground">
-                      Easetag: @{person.easetag?.replace(/^@/, "") || "—"}
+                      Easetag: @{person.easetag?.replace(/^@/, "") || "–"}
                       <span aria-hidden="true"> · </span>
-                      Email: {person.email || "—"}
+                      Email: {person.email || "–"}
                     </p>
                   </div>
                   <div className="sm:text-right">
@@ -439,7 +439,7 @@ export function PayrollPersonEditFlow({ personId }: { personId: string }) {
               <Summary label="Setup method" value={isEasetagPerson ? "EASETAG" : "Manual"} />
               <Summary label="Person" value={isEasetagPerson ? person.fullName : fullName || person.fullName} />
               <Summary label="Classification" value={type === "employee" ? "Employee" : "Contractor"} />
-              <Summary label="Amount" value={amount ? formatCurrency(Number(amount), currency) : "—"} />
+              <Summary label="Amount" value={amount ? formatCurrency(Number(amount), currency) : "–"} />
               <Summary
                 label="Schedule"
                 value={schedules.find((schedule) => schedule.id === scheduleId)?.name || "No schedule"}

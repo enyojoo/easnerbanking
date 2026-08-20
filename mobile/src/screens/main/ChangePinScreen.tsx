@@ -92,7 +92,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
     ]).start()
   }
 
-  // Verify current PIN (auto-submit when 4 digits entered — same cadence as setup)
+  // Verify current PIN (auto-submit when 4 digits entered – same cadence as setup)
   useEffect(() => {
     if (!ready || !userId || step !== 'verify' || verifyBusy || lockedOut) return
     const code = verifyDigits.join('')

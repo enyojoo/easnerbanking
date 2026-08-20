@@ -29,7 +29,7 @@ type Props = {
 }
 
 /**
- * Receipt preview + share/save sheet — the Wise/Revolut pattern: the user sees the branded
+ * Receipt preview + share/save sheet – the Wise/Revolut pattern: the user sees the branded
  * receipt before acting. Primary "Share receipt" opens the native share sheet (which itself
  * includes Save to Photos/Files); secondary "Save to Photos" writes directly to the camera roll.
  * Rendering the card visibly here (vs off-screen) also makes the capture far more reliable.
@@ -87,7 +87,7 @@ export function TransactionReceiptSheet({ visible, onClose, receipt }: Props) {
             ) : null}
           </ScrollView>
 
-          {/* Side-by-side, equal weight: the user explicitly picks Share or Save — nothing
+          {/* Side-by-side, equal weight: the user explicitly picks Share or Save – nothing
               is ever saved or shared automatically. */}
           <View style={styles.actions}>
             <Pressable

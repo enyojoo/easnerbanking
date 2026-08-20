@@ -8,7 +8,7 @@
  *   - `personal`  → a single user (Easner Personal mobile)
  *
  * `scopeKey()` returns the readonly tuple used as the prefix for every
- * scoped query key. Do not inline scope tuples elsewhere — always go
+ * scoped query key. Do not inline scope tuples elsewhere – always go
  * through this module so invalidations stay consistent.
  */
 

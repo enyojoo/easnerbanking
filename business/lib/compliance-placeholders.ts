@@ -1,5 +1,5 @@
 /**
- * Until Tier 2 (African banking) ships — gate local rails in UI.
+ * Until Tier 2 (African banking) ships – gate local rails in UI.
  */
 export const TIER2_COMPLETE_PLACEHOLDER = false
 

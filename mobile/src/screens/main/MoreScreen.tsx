@@ -119,14 +119,14 @@ function MoreContent({ navigation }: NavigationProps) {
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [mfaStatusLine, setMfaStatusLine] = useState('')
-  /** False until MFA status is read from cache or `listFactors` — avoids showing the MFA banner while loading or on errors. */
+  /** False until MFA status is read from cache or `listFactors` – avoids showing the MFA banner while loading or on errors. */
   const [mfaStatusResolved, setMfaStatusResolved] = useState(false)
   const [pendingPayrollCount, setPendingPayrollCount] = useState(0)
   const [payrollActivityVisible, setPayrollActivityVisible] = useState(() =>
     Boolean(user?.id && peekPayrollActivityVisible(user.id)),
   )
   const lastKycProfileRefreshRef = useRef(0)
-  /** Latest profile for focus handler — avoids putting `noah_kyc_status` in `useFocusEffect` deps (would re-run MFA listFactors on every profile poll while More stays focused). */
+  /** Latest profile for focus handler – avoids putting `noah_kyc_status` in `useFocusEffect` deps (would re-run MFA listFactors on every profile poll while More stays focused). */
   const userProfileRef = useRef(userProfile)
   userProfileRef.current = userProfile
 
@@ -419,7 +419,7 @@ function MoreContent({ navigation }: NavigationProps) {
     warmAvatarCache(headerAvatarUri)
   }, [headerAvatarUri])
 
-  // Conditional gradient banner — verify identity OR set up MFA when applicable.
+  // Conditional gradient banner – verify identity OR set up MFA when applicable.
   const profileReady = !authLoading && userProfile != null
   const tier1Complete = isTier1Complete(userProfile)
   const showVerifyBanner = profileReady && !tier1Complete && verificationStatus !== 'in_review'
@@ -695,10 +695,10 @@ function MoreContent({ navigation }: NavigationProps) {
               </Pressable>
             </View>
 
-            {/* App Version — tracks expo.version in app.json */}
+            {/* App Version – tracks expo.version in app.json */}
             <View style={styles.versionContainer}>
               <Text style={styles.versionText}>
-                Easner · v{Constants.expoConfig?.version ?? '—'}
+                Easner · v{Constants.expoConfig?.version ?? '–'}
               </Text>
             </View>
           </View>

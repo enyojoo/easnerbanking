@@ -24,9 +24,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 /**
  * Compatibility shim over the TanStack Query `useWalletBalances` hook.
  *
- * The BalanceContext surface is kept intact — existing screens still call
+ * The BalanceContext surface is kept intact – existing screens still call
  * `useBalance()` and receive `{ balances, hasResolvedBalance, hasAuthoritativeBalance, refreshBalances, ... }`
- * — but the data now lives in the shared Query cache. Realtime balance events
+ * – but the data now lives in the shared Query cache. Realtime balance events
  * flow through `useSupabaseRealtimeScope` (mounted once in `QueryProvider`)
  * and surgically update `qk.wallets.list(scope)`, so this context no longer
  * owns a Supabase channel, AsyncStorage envelope, or polling loop.

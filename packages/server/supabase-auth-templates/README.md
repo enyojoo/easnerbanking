@@ -28,4 +28,4 @@ Suggested subjects:
 
 - Footer matches SendGrid: Easner Group, Inc., Castro address, “You received this email because you have an Easner account.”
 - No “Manage email preferences” link (auth mail is account-required, not marketing).
-- Logo: **dual wordmark** — `Easner Logo.png` (light mode) + `Easner LogoW.png` (dark mode), swapped when the client honors `prefers-color-scheme: dark`.
+- Logo: **dual wordmark** – `Easner Logo.png` (light mode) + `Easner LogoW.png` (dark mode), swapped when the client honors `prefers-color-scheme: dark`.

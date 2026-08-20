@@ -29,12 +29,12 @@ export type EasnerAlertSheetProps = {
   /** Ignored when `singleAction` is true. */
   onSecondary?: () => void
   /**
-   * Destructive primary — oxblood fill + ivory label (delete account, etc.).
+   * Destructive primary – oxblood fill + ivory label (delete account, etc.).
    * Omit for brand-blue primary (logout, disable MFA, generic confirms).
    */
   primaryDestructive?: boolean
   primaryLoading?: boolean
-  /** OK-only — hides secondary / cancel (errors, success toasts). */
+  /** OK-only – hides secondary / cancel (errors, success toasts). */
   singleAction?: boolean
 }
 

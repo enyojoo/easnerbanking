@@ -1,7 +1,7 @@
 -- Cleanup orphan businesses created by the signup bootstrap vs profile GET race.
 --
--- Symptom: two rows like "Fruitful's Business" — one linked to the owner (Office shows
--- an Owner link), one ghost (Owner column is "—", empty easetag/KYB fields).
+-- Symptom: two rows like "Fruitful's Business" – one linked to the owner (Office shows
+-- an Owner link), one ghost (Owner column is "–", empty easetag/KYB fields).
 --
 -- Safe to delete: businesses with NO users.easner_business_id pointer AND NO
 -- business_memberships rows. Child payroll rows CASCADE on delete.

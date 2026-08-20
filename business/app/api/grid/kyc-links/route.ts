@@ -95,7 +95,7 @@ export async function POST(request: Request) {
         customer: customer as Record<string, unknown>,
       })
     } else {
-      // Fresh UNVERIFIED creates used to skip this — Grid got a customer, the business row did not.
+      // Fresh UNVERIFIED creates used to skip this – Grid got a customer, the business row did not.
       await persistVerificationStatus(admin, {
         kind: "business",
         businessId: ctx.businessId,

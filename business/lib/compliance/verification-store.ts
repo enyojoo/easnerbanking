@@ -60,7 +60,7 @@ function isProgressedVerificationStatus(status: string): status is VerificationS
 /**
  * Canonical KYC/KYB for money-movement gates.
  *
- * Business Grid KYB: `verification_status` only — Noah mirror columns are not read.
+ * Business Grid KYB: `verification_status` only – Noah mirror columns are not read.
  * Consumer Noah KYC: prefer progressed canonical values; fall back to Noah mirrors when stale.
  */
 export function canonicalVerificationStatus(row: StoredVerificationRow | null): VerificationStatus {

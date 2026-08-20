@@ -103,7 +103,7 @@ function TransactionDetailActions({
     transaction.paymentScheme !== "Easetag" &&
     !isStablecoinDeposit
 
-  // Nothing to offer (e.g. a completed Easetag transfer) — don't render an empty card.
+  // Nothing to offer (e.g. a completed Easetag transfer) – don't render an empty card.
   if (!showInvoice && !showTrackStatus && !showDownloadReceipt) return null
 
   return (
@@ -336,7 +336,7 @@ function TransactionSummaryDetails({
           value={
             whenAt
               ? formatTransactionWhen(whenAt)
-              : "—"
+              : "–"
           }
         />
       </CardContent>

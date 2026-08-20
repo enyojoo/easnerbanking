@@ -1,5 +1,5 @@
 /**
- * Easner Design System — Mobile shadows
+ * Easner Design System – Mobile shadows
  *
  * Soft, graphite-based elevation. No glows, no colored shadows.
  * All layers use the graphite base (`#0F1110`) so cards feel lifted
@@ -8,7 +8,7 @@
  * Keys (`xs`, `sm`, `md`, `lg`, `xl`, `none`) match the prior API so
  * screens don't need to be updated. The legacy `primary`, `success`,
  * and `glow` keys are retained but re-authored as neutral graphite
- * shadows — no brand-colored drop shadows.
+ * shadows – no brand-colored drop shadows.
  */
 
 import type { ViewStyle } from 'react-native'

@@ -68,7 +68,7 @@ export function ListRowSkeleton({ variant = 'transaction', showDivider = true, s
   )
 }
 
-/** One white card with stacked row skeletons — matches Transactions date `groupCard` + dividers. */
+/** One white card with stacked row skeletons – matches Transactions date `groupCard` + dividers. */
 export function GroupedListCardSkeleton({
   rowCount = 5,
   variant = 'transaction',

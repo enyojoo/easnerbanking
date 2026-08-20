@@ -4,7 +4,7 @@ import type { ParsedAvatarUpload } from "@/lib/profile-avatar-upload-body"
 
 const AVATARS_BUCKET = "avatars" as const
 
-/** One canonical object per user — re-uploads overwrite this path (no UUID sprawl). */
+/** One canonical object per user – re-uploads overwrite this path (no UUID sprawl). */
 export function profileAvatarStoragePath(userId: string, contentType: string): string {
   const ext = extensionForMime(contentType)
   return `${userId}/avatar.${ext}`

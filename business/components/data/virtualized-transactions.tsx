@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils"
  * The caller owns row rendering so tables stay flexible.
  *
  * `onNearEnd` is invoked once per scroll sweep when the user is within
- * `overscan` rows of the bottom — wire it to `fetchNextPage` to get
+ * `overscan` rows of the bottom – wire it to `fetchNextPage` to get
  * seamless pagination.
  */
 
@@ -26,7 +26,7 @@ type Props = {
   onNearEnd?: () => void
   renderRow: (tx: TransactionWithSource, index: number) => React.ReactNode
   className?: string
-  /** Minimum height before any rows arrive — keeps layout from collapsing. */
+  /** Minimum height before any rows arrive – keeps layout from collapsing. */
   placeholderMinHeight?: number
 }
 

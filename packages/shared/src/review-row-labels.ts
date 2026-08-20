@@ -3,7 +3,7 @@
  * Keep in-app review, transaction detail, and email rows aligned.
  */
 
-/** Cross-border Through Local Currency — review, complete, and detail transfer-method row. */
+/** Cross-border Through Local Currency – review, complete, and detail transfer-method row. */
 export const TLC_LOCAL_TRANSFER_METHOD = "Local Transfer"
 
 export const REVIEW_ROW_LABELS = {
@@ -25,13 +25,13 @@ export const REVIEW_ROW_LABELS = {
   totalToPay: "Total to pay",
   /** Settled local pay-in (transaction detail). */
   amountPaid: "Amount paid",
-  /** USD balance credit (live deposit review — mirrors Amount to pay). */
+  /** USD balance credit (live deposit review – mirrors Amount to pay). */
   amountToCredit: "Amount to credit",
   /** Review estimate before YC quote lock. */
   estimatedToPay: "Estimated to pay",
   estimatedToCredit: "Estimated to credit",
   creditTo: "Credited to",
-  /** Verification microdeposits — settled detail only (not spendable balance). */
+  /** Verification microdeposits – settled detail only (not spendable balance). */
   creditFor: "Credit for",
   /** Settled inbound bank / stablecoin deposit (detail / email). */
   amountCredited: "Amount credited",
@@ -42,7 +42,7 @@ export const REVIEW_ROW_LABELS = {
   /** Inbound deposit rail / how funds arrived (Wire, ACH, USDC on Solana, etc.). */
   depositMethod: "Deposit method",
   arrival: "Arrival",
-  /** Balance outbound — source account (confirm / detail / email). */
+  /** Balance outbound – source account (confirm / detail / email). */
   debitedFrom: "Debited from",
   when: "When",
   note: "Note",
@@ -52,7 +52,7 @@ export const REVIEW_ROW_LABELS = {
   paymentAmount: "Payment amount",
   mobileNumber: "Mobile number",
   paymentNetwork: "Network",
-  /** Fund-balance MoMo deposit review — phone / network prompts. */
+  /** Fund-balance MoMo deposit review – phone / network prompts. */
   momoNumberPrompt: "Enter your MOMO number",
   momoNetworkPrompt: "Select MOMO Network",
 } as const

@@ -138,5 +138,5 @@ export async function requireVerificationApproved(
   return null
 }
 
-/** @deprecated Use requireVerificationApproved — kept as alias for incremental migration. */
+/** @deprecated Use requireVerificationApproved – kept as alias for incremental migration. */
 export const requireNoahVerificationApproved = requireVerificationApproved

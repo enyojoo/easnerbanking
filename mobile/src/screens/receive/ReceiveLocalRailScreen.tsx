@@ -13,7 +13,7 @@ type RouteParams = {
   ngMissingType?: NgLocalIdType | null
 }
 
-/** Deprecated rail picker — redirects to Receive Cash hub or amount entry when deep-linked. */
+/** Deprecated rail picker – redirects to Receive Cash hub or amount entry when deep-linked. */
 export default function ReceiveLocalRailScreen({ navigation, route }: NavigationProps) {
   useEffect(() => {
     const params = (route.params || {}) as Partial<RouteParams>

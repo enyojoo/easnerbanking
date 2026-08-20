@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Production Noah VA diagnostic — customers + PayinTo payment methods.
+ * Production Noah VA diagnostic – customers + PayinTo payment methods.
  * Usage: node business/scripts/check-noah-vas.mjs [CustomerID ...]
  */
 import { config } from "dotenv"

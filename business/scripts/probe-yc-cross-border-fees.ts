@@ -110,7 +110,7 @@ async function main() {
   console.log("\n=== Easner plan fees (on top of YC) ===")
   console.log("  Processing: YC service + network (per leg) + Easner 1% (review line)")
   console.log("  FX display: +0.5% margin in shown rate (omnibus surplus)")
-  console.log("  Settlement: USDC/SOL both legs — no extra chain fee in user copy")
+  console.log("  Settlement: USDC/SOL both legs – no extra chain fee in user copy")
 
   try {
     const gas = await yellowcardFetch<{ gasFee?: number; gasToken?: string }>({

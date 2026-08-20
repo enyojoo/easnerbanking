@@ -8,9 +8,9 @@ import { trySyncTurnkeyDepositVaultsIfNeeded } from "@/lib/wallet/sync-deposit-v
 export const runtime = "nodejs"
 
 /**
- * GET — Solana USDC / EURC deposit addresses from Turnkey `wallet_accounts` (matches /accounts + invoice pay-in).
- * `?mode=fast` — Home/wallets warm path: skip vault drain + Solana/Turnkey ATA ensure when ATA is stored.
- * default / `?mode=ensure` — Receive open / explicit refresh: full sync + verify/ensure.
+ * GET – Solana USDC / EURC deposit addresses from Turnkey `wallet_accounts` (matches /accounts + invoice pay-in).
+ * `?mode=fast` – Home/wallets warm path: skip vault drain + Solana/Turnkey ATA ensure when ATA is stored.
+ * default / `?mode=ensure` – Receive open / explicit refresh: full sync + verify/ensure.
  */
 export async function GET(request: Request) {
   const auth = await requireAuth(request)

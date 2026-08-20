@@ -81,7 +81,7 @@ export async function POST(request: Request) {
   if (upsertDevice.error) {
     if (upsertDevice.error.code === "42P01" || upsertDevice.error.code === "42703") {
       return NextResponse.json(
-        { error: "user_push_devices missing — apply latest Supabase migrations." },
+        { error: "user_push_devices missing – apply latest Supabase migrations." },
         { status: 503 },
       )
     }

@@ -84,7 +84,7 @@ async function loadUserProfile(email: string): Promise<{ firstName: string } | n
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) {
-    console.warn("WARN: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set — skipping --from-db")
+    console.warn("WARN: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set – skipping --from-db")
     return null
   }
 
@@ -196,7 +196,7 @@ async function main() {
 
   console.log(
     dryRun
-      ? `Dry run — ${keys.length} template(s) → ${to}`
+      ? `Dry run – ${keys.length} template(s) → ${to}`
       : `Sending ${keys.length} template preview(s) → ${to}`,
   )
 

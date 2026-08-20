@@ -21,7 +21,7 @@ export function hasDuplicateStackTop(state: { index: number; routes: StackRoute[
   return Boolean(current && previous && current === previous)
 }
 
-/** Reset stack to MainTabs on a specific tab — clears send/receive loops. */
+/** Reset stack to MainTabs on a specific tab – clears send/receive loops. */
 export function exitToMainTabs(
   navigation: StackNavigationLike,
   tab: MainTabName = 'Dashboard',
@@ -35,7 +35,7 @@ export function exitToMainTabs(
 }
 
 /**
- * Safe stack back — pops duplicate consecutive routes, then goBack, else exits to MainTabs.
+ * Safe stack back – pops duplicate consecutive routes, then goBack, else exits to MainTabs.
  */
 export function navigateStackBack(
   navigation: StackNavigationLike,
@@ -56,7 +56,7 @@ export function navigateStackBack(
   exitToMainTabs(navigation, options?.fallbackTab ?? 'Dashboard')
 }
 
-/** Leave the send flow from the recipient hub — always land on Dashboard tabs. */
+/** Leave the send flow from the recipient hub – always land on Dashboard tabs. */
 export function exitSendFlowFromHub(navigation: StackNavigationLike): void {
   const state = navigation.getState()
   const idx = state.index
@@ -73,7 +73,7 @@ export function exitSendFlowFromHub(navigation: StackNavigationLike): void {
   navigateStackBack(navigation, { fallbackTab: 'Dashboard' })
 }
 
-/** Pop to MainTabs without clearing tab param — for settings opened from More. */
+/** Pop to MainTabs without clearing tab param – for settings opened from More. */
 export function popToMainTabs(
   navigation: StackNavigationLike,
   tab: MainTabName = 'More',

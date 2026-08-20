@@ -168,7 +168,7 @@ export function deriveEasnerInboundRemitterDisplayName(input: {
 
 /**
  * Fixed product line for detail UIs (e.g. "Bank Deposit" vs sender name on a separate row).
- * Does not substitute remitter — use {@link deriveEasnerInboundRemitterDisplayName} for that.
+ * Does not substitute remitter – use {@link deriveEasnerInboundRemitterDisplayName} for that.
  */
 export function toEasnerTransactionProductCategory(input: {
   provider: string

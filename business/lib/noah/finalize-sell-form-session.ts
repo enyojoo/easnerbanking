@@ -304,7 +304,7 @@ export function buildPrepareBody(input: PrepareBodyInput): Record<string, unknow
     ...(input.customerId ? { CustomerID: input.customerId } : {}),
     ...(input.paymentMethodId ? { PaymentMethodID: input.paymentMethodId } : {}),
   }
-  // Omit empty Form — Noah rejects `{}` on seal steps ("invalid request").
+  // Omit empty Form – Noah rejects `{}` on seal steps ("invalid request").
   if (Object.keys(input.form).length > 0) {
     body.Form = input.form
   }

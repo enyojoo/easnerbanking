@@ -9,7 +9,7 @@ export const COMPACT_FIELD_MIN_HEIGHT = 48
 
 /**
  * Vertical metrics for standard single-line fields (auth, TextField, passwords).
- * Always include `web` — RN Web omits ios/android branches and collapses inputs.
+ * Always include `web` – RN Web omits ios/android branches and collapses inputs.
  */
 export const standardInputMetrics: TextStyle = Platform.select({
   android: { includeFontPadding: false, minHeight: FORM_FIELD_MIN_HEIGHT },

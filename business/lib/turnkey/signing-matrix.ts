@@ -4,7 +4,7 @@
  * Custodial model: root API key provisions orgs; sends auto-use non-root easner-da when
  * TURNKEY_DA_* keys are set and org/sub-org is migrated (no manual enable flag).
  *
- * Full migration is auto-detected — fail-closed on stragglers without TURNKEY_DA_SENDS_STRICT.
+ * Full migration is auto-detected – fail-closed on stragglers without TURNKEY_DA_SENDS_STRICT.
  *
  * Threat model:
  * - DA key theft → policy-bound signing only; export/escalation denied.

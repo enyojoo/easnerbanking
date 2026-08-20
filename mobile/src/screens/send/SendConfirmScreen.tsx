@@ -1065,7 +1065,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
               {!easetagUi && pricingQuoteExpiry ? (
                 <Text style={styles.quoteHint}>
                   {quoteCountdown.expired
-                    ? 'Quote expired — go back and continue again for a fresh quote.'
+                    ? 'Quote expired – go back and continue again for a fresh quote.'
                     : `Quote valid for ${quoteCountdown.label}`}
                 </Text>
               ) : null}

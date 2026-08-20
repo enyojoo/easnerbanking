@@ -7,7 +7,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Easner Stablecoin Counter",
     short_name: "Counter",
-    description: "Accept stablecoin at the counter — Easner Business",
+    description: "Accept stablecoin at the counter – Easner Business",
     start_url: "/pay?source=pwa",
     scope: "/",
     display: "standalone",

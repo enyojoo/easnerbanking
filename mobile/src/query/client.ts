@@ -17,7 +17,7 @@ export function getMobileQueryClient(): QueryClient {
     client = createBaseQueryClient({
       defaultOptions: {
         queries: {
-          // Mobile networks are slower/spikier — give a touch more room
+          // Mobile networks are slower/spikier – give a touch more room
           // before refetching, and keep cached pages in memory longer so
           // returning to a screen feels instant.
           staleTime: 45_000,

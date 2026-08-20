@@ -34,7 +34,7 @@ async function cancelSubscriptionsForLink(
     try {
       await stripe.subscriptions.cancel(subscriptionId)
     } catch {
-      // Already canceled or unknown to the provider — closing the link still stands.
+      // Already canceled or unknown to the provider – closing the link still stands.
     }
   }
 }

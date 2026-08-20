@@ -4,7 +4,7 @@
  *
  * Idempotently provisions non-root easner-da user + policy pack on:
  * - every linked wallet_owners.turnkey_sub_organization_id
- * - parent org (omnibus) — may require 2-of-3 second approver on parent root quorum
+ * - parent org (omnibus) – may require 2-of-3 second approver on parent root quorum
  *
  * Parent org 2-of-3 ceremony (one-time):
  * 1. Run with --apply (this script submits createUsers + createPolicy on parent org).
@@ -201,7 +201,7 @@ async function main() {
 
   if (args.apply && unmigrated === 0 && skipped > 0 && pendingActivities.length === 0) {
     markCustodialDaMigrationCompleteInCache()
-    console.log("\nCustodial DA migration complete — auto fail-closed on stragglers (no STRICT flag needed).")
+    console.log("\nCustodial DA migration complete – auto fail-closed on stragglers (no STRICT flag needed).")
   }
 
   if (args.requireComplete && unmigrated > 0) {

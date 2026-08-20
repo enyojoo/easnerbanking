@@ -9,7 +9,7 @@ export const USER_AVATAR_SIZE = 40
 /** Slightly larger circle on Profile edit only (initials styling matches `userAvatarStyles.initials`). */
 export const PROFILE_EDIT_AVATAR_SIZE = 56
 
-/** PIN entry / app lock — aligns with business web `h-16 w-16` (64px). */
+/** PIN entry / app lock – aligns with business web `h-16 w-16` (64px). */
 export const PIN_ENTRY_AVATAR_SIZE = 64
 
 export const userAvatarStyles = StyleSheet.create({

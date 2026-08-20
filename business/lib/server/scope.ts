@@ -9,7 +9,7 @@ import { BUSINESS_APP_SESSION_COOKIE, getBusinessAppSessionUser } from "@/lib/ap
  * Reads the short-lived `easner_business_session` cookie (minted by
  * `createBusinessAppSession` after login) to derive a `BusinessScope`
  * without making any network calls. Returns `null` when the user is
- * signed out or the cookie is invalid — server components should
+ * signed out or the cookie is invalid – server components should
  * gracefully skip prefetching in that case.
  */
 export async function getServerScope(): Promise<BusinessScope | null> {

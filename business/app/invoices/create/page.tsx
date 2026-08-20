@@ -534,7 +534,7 @@ export default function CreateInvoicePage() {
   }, [isEditMode, formData.dueDate])
 
   // Default invoice currency to business base currency when no customer (same as Add Customer dialog).
-  // Only on initial profile load — not on every baseCurrency change — so manual picks are preserved.
+  // Only on initial profile load – not on every baseCurrency change – so manual picks are preserved.
   useEffect(() => {
     if (isEditMode || formData.customerId) {
       awaitingProfileForDefaultCurrency.current = profileLoading

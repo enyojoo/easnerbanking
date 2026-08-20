@@ -1,6 +1,6 @@
 /**
  * Last-known `AuthUser` snapshot for instant UI on cold start / resume (avatar, KYC fields).
- * Plaintext on device — same sensitivity as session; cleared on logout.
+ * Plaintext on device – same sensitivity as session; cleared on logout.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { AuthUser } from '../types'

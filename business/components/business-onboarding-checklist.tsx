@@ -58,7 +58,7 @@ function ProgressRing({ pct }: { pct: number }) {
 type StepVisual = "complete" | "error" | "pending"
 
 /**
- * Sidebar onboarding progress — driven only by the signed-in account's live
+ * Sidebar onboarding progress – driven only by the signed-in account's live
  * profile / payroll / wallet data (same isolation model as balances).
  * No sticky localStorage: that leaked completed steps across account switches.
  */

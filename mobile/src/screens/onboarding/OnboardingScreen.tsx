@@ -71,7 +71,7 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
     }
   }, [])
 
-  /** Only sync index when paging settles — `onScroll` + Math.round caused label/dot flicker mid-animation. */
+  /** Only sync index when paging settles – `onScroll` + Math.round caused label/dot flicker mid-animation. */
   const handleMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const scrollPosition = event.nativeEvent.contentOffset.x
     const index = Math.round(scrollPosition / screenWidth)
@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[4],
   },
   title: {
-    /** Hero headline — between `fontSize['4xl']` and `5xl` for marketing slides */
+    /** Hero headline – between `fontSize['4xl']` and `5xl` for marketing slides */
     fontSize: fontSize['4xl'] + 2,
     lineHeight: (fontSize['4xl'] + 2) * lineHeight.tight,
     color: colors.text.inverse,

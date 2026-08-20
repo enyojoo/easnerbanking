@@ -7,7 +7,7 @@ export type StartAutomatedPayoutInput = {
   /** Fiat face amount for payout (string decimal) */
   fiatAmount: string
   formSessionId: string
-  /** Easner session id — sent as Noah ExternalID */
+  /** Easner session id – sent as Noah ExternalID */
   externalId: string
   network: string
   /**

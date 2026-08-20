@@ -1,5 +1,5 @@
 /**
- * Screen transition registry — maps every navigable route to a transition intent.
+ * Screen transition registry – maps every navigable route to a transition intent.
  * Used by resolveScreenTransitionOptions for intelligent stack motion.
  */
 
@@ -16,7 +16,7 @@ export type ScreenTransitionEntry = {
   blockGesture?: boolean
   /** Allow swipe on Auth when coming from onboarding */
   allowAuthSwipe?: boolean
-  /** Terminal flow step — enable Android swipe-back */
+  /** Terminal flow step – enable Android swipe-back */
   flowStepTerminal?: boolean
 }
 
@@ -86,7 +86,7 @@ export const SCREEN_TRANSITION_MAP: Record<ScreenRouteName, ScreenTransitionEntr
   PinSetupGate: { intent: 'authGate', blockGesture: true },
   PinEntryGate: { intent: 'authGate', blockGesture: true },
 
-  // Tab roots (inside MainTabs — stack options apply when pushed as stack screens)
+  // Tab roots (inside MainTabs – stack options apply when pushed as stack screens)
   MainTabs: { intent: 'tabRoot', blockGesture: true },
   Dashboard: { intent: 'tabRoot' },
   Card: { intent: 'tabRoot' },

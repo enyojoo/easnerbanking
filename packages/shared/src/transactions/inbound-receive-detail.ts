@@ -1,5 +1,5 @@
 /**
- * Unified inbound receive detail — YC fund_balance, Noah VA, verification, stablecoin, Easetag.
+ * Unified inbound receive detail – YC fund_balance, Noah VA, verification, stablecoin, Easetag.
  * One snapshot + row builder for detail, email, receipt, and notifications.
  */
 
@@ -74,7 +74,7 @@ export type InboundReceiveDetailRow = {
   value: string
   /** When set, UI renders currency flag + balance label instead of plain text. */
   creditCurrency?: string
-  /** Verification explainer — detail surface only. */
+  /** Verification explainer – detail surface only. */
   isVerificationHint?: boolean
   /** Full value to copy (e.g. wallet address); display `value` may be truncated. */
   copyValue?: string
@@ -112,7 +112,7 @@ export type InboundReceiveResolveInput = {
 }
 
 const VERIFICATION_CREDIT_HINT =
-  "Verification only — not added to your spendable balance."
+  "Verification only – not added to your spendable balance."
 
 const CHAIN_ABBREVIATIONS: Record<string, string> = {
   solana: "SOL",
@@ -689,13 +689,13 @@ export function buildInboundReceiveDetailRows(
     }
   }
 
-  // Deposit method sits with Transfer method on payouts — last content row before When.
+  // Deposit method sits with Transfer method on payouts – last content row before When.
   pushIf(rows, REVIEW_ROW_LABELS.depositMethod, snapshot.scheme)
 
   // Keep the timestamp as the final transaction-detail row for every deposit type.
   if (includeWhen) {
     const formatted = snapshot.whenAt ? formatTransactionWhen(snapshot.whenAt) : ""
-    rows.push({ label: REVIEW_ROW_LABELS.when, value: formatted || "—" })
+    rows.push({ label: REVIEW_ROW_LABELS.when, value: formatted || "–" })
   }
 
   return rows
@@ -728,7 +728,7 @@ export function resolveInboundDepositNotificationAmountDisplay(
   return formatMoneyDisplay(amount, currency)
 }
 
-/** Unified deposit push/email intro — mirrors outbound "You've sent $X to …". */
+/** Unified deposit push/email intro – mirrors outbound "You've sent $X to …". */
 export function formatInboundDepositReceivedNotificationBody(
   snapshot: InboundReceiveDetailSnapshot,
 ): string {

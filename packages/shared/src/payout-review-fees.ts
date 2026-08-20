@@ -1,6 +1,6 @@
 /**
  * Exchange fee implied in balance currency: Noah `cryptoAuthorizedAmount` (total debited)
- * minus amount-screen "you send" minus Easner processing fee — all in USD/EUR.
+ * minus amount-screen "you send" minus Easner processing fee – all in USD/EUR.
  */
 export function computeBalancePayoutExchangeFee(
   totalDebited: number,

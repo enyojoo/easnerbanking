@@ -20,7 +20,7 @@ export interface TransactionEmailData {
   transactionId: string
   easnerTransactionId?: string
   title: string
-  /** SendGrid subject — may differ from pushTitle on failed/reversed */
+  /** SendGrid subject – may differ from pushTitle on failed/reversed */
   emailSubject?: string
   body: string
   amountDisplay: string
@@ -131,7 +131,7 @@ export interface SecurityAlertEmailData {
   audience?: EmailAudience
 }
 
-/** easner.com “Get the app” popup — download link email to a non-account visitor. */
+/** easner.com “Get the app” popup – download link email to a non-account visitor. */
 export interface AppDownloadLinkEmailData {
   email: string
   appStoreUrl?: string
@@ -140,7 +140,7 @@ export interface AppDownloadLinkEmailData {
   appWebUrl?: string
 }
 
-/** @deprecated Legacy remittance shape — use TransactionEmailData from ledger descriptor */
+/** @deprecated Legacy remittance shape – use TransactionEmailData from ledger descriptor */
 export interface LegacyTransactionEmailData {
   transactionId: string
   recipientName: string

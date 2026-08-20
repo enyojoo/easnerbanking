@@ -9,7 +9,7 @@ type Props = {
   flagSize?: number
 }
 
-/** Balance chip for receipt rows — matches transaction detail CreditDestinationRow spacing. */
+/** Balance chip for receipt rows – matches transaction detail CreditDestinationRow spacing. */
 export function ReceiptBalanceDestinationValue({
   currency,
   balanceLabel,

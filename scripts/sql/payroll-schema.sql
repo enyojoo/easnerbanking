@@ -1,4 +1,4 @@
--- Easner Payroll — apply in Supabase (business-scoped disbursement)
+-- Easner Payroll – apply in Supabase (business-scoped disbursement)
 -- Run after review in staging; tables are additive.
 
 -- ---------------------------------------------------------------------------

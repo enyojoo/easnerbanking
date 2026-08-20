@@ -11,7 +11,7 @@ export interface OrderAmounts {
 
 /**
  * Pure FX calculation for catalog / send flows.
- * Does not fetch rates — callers pass `exchangeRates[]`.
+ * Does not fetch rates – callers pass `exchangeRates[]`.
  * Production Noah wallet send may still use Noah APIs until wired here.
  */
 export const fxEngine = {

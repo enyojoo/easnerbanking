@@ -7,7 +7,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
 /**
  * Read-only B2B rows for controlled demos only (Business web app).
- * In production, set ALLOW_B2B_DEMO_PUBLIC=true — otherwise returns empty.
+ * In production, set ALLOW_B2B_DEMO_PUBLIC=true – otherwise returns empty.
  */
 export async function GET() {
   if (process.env.NODE_ENV === "production" && process.env.ALLOW_B2B_DEMO_PUBLIC !== "true") {

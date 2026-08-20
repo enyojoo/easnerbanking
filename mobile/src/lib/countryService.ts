@@ -198,7 +198,7 @@ export const countryService = {
     return countriesList
   },
 
-  /** Synchronous full catalog — lets pickers render instantly without a loading spinner. */
+  /** Synchronous full catalog – lets pickers render instantly without a loading spinner. */
   getAllIncludingUnsupportedSync(): Country[] {
     return countriesList
   },

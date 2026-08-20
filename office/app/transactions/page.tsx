@@ -92,7 +92,7 @@ function formatDirectionLabel(direction: string | null | undefined): string {
 
 function formatProviderLabel(provider: string | null | undefined): string {
   const raw = String(provider || "").trim()
-  if (!raw) return "—"
+  if (!raw) return "–"
   if (raw.toLowerCase() === "easner_internal") return "Easetag"
   if (raw.toLowerCase() === "yellowcard") return "Yellowcard"
   if (raw.toLowerCase() === "noah") return "Noah"
@@ -112,7 +112,7 @@ function transactionIdDisplay(tx: OfficeTransaction): string {
 function WhoDisplay({ transaction }: { transaction: OfficeTransaction }) {
   return (
     <div>
-      <div className="font-medium">{transaction.who || "—"}</div>
+      <div className="font-medium">{transaction.who || "–"}</div>
       {transaction.user?.email ? (
         <div className="text-sm text-gray-500">{transaction.user.email}</div>
       ) : null}

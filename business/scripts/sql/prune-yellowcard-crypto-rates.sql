@@ -4,7 +4,7 @@
 -- Removes:
 --   USDC → * (misleading pay-in math as payout)
 --   crypto / stablecoin codes from YC /rates
---   non-3-letter codes (except USDC as to_currency on pay-in legs — those stay)
+--   non-3-letter codes (except USDC as to_currency on pay-in legs – those stay)
 
 delete from public.yellowcard_rates
 where lower(source) <> 'office'

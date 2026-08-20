@@ -30,7 +30,7 @@ function getSupabaseServiceConfig(): { supabaseUrl: string; serviceRoleKey: stri
   return { supabaseUrl, serviceRoleKey }
 }
 
-/** Optional override: GRID_CROSS_PAIRS=NGN:KES,NGN:GHS — otherwise all corridor fiats are crossed. */
+/** Optional override: GRID_CROSS_PAIRS=NGN:KES,NGN:GHS – otherwise all corridor fiats are crossed. */
 function resolveGridCrossPairs(fiatCodes: string[]): YcCrossPairInput[] {
   const fromEnv = (process.env.GRID_CROSS_PAIRS || "").trim()
   if (fromEnv) {

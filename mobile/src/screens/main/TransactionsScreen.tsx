@@ -118,7 +118,7 @@ interface CombinedTransaction {
   metadata?: any
 }
 
-/** Prefer ledger UUID for detail API — list `transaction_id` may be display-only (ETID…). */
+/** Prefer ledger UUID for detail API – list `transaction_id` may be display-only (ETID…). */
 function transactionDetailLookupId(row: Pick<CombinedTransaction, 'ledger_row_id' | 'transaction_id' | 'id'>) {
   const ledger = typeof row.ledger_row_id === 'string' ? row.ledger_row_id.trim() : ''
   if (ledger) return ledger
@@ -715,7 +715,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
           />
         }
       >
-        {/* Money in / Money out — totals match filtered list (search + chips + date range), same idea as business */}
+        {/* Money in / Money out – totals match filtered list (search + chips + date range), same idea as business */}
         <View style={styles.summaryRow}>
           <SectionCard style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>MONEY IN</Text>
@@ -1398,7 +1398,7 @@ const styles = StyleSheet.create({
   transactionItemLast: {
     marginBottom: 0,
   },
-  /** Tinted-blue circular icon — primary @ ~10% alpha fill. */
+  /** Tinted-blue circular icon – primary @ ~10% alpha fill. */
   transactionIconBox: {
     width: 44,
     height: 44,

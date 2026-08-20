@@ -1,7 +1,7 @@
 /**
  * **Counter charge denomination only** (Stablecoin Terminal `/pay`): which fiat label the merchant
  * shows for “how much the customer pays” before crypto is sent. This aligns with Noah on-chain
- * wallet assets (e.g. USDC, EURC) — not with bank payout rails.
+ * wallet assets (e.g. USDC, EURC) – not with bank payout rails.
  *
  * **Payout currency** is independent: it comes from the recipient configured under Setup payout on
  * `/terminal` and Noah automated-payouts / `prepareSellFromRecipientRow` (any supported corridor).

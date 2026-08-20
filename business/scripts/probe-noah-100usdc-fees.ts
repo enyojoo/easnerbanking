@@ -1,5 +1,5 @@
 /**
- * Noah GET /prices — 100 USDC source amount across all sell corridors.
+ * Noah GET /prices – 100 USDC source amount across all sell corridors.
  * Usage: cd business && node --env-file=.env.local --import tsx scripts/probe-noah-100usdc-fees.ts
  */
 

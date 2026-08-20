@@ -29,7 +29,7 @@ begin
       and easner_business_id is null
   ) then
     raise exception
-      'users_role_business_linkage: cannot add constraint — role=business without easner_business_id';
+      'users_role_business_linkage: cannot add constraint – role=business without easner_business_id';
   end if;
 
   if exists (
@@ -39,7 +39,7 @@ begin
       and role is distinct from 'business'
   ) then
     raise exception
-      'users_role_business_linkage: cannot add constraint — easner_business_id set but role is not business';
+      'users_role_business_linkage: cannot add constraint – easner_business_id set but role is not business';
   end if;
 end $$;
 

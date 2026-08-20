@@ -36,7 +36,7 @@ export function OtpCodeInput({
   boxesClassName,
 }: OtpCodeInputProps) {
   const digits = value.replace(/\D/g, "").slice(0, length)
-  /** Next slot while typing; last cell when full — avoids “no highlight” jitter at 6 digits. */
+  /** Next slot while typing; last cell when full – avoids “no highlight” jitter at 6 digits. */
   const activeIndex = Math.min(digits.length, length - 1)
 
   const applyDigits = (raw: string) => {

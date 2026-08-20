@@ -1,11 +1,11 @@
 /**
- * Yellowcard pricing — mirror Noah `computeGlobalPayoutPricing` for three YC products.
+ * Yellowcard pricing – mirror Noah `computeGlobalPayoutPricing` for three YC products.
  *
  * Pricing model:
  * - Customer rate = Easner rate (easner_sell / easner_buy / cross rate). FX margin (0.5%) is in the rate.
- * - YC provider rates (yc_sell, yc_buy) = omnibus sizing + internal surplus — never customer-facing.
+ * - YC provider rates (yc_sell, yc_buy) = omnibus sizing + internal surplus – never customer-facing.
  * - Display processing fee = Easner 1% leg + all YC leg fees (one row via computeDisplayProcessingFee).
- * - Pay-in solve never shrinks credit/receive — local pay-in moves up for YC fees.
+ * - Pay-in solve never shrinks credit/receive – local pay-in moves up for YC fees.
  * - Easner 1% base = value customer buys/moves (usdCredit for fund balance; customerPrincipalUsd for cross-border).
  *   Never apply 1% to gross localPayIn.
  * - Pay-in fee display: local currency (Easner rate conversion, display-only).
@@ -19,7 +19,7 @@ function roundUsdc(n: number): number {
   return Math.round(n * 1_000_000) / 1_000_000
 }
 
-/** Ceil USDC for YC directSettlement — avoids under-lock from round-down. */
+/** Ceil USDC for YC directSettlement – avoids under-lock from round-down. */
 export function roundYcSettlementCryptoUp(n: number): number {
   if (!Number.isFinite(n) || n <= 0) return 0
   return Math.ceil(n * 1_000_000) / 1_000_000
@@ -68,7 +68,7 @@ export const YC_CROSS_BORDER_OMNIBUS_TOLERANCE_USDC = 1
 /** Cross-border leg-1 confirm retries when POST /receive omnibus is short. */
 export const YC_CROSS_BORDER_RECEIVE_MAX_ATTEMPTS = 3
 
-/** Quote TTL — production 5min (YC PENDING_APPROVAL), sandbox 10min. */
+/** Quote TTL – production 5min (YC PENDING_APPROVAL), sandbox 10min. */
 export function resolveYcQuoteTtlMs(): number {
   const env = String(
     typeof process !== "undefined" ? process.env?.YELLOWCARD_ENVIRONMENT ?? "sandbox" : "sandbox",
@@ -501,7 +501,7 @@ export function bumpYcCrossBorderLocalPayInForOmnibusShortfall(input: {
     return roundLocalUp(input.localPayIn)
   }
   const pad = input.padRatio ?? 1.05
-  // Shortfall plus 1 USDC headroom — YC leg-1 crypto often lags local pay-in bumps slightly.
+  // Shortfall plus 1 USDC headroom – YC leg-1 crypto often lags local pay-in bumps slightly.
   const bumpUsd = roundUsdc(shortfall * pad + 1)
   return roundLocalUp(input.localPayIn + input.ycSellFrom * bumpUsd)
 }
@@ -605,7 +605,7 @@ export function computeYcFundBalancePricing(
   let usdCredit: number
   let omnibusInUsd: number
 
-  // Prefer usdCredit when both are set — padded local must not inflate the credit target.
+  // Prefer usdCredit when both are set – padded local must not inflate the credit target.
   const usdCreditTarget = input.usdCredit != null && Number(input.usdCredit) > 0
   if (!usdCreditTarget && input.localPayIn != null && input.localPayIn > 0) {
     localPayIn = roundLocal(input.localPayIn)
@@ -796,7 +796,7 @@ function computeYcFundBalanceEstimatedTotalLocalPayIn(input: {
   })
 }
 
-/** Client/server amount-screen preview — principal at DB customer rate. */
+/** Client/server amount-screen preview – principal at DB customer rate. */
 export function computeYcFundBalanceAmountPreview(input: {
   amountEntryMode: "usd" | "local"
   enteredAmount: number
@@ -1075,7 +1075,7 @@ export function resolveYcLockedLocalPayInFromReceive(input: {
 
 /**
  * Cross-border confirm: YC locked local pay-in is authoritative.
- * Submit padding may lock above repriced model — only reject when YC locks below submitted.
+ * Submit padding may lock above repriced model – only reject when YC locks below submitted.
  */
 export function alignYcCrossBorderLockedLocalPayIn(input: {
   pricingLocalPayIn: number
@@ -1107,19 +1107,19 @@ export const YC_SEND_LEG_DESTINATION_MAX_ATTEMPTS = 24
 
 /**
  * Never underpay: net local must be >= quoted receive.
- * (Was 1 unit; that allowed 12549 for a 12550 payout — not acceptable.)
+ * (Was 1 unit; that allowed 12549 for a 12550 payout – not acceptable.)
  */
 export const YC_SEND_LEG_DESTINATION_TOLERANCE = 0
 
 /**
  * Fallback excess dust when destination rate is unknown.
- * Prefer resolveYcSendLegDestinationExcessTolerance with yc_sell — one USDC cent of local.
+ * Prefer resolveYcSendLegDestinationExcessTolerance with yc_sell – one USDC cent of local.
  */
 export const YC_SEND_LEG_DESTINATION_EXCESS_TOLERANCE = 0.01
 
 /**
  * Typical YC send service fee as a fraction of gross local amount.
- * Deducted before recipient credit — settlement crypto must target net receive.
+ * Deducted before recipient credit – settlement crypto must target net receive.
  */
 export const YC_SEND_LEG_SERVICE_FEE_FRACTION = 0.01
 
@@ -1154,7 +1154,7 @@ export function resolveYcSendLegServiceFeeLocal(input: {
 export const YC_SEND_LEG_RATE_BUFFER_BPS = 50
 
 /**
- * Extra slop — YC directSettlement conversion can be ~0.1% below customerRate
+ * Extra slop – YC directSettlement conversion can be ~0.1% below customerRate
  * (prod: 1364.9 vs 1366.135 on 2000 NGN lock).
  */
 export const YC_SEND_LEG_CONVERSION_SLOP_BPS = 25
@@ -1193,7 +1193,7 @@ export function readYcSendLockedLocalAmount(
   sendRes: Record<string, unknown> | null | undefined,
 ): number | null {
   if (!sendRes) return null
-  // Prefer convertedAmount — localAmount is often the quoted receive, not YC gross lock.
+  // Prefer convertedAmount – localAmount is often the quoted receive, not YC gross lock.
   for (const key of ["convertedAmount", "converted_amount", "localAmount", "local_amount"]) {
     const n = Number(sendRes[key] ?? 0)
     if (Number.isFinite(n) && n > 0) return roundLocal(n)
@@ -1216,7 +1216,7 @@ export function resolveYcSendLegFeeLocalForLock(input: {
   const tolerance = input.tolerance ?? YC_SEND_LEG_DESTINATION_TOLERANCE
   if (!(locked > 0) || !(quoted > 0)) return 0
 
-  // Gross above quoted receive — YC deducts ~1% service fee before crediting recipient.
+  // Gross above quoted receive – YC deducts ~1% service fee before crediting recipient.
   // Do not use (locked - quoted) as fee: excess gross is over-settlement crypto, not YC fee.
   if (locked > quoted + tolerance) {
     return roundLocal(locked * 0.01)
@@ -1290,11 +1290,11 @@ export function checkYcSendLegDestinationAmountSufficient(input: {
   lockedLocalAmount: number
   /** Deducted from gross locked local before recipient credit (serviceFeeAmountLocal). */
   sendLegFeeLocal?: number
-  /** Shortfall tolerance (default 0 — never underpay). */
+  /** Shortfall tolerance (default 0 – never underpay). */
   tolerance?: number
   /** Excess tolerance (default: one USDC cent of local at destinationRate). */
   excessTolerance?: number
-  /** yc_sell / observed rate — widens excess band to YC crypto-cent granularity. */
+  /** yc_sell / observed rate – widens excess band to YC crypto-cent granularity. */
   destinationRate?: number
 }): { ok: boolean; shortfall: number; excess: number; netLocalAmount: number } {
   const shortfallTolerance = input.tolerance ?? YC_SEND_LEG_DESTINATION_TOLERANCE
@@ -1478,7 +1478,7 @@ export function estimateYcSendLegSettlementCryptoForQuotedReceive(input: {
 
 /**
  * Retarget settlement crypto from an observed YC lock toward quoted net receive.
- * Always moves by at least one USDC cent — YC rounds crypto to 2dp before converting.
+ * Always moves by at least one USDC cent – YC rounds crypto to 2dp before converting.
  */
 export function retargetYcSendLegSettlementCryptoForQuotedReceive(input: {
   settlementCryptoUsd: number
@@ -1555,7 +1555,7 @@ export function bumpYcSendLegSettlementCryptoForLocalShortfall(input: {
     input.feeFraction ?? YC_SEND_LEG_SERVICE_FEE_FRACTION,
   )
   const netFraction = 1 - feeFraction
-  // Fee scales with gross — fund shortfall on the net side, not gross/rate alone.
+  // Fee scales with gross – fund shortfall on the net side, not gross/rate alone.
   const bumpFromShortfall = roundUsdc(shortfall / (rate * netFraction))
   const bumpFromPct = roundUsdc(crypto * 0.005)
   return roundUsdc(crypto + Math.max(bumpFromShortfall, bumpFromPct))

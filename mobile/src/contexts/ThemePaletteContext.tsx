@@ -12,7 +12,7 @@ import { lightColors } from '../theme/colors'
 import type { Colors } from '../theme/colors'
 
 /**
- * Theme mode — the app currently ships **light** only. Dark/system preferences are reserved for a future release.
+ * Theme mode – the app currently ships **light** only. Dark/system preferences are reserved for a future release.
  */
 export type ThemeMode = 'light'
 
@@ -47,7 +47,7 @@ export function ThemePaletteProvider({ children }: { children: ReactNode }) {
         }
       })
       .catch(() => {
-        /* swallow — keep in-memory default (light) */
+        /* swallow – keep in-memory default (light) */
       })
     return () => {
       cancelled = true
@@ -62,7 +62,7 @@ export function ThemePaletteProvider({ children }: { children: ReactNode }) {
     try {
       await AsyncStorage.setItem(STORAGE_KEY, 'light')
     } catch {
-      /* non-fatal — state is already updated in memory */
+      /* non-fatal – state is already updated in memory */
     }
   }, [])
 

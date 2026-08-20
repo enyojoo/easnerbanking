@@ -18,10 +18,10 @@ export type BuildTransactionTimingRowsInput = {
   showExpectedWhileInFlight?: boolean
   /**
    * User-initiated payouts: show Started timestamp while in-flight.
-   * Bank deposits: false — Processing step in lifecycle already shows that time.
+   * Bank deposits: false – Processing step in lifecycle already shows that time.
    */
   showStartedWhileInFlight?: boolean
-  /** Bank deposits: false — use lifecycle tracker only (no Arrived / Failed after). */
+  /** Bank deposits: false – use lifecycle tracker only (no Arrived / Failed after). */
   showTerminalDuration?: boolean
 }
 
@@ -117,7 +117,7 @@ export function appendLifecycleDuration(
 
 /** Human-readable duration between two instants. */
 export function formatTransactionDurationMs(ms: number): string {
-  if (!Number.isFinite(ms) || ms < 0) return "—"
+  if (!Number.isFinite(ms) || ms < 0) return "–"
   const totalSeconds = Math.round(ms / 1000)
   if (totalSeconds < 60) {
     return totalSeconds === 1 ? "1 second" : `${totalSeconds} seconds`
@@ -136,7 +136,7 @@ export function formatTransactionDurationMs(ms: number): string {
 
 function formatStartedDisplay(iso: string | null): string {
   const ms = parseIsoMs(iso)
-  if (ms == null) return "—"
+  if (ms == null) return "–"
   const date = new Date(ms)
   const month = date.toLocaleString("en-US", { month: "short" })
   const day = date.getDate().toString().padStart(2, "0")

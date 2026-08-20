@@ -17,7 +17,7 @@ export type PublicPayPageResult =
       stripeCheckout: PublicPayStripeCheckout | null
     }
 
-/** Server load for the public pay HTML document — includes checkout when card/bank is on. */
+/** Server load for the public pay HTML document – includes checkout when card/bank is on. */
 export async function loadPublicPayPage(parts: string[]): Promise<PublicPayPageResult> {
   const admin = createSupabaseAdmin()
   const resolved = await resolvePublicPayPath(admin, parts)

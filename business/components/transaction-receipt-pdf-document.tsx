@@ -17,7 +17,7 @@ import { formatCurrency } from "@/lib/utils"
 import { resolveTransactionDetailHeroAmount } from "@/lib/transactions/resolve-transaction-detail-hero"
 import { PdfReceiptVisualRow } from "@/lib/receipt-pdf-visual-rows"
 
-/** Business palette — matches the original PDF tokens (blue primary, neutral text/borders). */
+/** Business palette – matches the original PDF tokens (blue primary, neutral text/borders). */
 const palette = {
   primary: "#007ACC",
   primaryTint: "#EAF4FB",
@@ -32,7 +32,7 @@ const palette = {
 } as const
 
 /**
- * Direction glyph — react-pdf/Helvetica can't render Unicode check/arrow marks, so the icon
+ * Direction glyph – react-pdf/Helvetica can't render Unicode check/arrow marks, so the icon
  * is drawn with SVG. Deposits (credit) point down-left; transfers (debit) point up-right,
  * mirroring the mobile app hero (ArrowDownLeft / ArrowUpRight, brand blue).
  */
@@ -409,13 +409,13 @@ export function TransactionReceiptPDFDocument({
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.card}>
-          {/* Header — logo left, label right. */}
+          {/* Header – logo left, label right. */}
           <View style={styles.header}>
             <Image style={styles.headerLogo} src={logoUrl} />
             <Text style={styles.headerLabel}>Transaction Receipt</Text>
           </View>
 
-          {/* Hero — direction arrow, amount, title, status pill, date. */}
+          {/* Hero – direction arrow, amount, title, status pill, date. */}
           <View style={styles.heroBlock}>
             <View style={styles.glyph}>
               <DirectionArrow isCredit={isCredit} />

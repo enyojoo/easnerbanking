@@ -257,7 +257,7 @@ export function ProcessingFeeOverrideSection({
                 <Label htmlFor={`reason-${subjectId}`}>Reason</Label>
                 <Input
                   id={`reason-${subjectId}`}
-                  placeholder={scheduleView ? "—" : "Optional note for ops / audit"}
+                  placeholder={scheduleView ? "–" : "Optional note for ops / audit"}
                   value={scheduleView || mode === "schedule" ? "" : draft.reason}
                   onChange={(e) => setDraft((prev) => ({ ...prev, reason: e.target.value }))}
                   disabled={fieldsDisabled}

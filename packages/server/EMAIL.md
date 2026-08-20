@@ -6,15 +6,15 @@ Consumer-facing HTML templates live under **`packages/server/lib/`** (`email-tem
 
 Transaction and verification emails are **not** driven by legacy remittance status (`pending` / `processing` / `completed`). They fire from the same ledger events as mobile push:
 
-1. **`deriveTransactionNotification`** (`packages/shared/src/transactions/derive-transaction-notification.ts`) — channel-agnostic descriptor from live `Transaction` rows (provider, direction, metadata, outcome).
-2. **`dispatchTransactionNotification`** (`business/lib/notifications/dispatch.ts`) — resolves audience, checks `communication_preferences`, sends push + email.
+1. **`deriveTransactionNotification`** (`packages/shared/src/transactions/derive-transaction-notification.ts`) – channel-agnostic descriptor from live `Transaction` rows (provider, direction, metadata, outcome).
+2. **`dispatchTransactionNotification`** (`business/lib/notifications/dispatch.ts`) – resolves audience, checks `communication_preferences`, sends push + email.
 3. **Chokepoints**: `business/lib/ledger/transactions.ts` (settled / failed / cancelled), `bank-deposit-settled-notify.ts`, `easetag-transfer-notify.ts`, `global-payout-notify.ts`, `sync-user.ts` (KYB/KYC transitions).
 
 Audience (`business` | `personal`) is resolved in `business/lib/notifications/resolve-email-audience.ts` and threaded through `emailService.sendEmail`.
 
 ## Rollout flag (ledger transaction emails)
 
-Ledger **transaction** emails (deposit, payout, wallet send, stablecoin receive — settled / failed) are **on by default**. Set `LEDGER_TRANSACTION_EMAIL_ENABLED=false` to disable platform-wide (e.g. rollback). User-level opt-out still uses **Settings → Communication → Email notifications**.
+Ledger **transaction** emails (deposit, payout, wallet send, stablecoin receive – settled / failed) are **on by default**. Set `LEDGER_TRANSACTION_EMAIL_ENABLED=false` to disable platform-wide (e.g. rollback). User-level opt-out still uses **Settings → Communication → Email notifications**.
 
 Welcome, KYB/KYC, team invite, security, and invoice emails are always subject to normal preference rules (not gated by this env flag).
 
@@ -50,7 +50,7 @@ node packages/server/scripts/verify-sendgrid-env.mjs
 Send one real message per template to a test inbox (uses fixture data, not live ledger events):
 
 ```bash
-# from repo root — loads business/.env.local for SENDGRID_API_KEY
+# from repo root – loads business/.env.local for SENDGRID_API_KEY
 npx tsx packages/server/scripts/send-all-email-previews.ts --to enyocreative@gmail.com
 
 # optional: use first_name from public.users for that email
@@ -71,7 +71,7 @@ Supabase sends signup verification and password-reset OTP mail from **Auth → E
 npm run email:render-supabase-auth
 ```
 
-Output: [`packages/server/supabase-auth-templates/`](supabase-auth-templates/) — paste into Supabase Dashboard. See that folder’s README for which file maps to which template. Both use `{{ .Token }}` for the 6-digit code.
+Output: [`packages/server/supabase-auth-templates/`](supabase-auth-templates/) – paste into Supabase Dashboard. See that folder’s README for which file maps to which template. Both use `{{ .Token }}` for the 6-digit code.
 
 **Supabase “Invite user”** (magic link via `inviteUserByEmail`) is **not used** for business team invites. Leave that dashboard template unchanged.
 
@@ -90,13 +90,13 @@ Flow: owner invites via **Settings → Team** → `POST /api/settings/team` upse
 |-------|-----|---------|
 | `POST /api/send-email-notification` | **business** | Admin transaction notices only (`type: admin-transaction`). User `type: transaction` returns **410 deprecated**. |
 | `POST /api/notifications/security-alert` | **business** (mobile + web) | Security alert emails (password changed, MFA enabled/disabled). |
-| `POST /api/invoices/send-email` | **business** | Invoice PDF to **customer** — not gated by marketing toggles (operational). |
+| `POST /api/invoices/send-email` | **business** | Invoice PDF to **customer** – not gated by marketing toggles (operational). |
 | `GET` / `PATCH /api/settings/communication` | **business** | Read/update `users.communication_preferences` (shared with mobile). |
 | `POST /api/settings/push-token` | **business** | Register Expo push tokens; sends new-device security email on first device. |
 | `POST /api/auth/bootstrap` | **business** | Welcome email for new org owners; **team invite claim** when `membershipId` is sent. |
 | `GET /api/auth/invite-preview` | **business** | Pending invite preview for `/auth/join`. |
 | `POST /api/settings/team` | **business** | Team invitation emails on invite POST (`/auth/join/{membershipId}` link). |
-| `POST /api/marketing/app-download-link` | **business** | easner.com “Get the app” popup — sends **`appDownloadLink`** to visitor email (public, CORS for `easner.com`). |
+| `POST /api/marketing/app-download-link` | **business** | easner.com “Get the app” popup – sends **`appDownloadLink`** to visitor email (public, CORS for `easner.com`). |
 
 Mobile sets `EXPO_PUBLIC_API_URL` to the business app origin and must send `Authorization: Bearer` for user-triggered notification calls.
 
@@ -151,7 +151,7 @@ Separate from the shared template registry (`business/lib/invoice-email-service.
 
 | Field | Value |
 |-------|--------|
-| **From** | **Easner Business** — `SENDGRID_FROM_EMAIL_INVOICES` (default **`invoices@easner.com`**). Does **not** use `SENDGRID_FROM_EMAIL_BUSINESS` (`business@easner.com`). |
+| **From** | **Easner Business** – `SENDGRID_FROM_EMAIL_INVOICES` (default **`invoices@easner.com`**). Does **not** use `SENDGRID_FROM_EMAIL_BUSINESS` (`business@easner.com`). |
 | **Reply-To** | Org **Settings → Business → Support Email**; else org owner email; else sender’s account email |
 | **Subject** | `{Invoice from \| Reminder…} {businessName} – {invoiceNumber}` |
 | **Attachment** | Invoice PDF (contact block uses same Reply-To email) |
@@ -159,7 +159,7 @@ Separate from the shared template registry (`business/lib/invoice-email-service.
 | **Trigger** | `POST /api/invoices/send-email`, reminder cron |
 | **Blocked when** | Business profile incomplete or no reply email can be resolved (400 with settings hint) |
 
-**Customer viewed invoice** (to merchant): styled template in `invoice-email-template.ts` — same Easner Business shell; CTA links to `/invoices/{id}` in the business app.
+**Customer viewed invoice** (to merchant): styled template in `invoice-email-template.ts` – same Easner Business shell; CTA links to `/invoices/{id}` in the business app.
 
 **Payment receipt** (to customer on mark paid): styled template with merchant header block, payment confirmation, PDF attachment.
 
@@ -169,7 +169,7 @@ Separate from invoice mail (`business/lib/checkout/send-checkout-payer-receipt-e
 
 | Field | Value |
 |-------|--------|
-| **From** | **Easner Business** — **`receipt@easner.com`** (hardcoded default, same as invoices@; no env required) |
+| **From** | **Easner Business** – **`receipt@easner.com`** (hardcoded default, same as invoices@; no env required) |
 | **Reply-To** | Same merchant support resolution as invoices |
 | **Subject** | `Receipt from {businessName}` |
 | **When** | Stripe `charge.created`, formatted in `EASNER_RECEIPT_TIMEZONE` or the platform Dashboard timezone |
@@ -184,13 +184,13 @@ Mobile security emails: **Change password** and **MFA enable/disable** call `POS
 - **Push** and **email** share derivation via `deriveTransactionNotification` + `dispatchTransactionNotification`.
 - **Business** users receive **email only** (no Expo push), even when ledger events fire for org accounts.
 - **Personal (mobile)** receives push + email when preferences allow.
-- **Email channel scope**: settled ledger activities including Easetag P2P and card, plus failed outbound transfers (funds restored — no separate reversal notices). Gated by user `channels.email` (default on); platform kill-switch: `LEDGER_TRANSACTION_EMAIL_ENABLED=false`.
+- **Email channel scope**: settled ledger activities including Easetag P2P and card, plus failed outbound transfers (funds restored – no separate reversal notices). Gated by user `channels.email` (default on); platform kill-switch: `LEDGER_TRANSACTION_EMAIL_ENABLED=false`.
 - **Email** delivery is enforced in **`communication-email-guard.ts`** together with `channels.email` and product/security/marketing toggles. Transactional templates are not suppressed by marketing toggles.
 - **Push** checks **`parseCommunicationPreferences(...).channels.push`** and reads tokens from **`public.user_push_devices`**.
 
 ## Preference enforcement
 
-- Parsed with `@easner/shared` **`parseCommunicationPreferences`** — all channels and categories default **on**.
+- Parsed with `@easner/shared` **`parseCommunicationPreferences`** – all channels and categories default **on**.
 - New accounts seed defaults on bootstrap and first visit to **Settings → Communication**.
 - Template → bucket: **`communication-email-guard.ts`** (`shouldSendTemplatedEmail`).
 - Transaction lifecycle templates are **never** blocked by product/marketing toggles (`channels.email` still gates delivery).
@@ -204,9 +204,9 @@ npm run test --workspace=easner-business # claim-team-invite + push content deri
 
 ## Legacy paths (removed / deprecated)
 
-- `EmailNotificationService.sendTransactionStatusEmail` — no-op; legacy remittance model.
-- `EmailNotificationService.sendCryptoReceiveTransactionEmail` — no-op; stablecoin receive uses ledger dispatch.
-- `POST /api/send-email-notification` with `type: transaction` — **410 Gone**.
+- `EmailNotificationService.sendTransactionStatusEmail` – no-op; legacy remittance model.
+- `EmailNotificationService.sendCryptoReceiveTransactionEmail` – no-op; stablecoin receive uses ledger dispatch.
+- `POST /api/send-email-notification` with `type: transaction` – **410 Gone**.
 - Legacy remittance email helpers removed from `email-service.ts`.
-- `packages/server/lib/transaction-status-service.ts` — status email hook retired.
+- `packages/server/lib/transaction-status-service.ts` – status email hook retired.
 - `fetch('/api/send-email-notification')` removed from `database.ts`, `admin-data-store.ts`, mobile `transactionService.ts`.

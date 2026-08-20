@@ -12,7 +12,7 @@ import type { Persister } from '@tanstack/react-query-persist-client'
  * MUST NOT set `safePersist`; they live in memory only.
  *
  * The persister is bucketed by `APP_BUILD_ID` so a shipped schema change
- * invalidates every cached payload in a single release — readers never see
+ * invalidates every cached payload in a single release – readers never see
  * a shape mismatch between old persisted data and new code.
  */
 
@@ -43,7 +43,7 @@ export async function clearPersistedQueryCache(): Promise<void> {
   try {
     await AsyncStorage.removeItem(MOBILE_QUERY_STORAGE_KEY)
   } catch {
-    // ignore — best-effort
+    // ignore – best-effort
   }
 }
 

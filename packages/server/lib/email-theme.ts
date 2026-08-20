@@ -1,5 +1,5 @@
 /**
- * Email design tokens — mirrors docs/marketing/design-system.md §2.0 / §8.1
+ * Email design tokens – mirrors docs/marketing/design-system.md §2.0 / §8.1
  */
 import { easnerBrand } from "../../shared/src/design/tokens"
 
@@ -41,7 +41,7 @@ export const EASNER_LOGO_URL = EASNER_LOGO_URL_LIGHT
 
 export const EASNER_COMPANY_LEGAL_NAME = "Easner Group, Inc."
 
-/** Public contact / sales page — used for email “Contact Support” links. */
+/** Public contact / sales page – used for email “Contact Support” links. */
 export const EASNER_CONTACT_URL = "https://www.easner.com/contact"
 
 export const EASNER_COMPANY_ADDRESS_HTML =

@@ -24,17 +24,17 @@ interface ToastContextType {
   showError: (message: string, duration?: number) => void
   showInfo: (message: string, duration?: number) => void
   showWarning: (message: string, duration?: number) => void
-  /** @internal — used by ToastViewport / ModalToastHost to render the toasts. */
+  /** @internal – used by ToastViewport / ModalToastHost to render the toasts. */
   _toasts: ToastData[]
   /** @internal */
   _removeToast: (id: string) => void
   /**
-   * @internal — a Modal can register itself as the active toast host so toasts
+   * @internal – a Modal can register itself as the active toast host so toasts
    * render inside it (on top). Native Modals present in a separate window, so a
    * root-level overlay would otherwise be hidden behind an open Modal.
    */
   _registerModalHost: () => () => void
-  /** @internal — true while a Modal host is mounted; root viewport hides to avoid duplicates. */
+  /** @internal – true while a Modal host is mounted; root viewport hides to avoid duplicates. */
   _modalHostActive: boolean
 }
 

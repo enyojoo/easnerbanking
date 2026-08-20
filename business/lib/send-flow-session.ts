@@ -9,7 +9,7 @@ export const SEND_FLOW_STATE_KEY = "send_flow_state"
 /** Shape stored in sessionStorage for the send money flow (amount step through confirm / authorize). */
 export interface SendFlowState {
   recipient: Beneficiary
-  /** Present when `recipient.id` is a draft — used to persist silently at quote/authorize. */
+  /** Present when `recipient.id` is a draft – used to persist silently at quote/authorize. */
   draftRecipientPersist?: RecipientUpsertInput
   /** Immutable local amount entered/calculated before provider payout quantization. */
   requestedReceiveAmount?: number
@@ -26,7 +26,7 @@ export interface SendFlowState {
   feeAmount?: number
   totalAmount?: number
   note: string
-  /** Canada CAD — Noah PaymentPurpose (amount screen dropdown). */
+  /** Canada CAD – Noah PaymentPurpose (amount screen dropdown). */
   paymentPurpose?: string
   transactionId: string
   /** Which side of the FX pair the user typed on the amount screen. */

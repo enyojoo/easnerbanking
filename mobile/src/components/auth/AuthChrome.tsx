@@ -29,7 +29,7 @@ type AppleButtonProps = {
   disabled?: boolean
 }
 
-/** Web Sign in with Apple — Apple JS popup + Supabase id token (not expo-apple-authentication). */
+/** Web Sign in with Apple – Apple JS popup + Supabase id token (not expo-apple-authentication). */
 export function WebAppleSignInButton({ mode, onPress, disabled }: AppleButtonProps) {
   return (
     <Pressable

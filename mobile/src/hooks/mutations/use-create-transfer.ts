@@ -10,7 +10,7 @@ import type { MobileTransactionRow } from '../queries/use-transactions'
  * Pessimistic for the network call (we need a Noah transfer id before we
  * trust anything authoritative) but optimistic for the ledger row so the
  * user sees their transfer appear instantly. Balances are NEVER touched
- * here — balances only move when the realtime bridge delivers a
+ * here – balances only move when the realtime bridge delivers a
  * `wallet_balances` event.
  */
 

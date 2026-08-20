@@ -64,7 +64,7 @@ export function tokenBalanceDeltaForVault(
 
 /**
  * Best-effort sender wallet for an inbound SPL transfer to a user vault ATA.
- * Uses token balance deltas on the mint — Turnkey balance webhooks omit `fromAddress`.
+ * Uses token balance deltas on the mint – Turnkey balance webhooks omit `fromAddress`.
  */
 export function resolveSplTransferSenderForVaultInbound(
   tx: ParsedTx,

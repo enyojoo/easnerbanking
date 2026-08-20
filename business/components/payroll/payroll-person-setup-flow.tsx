@@ -631,7 +631,7 @@ function SetupSummary({
           </div>
           <div className="flex justify-between gap-3">
             <dt className="text-muted-foreground">Amount</dt>
-            <dd className="tabular-nums">{amount ? `${currency} ${Number(amount).toLocaleString()}` : "—"}</dd>
+            <dd className="tabular-nums">{amount ? `${currency} ${Number(amount).toLocaleString()}` : "–"}</dd>
           </div>
         </dl>
       </CardContent>

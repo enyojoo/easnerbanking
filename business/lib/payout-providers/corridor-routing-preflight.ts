@@ -36,7 +36,7 @@ function parseRouting(raw: unknown): ProviderRoutingEntry[] {
 
 function schemaReadyForProvider(fieldsSchema: unknown, provider: string): boolean {
   if (!isNestedPayoutFieldsSchema(fieldsSchema)) {
-    // Legacy flat Noah-shaped schema — acceptable only for Noah primary.
+    // Legacy flat Noah-shaped schema – acceptable only for Noah primary.
     return provider === "noah" && fieldsSchema != null && typeof fieldsSchema === "object"
   }
   const nested = fieldsSchema as {
@@ -59,7 +59,7 @@ function schemaReadyForProvider(fieldsSchema: unknown, provider: string): boolea
 }
 
 /**
- * Validate Office corridor PATCH before write — fail closed on incomplete manual routing.
+ * Validate Office corridor PATCH before write – fail closed on incomplete manual routing.
  * Does not hit live partner APIs (keeps admin saves fast); schema + flag consistency only.
  */
 export function preflightCorridorRoutingPatch(input: {
@@ -87,7 +87,7 @@ export function preflightCorridorRoutingPatch(input: {
 
   const issues: CorridorRoutingPreflightIssue[] = []
 
-  // Empty routing = payout disabled — allowed.
+  // Empty routing = payout disabled – allowed.
   if (routing.length === 0) {
     if (input.metadata !== undefined || input.providerRouting !== undefined) {
       const payIn = String(metadata.pay_in_provider ?? "").trim().toLowerCase()
@@ -130,7 +130,7 @@ export function preflightCorridorRoutingPatch(input: {
   }
 
   if (!schemaReadyForProvider(fieldsSchema, primary)) {
-    // Only block when Office is actively setting payout routing — metadata-only
+    // Only block when Office is actively setting payout routing – metadata-only
     // patches should not trap corridors that still need a Sync.
     if (input.providerRouting !== undefined) {
       issues.push({

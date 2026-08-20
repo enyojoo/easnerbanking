@@ -16,7 +16,7 @@ type Props = {
 
 /**
  * Profile-style avatar with stable URL normalization, disk cache, and prefetch on mount.
- * Returns `null` when URL is missing or load fails — parent should show initials fallback.
+ * Returns `null` when URL is missing or load fails – parent should show initials fallback.
  */
 export function AvatarImage({
   avatarUrl,

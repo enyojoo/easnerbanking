@@ -2,7 +2,7 @@ import crypto from "node:crypto"
 import jwt from "jsonwebtoken"
 
 /**
- * Noah Request Signing — mirrors the official `createJwt` from:
+ * Noah Request Signing – mirrors the official `createJwt` from:
  * https://docs.noah.com/api-concepts/authentication/signing
  *
  * Use the same `body` buffer for the JWT and the HTTP request payload.
@@ -21,7 +21,7 @@ export type CreateNoahJwtOptions = {
 }
 
 /**
- * Creates a JWT for the `Api-Signature` header (Noah docs — ES384, aud, 5m expiry).
+ * Creates a JWT for the `Api-Signature` header (Noah docs – ES384, aud, 5m expiry).
  */
 export function createNoahSignatureJwt(opts: CreateNoahJwtOptions): string {
   const { body, method, path, privateKey, queryParams } = opts

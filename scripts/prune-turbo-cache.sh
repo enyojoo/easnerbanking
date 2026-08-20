@@ -25,7 +25,7 @@ CACHE_DIR="$REPO_ROOT/.turbo/cache"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
 if [[ ! -d "$CACHE_DIR" ]]; then
-  log "No cache dir at $CACHE_DIR — nothing to prune."
+  log "No cache dir at $CACHE_DIR – nothing to prune."
   exit 0
 fi
 
@@ -42,7 +42,7 @@ current_bytes="$(du -sk "$CACHE_DIR" 2>/dev/null | cut -f1)"
 current_bytes=$(( ${current_bytes:-0} * 1024 ))
 
 if (( current_bytes > max_bytes )); then
-  log "Cache still over ${MAX_SIZE_GB}GB — removing oldest archives to fit cap..."
+  log "Cache still over ${MAX_SIZE_GB}GB – removing oldest archives to fit cap..."
   # Oldest first (sorted by mtime ascending).
   while IFS= read -r line; do
     (( current_bytes <= max_bytes )) && break

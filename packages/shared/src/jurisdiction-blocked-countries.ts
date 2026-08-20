@@ -43,7 +43,7 @@ export const GRID_PROHIBITED_RESIDENCE_ISO2 = [
 
 /**
  * Noah fully prohibited VA residences (no VA on listed rails).
- * Includes GB — Mobile blocks UK signup; Business keeps GB open.
+ * Includes GB – Mobile blocks UK signup; Business keeps GB open.
  */
 export const NOAH_FULLY_PROHIBITED_VA_ISO2 = [
   "AF", // Afghanistan
@@ -91,7 +91,7 @@ export const GRID_DIGITAL_ASSET_EXTRA_ISO2 = [
   "NP", // Nepal
 ] as const
 
-/** @deprecated Use GRID_PROHIBITED_RESIDENCE_ISO2 — transitional alias for shared sanctions core. */
+/** @deprecated Use GRID_PROHIBITED_RESIDENCE_ISO2 – transitional alias for shared sanctions core. */
 export const EASNER_PROHIBITED_JURISDICTION_ISO2 = [
   "CU",
   "IR",
@@ -100,7 +100,7 @@ export const EASNER_PROHIBITED_JURISDICTION_ISO2 = [
   "SY",
 ] as const
 
-/** @deprecated Controlled split retired — empty for transitional imports. */
+/** @deprecated Controlled split retired – empty for transitional imports. */
 export const EASNER_CONTROLLED_JURISDICTION_ISO2 = [] as const
 
 const BUSINESS_BLOCKED = new Set<string>(GRID_PROHIBITED_RESIDENCE_ISO2)
@@ -132,7 +132,7 @@ export function isGridDigitalAssetJurisdiction(countryCode: string | null | unde
   return GRID_DIGITAL_ASSET.has(code)
 }
 
-/** Business signup/KYB alias — prefer isBlockedForBusiness at new call sites. */
+/** Business signup/KYB alias – prefer isBlockedForBusiness at new call sites. */
 export function isEasnerBlockedJurisdiction(countryCode: string | null | undefined): boolean {
   return isBlockedForBusiness(countryCode)
 }

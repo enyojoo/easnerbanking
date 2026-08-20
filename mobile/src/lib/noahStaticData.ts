@@ -4,7 +4,7 @@ function ts(): string {
   return new Date().toISOString()
 }
 
-/** Noah wallet / send flow uses USD, EUR, GBP — no `currencies` table on Supabase. */
+/** Noah wallet / send flow uses USD, EUR, GBP – no `currencies` table on Supabase. */
 export const NOAH_CONTEXT_CURRENCIES: Currency[] = [
   {
     id: 'noah-usd',

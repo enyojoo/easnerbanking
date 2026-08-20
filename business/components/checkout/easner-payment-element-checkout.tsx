@@ -36,12 +36,12 @@ type Props = {
   showMethodsHint?: boolean
   /**
    * Collect payer email on this page. Required for payment links (no bill-to).
-   * Invoices already set `customer_email` on the session — leave this off.
+   * Invoices already set `customer_email` on the session – leave this off.
    */
   collectEmail?: boolean
   /** Prefill / confirm with a known bill-to email (invoices). */
   knownEmail?: string | null
-  /** Prefill name on card only — never hide the field or stamp it at confirm. */
+  /** Prefill name on card only – never hide the field or stamp it at confirm. */
   knownName?: string | null
   /** Payment-link page centers the methods hint; invoices stay left. */
   hintAlign?: "left" | "center"

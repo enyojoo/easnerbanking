@@ -1,4 +1,4 @@
-/** Turnkey Solana send status parsing/polling — no ledger or Next.js server-only deps (CLI-safe). */
+/** Turnkey Solana send status parsing/polling – no ledger or Next.js server-only deps (CLI-safe). */
 export type TurnkeyClientLike = Record<string, (...args: any[]) => Promise<any>>
 
 export function asRecord(v: unknown): Record<string, unknown> | null {
@@ -312,7 +312,7 @@ export function extractTxHashFromTurnkeySendStatusResponse(res: unknown): string
 
 /**
  * Maps Turnkey `getSendTransactionStatus` to Easner ledger semantics.
- * @see Turnkey `pollTransactionStatus` — terminal success `COMPLETED` | `INCLUDED`, failure `FAILED` | `CANCELLED`.
+ * @see Turnkey `pollTransactionStatus` – terminal success `COMPLETED` | `INCLUDED`, failure `FAILED` | `CANCELLED`.
  */
 export function interpretTurnkeyGetSendTransactionStatus(res: unknown): {
   status: "pending" | "settled" | "failed"

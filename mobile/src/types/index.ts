@@ -46,9 +46,9 @@ export interface Recipient {
   city?: string
   state?: string
   postal_code?: string
-  /** Derived from `Easetag (@tag)` bank_name + account_number — not a DB column. */
+  /** Derived from `Easetag (@tag)` bank_name + account_number – not a DB column. */
   payee_easetag?: string
-  /** Client-only snapshot from Easenet lookup / profile cache — not a DB column. */
+  /** Client-only snapshot from Easenet lookup / profile cache – not a DB column. */
   payee_avatar_url?: string | null
   payee_account_kind?: 'business' | 'personal'
   transfer_type?: "ACH" | "Wire"
@@ -150,7 +150,7 @@ export interface PaymentMethod {
 export interface User {
   id: string
   email: string
-  /** `public.users.full_name` — source of truth for display name */
+  /** `public.users.full_name` – source of truth for display name */
   full_name: string | null
   /** Derived from `full_name` for forms / greetings */
   first_name: string

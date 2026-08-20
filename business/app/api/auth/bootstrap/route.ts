@@ -148,7 +148,7 @@ export async function POST(request: Request) {
   const countryCode = normalizeCountryCode(body.countryCode)
   const country = countryNameFromCode(countryCode)
   const metadataName = typeof user.user_metadata?.name === "string" ? user.user_metadata.name : null
-  /** Only JSON string counts as explicit — `fullName: null` must not wipe DB (treat as omit; preserve/seed). */
+  /** Only JSON string counts as explicit – `fullName: null` must not wipe DB (treat as omit; preserve/seed). */
   const explicitFullNameProvided = typeof body.fullName === "string"
   const explicitName = parseName(explicitFullNameProvided ? body.fullName : null)
   const admin = createSupabaseAdmin()
@@ -390,7 +390,7 @@ export async function POST(request: Request) {
     }
     residencePersisted = false
   } else {
-    // Unrelated upsert error — retry without role / minimal fields, but keep residence when we can.
+    // Unrelated upsert error – retry without role / minimal fields, but keep residence when we can.
     const { error: upsertErrNoRole } = await admin.from("users").upsert(baseUserPayload, { onConflict: "id" })
     if (!upsertErrNoRole) {
       if (shouldSetResidence) residencePersisted = true
@@ -418,7 +418,7 @@ export async function POST(request: Request) {
     }
   }
 
-  // Grid End User Terms audit — non-blocking if Grid is down; ensure* fails closed later.
+  // Grid End User Terms audit – non-blocking if Grid is down; ensure* fails closed later.
   if (isGridConfigured()) {
     try {
       const { version } = await fetchCurrentEndUserTermsVersion()

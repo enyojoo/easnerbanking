@@ -162,7 +162,7 @@ function parseAmountFromDisplay(display: string): number {
 
 /**
  * Cross-border bank Continue warms preview (+ background leg2). POST /receive
- * runs on review Pay via YcPayInReviewSection — do not block Amount on full confirm.
+ * runs on review Pay via YcPayInReviewSection – do not block Amount on full confirm.
  */
 function beginTlcContinueLoading(
   setIsContinuePending: (value: boolean) => void,

@@ -54,7 +54,7 @@ function canCompatibilityAcceptTurnkeyV2SignatureFailure(
 }
 
 /**
- * Turnkey webhooks (activity + balance confirmed/finalized) — V2 headers, verify, `event_inbox`.
+ * Turnkey webhooks (activity + balance confirmed/finalized) – V2 headers, verify, `event_inbox`.
  * Balance deposits dedupe on `tx_hash`; confirmed and finalized may both be subscribed.
  */
 export async function POST(request: Request) {

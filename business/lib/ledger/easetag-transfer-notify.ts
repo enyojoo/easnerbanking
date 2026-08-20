@@ -3,7 +3,7 @@ import { dispatchTransactionNotification } from "@/lib/notifications/dispatch"
 import { normalizeDirection } from "@/lib/ledger/transactions"
 
 /**
- * Easetag P2P rows are inserted by SQL RPC — settlement notifications from the API after transfer.
+ * Easetag P2P rows are inserted by SQL RPC – settlement notifications from the API after transfer.
  * Push + email via {@link dispatchTransactionNotification} (ledger email flag applies).
  */
 export async function notifyEasetagTransferSettled(
@@ -103,7 +103,7 @@ export async function fetchEasetagDebitSnapshot(
   }
 }
 
-/** Easetag chain-settlement rollback — failed notice only (uses pre-rollback snapshot). */
+/** Easetag chain-settlement rollback – failed notice only (uses pre-rollback snapshot). */
 export async function notifyEasetagTransferFailed(
   admin: SupabaseClient,
   input: { userId: string; snapshot: EasetagDebitSnapshot; failureReason: string },

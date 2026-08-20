@@ -6,7 +6,7 @@ const PROVIDERS = ["noah", "turnkey", "yellowcard", "grid", "other"] as const
 const STATUSES = ["received", "processed", "failed"] as const
 
 /**
- * Office webhook inbox (`event_inbox`) — list recent deliveries for ops.
+ * Office webhook inbox (`event_inbox`) – list recent deliveries for ops.
  */
 export async function GET(request: Request) {
   const auth = await requireOfficeAdmin(request)

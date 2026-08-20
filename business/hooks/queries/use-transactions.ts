@@ -171,7 +171,7 @@ export function useTransactionsList(filters: TxFilters = {}) {
 }
 
 /**
- * Single transaction detail — same cache/TTL/persistence band as list (`webPersist: reduced`).
+ * Single transaction detail – same cache/TTL/persistence band as list (`webPersist: reduced`).
  * Seeds from any cached transactions list row via `placeholderData` for instant navigation.
  */
 export function useTransactionDetail(txId: string | null) {

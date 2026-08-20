@@ -142,7 +142,7 @@ async function assertSafeToProceed(
 }
 
 async function deleteGhostSupabase(admin: ReturnType<typeof createSupabaseAdmin>, execute: boolean) {
-  console.log("\n— Ghost Supabase cleanup —")
+  console.log("\n– Ghost Supabase cleanup –")
   const { data: wo } = await admin
     .from("wallet_owners")
     .select("id,owner_ref,turnkey_sub_organization_id")
@@ -185,7 +185,7 @@ async function deleteTurnkeySubOrg(
   item: { label: string; subOrg: string },
   execute: boolean,
 ) {
-  console.log(`\n— Turnkey ${item.label} (${item.subOrg}) —`)
+  console.log(`\n– Turnkey ${item.label} (${item.subOrg}) –`)
   if (!execute) {
     console.log("  would call deleteSubOrganization({ deleteWithoutExport: true })")
     return

@@ -20,13 +20,13 @@ type SplitPaneProps = {
   list: ReactNode
   detail?: ReactNode
   showDetail?: boolean
-  /** Override breakpoint behavior — defaults to regular width (600+). */
+  /** Override breakpoint behavior – defaults to regular width (600+). */
   enabled?: boolean
 }
 
 export function useSplitPaneConfig(): { regularWidth: boolean; config: SplitPaneConfig } {
   const { width: windowWidth } = useWindowDimensions()
-  // Web: match mobile — tap a row to push TransactionDetails (no inline preview pane).
+  // Web: match mobile – tap a row to push TransactionDetails (no inline preview pane).
   const regularWidth = Platform.OS === 'web' ? false : isRegularWidth(windowWidth)
 
   const config = useMemo<SplitPaneConfig>(() => {

@@ -285,7 +285,7 @@ export function GridKybPeopleStep({
         hideSubmit
         rejected={identityRejected}
         rejectionReason={identityError?.reason}
-        fileHint="PDF, JPEG, PNG, or HEIC. If you upload an image, photograph the physical ID — not a screenshot or a crop from Photos."
+        fileHint="PDF, JPEG, PNG, or HEIC. If you upload an image, photograph the physical ID – not a screenshot or a crop from Photos."
         onUploaded={async (doc) => {
           if (doc) onDocumentAdded(doc)
           await onReload()
@@ -486,6 +486,7 @@ export function GridKybPeopleStep({
           {addressError ? <p className="text-sm text-destructive">{addressError.reason}</p> : null}
           <div className="space-y-2">
             <Label>Roles</Label>
+            <p className="text-sm text-muted-foreground">{GRID_KYB_WIZARD_COPY.peopleRolesHint}</p>
             <div className="grid gap-2 sm:grid-cols-2">
               {GRID_KYB_OWNER_ROLES.map((role) => (
                 <label key={role.value} className="flex items-center gap-2 text-sm">

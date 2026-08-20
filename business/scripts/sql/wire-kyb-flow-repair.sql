@@ -1,7 +1,7 @@
 -- Repair local KYB state after hosted-flow wiring (no emails).
 -- Run manually against production/staging after deploy.
 
--- Mid-flow businesses: Grid PENDING with incomplete UBO — local should be in_progress.
+-- Mid-flow businesses: Grid PENDING with incomplete UBO – local should be in_progress.
 update public.businesses
 set verification_status = 'in_progress',
     updated_at = now()

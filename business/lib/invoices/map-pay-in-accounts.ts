@@ -16,7 +16,7 @@ export type VirtualAccountJson = {
 }
 
 function maskTail(s: string | undefined, visible = 4): string {
-  if (!s) return "—"
+  if (!s) return "–"
   const t = s.replace(/\s/g, "")
   if (t.length <= visible) return t
   return `••••${t.slice(-visible)}`
@@ -59,7 +59,7 @@ export function buildPayInAccountsFromSources(opts: {
       id: `acc_${code.toLowerCase()}`,
       currency: bankCurrency,
       accountName: va?.accountHolderName || displayName,
-      bankName: va?.bankName || "—",
+      bankName: va?.bankName || "–",
       accountNumber: maskTail(va?.accountNumber ?? va?.iban),
       fullAccountNumber: va?.accountNumber ?? va?.iban ?? "",
       routingNumber: code === "USD" ? va?.routingNumber : undefined,

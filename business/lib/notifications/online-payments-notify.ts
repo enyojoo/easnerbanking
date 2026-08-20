@@ -76,7 +76,7 @@ export function resolveOnlinePaymentsEmailKind(input: {
   const hadAccount = Boolean(input.previous?.stripeAccountId)
   const hasAccount = Boolean(input.next.stripeAccountId)
 
-  // Setup started — first time we have a connected account id
+  // Setup started – first time we have a connected account id
   if (
     hasAccount &&
     !notif.setupStartedAt &&
@@ -86,7 +86,7 @@ export function resolveOnlinePaymentsEmailKind(input: {
     return { kind: "setup_started" }
   }
 
-  // Action required — enter requirements_due, or due set changes while still due
+  // Action required – enter requirements_due, or due set changes while still due
   if (nextPhase === "requirements_due") {
     const entered =
       prevPhase !== "requirements_due" ||
@@ -97,7 +97,7 @@ export function resolveOnlinePaymentsEmailKind(input: {
     }
   }
 
-  // Ready — once
+  // Ready – once
   if (nextPhase === "ready" && !notif.readyAt) {
     return { kind: "ready" }
   }

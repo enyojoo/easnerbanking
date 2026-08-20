@@ -80,7 +80,7 @@ export type PayoutCorridorPublic = {
   grid_receive_available?: boolean
   provider_routing?: ProviderRoutingEntry[]
   provider_health?: Record<string, ProviderHealthStatus>
-  /** Noah hints and/or nested `yellowcard` schema — see yc-recipient-schema. */
+  /** Noah hints and/or nested `yellowcard` schema – see yc-recipient-schema. */
   fields_schema?: PayoutFieldsSchemaHint | import("./yc-recipient-schema").PayoutCorridorFieldsSchema | null
   /** Pay-in routing flags from Office (subset of corridor metadata). */
   metadata?: PayoutCorridorPayInMetadata | null
@@ -99,7 +99,7 @@ function normCorridorToken(value: string | null | undefined): string {
   return String(value ?? "").trim().toUpperCase()
 }
 
-/** Safe match for catalog rows — skips malformed entries missing country/currency codes. */
+/** Safe match for catalog rows – skips malformed entries missing country/currency codes. */
 export function corridorMatchesCountryCurrency(
   c: Pick<PayoutCorridorPublic, "country_code" | "currency_code" | "rail">,
   input: { countryCode: string; currencyCode: string; rail?: PayoutRail },

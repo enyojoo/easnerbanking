@@ -66,7 +66,7 @@ export function computeDirectTurnkeyWalletSendPricing(input: {
     marginAmount,
     bridgeFloor: receiveAmount,
     routeCost: 0,
-    // Direct Turnkey has no FX margin — the fee IS the explicit processing fee.
+    // Direct Turnkey has no FX margin – the fee IS the explicit processing fee.
     processingFee: marginAmount,
     displayChannelCost: 0,
     networkFee: 0,

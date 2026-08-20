@@ -24,7 +24,7 @@ export function PwaStandaloneRoot() {
       return () => mq.removeEventListener("change", onChange)
     }
 
-    // Public customer invoice views should not be controlled by a SW — avoids
+    // Public customer invoice views should not be controlled by a SW – avoids
     // console noise and unnecessary interception on unauthenticated pay pages.
     const path = window.location.pathname
     const isPublicCustomer = isPublicSurfacePath(path, window.location.hostname)

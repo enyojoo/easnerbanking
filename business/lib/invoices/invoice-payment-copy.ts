@@ -129,7 +129,7 @@ export function onlinePaymentTabHint(): string {
   return "Pay with card, bank debit, or other methods available."
 }
 
-/** Short tab labels — fit 3-up on mobile; details live inside each tab. */
+/** Short tab labels – fit 3-up on mobile; details live inside each tab. */
 export function invoicePaymentTabLabel(tab: "online" | "bank" | "stablecoin"): string {
   switch (tab) {
     case "online":

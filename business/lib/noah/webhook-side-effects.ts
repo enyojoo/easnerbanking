@@ -325,7 +325,7 @@ export async function applyNoahWebhookSideEffects(
           isNoahBankOnrampOrchestrationInLeg(txData) &&
           !isNoahGlobalPayoutOrchestrationInLegShape(txData)
         ) {
-          // Internal on-chain orchestration IN — fiat pay-in row is user-facing.
+          // Internal on-chain orchestration IN – fiat pay-in row is user-facing.
         } else if (
           isNoahBankOnrampFiatPayIn(txData) &&
           payInEnrichment &&
@@ -534,7 +534,7 @@ export async function applyNoahWebhookSideEffects(
           }).catch((e) => {
             console.warn("global_payout_failed_reversal:", e)
           })
-          // Failed payout notice comes from upsertLedgerTransaction (becameFailed) — not a reversal email.
+          // Failed payout notice comes from upsertLedgerTransaction (becameFailed) – not a reversal email.
         }
         }
       }

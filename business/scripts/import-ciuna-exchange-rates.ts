@@ -67,7 +67,7 @@ async function main() {
   const sql = readFileSync(file, "utf8")
   const rows = parseInsertValues(sql)
   if (rows.length === 0) {
-    console.error("No rows parsed — check INSERT format")
+    console.error("No rows parsed – check INSERT format")
     process.exit(1)
   }
 

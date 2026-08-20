@@ -63,9 +63,9 @@ function row(label: string, ms: number, note = "") {
   const target =
     label.includes("Continue") || label.toLowerCase().includes("preview") || label.includes("cache hit")
       ? "<500"
-      : "—"
+      : "–"
   console.log(
-    `${label.padEnd(44)} ${String(ms).padStart(5)} ms${note ? `  (${note})` : ""}${target !== "—" ? `  [target ${target}]` : ""}`,
+    `${label.padEnd(44)} ${String(ms).padStart(5)} ms${note ? `  (${note})` : ""}${target !== "–" ? `  [target ${target}]` : ""}`,
   )
 }
 

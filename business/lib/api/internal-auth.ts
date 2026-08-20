@@ -1,8 +1,8 @@
 /**
  * Shared secret for cron / workers (wallet provisioning, inbox replay batches).
  *
- * - `x-easner-internal-secret: <secret>` — manual / GitHub Actions / curl
- * - `Authorization: Bearer <secret>` — [Vercel Cron](https://vercel.com/docs/cron-jobs) when `CRON_SECRET` matches `EASNER_INTERNAL_CRON_SECRET`
+ * - `x-easner-internal-secret: <secret>` – manual / GitHub Actions / curl
+ * - `Authorization: Bearer <secret>` – [Vercel Cron](https://vercel.com/docs/cron-jobs) when `CRON_SECRET` matches `EASNER_INTERNAL_CRON_SECRET`
  */
 export function assertInternalCronAuthorized(request: Request): void {
   const secret = process.env.EASNER_INTERNAL_CRON_SECRET?.trim()

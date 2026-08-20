@@ -49,7 +49,7 @@ type Body = {
 
 /**
  * Instant Easetag P2P via internal ledger (USD/EUR buckets). Requires `EASETAG_LEDGER_P2P_ENABLED=true`.
- * Implemented in-app ({@link executeEasetagTransfer}): `wallet_balances` + `transactions` — no Postgres RPC.
+ * Implemented in-app ({@link executeEasetagTransfer}): `wallet_balances` + `transactions` – no Postgres RPC.
  */
 export async function POST(request: Request) {
   if (!isEasetagLedgerP2PEnabled()) {

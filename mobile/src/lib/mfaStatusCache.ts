@@ -1,6 +1,6 @@
 /**
  * Cached TOTP MFA "verified factor present" for the More row.
- * Persists until sign-out or explicit save after enable/disable — no TTL.
+ * Persists until sign-out or explicit save after enable/disable – no TTL.
  * `bumpMfaRefreshGeneration` runs on save/clear so in-flight `listFactors` cannot overwrite fresh UI.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -17,7 +17,7 @@ let memory: Snapshot | null = null
  */
 let mfaRefreshGeneration = 0
 
-/** In-memory only — cleared with `clearMfaVerified` so a new login always revalidates once. */
+/** In-memory only – cleared with `clearMfaVerified` so a new login always revalidates once. */
 let lastListFactorsAt: { userId: string; at: number } | null = null
 
 /** Minimum time between Supabase `listFactors` calls for the More row when we already have a saved snapshot. */

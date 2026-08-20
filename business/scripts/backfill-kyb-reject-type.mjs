@@ -135,7 +135,7 @@ async function main() {
     const p = planPatch("users", row, "noah_kyc_rejection_reasons", "noah_kyc_status")
     if (p) patches.push(p)
   }
-  // businesses.noah_kyb_* columns removed — use verification_rejection_reasons on Grid SoR orgs instead.
+  // businesses.noah_kyb_* columns removed – use verification_rejection_reasons on Grid SoR orgs instead.
 
   if (!patches.length) {
     console.log("No rejection rows need backfill.")
@@ -144,7 +144,7 @@ async function main() {
 
   console.log(`${patches.length} row(s) to update:`)
   for (const p of patches) {
-    console.log(`  ${p.table} ${p.id} — ${p.note}`)
+    console.log(`  ${p.table} ${p.id} – ${p.note}`)
   }
 
   if (!execute) {

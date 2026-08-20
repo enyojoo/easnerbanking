@@ -92,8 +92,8 @@ export function sortRecipientsForSendHub(
 }
 
 /**
- * - No leading `@`: local-only match (saved list) — name, bank, account, IBAN, easetag (with/without `@`).
- * - Leading `@`: Easetag mode — match saved rows by handle / name (prefix-friendly for progressive search).
+ * - No leading `@`: local-only match (saved list) – name, bank, account, IBAN, easetag (with/without `@`).
+ * - Leading `@`: Easetag mode – match saved rows by handle / name (prefix-friendly for progressive search).
  */
 export function filterRecipientsBySearch(recipients: Recipient[], searchTerm: string): Recipient[] {
   const trimmed = searchTerm.trim()

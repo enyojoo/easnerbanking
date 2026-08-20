@@ -23,7 +23,7 @@ export interface CreateTransferResult {
 }
 
 /**
- * Create internal/international transfer — pessimistic for the create
+ * Create internal/international transfer – pessimistic for the create
  * itself (we must have a server-minted id before showing anything
  * authoritative) but optimistic for the ledger row presence.
  *
@@ -33,7 +33,7 @@ export interface CreateTransferResult {
  *      transfer appear immediately.
  *   2. On success, swap the optimistic row for the server row.
  *   3. On error, remove the optimistic row and surface a toast.
- *   4. Balance numbers are NEVER touched here — balances only move
+ *   4. Balance numbers are NEVER touched here – balances only move
  *      when a `wallet_balances` realtime event fires.
  */
 export function useCreateTransfer() {

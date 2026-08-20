@@ -6,10 +6,10 @@ import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 
 /**
- * TreasuryStatCard — KPI tile for CFO-facing dashboards.
+ * TreasuryStatCard – KPI tile for CFO-facing dashboards.
  *
  * Style intent: ivory plate, tabular figures, monochrome delta indicator.
- * Never uses bright red/green — deltas are expressed through direction + emerald.
+ * Never uses bright red/green – deltas are expressed through direction + emerald.
  */
 export interface TreasuryStatCardProps {
   label: string

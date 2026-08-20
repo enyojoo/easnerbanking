@@ -66,7 +66,7 @@ async function main() {
   const orgId = getTurnkeyOrganizationId()
   if (!orgId && !dryRun) throw new Error("TURNKEY_ORGANIZATION_ID missing")
 
-  console.log(dryRun ? "DRY RUN — derived ATAs only" : `Parent org: ${orgId}`)
+  console.log(dryRun ? "DRY RUN – derived ATAs only" : `Parent org: ${orgId}`)
 
   await ensureOne("USD/USDC", usdOwner, "USDC", orgId)
   await ensureOne("EUR/EURC", eurOwner, "EURC", orgId)

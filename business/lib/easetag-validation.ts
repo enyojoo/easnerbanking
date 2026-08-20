@@ -1,4 +1,4 @@
-/** Same rules as `packages/server/lib/username-service` — keep in sync for mobile/business parity. */
+/** Same rules as `packages/server/lib/username-service` – keep in sync for mobile/business parity. */
 
 export function validateEasetag(easetag: string): { valid: boolean; error?: string } {
   if (!easetag) return { valid: false, error: "Easetag is required" }

@@ -5,7 +5,7 @@ import { getPayAppPublicOrigin } from "@/lib/customer-hosts"
 import { payCustomerSeo } from "@/lib/seo/content/pay-customer"
 import { businessMetadata } from "@/lib/seo/metadata"
 
-/** Served as pay.easner.com — the internal `/pay-customer` prefix is rewritten by the proxy. */
+/** Served as pay.easner.com – the internal `/pay-customer` prefix is rewritten by the proxy. */
 export const metadata = businessMetadata({
   metadata: payCustomerSeo.publicDefault.metadata,
   path: "/",

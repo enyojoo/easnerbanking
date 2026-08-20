@@ -21,7 +21,7 @@ export type TextFieldProps = {
 
 const FIELD_MIN_H = 52
 
-/** Label + input + optional error — pill radius (auth parity with premium fields). */
+/** Label + input + optional error – pill radius (auth parity with premium fields). */
 export function TextField({
   label,
   error,

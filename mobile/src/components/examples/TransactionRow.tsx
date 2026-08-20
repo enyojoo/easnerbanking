@@ -16,11 +16,11 @@ import {
 } from '../../theme'
 
 /**
- * TransactionRow — executive ledger line.
+ * TransactionRow – executive ledger line.
  *
  * Rules mirror web:
  *   - Credits: emerald-tinted avatar + emerald amount.
- *   - Debits: neutral graphite — never bright red.
+ *   - Debits: neutral graphite – never bright red.
  *   - Amounts use tabular figures for alignment.
  */
 export interface TransactionRowProps {

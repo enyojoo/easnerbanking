@@ -118,7 +118,7 @@ export const EMPTY_STORED_SUPABASE_SESSION_PROBE: StoredSupabaseSessionProbe = {
   likelyAuthenticated: false,
 }
 
-/** Synchronous read of Supabase auth storage — used for instant login redirect vs optimistic cache boot. */
+/** Synchronous read of Supabase auth storage – used for instant login redirect vs optimistic cache boot. */
 export function probeStoredSupabaseSession(): StoredSupabaseSessionProbe {
   if (typeof window === "undefined") {
     return { userId: null, likelyAuthenticated: false }

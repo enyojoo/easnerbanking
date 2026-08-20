@@ -7,7 +7,7 @@ type Ctx = { params: Promise<{ id: string }> }
 /**
  * Payer-facing read for a stablecoin charge on pay.easner.com. The session id is
  * the capability token (same model as invoice-by-id links), so only the fields a
- * payer needs are returned — never payout, recipient, or provider details.
+ * payer needs are returned – never payout, recipient, or provider details.
  */
 export async function GET(_request: Request, context: Ctx) {
   const { id } = await context.params

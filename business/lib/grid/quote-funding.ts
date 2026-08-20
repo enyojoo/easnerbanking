@@ -9,7 +9,7 @@ type GridInternalAccountRow = {
   fundingPaymentInstructions?: GridPaymentInstruction | GridPaymentInstruction[]
 }
 
-/** GET /quotes/{id} — payment instructions may appear after create. */
+/** GET /quotes/{id} – payment instructions may appear after create. */
 export async function retrieveGridQuote(quoteId: string): Promise<GridQuote> {
   return gridFetch<GridQuote>({
     method: "GET",
@@ -52,7 +52,7 @@ export async function resolveGridPlatformUsdcFundingInstructions(): Promise<
 /**
  * Ensure quote carries Solana USDC funding instructions for balance payout.
  * Create response, then GET quote. Do not fall back to platform USDC deposit
- * instructions — those are not this quote's REALTIME_FUNDING address.
+ * instructions – those are not this quote's REALTIME_FUNDING address.
  */
 export async function hydrateGridQuotePaymentInstructions(
   quote: GridQuote,

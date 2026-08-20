@@ -1,4 +1,4 @@
-/** Public Easner mark — badge for Easetag / in-network recipients (same-origin for HTTP cache) */
+/** Public Easner mark – badge for Easetag / in-network recipients (same-origin for HTTP cache) */
 export const EASNER_MARK_URL = "/easner-mark.png"
 
 export type PayeeAccountKind = "business" | "personal"

@@ -19,9 +19,9 @@ import {
 } from '../../theme'
 
 /**
- * PremiumWalletCard — a passport-feel credit card for wallets/cards screens.
+ * PremiumWalletCard – a passport-feel credit card for wallets/cards screens.
  *
- * Always graphite on graphite — the only "color" that survives from the old
+ * Always graphite on graphite – the only "color" that survives from the old
  * palette is the Easner emerald wordmark in the corner. Balances render in
  * Playfair Display, inverse text, tabular numerals.
  */

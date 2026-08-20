@@ -9,7 +9,7 @@ import { isPublicSurfacePath } from "@/lib/surface-paths"
 
 function bypassesDesktopViewportGate(pathname: string, flow: string | null, hostname?: string | null) {
   if (isPublicSurfacePath(pathname, hostname)) return true
-  // Hosted KYB is a full-page flow — do not bounce the user to the wide-screen wall.
+  // Hosted KYB is a full-page flow – do not bounce the user to the wide-screen wall.
   if (
     (pathname === "/settings" || pathname.startsWith("/settings/")) &&
     parseSettingsVerificationFlow(flow) != null

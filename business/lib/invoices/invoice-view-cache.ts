@@ -50,7 +50,7 @@ function readFromStore(
   return parsed
 }
 
-/** Session cache first, then localStorage within TTL — instant revisit UX. */
+/** Session cache first, then localStorage within TTL – instant revisit UX. */
 export function readCachedInvoiceView(cacheKey: string): CachedInvoiceView | null {
   if (!cacheKey || typeof window === "undefined") return null
   try {
@@ -72,7 +72,7 @@ export function writeCachedInvoiceView(
   payload: PublicInvoicePayload,
 ): void {
   if (!cacheKey || typeof window === "undefined") return
-  // Stripe checkout sessions expire — never cache clientSecret; always fetch fresh on Pay online.
+  // Stripe checkout sessions expire – never cache clientSecret; always fetch fresh on Pay online.
   const entry: CachedInvoiceView = {
     ...payload,
     stripeCheckout: null,

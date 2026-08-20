@@ -92,7 +92,7 @@ export async function fetchAllPaymentMethodsForCustomer(noahCustomerId: string):
   return payin.length > 0 ? payin : all
 }
 
-/** For diagnostics — counts by capability query. */
+/** For diagnostics – counts by capability query. */
 export async function fetchPaymentMethodsForCustomerDiagnostics(
   noahCustomerId: string,
 ): Promise<{ payin: number; all: number }> {

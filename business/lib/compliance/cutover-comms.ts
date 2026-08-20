@@ -43,7 +43,7 @@ export function isHostedVerificationFlowLocation(
   return isSettingsVerificationFlowLocation(pathname, search)
 }
 
-/** Email template for business KYB cutover — re-verification required. */
+/** Email template for business KYB cutover – re-verification required. */
 export function buildBusinessKybCutoverEmail(input: {
   businessName: string
   verifyUrl: string
@@ -58,7 +58,7 @@ export function buildBusinessKybCutoverEmail(input: {
     "",
     "If you have open bank deposit instructions from before this change, please finish any in-flight deposits within the wind-down window shown in your dashboard.",
     "",
-    "— Easner",
+    "– Easner",
   ].join("\n")
 
   const html = `
@@ -66,7 +66,7 @@ export function buildBusinessKybCutoverEmail(input: {
     <p>We upgraded business verification on Easner. To continue sending, receiving, and invoicing, please complete verification again.</p>
     <p><a href="${input.verifyUrl}">Start verification</a></p>
     <p>If you have open bank deposit instructions from before this change, please finish any in-flight deposits within the wind-down window shown in your dashboard.</p>
-    <p>— Easner</p>
+    <p>– Easner</p>
   `.trim()
 
   return { subject, text, html }

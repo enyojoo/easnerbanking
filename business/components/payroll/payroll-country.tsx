@@ -3,7 +3,7 @@ import { countries } from "@/lib/countries"
 
 export function PayrollCountry({ country }: { country: string | null }) {
   const value = String(country || "").trim()
-  if (!value) return <span className="text-muted-foreground">—</span>
+  if (!value) return <span className="text-muted-foreground">–</span>
 
   const normalized = value.toLowerCase()
   const match = countries.find((item) =>

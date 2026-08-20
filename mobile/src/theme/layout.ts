@@ -1,5 +1,5 @@
 /**
- * Layout tokens — 8pt grid, screen rhythm (Easner mobile UI v2).
+ * Layout tokens – 8pt grid, screen rhythm (Easner mobile UI v2).
  * Values mirror `spacing` scale (5=20, 6=24) without importing `theme/index` (cycles).
  */
 export const layout = {

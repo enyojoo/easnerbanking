@@ -23,7 +23,7 @@ type ScreenTransitionOptionsFactory = (args: {
   route: RouteLike
 }) => StackNavigationOptions
 
-/** Hook factory for Stack.Screen options — wires responsive web layout into resolver. */
+/** Hook factory for Stack.Screen options – wires responsive web layout into resolver. */
 export function useScreenTransitionOptions(routeName: ScreenRouteName) {
   const { showSidebarShell, mode } = useResponsiveLayout()
 
@@ -50,7 +50,7 @@ export function useScreenTransitionOptions(routeName: ScreenRouteName) {
   )
 }
 
-/** Single hook for MainStack — stable per-route options callbacks (avoids stack thrash on Android). */
+/** Single hook for MainStack – stable per-route options callbacks (avoids stack thrash on Android). */
 export function useMainStackTransitionOptionsFactory(): (
   routeName: ScreenRouteName,
 ) => ScreenTransitionOptionsFactory {
@@ -87,7 +87,7 @@ const staticTransitionOptionsCache = new Map<
   ScreenTransitionOptionsFactory
 >()
 
-/** Static resolver for auth/onboarding stacks — cached callbacks avoid Android stack thrash. */
+/** Static resolver for auth/onboarding stacks – cached callbacks avoid Android stack thrash. */
 export function staticScreenTransitionOptions(
   routeName: ScreenRouteName,
 ): ScreenTransitionOptionsFactory {

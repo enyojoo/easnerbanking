@@ -1,6 +1,6 @@
 /**
  * Turnkey Webhooks V2 signed message (Ed25519).
- * @see https://docs.turnkey.com/developer-reference/webhooks — Verify signatures
+ * @see https://docs.turnkey.com/developer-reference/webhooks – Verify signatures
  *
  * Canonical form:
  *   v1.ed25519.<signing_key_id>.<timestamp>.<event_id>.<raw_body>

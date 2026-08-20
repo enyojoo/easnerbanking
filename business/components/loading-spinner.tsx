@@ -3,14 +3,14 @@
  *
  * Contract (see packages/shared/src/query/ux-rules.ts and lib/query/loading-state.ts):
  *
- * Three content states per surface — never mix:
+ * Three content states per surface – never mix:
  *   - Cached: data exists → show immediately, silent background refetch
  *   - First-load: isQueryFirstLoad(query) → inline skeleton in that surface only
  *   - Empty: isQueryTrulyEmpty(query, isEmpty) → zero-state copy after fetch completes
  *
  * Full-screen loaders:
  *   - WorkspaceBootSplash: logo-only when workspace is reached with no session at all
- *     (definitively logged out — not during auth resolve, hydration, or soft reload)
+ *     (definitively logged out – not during auth resolve, hydration, or soft reload)
  *   - Public pay/invoice: page-shaped skeletons, never this spinner
  *
  * Workspace rules:
@@ -30,7 +30,7 @@ export function LoadingSpinner() {
   )
 }
 
-/** Logo-only splash for logged-out workspace redirect — not a data-loading screen. */
+/** Logo-only splash for logged-out workspace redirect – not a data-loading screen. */
 export function WorkspaceBootSplash() {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-background">

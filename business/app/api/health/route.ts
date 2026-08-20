@@ -53,7 +53,7 @@ export async function GET() {
   checks.noah_webhook_keys = `${getNoahWebhookVerifyPublicKeys().length} key(s); NOAH_WEBHOOK_NOAH_ENV=${webhookEnv}`
   if (process.env.NOAH_WEBHOOK_PUBLIC_KEY?.trim()) {
     checks.noah_webhook_note =
-      "NOAH_WEBHOOK_PUBLIC_KEY is set — remove it unless Noah gave a custom key (wrong value causes 401)"
+      "NOAH_WEBHOOK_PUBLIC_KEY is set – remove it unless Noah gave a custom key (wrong value causes 401)"
   }
 
   const tk = validateTurnkeyEnvForProduction()

@@ -12,7 +12,7 @@ function resolveFractionDigits(
     return { min, max }
   }
   // Display the amount as-is (up to 2dp). Do not round via Noah zero-decimal payout
-  // rules — YC pay-in requires exact local amounts (e.g. ₦3,678.96 not ₦3,679).
+  // rules – YC pay-in requires exact local amounts (e.g. ₦3,678.96 not ₦3,679).
   return { min: 2, max: 2 }
 }
 

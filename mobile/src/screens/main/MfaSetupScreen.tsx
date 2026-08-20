@@ -67,7 +67,7 @@ const MFA_COPY = {
   enrollDescription:
     'Scan this QR code to set up your account using your preferred authenticator app.',
   alreadyEnabled: 'Two-factor authentication is already enabled for this account.',
-  /** List-only edge case: no manual Set up — enrollment starts from Security when MFA is off. */
+  /** List-only edge case: no manual Set up – enrollment starts from Security when MFA is off. */
   listNotEnabledHint:
     'Two-factor authentication is not enabled. Open Security and tap MFA when your status shows Off to continue.',
   digitCodeLabel: 'Enter 6-digit code shown to you',
@@ -102,7 +102,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   const navRoute = useRoute()
   const params = ((navRoute.params ?? route?.params) ?? {}) as MfaRouteParams
   const autoStartEnroll = params.autoStartEnroll === true
-  /** From Security row when status is On — show Disable UI immediately (no spinner). */
+  /** From Security row when status is On – show Disable UI immediately (no spinner). */
   const mfaVerifiedOnCard = params.mfaVerifiedOnCard === true
 
   const enrollGenRef = useRef(0)
@@ -132,7 +132,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   const [secretJustCopied, setSecretJustCopied] = useState(false)
   const [disableMfaSheetVisible, setDisableMfaSheetVisible] = useState(false)
 
-  /** Skip fade-in when jumping straight to QR — avoids hiding content for `motion.screenEnterMs` while enroll loads. */
+  /** Skip fade-in when jumping straight to QR – avoids hiding content for `motion.screenEnterMs` while enroll loads. */
   const headerAnim = useRef(new Animated.Value(autoStartEnroll ? 1 : 0)).current
   const contentAnim = useRef(new Animated.Value(autoStartEnroll ? 1 : 0)).current
 
@@ -171,7 +171,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
 
   /**
    * Same pattern as `business/components/settings/mfa-settings-dialog.tsx`: when opening from
-   * Security with MFA off, go straight to the QR step and start enroll immediately — no list + Set up.
+   * Security with MFA off, go straight to the QR step and start enroll immediately – no list + Set up.
    */
   const startEnroll = useCallback(async (generation: number) => {
     setError(null)
@@ -238,7 +238,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   /** QR flow only from Security when MFA is off (`autoStartEnroll`). */
   const showEnrollUi = autoStartEnroll
 
-  /** Security card showed Off but API already has verified TOTP — pop. */
+  /** Security card showed Off but API already has verified TOTP – pop. */
   useEffect(() => {
     if (!autoStartEnroll) return
     if (!verifiedFactorId) return
@@ -309,7 +309,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   }
 
   const backFromEnroll = useCallback(() => {
-    /** Enrollment only runs with `autoStartEnroll`; pop — `useFocusEffect` cleanup drops unverified factors. */
+    /** Enrollment only runs with `autoStartEnroll`; pop – `useFocusEffect` cleanup drops unverified factors. */
     allowRemoveRef.current = true
     navigation.goBack()
   }, [navigation])

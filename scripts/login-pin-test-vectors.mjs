@@ -11,7 +11,7 @@ const LOGIN_PIN_PBKDF2_ITERATIONS = 100_000
 const LOGIN_PIN_DERIVED_KEY_BITS = 256
 const LOGIN_PIN_SALT_BYTES = 16
 
-/** Fixed test vector (not secret — deterministic salt for CI). */
+/** Fixed test vector (not secret – deterministic salt for CI). */
 const salt = new Uint8Array(LOGIN_PIN_SALT_BYTES)
 for (let i = 0; i < salt.length; i++) salt[i] = i + 1
 

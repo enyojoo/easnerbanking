@@ -1,5 +1,5 @@
 /**
- * Motion tokens — keep in sync with `duration` in `./index.ts` where they overlap
+ * Motion tokens – keep in sync with `duration` in `./index.ts` where they overlap
  * (same numeric values; this module must not import `index.ts` to avoid cycles).
  */
 export const motion = {

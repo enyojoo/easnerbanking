@@ -128,7 +128,7 @@ export async function isParentOrgCustodialDaReady(): Promise<boolean> {
   return parentReadyInflight
 }
 
-/** @deprecated Sync check — prefer `isParentOrgCustodialDaReady()`. */
+/** @deprecated Sync check – prefer `isParentOrgCustodialDaReady()`. */
 export function isParentOrgCustodialDaReadySync(): boolean {
   return isTurnkeyParentDaReady() || parentReadyCache === true
 }

@@ -167,7 +167,7 @@ export function resolveYcFundBalanceLocalPayInBreakdown(
 
 /**
  * Keep exact local pay-in amounts for display.
- * Do not round NGN/KES to whole units — Yellowcard requires the exact amount
+ * Do not round NGN/KES to whole units – Yellowcard requires the exact amount
  * (e.g. NGN 3,678.96, not 3,679).
  */
 export function alignLocalPayInBreakdownForDisplay(
@@ -260,7 +260,7 @@ function readMetaString(value: unknown): string | undefined {
   return undefined
 }
 
-/** Push/email activity label — sentence case from deposit title. */
+/** Push/email activity label – sentence case from deposit title. */
 export function resolveYcFundBalanceNotificationActivityLabel(input: {
   depositDisplayTitle?: string | null
   residenceCountry?: string | null

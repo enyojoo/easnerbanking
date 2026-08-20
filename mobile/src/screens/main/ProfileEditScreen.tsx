@@ -61,7 +61,7 @@ import { ACCOUNT_DELETED_FLAG_KEY } from '../../constants/auth'
 function ProfileEditContent({ navigation }: NavigationProps) {
   const { user, userProfile, refreshUserProfile, applyPersonalSettingsFromServer, signOut } = useAuth()
   const insets = useSafeAreaInsets()
-  // Stack screen — tab bar is hidden, so pad only for the safe-area inset (no tab bar height).
+  // Stack screen – tab bar is hidden, so pad only for the safe-area inset (no tab bar height).
   const scrollBottomPadding = useFixedFooterPadding(spacing[6])
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -1142,7 +1142,7 @@ const styles = StyleSheet.create({
   verifiedCard: {
     marginTop: spacing.md,
   },
-  /** Shared 40px field tray — edit mode, view mode, verified identity, easetag */
+  /** Shared 40px field tray – edit mode, view mode, verified identity, easetag */
   profileFieldBox: {
     borderWidth: 0.5,
     borderColor: colors.frame.border,
@@ -1206,7 +1206,7 @@ const styles = StyleSheet.create({
   fieldBoxValueTextEditable: {
     color: colors.text.primary,
   },
-  /** Borderless input — shell is `profileFieldBox`; matches `fieldBoxValueText` metrics */
+  /** Borderless input – shell is `profileFieldBox`; matches `fieldBoxValueText` metrics */
   fieldBoxInput: {
     ...textStyles.bodyLarge,
     width: '100%',
@@ -1350,7 +1350,7 @@ const styles = StyleSheet.create({
     marginTop: spacing[1],
   },
   /**
-   * Same rhythm as DOB: `fieldLabelEdit` uses marginBottom below the label — here the label + status
+   * Same rhythm as DOB: `fieldLabelEdit` uses marginBottom below the label – here the label + status
    * sit on the row bottom (flex-end) so there’s no extra air under “Easetag” inside the row.
    * Fixed height keeps status from moving the @ field; gap to the box is only easetagInput marginTop.
    */

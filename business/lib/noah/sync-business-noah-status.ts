@@ -59,7 +59,7 @@ async function syncBusinessNoahStatusOnce(): Promise<SyncBusinessNoahStatusResul
 }
 
 /**
- * POST `/api/noah/sync-status` with business scope — pulls KYB status and provisions fiat VAs when approved.
+ * POST `/api/noah/sync-status` with business scope – pulls KYB status and provisions fiat VAs when approved.
  */
 export async function syncBusinessNoahStatus(): Promise<SyncBusinessNoahStatusResult> {
   return syncBusinessNoahStatusOnce()

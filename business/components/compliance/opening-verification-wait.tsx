@@ -16,7 +16,7 @@ export function OpeningVerificationWait() {
   )
 }
 
-/** Blank until the embed is late — avoids a spinner flash on a normal open. */
+/** Blank until the embed is late – avoids a spinner flash on a normal open. */
 export function DelayedOpeningVerificationWait() {
   const [visible, setVisible] = useState(false)
   useEffect(() => {

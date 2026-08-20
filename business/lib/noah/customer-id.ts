@@ -2,15 +2,15 @@
  * Deterministic Noah CustomerID (Standard Model hosted onboarding).
  * @see https://docs.noah.com/recipes/onboarding/hosted-onboarding/
  *
- * - `eind_` — consumer KYC (`CustomerType: Individual`) keyed to `users.id`.
- * - `ebiz_` — business KYB (`CustomerType: Business`) keyed to `businesses.id`.
+ * - `eind_` – consumer KYC (`CustomerType: Individual`) keyed to `users.id`.
+ * - `ebiz_` – business KYB (`CustomerType: Business`) keyed to `businesses.id`.
  */
 export type NoahCustomerScope = "individual" | "business"
 
-/** B2B — `ebiz_` (5) + UUID hex (32) = 37 (Noah ID length budget). */
+/** B2B – `ebiz_` (5) + UUID hex (32) = 37 (Noah ID length budget). */
 export const EASNER_NOAH_BUSINESS_CUSTOMER_PREFIX = "ebiz_" as const
 
-/** Consumer — `eind_` (5) + UUID hex (32) = 37. */
+/** Consumer – `eind_` (5) + UUID hex (32) = 37. */
 export const EASNER_NOAH_INDIVIDUAL_CUSTOMER_PREFIX = "eind_" as const
 
 /** Legacy individual prefix; still parsed for old Noah rows. */

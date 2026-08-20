@@ -151,7 +151,7 @@ export function OpenCurrencyAccountDialog({ onAdded }: { onAdded: () => void }) 
                 >
                   <div>
                     <p className="text-sm font-medium">
-                      {o.code} — {o.label}
+                      {o.code} – {o.label}
                     </p>
                     {o.disabledReason ? (
                       <p className="text-xs text-muted-foreground">{o.disabledReason}</p>

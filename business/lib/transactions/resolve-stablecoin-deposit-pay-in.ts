@@ -10,7 +10,7 @@ import {
 } from "@easner/shared"
 import { resolveLedgerWhenAtFromRow } from "@/lib/ledger/ledger-occurred-at"
 
-/** True for genuine inbound stablecoin (liquidation address) deposits — not Easetag, bank onramp, or payouts. */
+/** True for genuine inbound stablecoin (liquidation address) deposits – not Easetag, bank onramp, or payouts. */
 export function isStablecoinDepositPayInRow(row: Record<string, unknown>): boolean {
   const dir = String(row.direction ?? "").toLowerCase()
   if (dir !== "in") return false

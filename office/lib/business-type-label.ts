@@ -5,7 +5,7 @@ export function businessTypeDisplayText(raw: string | null | undefined): string 
   const label = getIndustryLabelForProfileValue(raw)
   if (label) return label
   const s = raw?.trim()
-  if (!s) return "—"
+  if (!s) return "–"
   return s
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase())

@@ -12,7 +12,7 @@ type NavigationLike = {
   dispatch: (action: ReturnType<typeof CommonActions.reset>) => void
 }
 
-/** Leave pay-in review — land on transaction detail with a clean stack. */
+/** Leave pay-in review – land on transaction detail with a clean stack. */
 export function navigateToTransactionDetailAfterPayIn(
   navigation: NavigationLike,
   transactionId: string,
@@ -41,7 +41,7 @@ export function usesCustomTransactionDetailBack(fromScreen?: TransactionDetailFr
   )
 }
 
-/** Back from transaction detail — never return to pay-in flow screens. */
+/** Back from transaction detail – never return to pay-in flow screens. */
 export function navigateBackFromTransactionDetail(
   navigation: NavigationLike,
   fromScreen?: TransactionDetailFromScreen,

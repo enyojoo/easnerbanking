@@ -13,5 +13,5 @@ export type ReceiptDetails = {
   transactionId: string
 }
 
-/** @deprecated Plain rows — use ReceiptVisualRow via buildTransactionReceiptDetailRows. */
+/** @deprecated Plain rows – use ReceiptVisualRow via buildTransactionReceiptDetailRows. */
 export type ReceiptRow = { label: string; value: string }

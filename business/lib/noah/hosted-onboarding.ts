@@ -1,5 +1,5 @@
 /**
- * Noah Hosted Onboarding — POST /v1/onboarding/:CustomerID
+ * Noah Hosted Onboarding – POST /v1/onboarding/:CustomerID
  * Request body must include full `ReturnURL` (https) per Noah; see `getReturnUrlForNoahScope` / config.
  * Noah Standard Model: one HostedURL covers KYC/KYB verification and Terms & Conditions acceptance.
  * @see https://docs.noah.com/recipes/onboarding/hosted-onboarding/

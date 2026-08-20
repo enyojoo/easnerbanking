@@ -1,4 +1,4 @@
-// Mobile signup/residence — Noah fully prohibited VA list (product-split).
+// Mobile signup/residence – Noah fully prohibited VA list (product-split).
 // Legal reference (keep in sync): docs/legal/compliance.md §3
 
 import { isBlockedForMobile } from '@easner/shared'

@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
 
 interface InvoicePDFDocumentProps {
   invoice: Invoice
-  /** Link-first payment block — bank/stablecoin details live on the web invoice view. */
+  /** Link-first payment block – bank/stablecoin details live on the web invoice view. */
   paymentSection?: InvoicePdfPaymentSection
   /** When omitted, uses static `business-info` defaults. */
   issuer?: InvoicePdfIssuer

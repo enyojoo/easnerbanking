@@ -3,7 +3,7 @@ import { BRAND } from "@/components/brand/brand-constants"
 
 /**
  * Chrome for pay.easner.com. Payer-only: no dashboard nav, no sign-in, no operator
- * banners — the business's own name and logo lead, Easner signs the footer.
+ * banners – the business's own name and logo lead, Easner signs the footer.
  */
 export function CustomerPayShell({ children }: { children: ReactNode }) {
   return (

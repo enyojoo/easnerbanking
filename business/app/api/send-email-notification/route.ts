@@ -4,8 +4,8 @@ import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin
 import { requireOfficeAdmin } from "@/lib/api/admin-auth"
 
 /**
- * - `type: admin-transaction` — office staff, or the transaction owner (Bearer) notifying ops.
- * - `type: transaction` (default) — **deprecated**; ledger dispatch sends user transaction emails.
+ * - `type: admin-transaction` – office staff, or the transaction owner (Bearer) notifying ops.
+ * - `type: transaction` (default) – **deprecated**; ledger dispatch sends user transaction emails.
  */
 export async function POST(request: Request) {
   let body: { type?: string; transactionId?: string; status?: string }

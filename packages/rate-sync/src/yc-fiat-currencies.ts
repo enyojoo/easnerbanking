@@ -8,7 +8,7 @@ export const YC_RATE_BRIDGE_CURRENCIES = new Set(["USD", "USDC"])
 
 /**
  * Stablecoins / on-chain assets returned by YC /rates that we do not store.
- * Safety net alongside corridor allowlist — settlement uses USD product + USDC chain only.
+ * Safety net alongside corridor allowlist – settlement uses USD product + USDC chain only.
  */
 export const YC_EXCLUDED_CRYPTO_CURRENCIES = new Set([
   "CUSD",

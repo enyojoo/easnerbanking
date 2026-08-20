@@ -59,7 +59,7 @@ export type ExecuteYcBalancePayoutInput = {
   reviewSnapshot?: GlobalPayoutReviewSnapshot | null
   sendNote?: string
   lockId?: string
-  /** Locked YC send from confirm — POST /send runs at confirm when lock-on-review enabled. */
+  /** Locked YC send from confirm – POST /send runs at confirm when lock-on-review enabled. */
   yc: {
     sequenceId?: string
     sendId?: string | null

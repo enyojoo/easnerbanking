@@ -11,7 +11,7 @@ async function main() {
   const annotated = await annotateAdminCorridorsWithProviderHealth(rows ?? [])
   const visible = annotated.filter((r) => corridorHasRailCapability(r))
 
-  console.log("Visible mobile_money corridors — YC channel breakdown:\n")
+  console.log("Visible mobile_money corridors – YC channel breakdown:\n")
   for (const r of visible.sort((a, b) => a.country_name.localeCompare(b.country_name))) {
     const cc = r.country_code
     const cur = r.currency_code

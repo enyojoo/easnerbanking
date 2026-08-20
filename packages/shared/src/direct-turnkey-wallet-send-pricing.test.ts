@@ -25,7 +25,7 @@ describe("computeDirectTurnkeyWalletSendPricing", () => {
     expect(p.customerRate).toBe(1)
     expect(p.customerPrincipal).toBe(100)
     expect(p.marginAmount).toBe(1)
-    // Direct Turnkey has no FX margin — the fee IS the explicit processing fee.
+    // Direct Turnkey has no FX margin – the fee IS the explicit processing fee.
     expect(p.processingFee).toBe(1)
     expect(p.displayChannelCost).toBe(0)
     expect(p.totalDebited).toBe(101)

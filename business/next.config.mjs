@@ -45,7 +45,7 @@ const nextConfig = {
   webpack: (config) => {
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
-      // Exact match only — a bare `@easner/shared` prefix would swallow subpath imports.
+      // Exact match only – a bare `@easner/shared` prefix would swallow subpath imports.
       "@easner/shared$": resolve(__dirname, "../packages/shared/src/index.ts"),
       "@easner/shared/verified-identity": resolve(
         __dirname,
@@ -65,7 +65,7 @@ const nextConfig = {
       "@noble/hashes/sha3.js": nobleHashesSubpath("sha3"),
       "@noble/hashes/hmac": nobleHashesSubpath("hmac"),
       "@noble/hashes/hmac.js": nobleHashesSubpath("hmac"),
-      // Exact match only — a prefix alias breaks `lib-address/countries/*.json` lazy imports.
+      // Exact match only – a prefix alias breaks `lib-address/countries/*.json` lazy imports.
       "lib-address$": resolve(__dirname, "../node_modules/lib-address/dist/entry-browser.mjs"),
     }
     return config

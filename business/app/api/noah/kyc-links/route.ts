@@ -14,7 +14,7 @@ import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../_helper
 
 /**
  * Start or resume Noah hosted onboarding (Standard Model).
- * One `HostedURL` covers identity verification (KYC/KYB) and partner Terms & Conditions — no separate TOS API.
+ * One `HostedURL` covers identity verification (KYC/KYB) and partner Terms & Conditions – no separate TOS API.
  * @see https://docs.noah.com/recipes/onboarding/hosted-onboarding/
  */
 export async function POST(request: Request) {

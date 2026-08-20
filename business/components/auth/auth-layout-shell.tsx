@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation"
 import { BusinessLogo } from "@/components/brand/business-logo"
 import { AuthSessionRedirect } from "@/components/auth/auth-session-redirect"
 
-/** Hosted Noah completion — no auth marketing chrome (loaded inside iframe or in-app browser). */
+/** Hosted Noah completion – no auth marketing chrome (loaded inside iframe or in-app browser). */
 function isNoahCompletePath(pathname: string | null): boolean {
   return pathname === "/auth/noah-complete"
 }

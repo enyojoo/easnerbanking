@@ -7,7 +7,7 @@ function hashPayload(payload: unknown): string {
 }
 
 /**
- * Cross-provider webhook dedupe (`event_inbox`). Best-effort — failures do not block primary ingestion.
+ * Cross-provider webhook dedupe (`event_inbox`). Best-effort – failures do not block primary ingestion.
  */
 export async function recordEventInbox(
   admin: SupabaseClient,

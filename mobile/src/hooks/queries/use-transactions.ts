@@ -30,7 +30,7 @@ import type { Transaction } from '../../types'
 export type MobileTransactionRow = {
   id?: string
   transaction_id?: string
-  /** Supabase `transactions.id` — preferred when opening detail (display id may be synthetic). */
+  /** Supabase `transactions.id` – preferred when opening detail (display id may be synthetic). */
   ledger_row_id?: string
   currency?: string
   amount?: string | number
@@ -81,12 +81,12 @@ interface TransactionsResponse {
 
 /**
  * Single page size for the unified ledger list on mobile.
- * Home dashboard only displays the first four rows — it uses this same query so cache is shared with the
+ * Home dashboard only displays the first four rows – it uses this same query so cache is shared with the
  * Transactions tab (no second cold fetch / endless skeleton).
  */
 export const TRANSACTIONS_LEDGER_PAGE_SIZE = 50
 
-/** Detail rows are immutable ledger snapshots — keep warm for 7d (disk + memory). */
+/** Detail rows are immutable ledger snapshots – keep warm for 7d (disk + memory). */
 export const TRANSACTION_DETAIL_STALE_MS = CacheTTL.TRANSACTION_DETAIL
 export const TRANSACTION_DETAIL_GC_MS = CacheTTL.TRANSACTION_DETAIL
 
@@ -129,7 +129,7 @@ export function transactionDetailQueryOptions(
     gcTime: TRANSACTION_DETAIL_GC_MS,
     meta: { safePersist: true, freshness: 'operational' },
     placeholderData: (previousData) => previousData,
-    // Global mobile client sets refetchOnMount: false — override here so cached
+    // Global mobile client sets refetchOnMount: false – override here so cached
     // detail renders instantly, then enrichment refreshes in the background.
     refetchOnMount: 'always',
     refetchOnReconnect: false,
@@ -204,7 +204,7 @@ export function prefetchTransactionDetail(
     .then(() => undefined)
 }
 
-/** Prefer ledger UUID for detail API — list `transaction_id` may be display-only (ETID…). */
+/** Prefer ledger UUID for detail API – list `transaction_id` may be display-only (ETID…). */
 export function transactionDetailLookupId(row: {
   ledger_row_id?: string
   transaction_id?: string

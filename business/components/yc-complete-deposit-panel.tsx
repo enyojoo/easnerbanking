@@ -44,7 +44,7 @@ export type YcCompleteDepositPanelProps = {
   returnTo?: "dashboard" | "transactions"
   /** When true, hide the attest CTA (detail "here" link replay). */
   readOnly?: boolean
-  /** Channel deposit window expiry (ISO) — awaiting payment countdown. */
+  /** Channel deposit window expiry (ISO) – awaiting payment countdown. */
   depositExpiresAt?: string | null
   payInProvider?: PayInProviderId
 }

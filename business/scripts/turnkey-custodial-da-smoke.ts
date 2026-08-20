@@ -95,10 +95,10 @@ async function main() {
   for (const c of checks) {
     const mark = c.ok ? "PASS" : "FAIL"
     if (!c.ok) failed += 1
-    console.log(`${mark} ${c.name}${c.detail ? ` — ${c.detail}` : ""}`)
+    console.log(`${mark} ${c.name}${c.detail ? ` – ${c.detail}` : ""}`)
   }
 
-  console.log("\nWhen migration_complete passes, DA auto-wires in prod — no TURNKEY_DA_SENDS_STRICT flag needed.")
+  console.log("\nWhen migration_complete passes, DA auto-wires in prod – no TURNKEY_DA_SENDS_STRICT flag needed.")
   if (failed > 0) process.exit(1)
 }
 

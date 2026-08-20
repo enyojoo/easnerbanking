@@ -3,7 +3,7 @@ import { BackHandler, Platform } from 'react-native'
 import { navigateStackBack } from '../navigation/stackBackNavigation'
 
 /**
- * Android hardware / gesture back — delegates to the same handler as the header back button.
+ * Android hardware / gesture back – delegates to the same handler as the header back button.
  * Use on receive/send flow screens where stack pop must match visible back affordance.
  */
 export function useStackHardwareBack(onBack: () => void, enabled = true): void {

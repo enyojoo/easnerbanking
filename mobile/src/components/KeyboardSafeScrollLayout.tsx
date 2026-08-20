@@ -20,7 +20,7 @@ type Props = {
 } & Omit<ScrollViewProps, 'contentContainerStyle' | 'style' | 'children'>
 
 /**
- * Pattern A: form / column screens — KAV + ScrollView with keyboard-friendly defaults.
+ * Pattern A: form / column screens – KAV + ScrollView with keyboard-friendly defaults.
  */
 export default function KeyboardSafeScrollLayout({
   children,

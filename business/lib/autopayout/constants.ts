@@ -5,7 +5,7 @@ export const PLACARD_PNG_EXPORT_SCALE = 2
 export const PLACARD_HD_PNG_W = PLACARD_LAYOUT_W * PLACARD_PNG_EXPORT_SCALE
 export const PLACARD_HD_PNG_H = PLACARD_LAYOUT_H * PLACARD_PNG_EXPORT_SCALE
 
-/** PDF print size (points), 4×6 in @ 72pt/in — same 2∶3 aspect as PNG. */
+/** PDF print size (points), 4×6 in @ 72pt/in – same 2∶3 aspect as PNG. */
 export const PLACARD_PDF_W_PT = 288
 export const PLACARD_PDF_H_PT = 432
 

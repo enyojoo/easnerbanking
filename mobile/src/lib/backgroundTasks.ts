@@ -77,7 +77,7 @@ if (Platform.OS === 'ios' || Platform.OS === 'android') {
       const session = await getSessionReliable()
       const userId = session?.user?.id
       if (!userId) {
-        console.log('Background task skipped — no session')
+        console.log('Background task skipped – no session')
         return BackgroundTask.BackgroundTaskResult.Success
       }
       const scope: PersonalScope = { kind: 'personal', userId }
@@ -105,7 +105,7 @@ export async function unregisterBackgroundTaskAsync() {
   return BackgroundTask.unregisterTaskAsync(BACKGROUND_TASK_IDENTIFIER)
 }
 
-/** Dev / debug only — no-op outside `__DEV__` or on web. */
+/** Dev / debug only – no-op outside `__DEV__` or on web. */
 export async function triggerBackgroundTaskWorkerForTestingAsync() {
   if (!__DEV__) return
   if (Platform.OS !== 'ios' && Platform.OS !== 'android') return

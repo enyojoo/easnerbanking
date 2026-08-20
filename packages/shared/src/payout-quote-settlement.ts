@@ -24,7 +24,7 @@ export type PayoutSettlementLeg = {
   customerPrincipal: number
 }
 
-/** @deprecated Legacy Noah-shaped settlement block — prefer `settlement`. */
+/** @deprecated Legacy Noah-shaped settlement block – prefer `settlement`. */
 export type LegacyNoahPayoutSettlementLeg = {
   totalFee: number
   feeCurrency: string

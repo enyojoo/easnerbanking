@@ -76,7 +76,7 @@ export function resolvePayInProvider(input: {
 
   const meta = input.metadata ?? {}
 
-  // Match Office Platform Control toggles — capability flags alone must not activate pay-in.
+  // Match Office Platform Control toggles – capability flags alone must not activate pay-in.
   if (meta.noah_receive_enabled === true) return "noah"
   if (meta.yc_receive_enabled === true) return "yellowcard"
   if (meta.grid_receive_enabled === true) return "grid"
@@ -160,7 +160,7 @@ export function validatePayInAmountForProvider(
 
 export type ValidateBalancePayoutAmountInput = {
   providerRouting?: ProviderRoutingEntry[] | null
-  /** Explicit override — otherwise derived from routing priority 1. */
+  /** Explicit override – otherwise derived from routing priority 1. */
   provider?: PayoutProviderId
   sourceBalanceCurrency: string
   amountEntryMode?: "send" | "receive"

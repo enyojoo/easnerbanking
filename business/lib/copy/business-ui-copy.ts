@@ -313,9 +313,9 @@ export const INVOICE_LIST_COPY = {
   outstanding: "Outstanding",
   overdue: "Overdue",
   paidThisMonth: "Paid this month",
-  mixedCurrencies: "Mixed currencies — totals shown in your base currency where possible.",
-  emptyAll: "No invoices yet — create one to get started.",
-  emptyDraft: "No drafts — create an invoice to get started.",
+  mixedCurrencies: "Mixed currencies – totals shown in your base currency where possible.",
+  emptyAll: "No invoices yet – create one to get started.",
+  emptyDraft: "No drafts – create an invoice to get started.",
   emptyUnpaid: "No unpaid invoices.",
   emptySent: "No sent invoices.",
   emptyPastDue: "No past-due invoices.",
@@ -596,7 +596,9 @@ export const GRID_KYB_WIZARD_COPY = {
   peopleTitle: "Business owners",
   peopleSubtitle:
     "Add all individuals who own 25% or more of the business, or who have significant control over its operations.",
-  documentsTitle: "Add the required documents.",
+  peopleRolesHint:
+    "Select UBO for anyone with 25%+ ownership, and Control person for at least one person who runs the company – often the same person. The other roles are optional extras.",
+  documentsTitle: "Upload required documents",
   documentsSubtitle: "One file can often cover more than one requirement.",
   continue: "Continue",
   saveAndExit: "Save and exit",

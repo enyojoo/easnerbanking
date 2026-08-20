@@ -7,7 +7,7 @@
  * Optional:
  *   YC_PROBE_USER_ID=c7ace38e-be38-43e7-86e1-6e66b90d4243
  *   YC_PROBE_USD_AMOUNTS=1.79,10,50,100
- *   YC_PROBE_DRY_RUN=1   — skip POST /receive (pricing math only)
+ *   YC_PROBE_DRY_RUN=1   – skip POST /receive (pricing math only)
  */
 import { randomUUID } from "crypto"
 import {
@@ -36,7 +36,7 @@ const USD_AMOUNTS = String(process.env.YC_PROBE_USD_AMOUNTS || "1.79,10,50,100")
   .filter((n) => Number.isFinite(n) && n > 0)
 
 function fmt(n: number, d = 2) {
-  return Number.isFinite(n) ? n.toFixed(d) : "—"
+  return Number.isFinite(n) ? n.toFixed(d) : "–"
 }
 
 function pricingNoBuffer(usdCredit: number, customerSellRate: number, ycSellRate: number) {

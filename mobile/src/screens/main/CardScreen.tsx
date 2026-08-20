@@ -39,7 +39,7 @@ type PreviewCard = {
   expiryDate: string
 }
 
-/** Preview — single placeholder until API-backed carousel; layout stays multi-card ready. */
+/** Preview – single placeholder until API-backed carousel; layout stays multi-card ready. */
 const MOCK_CARDS: PreviewCard[] = [
   {
     id: '2',

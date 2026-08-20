@@ -1,9 +1,9 @@
 /**
- * Until African banking (Tier 2) is available in the app — gate local rails in UI.
+ * Until African banking (Tier 2) is available in the app – gate local rails in UI.
  */
 export const TIER2_COMPLETE_PLACEHOLDER = false
 
-/** Cards / Tier 3 — not wired yet; More tab badge uses this with Tier 2 for “Tier x” display. */
+/** Cards / Tier 3 – not wired yet; More tab badge uses this with Tier 2 for “Tier x” display. */
 export const TIER3_COMPLETE_PLACEHOLDER = false
 
 /**

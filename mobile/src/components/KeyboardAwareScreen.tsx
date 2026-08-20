@@ -9,7 +9,7 @@ type Props = KeyboardAwareScrollViewProps & {
 }
 
 /**
- * Scroll surface that tracks the software keyboard — pilot replacement for KeyboardAvoidingView + ScrollView.
+ * Scroll surface that tracks the software keyboard – pilot replacement for KeyboardAvoidingView + ScrollView.
  */
 export default function KeyboardAwareScreen({
   children,

@@ -8,7 +8,7 @@ import { resolveWalletOwnerIdForEasnerContext } from "@/lib/wallet/resolve-walle
 import { DEFAULT_INDIVIDUAL_VAULTS, type WalletVaultSpec } from "@/lib/wallet/vault-spec"
 
 export type TurnkeyDepositLine = {
-  /** SPL token account (ATA) for USDC/EURC deposits — only returned after on-chain ATA is verified. */
+  /** SPL token account (ATA) for USDC/EURC deposits – only returned after on-chain ATA is verified. */
   address: string
   /** Turnkey Solana vault (wallet signer). Use for Noah on-chain workflows, not raw SPL deposits. */
   ownerAddress: string

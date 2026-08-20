@@ -146,7 +146,7 @@ async function prepareGridCrossBorderQuote(input: GridCrossBorderTransferInput) 
   }
 }
 
-/** Indicative cross-border pricing from `grid_rates` — no Grid API calls. */
+/** Indicative cross-border pricing from `grid_rates` – no Grid API calls. */
 export async function previewGridCrossBorderQuote(input: GridCrossBorderTransferInput) {
   const prepared = await prepareGridCrossBorderQuote(input)
   const expiresAt = new Date(Date.now() + getGridQuoteTtlMs()).toISOString()

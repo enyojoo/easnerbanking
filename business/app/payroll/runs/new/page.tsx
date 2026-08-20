@@ -1079,7 +1079,7 @@ function RunSummary({
           />
           <ReviewItem
             label={draft.scheduleId ? "Scheduled payday" : "Payday"}
-            value={draft.payday ? formatDate(draft.payday) : "—"}
+            value={draft.payday ? formatDate(draft.payday) : "–"}
             row
           />
           <ReviewItem

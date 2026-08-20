@@ -179,7 +179,7 @@ describe("attachRealtime INSERT prepend path", () => {
     expect(items).toHaveLength(1)
   })
 
-  it("skips hidden_from_feed rows — does not prepend or invalidate", async () => {
+  it("skips hidden_from_feed rows – does not prepend or invalidate", async () => {
     const invalidateSpy = vi.spyOn(qc, "invalidateQueries")
     seedListCache(qc, [])
 
@@ -205,7 +205,7 @@ describe("attachRealtime INSERT prepend path", () => {
 
   it("falls back to invalidateQueries when no warm cache exists (cold start)", async () => {
     const invalidateSpy = vi.spyOn(qc, "invalidateQueries")
-    // No seedListCache — cold start
+    // No seedListCache – cold start
 
     triggerInsert(baseRow())
     await flushBatcher()

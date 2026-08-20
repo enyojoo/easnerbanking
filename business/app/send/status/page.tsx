@@ -4,7 +4,7 @@ import { Suspense, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 
-/** Legacy URL: `/send/status?id=ETID...` — redirect to unified transaction detail. */
+/** Legacy URL: `/send/status?id=ETID...` – redirect to unified transaction detail. */
 function SendStatusRedirect() {
   const searchParams = useSearchParams()
   const router = useRouter()

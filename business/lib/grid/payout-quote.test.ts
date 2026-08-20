@@ -32,7 +32,7 @@ const customerRate = receiveAmount / customerPrincipal
 const gridSendingUsd = 1.501175
 
 describe("computeGridLockedBalancePayoutPricing", () => {
-  it("debits Grid totalSendingAmount plus FX margin and 1% — no YC 2% pad", () => {
+  it("debits Grid totalSendingAmount plus FX margin and 1% – no YC 2% pad", () => {
     const locked = computeGridLockedBalancePayoutPricing({
       receiveAmount,
       customerRate,

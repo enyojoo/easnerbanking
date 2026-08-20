@@ -1,6 +1,6 @@
 /**
  * Indicative USD-per-unit for send UI when Noah has no pair.
- * Execution uses Noah / Easner quote paths — not this table.
+ * Execution uses Noah / Easner quote paths – not this table.
  */
 export const sendFlowReferenceUsdPerUnit: Record<string, number> = {
   USD: 1,

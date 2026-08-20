@@ -12,7 +12,7 @@ module.exports = function (api) {
         {
           extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
           alias: {
-            // Subpaths must precede `@easner/shared` — otherwise module-resolver maps
+            // Subpaths must precede `@easner/shared` – otherwise module-resolver maps
             // `@easner/shared/currency-flag` → `packages/shared/currency-flag` (missing).
             '@easner/shared/warm-flags': path.resolve(
               __dirname,
@@ -28,7 +28,7 @@ module.exports = function (api) {
             ),
             // Monorepo: shared package source (not only root node_modules).
             '@easner/shared': path.resolve(__dirname, '../packages/shared'),
-            // @noble/hashes: do not alias here — subpath imports like `@noble/hashes/pbkdf2.js`
+            // @noble/hashes: do not alias here – subpath imports like `@noble/hashes/pbkdf2.js`
             // must resolve via package `exports` (see mobile/metro.config.js extraNodeModules).
           },
         },

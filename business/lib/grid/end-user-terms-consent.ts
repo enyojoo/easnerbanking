@@ -3,7 +3,7 @@ import type { User } from "@supabase/supabase-js"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { gridFetch } from "./http"
 
-/** Grid API acceptanceMethod enum — Easner Terms CTA is click-to-accept. */
+/** Grid API acceptanceMethod enum – Easner Terms CTA is click-to-accept. */
 export type GridAcceptanceMethod = "CHECKBOX" | "CLICK_TO_ACCEPT"
 
 /** Local audit trail method (stored on users.grid_end_user_terms_accept_method). */
@@ -66,7 +66,7 @@ export async function fetchCurrentEndUserTermsVersion(opts?: {
   return { version, url }
 }
 
-/** Test helper — clear in-memory terms cache. */
+/** Test helper – clear in-memory terms cache. */
 export function clearEndUserTermsCacheForTests(): void {
   termsCache = null
 }

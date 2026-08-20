@@ -102,9 +102,9 @@ const YC_RATE_SOURCES: Array<{
 ]
 
 function formatAsOf(raw: string | undefined): string {
-  if (!raw) return "—"
+  if (!raw) return "–"
   const t = new Date(raw)
-  if (!Number.isFinite(t.getTime())) return "—"
+  if (!Number.isFinite(t.getTime())) return "–"
   return t.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
 }
 
@@ -199,7 +199,7 @@ export function OfficeYcRatesPanel() {
         code: source.code,
         pairCount: pairs.length,
         activePairCount: activePairs.length,
-        lastUpdate: lastMs > 0 ? formatAsOf(new Date(lastMs).toISOString()) : "—",
+        lastUpdate: lastMs > 0 ? formatAsOf(new Date(lastMs).toISOString()) : "–",
       }
     })
   }, [rates])
@@ -215,7 +215,7 @@ export function OfficeYcRatesPanel() {
           result.pruned ? `, pruned ${result.pruned} crypto` : ""
         }${
           result.skippedPairs.length
-            ? ` — ${result.skippedPairs.slice(0, 6).join(", ")}`
+            ? ` – ${result.skippedPairs.slice(0, 6).join(", ")}`
             : ""
         }`,
       )
@@ -340,7 +340,7 @@ export function OfficeYcRatesPanel() {
                     <TableCell className="font-mono">{source.code}</TableCell>
                     <TableCell>
                       {source.pairCount === 0 ? (
-                        <span className="text-muted-foreground text-sm">None — run Sync rates</span>
+                        <span className="text-muted-foreground text-sm">None – run Sync rates</span>
                       ) : (
                         <span>
                           {source.activePairCount} active
@@ -383,7 +383,7 @@ export function OfficeYcRatesPanel() {
         <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
           <DialogHeader className="border-b pb-4">
             <DialogTitle>
-              Edit Yellowcard rates — {editingMeta?.name ?? editingSource} ({editingSource})
+              Edit Yellowcard rates – {editingMeta?.name ?? editingSource} ({editingSource})
             </DialogTitle>
           </DialogHeader>
 

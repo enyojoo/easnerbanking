@@ -12,7 +12,7 @@ type StableAvatarProps = {
   imageClassName?: string
 }
 
-/** Avatar shell that avoids Radix load flicker — reuses warmed/cached profile images. */
+/** Avatar shell that avoids Radix load flicker – reuses warmed/cached profile images. */
 export function StableAvatar({ src, fallback, className, imageClassName }: StableAvatarProps) {
   const normalized = normalizeProfileImageUrl(src)
   const [ready, setReady] = useState(() => Boolean(normalized && isImageWarm(normalized)))

@@ -21,7 +21,7 @@ export class NoahCustomerNotFoundAfterTriesError extends Error {
   }
 }
 
-/** True when GET /customers/:id missed — prefer `NoahHttpError.status === 404` (Noah `Detail` text is not stable). */
+/** True when GET /customers/:id missed – prefer `NoahHttpError.status === 404` (Noah `Detail` text is not stable). */
 export function isNoahCustomerNotFoundError(e: unknown): boolean {
   if (e instanceof NoahHttpError) return e.status === 404
   const msg = e instanceof Error ? e.message : String(e)
@@ -29,7 +29,7 @@ export function isNoahCustomerNotFoundError(e: unknown): boolean {
 }
 
 /**
- * GET /customers/:id — try primary id, bare compact UUID, `eind_{uuid}`, and hyphenated auth UUID (Noah envs differ).
+ * GET /customers/:id – try primary id, bare compact UUID, `eind_{uuid}`, and hyphenated auth UUID (Noah envs differ).
  * Persists `resolvedCustomerId` via callers’ `syncNoahCustomerToSupabase`.
  */
 export async function fetchNoahCustomerWithIndividualFallback(
@@ -70,7 +70,7 @@ export async function fetchNoahCustomerWithIndividualFallback(
 }
 
 /**
- * GET /customers/:id — try stored id, `ebiz_{uuid}`, compact UUID, and hyphenated business id.
+ * GET /customers/:id – try stored id, `ebiz_{uuid}`, compact UUID, and hyphenated business id.
  */
 export async function fetchNoahCustomerWithBusinessFallback(
   businessId: string,

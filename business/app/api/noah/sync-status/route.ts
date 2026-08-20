@@ -108,7 +108,7 @@ async function runSyncFromNoah(request: Request) {
       ...(needsFiatAccountsAfter && kyc === "approved"
         ? {
             hint:
-              "KYC/KYB is approved but USD/EUR virtual account ids are still missing. Noah may not have issued payment methods yet — retry sync-status in a few minutes or check the Noah dashboard.",
+              "KYC/KYB is approved but USD/EUR virtual account ids are still missing. Noah may not have issued payment methods yet – retry sync-status in a few minutes or check the Noah dashboard.",
           }
         : {}),
     })

@@ -21,7 +21,7 @@ export function isStripeConnectEnabled(): boolean {
 }
 
 /**
- * Same rail as invoice Pay online — used by Payment Links and the website embed.
+ * Same rail as invoice Pay online – used by Payment Links and the website embed.
  * Optional kill-switch: ONLINE_CHECKOUT_ENABLED=false turns off Collections
  * without disabling invoice Pay online.
  */

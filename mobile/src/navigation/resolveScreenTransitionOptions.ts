@@ -84,7 +84,7 @@ function nativePresetForIntent(
   }
 }
 
-/** Core resolver — pure function, testable without React Navigation. */
+/** Core resolver – pure function, testable without React Navigation. */
 export function resolveScreenTransitionOptions(
   ctx: ResolveTransitionContext,
 ): StackNavigationOptions {
@@ -135,7 +135,7 @@ export function resolveScreenTransitionOptions(
   }
 
   if (routeName === 'MainTabs') {
-    // MainTabs is always the stack root — instant avoids card interpolator work on cold mount (PIN unlock).
+    // MainTabs is always the stack root – instant avoids card interpolator work on cold mount (PIN unlock).
     return {
       ...base,
       gestureEnabled: false,
@@ -143,7 +143,7 @@ export function resolveScreenTransitionOptions(
     }
   }
 
-  // Auth/onboarding/PIN gate stacks mount a single root screen on cold entry — instant avoids interpolator work.
+  // Auth/onboarding/PIN gate stacks mount a single root screen on cold entry – instant avoids interpolator work.
   if (
     !previousRouteName &&
     entry.intent === 'authGate' &&
@@ -198,7 +198,7 @@ export function createScreenTransitionOptions(routeName: ScreenRouteName) {
   }
 }
 
-/** For decorative enter — true when stack transition already animates content. */
+/** For decorative enter – true when stack transition already animates content. */
 export function shouldSkipDecorativeEnterForRoute(
   ctx: ResolveTransitionContext,
 ): boolean {

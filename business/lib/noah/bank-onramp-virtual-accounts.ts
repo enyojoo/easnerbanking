@@ -258,7 +258,7 @@ export type ReprovisionBankOnrampRailResult = {
 }
 
 /**
- * Force Noah `bank-deposit-to-onchain-address` for one rail — even when a VA already exists.
+ * Force Noah `bank-deposit-to-onchain-address` for one rail – even when a VA already exists.
  * Use when migrating destination (e.g. user vault → deposit omnibus) for approved customers.
  */
 export async function reprovisionBankOnrampRail(

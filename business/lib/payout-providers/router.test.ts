@@ -24,7 +24,7 @@ vi.mock("./grid-provider", () => ({
 }))
 
 describe("selectProvider", () => {
-  it("honors Office primary only — does not fall through to secondary", async () => {
+  it("honors Office primary only – does not fall through to secondary", async () => {
     const { yellowcardPayoutProvider } = await import("./yellowcard-provider")
     vi.mocked(yellowcardPayoutProvider.supports).mockResolvedValueOnce(false)
     const ctx: CorridorContext = {

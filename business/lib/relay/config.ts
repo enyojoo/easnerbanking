@@ -61,7 +61,7 @@ const RELAY_RATE_PROBE_TRON_ADDRESS_DEFAULT = "TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLS
 /**
  * Easner-controlled Tron address for Relay Tron USDT deposit provisioning.
  * Used as `user` + `refundTo` when requesting open deposit addresses (origin = Tron).
- * Same idea as WALLET_SEND_FEE_SOLANA_ADDRESS_* — one platform treasury, not per customer.
+ * Same idea as WALLET_SEND_FEE_SOLANA_ADDRESS_* – one platform treasury, not per customer.
  */
 export function resolveRelayTronPlatformAddress(): string | null {
   return String(process.env.RELAY_TRON_PLATFORM_ADDRESS || "").trim() || null

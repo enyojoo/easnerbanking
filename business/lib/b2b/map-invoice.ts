@@ -190,7 +190,7 @@ export function mapRowToInvoice(row: B2bInvoiceRow): Invoice {
   return inv
 }
 
-/** Postgres `uuid` rejects malformed strings — invalid ids must become null. */
+/** Postgres `uuid` rejects malformed strings – invalid ids must become null. */
 export function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim())
 }
@@ -202,7 +202,7 @@ function safeTrimText(v: unknown, fallback: string): string {
   return String(v).trim() || fallback
 }
 
-/** Postgres `date` — only pass YYYY-MM-DD or null. */
+/** Postgres `date` – only pass YYYY-MM-DD or null. */
 function normalizeDueDate(raw: unknown): string | null {
   if (raw == null) return null
   const s = typeof raw === "string" ? raw.trim() : String(raw).trim()

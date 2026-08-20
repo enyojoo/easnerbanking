@@ -1,6 +1,6 @@
 /**
  * List feeds order by `occurred_at DESC NULLS LAST, created_at DESC`.
- * Rows without occurred_at sink below every dated row — set at insert for pending flows.
+ * Rows without occurred_at sink below every dated row – set at insert for pending flows.
  */
 import { resolveLedgerWhenAt } from "@easner/shared"
 
@@ -21,7 +21,7 @@ export function resolveLedgerOccurredAt(input: {
   return input.fallback ?? ledgerOccurredAtForNewRow()
 }
 
-/** User-facing "When" from a ledger row — first DB insert (`created_at`), never updated_at / settled_at. */
+/** User-facing "When" from a ledger row – first DB insert (`created_at`), never updated_at / settled_at. */
 export function resolveLedgerWhenAtFromRow(row: {
   occurred_at?: unknown
   created_at?: unknown

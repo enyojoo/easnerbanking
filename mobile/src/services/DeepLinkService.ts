@@ -36,7 +36,7 @@ export class DeepLinkService {
     if (Platform.OS === 'web') return
     try {
       // Handle deep links when the app is already running.
-      // Do NOT call `getInitialURL()` here — that URL is single-flight on some platforms, and
+      // Do NOT call `getInitialURL()` here – that URL is single-flight on some platforms, and
       // `AuthContext` must be the one to read it for OAuth (PKCE + fragment) during cold start.
       const subscription = Linking.addEventListener('url', this.handleDeepLink)
 

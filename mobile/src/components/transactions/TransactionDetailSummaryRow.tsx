@@ -16,7 +16,7 @@ type Props = {
   children?: ReactNode
 }
 
-/** Bordered label/value row — shared by deposit and payout transaction detail cards. */
+/** Bordered label/value row – shared by deposit and payout transaction detail cards. */
 export function TransactionDetailSummaryRow({
   label,
   value,
@@ -89,7 +89,7 @@ export function TransactionDetailCopyableValue({
   )
 }
 
-/** Shared row chrome — review confirm, transaction detail, and YC deposit cards. */
+/** Shared row chrome – review confirm, transaction detail, and YC deposit cards. */
 export const transactionDetailRowStyles = StyleSheet.create({
   row: {
     flexDirection: 'row',
@@ -119,7 +119,7 @@ export const transactionDetailRowStyles = StyleSheet.create({
     marginLeft: spacing[2],
   },
   valueBold: {
-    // Same size as body — weight only for primary money totals.
+    // Same size as body – weight only for primary money totals.
     fontFamily: fontFamily.semibold,
   },
   valueMono: {

@@ -2666,7 +2666,7 @@ const styles = StyleSheet.create({
     color: colors.text.inverse,
     fontFamily: fontFamily.semibold,
   },
-  /** White SectionCard frame — flat rows with hairline dividers (More-screen parity). */
+  /** White SectionCard frame – flat rows with hairline dividers (More-screen parity). */
   recipientsTray: {
     ...surfaceFrameStyle(colors),
     marginHorizontal: spacing[5],

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 
 /**
- * GET — smoke test for Phase 0: Bearer token resolves to a Supabase user; optional admin_users check.
+ * GET – smoke test for Phase 0: Bearer token resolves to a Supabase user; optional admin_users check.
  */
 export async function GET(request: Request) {
   const user = await getUserFromApiRequest(request)

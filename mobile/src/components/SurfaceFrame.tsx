@@ -12,7 +12,7 @@ type Props = ViewProps &
   }
 
 /**
- * Theme-aware raised surface — same tokens as More/Dashboard section trays.
+ * Theme-aware raised surface – same tokens as More/Dashboard section trays.
  */
 export function SurfaceFrame({ children, style, shadow, radius, ...rest }: Props) {
   const c = useThemeColors()

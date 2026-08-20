@@ -82,7 +82,7 @@ async function main() {
     ycStatus !== "completed" &&
     ycStatus !== "settlement_completed"
   ) {
-    throw new Error(`YC status is ${ycStatus}, not settlement_complete — refusing replay`)
+    throw new Error(`YC status is ${ycStatus}, not settlement_complete – refusing replay`)
   }
 
   const envelope = buildYellowcardPollWebhookEnvelope("receive", receive)

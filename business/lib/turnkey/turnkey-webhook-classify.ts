@@ -30,7 +30,7 @@ function collectActivityTypes(payload: TurnkeyPayload): string[] {
   return [...types]
 }
 
-/** Turnkey balance webhooks (`balances:confirmed` / `balances:finalized`) — not activity no-op. */
+/** Turnkey balance webhooks (`balances:confirmed` / `balances:finalized`) – not activity no-op. */
 export function isTurnkeyBalanceConfirmedPayload(payload: unknown): boolean {
   if (isTurnkeyBalancesConfirmedWebhook(payload)) return true
   if (!payload || typeof payload !== "object") return false

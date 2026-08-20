@@ -25,7 +25,7 @@ type Row = {
 
 function fmtFiat(amount: number | string | null, currency: string | null) {
   const n = typeof amount === "string" ? Number.parseFloat(amount) : amount
-  if (amount == null || !Number.isFinite(n)) return "—"
+  if (amount == null || !Number.isFinite(n)) return "–"
   const c = (currency || "USD").toUpperCase()
   return `${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${c}`
 }
@@ -89,14 +89,14 @@ export default function TerminalPage() {
                       <TableRow key={s.id}>
                         <TableCell>{fmtFiat(s.fiat_amount, s.fiat_currency)}</TableCell>
                         <TableCell className="text-sm">
-                          {s.crypto_currency && s.network ? `${s.crypto_currency} · ${s.network}` : "—"}
+                          {s.crypto_currency && s.network ? `${s.crypto_currency} · ${s.network}` : "–"}
                           {s.crypto_amount_expected ? (
                             <span className="block text-muted-foreground text-xs">Exp. {s.crypto_amount_expected}</span>
                           ) : null}
                         </TableCell>
                         <TableCell>{s.status}</TableCell>
                         <TableCell className="text-sm">
-                          {s.settlement_destination ?? "—"}
+                          {s.settlement_destination ?? "–"}
                           {s.balance_currency ? (
                             <span className="block text-muted-foreground text-xs">{s.balance_currency}</span>
                           ) : null}

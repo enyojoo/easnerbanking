@@ -6,7 +6,7 @@ import { ListRowSkeleton } from './ListRowSkeleton'
 import { colors, spacing, borderRadius } from '../../theme'
 
 /**
- * Scroll content for transaction detail loading — matches hero + summary SectionCards.
+ * Scroll content for transaction detail loading – matches hero + summary SectionCards.
  * Parent supplies ScrollView + padding (see TransactionDetailsScreen).
  */
 export function TransactionDetailsBodySkeleton() {

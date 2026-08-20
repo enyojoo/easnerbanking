@@ -115,7 +115,7 @@ export function enrichOfficeLedgerForUserDisplay(row: OfficeLedgerTransaction): 
     ycMode: resolveOfficeYcMode(txRow),
     payInRail: resolveOfficePayInRail(txRow),
     flowLabel: officeTxFlowLabel(txRow),
-    who: account.label || "—",
+    who: account.label || "–",
   }
 }
 

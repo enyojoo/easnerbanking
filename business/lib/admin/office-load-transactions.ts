@@ -3,7 +3,7 @@ import { OFFICE_LEDGER_LIST_SELECT } from "@/lib/ledger/ledger-select"
 
 type AdminClient = ReturnType<typeof createSupabaseAdmin>
 
-/** @deprecated Use OFFICE_LEDGER_LIST_SELECT — no payload on list reads. */
+/** @deprecated Use OFFICE_LEDGER_LIST_SELECT – no payload on list reads. */
 export const OFFICE_LEDGER_TX_SELECT = OFFICE_LEDGER_LIST_SELECT
 
 export type OfficeLedgerTransaction = {

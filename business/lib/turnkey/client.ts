@@ -52,7 +52,7 @@ export function getTurnkeyApiClient() {
 
 /**
  * Root client scoped to a sub-organization (provisioner key registered as sub-org root).
- * Used for createWallet, createPolicy, createUsers — not for day-to-day sends once DA is enabled.
+ * Used for createWallet, createPolicy, createUsers – not for day-to-day sends once DA is enabled.
  */
 export function getTurnkeyRootApiClientForSubOrganization(subOrganizationId: string) {
   if (!isTurnkeyConfigured()) return null

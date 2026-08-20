@@ -56,7 +56,7 @@ export function quoteMetaKey(meta: CrossBorderQuoteStashMeta): string {
   ].join('|')
 }
 
-/** Preview quote from `/quote` — enough for review rows while leg2 locks. */
+/** Preview quote from `/quote` – enough for review rows while leg2 locks. */
 export function isUsableCrossBorderQuotePreview(
   quote: YcCrossBorderQuoteResult | null | undefined,
 ): quote is YcCrossBorderQuoteResult {
@@ -68,7 +68,7 @@ export function isUsableCrossBorderQuotePreview(
   )
 }
 
-/** Leg2 locked — review Continue can trigger leg1 confirm. */
+/** Leg2 locked – review Continue can trigger leg1 confirm. */
 export function isCrossBorderLeg2Locked(
   quote: YcCrossBorderQuoteResult | null | undefined,
   leg2DraftId?: string | null,
@@ -79,7 +79,7 @@ export function isCrossBorderLeg2Locked(
   )
 }
 
-/** Locked order from `/confirm` — required before pay-in instructions finalize. */
+/** Locked order from `/confirm` – required before pay-in instructions finalize. */
 export function isCompleteCrossBorderQuote(
   quote: YcCrossBorderQuoteResult | null | undefined,
 ): quote is YcCrossBorderQuoteResult {

@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     : null
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !surface) {
-    // Invalid input — let the client-side form validation handle it; don't block.
+    // Invalid input – let the client-side form validation handle it; don't block.
     return respond(200, { ok: true })
   }
 
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
 
   if (lookupError) {
     console.warn("[signup-precheck] users lookup failed:", lookupError.message)
-    // Fail open — client + Supabase duplicate fallbacks still cover confirmed accounts.
+    // Fail open – client + Supabase duplicate fallbacks still cover confirmed accounts.
     return respond(200, { ok: true })
   }
 
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  // Row exists without a normalized role — still an account; ask them to sign in.
+  // Row exists without a normalized role – still an account; ask them to sign in.
   const block = resolveSignupExistingAccountBlock({
     surface,
     existingRole: surface === "business_web" ? "business" : "individual",

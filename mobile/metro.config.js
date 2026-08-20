@@ -51,7 +51,7 @@ for (const pkg of ['@supabase/supabase-js']) {
     )
     extraNodeModules[pkg] = dir
   } catch {
-    // Missing at config load — install issue; Metro will surface the same as before.
+    // Missing at config load – install issue; Metro will surface the same as before.
   }
 }
 

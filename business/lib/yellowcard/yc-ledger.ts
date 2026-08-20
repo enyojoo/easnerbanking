@@ -1,5 +1,5 @@
 /**
- * Yellowcard ledger helpers — Noah-parity metadata, lookups, and refund flags.
+ * Yellowcard ledger helpers – Noah-parity metadata, lookups, and refund flags.
  */
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { YcFundBalanceDepositReviewSnapshot } from "@easner/shared"

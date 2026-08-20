@@ -51,11 +51,11 @@ type BusinessRow = {
 
 function displayText(v: string | null | undefined): string {
   const t = v?.trim()
-  return t ? t : "—"
+  return t ? t : "–"
 }
 
 function displayCurrencies(arr: string[] | null | undefined): string {
-  if (!arr || arr.length === 0) return "—"
+  if (!arr || arr.length === 0) return "–"
   return arr.join(", ")
 }
 
@@ -150,7 +150,7 @@ function BusinessesPageInner() {
   const ownerLabel = (o: BusinessRow) => {
     if (o.owner_name?.trim()) return o.owner_name.trim()
     if (o.owner_email?.trim()) return o.owner_email.trim()
-    return o.owner_user_id ? o.owner_user_id.slice(0, 8) + "…" : "—"
+    return o.owner_user_id ? o.owner_user_id.slice(0, 8) + "…" : "–"
   }
 
   const stats = {
@@ -181,7 +181,7 @@ function BusinessesPageInner() {
               <Building2 className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-gray-900">{loading ? "—" : stats.total}</div>
+              <div className="text-2xl font-bold text-gray-900">{loading ? "–" : stats.total}</div>
               <p className="text-xs text-muted-foreground">Registered workspaces</p>
             </CardContent>
           </Card>
@@ -191,7 +191,7 @@ function BusinessesPageInner() {
               <Building2 className="h-4 w-4 text-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-gray-900">{loading ? "—" : stats.withOwner}</div>
+              <div className="text-2xl font-bold text-gray-900">{loading ? "–" : stats.withOwner}</div>
               <p className="text-xs text-muted-foreground">Businesses with a linked owner user</p>
             </CardContent>
           </Card>
@@ -255,7 +255,7 @@ function BusinessesPageInner() {
                         data-business-row={o.id}
                         className={highlightBusinessId === o.id ? "bg-muted/50" : undefined}
                       >
-                        <TableCell className="font-medium">{o.name || "—"}</TableCell>
+                        <TableCell className="font-medium">{o.name || "–"}</TableCell>
                         <TableCell>
                           {o.owner_user_id ? (
                             <Link
@@ -265,20 +265,20 @@ function BusinessesPageInner() {
                               {ownerLabel(o)}
                             </Link>
                           ) : (
-                            <span className="text-muted-foreground">—</span>
+                            <span className="text-muted-foreground">–</span>
                           )}
                         </TableCell>
                         <TableCell>
                           {o.logo_url ? (
                             <img src={o.logo_url} alt="" className="h-8 w-8 rounded object-cover border" />
                           ) : (
-                            "—"
+                            "–"
                           )}
                         </TableCell>
                         <TableCell className="text-sm">
                           {(() => {
                             const t = o.easetag ?? o.slug
-                            return t ? `@${t}` : "—"
+                            return t ? `@${t}` : "–"
                           })()}
                         </TableCell>
                         <TableCell className="max-w-[220px] text-sm">{businessTypeDisplayText(o.business_type)}</TableCell>
@@ -305,7 +305,7 @@ function BusinessesPageInner() {
           {selectedBusiness && (
             <>
               <DialogHeader className="shrink-0 space-y-0 border-b px-6 py-4 pr-12 text-left">
-                <DialogTitle>Business — {selectedBusiness.name || "—"}</DialogTitle>
+                <DialogTitle>Business – {selectedBusiness.name || "–"}</DialogTitle>
                 <DialogDescription className="sr-only">
                   Business profile, provider references, and processing fee overrides.
                 </DialogDescription>
@@ -331,7 +331,7 @@ function BusinessesPageInner() {
                           <DetailRow label="Easetag">
                             {(() => {
                               const t = selectedBusiness.easetag ?? selectedBusiness.slug
-                              return t ? `@${t}` : "—"
+                              return t ? `@${t}` : "–"
                             })()}
                           </DetailRow>
                         </div>
@@ -348,7 +348,7 @@ function BusinessesPageInner() {
                             {ownerLabel(selectedBusiness)}
                           </Link>
                         ) : (
-                          "—"
+                          "–"
                         )}
                       </DetailRow>
                     </div>
@@ -364,7 +364,7 @@ function BusinessesPageInner() {
                     </div>
                     <p className="mt-3 text-sm font-medium text-gray-900">Description</p>
                     <p className="mt-1 text-sm text-gray-700 whitespace-pre-wrap rounded-md border bg-muted/30 p-3">
-                      {selectedBusiness.description?.trim() ? selectedBusiness.description : "—"}
+                      {selectedBusiness.description?.trim() ? selectedBusiness.description : "–"}
                     </p>
                   </div>
 
@@ -405,7 +405,7 @@ function BusinessesPageInner() {
                             {selectedBusiness.website}
                           </a>
                         ) : (
-                          "—"
+                          "–"
                         )}
                       </DetailRow>
                       <DetailRow label="Support email">{displayText(selectedBusiness.support_email)}</DetailRow>

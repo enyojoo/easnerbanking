@@ -1,5 +1,5 @@
 /**
- * Restricted industries — stub until Noah provides the official list.
+ * Restricted industries – stub until Noah provides the official list.
  */
 
 export const NOAH_RESTRICTED_INDUSTRIES_STUB: readonly string[] = []

@@ -1,4 +1,4 @@
-/* Easner Design System — Office admin
+/* Easner Design System – Office admin
  * Mirrors business/app/globals.css. Single source of truth:
  * packages/shared/src/design/tokens.ts
  * Typography: sans-first (docs/design-system.md §3); no separate display serif stack.
@@ -29,7 +29,7 @@
   --muted: 42 20% 90%;
   --muted-foreground: 210 7% 42%;
 
-  /* Subtle neutral hover/focus highlight — used by shadcn DropdownMenu,
+  /* Subtle neutral hover/focus highlight – used by shadcn DropdownMenu,
      Select, Command, etc. and by custom hover:bg-accent/* call sites.
      Must be a quiet surface so text-foreground stays readable on hover.
      Primary blue is separate; success uses --success. */
@@ -90,7 +90,7 @@
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  /* Alias serif slot to sans — Easner Office follows the same sans-first contract (§3). */
+  /* Alias serif slot to sans – Easner Office follows the same sans-first contract (§3). */
   --font-serif: var(--font-geist-sans);
 
   --color-background: hsl(var(--background));
@@ -181,7 +181,7 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* Display helpers — same stack as sans; tighter tracking for hero figures */
+  /* Display helpers – same stack as sans; tighter tracking for hero figures */
   .font-serif,
   .font-display {
     font-family: var(--font-serif);

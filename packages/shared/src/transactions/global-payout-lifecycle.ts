@@ -54,7 +54,7 @@ function crossBorderFailedDescription(meta: Record<string, unknown>): string {
     return "We couldn't receive your local payment. Please try again or contact support with your transaction reference."
   }
   if (leg === "leg2") {
-    return "We received your payment but couldn't complete the transfer to the recipient. Our team will follow up — contact support with your transaction reference."
+    return "We received your payment but couldn't complete the transfer to the recipient. Our team will follow up – contact support with your transaction reference."
   }
   return "This transfer could not be completed. Please contact support with your transaction reference."
 }

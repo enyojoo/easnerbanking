@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     gap: spacing[2],
   },
   base: {
-    /** Pill shape — matches `GlossyPrimaryButton` / Change Password CTAs. */
+    /** Pill shape – matches `GlossyPrimaryButton` / Change Password CTAs. */
     borderRadius: borderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',

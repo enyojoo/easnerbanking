@@ -17,7 +17,7 @@ export type YcQuoteSummary = {
   processingFee: number
   /** All YC leg fees (USD). */
   ycLegFeesUsd: number
-  /** Easner 1% + YC leg fees (USD) — canonical stored value. */
+  /** Easner 1% + YC leg fees (USD) – canonical stored value. */
   displayProcessingFee: number
   /** Pay-in currency display only (YC pay-in + cross-border). */
   displayProcessingFeeLocal?: number

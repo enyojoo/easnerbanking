@@ -17,7 +17,7 @@ function sortResidenceCountries(countries: Country[]): Country[] {
   })
 }
 
-/** Pre-sorted local catalog — signup picker renders instantly with no async work. */
+/** Pre-sorted local catalog – signup picker renders instantly with no async work. */
 export const RESIDENCE_COUNTRY_CATALOG = sortResidenceCountries(
   countryService.getAllIncludingUnsupportedSync(),
 )

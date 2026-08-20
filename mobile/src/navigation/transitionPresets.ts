@@ -1,5 +1,5 @@
 /**
- * Stack transition presets — single source for AppNavigator + transition resolver.
+ * Stack transition presets – single source for AppNavigator + transition resolver.
  *
  * Product policy:
  * - iOS + Android share horizontal push for stack navigation (unified motion language).
@@ -12,7 +12,7 @@ import { TransitionPresets } from '@react-navigation/stack'
 import type { StackCardInterpolationProps } from '@react-navigation/stack'
 import { USE_NATIVE_DRIVER } from '../lib/animation'
 
-/** Keep in sync with `duration` in `../theme/index.ts` (avoid importing theme — pulls RN native deps in Jest). */
+/** Keep in sync with `duration` in `../theme/index.ts` (avoid importing theme – pulls RN native deps in Jest). */
 const duration = {
   instant: 0,
   fast: 150,
@@ -96,7 +96,7 @@ function modalBottomInterpolator({ current, layouts }: StackCardInterpolationPro
   }
 }
 
-/** Instant stack transitions on web — hubs and zero-duration native pairs. */
+/** Instant stack transitions on web – hubs and zero-duration native pairs. */
 export function webInstantPreset() {
   return Platform.OS === 'web'
     ? ({
@@ -111,7 +111,7 @@ export function webInstantPreset() {
       } as const)
 }
 
-/** @deprecated Use webInstantPreset — kept for call-site compatibility during migration. */
+/** @deprecated Use webInstantPreset – kept for call-site compatibility during migration. */
 export const webStackPreset = webInstantPreset
 
 /** Opacity crossfade for web stack navigations (avoids broken card transforms on RN Web). */
@@ -176,7 +176,7 @@ export function horizontalPushPreset(options: HorizontalPushOptions = {}) {
   }
 }
 
-/** Main app stack — horizontal push on native; web fade handled by resolver tier. */
+/** Main app stack – horizontal push on native; web fade handled by resolver tier. */
 export function mainStackPreset(gestureEnabled = true) {
   if (Platform.OS === 'web') {
     return webFadePreset('mobile')
@@ -184,7 +184,7 @@ export function mainStackPreset(gestureEnabled = true) {
   return horizontalPushPreset({ gestureEnabled, openMs: 180, closeMs: 150 })
 }
 
-/** Send / pay / receive flow steps — full horizontal push with wider gesture zone on iOS. */
+/** Send / pay / receive flow steps – full horizontal push with wider gesture zone on iOS. */
 export function flowStepPreset(gestureEnabled = true) {
   if (Platform.OS === 'web') {
     return webFadePreset('mobile')
@@ -202,13 +202,13 @@ export function sendFlowStandardPreset(gestureEnabled = true) {
   return flowStepPreset(gestureEnabled)
 }
 
-/** Flow hub — instant when adjacent screens share continuous chrome. */
+/** Flow hub – instant when adjacent screens share continuous chrome. */
 export const flowHubInstantSpec = webInstantPreset()
 
 /** @deprecated Use flowHubInstantSpec */
 export const sendFlowInstantTransitionSpec = flowHubInstantSpec
 
-/** Modal sheet — slide from bottom (ScanWalletAddress, etc.). */
+/** Modal sheet – slide from bottom (ScanWalletAddress, etc.). */
 export function modalBottomPreset() {
   if (Platform.OS === 'web') {
     return webFadePreset('mobile')
@@ -223,7 +223,7 @@ export function modalBottomPreset() {
   }
 }
 
-/** Auth gate screens — slightly faster horizontal push; gestures controlled per screen. */
+/** Auth gate screens – slightly faster horizontal push; gestures controlled per screen. */
 export function authGatePreset(gestureEnabled = false) {
   if (Platform.OS === 'web') {
     return webFadePreset('mobile')

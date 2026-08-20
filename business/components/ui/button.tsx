@@ -5,11 +5,11 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
 /**
- * Easner button — premium, tactile, monochrome-first.
+ * Easner button – premium, tactile, monochrome-first.
  *
  * Intent levels:
  *   - default: graphite on ivory (the trusted, authoritative default)
- *   - primary: Easner blue (use sparingly — key action / confirmation)
+ *   - primary: Easner blue (use sparingly – key action / confirmation)
  *   - secondary: ivory surface with stone border
  *   - ghost: minimal hover-only
  *   - outline: surface + border

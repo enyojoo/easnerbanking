@@ -34,7 +34,7 @@ export function buildInvoiceCustomerViewPath(
 
 /**
  * Customer-facing invoice URL on invoice.easner.com. The `/invoice` segment is an
- * internal route prefix only — customers see `invoice.easner.com/acme/einv-1042`.
+ * internal route prefix only – customers see `invoice.easner.com/acme/einv-1042`.
  */
 export function buildInvoiceCustomerUrl(
   easetag: string | null | undefined,

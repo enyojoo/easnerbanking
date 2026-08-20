@@ -41,7 +41,7 @@ try {
     process.exit(1)
   }
   const publicPem = createPublicKey(key).export({ type: "spki", format: "pem" })
-  console.log("OK — ES384 / secp384r1")
+  console.log("OK – ES384 / secp384r1")
   console.log("\nUpload this public key on your production Noah API key:\n")
   console.log(publicPem)
 } catch (e) {

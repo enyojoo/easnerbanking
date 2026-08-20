@@ -102,9 +102,9 @@ const GRID_RATE_SOURCES: Array<{
 ]
 
 function formatAsOf(raw: string | undefined): string {
-  if (!raw) return "—"
+  if (!raw) return "–"
   const t = new Date(raw)
-  if (!Number.isFinite(t.getTime())) return "—"
+  if (!Number.isFinite(t.getTime())) return "–"
   return t.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
 }
 
@@ -171,7 +171,7 @@ export function OfficeGridRatesPanel() {
         code: source.code,
         pairCount: pairs.length,
         activePairCount: activePairs.length,
-        lastUpdate: lastMs > 0 ? formatAsOf(new Date(lastMs).toISOString()) : "—",
+        lastUpdate: lastMs > 0 ? formatAsOf(new Date(lastMs).toISOString()) : "–",
       }
     })
   }, [rates])
@@ -303,7 +303,7 @@ export function OfficeGridRatesPanel() {
                     <TableCell className="font-mono">{source.code}</TableCell>
                     <TableCell>
                       {source.pairCount === 0 ? (
-                        <span className="text-muted-foreground text-sm">None — run Sync rates</span>
+                        <span className="text-muted-foreground text-sm">None – run Sync rates</span>
                       ) : (
                         <span>
                           {source.activePairCount} active
@@ -346,7 +346,7 @@ export function OfficeGridRatesPanel() {
         <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
           <DialogHeader className="border-b pb-4">
             <DialogTitle>
-              Edit Grid rates — {editingMeta?.name ?? editingSource} ({editingSource})
+              Edit Grid rates – {editingMeta?.name ?? editingSource} ({editingSource})
             </DialogTitle>
           </DialogHeader>
 

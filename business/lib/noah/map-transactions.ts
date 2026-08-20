@@ -47,7 +47,7 @@ export function pickTxAmountAndCurrency(tx: Record<string, unknown>): { amount: 
   }
 }
 
-/** True when `payload` is a Noah REST Transaction — not a YC webhook or other provider blob. */
+/** True when `payload` is a Noah REST Transaction – not a YC webhook or other provider blob. */
 export function isNoahLedgerTransactionPayload(
   payload: Record<string, unknown> | null | undefined,
   row?: Record<string, unknown>,

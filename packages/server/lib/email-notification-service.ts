@@ -39,7 +39,7 @@ export class EmailNotificationService {
   /**
    * Send transaction status email notification
    */
-  /** @deprecated Legacy remittance path — ledger dispatch sends transaction emails now. */
+  /** @deprecated Legacy remittance path – ledger dispatch sends transaction emails now. */
   static async sendTransactionStatusEmail(
     transactionId: string,
     status: string,

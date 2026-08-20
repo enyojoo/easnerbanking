@@ -14,7 +14,7 @@ export type ResolvedChargeSettlement = {
    */
   applicationFeeCents: number | null
   chargeId: string | null
-  /** Charge.created as ISO — the paid-at Stripe receipts use. */
+  /** Charge.created as ISO – the paid-at Stripe receipts use. */
   chargedAt: string | null
   paymentMethodType: string | null
   paymentMethod: StripePaymentMethodDisplay | null
@@ -45,7 +45,7 @@ function emailFromUnknown(value: unknown): string | null {
   return s && s.includes("@") ? s : null
 }
 
-/** Session webhooks carry email; PI.succeeded usually does not — fall back to the charge. */
+/** Session webhooks carry email; PI.succeeded usually does not – fall back to the charge. */
 export function payerIdentityFromPaymentIntent(pi: Stripe.PaymentIntent): {
   payerEmail: string | null
   payerName: string | null

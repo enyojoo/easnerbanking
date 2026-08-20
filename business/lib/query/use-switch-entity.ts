@@ -22,7 +22,7 @@ import { BUSINESS_TRANSACTIONS_LIST_LIMIT } from "@/hooks/queries/use-transactio
  *   4. Mark the old scope's caches `inactive` (keepPreviousData guards
  *      the transition, so nothing blinks).
  *
- * This helper does NOT manage the signed cookie — that's owned by the
+ * This helper does NOT manage the signed cookie – that's owned by the
  * auth layer. Call it from your entity picker AFTER the cookie has been
  * rotated server-side.
  */

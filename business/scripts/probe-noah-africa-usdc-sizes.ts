@@ -1,5 +1,5 @@
 /**
- * Noah /prices — USDC send sizes × African local corridors vs PDF schedule.
+ * Noah /prices – USDC send sizes × African local corridors vs PDF schedule.
  * Usage: cd business && node --env-file=.env.local --import tsx scripts/probe-noah-africa-usdc-sizes.ts
  */
 

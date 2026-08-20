@@ -82,7 +82,7 @@ export function useYcReceiveRails(input: {
       resolveReceiveRailsForDisplay(country, currency, payInProvider)
     )
   })
-  // Never block UI on rails — display uses cache/optimistic; network refreshes quietly.
+  // Never block UI on rails – display uses cache/optimistic; network refreshes quietly.
   const [loading, setLoading] = useState(false)
 
   const revalidate = useCallback(async () => {

@@ -11,7 +11,7 @@ export type DynamicAmountFontSizeOptions = {
 
 /**
  * Scale headline money type by digit count (Send Amount input, transaction detail hero).
- * Ignores commas, signs, and currency symbols — counts digits only.
+ * Ignores commas, signs, and currency symbols – counts digits only.
  */
 export function getDynamicAmountFontSize(
   amountText: string,

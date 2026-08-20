@@ -2,7 +2,7 @@
 const CONNECT_HOLDERS = new Set(["easner"])
 const CONNECT_ROUTINGS = new Set(["091000019"])
 
-/** Stripe Dashboard / platform payouts — never match Connect Incoming. */
+/** Stripe Dashboard / platform payouts – never match Connect Incoming. */
 const DASHBOARD_HOLDERS = new Set(["bridge building"])
 const DASHBOARD_ROUTINGS = new Set(["101019644"])
 

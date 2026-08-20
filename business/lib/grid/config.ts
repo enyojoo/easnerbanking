@@ -22,7 +22,7 @@ export function getGridWebhookPublicKey(): string | null {
   return `-----BEGIN PUBLIC KEY-----\n${unescaped}\n-----END PUBLIC KEY-----`
 }
 
-/** @deprecated Grid uses ECDSA public-key verification — set GRID_WEBHOOK_PUBLIC_KEY instead. */
+/** @deprecated Grid uses ECDSA public-key verification – set GRID_WEBHOOK_PUBLIC_KEY instead. */
 export function getGridWebhookSecret(): string {
   return String(process.env.GRID_WEBHOOK_SECRET || "").trim()
 }
@@ -55,7 +55,7 @@ export function getGridQuoteRefreshBufferMs(): number {
   return 45_000
 }
 
-/** Reuse a confirm lock while the Grid quote is still valid. Do not use the 45s execute buffer — Grid quotes are often ~60s, so that buffer forced a second 20s POST /quotes. */
+/** Reuse a confirm lock while the Grid quote is still valid. Do not use the 45s execute buffer – Grid quotes are often ~60s, so that buffer forced a second 20s POST /quotes. */
 export function getGridQuoteConfirmReuseBufferMs(): number {
   return 5_000
 }

@@ -13,12 +13,12 @@ export type YcPayoutLimits = {
   maxLocalReceive: number | null
 }
 
-/** Published send limits — fallback when channel omits min/max. */
+/** Published send limits – fallback when channel omits min/max. */
 const YC_SEND_LIMITS_FALLBACK_LOCAL = YC_SEND_LIMITS_FALLBACK
 
 /**
  * Easner minimum receive amounts for YC balance payouts (bank + mobile money).
- * Separate from Noah policy in payout-business-limits.ts — YC corridors can differ.
+ * Separate from Noah policy in payout-business-limits.ts – YC corridors can differ.
  */
 const YC_PAYOUT_BUSINESS_MIN_BANK: Record<string, number> = {
   NGN: 2000,

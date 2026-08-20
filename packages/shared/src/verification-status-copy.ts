@@ -12,7 +12,7 @@ export const VERIFICATION_STATUS_COPY = {
 } as const
 
 export type VerificationStatusLabelOpts = {
-  /** Tier complete or explicit success — always "Verified". */
+  /** Tier complete or explicit success – always "Verified". */
   complete?: boolean
   /** Detail screens: missing / not_started → "Not started" instead of "Unverified". */
   detail?: boolean

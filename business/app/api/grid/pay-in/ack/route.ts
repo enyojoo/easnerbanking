@@ -5,7 +5,7 @@ import { ackGridPayIn, GridPayInAckError } from "@/lib/grid/pay-in-ack"
 
 export const runtime = "nodejs"
 
-/** User attestation only — Grid pay-in settlement is webhook-driven. */
+/** User attestation only – Grid pay-in settlement is webhook-driven. */
 export async function POST(request: Request) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error

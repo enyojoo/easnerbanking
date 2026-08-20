@@ -1,7 +1,7 @@
 "use client"
 
 /**
- * Easner chart primitives — executive, monochrome, expensive-looking.
+ * Easner chart primitives – executive, monochrome, expensive-looking.
  *
  * Use these wrappers for treasury dashboards, cash-flow charts, and balance
  * sparklines. They intentionally hide rainbow palettes, aggressive gridlines,
@@ -78,7 +78,7 @@ function EasnerChartTooltip({ active, payload, label }: any) {
 }
 
 /* ------------------------------------------------------------------ *
- *  TreasuryAreaChart — soft emerald gradient on graphite baseline
+ *  TreasuryAreaChart – soft emerald gradient on graphite baseline
  * ------------------------------------------------------------------ */
 
 export interface TreasuryAreaChartProps {
@@ -136,13 +136,13 @@ export function TreasuryAreaChart({
 }
 
 /* ------------------------------------------------------------------ *
- *  CashFlowBarChart — two-series bars (inflow graphite, outflow stone)
+ *  CashFlowBarChart – two-series bars (inflow graphite, outflow stone)
  * ------------------------------------------------------------------ */
 
 export interface CashFlowBarChartProps {
   data: Array<Record<string, number | string>>
   xKey: string
-  /** Series definitions — keep to 2 for executive clarity */
+  /** Series definitions – keep to 2 for executive clarity */
   series: Array<{ key: string; label: string; tone?: 'emerald' | 'graphite' | 'stone' | 'amber' }>
   className?: string
   height?: number
@@ -191,7 +191,7 @@ export function CashFlowBarChart({
 }
 
 /* ------------------------------------------------------------------ *
- *  BalanceSparkline — inline trend line, no axes, minimal footprint
+ *  BalanceSparkline – inline trend line, no axes, minimal footprint
  * ------------------------------------------------------------------ */
 
 export interface BalanceSparklineProps {

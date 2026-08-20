@@ -436,7 +436,7 @@ export async function executeGridBalancePayout(
 
   // REALTIME_FUNDING quotes auto-execute once the funding address is fully funded.
   // Posting /execute before confirmation races Grid and is not required.
-  // Mark processing as soon as USDC is broadcast — same as YC after the Turnkey leg.
+  // Mark processing as soon as USDC is broadcast – same as YC after the Turnkey leg.
   const { data: txAfter } = await admin
     .from("transactions")
     .select("metadata")

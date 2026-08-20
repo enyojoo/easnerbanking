@@ -124,7 +124,7 @@ export default function PayrollOverviewPage() {
                   {(overview?.recentRuns ?? []).map((run) => (
                     <TableRow key={run.id} className="cursor-pointer">
                       <TableCell><PayrollDetailLink kind="run" id={run.id} className="font-medium" href={`/payroll/runs/${run.id}`}>{String(run.metadata?.name || "Payroll run")}</PayrollDetailLink></TableCell>
-                      <TableCell>{run.payday ? formatDate(run.payday) : "—"}</TableCell>
+                      <TableCell>{run.payday ? formatDate(run.payday) : "–"}</TableCell>
                       <TableCell className="tabular-nums">{formatCurrency(run.totalSource, run.sourceCurrency)}</TableCell>
                       <TableCell><PayrollRunStatusBadge status={run.status} /></TableCell>
                     </TableRow>
@@ -150,7 +150,7 @@ export default function PayrollOverviewPage() {
                     <div className="mt-4 flex items-end justify-between gap-3 border-t pt-3">
                       <div>
                         <p className="text-xs text-muted-foreground">Payday</p>
-                        <p className="mt-1 text-sm">{run.payday ? formatDate(run.payday) : "—"}</p>
+                        <p className="mt-1 text-sm">{run.payday ? formatDate(run.payday) : "–"}</p>
                       </div>
                       <p className="font-semibold tabular-nums">
                         {formatCurrency(run.totalSource, run.sourceCurrency)}

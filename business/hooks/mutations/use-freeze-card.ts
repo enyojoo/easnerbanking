@@ -7,7 +7,7 @@ import { useScope } from "@/lib/query/scope"
 import type { CardRow } from "@/hooks/queries/use-cards"
 
 /**
- * Freeze/unfreeze card — optimistic pattern from plan §9.
+ * Freeze/unfreeze card – optimistic pattern from plan §9.
  *
  * - Snapshot current card state.
  * - Flip status immediately with a `pending: true` marker (UX can show

@@ -62,7 +62,7 @@ export function getYellowcardApiOrigin(): string {
   return getYellowcardEnvironment() === "production" ? YC_PRODUCTION_ORIGIN : YC_SANDBOX_ORIGIN
 }
 
-/** OpenAPI path segment signed in HMAC — always `/business/...`, query string excluded. */
+/** OpenAPI path segment signed in HMAC – always `/business/...`, query string excluded. */
 export function toYellowcardSignedPath(path: string): string {
   const withoutQuery = path.split("?")[0] ?? path
   const p = withoutQuery.startsWith("/") ? withoutQuery : `/${withoutQuery}`

@@ -11,7 +11,7 @@ type Props = {
   row: ReceiptVisualRow
 }
 
-/** Rich receipt row — recipient chip or balance flag, matching transaction detail layout. */
+/** Rich receipt row – recipient chip or balance flag, matching transaction detail layout. */
 export function ReceiptVisualRowValue({ row }: Props) {
   if (row.kind === 'recipient') {
     return (

@@ -6,12 +6,12 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
 /**
- * TransactionRow — executive ledger line.
+ * TransactionRow – executive ledger line.
  *
  * Rules:
  *   - Credits: emerald tint + emerald icon. Debits: neutral.
  *   - Amounts always tabular-nums.
- *   - No bright red on debits — privacy/private-bank tone demands restraint.
+ *   - No bright red on debits – privacy/private-bank tone demands restraint.
  */
 export interface TransactionRowProps {
   description: string

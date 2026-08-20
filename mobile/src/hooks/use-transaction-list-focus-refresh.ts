@@ -11,7 +11,7 @@ interface UseTransactionListFocusRefreshOptions {
   /**
    * Optional async function that runs the chain-ledger sync and returns
    * `true` if it inserted new rows that require a ledger refetch.
-   * Always runs when provided — it may insert rows even when realtime is healthy.
+   * Always runs when provided – it may insert rows even when realtime is healthy.
    */
   onChainSync?: () => Promise<boolean>
 }

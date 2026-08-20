@@ -42,7 +42,7 @@ export async function registerOperationalAddressCountries(countryCodes: string[]
   await Promise.all(unique.map((code) => ensureOperationalAddressCountryRegistered(code)))
 }
 
-/** Test helper — marks a country as registered without loading JSON. */
+/** Test helper – marks a country as registered without loading JSON. */
 export function markOperationalAddressCountryRegisteredForTests(countryCode: string): void {
   registered.add(countryCode.trim().toUpperCase())
 }

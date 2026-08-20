@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
 /**
- * FxConversionPanel — a CFO-style quote card.
+ * FxConversionPanel – a CFO-style quote card.
  *
  * Composition:
  *   - Two amount fields separated by a swap affordance.

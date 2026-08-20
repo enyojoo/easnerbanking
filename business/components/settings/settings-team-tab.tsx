@@ -238,7 +238,7 @@ export function SettingsTeamTab() {
                       </div>
                       <div>
                         <p className="font-medium">{member.fullName}</p>
-                        <p className="text-sm text-muted-foreground">{member.email || "—"}</p>
+                        <p className="text-sm text-muted-foreground">{member.email || "–"}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">

@@ -19,7 +19,7 @@ import {
 export type ResolvedStripeInvoiceSettlement = {
   lifecycle: StripeInvoiceSettlementLifecycleStep[]
   settlementPhase: string
-  /** Hero/list title — invoice number, payment link label, or "Online payment". */
+  /** Hero/list title – invoice number, payment link label, or "Online payment". */
   displayTitle: string
   invoiceId: string | null
   invoiceNumber: string | null

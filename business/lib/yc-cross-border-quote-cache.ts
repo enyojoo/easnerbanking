@@ -97,7 +97,7 @@ export function isCrossBorderQuotePreview(
   return Boolean(quote?.ok && quote.quotePhase === "preview" && !quote.transferId)
 }
 
-/** Preview quote from `/quote` — enough for review and Continue. */
+/** Preview quote from `/quote` – enough for review and Continue. */
 export function isUsableCrossBorderQuotePreview(
   quote: CrossBorderQuoteResult | null | undefined,
 ): quote is CrossBorderQuoteResult {
@@ -109,7 +109,7 @@ export function isUsableCrossBorderQuotePreview(
   )
 }
 
-/** Leg2 locked — review Continue can trigger leg1 confirm. */
+/** Leg2 locked – review Continue can trigger leg1 confirm. */
 export function isCrossBorderLeg2Locked(
   quote: CrossBorderQuoteResult | null | undefined,
   leg2DraftId?: string | null,
@@ -120,7 +120,7 @@ export function isCrossBorderLeg2Locked(
   )
 }
 
-/** Locked order from `/confirm` — required before pay-in instructions finalize. */
+/** Locked order from `/confirm` – required before pay-in instructions finalize. */
 export function isCompleteCrossBorderQuote(
   quote: CrossBorderQuoteResult | null | undefined,
 ): quote is CrossBorderQuoteResult {

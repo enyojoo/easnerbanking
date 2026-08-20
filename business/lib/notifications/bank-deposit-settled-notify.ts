@@ -9,7 +9,7 @@ import { normalizeDirection } from "@/lib/ledger/transactions"
 
 /**
  * Funding bank deposits: defer settled push until funds are on-chain in the user vault.
- * Verification microdeposits settle at fiat leg only — push immediately from ledger upsert.
+ * Verification microdeposits settle at fiat leg only – push immediately from ledger upsert.
  */
 export function shouldDeferBankDepositSettledPush(metadata: unknown): boolean {
   if (!metadata || typeof metadata !== "object") return false

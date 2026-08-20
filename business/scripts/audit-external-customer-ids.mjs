@@ -125,7 +125,7 @@ async function main() {
   }
 
   if (backfill && !apply) {
-    console.log("\n(dry-run — pass --apply to persist grid_customer_id)")
+    console.log("\n(dry-run – pass --apply to persist grid_customer_id)")
   }
 }
 

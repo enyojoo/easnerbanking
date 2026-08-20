@@ -216,7 +216,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     draftRecipientPersistFromRoute,
   )
   const easenetDisplay = useEasenetRecipientHydration(recipient)
-  /** Internal Easetag P2P does not use fiat payout corridors — don’t block the CTA on corridor status. */
+  /** Internal Easetag P2P does not use fiat payout corridors – don’t block the CTA on corridor status. */
   const easetagUi = recipient ? resolveRecipientEasetagForUi(recipient).trim() : ''
   const isEasetagRecipient = easetagUi.length > 0
   const [payoutCorridorActive, setPayoutCorridorActive] = useState(true)
@@ -400,7 +400,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
   const recipientReceiveCurrency = recipient?.currency?.trim().toUpperCase() ?? ''
 
-  // TLC is cross-border only — hide when pay-in currency matches recipient (use balance instead).
+  // TLC is cross-border only – hide when pay-in currency matches recipient (use balance instead).
   const expectTlcCorridor =
     !isEasetagRecipient &&
     !isWalletRecipient &&
@@ -527,7 +527,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   // Update recipient when screen comes into focus (smooth transition)
   useFocusEffect(
     React.useCallback(() => {
-      /** Match dashboard Turnkey/Noah truth — send flow must not show stale wallet zeros. */
+      /** Match dashboard Turnkey/Noah truth – send flow must not show stale wallet zeros. */
       void refreshBalances(true).catch(() => {})
       if (noahKycStatus !== 'approved') {
         void refreshUserProfile()
@@ -1672,7 +1672,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             showError('Could not resolve pay-in country for bank transfer.')
             return
           }
-          // Preview (+ background leg2) only — POST /receive happens on review Pay.
+          // Preview (+ background leg2) only – POST /receive happens on review Pay.
           setIsContinuePending(true)
           setIsContinueLoading(true)
           if (continueSpinnerTimerRef.current) {

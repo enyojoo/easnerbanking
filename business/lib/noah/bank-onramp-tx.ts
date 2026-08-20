@@ -57,7 +57,7 @@ export function isBankOnrampFiatDepositPayload(payload: Record<string, unknown>)
 }
 
 /**
- * Noah's orchestrated crypto withdrawal to the user's Turnkey wallet — not a separate user action.
+ * Noah's orchestrated crypto withdrawal to the user's Turnkey wallet – not a separate user action.
  */
 export function isNoahBankOnrampOrchestrationOutLeg(tx: Record<string, unknown>): boolean {
   if (String(tx.Direction ?? "") !== "Out") return false
@@ -70,7 +70,7 @@ export function isNoahBankOnrampOrchestrationOutLeg(tx: Record<string, unknown>)
 
 /**
  * Orchestrated on-chain stablecoin credit to the user's wallet (Transaction In + Orchestration).
- * Excludes fiat VA pay-ins (OffNetwork + FiatPayment) — those are the user-facing ledger row.
+ * Excludes fiat VA pay-ins (OffNetwork + FiatPayment) – those are the user-facing ledger row.
  */
 export function isNoahBankOnrampOrchestrationInLeg(tx: Record<string, unknown>): boolean {
   if (String(tx.Direction ?? "") !== "In") return false
@@ -110,7 +110,7 @@ export function parseLastSentFromInNarration(text: string | null | undefined): s
 }
 
 /**
- * FiatDeposit remitter for hero/list — not VA account holder, not ACH narration.
+ * FiatDeposit remitter for hero/list – not VA account holder, not ACH narration.
  */
 export function deriveNoahBankPayInRemitterName(
   tx: Record<string, unknown>,
@@ -216,7 +216,7 @@ export function mergeBankDepositLifecycleMetadata(
     processing_at?: string | null
     /** Fiat VA leg settled (funding deposits). */
     fiat_settled_at?: string | null
-    /** Orchestration Out settled — funds sent to user wallet; sets user-facing `completed_at`. */
+    /** Orchestration Out settled – funds sent to user wallet; sets user-facing `completed_at`. */
     on_chain_settled_at?: string | null
     completed_at?: string | null
     noah_fiat_deposit_id?: string | null
@@ -469,7 +469,7 @@ export function buildNoahBankPayInLedgerMetadata(
   opts?: {
     status?: string
     occurredAt?: string | null
-    /** From FiatDeposit webhook — must win over settlement VA account holder name. */
+    /** From FiatDeposit webhook – must win over settlement VA account holder name. */
     fiatDepositSenderName?: string | null
     /** ACH/wire narration (Reference / Description from FiatDeposit). */
     paymentReference?: string | null

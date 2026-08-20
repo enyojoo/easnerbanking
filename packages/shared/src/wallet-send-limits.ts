@@ -7,7 +7,7 @@ export const RELAY_BRIDGE_MIN_SOURCE_USDC = 7
 
 /**
  * Easner minimum receive amounts for Relay wallet-send corridors (stablecoin units).
- * Applied as max(relayMin, businessMin) — same pattern as fiat payout mins.
+ * Applied as max(relayMin, businessMin) – same pattern as fiat payout mins.
  */
 const WALLET_SEND_BUSINESS_MIN: Record<string, number> = {
   USDC: 10,

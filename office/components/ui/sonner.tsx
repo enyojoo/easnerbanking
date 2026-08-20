@@ -3,7 +3,7 @@
 import { Toaster as SonnerToaster, type ToasterProps } from "sonner"
 
 /**
- * Easner toast wrapper — muted semantic palette, private-bank tone.
+ * Easner toast wrapper – muted semantic palette, private-bank tone.
  * Mirrors the business app so office + business share toast styling.
  */
 function Toaster(props: ToasterProps) {

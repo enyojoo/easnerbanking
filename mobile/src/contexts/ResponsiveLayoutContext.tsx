@@ -24,7 +24,7 @@ type ResponsiveLayoutValue = {
   width: number
   height: number
   isWeb: boolean
-  /** True on web tablet/desktop — sidebar + top header shell (business-style). */
+  /** True on web tablet/desktop – sidebar + top header shell (business-style). */
   showSidebarShell: boolean
   contentMaxWidth: number
   sidebarWidth: number

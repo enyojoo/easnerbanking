@@ -10,7 +10,7 @@ function stablePart(value: string | number | null | undefined): string {
   return String(value).trim()
 }
 
-/** Deterministic key for idempotent confirm — same inputs reuse the same active transfer. */
+/** Deterministic key for idempotent confirm – same inputs reuse the same active transfer. */
 export function buildYcQuoteKey(parts: Record<string, string | number | null | undefined>): string {
   return Object.keys(parts)
     .sort()

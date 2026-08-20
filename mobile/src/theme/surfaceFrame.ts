@@ -2,14 +2,14 @@ import { StyleSheet, type ViewStyle } from 'react-native'
 import type { Colors } from './colors'
 import { shadows } from './shadows'
 
-/** Matches `borderRadius['3xl']` — default raised section trays on canvas */
+/** Matches `borderRadius['3xl']` – default raised section trays on canvas */
 export const SURFACE_FRAME_RADIUS_DEFAULT = 24
 
 export type SurfaceFrameShadow = 'none' | 'xs' | 'sm'
 
 export type SurfaceFrameOptions = {
   /**
-   * Default `'sm'` — same lift as More / Dashboard section trays.
+   * Default `'sm'` – same lift as More / Dashboard section trays.
    * Use `'none'` for inset fields (search bars) that sit flush on the canvas.
    */
   shadow?: SurfaceFrameShadow
@@ -19,7 +19,7 @@ export type SurfaceFrameOptions = {
 
 /**
  * Canonical “raised frame” shell: `frame` fill + hairline border + neutral shadow.
- * Use for section cards, trays, and hero plates — not for `semantic.card` inset rows.
+ * Use for section cards, trays, and hero plates – not for `semantic.card` inset rows.
  */
 export function surfaceFrameStyle(c: Colors, options?: SurfaceFrameOptions): ViewStyle {
   const shadowKey = options?.shadow ?? 'sm'
@@ -36,7 +36,7 @@ export function surfaceFrameStyle(c: Colors, options?: SurfaceFrameOptions): Vie
 }
 
 export type SurfaceChromeCircleOptions = {
-  /** Default `'xs'` — subtle lift on circular chrome */
+  /** Default `'xs'` – subtle lift on circular chrome */
   shadow?: 'none' | 'xs'
 }
 

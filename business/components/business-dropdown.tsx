@@ -27,9 +27,9 @@ import { prefetchRouteWorkspaceData } from "@/lib/query/workspace-prefetch"
 
 interface BusinessDropdownProps {
   businessName: string
-  /** User profile photo (Personal tab) — header trigger */
+  /** User profile photo (Personal tab) – header trigger */
   profileImageUrl?: string | null
-  /** Organization logo — sidebar dropdown variant only */
+  /** Organization logo – sidebar dropdown variant only */
   businessLogoUrl?: string | null
   adminName: string
   adminEmail: string

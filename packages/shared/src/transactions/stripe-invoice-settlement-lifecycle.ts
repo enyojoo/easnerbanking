@@ -34,7 +34,7 @@ function isTruthyFlag(value: unknown): boolean {
   return s === "true" || s === "1"
 }
 
-/** Rail Stripe actually paid out on — not the later Grid VA → Turnkey sweep. */
+/** Rail Stripe actually paid out on – not the later Grid VA → Turnkey sweep. */
 export function inferStripeSettlementRail(
   meta: Record<string, unknown> | null | undefined,
 ): StripeSettlementRail | null {
@@ -136,7 +136,7 @@ export function isStripeCollectionSettlementMetadata(
   return isStripeInvoiceSettlementMetadata(meta) || isStripeCheckoutSettlementMetadata(meta)
 }
 
-/** List/detail title for a collection settlement — invoice number, link label, or embed. */
+/** List/detail title for a collection settlement – invoice number, link label, or embed. */
 export function stripeCollectionSettlementTitle(
   meta: Record<string, unknown> | null | undefined,
 ): string {

@@ -84,7 +84,7 @@ async function loadPending(): Promise<PendingPushPayload | null> {
   }
 }
 
-/** Read pending push without clearing — used for PIN-screen prefetch. */
+/** Read pending push without clearing – used for PIN-screen prefetch. */
 export async function peekPendingPushPayload(): Promise<PendingPushPayload | null> {
   return loadPending()
 }

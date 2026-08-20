@@ -3,7 +3,7 @@ import { extensionForMime, uploadPublicImage } from "@/lib/supabase/storage-serv
 
 const ORG_LOGOS_BUCKET = "org-logos" as const
 
-/** One canonical object per organization — re-uploads replace the same path. */
+/** One canonical object per organization – re-uploads replace the same path. */
 export function organizationLogoStoragePath(organizationId: string, contentType: string): string {
   const ext = extensionForMime(contentType)
   return `${organizationId}/logo.${ext}`

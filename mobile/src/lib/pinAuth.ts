@@ -4,7 +4,7 @@
  * Stored per user on device only. Used for idle soft-lock, unlock, and action confirmations.
  * NOT server MFA / not Supabase 2FA.
  *
- * iOS/Android: `react-native-quick-crypto` 0.x (OpenSSL via native JSI, no Nitro) — same KDF as web; falls back to @noble/hashes if unavailable
+ * iOS/Android: `react-native-quick-crypto` 0.x (OpenSSL via native JSI, no Nitro) – same KDF as web; falls back to @noble/hashes if unavailable
  * (100k iterations in JS was multi-second; business feels instant due to Web Crypto).
  * Expo web: `crypto.subtle` when available.
  */
@@ -179,7 +179,7 @@ async function derivePinHash(pin: string, salt: Uint8Array): Promise<Uint8Array>
   const enc = new TextEncoder()
   const password = enc.encode(pin)
 
-  // Browser / Expo Web — same path as `business/lib/login-pin.ts`
+  // Browser / Expo Web – same path as `business/lib/login-pin.ts`
   if (typeof globalThis !== 'undefined' && globalThis.crypto?.subtle) {
     const keyMaterial = await globalThis.crypto.subtle.importKey('raw', password, 'PBKDF2', false, [
       'deriveBits',

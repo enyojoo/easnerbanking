@@ -307,7 +307,7 @@ async function main() {
       console.log("  → Fix option A: update Turnkey root user email enyo@easner.com → hello@easner.com (if API supports)")
       console.log("  → Fix option B: leave sub-org as-is (server provisioner key drives wallet ops; root email may be cosmetic)")
       if (helloSubs.some((s) => s.subOrganizationId !== sub)) {
-        console.log("  → Caution: hello@easner.com already has other sub-org(s) — do not swap IDs without audit")
+        console.log("  → Caution: hello@easner.com already has other sub-org(s) – do not swap IDs without audit")
       }
     }
   }

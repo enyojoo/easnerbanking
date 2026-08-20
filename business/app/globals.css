@@ -1,4 +1,4 @@
-/* Easner Design System — Web
+/* Easner Design System – Web
  * Palette: Graphite + Ivory + Easner blue primary; emerald for success.
  * Source of truth: packages/shared/src/design/tokens.ts
  */
@@ -9,9 +9,9 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Semantic roles (HSL tuples — consumed via hsl(var(--x)) in @theme inline) */
+  /* Semantic roles (HSL tuples – consumed via hsl(var(--x)) in @theme inline) */
   --background: 42 33% 95%;
-  /* Blue-gray text (~210°) — avoids green cast from legacy 120° graphite */
+  /* Blue-gray text (~210°) – avoids green cast from legacy 120° graphite */
   --foreground: 210 12% 8%;
 
   --card: 40 27% 97%;
@@ -22,11 +22,11 @@
 
   --primary: 204 100% 40%;
   --primary-foreground: 40 30% 96%;
-  /* #0062A3 — primary control hover (light mode) */
+  /* #0062A3 – primary control hover (light mode) */
   --primary-hover: 204 100% 32%;
-  /* #EAF5FD — sparse selection / info surfaces */
+  /* #EAF5FD – sparse selection / info surfaces */
   --surface-tint: 205 83% 96%;
-  /* #0A2540 — executive / institutional emphasis */
+  /* #0A2540 – executive / institutional emphasis */
   --brand-navy: 210 73% 15%;
 
   --secondary: 42 18% 88%;
@@ -35,7 +35,7 @@
   --muted: 42 20% 90%;
   --muted-foreground: 210 7% 42%;
 
-  /* Subtle neutral hover/focus highlight — used by shadcn DropdownMenu,
+  /* Subtle neutral hover/focus highlight – used by shadcn DropdownMenu,
      Select, Command, etc. and by custom hover:bg-accent/* call sites.
      Must be a quiet surface so text-foreground stays readable on hover.
      Primary blue is separate; success uses --success. */
@@ -91,14 +91,14 @@
 
   --radius: 1rem;
 
-  /* Premium soft shadows — graphite-based, never glowing */
+  /* Premium soft shadows – graphite-based, never glowing */
   --shadow-soft: 0 8px 30px rgba(15, 17, 16, 0.06);
   --shadow-card: 0 10px 30px rgba(15, 17, 16, 0.08);
   --shadow-lift: 0 16px 40px rgba(15, 17, 16, 0.12);
 }
 
 .dark {
-  /* Surfaces ~210° — blue-gray bank rail, not 120° moss next to emerald success */
+  /* Surfaces ~210° – blue-gray bank rail, not 120° moss next to emerald success */
   --background: 210 10% 8%;
   --foreground: 40 24% 93%;
 
@@ -108,12 +108,12 @@
   --popover: 210 10% 11%;
   --popover-foreground: 40 24% 93%;
 
-  /* #3AA6F8 — dark canvas primary / ring / charts */
+  /* #3AA6F8 – dark canvas primary / ring / charts */
   --primary: 206 93% 60%;
   --primary-foreground: 40 30% 96%;
   /* Darker than --primary for hover on bright accent buttons */
   --primary-hover: 206 93% 52%;
-  /* Sparse blue highlight on dark — matches tokens darkSemantic.surfaceTint */
+  /* Sparse blue highlight on dark – matches tokens darkSemantic.surfaceTint */
   --surface-tint: 206 40% 18%;
 
   --secondary: 210 8% 15%;
@@ -162,7 +162,7 @@
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  /* Alias serif slot to sans — Easner Business is sans-only (docs/design-system §3). */
+  /* Alias serif slot to sans – Easner Business is sans-only (docs/design-system §3). */
   --font-serif: var(--font-geist-sans);
 
   --color-background: hsl(var(--background));
@@ -248,13 +248,13 @@
     transition: background-color 0.2s ease, color 0.2s ease;
   }
 
-  /* Numerics — all money/balance/transaction text should feel precise & stable */
+  /* Numerics – all money/balance/transaction text should feel precise & stable */
   .tabular,
   .tabular-nums {
     font-variant-numeric: tabular-nums;
   }
 
-  /* Display helpers — same stack as sans; tighter tracking for hero figures */
+  /* Display helpers – same stack as sans; tighter tracking for hero figures */
   .font-serif,
   .font-display {
     font-family: var(--font-serif);
@@ -380,7 +380,7 @@ html[data-verification-flow-open="true"] main {
   padding-bottom: 0;
 }
 
-/* Grid KYB — SumSub WebSDK should fill the verification dialog body */
+/* Grid KYB – SumSub WebSDK should fill the verification dialog body */
 .grid-sumsub-host {
   display: flex;
   flex-direction: column;

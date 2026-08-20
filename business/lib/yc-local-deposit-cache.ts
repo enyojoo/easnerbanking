@@ -312,7 +312,7 @@ async function loadYcPayInNetworks(
   return rails?.momoNetworks ?? []
 }
 
-/** Idempotent prefetch — dedupes in-flight requests and writes cache on success. */
+/** Idempotent prefetch – dedupes in-flight requests and writes cache on success. */
 export async function prefetchYcPayInNetworks(
   country: string,
   currency: string,
@@ -341,7 +341,7 @@ export async function prefetchYcPayInNetworks(
   return task
 }
 
-/** MoMo networks for pay-in review — falls back to receive-rails when pay-in-networks is absent. */
+/** MoMo networks for pay-in review – falls back to receive-rails when pay-in-networks is absent. */
 export async function fetchYcPayInNetworks(
   country: string,
   currency: string,

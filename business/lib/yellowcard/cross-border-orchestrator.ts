@@ -291,7 +291,7 @@ async function prepareCrossBorderQuote(input: CrossBorderTransferInput) {
   return { cross, pricing, payInCurrency, receiveCurrency, quoteKey, rates, fromLeg, toLeg, processingFeeBps }
 }
 
-/** Indicative cross-border pricing — no YC API calls, no ledger rows. */
+/** Indicative cross-border pricing – no YC API calls, no ledger rows. */
 export async function previewCrossBorderQuote(input: CrossBorderTransferInput) {
   const prepared = await prepareCrossBorderQuote(input)
   const expiresAt = resolveYcQuoteExpiresAt()
@@ -1232,7 +1232,7 @@ export async function confirmCrossBorderTransfer(
   }
 }
 
-/** @deprecated MoMo cross-border draft — quote API replaces this. Routes return 410. */
+/** @deprecated MoMo cross-border draft – quote API replaces this. Routes return 410. */
 export async function createCrossBorderDraft(input: {
   admin: SupabaseClient
   userId: string
@@ -1381,7 +1381,7 @@ export async function createCrossBorderDraft(input: {
   }
 }
 
-/** MoMo cross-border authorize — submit YC legs on existing draft transfer. */
+/** MoMo cross-border authorize – submit YC legs on existing draft transfer. */
 export async function authorizeCrossBorderDraft(input: {
   admin: SupabaseClient
   userId: string
@@ -1417,7 +1417,7 @@ export async function authorizeCrossBorderDraft(input: {
     throw new Error("Transfer is not awaiting authorization")
   }
   if (transfer.expires_at && new Date(String(transfer.expires_at)).getTime() <= Date.now()) {
-    throw new Error("Quote expired — start again")
+    throw new Error("Quote expired – start again")
   }
 
   const meta = (transfer.metadata || {}) as Record<string, unknown>
@@ -2026,7 +2026,7 @@ export async function maybeExecuteCrossBorderLeg2(
         })
       }
     }
-    console.error("[yc-cross-border] leg2 deposit failed — USDC refund to fee wallet; NGN recovery runbook", {
+    console.error("[yc-cross-border] leg2 deposit failed – USDC refund to fee wallet; NGN recovery runbook", {
       transferId,
       error: deposit.errorMessage,
     })

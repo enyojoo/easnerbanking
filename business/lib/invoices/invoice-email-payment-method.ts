@@ -17,7 +17,7 @@ export type InvoiceEmailPaymentMethodDisplay = {
   brandIconSrc?: string
 }
 
-/** Payment method row for customer invoice emails — matches receipt PDF / in-app chip layout. */
+/** Payment method row for customer invoice emails – matches receipt PDF / in-app chip layout. */
 export function resolveInvoiceEmailPaymentMethod(
   invoice: Invoice,
 ): InvoiceEmailPaymentMethodDisplay | null {

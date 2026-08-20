@@ -216,7 +216,7 @@ function buildWalletSendBody(input: {
       ? formatMoneyDisplay(receiveAmount, receiveCurrency)
       : input.amountText
   const destinationLabel = walletAddress ? truncateMiddle(walletAddress, 6, 6) : ""
-  // Second person — email body follows “Hey {name},”
+  // Second person – email body follows “Hey {name},”
   return destinationLabel
     ? `You've sent ${amountDisplay} to ${destinationLabel}`
     : `You've sent ${amountDisplay}`

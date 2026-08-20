@@ -16,7 +16,7 @@ const COPY: Record<
   },
   office: {
     title: "Easner Office works best on a wide screen",
-    lede: "Customer records, platform controls, and operations dashboards assume a keyboard and plenty of horizontal room—similar to other admin consoles you already use.",
+    lede: "Customer records, platform controls, and operations dashboards assume a keyboard and plenty of horizontal room–similar to other admin consoles you already use.",
     detail:
       "This console is not supported on phones or small tablets. Use a computer or a large tablet in landscape, or ask a teammate with a suitable device.",
   },
@@ -62,7 +62,7 @@ export function DesktopMinViewportGate({ product, children }: DesktopMinViewport
             <li className="flex gap-3">
               <Monitor className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden />
               <span>
-                <span className="font-medium text-foreground">Minimum width</span> — about 1024
+                <span className="font-medium text-foreground">Minimum width</span> – about 1024
                 pixels wide. Many full-size tablets in <span className="text-foreground">landscape</span>{" "}
                 qualify; most phones and small tablets in portrait do not.
               </span>
@@ -70,7 +70,7 @@ export function DesktopMinViewportGate({ product, children }: DesktopMinViewport
             <li className="flex gap-3">
               <Smartphone className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden />
               <span>
-                <span className="font-medium text-foreground">Banking on your phone</span> — use the
+                <span className="font-medium text-foreground">Banking on your phone</span> – use the
                 Easner mobile app for balances, transfers, and notifications.{" "}
                 <a
                   href={APP_URLS.website}

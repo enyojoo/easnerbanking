@@ -496,7 +496,7 @@ export function SettingsBusinessTab() {
                         code={formData.baseCurrency}
                         suffix={
                           <span className="truncate text-xs text-muted-foreground">
-                            (current — not in allowed list)
+                            (current – not in allowed list)
                           </span>
                         }
                       />
@@ -570,7 +570,7 @@ export function SettingsBusinessTab() {
                     <span className="truncate">{selectedCountry.name}</span>
                   </>
                 ) : (
-                  <span className="text-muted-foreground">{formData.country || "—"}</span>
+                  <span className="text-muted-foreground">{formData.country || "–"}</span>
                 )}
               </span>
               <ChevronDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden />

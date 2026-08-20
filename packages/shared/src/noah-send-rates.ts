@@ -30,7 +30,7 @@ export function noahSendRatesQueryPath(receiveCurrency: string): string {
   return `/api/fx/noah-rates?destinations=${encodeURIComponent(dest)}`
 }
 
-/** True when a DB row has a usable customer rate (ignores age — sync/ops owns freshness). */
+/** True when a DB row has a usable customer rate (ignores age – sync/ops owns freshness). */
 export function hasNoahSendRateRow(
   row: Pick<NoahWalletRateRow, "rate"> | null | undefined,
 ): boolean {
@@ -85,7 +85,7 @@ export function normalizePayoutReceiveAmountForCurrency(
   return normalized
 }
 
-/** Noah sell/prepare FiatAmount string — whole units for zero-decimal fiats. */
+/** Noah sell/prepare FiatAmount string – whole units for zero-decimal fiats. */
 export function formatPayoutFiatAmountForPrepare(currency: string, amount: number): string {
   const normalized = normalizePayoutReceiveAmountForCurrency(currency, amount)
   if (!Number.isFinite(normalized) || normalized <= 0) return "0"
@@ -163,7 +163,7 @@ function applyGridCustomerMargin(mid: number, marginBps?: number): number {
   return mid * (1 - bps / 10_000)
 }
 
-/** Same normalization as server `findGridBalancePayoutRate` — local fiat per 1 USD. */
+/** Same normalization as server `findGridBalancePayoutRate` – local fiat per 1 USD. */
 export function resolveGridBalancePayoutCustomerRate(
   rows: GridWalletRateRow[],
   receiveCurrency: string,

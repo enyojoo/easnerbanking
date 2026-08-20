@@ -44,7 +44,7 @@ export function isInvoicePubliclyViewable(status: InvoiceStatus): boolean {
   return !isInvoiceDraft(status)
 }
 
-/** Same as public view — customer link is copyable once issued. */
+/** Same as public view – customer link is copyable once issued. */
 export function isInvoiceCustomerLinkShareable(status: InvoiceStatus): boolean {
   return isInvoicePubliclyViewable(status)
 }

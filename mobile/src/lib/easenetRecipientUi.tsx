@@ -95,7 +95,7 @@ export function EasenetSubtitleRow({
   )
 }
 
-/** `Label • detail` (mobile / bank / wallet) — same bullet rhythm as {@link EasenetSubtitleRow}. */
+/** `Label • detail` (mobile / bank / wallet) – same bullet rhythm as {@link EasenetSubtitleRow}. */
 export function PayoutSubtitleRow({
   left,
   right,

@@ -38,7 +38,7 @@ async function main() {
         withBanks++
         if (samples.length < 8) {
           samples.push(
-            `${cc}/${fiat} (${pick.PaymentMethodType}): ${banks.length} banks — ${banks.slice(0, 3).join(", ")}…`,
+            `${cc}/${fiat} (${pick.PaymentMethodType}): ${banks.length} banks – ${banks.slice(0, 3).join(", ")}…`,
           )
         }
       } else {

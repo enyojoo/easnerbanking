@@ -1,5 +1,5 @@
 /**
- * Easner Design System — Mobile typography
+ * Easner Design System – Mobile typography
  *
  * Unified sans type system:
  *   - Sans: Geist Sans (UI + numerals + hero money)
@@ -11,7 +11,7 @@ import { TextStyle, Platform, Dimensions, PixelRatio } from 'react-native'
 import { getEffectiveWindowPoints } from '../lib/effective-window'
 
 /**
- * Font PostScript names — these must match the keys registered via
+ * Font PostScript names – these must match the keys registered via
  * in `mobile/App.tsx`.
  */
 export const fontFamily = {
@@ -24,7 +24,7 @@ export const fontFamily = {
   serifMedium: 'Geist-Medium',
   serifSemibold: 'Geist-SemiBold',
   serifBold: 'Geist-Bold',
-  /** IBANs, refs, PAN fragments — system monospace (no bundled DM Mono). */
+  /** IBANs, refs, PAN fragments – system monospace (no bundled DM Mono). */
   mono: Platform.select({
     ios: 'Menlo',
     android: 'monospace',
@@ -52,7 +52,7 @@ export const fontSize = {
   '3xl': 34,
   '4xl': 40,
   '5xl': 48,
-  /** Hero balance / send amount — matches web displayXl. */
+  /** Hero balance / send amount – matches web displayXl. */
   '6xl': 56,
 }
 
@@ -88,7 +88,7 @@ export const letterSpacing = {
 
 export const textStyles: Record<string, TextStyle> = {
   // ---------------------------------------------------------------
-  // Hero display (Geist — naming aligns with design-system §3.3)
+  // Hero display (Geist – naming aligns with design-system §3.3)
   // ---------------------------------------------------------------
   displayHeroXl: {
     fontFamily: fontFamily.serifBold,
@@ -116,7 +116,7 @@ export const textStyles: Record<string, TextStyle> = {
   },
 
   // ---------------------------------------------------------------
-  // Display — sans headlines
+  // Display – sans headlines
   // ---------------------------------------------------------------
   displayLarge: {
     fontFamily: fontFamily.bold,
@@ -219,7 +219,7 @@ export const textStyles: Record<string, TextStyle> = {
   },
 
   /**
-   * Single-line TextInput — intentionally no `lineHeight`.
+   * Single-line TextInput – intentionally no `lineHeight`.
    */
   textInputSingleLine: {
     fontFamily: fontFamily.regular,
@@ -260,7 +260,7 @@ export const textStyles: Record<string, TextStyle> = {
     }),
   },
 
-  // Numbers / Currency — tabular sans
+  // Numbers / Currency – tabular sans
   currencyLarge: {
     fontFamily: fontFamily.bold,
     fontSize: fontSize['3xl'],
@@ -302,7 +302,7 @@ export const textStyles: Record<string, TextStyle> = {
   },
 
   /**
-   * Shorthand aliases — align with `@easner/shared` typeScale names used in
+   * Shorthand aliases – align with `@easner/shared` typeScale names used in
    * send / YC screens (`caption`, `body`, `screenTitle`, etc.).
    */
   caption: {

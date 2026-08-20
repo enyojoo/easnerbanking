@@ -53,7 +53,7 @@ async function main() {
   }
 
   console.log(
-    `${dryRun ? "[dry-run] " : ""}delete ${deleteIds.length} Turnkey Easetag settlement row(s): ${deleteIds.join(", ") || "—"}`,
+    `${dryRun ? "[dry-run] " : ""}delete ${deleteIds.length} Turnkey Easetag settlement row(s): ${deleteIds.join(", ") || "–"}`,
   )
 
   if (!dryRun && deleteIds.length) {

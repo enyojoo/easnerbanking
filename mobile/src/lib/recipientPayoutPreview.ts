@@ -28,7 +28,7 @@ function recipientToSubtitleInput(r: Recipient): PayoutRecipientSubtitleInput {
 }
 
 /**
- * Subtitle parts for mobile money, bank, and wallet rows — `Left • Right`.
+ * Subtitle parts for mobile money, bank, and wallet rows – `Left • Right`.
  * Not used for Easenet rows (handled separately).
  */
 export function getPayoutRecipientSubtitleParts(r: Recipient): { left: string; right: string } {

@@ -22,11 +22,11 @@ export type NoahFetchOptions = {
   /** OpenAPI path segment; JWT `path` claim is `/v1` + this (Noah docs). */
   path: string
   query?: Record<string, string | number | boolean | undefined>
-  /** JSON body — same bytes are hashed (`bodyHash`) and sent on the wire. */
+  /** JSON body – same bytes are hashed (`bodyHash`) and sent on the wire. */
   json?: unknown
 }
 
-/** JWT `path` claim — e.g. `/v1/transactions` (Noah signing docs). */
+/** JWT `path` claim – e.g. `/v1/transactions` (Noah signing docs). */
 export function toNoahSignedPath(openApiPath: string): string {
   const p = openApiPath.startsWith("/") ? openApiPath : `/${openApiPath}`
   if (p === "/v1" || p.startsWith("/v1/")) return p
@@ -51,13 +51,13 @@ export function isNoahSignatureErrorMessage(message: string): boolean {
 export function formatNoahSignatureHelpError(detail: string): string {
   return [
     detail,
-    "Per Noah signing docs: use an ES384 (secp384r1) key pair — openssl ecparam -name secp384r1 -genkey -noout -out private-key.pem; upload public-key.pem on this production API key; set NOAH_SIGNING_PRIVATE_KEY to the private PEM in Vercel.",
+    "Per Noah signing docs: use an ES384 (secp384r1) key pair – openssl ecparam -name secp384r1 -genkey -noout -out private-key.pem; upload public-key.pem on this production API key; set NOAH_SIGNING_PRIVATE_KEY to the private PEM in Vercel.",
     "https://docs.noah.com/api-concepts/authentication/signing",
   ].join(" ")
 }
 
 /**
- * Signed Noah API request — same body buffer for JWT `bodyHash` and fetch body (Noah docs).
+ * Signed Noah API request – same body buffer for JWT `bodyHash` and fetch body (Noah docs).
  */
 export async function noahFetch<T>(opts: NoahFetchOptions): Promise<T> {
   const apiKey = getNoahApiKey()

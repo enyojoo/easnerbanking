@@ -5,7 +5,7 @@ import { getNoahRatesRefreshTtlMs, listNoahRates, triggerNoahRatesBackgroundRefr
 
 export const runtime = "nodejs"
 
-/** @deprecated Prefer GET /api/fx/noah-rates — reads `noah_rates` table instead of live Noah /prices. */
+/** @deprecated Prefer GET /api/fx/noah-rates – reads `noah_rates` table instead of live Noah /prices. */
 export async function GET(request: Request) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error

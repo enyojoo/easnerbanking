@@ -28,7 +28,7 @@ function ensureRootInstall() {
     process.exit(1)
   }
   if (fs.existsSync(src)) return
-  console.warn('[syncHoistedScope] missing', src, '— running npm install at repo root')
+  console.warn('[syncHoistedScope] missing', src, '– running npm install at repo root')
   try {
     if (fs.existsSync(lock)) {
       execSync('npm ci --ignore-scripts', { cwd: rootDir, stdio: 'inherit' })

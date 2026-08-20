@@ -10,7 +10,7 @@ function trimTrailingZeros(value: string): string {
  * e.g. 1342.7546 → "1,342.75", 0.04857 → "0.049"
  */
 export function formatExchangeRate(rate: number): string {
-  if (!Number.isFinite(rate)) return "—"
+  if (!Number.isFinite(rate)) return "–"
   const abs = Math.abs(rate)
   if (abs === 0) return "0"
 

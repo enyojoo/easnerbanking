@@ -41,7 +41,7 @@ export async function GET(request: Request) {
 
 /**
  * Create / refresh [Noah Hosted Onboarding](https://docs.noah.com/recipes/onboarding/hosted-onboarding/)
- * — mobile consumer (Individual) by default; Easner Business (KYB) when `type: "business"` or
+ * – mobile consumer (Individual) by default; Easner Business (KYB) when `type: "business"` or
  * header `X-Easner-Account-Scope: business`.
  */
 export async function POST(request: Request) {

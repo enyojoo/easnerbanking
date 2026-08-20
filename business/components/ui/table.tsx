@@ -3,7 +3,7 @@ import * as React from 'react'
 import { cn } from '@/lib/utils'
 
 /**
- * Easner table — modern transaction ledger styling.
+ * Easner table – modern transaction ledger styling.
  * Larger row height, muted uppercase headers, soft row hover, tabular numerals for numerics.
  */
 const Table = React.forwardRef<

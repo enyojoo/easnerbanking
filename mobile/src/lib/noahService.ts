@@ -1,4 +1,4 @@
-// Noah — mobile API client (calls Easner backend under /api/noah/*).
+// Noah – mobile API client (calls Easner backend under /api/noah/*).
 // Noah REST API: https://docs.noah.com/
 
 import * as FileSystem from 'expo-file-system/legacy'
@@ -12,12 +12,12 @@ async function requireAuthSession(): Promise<Session> {
   return session
 }
 
-/** Next.js business app — same origin as {@link getApiBaseUrl}. */
+/** Next.js business app – same origin as {@link getApiBaseUrl}. */
 function apiUrl(): string {
   return getApiBaseUrl()
 }
 
-/** Legacy execute field — Noah CustomerID (`eind_` + compact user uuid). Server resolves this today; kept for older API builds. */
+/** Legacy execute field – Noah CustomerID (`eind_` + compact user uuid). Server resolves this today; kept for older API builds. */
 function noahSourceWalletIdFromSession(session: Session): string {
   return `eind_${session.user.id.replace(/-/g, '')}`
 }
@@ -87,7 +87,7 @@ export interface NoahWalletBalances {
   source?: "turnkey" | "none"
   /** Server diagnostic, e.g. `turnkey_balance_query_failed:...` */
   detail?: string
-  /** CAIP-2 value the server used for Turnkey — must match the network where USDC/EURC were sent */
+  /** CAIP-2 value the server used for Turnkey – must match the network where USDC/EURC were sent */
   balanceCaip2?: string
 }
 
@@ -781,7 +781,7 @@ export const noahService = {
   },
 
   /**
-   * Pull latest Noah customer (Individual scope) and upsert into Supabase — same route business uses after hosted KYB/KYC.
+   * Pull latest Noah customer (Individual scope) and upsert into Supabase – same route business uses after hosted KYB/KYC.
    */
   async syncKyc(): Promise<{ success: boolean; noahScope?: string }> {
     const session = await requireAuthSession()
@@ -1029,7 +1029,7 @@ export const noahService = {
    * Solana USDC / EURC deposit addresses from Turnkey `wallet_accounts` (same as business /accounts).
    */
   /**
-   * Ensure Turnkey sub-org exists (server-side create) and is linked — idempotent.
+   * Ensure Turnkey sub-org exists (server-side create) and is linked – idempotent.
    * (Consumer mobile: default Noah scope is individual.)
    */
   async ensureTurnkeySubOrg(): Promise<{
@@ -1486,7 +1486,7 @@ export const noahService = {
   },
 
   /**
-   * Noah GET /prices (via Easner) — any supported fiat pair (USD/EUR wallet + payout fiats).
+   * Noah GET /prices (via Easner) – any supported fiat pair (USD/EUR wallet + payout fiats).
    */
   async getFxQuote(params: {
     sourceCurrency: string

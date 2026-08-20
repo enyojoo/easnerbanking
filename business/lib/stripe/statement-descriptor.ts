@@ -8,7 +8,7 @@ function sanitizeAlnum(raw: string): string {
 }
 
 /**
- * Platform MoR suffix — Easner is on the statement. Invoices carry their number
+ * Platform MoR suffix – Easner is on the statement. Invoices carry their number
  * ("EASNER* INV ACME2024"); other collections carry the business name so the payer
  * recognizes the charge.
  */

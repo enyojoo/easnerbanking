@@ -599,7 +599,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
 
   return (
     <View style={styles.container}>
-      {/* Header: avatar | verify banner (if needed) | support — avatar/support stay in-screen on small; web shell moves them to DesktopHeader */}
+      {/* Header: avatar | verify banner (if needed) | support – avatar/support stay in-screen on small; web shell moves them to DesktopHeader */}
       {showDashboardHeader ? (
       <View style={[styles.headerWrapper, { paddingTop: insets.top + spacing[4] }]}>
         <View style={styles.header}>
@@ -656,7 +656,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
               style={styles.supportHeaderButton}
               onPress={() => {
                 haptics.tap()
-                // Same path as Profile / AccountVerification — let navigate bubble to MainStack.
+                // Same path as Profile / AccountVerification – let navigate bubble to MainStack.
                 navigation.navigate('Support' as never)
               }} accessibilityRole="button"
               accessibilityLabel="Support"
@@ -1089,7 +1089,7 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
   scrollContentTabBarTight: {
     paddingBottom: spacing[4],
   },
-  /** Sky-blue gradient hero — primary identity card. */
+  /** Sky-blue gradient hero – primary identity card. */
   heroCard: {
     marginHorizontal: spacing[5],
     marginBottom: spacing[3],
@@ -1423,7 +1423,7 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
   transactionItemLast: {
     marginBottom: 0,
   },
-  /** Tinted-blue circular icon — primary @ ~10% alpha fill, primary stroke icon. */
+  /** Tinted-blue circular icon – primary @ ~10% alpha fill, primary stroke icon. */
   transactionIconBox: {
     width: 44,
     height: 44,

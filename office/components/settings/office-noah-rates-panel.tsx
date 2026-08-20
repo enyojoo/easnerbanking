@@ -68,9 +68,9 @@ type WalletSourceRow = {
 }
 
 function formatAsOf(raw: string | undefined): string {
-  if (!raw) return "—"
+  if (!raw) return "–"
   const t = new Date(raw)
-  if (!Number.isFinite(t.getTime())) return "—"
+  if (!Number.isFinite(t.getTime())) return "–"
   return t.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
 }
 
@@ -151,7 +151,7 @@ export function OfficeNoahRatesPanel() {
                 dateStyle: "medium",
                 timeStyle: "short",
               })
-            : "—",
+            : "–",
       }
     })
   }, [rates, currencyByCode])
@@ -165,7 +165,7 @@ export function OfficeNoahRatesPanel() {
       setSyncSummary(
         `Updated ${result.updated}, skipped ${result.skipped}${
           result.skippedPairs.length
-            ? ` — ${result.skippedPairs.slice(0, 8).join(", ")}`
+            ? ` – ${result.skippedPairs.slice(0, 8).join(", ")}`
             : ""
         }`,
       )
@@ -286,7 +286,7 @@ export function OfficeNoahRatesPanel() {
                     <TableCell className="font-mono">{wallet.code}</TableCell>
                     <TableCell>
                       {wallet.pairCount === 0 ? (
-                        <span className="text-muted-foreground text-sm">None — run Sync rates</span>
+                        <span className="text-muted-foreground text-sm">None – run Sync rates</span>
                       ) : (
                         <span>
                           {wallet.activePairCount} active
@@ -329,7 +329,7 @@ export function OfficeNoahRatesPanel() {
         <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
           <DialogHeader className="border-b pb-4">
             <DialogTitle>
-              Edit Noah rates — {editingMeta?.name} ({editingSource})
+              Edit Noah rates – {editingMeta?.name} ({editingSource})
             </DialogTitle>
           </DialogHeader>
 

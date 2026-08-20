@@ -59,7 +59,7 @@ export function SendRecipientPicker({
   const [isPickerOpen, setIsPickerOpen] = useState(false)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
 
-  /** Hub search (@…) live lookup — same pattern as mobile send hub. */
+  /** Hub search (@…) live lookup – same pattern as mobile send hub. */
   const [hubSearchEasenet, setHubSearchEasenet] = useState<{
     easetag: string
     fullName: string

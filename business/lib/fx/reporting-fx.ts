@@ -1,4 +1,4 @@
-/** Business base currencies — used for reporting FX (dashboard totals after base change). */
+/** Business base currencies – used for reporting FX (dashboard totals after base change). */
 export const REPORTING_FX_CURRENCY_CODES = ["USD", "EUR", "GBP", "NGN"] as const
 
 export type ReportingFxCurrencyCode = (typeof REPORTING_FX_CURRENCY_CODES)[number]

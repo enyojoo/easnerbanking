@@ -1,7 +1,7 @@
 /**
  * Map Noah Business customer payload → `public.businesses` on KYB approval.
  *
- * Expected — present on Noah Business customer, not mapped in v1:
+ * Expected – present on Noah Business customer, not mapped in v1:
  * - IncorporationDate
  * - Email / PhoneNumber (operational support contact stays user-entered)
  * - RegisteredAddress.Street2

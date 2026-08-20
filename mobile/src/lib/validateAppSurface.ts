@@ -14,7 +14,7 @@ export type SurfaceAccessResult = {
 export async function ensureConsumerMobileAccess(): Promise<SurfaceAccessResult> {
   try {
     const session = await getSessionReliable()
-    /** Transient while SecureStore/AsyncStorage hydrates — caller must not treat as "denied". */
+    /** Transient while SecureStore/AsyncStorage hydrates – caller must not treat as "denied". */
     if (!session?.access_token) {
       return { error: new Error('Unauthorized'), kind: 'unauthorized' }
     }
@@ -55,7 +55,7 @@ export async function ensureConsumerMobileAccess(): Promise<SurfaceAccessResult>
     if (msg === 'No access token found' || msg === 'Authentication required') {
       return { error: new Error('Unauthorized'), kind: 'unauthorized' }
     }
-    /** Do not sign out — transient / network; avoid kicking user back to login after successful sign-in. */
+    /** Do not sign out – transient / network; avoid kicking user back to login after successful sign-in. */
     console.warn('ensureConsumerMobileAccess:', msg)
     return { error: null, kind: 'transient' }
   }

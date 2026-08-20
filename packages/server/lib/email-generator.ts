@@ -1,4 +1,4 @@
-// Email template generator — Easner design system (sans-first, token-driven)
+// Email template generator – Easner design system (sans-first, token-driven)
 
 import {
   emailTheme,
@@ -352,7 +352,7 @@ function generateEmailLayoutStyles(): string {
   `.trim()
 }
 
-/** Light/dark wordmarks — swapped via `prefers-color-scheme: dark` in email clients that support it. */
+/** Light/dark wordmarks – swapped via `prefers-color-scheme: dark` in email clients that support it. */
 export function generateEmailLogoMarkup(width = 120): string {
   return `
             <img src="${EASNER_LOGO_URL_LIGHT}" alt="Easner" class="logo logo-light" width="${width}">
@@ -369,7 +369,7 @@ export function generateBaseEmailTemplate(
 ): string {
   const audience = options?.audience ?? "personal"
   const profile = getEmailAudienceProfile(audience)
-  /** Omit product line under the title — logo + H1 only (personal and business). */
+  /** Omit product line under the title – logo + H1 only (personal and business). */
   const headerSubtitle =
     subtitle.trim() === profile.productName.trim() ? "" : subtitle
   const preheader = options?.preheader?.trim()
@@ -479,7 +479,7 @@ const SUPABASE_AUTH_EMAIL_COPY: Record<
   },
 }
 
-/** OTP block — paste `{{ .Token }}` verbatim into Supabase Auth email templates. */
+/** OTP block – paste `{{ .Token }}` verbatim into Supabase Auth email templates. */
 export function generateAuthOtpBlock(tokenPlaceholder = "{{ .Token }}"): string {
   return `
         <div class="otp-container">
@@ -521,7 +521,7 @@ export type TransactionDetailRow = {
   value: string
   isStatus?: boolean
   statusClass?: string
-  /** Hosted PNG or data URL — renders brand chip beside `value` in HTML email. */
+  /** Hosted PNG or data URL – renders brand chip beside `value` in HTML email. */
   brandIconSrc?: string | null
 }
 

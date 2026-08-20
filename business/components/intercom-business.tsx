@@ -61,7 +61,7 @@ function bootPayload(
     return {
       ...base,
       intercom_user_jwt: auth.token,
-      /** Align Messenger cookie TTL with a 24h app session; optional — see Intercom Messenger settings. */
+      /** Align Messenger cookie TTL with a 24h app session; optional – see Intercom Messenger settings. */
       session_duration: 86_400_000,
     }
   }
@@ -119,7 +119,7 @@ export function BusinessIntercom() {
     if (!appId) {
       if (process.env.NODE_ENV === "development") {
         console.warn(
-          "[Intercom] Missing NEXT_PUBLIC_INTERCOM_APP_ID — add it to business/.env.local and Vercel env, then redeploy.",
+          "[Intercom] Missing NEXT_PUBLIC_INTERCOM_APP_ID – add it to business/.env.local and Vercel env, then redeploy.",
         )
       }
       return
@@ -156,7 +156,7 @@ export function BusinessIntercom() {
 
       if (auth.mode === "legacy" && process.env.NODE_ENV === "development") {
         console.warn(
-          "[Intercom] Messenger is not JWT-secured — set INTERCOM_MESSENGER_API_SECRET (see .env.example) and enforce security in Intercom.",
+          "[Intercom] Messenger is not JWT-secured – set INTERCOM_MESSENGER_API_SECRET (see .env.example) and enforce security in Intercom.",
         )
       }
 

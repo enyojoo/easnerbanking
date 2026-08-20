@@ -133,7 +133,7 @@ export function notifyTerminalPayoutSetupUpdated(): void {
   window.dispatchEvent(new CustomEvent(EASNER_TERMINAL_PAYOUT_SETUP_UPDATED_EVENT))
 }
 
-/** Drop cached snapshot and ask hooks to refetch (e.g. after switching org — rare for same user). */
+/** Drop cached snapshot and ask hooks to refetch (e.g. after switching org – rare for same user). */
 export function invalidateBusinessNoahAccountsCache(userId: string): void {
   dataCache.invalidate(CACHE_KEYS.BUSINESS_NOAH_ACCOUNT_SNAPSHOT(userId))
   if (typeof window === "undefined") return

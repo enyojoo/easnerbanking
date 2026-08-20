@@ -36,7 +36,7 @@ function roundUsdc(n: number): number {
 
 /**
  * Ticket-sized bridge mid from a live Relay quote (Noah payout 2B pattern).
- * Uses receiveAmount / bridgeFloor — not quote toAmount, which can overshoot the user's target.
+ * Uses receiveAmount / bridgeFloor – not quote toAmount, which can overshoot the user's target.
  */
 export function resolveBridgeTicketPricingInput(input: {
   receiveAmount: number

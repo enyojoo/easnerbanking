@@ -1,5 +1,5 @@
 /**
- * Rich receipt detail rows — flags, recipient avatars, balance chips.
+ * Rich receipt detail rows – flags, recipient avatars, balance chips.
  * Emails stay plain via `buildTransactionEmailDetailRows`.
  */
 

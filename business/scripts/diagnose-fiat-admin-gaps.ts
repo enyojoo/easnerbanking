@@ -124,7 +124,7 @@ async function main() {
   for (const [cc, cur, rail] of userAsked) {
     const r = annotated.find((x) => x.country_code === cc && x.currency_code === cur && x.rail === rail)
     if (!r) {
-      console.log(`${cc}:${cur}:${rail} — NO DB ROW`)
+      console.log(`${cc}:${cur}:${rail} – NO DB ROW`)
       continue
     }
     console.log(`${cc}:${cur}:${rail}`, {

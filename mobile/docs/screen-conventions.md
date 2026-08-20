@@ -16,7 +16,7 @@ Short reference for building screens that match the premium banking UI.
 ## Lists
 
 - Primary long lists: **`@shopify/flash-list`** with a realistic **`estimatedItemSize`**; memo row components when parents re-render often.
-- Remote images: use **`CachedImage`** / **`AvatarImage`** (`components/`) — wraps `expo-image` with `memory-disk` cache and prefetch. Do not use react-native `Image` for URLs.
+- Remote images: use **`CachedImage`** / **`AvatarImage`** (`components/`) – wraps `expo-image` with `memory-disk` cache and prefetch. Do not use react-native `Image` for URLs.
 
 ## Typography
 

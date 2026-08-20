@@ -1,4 +1,4 @@
-/** Pure helpers for routing payout fee capture — safe to import from tests. */
+/** Pure helpers for routing payout fee capture – safe to import from tests. */
 
 export function isYcBalancePayoutLedgerMeta(meta: Record<string, unknown>): boolean {
   if (String(meta.yc_mode ?? "") === "balance_payout") return true
@@ -17,7 +17,7 @@ export function isGridBalancePayoutLedgerMeta(meta: Record<string, unknown>): bo
   )
 }
 
-/** Noah global fiat off-ramp only — never YC or Grid balance payout. */
+/** Noah global fiat off-ramp only – never YC or Grid balance payout. */
 export function isNoahGlobalPayoutLedgerMeta(meta: Record<string, unknown>): boolean {
   if (isYcBalancePayoutLedgerMeta(meta)) return false
   if (isGridBalancePayoutLedgerMeta(meta)) return false

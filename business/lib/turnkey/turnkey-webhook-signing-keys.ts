@@ -75,7 +75,7 @@ function parseEnvSigningKeysJson(): Record<string, string> {
 
 /**
  * Resolve Ed25519 public key material for a V2 `X-Turnkey-Signature-Key-Id`.
- * Returns null when not configured — set keys from Turnkey dashboard / support.
+ * Returns null when not configured – set keys from Turnkey dashboard / support.
  */
 export function resolveTurnkeyWebhookEd25519PublicKey(
   keyId: string | null | undefined,

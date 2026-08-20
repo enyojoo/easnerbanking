@@ -18,7 +18,7 @@ type PersonalUpdateBody = {
   email?: string
   phone?: string
   dateOfBirth?: string
-  /** Short HTTPS URL from Storage upload API; null clears. Stored on `users.avatar_url` only — never in JWT metadata. */
+  /** Short HTTPS URL from Storage upload API; null clears. Stored on `users.avatar_url` only – never in JWT metadata. */
   avatarUrl?: string | null
 }
 

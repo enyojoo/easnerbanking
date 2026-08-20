@@ -100,7 +100,7 @@ export async function backfillTurnkeyOnchainTransactions(
     walletOwnerId?: string
     throttleMsBetweenIngests?: number
     connection?: Connection
-    /** When false (default), only scan SPL ATA — avoids duplicate owner+ATA RPC calls. */
+    /** When false (default), only scan SPL ATA – avoids duplicate owner+ATA RPC calls. */
     scanOwnerAddress?: boolean
   },
 ): Promise<{

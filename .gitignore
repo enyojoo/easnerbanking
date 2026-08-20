@@ -132,6 +132,6 @@ next-env.d.ts
 /docs/
 .env*
 
-# Expo/EAS live under mobile/ only — block accidental root project configs
+# Expo/EAS live under mobile/ only – block accidental root project configs
 /app.json
 /eas.json

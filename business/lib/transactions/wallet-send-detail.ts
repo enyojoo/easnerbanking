@@ -71,7 +71,7 @@ export function attachWalletSendDetailFields(
     sendCurrency: payoutReview.send_currency,
     executionModel: payoutReview.execution_model,
   })
-  // Direct Turnkey (and Easetag-style instant sends) settle during execute — no transfer tracker.
+  // Direct Turnkey (and Easetag-style instant sends) settle during execute – no transfer tracker.
   // Relay bridge may return pending; show Processing → Complete only while still in flight.
   const lifecycle =
     payoutReview.execution_model === "relay_bridge" &&

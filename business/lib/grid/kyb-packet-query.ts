@@ -9,7 +9,7 @@ import { useMaybeScope } from "@/lib/query/scope"
 import { useDocumentVisibility } from "@/lib/query/use-document-visibility"
 import { useRealtimeHealth } from "@/lib/query/realtime-health-context"
 
-/** @deprecated Prefer `qk.verification.packet(scope)` — kept for wizard cache writes. */
+/** @deprecated Prefer `qk.verification.packet(scope)` – kept for wizard cache writes. */
 export const KYB_PACKET_QUERY_KEY = ["grid", "kyb-packet"] as const
 
 export async function fetchKybPacket(): Promise<KybPacket> {

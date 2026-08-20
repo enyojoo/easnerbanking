@@ -76,7 +76,7 @@ export default function InvoicesPage() {
                           {(inv.amount_cents / 100).toFixed(2)} {inv.currency}
                         </TableCell>
                         <TableCell>{inv.status}</TableCell>
-                        <TableCell>{inv.due_date ?? "—"}</TableCell>
+                        <TableCell>{inv.due_date ?? "–"}</TableCell>
                         <TableCell className="font-mono text-xs">{inv.business_id}</TableCell>
                       </TableRow>
                     ))

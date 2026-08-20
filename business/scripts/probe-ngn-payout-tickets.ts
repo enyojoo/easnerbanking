@@ -6,7 +6,7 @@
  * Optional env:
  *   PROBE_NOAH_CUSTOMER_ID (default: user's individual eind)
  *   PROBE_USER_ID
- *   PROBE_NOAH_RECIPIENT_ID — NGN recipient uuid; else first NGN recipient for user
+ *   PROBE_NOAH_RECIPIENT_ID – NGN recipient uuid; else first NGN recipient for user
  */
 
 import { computeDisplayProcessingFee } from "@easner/shared"

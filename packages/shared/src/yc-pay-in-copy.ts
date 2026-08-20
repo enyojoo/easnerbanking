@@ -1,6 +1,6 @@
 export type YcPayInRail = 'bank_transfer' | 'mobile_money'
 
-/** Prefix for the pay-in amount reminder — render at body size; amount is styled separately. */
+/** Prefix for the pay-in amount reminder – render at body size; amount is styled separately. */
 export const YC_PAY_IN_SEND_EXACTLY_LABEL = 'Send exactly'
 
 /** CTA on amount, MoMo setup, and review steps before pay-in complete. */

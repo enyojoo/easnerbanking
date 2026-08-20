@@ -288,7 +288,7 @@ interface AuthContextType {
   loading: boolean
   /** Set after password sign-in when AAL1→AAL2 is required; cleared after successful TOTP verify or sign-out. */
   mfaPending: { factorId: string } | null
-  /** False while post-sign-in MFA requirement is being resolved — blocks PIN until known. */
+  /** False while post-sign-in MFA requirement is being resolved – blocks PIN until known. */
   mfaGateResolved: boolean
   signIn: (email: string, password: string, rememberMe?: boolean) => Promise<{ error: any }>
   signInWithGoogle: () => Promise<{ error: Error | null }>
@@ -380,7 +380,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [mfaPending])
 
   const syncMfaGateFromSession = useCallback(async (): Promise<'none' | 'pending' | 'missing_factor'> => {
-    /** User is mid OTP entry — do not re-sync (avoids loading-shell flicker on app resume). */
+    /** User is mid OTP entry – do not re-sync (avoids loading-shell flicker on app resume). */
     if (mfaPendingRef.current) {
       return 'pending'
     }
@@ -461,7 +461,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       /**
        * Do not skip `mfa.verify` based on `getAuthenticatorAssuranceLevel()` alone.
        * After password sign-in, GoTrue can briefly report AAL in a state where `isMfaStepRequired`
-       * is false even though the session is still AAL1 — that path cleared MFA without verifying
+       * is false even though the session is still AAL1 – that path cleared MFA without verifying
        * and accepted any 6-digit code. Always challenge + verify the submitted code here.
        */
       const { data: factors, error: facErr } = await supabase.auth.mfa.listFactors()
@@ -499,7 +499,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (finalized.deletionCancelled) {
         await markAccountClosureCancelledIfNeeded(true)
       }
-      /** After surface is OK — avoids a blank frame: clearing MFA before this left AppNavigator without MfaStack while still awaiting network. */
+      /** After surface is OK – avoids a blank frame: clearing MFA before this left AppNavigator without MfaStack while still awaiting network. */
       setMfaPending(null)
       return { error: null }
     },
@@ -695,7 +695,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       lastAutoProfileFetchAtRef.current[userId] = Date.now()
       if (profileFetchPendingRef.current) {
         profileFetchPendingRef.current = false
-        /** Second caller while in flight — must not be dropped by throttle. */
+        /** Second caller while in flight – must not be dropped by throttle. */
         void fetchUserProfile(userId, user, { ...(opts ?? {}), force: true, sourceEvent: opts?.sourceEvent })
       }
     }
@@ -1123,7 +1123,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       // Same SFSafariViewController / Chrome Custom Tab as Legal + KYC.
-      // Do not use openAuthSessionAsync — that triggers iOS “wants to use supabase.co to Sign In”.
+      // Do not use openAuthSessionAsync – that triggers iOS “wants to use supabase.co to Sign In”.
       // OAuth completion is delivered via Linking → consumeOAuthCallbackIfPresent (same as before).
       await openEasnerInAppBrowser(authUrl)
 
@@ -1184,7 +1184,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const { idToken, fullName } = await signInWithAppleWeb()
         if (applePrivateRelayFromIdToken(idToken)) return relayBlocked()
 
-        // Omit nonce — matches native iOS; avoids GoTrue hex vs Apple base64url mismatch.
+        // Omit nonce – matches native iOS; avoids GoTrue hex vs Apple base64url mismatch.
         const { error: signInError } = await supabase.auth.signInWithIdToken({
           provider: 'apple',
           token: idToken,

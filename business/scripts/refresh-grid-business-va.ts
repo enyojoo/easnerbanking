@@ -57,7 +57,7 @@ async function main() {
   console.log("Active Noah VAs:", noahRows ?? [])
 
   if (dryRun) {
-    console.log("\nDry run — no changes applied.")
+    console.log("\nDry run – no changes applied.")
     return
   }
 

@@ -7,13 +7,13 @@ function depositCreditSubtitle(depositCurrency: string, creditCurrency: string):
   return `Deposit ${deposit} to credit your ${credit} Balance`
 }
 
-/** US / EU bank transfer row (Noah VA) — deposit and credit use the same account currency. */
+/** US / EU bank transfer row (Noah VA) – deposit and credit use the same account currency. */
 export function receiveInternationalDepositSubtitle(accountCurrency: string): string {
   const cur = String(accountCurrency ?? "").trim().toUpperCase()
   return depositCreditSubtitle(cur, cur)
 }
 
-/** Local pay-in row (YC fund balance) — pay in local currency, credit USD balance. */
+/** Local pay-in row (YC fund balance) – pay in local currency, credit USD balance. */
 export function receiveLocalDepositSubtitle(localPayInCurrency: string): string {
   const cur = String(localPayInCurrency ?? "").trim().toUpperCase()
   return depositCreditSubtitle(cur, "USD")

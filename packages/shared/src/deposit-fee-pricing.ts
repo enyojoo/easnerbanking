@@ -1,5 +1,5 @@
 /**
- * Bank deposit (VA on-ramp) customer fee — Easner UX + ledger only.
+ * Bank deposit (VA on-ramp) customer fee – Easner UX + ledger only.
  * Noah API does not support min/max caps; inbound ChannelFee is deducted by Noah before Remaining.
  */
 

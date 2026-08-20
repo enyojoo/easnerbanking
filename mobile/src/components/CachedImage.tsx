@@ -5,9 +5,9 @@ import { IMAGE_CACHE_POLICY, markImageWarm, warmImageCache, type ImageCachePolic
 import { BundledImage } from './BundledImage'
 
 export type CachedImageProps = Omit<ImageProps, 'source' | 'cachePolicy'> & {
-  /** Remote URL — preferred for avatars and CDN assets. */
+  /** Remote URL – preferred for avatars and CDN assets. */
   uri?: string | null
-  /** Bundled `require()` — routed to {@link BundledImage}, not expo-image. */
+  /** Bundled `require()` – routed to {@link BundledImage}, not expo-image. */
   source?: ImageSource | ImageSource[] | number
   cachePolicy?: ImageCachePolicy
   /** Prefetch on mount (default true for remote `uri`). */

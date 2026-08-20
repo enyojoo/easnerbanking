@@ -43,7 +43,7 @@ type RecipientPayoutProfileRowProps = {
 }
 
 /**
- * Selected payout recipient — full flag or token avatar, no corner badge (mobile SendSelectedRecipientSummary).
+ * Selected payout recipient – full flag or token avatar, no corner badge (mobile SendSelectedRecipientSummary).
  */
 export function RecipientPayoutProfileRow({
   fullName,

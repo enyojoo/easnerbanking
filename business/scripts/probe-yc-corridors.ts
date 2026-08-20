@@ -216,7 +216,7 @@ function supportLabel(row: CorridorCaps): string {
   if (row.noah_sell) parts.push("Noah")
   if (row.yc_send) parts.push("YC Send")
   if (row.yc_receive) parts.push("YC Receive")
-  return parts.length ? parts.join(" · ") : "—"
+  return parts.length ? parts.join(" · ") : "–"
 }
 
 function printTable(title: string, rows: CorridorCaps[]) {
@@ -226,7 +226,7 @@ function printTable(title: string, rows: CorridorCaps[]) {
   )
   for (const row of rows) {
     console.log(
-      `${row.country_code.padEnd(4)} ${row.currency_code.padEnd(4)} ${row.rail.padEnd(14)} ${(row.yc_send ? "yes" : "—").padEnd(8)} ${(row.yc_receive ? "yes" : "—").padEnd(8)} ${(row.noah_sell ? "yes" : "—").padEnd(6)} ${supportLabel(row)}`,
+      `${row.country_code.padEnd(4)} ${row.currency_code.padEnd(4)} ${row.rail.padEnd(14)} ${(row.yc_send ? "yes" : "–").padEnd(8)} ${(row.yc_receive ? "yes" : "–").padEnd(8)} ${(row.noah_sell ? "yes" : "–").padEnd(6)} ${supportLabel(row)}`,
     )
   }
 }
@@ -241,8 +241,8 @@ async function main() {
 
   const rampTypes = [...new Set(active.map((c) => c.rampType).filter(Boolean))]
   const channelTypes = [...new Set(active.map((c) => c.channelType).filter(Boolean))]
-  console.log(`YC rampType: ${rampTypes.join(", ") || "—"}`)
-  console.log(`YC channelType: ${channelTypes.join(", ") || "—"}`)
+  console.log(`YC rampType: ${rampTypes.join(", ") || "–"}`)
+  console.log(`YC channelType: ${channelTypes.join(", ") || "–"}`)
 
   const ycMap = buildYcCorridorMap(channels)
   const ycRows = [...ycMap.values()].sort(
@@ -282,7 +282,7 @@ async function main() {
       }
     }
   } else {
-    console.log("\n(Noah comparison skipped — configure NOAH_API_KEY + signing key for matrix.)")
+    console.log("\n(Noah comparison skipped – configure NOAH_API_KEY + signing key for matrix.)")
   }
 
   if (process.env.PROBE_WRITE_MANIFEST === "true") {

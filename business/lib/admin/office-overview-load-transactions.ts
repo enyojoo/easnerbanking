@@ -109,7 +109,7 @@ async function attachProfilesAndFinalizeVisible(
 }
 
 /**
- * User-visible transactions for volume KPIs — no date filter (all time, capped).
+ * User-visible transactions for volume KPIs – no date filter (all time, capped).
  */
 export async function loadAllTimeUserVisibleTransactions(
   admin: AdminClient,

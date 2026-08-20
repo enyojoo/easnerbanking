@@ -4,7 +4,7 @@ import { useCallback, useRef, useState } from "react"
 
 /**
  * Promise-based PIN confirmation for sensitive actions (send, future card controls).
- * Renders nothing — pair with {@link PinChallengeDialog} using the returned handlers.
+ * Renders nothing – pair with {@link PinChallengeDialog} using the returned handlers.
  *
  * ```tsx
  * const { open, requestConfirm, onVerified, onOpenChange } = useConfirmWithPin()

@@ -105,7 +105,7 @@ function SessionsTable({ sessions }: { sessions: TerminalSessionListItem[] }) {
                 <span className="font-mono text-xs">
                   {s.crypto_amount_expected?.trim()
                     ? `${s.crypto_amount_expected} ${s.crypto_currency}`
-                    : "—"}
+                    : "–"}
                 </span>
               </td>
               <td className="min-w-0 p-4 align-middle">

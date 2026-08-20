@@ -48,7 +48,7 @@ export function isWithinMinutesBankPayoutCorridor(_input: {
   return false
 }
 
-/** Pass through Noah `ProcessingSeconds` — confirm copy comes from `formatPayoutArrivalHint`. */
+/** Pass through Noah `ProcessingSeconds` – confirm copy comes from `formatPayoutArrivalHint`. */
 export function resolvePayoutProcessingSeconds(input: {
   countryCode: string
   rail: PayoutRail
@@ -191,7 +191,7 @@ export function validatePayoutAmountAgainstLimits(input: {
   hints: PayoutFieldsSchemaHint | null | undefined
   currencyCode?: string
   rail?: PayoutRail
-  /** Easetag P2P is internal ledger — no Noah fiat payout minimums. */
+  /** Easetag P2P is internal ledger – no Noah fiat payout minimums. */
   isEasetag?: boolean
 }): SendAmountFieldValidation {
   if (input.isEasetag) return { ok: true }
@@ -230,7 +230,7 @@ export function deriveSendBudgetFromReceiveAmount(
 }
 
 /**
- * Amount screen limit check — when entry mode is send, over-max copy uses send currency.
+ * Amount screen limit check – when entry mode is send, over-max copy uses send currency.
  */
 export function validatePayoutAmountAgainstLimitsForEntry(input: {
   amountEntryMode?: "send" | "receive"
@@ -339,7 +339,7 @@ export function formatPayoutArrivalHint(processingSeconds?: number): string | nu
   return days === 1 ? "1 business day" : `${days} business days`
 }
 
-/** Send confirm Arrival row — fiat uses Noah seconds; Easetag and wallet are instant ledger/on-chain. */
+/** Send confirm Arrival row – fiat uses Noah seconds; Easetag and wallet are instant ledger/on-chain. */
 export function resolveSendConfirmArrivalHint(input: {
   isEasetag?: boolean
   isWalletSend?: boolean

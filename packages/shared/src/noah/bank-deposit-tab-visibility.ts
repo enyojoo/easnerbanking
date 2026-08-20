@@ -1,6 +1,6 @@
 /**
  * Whether a fiat virtual-account (bank deposit) tab should be shown for a currency.
- * Uses Noah provisioning result (`hasAccount`) — not a geo blocklist.
+ * Uses Noah provisioning result (`hasAccount`) – not a geo blocklist.
  */
 
 export function isVaAnswerSettled(opts: {

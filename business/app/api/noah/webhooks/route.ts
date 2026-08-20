@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic"
 export const maxDuration = 60
 
 /**
- * Noah webhook ingress — verify `Webhook-Signature` (ECDSA SHA-384) over raw body per Noah docs.
+ * Noah webhook ingress – verify `Webhook-Signature` (ECDSA SHA-384) over raw body per Noah docs.
  * Register this URL in the Noah production dashboard.
  */
 export async function GET() {
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
           code === "MISSING_SIGNATURE"
             ? "Noah must send Webhook-Signature. Remove NOAH_WEBHOOK_PUBLIC_KEY from Vercel unless Noah gave you a custom key. Test pings without a signature will always fail."
             : code === "EMPTY_BODY"
-              ? "Webhook body was empty — check proxies and that Noah POSTs JSON."
+              ? "Webhook body was empty – check proxies and that Noah POSTs JSON."
               : `Signature did not verify. Unset NOAH_WEBHOOK_PUBLIC_KEY if unsure. Set NOAH_WEBHOOK_NOAH_ENV=production or sandbox to match your Noah program (${envHint}). See Noah webhook configuration docs.`,
       },
       { status: 401 },

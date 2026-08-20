@@ -154,7 +154,7 @@ describe("submitYcSendWithDestinationAmountLock", () => {
 
     const result = await submitYcSendWithDestinationAmountLock({
       receiveAmount: 2000,
-      // Force a bad first crypto via mock — lock will size to 1.48 normally;
+      // Force a bad first crypto via mock – lock will size to 1.48 normally;
       // override by returning shortfall for first call if somehow 1.47.
       initialSettlementCryptoUsd: 1.47,
       destinationRate: 1366.135,

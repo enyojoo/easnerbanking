@@ -24,7 +24,7 @@ export type NoahWebhookVerifyDiagnostic = {
 
 /**
  * Public keys used to verify Noah `Webhook-Signature` (ECDSA SHA-384 over raw body).
- * Production Noah only — sandbox key is opt-in via `NOAH_WEBHOOK_NOAH_ENV=sandbox`.
+ * Production Noah only – sandbox key is opt-in via `NOAH_WEBHOOK_NOAH_ENV=sandbox`.
  * @see https://docs.noah.com/api-concepts/webhooks/configuration
  */
 export function getNoahWebhookVerifyPublicKeys(): string[] {
@@ -93,7 +93,7 @@ function decodeSignatureBytes(candidate: string): Buffer | null {
 }
 
 /**
- * Noah docs Node.js pattern — primary verifier.
+ * Noah docs Node.js pattern – primary verifier.
  * @see https://docs.noah.com/api-concepts/webhooks/configuration
  */
 function verifyWithNoahDocsNodePattern(
@@ -106,7 +106,7 @@ function verifyWithNoahDocsNodePattern(
   return verifier.verify(publicKeyPem, signature)
 }
 
-/** Go docs pattern — SHA-384 hash of body, then ASN.1 ECDSA verify. */
+/** Go docs pattern – SHA-384 hash of body, then ASN.1 ECDSA verify. */
 function verifyWithNoahDocsGoPattern(
   rawBody: Buffer,
   publicKeyPem: string,
@@ -224,7 +224,7 @@ export function diagnoseNoahWebhookVerification(
           }
         }
       } catch {
-        /* invalid PEM in env — try next key */
+        /* invalid PEM in env – try next key */
       }
     }
   }

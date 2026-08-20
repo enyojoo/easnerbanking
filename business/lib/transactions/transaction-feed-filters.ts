@@ -35,7 +35,7 @@ export function isTurnkeyTransactionHiddenFromFeed(
 }
 
 /**
- * On-chain Turnkey row for Easetag USDC settlement — user already gets {@link notifyEasetagTransferSettled}
+ * On-chain Turnkey row for Easetag USDC settlement – user already gets {@link notifyEasetagTransferSettled}
  * for the internal P2P leg; do not send a second "stablecoin transfer" push for this ledger row.
  */
 export function isEasetagChainSettlementTransaction(metadata: unknown): boolean {

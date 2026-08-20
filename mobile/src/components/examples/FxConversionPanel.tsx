@@ -19,7 +19,7 @@ import {
 } from '../../theme'
 
 /**
- * FxConversionPanel — CFO-style quote card.
+ * FxConversionPanel – CFO-style quote card.
  *
  * Two amount fields with a swap affordance, editorial "You receive"
  * amount in Playfair Display, emerald primary action, no other color.

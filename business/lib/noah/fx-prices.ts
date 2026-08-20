@@ -70,7 +70,7 @@ export function isNoahWalletSourceFiat(currency: string): boolean {
   return WALLET_SOURCE_FIATS.includes(currency.trim().toUpperCase() as (typeof WALLET_SOURCE_FIATS)[number])
 }
 
-/** Parse Noah /prices body — production returns `Items[0]`, older shapes use top-level fields. */
+/** Parse Noah /prices body – production returns `Items[0]`, older shapes use top-level fields. */
 export function parseNoahPriceResponse(data: NoahPricesResponse): NoahPriceItem | null {
   const items = data.Items
   if (Array.isArray(items) && items.length > 0) {
@@ -93,7 +93,7 @@ export function amountsFromNoahPriceItem(
 }
 
 /**
- * Noah `/prices` mid-market rate (`Items[0].Rate`) — destination fiat per 1 unit of source.
+ * Noah `/prices` mid-market rate (`Items[0].Rate`) – destination fiat per 1 unit of source.
  * Stable across ticket size; unlike `destinationAmount / sourceAmount`, which embeds channel fees.
  */
 export function midMarketRateFromNoahPriceItem(row: NoahPriceItem): number | null {
@@ -448,7 +448,7 @@ export async function buildNoahWalletExchangeRates(input?: {
               })
             }
           } catch {
-            // corridor not on Noah /prices — omit
+            // corridor not on Noah /prices – omit
           }
         }),
     ),

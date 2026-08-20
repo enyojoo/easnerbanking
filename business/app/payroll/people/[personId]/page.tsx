@@ -83,11 +83,11 @@ export default function PayrollPersonDetailPage() {
           <Detail label="Classification" value={person.type} capitalize />
           <Detail label="Amount" value={formatCurrency(person.defaultAmount, businessCurrency)} />
           <div><dt className="text-xs text-muted-foreground">Residence country</dt><dd className="mt-1 text-sm"><PayrollCountry country={person.country} /></dd></div>
-          <Detail label="Internal reference" value={person.internalReference || "—"} />
+          <Detail label="Internal reference" value={person.internalReference || "–"} />
           {person.easetag ? (
             <Detail label="Easetag" value={`@${person.easetag.replace(/^@/, "")}`} />
           ) : null}
-          <Detail label="Email" value={person.email || "—"} />
+          <Detail label="Email" value={person.email || "–"} />
           <div><dt className="text-xs text-muted-foreground">Receiving method</dt><dd className="mt-1"><PayrollReceivingMethod person={person} typeOnly /></dd></div>
         </dl></CardContent></Card>
 

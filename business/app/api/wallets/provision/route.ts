@@ -7,7 +7,7 @@ import { linkTurnkeySubOrganizationAndEnqueueVaults } from "@/lib/wallet/turnkey
 export const runtime = "nodejs"
 
 /**
- * POST — link Turnkey sub-organization after embedded signup; enqueue vault jobs.
+ * POST – link Turnkey sub-organization after embedded signup; enqueue vault jobs.
  */
 export async function POST(request: Request) {
   const mis = requireNoahEnv()

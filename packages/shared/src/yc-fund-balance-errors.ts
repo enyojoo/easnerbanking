@@ -35,13 +35,13 @@ export function ycFundBalanceQuoteErrorMessage(
     case "yc_amount_above_max":
       return fallback || "Amount is outside the allowed range for this deposit."
     case "yc_omnibus_below_required":
-      return "Rates changed — go back and confirm again to refresh payment details."
+      return "Rates changed – go back and confirm again to refresh payment details."
     case "yc_receive_rejected":
       if (fallback?.toLowerCase().includes("disabled")) {
         return "This payment method is temporarily unavailable. Try again later or contact support."
       }
       if (fallback?.toLowerCase().includes("international format")) {
-        return "Enter your mobile number without the country code — the + prefix is added automatically."
+        return "Enter your mobile number without the country code – the + prefix is added automatically."
       }
       return fallback || "Could not create payment details. Check your amount and try again."
     default:

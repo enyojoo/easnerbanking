@@ -7,7 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
  * - merchant_net: customer pays the listed amount, merchant receives it minus processing.
  * - buyer_surcharge: customer pays listed + processing, merchant receives ~the listed amount.
  * - easner_absorbs: customer pays listed, merchant receives listed, Easner covers processing.
- *   Office-only — never selectable by a business.
+ *   Office-only – never selectable by a business.
  */
 export type CheckoutFeeMode = "merchant_net" | "buyer_surcharge" | "easner_absorbs"
 
@@ -37,7 +37,7 @@ export type ResolvedCheckoutFeeMode = {
   feeMode: CheckoutFeeMode
   /** Business choice, ignored while an override is set. */
   businessFeeMode: CheckoutFeeMode | null
-  /** Office override — when present the business UI shows the mode as managed by Easner. */
+  /** Office override – when present the business UI shows the mode as managed by Easner. */
   overrideFeeMode: CheckoutFeeMode | null
   overrideReason: string | null
 }
@@ -81,7 +81,7 @@ export function checkoutFeeModeLabel(mode: CheckoutFeeMode): string {
   return "Merchant net"
 }
 
-/** Plain-language explanation shown to operators — no provider names. */
+/** Plain-language explanation shown to operators – no provider names. */
 export function checkoutFeeModeDescription(mode: CheckoutFeeMode): string {
   if (mode === "buyer_surcharge") {
     return "The customer pays the listed amount plus the processing fee."

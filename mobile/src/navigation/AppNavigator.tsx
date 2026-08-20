@@ -92,7 +92,7 @@ import PayrollConnectionDetailScreen from '../screens/payroll/PayrollConnectionD
 import PayrollInvitationScreen from '../screens/payroll/PayrollInvitationScreen'
 import PayrollReceivingMethodScreen from '../screens/payroll/PayrollReceivingMethodScreen'
 
-// Transaction Screens — lazy-loaded so receipt capture native modules never run at app launch.
+// Transaction Screens – lazy-loaded so receipt capture native modules never run at app launch.
 function loadTransactionDetailsScreen() {
   return require('../screens/transactions/TransactionDetailsScreen').default
 }
@@ -452,7 +452,7 @@ function PinGateEntryStack() {
   )
 }
 
-/** Same canvas as PIN screens — avoids blank frames during auth / PIN / main handoffs. */
+/** Same canvas as PIN screens – avoids blank frames during auth / PIN / main handoffs. */
 function AuthFlowLoadingShell({ palette, testId }: { palette: ReturnType<typeof useThemeColors>; testId?: string }) {
   return (
     <View
@@ -817,7 +817,7 @@ export default function AppNavigator() {
   //   }
   // }, [pinSetup])
 
-  // Onboarding key read — match app background so the chain onboarding → auth → PIN → main never flashes empty.
+  // Onboarding key read – match app background so the chain onboarding → auth → PIN → main never flashes empty.
   if (onboardingCompleted === null || checkingAuth) {
     return <AuthFlowLoadingShell palette={palette} testId="Bootstrapping app" />
   }
@@ -831,7 +831,7 @@ export default function AppNavigator() {
 
   // After onboarding is completed, check user authentication
   // IMPORTANT: during cold start, Supabase session restore happens asynchronously.
-  // While `loading` is true, do NOT flash the Auth stack (login screen) — keep a
+  // While `loading` is true, do NOT flash the Auth stack (login screen) – keep a
   // consistent loading shell until the auth state is resolved.
   if (loading && !user) {
     return <AuthFlowLoadingShell palette={palette} testId="Restoring session" />
@@ -845,7 +845,7 @@ export default function AppNavigator() {
   /**
    * Signed-in flow order:
    * 1. Login (email/password)
-   * 2. MFA when required (`mfaPending`) — wait until `mfaGateResolved`
+   * 2. MFA when required (`mfaPending`) – wait until `mfaGateResolved`
    * 3. App PIN create or unlock (`pinGate`)
    * 4. Main app
    */
@@ -857,7 +857,7 @@ export default function AppNavigator() {
     return <MfaStack key="mfa-stack" />
   }
 
-  /** Session bootstrap without a user — should be handled above (kept for safety). */
+  /** Session bootstrap without a user – should be handled above (kept for safety). */
   if (loading && !user) {
     return <AuthFlowLoadingShell palette={palette} testId="Restoring session" />
   }

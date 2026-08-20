@@ -100,7 +100,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   // Ref to prevent multiple simultaneous syncs
   const syncingRef = useRef(false)
 
-  // KYC open state (hosted link opens via in-app browser — same as Legal)
+  // KYC open state (hosted link opens via in-app browser – same as Legal)
   const [loadingKyc, setLoadingKyc] = useState(false)
   const externalLink = useExternalLink()
   const [legacyResidenceOpen, setLegacyResidenceOpen] = useState(false)
@@ -128,9 +128,9 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     }
   }, [userProfile?.id])
 
-  // Sync Noah customer status — fetches from the verification API and updates the database
+  // Sync Noah customer status – fetches from the verification API and updates the database
   const syncNoahStatus = useCallback(async (silent: boolean = false, force: boolean = false) => {
-    /** Backend resolves `eind_{userId}` when `noah_customer_id` is null — do not require the column. */
+    /** Backend resolves `eind_{userId}` when `noah_customer_id` is null – do not require the column. */
     if (!userProfile?.id) return
 
     if (syncingRef.current) {
@@ -141,7 +141,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     }
 
     /**
-     * Lock **before** any await — otherwise concurrent callers all pass the guard and spam
+     * Lock **before** any await – otherwise concurrent callers all pass the guard and spam
      * POST /api/noah/sync-status (and profile refresh) while the first is still in AsyncStorage/cache.
      */
     syncingRef.current = true
@@ -160,7 +160,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         return
       }
 
-      // Throttle only for in-review / rejected polling — never block not_started → approved.
+      // Throttle only for in-review / rejected polling – never block not_started → approved.
       if (!force) {
         try {
           const kycPulled =
@@ -289,7 +289,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     scope,
   ])
 
-  // Force Noah pull when opening this screen (success path calls refreshUserProfile — avoid double-fetch).
+  // Force Noah pull when opening this screen (success path calls refreshUserProfile – avoid double-fetch).
   useFocusEffect(
     React.useCallback(() => {
       if (!userProfile?.id) return
@@ -542,7 +542,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         return
       }
       
-      // Noah HostedURL (checkout.noah.com/kyc?session=…) — same in-app browser as Legal
+      // Noah HostedURL (checkout.noah.com/kyc?session=…) – same in-app browser as Legal
       // (SFSafariViewController / Chrome Custom Tabs via useExternalLink).
       // ReturnURL (NOAH_ONBOARDING_RETURN_URL) should be /auth/noah-complete?context=kyc on the business web app.
       await externalLink.openLink(response.kyc_link, 'Verification for global banking')
@@ -735,7 +735,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
               </View>
             )}
 
-            {/* Tier cards: 1 = Noah KYC; 2–3 = roadmap — always visible (approved = read-only, like business). */}
+            {/* Tier cards: 1 = Noah KYC; 2–3 = roadmap – always visible (approved = read-only, like business). */}
             {!noahKycApproved && !kycFinalReject ? (
               <KycRequiredDocumentsNotice />
             ) : null}

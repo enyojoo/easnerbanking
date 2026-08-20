@@ -7,7 +7,7 @@ type Props = Omit<ImageProps, 'source'> & {
 }
 
 /**
- * Local bundled PNG/SVG raster assets. Uses react-native `Image` — reliable in release
+ * Local bundled PNG/SVG raster assets. Uses react-native `Image` – reliable in release
  * builds (expo-image + cachePolicy often fails on `require()` sources).
  */
 export function BundledImage({ source, resizeMode = 'cover', ...rest }: Props) {

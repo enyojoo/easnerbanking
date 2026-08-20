@@ -28,7 +28,7 @@ function validateWebhookUrl(url: string): string | null {
 
 /**
  * Internal: register Turnkey `BALANCE_CONFIRMED_UPDATES` on the same HTTPS URL as activity webhooks.
- * Separate from `FEATURE_NAME_WEBHOOK` (activity only). Closed beta — requires `createWebhookEndpoint` on SDK.
+ * Separate from `FEATURE_NAME_WEBHOOK` (activity only). Closed beta – requires `createWebhookEndpoint` on SDK.
  */
 export async function GET(request: Request) {
   try {

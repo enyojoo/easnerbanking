@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils"
 import { verificationStatusLabel } from "@easner/shared"
 
 /**
- * Compact Tier 1 (business KYB) status for headers — pairs with org name; matches tier-card semantics.
+ * Compact Tier 1 (business KYB) status for headers – pairs with org name; matches tier-card semantics.
  */
 const compactBadge = "text-[10px] leading-tight px-1.5 py-px font-medium rounded"
 

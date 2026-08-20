@@ -79,7 +79,7 @@ export async function createWalletSendSession(
   }
 
   // Pre-migration DBs still have NOT NULL on lifi_mid (Turnkey never used LI.FI).
-  // Post-migration those columns are dropped — retry without the legacy mirrors.
+  // Post-migration those columns are dropped – retry without the legacy mirrors.
   let { error } = await admin.from("wallet_send_sessions").upsert({
     ...payload,
     lifi_mid: input.relay_mid,

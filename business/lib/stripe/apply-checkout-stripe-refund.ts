@@ -65,7 +65,7 @@ export async function applyCheckoutStripeRefund(
     .eq("id", settlementId)
 
   if (credited) {
-    console.warn("[stripe] checkout refund after credited — manual clawback required", settlementId)
+    console.warn("[stripe] checkout refund after credited – manual clawback required", settlementId)
     return { applied: false, skipped: "credited", settlementId, businessId }
   }
 

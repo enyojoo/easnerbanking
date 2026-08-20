@@ -128,7 +128,7 @@ function ycSendSubmitHasSettlementWallet(sendRes: YcSendSubmitResult): boolean {
 function ycSendSubmitReadyWithoutHydrate(sendRes: YcSendSubmitResult): boolean {
   const record = sendRes as Record<string, unknown>
   if (readYcSendLegFeeLocal(record) > 0) return true
-  // POST already returned settlement wallet + locked local — skip GET poll.
+  // POST already returned settlement wallet + locked local – skip GET poll.
   const lockedLocal = Number(sendRes.localAmount ?? sendRes.convertedAmount ?? 0)
   return ycSendSubmitHasSettlementWallet(sendRes) && Number.isFinite(lockedLocal) && lockedLocal > 0
 }

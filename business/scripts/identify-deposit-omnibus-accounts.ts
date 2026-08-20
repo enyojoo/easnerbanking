@@ -42,7 +42,7 @@ export function solanaAccountIndexFromPath(path: string): number | null {
 function envVarForIndex(index: number | null): string {
   if (index === 0) return "DEPOSIT_OMNIBUS_SOLANA_ADDRESS_USD  (USDC / USD ledger)"
   if (index === 1) return "DEPOSIT_OMNIBUS_SOLANA_ADDRESS_EUR  (EURC / EUR ledger)"
-  return "unknown index — expected 0 (USD) or 1 (EUR)"
+  return "unknown index – expected 0 (USD) or 1 (EUR)"
 }
 
 type WalletAccountRow = {
@@ -61,7 +61,7 @@ async function fetchWalletAccounts(walletId: string): Promise<WalletAccountRow[]
 
   const getWallet = client.getWallet ?? client.getWallets
   if (!getWallet) {
-    throw new Error("Turnkey SDK has no getWallet — use --address flags and table order instead")
+    throw new Error("Turnkey SDK has no getWallet – use --address flags and table order instead")
   }
 
   const res = (await getWallet.call(client, {
@@ -135,7 +135,7 @@ async function main() {
   npx tsx scripts/identify-deposit-omnibus-accounts.ts --wallet-id <id>
   npx tsx scripts/identify-deposit-omnibus-accounts.ts --address <pubkey> --address <pubkey>
 
-Turnkey UI truncates paths to m/44'....'/0' — the digit that matters is hidden:
+Turnkey UI truncates paths to m/44'....'/0' – the digit that matters is hidden:
   m/44'/501'/0'/0'  → USD / USDC  (DEPOSIT_OMNIBUS_SOLANA_ADDRESS_USD)
   m/44'/501'/1'/0'  → EUR / EURC  (DEPOSIT_OMNIBUS_SOLANA_ADDRESS_EUR)
 

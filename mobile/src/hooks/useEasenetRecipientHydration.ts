@@ -25,7 +25,7 @@ function normEasetag(s: string | undefined): string {
 /**
  * Merges saved recipient snapshot with live `/api/users/public-by-easetag` (same source as search preview):
  * business logo vs personal avatar, correct Business/Personal, display name.
- * Uses stale-while-revalidate — cached avatar/kind render instantly, network refresh updates in place.
+ * Uses stale-while-revalidate – cached avatar/kind render instantly, network refresh updates in place.
  */
 export function useEasenetRecipientHydration(recipient: Recipient | null | undefined): HydratedEasenetProfile {
   const tag = recipient ? resolveRecipientEasetagForUi(recipient) : ''

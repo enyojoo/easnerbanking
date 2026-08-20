@@ -19,7 +19,7 @@ export function useFocusRefresh(
   force: boolean = false
 ) {
   const lastRefreshTime = useRef<number>(0)
-  /** Inline `refreshFn` from call sites changes every render — must not be a focus-effect dep or we loop refetch → render → new fn → refocus logic. */
+  /** Inline `refreshFn` from call sites changes every render – must not be a focus-effect dep or we loop refetch → render → new fn → refocus logic. */
   const refreshFnRef = useRef(refreshFn)
   refreshFnRef.current = refreshFn
 

@@ -14,9 +14,9 @@ import type { Invoice } from "@/lib/b2b/types"
 type Props = {
   invoice: Invoice
   easetag: string
-  /** Preloaded with the public invoice payload — skips a second round trip. */
+  /** Preloaded with the public invoice payload – skips a second round trip. */
   initialCheckout?: PublicInvoiceStripeCheckout | null
-  /** Merchant preview — do not collect payment. */
+  /** Merchant preview – do not collect payment. */
   previewOnly?: boolean
   /** Fired when Stripe confirms payment (parent can optimistically mark invoice paid). */
   onPaid?: () => void

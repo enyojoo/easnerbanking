@@ -369,7 +369,7 @@ export default function TransactionsPage() {
       </Card>
 
       <div className="text-sm text-muted-foreground">
-        {showListSkeleton ? "—" : `${filteredTransactions.length} result${filteredTransactions.length !== 1 ? "s" : ""}`}
+        {showListSkeleton ? "–" : `${filteredTransactions.length} result${filteredTransactions.length !== 1 ? "s" : ""}`}
       </div>
     </div>
   )

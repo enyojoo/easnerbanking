@@ -3,7 +3,7 @@ import { TIER2_COMPLETE_PLACEHOLDER } from "@/lib/compliance-placeholders"
 export type AccountCurrencyOffer = {
   code: string
   label: string
-  /** Internal routing — not shown to end users */
+  /** Internal routing – not shown to end users */
   provider: "noah" | "tier2"
   tierRequired: 1 | 2
   /** If set, currency cannot be opened yet */

@@ -8,7 +8,7 @@ const TOKEN_ICONS: Record<string, string> = {
   EURC: `${TW_BLOCKCHAINS}/base/assets/0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42/logo.png`,
   BTC: `${TW_BLOCKCHAINS}/bitcoin/info/logo.png`,
   SOL: `${TW_BLOCKCHAINS}/solana/info/logo.png`,
-  /** Not listed in trustwallet/assets yet — keep external logo until added upstream. */
+  /** Not listed in trustwallet/assets yet – keep external logo until added upstream. */
   PYUSD: "https://logo.svgcdn.com/token-branded/pyusd.png",
 }
 

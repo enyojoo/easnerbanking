@@ -9,7 +9,7 @@ import { BalanceSparkline } from '@/components/charts/chart-primitives'
 import { cn } from '@/lib/utils'
 
 /**
- * BalanceCard — the hero balance moment on web.
+ * BalanceCard – the hero balance moment on web.
  *
  * Design intent: private-bank, editorial, tactile.
  *   - Ivory surface in light, carbon in dark.

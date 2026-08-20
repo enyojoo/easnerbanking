@@ -13,7 +13,7 @@ type Props = {
   titleEndAccessory?: ReactNode
 }
 
-/** Payout recipient row — full flag / token avatar + name + subtitle (no corner badge). */
+/** Payout recipient row – full flag / token avatar + name + subtitle (no corner badge). */
 export function RecipientPayoutPreview({ recipient, variant = 'card', titleEndAccessory }: Props) {
   const row = variant === 'row'
   const { left, right } = getPayoutRecipientSubtitleParts(recipient)

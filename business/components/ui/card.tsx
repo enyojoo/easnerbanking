@@ -4,7 +4,7 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
 /**
- * Easner card — the signature component.
+ * Easner card – the signature component.
  * Rounded, layered, structured; ivory surface in light, carbon in dark.
  */
 const cardVariants = cva(

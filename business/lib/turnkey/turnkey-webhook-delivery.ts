@@ -1,7 +1,7 @@
 import { getTurnkeyOrganizationId } from "@/lib/turnkey/config"
 import { turnkeyWebhookInboxIdentity } from "@/lib/turnkey/turnkey-balance-webhook-payload"
 
-/** Webhooks V2 delivery headers (https://docs.turnkey.com — preview). */
+/** Webhooks V2 delivery headers (https://docs.turnkey.com – preview). */
 export type TurnkeyWebhookHeaders = {
   organizationId: string | null
   eventType: string | null

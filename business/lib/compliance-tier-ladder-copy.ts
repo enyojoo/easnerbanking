@@ -1,6 +1,6 @@
 /**
- * Easner compliance tier ladder — B2B (business). Customer-facing only; no provider names.
- * Local rails are Tier 1 + NG supplement when YC is enabled — not a separate ladder step.
+ * Easner compliance tier ladder – B2B (business). Customer-facing only; no provider names.
+ * Local rails are Tier 1 + NG supplement when YC is enabled – not a separate ladder step.
  */
 
 export type TierLadderTier = {

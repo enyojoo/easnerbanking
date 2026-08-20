@@ -84,7 +84,7 @@ function AppContent() {
 
   const [splashFinished, setSplashFinished] = useState(Platform.OS === 'web')
   const [navReady, setNavReady] = useState(false)
-  /** Leaf route name — used so status bar stays light on dark chrome (e.g. onboarding) after splash hides. */
+  /** Leaf route name – used so status bar stays light on dark chrome (e.g. onboarding) after splash hides. */
   const [activeRouteName, setActiveRouteName] = useState('')
   const appFadeAnim = useRef(new Animated.Value(0)).current
 
@@ -456,7 +456,7 @@ export default function App() {
         animationConfig={{ damping: 28, stiffness: 320 }}
         config={{ minScale: 0.97, activeOpacity: 0.92 }}
       >
-        {/* Global safe areas (react-native-safe-area-context). Expo Router not used — React Navigation + stack/tabs. */}
+        {/* Global safe areas (react-native-safe-area-context). Expo Router not used – React Navigation + stack/tabs. */}
         <SafeAreaProvider>
           <ResponsiveLayoutProvider>
           <ShellAwareSafeArea>

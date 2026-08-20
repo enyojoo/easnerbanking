@@ -4,7 +4,7 @@ import { standardInputMetrics } from './textInputStyles'
 
 /**
  * Shared typography and field styles for auth flows (AuthScreen, LoginScreen).
- * Uses design tokens only — no one-off font sizes.
+ * Uses design tokens only – no one-off font sizes.
  *
  * Form controls use pill radius for mobile auth parity with `TextField` / premium fields.
  */
@@ -64,7 +64,7 @@ export const authScreenStyles = StyleSheet.create({
     backgroundColor: colors.semantic.background,
     minHeight: AUTH_FIELD_MIN_HEIGHT,
   },
-  /** Inner field for password rows (no border — outer `passwordOuter` draws the frame). */
+  /** Inner field for password rows (no border – outer `passwordOuter` draws the frame). */
   passwordInner: {
     flex: 1,
     paddingHorizontal: spacing[4],

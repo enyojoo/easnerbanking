@@ -27,7 +27,7 @@ type Input = {
 
 function headlineFor(source: CheckoutCollectionSource, linkLabel: string | null): string {
   if (source === "embed") return "Online payment"
-  return linkLabel ? `Payment link — ${linkLabel}` : "Payment link payment"
+  return linkLabel ? `Payment link – ${linkLabel}` : "Payment link payment"
 }
 
 function receiptDescription(source: CheckoutCollectionSource, linkLabel: string | null): string {

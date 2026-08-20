@@ -36,7 +36,7 @@ function docSetStillRequired(row: Record<string, unknown>): boolean {
 }
 
 /**
- * Hosted SumSub keeps files in SumSub — they never show on Grid `/documents`.
+ * Hosted SumSub keeps files in SumSub – they never show on Grid `/documents`.
  * Reopening with no remaining step is the real "ID uploaded / in review" signal.
  */
 export function sumsubApplicantHasNoRequiredAction(payload: unknown): boolean {
@@ -52,7 +52,7 @@ export function sumsubApplicantHasNoRequiredAction(payload: unknown): boolean {
   return reviewStatus === "completed" || reviewStatus === "queued" || reviewStatus === "prechecked"
 }
 
-/** SumSub is in queue / waiting — not collecting another upload. */
+/** SumSub is in queue / waiting – not collecting another upload. */
 export function sumsubReviewStatusIsWaitingForReview(reviewStatus: string | null | undefined): boolean {
   const s = String(reviewStatus ?? "").toLowerCase()
   return (
@@ -84,7 +84,7 @@ export function sumsubStepRequiresApplicantAction(idDocSetType: string | null | 
 /** Terminal Sumsub review statuses for `onApplicantStatusChanged` (not initial load). */
 export function sumsubReviewStatusTriggersComplete(reviewStatus: string | null | undefined): boolean {
   const s = String(reviewStatus ?? "").toLowerCase()
-  // `onHold` is the applicant's current state when reopening — not "user finished".
+  // `onHold` is the applicant's current state when reopening – not "user finished".
   // `pending` fires mid-KYB when only some steps are done.
   return s === "completed"
 }
@@ -95,7 +95,7 @@ export function sumsubReviewStatusShouldSyncGrid(reviewStatus: string | null | u
   return s === "pending" || s === "completed" || s === "onhold"
 }
 
-/** Close hosted KYB only when Grid says submitted/review/terminal — not mid-flow `in_progress`. */
+/** Close hosted KYB only when Grid says submitted/review/terminal – not mid-flow `in_progress`. */
 export function gridKybStatusClosesHostedFlow(status: string | null | undefined): boolean {
   const s = String(status ?? "").toLowerCase()
   return s === "pending" || s === "approved" || s === "hold" || s === "rejected"
@@ -117,7 +117,7 @@ export function sumsubStepIsIdentityDocument(idDocSetType: string | null | undef
 
 /**
  * Mark in-review only after the UBO ID step.
- * `completed` is SumSub review finished — not the upload. Company `pending` is mid-flow.
+ * `completed` is SumSub review finished – not the upload. Company `pending` is mid-flow.
  */
 export function sumsubReviewStatusMarksApplicantSubmitted(
   reviewStatus: string | null | undefined,

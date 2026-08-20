@@ -1,5 +1,5 @@
 /**
- * Design-system primitives (shadcn-style roles) — use with `colors.semantic` from theme.
+ * Design-system primitives (shadcn-style roles) – use with `colors.semantic` from theme.
  */
 export { Button } from './Button'
 export type { ButtonProps, ButtonVariant, ButtonSize } from './Button'

@@ -40,7 +40,7 @@ export type ProcessingFeePricingDialogProps = {
   onOpenChange: (open: boolean) => void
   scope: ProcessingFeeScheduleScope
   title: string
-  /** Pre-built rows — opens instantly without fetching (fiat tab pattern). */
+  /** Pre-built rows – opens instantly without fetching (fiat tab pattern). */
   initialRows?: ProcessingFeeScheduleRow[]
 }
 

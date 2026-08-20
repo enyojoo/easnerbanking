@@ -25,7 +25,7 @@ export const EASNER_PUBLIC_APP_ORIGIN = 'https://api.easner.com'
  * 1. `expo.extra.apiUrl` from app.config.js (EAS env / local .env at prebuild)
  * 2. `process.env.EXPO_PUBLIC_API_URL` (Metro inline)
  * 3. Dev: `http://localhost:3000`
- * 4. Release: {@link EASNER_PUBLIC_APP_ORIGIN} (warn once — same default as auth deep links elsewhere)
+ * 4. Release: {@link EASNER_PUBLIC_APP_ORIGIN} (warn once – same default as auth deep links elsewhere)
  */
 export const getApiBaseUrl = (): string => {
   const fromExtra = Constants.expoConfig?.extra?.apiUrl
@@ -107,7 +107,7 @@ export async function ensureBusinessAppUserBootstrap(options?: {
       deletionCancelled?: boolean
     }
 
-    /** Bootstrap may align `user_metadata.name` with `users.full_name` server-side — refresh JWT. */
+    /** Bootstrap may align `user_metadata.name` with `users.full_name` server-side – refresh JWT. */
     await supabase.auth.refreshSession().catch(() => undefined)
 
     /** Only clear pending residence once the server confirms it was persisted. */
@@ -163,7 +163,7 @@ export const apiRequest = async (
       throw new Error('No access token found')
     }
     
-    // Build full URL (React Native has no document origin — never use host-relative URLs)
+    // Build full URL (React Native has no document origin – never use host-relative URLs)
     const apiBase = getApiBaseUrl()
     const url = endpoint.startsWith('http')
       ? endpoint
@@ -226,7 +226,7 @@ export const ACCOUNT_SCOPE_INDIVIDUAL_HEADERS = { 'X-Easner-Account-Scope': 'ind
 
 export const ACCOUNT_SCOPE_BUSINESS_HEADERS = { 'X-Easner-Account-Scope': 'business' } as const
 
-/** Mobile is consumer-only — always use individual account scope. */
+/** Mobile is consumer-only – always use individual account scope. */
 export async function getAccountScopeHeaders(): Promise<typeof ACCOUNT_SCOPE_INDIVIDUAL_HEADERS> {
   return ACCOUNT_SCOPE_INDIVIDUAL_HEADERS
 }

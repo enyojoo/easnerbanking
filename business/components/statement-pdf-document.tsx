@@ -12,7 +12,7 @@ export type StatementPdfRow = {
 
 export type StatementPdfMeta = {
   periodLabel: string
-  /** e.g. "USD" — the account this statement was exported for */
+  /** e.g. "USD" – the account this statement was exported for */
   accountCurrency: string
   generatedAt: string
   accountLabel?: string

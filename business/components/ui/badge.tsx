@@ -5,7 +5,7 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
 /**
- * Easner badge — soft pill shapes, muted tones, never oversaturated.
+ * Easner badge – soft pill shapes, muted tones, never oversaturated.
  * Emerald only for positive / premium-active states.
  */
 const badgeVariants = cva(
@@ -20,25 +20,25 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        /** Neutral/default — for quiet metadata chips */
+        /** Neutral/default – for quiet metadata chips */
         neutral:
           'bg-muted text-foreground border-transparent [a&]:hover:bg-muted/80',
-        /** Emerald — positive states, premium tier, active/confirmed */
+        /** Emerald – positive states, premium tier, active/confirmed */
         emerald:
           'bg-primary/12 text-primary border-transparent [a&]:hover:bg-primary/18 dark:bg-primary/15 dark:text-primary',
-        /** Amber — operational warnings */
+        /** Amber – operational warnings */
         amber:
           'bg-[hsl(var(--warning)/0.14)] text-[hsl(var(--warning))] border-transparent',
-        /** Oxblood — serious errors, never bright red */
+        /** Oxblood – serious errors, never bright red */
         oxblood:
           'bg-destructive/12 text-destructive border-transparent [a&]:hover:bg-destructive/18',
-        /** Slate — info / quiet meta */
+        /** Slate – info / quiet meta */
         slate:
           'bg-muted text-muted-foreground border-transparent',
-        /** Outline — subtle boundary chip */
+        /** Outline – subtle boundary chip */
         outline:
           'bg-transparent text-foreground border-border',
-        /** Solid — strongest emphasis (graphite on ivory) */
+        /** Solid – strongest emphasis (graphite on ivory) */
         solid:
           'bg-foreground text-background border-transparent',
 

@@ -123,7 +123,7 @@ export async function syncGridBusinessKybToSupabase(input: {
   businessId: string
   userId: string
   customerId: string
-  /** @deprecated Ignored — always fetches canonical customer from Grid API (webhook + poll parity). */
+  /** @deprecated Ignored – always fetches canonical customer from Grid API (webhook + poll parity). */
   customer?: Record<string, unknown>
   occurredAt?: string
 }): Promise<{ status: VerificationStatus; customer: Record<string, unknown> }> {
@@ -153,7 +153,7 @@ export async function syncGridBusinessKybToSupabase(input: {
     .maybeSingle()
   const priorLocal = String(priorBiz?.verification_status ?? "not_started").toLowerCase()
   // Keep in-review across empty Grid document lists, but not when Grid still
-  // reports MISSING_IDENTITY_DOCUMENT (owner needs ID — CTA must come back).
+  // reports MISSING_IDENTITY_DOCUMENT (owner needs ID – CTA must come back).
   if (
     priorLocal === "pending" &&
     status === "in_progress" &&

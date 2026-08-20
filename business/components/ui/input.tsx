@@ -3,7 +3,7 @@ import * as React from 'react'
 import { cn } from '@/lib/utils'
 
 /**
- * Easner input — calm, rounded, premium focus ring.
+ * Easner input – calm, rounded, premium focus ring.
  * Default height 48px, 16px radius, soft surface separation.
  */
 const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<'input'>>(

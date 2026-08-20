@@ -3,7 +3,7 @@ import type { Beneficiary } from "@/lib/recipient-types"
 /**
  * Parity with mobile `filterRecipientsBySearch`:
  * - No leading `@`: substring match on name, bank, account, IBAN, easetag.
- * - Leading `@`: handle mode — progressive match on tag / display name for saved recipients.
+ * - Leading `@`: handle mode – progressive match on tag / display name for saved recipients.
  */
 export function filterBeneficiariesBySearch(beneficiaries: Beneficiary[], searchTerm: string): Beneficiary[] {
   const trimmed = searchTerm.trim()

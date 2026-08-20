@@ -12,7 +12,7 @@ type Props = {
   suffix?: ReactNode
 }
 
-/** Flag and uppercase code — used in base currency Select items and trigger via Radix ItemText. */
+/** Flag and uppercase code – used in base currency Select items and trigger via Radix ItemText. */
 export function BaseCurrencyOptionLabel({ code, size = 20, className, suffix }: Props) {
   const upper = String(code || "").trim().toUpperCase()
   return (

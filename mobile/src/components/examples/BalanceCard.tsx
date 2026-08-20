@@ -25,7 +25,7 @@ import {
 } from '../../theme'
 
 /**
- * BalanceCard — hero balance moment on mobile.
+ * BalanceCard – hero balance moment on mobile.
  *
  * Design intent: private-bank, editorial, tactile. Mirrors the web
  * `BalanceCard` (ivory in light, carbon in dark, sans tabular amount,

@@ -162,7 +162,7 @@ async function main() {
 
   const txMeta = asMeta(tx.metadata)
   if (txMeta.balance_delta_applied !== true) {
-    throw new Error("expected_balance_delta_applied — use normal fund balance split flow")
+    throw new Error("expected_balance_delta_applied – use normal fund balance split flow")
   }
 
   const { data: transfer, error: trErr } = await admin

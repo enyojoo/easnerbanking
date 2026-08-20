@@ -18,7 +18,7 @@ export const VERIFICATION_DEPOSIT_LIST_LABEL = "Bank verification deposit"
 export const VERIFICATION_BANK_FALLBACK = "Your bank"
 
 export const BANK_VERIFICATION_COMPLETED_DESCRIPTION =
-  "Verification only — not added to your balance. If your bank asked you to confirm trial deposits, complete that in your bank app."
+  "Verification only – not added to your balance. If your bank asked you to confirm trial deposits, complete that in your bank app."
 
 /** USD/EUR/GBP: Noah treats deposits under 1 unit as verification attempts. */
 export const VERIFICATION_FIAT_AMOUNT_THRESHOLD = 1
@@ -184,7 +184,7 @@ export function classifyVerificationDepositFromFiatDeposit(input: {
 }
 
 /**
- * User-facing narration for verification microdeposits — same "Sent from …" pattern as funding VA pay-ins.
+ * User-facing narration for verification microdeposits – same "Sent from …" pattern as funding VA pay-ins.
  */
 export function deriveVerificationDepositNarrationLabel(input: {
   metadata?: Record<string, unknown> | null

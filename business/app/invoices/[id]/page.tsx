@@ -680,8 +680,8 @@ export default function InvoiceDetailPage() {
       const restored = data.invoiceStatus?.trim()
       toast.success(
         restored
-          ? `Payment refunded — invoice marked ${restored.replace("_", " ")}`
-          : "Payment refunded — invoice marked unpaid",
+          ? `Payment refunded – invoice marked ${restored.replace("_", " ")}`
+          : "Payment refunded – invoice marked unpaid",
       )
     } finally {
       setStripeRefunding(false)
@@ -1525,7 +1525,7 @@ export default function InvoiceDetailPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Mark as Paid dialog — hidden for Stripe-collected invoices */}
+      {/* Mark as Paid dialog – hidden for Stripe-collected invoices */}
       {invoice && invoice.paymentInfo?.method !== "stripe" ? (
         <MarkAsPaidDialog
           invoice={invoice}

@@ -11,7 +11,7 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 /**
- * Yellowcard webhook ingress — verify `X-YC-Signature` (HMAC-SHA256 base64 of raw body).
+ * Yellowcard webhook ingress – verify `X-YC-Signature` (HMAC-SHA256 base64 of raw body).
  * Register this URL in the Yellowcard partner dashboard.
  */
 export async function GET() {

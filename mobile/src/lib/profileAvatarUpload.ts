@@ -1,5 +1,5 @@
 /**
- * Upload profile photo via business app — `POST /api/upload/profile-avatar`.
+ * Upload profile photo via business app – `POST /api/upload/profile-avatar`.
  * Uses JSON + base64 (reliable from React Native); web uses multipart FormData.
  */
 

@@ -26,7 +26,7 @@ export function getTurnkeyApiPublicKey(): string {
   return (process.env.TURNKEY_API_PUBLIC_KEY || "").trim()
 }
 
-/** Turnkey CLI writes `hex:p256` — SDK expects hex only. */
+/** Turnkey CLI writes `hex:p256` – SDK expects hex only. */
 function normalizeTurnkeyPrivateKey(raw: string): string {
   const v = String(raw ?? "").trim()
   const colon = v.indexOf(":")
@@ -40,7 +40,7 @@ export function getTurnkeyApiPrivateKey(): string {
   return normalizeTurnkeyPrivateKey(process.env.TURNKEY_API_PRIVATE_KEY || "")
 }
 
-/** Non-root delegated-access (DA) API key — day-to-day signing only. */
+/** Non-root delegated-access (DA) API key – day-to-day signing only. */
 export function getTurnkeyDaApiPublicKey(): string {
   return (process.env.TURNKEY_DA_API_PUBLIC_KEY || "").trim()
 }
@@ -55,7 +55,7 @@ export function isTurnkeyDaConfigured(): boolean {
 
 /**
  * When DA API keys are configured, send paths auto-use DA for migrated orgs/sub-orgs.
- * No separate enable flag — readiness is detected from DB (sub-orgs) or Turnkey (parent).
+ * No separate enable flag – readiness is detected from DB (sub-orgs) or Turnkey (parent).
  *
  * Optional `TURNKEY_DA_SENDS_STRICT=true`: manual override to fail closed during partial migration.
  * When omitted, full migration is auto-detected from DB + Turnkey and fail-closed applies automatically.
@@ -68,7 +68,7 @@ export function isTurnkeyDaSendsStrict(): boolean {
 }
 
 /**
- * @deprecated Use `isTurnkeyDaConfigured()` — DA sends auto-wire when keys + readiness exist.
+ * @deprecated Use `isTurnkeyDaConfigured()` – DA sends auto-wire when keys + readiness exist.
  * Kept for backward compat: explicit `false` disables auto DA even when keys are set.
  */
 export function isTurnkeyDaSendsEnabled(): boolean {
@@ -125,7 +125,7 @@ export function isTurnkeyConfigured(): boolean {
   )
 }
 
-/** Root (provision/admin) credentials present — not required on send-only runtimes. */
+/** Root (provision/admin) credentials present – not required on send-only runtimes. */
 export function isTurnkeyRootProvisioningConfigured(): boolean {
   return isTurnkeyConfigured()
 }

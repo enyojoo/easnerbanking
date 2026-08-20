@@ -10,7 +10,7 @@ export type CreateAccountSessionResult =
 
 /**
  * Create an Account Session for embedded Connect Account Onboarding.
- * External account collection is disabled — Easner links Grid VA via API.
+ * External account collection is disabled – Easner links Grid VA via API.
  */
 export async function createConnectAccountSession(
   admin: SupabaseClient,

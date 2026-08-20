@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils"
 
-/** `Label • detail` — matches mobile PayoutSubtitleRow rhythm. */
+/** `Label • detail` – matches mobile PayoutSubtitleRow rhythm. */
 export function PayoutRecipientSubtitleRow({
   left,
   right,

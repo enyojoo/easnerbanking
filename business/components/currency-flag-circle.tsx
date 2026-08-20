@@ -13,7 +13,7 @@ type CurrencyFlagCircleProps = {
 }
 
 /**
- * Circular filled currency flag — matches mobile dashboard / send balance selectors
+ * Circular filled currency flag – matches mobile dashboard / send balance selectors
  * (`surfaceChromeCircle` + cover crop), not the default 3:2 web flag frame.
  */
 export function CurrencyFlagCircle({ currency, size = 35, className }: CurrencyFlagCircleProps) {

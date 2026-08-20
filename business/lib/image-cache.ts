@@ -82,7 +82,7 @@ function readParam(url: string, paramName: string): string | null {
 
 /**
  * Long-lived browser cache: keep a stable version query param.
- * Revalidate by changing the param (upload bust) — not a rotating time bucket.
+ * Revalidate by changing the param (upload bust) – not a rotating time bucket.
  */
 function normalizeImageUrl(value: unknown, paramName: string): string | null {
   if (typeof value !== "string") return null

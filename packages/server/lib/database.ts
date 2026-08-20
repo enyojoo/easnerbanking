@@ -1147,7 +1147,7 @@ export const cryptoReceiveTransactionService = {
     fiatCurrency: string,
     exchangeRate: number,
     userId: string,
-    /** Noah settlement / payout legs — not Easner “Cards” UI product storage */
+    /** Noah settlement / payout legs – not Easner “Cards” UI product storage */
     providerFields?: {
       noah_liquidation_address_id?: string
       noah_liquidation_id?: string
@@ -1199,7 +1199,7 @@ export const cryptoReceiveTransactionService = {
       confirmed_at?: string
       converted_at?: string
       deposited_at?: string
-      // Noah / provider fields (money movement — not Easner card product DB rows)
+      // Noah / provider fields (money movement – not Easner card product DB rows)
       noah_liquidation_address_id?: string
       noah_liquidation_id?: string
       blockchain_tx_hash?: string
@@ -1209,7 +1209,7 @@ export const cryptoReceiveTransactionService = {
       destination_type?: "bank" | "card"
       destination_currency?: string
       liquidation_status?: string
-      /** Noah / processor status for a card funding leg — not Easner Cards UI */
+      /** Noah / processor status for a card funding leg – not Easner Cards UI */
       card_top_up_status?: string
     } = {},
   ) {

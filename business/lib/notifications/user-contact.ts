@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-/** First token of `users.full_name` — `public.users` has no `first_name` column. */
+/** First token of `users.full_name` – `public.users` has no `first_name` column. */
 export function firstNameFromFullName(fullName: string | null | undefined): string | undefined {
   const trimmed = String(fullName ?? "").trim()
   if (!trimmed) return undefined
@@ -14,7 +14,7 @@ export type UserEmailContact = {
 
 /**
  * Load email + greeting name for notification sends.
- * Must not select `first_name` — that column does not exist on `public.users`, and a failed
+ * Must not select `first_name` – that column does not exist on `public.users`, and a failed
  * select returns null `data`, which silently skips transaction emails while push still fires.
  */
 export async function fetchUserEmailContact(

@@ -21,7 +21,7 @@ type Props = {
   titleEndAccessory?: ReactNode
 }
 
-/** Easetag row — profile photo or initials + name + subtitle (no corner mark). */
+/** Easetag row – profile photo or initials + name + subtitle (no corner mark). */
 export function EasenetLookupPreview({
   profile,
   getInitials,

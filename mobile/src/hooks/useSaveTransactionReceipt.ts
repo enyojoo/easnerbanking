@@ -12,7 +12,7 @@ async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
   return response.blob()
 }
 
-/** Web Share API rejects data: URLs — share a File, or download when sharing is unavailable. */
+/** Web Share API rejects data: URLs – share a File, or download when sharing is unavailable. */
 async function shareReceiptOnWeb(dataUrl: string): Promise<'shared' | 'downloaded' | 'unavailable'> {
   if (typeof navigator === 'undefined') return 'unavailable'
 

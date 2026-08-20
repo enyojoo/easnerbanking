@@ -162,7 +162,7 @@ export function CheckoutFeeOverrideSection({ businessId }: { businessId: string 
                 <Input
                   id={`checkout-fee-reason-${businessId}`}
                   placeholder={
-                    selection === BUSINESS_CHOICE ? "—" : "Optional note for ops / audit"
+                    selection === BUSINESS_CHOICE ? "–" : "Optional note for ops / audit"
                   }
                   value={selection === BUSINESS_CHOICE ? "" : reason}
                   onChange={(e) => setReason(e.target.value)}

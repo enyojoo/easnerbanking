@@ -274,7 +274,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
     let cancelled = false
     void (async () => {
       try {
-        // Must match other business wallet reads — without this header the API
+        // Must match other business wallet reads – without this header the API
         // defaults to individual scope and never returns the org USDT address.
         const res = await fetchWithSession("/api/wallets/relay-deposit-addresses", {
           headers: BUSINESS_ACCOUNT_SCOPE_HEADERS,

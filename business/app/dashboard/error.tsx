@@ -23,7 +23,7 @@ export default function DashboardError({
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            We couldn&apos;t load your dashboard. This is usually temporary — try again in a moment.
+            We couldn&apos;t load your dashboard. This is usually temporary – try again in a moment.
           </p>
           <Button type="button" onClick={() => reset()}>
             Try again

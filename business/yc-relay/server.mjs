@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Yellow Card static-IP relay — deploy on a VM with a fixed public IP.
+ * Yellow Card static-IP relay – deploy on a VM with a fixed public IP.
  *
  * Env:
  *   YC_RELAY_SECRET          required shared secret (match YELLOWCARD_RELAY_SECRET on Vercel)

@@ -2,8 +2,8 @@
  * Payout processing fee model (single displayed row).
  *
  * Two internal legs, ONE visible "Processing fee" row:
- *  - Easner bps leg (default 1%, uncapped) — our service fee, collected to the fee wallet
- *  - Provider channel / route cost (Noah `channel_cost` / LI.FI `routeCost`) — kept in `exchange_fee`
+ *  - Easner bps leg (default 1%, uncapped) – our service fee, collected to the fee wallet
+ *  - Provider channel / route cost (Noah `channel_cost` / LI.FI `routeCost`) – kept in `exchange_fee`
  *
  * The customer sees `Processing fee = bps leg + channel cost` as a single row.
  * There is NO separate "Exchange fee" row. The FX rate spread (0.5%) lives in the
@@ -45,9 +45,9 @@ export function parsePayoutProcessingFeeBpsFromEnv(raw: string | undefined): num
 }
 
 export type DisplayProcessingFeeInput = {
-  /** Easner bps leg — `payout_review.processing_fee`. */
+  /** Easner bps leg – `payout_review.processing_fee`. */
   processingFee?: number | null
-  /** Provider channel / route cost — `payout_review.exchange_fee`. */
+  /** Provider channel / route cost – `payout_review.exchange_fee`. */
   exchangeFee?: number | null
 }
 

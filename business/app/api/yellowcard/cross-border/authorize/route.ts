@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 
 export const runtime = "nodejs"
 
-/** Deprecated — use POST /cross-border/quote with sourcePhone + networkId. */
+/** Deprecated – use POST /cross-border/quote with sourcePhone + networkId. */
 export async function POST() {
   return NextResponse.json(
     {

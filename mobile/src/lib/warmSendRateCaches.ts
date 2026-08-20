@@ -32,7 +32,7 @@ export function prefetchSendRatesForRecipient(
 
 /**
  * Prefetch send FX rows for currencies/networks the user actually sends to.
- * One provider per corridor — same DB rows used at quote time.
+ * One provider per corridor – same DB rows used at quote time.
  */
 export async function warmSendRateCachesFromRecipients(
   qc: QueryClient,

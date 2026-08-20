@@ -11,7 +11,7 @@ import { triggerYcFundBalanceOmnibusSplit } from "@/lib/yellowcard/execute-yc-fu
 import { isCrossBorderLeg1OmnibusSufficient } from "@/lib/yellowcard/cross-border-orchestrator"
 
 /**
- * Omnibus Turnkey balance webhook — Noah deposit split or YC fund_balance / cross-border routing.
+ * Omnibus Turnkey balance webhook – Noah deposit split or YC fund_balance / cross-border routing.
  */
 export async function handleDepositOmnibusInbound(
   admin: SupabaseClient,
@@ -23,7 +23,7 @@ export async function handleDepositOmnibusInbound(
   const txHash = deposit.txHash ? String(deposit.txHash).trim() : null
   if (!txHash) return false
 
-  // YC fund_balance / cross_border leg1 — match before Noah (YC USDC lands on same omnibus).
+  // YC fund_balance / cross_border leg1 – match before Noah (YC USDC lands on same omnibus).
   const ycTransfer = await findYcTransferForOmnibusInbound(admin, {
     txHash,
     amount: deposit.amount,

@@ -81,7 +81,7 @@ export async function selectProvider(ctx: CorridorContext): Promise<PayoutProvid
 
 /**
  * Load Office payout routing for a corridor.
- * Empty when disabled or unset — callers must fail closed (no silent Noah default).
+ * Empty when disabled or unset – callers must fail closed (no silent Noah default).
  */
 export async function loadCorridorRouting(
   admin: SupabaseClient,

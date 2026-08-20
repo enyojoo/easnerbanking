@@ -10,7 +10,7 @@ type CardsDesktopSplitProps = {
   main: ReactNode
 }
 
-/** Two-column cards layout on desktop web — card carousel + actions | activity list. */
+/** Two-column cards layout on desktop web – card carousel + actions | activity list. */
 export function CardsDesktopSplit({ sidebar, main }: CardsDesktopSplitProps) {
   return (
     <View style={styles.row}>

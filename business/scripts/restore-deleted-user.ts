@@ -39,7 +39,7 @@ function loadEnvLocal() {
       if (process.env[key] == null) process.env[key] = value
     }
   } catch {
-    // optional — env may already be set in CI/production shells
+    // optional – env may already be set in CI/production shells
   }
 }
 
@@ -135,7 +135,7 @@ async function main() {
       if (error) throw new Error(`auth.admin.updateUserById email: ${error.message}`)
       console.log("\nUpdated auth user email to:", email)
     } else {
-      console.log("\nAuth user already exists — skipped create")
+      console.log("\nAuth user already exists – skipped create")
     }
 
     if (userRow?.id && userRow.deleted_at) {
@@ -154,7 +154,7 @@ async function main() {
       if (upsertErr) throw new Error(`users upsert: ${upsertErr.message}`)
       console.log("Upserted public.users row (legacy hard-delete recovery)")
     } else {
-      console.log("Profile row exists and is active — skipped profile upsert")
+      console.log("Profile row exists and is active – skipped profile upsert")
     }
   }
 

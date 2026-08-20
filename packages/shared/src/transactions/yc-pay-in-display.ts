@@ -17,7 +17,7 @@ export const YC_PAY_IN_LIST_STATUS_LABEL = "Processing"
 /** Detail deposit tracker step title (list uses Processing). */
 export const YC_PAY_IN_CONFIRMING_STATUS_LABEL = "Processing payment"
 
-/** Detail deposit tracker step title — matches hero/list status on detail only. */
+/** Detail deposit tracker step title – matches hero/list status on detail only. */
 export const YC_PAY_IN_CONFIRMING_STEP_TITLE = "Processing payment"
 
 /** @deprecated Use YC_PAY_IN_CONFIRMING_STATUS */
@@ -44,13 +44,13 @@ export const YC_PAY_IN_AWAITING_DESCRIPTION_PREFIX = YC_PAY_IN_CONFIRMING_DESCRI
 export const YC_PAY_IN_AWAITING_DESCRIPTION_LINK = "here"
 export const YC_PAY_IN_AWAITING_DESCRIPTION_SUFFIX = "."
 export const YC_PAY_IN_AWAITING_DESCRIPTION_EXPIRED =
-  "The time to complete this transfer has passed — contact support with your transaction ID."
+  "The time to complete this transfer has passed – contact support with your transaction ID."
 
-/** Shown on Review & Complete when the deposit window closes — user should restart the flow. */
+/** Shown on Review & Complete when the deposit window closes – user should restart the flow. */
 export const YC_PAY_IN_REVIEW_PAYMENT_WINDOW_EXPIRED =
   "The time to complete this payment has passed. Go back and start again."
 
-/** Bare deposit countdown — live timer (mm:ss under 1h, H:MM:SS from 1h, days + timer above). */
+/** Bare deposit countdown – live timer (mm:ss under 1h, H:MM:SS from 1h, days + timer above). */
 export function formatYcPayInDepositTimeRemaining(remainingMs: number): string {
   const totalSec = Math.max(0, Math.floor(remainingMs / 1000))
   if (totalSec >= 86400) {
@@ -75,7 +75,7 @@ export function formatYcPayInDepositTimeRemaining(remainingMs: number): string {
 /** Prefix for live pay-in countdown (YC channel deposit window). */
 export const YC_PAY_IN_MAKE_PAYMENT_WITHIN_PREFIX = "Make payment within "
 
-/** Live countdown label from remaining ms — e.g. "Make payment within 3:59:42". */
+/** Live countdown label from remaining ms – e.g. "Make payment within 3:59:42". */
 export function formatYcPayInPaymentCountdownLabel(
   remainingMs: number,
   expired = false,
@@ -97,7 +97,7 @@ export function formatYcPayInPaymentCountdownFromExpiry(
   return formatYcPayInPaymentCountdownLabel(endMs - nowMs, endMs <= nowMs)
 }
 
-/** Absolute deadline time — time-only when still today, otherwise short date + time. */
+/** Absolute deadline time – time-only when still today, otherwise short date + time. */
 export function formatYcPayInPaymentDeadlineAt(
   expiresAt: string,
   options?: { nowMs?: number; locale?: string },
@@ -278,7 +278,7 @@ export function resolveYcPayInListWhenAt(
   return null
 }
 
-/** Feed status override for in-flight YC pay-ins — list shows Processing; detail lifecycle uses Processing payment. */
+/** Feed status override for in-flight YC pay-ins – list shows Processing; detail lifecycle uses Processing payment. */
 export function resolveYcPayInFeedStatus(
   meta: Record<string, unknown> | null | undefined,
   ledgerStatus: string,

@@ -12,7 +12,7 @@ import { listYellowcardRates, normalizeYcRateRow } from "@/lib/yellowcard/rates"
 
 export type { YcRateSyncResult }
 
-/** Optional override: YC_CROSS_PAIRS=NGN:KES,NGN:GHS — otherwise all fiat crosses are generated. */
+/** Optional override: YC_CROSS_PAIRS=NGN:KES,NGN:GHS – otherwise all fiat crosses are generated. */
 function resolveCrossPairs(fiatCodes: string[]): YcCrossPairInput[] {
   const fromEnv = (process.env.YC_CROSS_PAIRS || "").trim()
   if (fromEnv) {

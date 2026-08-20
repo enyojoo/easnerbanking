@@ -16,7 +16,7 @@ function normalizeHostname(value: string | undefined): string | null {
   return h || null
 }
 
-/** Hostnames seen on this request (deduped). `Host` first — it matches the URL the client used on Vercel. */
+/** Hostnames seen on this request (deduped). `Host` first – it matches the URL the client used on Vercel. */
 export function collectHostnameCandidates(request: NextRequest): string[] {
   const out: string[] = []
   const seen = new Set<string>()
@@ -52,9 +52,9 @@ export function getRequestHostname(request: NextRequest): string {
 
 /**
  * Hostnames dedicated to `/api/*` only (browser hits should go to the business origin).
- * - `EASNER_API_HOSTS` — comma-separated (e.g. `api.easner.com,www.api.easner.com`)
- * - `EASNER_API_HOST` — single host
- * - `NEXT_PUBLIC_EASNER_API_HOST` — inlined on Edge (use if middleware doesn’t see server-only env)
+ * - `EASNER_API_HOSTS` – comma-separated (e.g. `api.easner.com,www.api.easner.com`)
+ * - `EASNER_API_HOST` – single host
+ * - `NEXT_PUBLIC_EASNER_API_HOST` – inlined on Edge (use if middleware doesn’t see server-only env)
  */
 export function getApiOnlyHostnames(): string[] {
   const list = process.env.EASNER_API_HOSTS?.split(",").map((s) => s.trim()).filter(Boolean) ?? []

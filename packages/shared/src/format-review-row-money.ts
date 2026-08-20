@@ -1,6 +1,6 @@
 /**
  * Signed money values for transaction review / detail rows.
- * Only debit and credit totals — not fees, Sending amount/Sent amount, or Recipient amount.
+ * Only debit and credit totals – not fees, Sending amount/Sent amount, or Recipient amount.
  */
 
 import { formatMoneyDisplay } from "./format-money-display"

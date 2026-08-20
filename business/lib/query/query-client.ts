@@ -13,7 +13,7 @@ import type { QueryClient } from "@tanstack/react-query"
  *
  * The server-rendered code path creates a per-request client via
  * `createBaseQueryClient()` in each server component that needs to
- * prefetch + dehydrate — never reuses this singleton.
+ * prefetch + dehydrate – never reuses this singleton.
  */
 
 let browserClient: QueryClient | null = null

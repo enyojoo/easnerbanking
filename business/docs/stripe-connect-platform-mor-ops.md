@@ -1,12 +1,12 @@
-# Stripe Connect Platform MoR — Ops checklist
+# Stripe Connect Platform MoR – Ops checklist
 
 ## Product model
 
-- Customers pay **Easner** (platform MoR) — Easner appears on the card statement.
+- Customers pay **Easner** (platform MoR) – Easner appears on the card statement.
 - Destination charges transfer net funds to the merchant’s **connected account**.
 - Connected account auto-payouts to the merchant’s **Grid VA**. ACH originator **EASNER**
   is a Connect payout (match to Incoming invoice / link / checkout). Originator
-  **Bridge Building** is a Stripe Dashboard / platform payout — keep as a bank deposit.
+  **Bridge Building** is a Stripe Dashboard / platform payout – keep as a bank deposit.
 - Grid `INCOMING_PAYMENT.COMPLETED` is the settlement signal (Hop 3). `payout.paid` on
   connected accounts is optional enrichment; the platform webhook often never receives it.
 
@@ -68,7 +68,7 @@ CHECKOUT_SECRET_ENCRYPTION_KEY=
 ## Merchant setup (Settings → Verification)
 
 1. Tier 1: complete global banking verification + Grid VA on `/accounts`.
-2. Tier 3: start / continue Stripe embedded onboarding (business profile only — no bank form).
+2. Tier 3: start / continue Stripe embedded onboarding (business profile only – no bank form).
 3. On submit, Easner **automatically links** the Grid VA as the Stripe payout destination when eligible.
 4. Tier 3 shows **Ready** once Stripe enables transfers + payouts → Pay online on invoices.
 
@@ -93,7 +93,7 @@ The status API discovers and links the account on load.
 4. When the connected-account payout hits the Grid VA, Grid webhook originator is **EASNER**.
    Hop 3: pack that inbound to open `payment_received` nets (FIFO), credit wallet once, settle
    the Stripe ledger. Do **not** post a second Bank Deposit.
-5. A **Bridge Building** ACH on the same VA is a Dashboard payout — leave it as a bank deposit.
+5. A **Bridge Building** ACH on the same VA is a Dashboard payout – leave it as a bank deposit.
 
 ## Monitoring
 
@@ -150,13 +150,13 @@ Before enabling for a merchant:
 
 1. Apply migration `20260818140000_collections_checkout.sql`.
 2. Connect account has **transfers + payouts active** and the Grid VA linked (same gate as
-   invoice Pay online — `resolveConnectReadyForCheckout`).
+   invoice Pay online – `resolveConnectReadyForCheckout`).
 3. Fee policy decided: business picks merchant net or buyer surcharge on `/checkout`; ops can
    force any of the three modes (including Easner absorbs) from the Office business profile,
    which supersedes the business choice.
 4. Customer hosts resolve: `invoice.easner.com` and `pay.easner.com` both point at this app
    (middleware rewrites each host onto its own route tree).
-5. Radar rules reviewed on the platform account — Collections raises card volume from
+5. Radar rules reviewed on the platform account – Collections raises card volume from
    unknown buyers, unlike invoices sent to named customers.
 6. Statement descriptor: invoices show `INV <number>`, links and embeds show the business
    name suffix under the `EASNER` platform prefix.

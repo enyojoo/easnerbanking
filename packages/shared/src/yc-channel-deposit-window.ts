@@ -1,5 +1,5 @@
 /**
- * YC receive deposit window — time to complete pay-in after POST /receive is accepted.
+ * YC receive deposit window – time to complete pay-in after POST /receive is accepted.
  * @see https://docs.yellowcard.engineering/docs/channels-api (Receives → Expiry Time)
  */
 
@@ -11,7 +11,7 @@ const MIN = 60 * 1000
 const HOUR = 60 * MIN
 const DAY = 24 * HOUR
 
-/** MoMo receive channels: 5–10 min — use 10 min. */
+/** MoMo receive channels: 5–10 min – use 10 min. */
 const MOMO_WINDOW_MS = 10 * MIN
 
 /**
@@ -54,7 +54,7 @@ export function resolveYcChannelDepositWindowMs(
 export function resolveYcPayInDepositExpiresAt(input: ResolveYcPayInDepositExpiresAtInput): string {
   const preferred = String(input.preferredExpiresAt ?? "").trim()
   const preferredMs = preferred ? new Date(preferred).getTime() : NaN
-  // POST /receive expiry is authoritative — YC rejects deposits after this time.
+  // POST /receive expiry is authoritative – YC rejects deposits after this time.
   if (Number.isFinite(preferredMs)) {
     return new Date(preferredMs).toISOString()
   }

@@ -52,7 +52,7 @@ export function mapNoahVerificationToKycStatus(customer: Record<string, unknown>
   return "not_started"
 }
 
-/** Mobile `getCustomerStatus` / dashboard — human-readable KYC string */
+/** Mobile `getCustomerStatus` / dashboard – human-readable KYC string */
 export function mapNoahCustomerToMobileSummary(
   customer: Record<string, unknown>,
   customerId: string,

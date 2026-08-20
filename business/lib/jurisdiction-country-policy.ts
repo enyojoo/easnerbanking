@@ -1,5 +1,5 @@
 /**
- * Business jurisdiction gates — Grid hard-blocks only.
+ * Business jurisdiction gates – Grid hard-blocks only.
  */
 
 import { isBlockedForBusiness } from "@easner/shared"

@@ -53,7 +53,7 @@ export function BaseCurrencySelect({ id, label, value, onValueChange, disabled }
                 code={value}
                 suffix={
                   <span className="truncate text-xs text-muted-foreground">
-                    (current — not in allowed list)
+                    (current – not in allowed list)
                   </span>
                 }
               />

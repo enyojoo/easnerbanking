@@ -16,7 +16,7 @@ export type TotpEnrollSetup = {
   factorId: string
   qrDataUrl: string
   secret: string | null
-  /** GoTrue `key.URL()` when the API returns it — preferred for client-rendered QR. */
+  /** GoTrue `key.URL()` when the API returns it – preferred for client-rendered QR. */
   keyUri: string | null
 }
 
@@ -224,7 +224,7 @@ export async function resolvePostSignInMfaRequirement(
 }
 
 /**
- * Incomplete sign-in MFA must not survive app kill — user should sign in again from scratch.
+ * Incomplete sign-in MFA must not survive app kill – user should sign in again from scratch.
  * Idempotent within the JS process (safe for getInitialSession + INITIAL_SESSION).
  */
 let coldStartIncompleteMfaCheckPromise: Promise<boolean> | null = null

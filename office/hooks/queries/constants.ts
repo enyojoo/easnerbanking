@@ -1,4 +1,4 @@
-/** Reference admin catalogs — stable between tab visits. */
+/** Reference admin catalogs – stable between tab visits. */
 export const OFFICE_REFERENCE_STALE_MS = 5 * 60_000
 
 /** Dashboard / overview aggregates. */

@@ -90,5 +90,5 @@ export function YcLocalPayInCompleteSummary({
   )
 }
 
-/** Plan alias — complete pay-in summary shell. */
+/** Plan alias – complete pay-in summary shell. */
 export const YcLocalPayInComplete = YcLocalPayInCompleteSummary

@@ -1,5 +1,5 @@
 /**
- * Easner Design System — Source of Truth
+ * Easner Design System – Source of Truth
  *
  * Shared design tokens consumed by:
  *   - business/ (Next.js + Tailwind v4 + shadcn)
@@ -28,17 +28,17 @@ export const easnerBrand = {
   mist: "#E9E4D8",
   stone: "#D9D4C7",
   slate: "#6F756F",
-  /** UI primary — links, buttons, focus ring, charts series 1 */
+  /** UI primary – links, buttons, focus ring, charts series 1 */
   primary: "#007ACC",
   /** Hover for primary controls (pairs with primary) */
   primaryHover: "#0062A3",
   /** Pressed / deep end of primary ramp (darker than hover) */
   primaryDeep: "#005A9E",
-  /** Executive contrast — hero, marketing, institutional strips (not default body text) */
+  /** Executive contrast – hero, marketing, institutional strips (not default body text) */
   navy: "#0A2540",
-  /** Sparse cool highlight — selected rows, info callouts (not full-screen wash) */
+  /** Sparse cool highlight – selected rows, info callouts (not full-screen wash) */
   tintBlue: "#EAF5FD",
-  /** Dark canvas primary accent — links, CTAs, ring on graphite */
+  /** Dark canvas primary accent – links, CTAs, ring on graphite */
   darkAccent: "#3AA6F8",
   /** Dark-mode primary control hover / pressed (pairs with darkAccent) */
   darkPrimaryHover: "#2B8FDC",
@@ -51,13 +51,13 @@ export const easnerBrand = {
 export type EasnerBrand = typeof easnerBrand
 
 /* ------------------------------------------------------------------ *
- *  2. HSL tuples — used verbatim inside CSS variables on web.
+ *  2. HSL tuples – used verbatim inside CSS variables on web.
  *     Format is "H S% L%" (no `hsl(...)` wrapper) so Tailwind
  *     modifiers like `bg-primary/10` keep working.
  * ------------------------------------------------------------------ */
 
 export const hsl = {
-  /** Blue-gray neutrals (~210°) — avoids 120° green cast in dark UI next to emerald success */
+  /** Blue-gray neutrals (~210°) – avoids 120° green cast in dark UI next to emerald success */
   graphite: "210 11% 8%",
   carbon: "210 10% 10%",
   ink: "210 12% 12%",
@@ -76,7 +76,7 @@ export const hsl = {
   navy: "210 73% 15%",
   /** #EAF5FD */
   tintBlue: "205 83% 96%",
-  /** #3AA6F8 — dark-mode primary / ring / chart-1 on graphite */
+  /** #3AA6F8 – dark-mode primary / ring / chart-1 on graphite */
   darkAccent: "206 93% 60%",
   /** #2B8FDC */
   darkPrimaryHover: "206 72% 52%",
@@ -137,7 +137,7 @@ export const lightSemantic = {
   chart4: "37 61% 41%",
   chart5: "210 5% 45%",
 
-  /** Optional surfaces — wire to CSS `--primary-hover`, `--surface-tint`, `--brand-navy` */
+  /** Optional surfaces – wire to CSS `--primary-hover`, `--surface-tint`, `--brand-navy` */
   primaryHover: "204 100% 32%",
   surfaceTint: "205 83% 96%",
   brandNavy: "210 73% 15%",
@@ -153,7 +153,7 @@ export const darkSemantic = {
   popover: "210 10% 11%",
   popoverForeground: "40 24% 93%",
 
-  /* Dark canvas accent — #3AA6F8 (readable on graphite; not a flat blue wash) */
+  /* Dark canvas accent – #3AA6F8 (readable on graphite; not a flat blue wash) */
   primary: "206 93% 60%",
   primaryForeground: "40 30% 96%",
 
@@ -189,7 +189,7 @@ export const darkSemantic = {
   chart4: "37 55% 48%",
   chart5: "210 5% 55%",
 
-  /** Dark primary control hover — matches `--primary-hover` in `.dark` */
+  /** Dark primary control hover – matches `--primary-hover` in `.dark` */
   primaryHover: "206 93% 52%",
   /** Sparse cool highlight on dark canvas */
   surfaceTint: "206 40% 18%",
@@ -232,7 +232,7 @@ export const radius = {
 } as const
 
 /* ------------------------------------------------------------------ *
- *  6. Shadows — soft layered, graphite-based. No glows, no colored.
+ *  6. Shadows – soft layered, graphite-based. No glows, no colored.
  * ------------------------------------------------------------------ */
 
 export const shadowCss = {

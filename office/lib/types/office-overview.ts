@@ -26,7 +26,7 @@ export type OfficeOverviewKpis = {
   totalBusinesses: number
   newBusinessesInWindow: number
   transactionCount: number
-  /** @deprecated Prefer `volumeBalance` — USD balance-leg throughput only */
+  /** @deprecated Prefer `volumeBalance` – USD balance-leg throughput only */
   transactionVolumeUsd: number
   volumeBalance: OfficeVolumeBalance
   pendingTransactions: number
@@ -42,7 +42,7 @@ export type OfficeOverviewTopCurrency = {
   code: string
   count: number
   totalAmount: number
-  /** Local payout fiat — informational; USD/EUR balance volume lives in volume KPIs. */
+  /** Local payout fiat – informational; USD/EUR balance volume lives in volume KPIs. */
   dataOnly?: boolean
 }
 

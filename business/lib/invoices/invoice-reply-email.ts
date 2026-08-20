@@ -1,4 +1,4 @@
-/** Reply-To resolution for invoice emails (no heavy imports — safe for unit tests). */
+/** Reply-To resolution for invoice emails (no heavy imports – safe for unit tests). */
 
 export type InvoiceReplyEmailSource = "support" | "owner" | "sender"
 

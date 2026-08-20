@@ -193,7 +193,7 @@ export function flattenYcBankInfo(
 /**
  * Normalize bankInfo for UI: prefer `bankName` when YC only returns `name`
  * (Yellowcard Lookup Collection example: `{ name: "PAGA", accountNumber, accountName }`).
- * Keep a single bank-name field — UI also dedupes aliases.
+ * Keep a single bank-name field – UI also dedupes aliases.
  */
 export function normalizeYcBankInfo(
   bankInfo: Record<string, unknown> | null | undefined,
@@ -204,7 +204,7 @@ export function normalizeYcBankInfo(
   const bankName = resolveYcBankInfoName(out)
   if (bankName) {
     out.bankName = bankName
-    // Drop YC `name` alias once mirrored — prevents duplicate Bank Name rows.
+    // Drop YC `name` alias once mirrored – prevents duplicate Bank Name rows.
     if ("name" in out && String(out.name ?? "").trim() === bankName) {
       delete out.name
     }

@@ -1,6 +1,6 @@
 import { BRAND } from '@easner/shared'
 
-/** Browser tab title suffix — business web uses "Easner Business Banking". */
+/** Browser tab title suffix – business web uses "Easner Business Banking". */
 export const WEB_APP_TITLE = `${BRAND.name} Banking`
 
 const ROUTE_TITLES: Record<string, string> = {
@@ -67,7 +67,7 @@ function resolvePageTitle(
   return ROUTE_TITLES[raw] ?? humanizeRouteName(raw)
 }
 
-/** Never emit "undefined" — RN Web calls this while navigation state is settling. */
+/** Never emit "undefined" – RN Web calls this while navigation state is settling. */
 export function formatWebDocumentTitle(
   options: { title?: string } | undefined,
   route: { name?: string } | undefined,

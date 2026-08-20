@@ -4,7 +4,7 @@ import type { Invoice } from "@/lib/b2b/types"
 
 export const INVOICES_LIST_STALE_MS = 30_000
 export const INVOICES_DETAIL_STALE_MS = 60_000
-/** Invoices have no realtime channel — poll while the tab is visible. */
+/** Invoices have no realtime channel – poll while the tab is visible. */
 export const INVOICES_LIST_POLL_MS = 60_000
 
 type InvoicesListEnvelope = { invoices: Invoice[] }

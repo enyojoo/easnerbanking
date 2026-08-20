@@ -3,7 +3,7 @@ import { noahFetch } from "@/lib/noah/http"
 import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "../../_helpers"
 
 /**
- * Token Share — POST /v1/onboarding/:CustomerID/prefill (Sumsub)
+ * Token Share – POST /v1/onboarding/:CustomerID/prefill (Sumsub)
  * @see https://docs.noah.com/recipes/onboarding/token-share-onboarding/
  */
 export async function POST(request: Request) {

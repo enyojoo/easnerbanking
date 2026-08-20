@@ -38,7 +38,7 @@ import {
  *      can render `<HydrationBoundary state={dehydrate(qc)}>` around
  *      their subtree without re-creating the cache.
  *   2. BusinessScopeProvider depends on `AuthContext` (mounted above
- *      `<Providers>` in `app/layout.tsx`) — scope resolves as soon as
+ *      `<Providers>` in `app/layout.tsx`) – scope resolves as soon as
  *      the Supabase session comes back.
  *   3. The realtime bridge mounts inside the scope so a single channel
  *      is active per entity and persists across navigations.

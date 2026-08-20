@@ -17,7 +17,7 @@ export function isPayoutLockOnReviewEnabled(
   const v = String(process.env[key] || "").trim().toLowerCase()
   if (v === "true" || v === "1") return true
   if (v === "false" || v === "0") return false
-  // YC POST /send wallet-pool create is slow — lock on review Continue; PIN only settles.
+  // YC POST /send wallet-pool create is slow – lock on review Continue; PIN only settles.
   // Override with PAYOUT_LOCK_ON_REVIEW_YELLOWCARD=false to restore lock-at-PIN.
   return true
 }

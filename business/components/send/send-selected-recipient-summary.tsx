@@ -7,7 +7,7 @@ import { EasenetRecipientProfileRowHydrated } from "@/components/easenet-recipie
 import { RecipientPayoutProfileRow } from "@/components/recipient-payout-profile-row"
 import { PayoutRecipientSubtitleRow } from "@/components/send/payout-recipient-subtitle-row"
 
-/** Recipient row — full flag / token / profile avatar everywhere (no corner badges). */
+/** Recipient row – full flag / token / profile avatar everywhere (no corner badges). */
 export function SendSelectedRecipientSummary({
   beneficiary,
   className,

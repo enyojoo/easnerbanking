@@ -1,5 +1,5 @@
 /**
- * Canonical transaction detail rows for settled/failed/reversed emails — the same
+ * Canonical transaction detail rows for settled/failed/reversed emails – the same
  * Sent amount / Processing fee / Total debited / Recipient / Transfer method (payout) and
  * Deposit method / Sender / Processing fee / Amount credited (deposit) rows shown in-app.
  *
@@ -38,7 +38,7 @@ export type TransactionEmailDetailRow = { label: string; value: string }
 export type TransactionEmailDetailInput = {
   direction: "in" | "out" | null
   payoutReview?: GlobalPayoutReviewSnapshot | null
-  /** Wallet-send receive network (e.g. "SOL") — hides the Exchange rate row for 1:1 stablecoin parity. */
+  /** Wallet-send receive network (e.g. "SOL") – hides the Exchange rate row for 1:1 stablecoin parity. */
   receiveNetwork?: string | null
   /** Recipient snapshot for payout rows (bank/mobile/wallet subtitle). */
   recipient?: {
@@ -154,7 +154,7 @@ function buildPayoutRows(review: GlobalPayoutReviewSnapshot, input: TransactionE
       ),
     )
   } else {
-    // Emails describe settled balance payout detail — Sent amount, fee, rate, total debited.
+    // Emails describe settled balance payout detail – Sent amount, fee, rate, total debited.
     pushIf(rows, REVIEW_ROW_LABELS.sent, formatMoneyDisplay(review.you_send_amount, sendCurrency))
     if (isPayoutReviewFeeVisible(feeAmount)) {
       pushIf(

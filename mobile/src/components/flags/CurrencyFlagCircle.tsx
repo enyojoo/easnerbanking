@@ -5,12 +5,12 @@ import { colors, surfaceChromeCircleStyle } from '../../theme'
 
 type Props = {
   currency: string
-  /** Diameter in px — matches send confirm / dashboard balance chips. */
+  /** Diameter in px – matches send confirm / dashboard balance chips. */
   size?: number
   style?: ViewStyle
 }
 
-/** Circular filled currency flag — same chrome as payout review "From" / dashboard balance. */
+/** Circular filled currency flag – same chrome as payout review "From" / dashboard balance. */
 export function CurrencyFlagCircle({ currency, size = 22, style }: Props) {
   return (
     <View style={[surfaceChromeCircleStyle(colors, size, { shadow: 'none' }), styles.clip, style]}>

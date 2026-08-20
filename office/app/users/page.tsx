@@ -96,7 +96,7 @@ interface TransactionData extends OfficeTransaction {}
 
 function formatProviderLabel(provider: string | null | undefined): string {
   const raw = String(provider || "").trim()
-  if (!raw) return "—"
+  if (!raw) return "–"
   if (raw.toLowerCase() === "easner_internal") return "Easetag"
   if (raw.toLowerCase() === "yellowcard") return "Yellowcard"
   if (raw.toLowerCase() === "noah") return "Noah"
@@ -240,7 +240,7 @@ export default function AdminUsersPage() {
   function accountTypeLabel(user: UserData): "Consumer" | "Business" | null {
     const role = String(user.role || "").toLowerCase()
     const hasOrg = Boolean(user.easner_business_id)
-    // A linked business always wins — role can be stale when bootstrap fallback omits it.
+    // A linked business always wins – role can be stale when bootstrap fallback omits it.
     if (role === "business" || hasOrg) return "Business"
     if (role === "individual" || user.totalTransactions > 0) return "Consumer"
     return null
@@ -257,7 +257,7 @@ export default function AdminUsersPage() {
 
   const getAccountTypeBadge = (user: UserData) => {
     const label = accountTypeLabel(user)
-    if (!label) return <span className="text-xs text-muted-foreground">—</span>
+    if (!label) return <span className="text-xs text-muted-foreground">–</span>
     const variant: "emerald" | "slate" = label === "Business" ? "emerald" : "slate"
     return <Badge variant={variant}>{label}</Badge>
   }
@@ -496,7 +496,7 @@ export default function AdminUsersPage() {
                   <TableRow key={user.id} data-user-row={user.id}>
                     <TableCell className="text-left font-medium">{userDisplayName(user)}</TableCell>
                     <TableCell className="text-sm text-muted-foreground max-w-[220px] truncate" title={user.email || ""}>
-                      {user.email || "—"}
+                      {user.email || "–"}
                     </TableCell>
                     <TableCell className="text-center">{getAccountTypeBadge(user)}</TableCell>
                     <TableCell className="text-center">
@@ -518,7 +518,7 @@ export default function AdminUsersPage() {
                           </DialogTrigger>
                           <DialogContent className="flex max-h-[min(88vh,920px)] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl">
                             <DialogHeader className="shrink-0 space-y-0 border-b px-6 py-4 pr-12 text-left">
-                              <DialogTitle>User — {selectedUser ? userDisplayName(selectedUser) : ""}</DialogTitle>
+                              <DialogTitle>User – {selectedUser ? userDisplayName(selectedUser) : ""}</DialogTitle>
                             </DialogHeader>
                             {selectedUser && (() => {
                               const ver = dialogVerificationRows(selectedUser)
@@ -538,7 +538,7 @@ export default function AdminUsersPage() {
                                         </div>
                                         <div className="flex items-center gap-2">
                                           <Mail className="h-4 w-4 text-gray-400" />
-                                          <span>{selectedUser.email || "—"}</span>
+                                          <span>{selectedUser.email || "–"}</span>
                                         </div>
                                         {selectedUser.phone ? (
                                           <div className="flex items-center gap-2">
@@ -683,7 +683,7 @@ export default function AdminUsersPage() {
                                             <span className="font-medium">
                                               {selectedUser.linkedBusinessName?.trim()
                                                 ? selectedUser.linkedBusinessName
-                                                : "—"}
+                                                : "–"}
                                             </span>
                                             <Link
                                               href={`/businesses?highlight=${encodeURIComponent(selectedUser.easner_business_id)}`}
@@ -747,7 +747,7 @@ export default function AdminUsersPage() {
                                                     {transaction.productLabel ? (
                                                       <Badge variant="outline">{transaction.productLabel}</Badge>
                                                     ) : (
-                                                      "—"
+                                                      "–"
                                                     )}
                                                   </TableCell>
                                                   <TableCell>
@@ -761,7 +761,7 @@ export default function AdminUsersPage() {
                                                     ) : null}
                                                   </TableCell>
                                                   <TableCell className="tabular-nums text-sm text-muted-foreground">
-                                                    {transactionImpactAmount(transaction) || "—"}
+                                                    {transactionImpactAmount(transaction) || "–"}
                                                   </TableCell>
                                                   <TableCell>
                                                     <Badge variant={transactionStatusBadgeVariant(tone)}>

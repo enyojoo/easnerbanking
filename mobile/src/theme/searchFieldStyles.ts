@@ -5,7 +5,7 @@ const S2 = 8
 const S3 = 12
 
 /**
- * Shared search field chrome — Platform.select previously omitted `web`, which
+ * Shared search field chrome – Platform.select previously omitted `web`, which
  * collapsed pill search bars on Expo web.
  */
 export const searchFieldWrapperStyle: ViewStyle = Platform.select({

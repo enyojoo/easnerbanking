@@ -21,7 +21,7 @@ export type CreateInvoiceCheckoutResult =
   | { ok: false; status: number; error: string }
 
 /**
- * Invoice Pay online — validates the invoice, reuses an open session when possible,
+ * Invoice Pay online – validates the invoice, reuses an open session when possible,
  * then delegates to the shared Collections checkout rail.
  */
 export async function createInvoiceCheckoutSession(

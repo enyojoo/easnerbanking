@@ -14,7 +14,7 @@ import { isSuspiciousAuthoritativeZeroRegression } from '../../lib/wallet-balanc
  *
  * Mirrors the business `useWalletBalances` hook but talks to the individual
  * Noah scope and returns the compact `{ USD, EUR }` envelope that existing
- * mobile screens consume. Never optimistic — balances are server-authoritative
+ * mobile screens consume. Never optimistic – balances are server-authoritative
  * and the realtime bridge invalidates `qk.wallets.list` on balance events
  * when a definitive value lands.
  */
@@ -84,7 +84,7 @@ export function useWalletBalances() {
     refetchInterval: inForeground ? pollingIntervalFor('critical', realtimeHealth) : false,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
-    // Balances are sensitive — NEVER persist to disk.
+    // Balances are sensitive – NEVER persist to disk.
     meta: { safePersist: false, freshness: 'critical' },
   })
 

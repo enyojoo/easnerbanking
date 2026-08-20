@@ -15,7 +15,7 @@ import {
 } from '../../theme'
 
 /**
- * TreasuryStatCard — KPI tile for balances, volumes, counts.
+ * TreasuryStatCard – KPI tile for balances, volumes, counts.
  *
  * Deltas are monochrome except positive movement which earns emerald.
  */

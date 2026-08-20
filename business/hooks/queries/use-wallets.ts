@@ -24,7 +24,7 @@ export type AvailableCurrencies = WalletBalancesData["available"]
  *
  * Talks to the same `/api/wallets/on-chain-balances` + `/api/accounts/available-currencies`
  * endpoints that `useBusinessAccountRows` used to poll by hand. Runs on a
- * 15s staleTime / 30s background fallback — the realtime bridge surgically
+ * 15s staleTime / 30s background fallback – the realtime bridge surgically
  * updates `qk.wallets.balance` on `wallet_balances` events so we rarely
  * have to hit this path outside of first load.
  *

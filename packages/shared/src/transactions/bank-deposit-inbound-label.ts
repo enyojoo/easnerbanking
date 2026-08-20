@@ -8,7 +8,7 @@ import { isVerificationDepositMetadata } from "./deposit-metadata-guards"
 
 export { parseSentFromNarrationLabel } from "./bank-deposit-narration-parse"
 
-/** FiatDeposit remitter for list/hero — never VA account holder or narration. */
+/** FiatDeposit remitter for list/hero – never VA account holder or narration. */
 export function deriveBankDepositInboundDisplayLabel(input: {
   metadata?: Record<string, unknown> | null
   fiatDepositSenderName?: string | null

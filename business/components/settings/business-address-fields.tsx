@@ -207,7 +207,7 @@ export function BusinessAddressFields({
                     <span className="truncate">{selectedCountry.name}</span>
                   </>
                 ) : (
-                  <span className="text-muted-foreground">—</span>
+                  <span className="text-muted-foreground">–</span>
                 )}
               </span>
               <ChevronDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden />

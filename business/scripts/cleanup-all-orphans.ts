@@ -192,7 +192,7 @@ async function discoverTargets(admin: ReturnType<typeof createSupabaseAdmin>, cl
 }
 
 async function deleteGhostSupabase(admin: ReturnType<typeof createSupabaseAdmin>, ghost: GhostOwner, execute: boolean) {
-  console.log(`\n— Supabase ghost ${ghost.label} —`)
+  console.log(`\n– Supabase ghost ${ghost.label} –`)
   console.log(`  wallet_owner: ${ghost.walletOwnerId}`)
   console.log(`  owner_ref:    ${ghost.ownerRef}`)
   console.log(`  sub-org:      ${ghost.subOrg}`)
@@ -221,7 +221,7 @@ async function deleteGhostSupabase(admin: ReturnType<typeof createSupabaseAdmin>
 }
 
 async function deleteTurnkeySubOrg(client: GwClient, item: OrphanSubOrg, execute: boolean) {
-  console.log(`\n— Turnkey ${item.label} (${item.subOrg}) —`)
+  console.log(`\n– Turnkey ${item.label} (${item.subOrg}) –`)
   if (!execute) {
     console.log("  would deleteSubOrganization")
     return "dry"
@@ -274,7 +274,7 @@ async function main() {
     const res = await client.getUsers({ organizationId: ghost.subOrg })
     const hasProvisioner = (res.users ?? []).some((u) => u.userName?.toLowerCase().includes("provisioner"))
     if (!hasProvisioner) {
-      console.log(`\n— Ghost Turnkey ${ghost.subOrg} skipped (no provisioner) —`)
+      console.log(`\n– Ghost Turnkey ${ghost.subOrg} skipped (no provisioner) –`)
       continue
     }
     await deleteTurnkeySubOrg(

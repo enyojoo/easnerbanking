@@ -58,7 +58,7 @@ export function MfaSettingsDialog({
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const [secret, setSecret] = useState<string | null>(null)
   const [verifyCode, setVerifyCode] = useState("")
-  /** Fetching QR / enroll from API — keep UI calm (no spinners on the card path). */
+  /** Fetching QR / enroll from API – keep UI calm (no spinners on the card path). */
   const [enrollFetching, setEnrollFetching] = useState(false)
   const [verifySubmitting, setVerifySubmitting] = useState(false)
   const [secretJustCopied, setSecretJustCopied] = useState(false)
@@ -110,7 +110,7 @@ export function MfaSettingsDialog({
 
   /**
    * Reset before paint; start enroll in the same turn (before paint) when opening from “Set up”
-   * so the request is in flight immediately — no extra listFactors round-trip first.
+   * so the request is in flight immediately – no extra listFactors round-trip first.
    */
   useLayoutEffect(() => {
     if (!open) return
@@ -169,7 +169,7 @@ export function MfaSettingsDialog({
 
   const verifiedFactorId = getVerifiedTotpFactorId(factors)
 
-  /** Verified in API, or parent card already shows “On” — render enrolled UI immediately (Turn off waits for factor id). */
+  /** Verified in API, or parent card already shows “On” – render enrolled UI immediately (Turn off waits for factor id). */
   const showEnrolledCard =
     Boolean(verifiedFactorId) || (initialTotpVerified && mfaStatusKnown)
 

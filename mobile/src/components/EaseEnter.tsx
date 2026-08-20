@@ -14,7 +14,7 @@ type EaseEnterProps = {
 }
 
 /**
- * Decorative screen/content enter — native spring via react-native-ease.
+ * Decorative screen/content enter – native spring via react-native-ease.
  * Honors reduce motion (instant, no animation).
  */
 export default function EaseEnter({

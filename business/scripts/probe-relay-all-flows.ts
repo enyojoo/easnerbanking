@@ -69,7 +69,7 @@ async function probeTronUsdtPayIn(): Promise<Record<string, unknown>> {
   const dest = sourceSolVaultToken("USD")
   if (!source || !dest) throw new Error("token map missing")
 
-  // Production path (Solana vault as user+recipient) — documents current provision-address.ts behavior.
+  // Production path (Solana vault as user+recipient) – documents current provision-address.ts behavior.
   try {
     await relayQuote({
       user: PROBE_VAULT_ATA,

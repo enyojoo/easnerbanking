@@ -10,10 +10,10 @@ type Props = {
   children?: ReactNode
 }
 
-/** Primary money totals only — same text-sm size as other values, heavier weight. */
+/** Primary money totals only – same text-sm size as other values, heavier weight. */
 export const TRANSACTION_DETAIL_MONEY_VALUE_CLASS = "font-semibold"
 
-/** Bordered label/value row — shared by deposit and payout transaction detail cards. */
+/** Bordered label/value row – shared by deposit and payout transaction detail cards. */
 export function TransactionDetailSummaryRow({
   label,
   value,

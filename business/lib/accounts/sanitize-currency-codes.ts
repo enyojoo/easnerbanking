@@ -1,4 +1,4 @@
-/** Extra currency lists from JSON/DB may contain null, numbers, or junk — never call string methods blindly in `.map`. */
+/** Extra currency lists from JSON/DB may contain null, numbers, or junk – never call string methods blindly in `.map`. */
 export function sanitizeCurrencyCodeList(raw: unknown): string[] {
   if (!Array.isArray(raw)) return []
   const out: string[] = []
@@ -13,7 +13,7 @@ export function sanitizeCurrencyCodeList(raw: unknown): string[] {
 
 /**
  * Human-readable labels from JSONB (e.g. `payout_corridors.providers`). cmdk/React keyed lists call
- * string methods on `value` — null entries crash with `toString` / `toUpperCase` inside `Array.map`.
+ * string methods on `value` – null entries crash with `toString` / `toUpperCase` inside `Array.map`.
  */
 export function sanitizeStringLabelList(raw: unknown): string[] {
   if (!Array.isArray(raw)) return []

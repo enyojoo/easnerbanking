@@ -17,7 +17,7 @@ export type StablecoinAtaBalanceRead = {
   EUR: number
   /**
    * False when we had wallet accounts to read but every RPC balance lookup failed.
-   * Callers must not overwrite `wallet_balances` when this is false — doing so
+   * Callers must not overwrite `wallet_balances` when this is false – doing so
    * would flash $0.00 until a later Turnkey/ATA sync recovers.
    */
   readOk: boolean
@@ -57,7 +57,7 @@ export async function fetchStablecoinBalancesFromAta(
       if (asset === "USDC") usd += ui
       else eur += ui
     } catch {
-      // Missing ATA or RPC failure — do not count as a successful read.
+      // Missing ATA or RPC failure – do not count as a successful read.
     }
   }
 

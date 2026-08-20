@@ -105,9 +105,9 @@ type WalletSourceRow = {
 }
 
 function formatAsOf(raw: string | undefined): string {
-  if (!raw) return "—"
+  if (!raw) return "–"
   const t = new Date(raw)
-  if (!Number.isFinite(t.getTime())) return "—"
+  if (!Number.isFinite(t.getTime())) return "–"
   return t.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
 }
 
@@ -195,7 +195,7 @@ export function OfficeCryptoRatesPanel() {
                 dateStyle: "medium",
                 timeStyle: "short",
               })
-            : "—",
+            : "–",
       }
     })
   }, [rates, currencyByCode])
@@ -209,7 +209,7 @@ export function OfficeCryptoRatesPanel() {
       setSyncSummary(
         `Updated ${result.updated}, skipped ${result.skipped}${
           result.skippedPairs.length
-            ? ` — ${result.skippedPairs.slice(0, 8).join(", ")}`
+            ? ` – ${result.skippedPairs.slice(0, 8).join(", ")}`
             : ""
         }`,
       )
@@ -327,7 +327,7 @@ export function OfficeCryptoRatesPanel() {
                     <TableCell className="font-mono">{wallet.code}</TableCell>
                     <TableCell>
                       {wallet.pairCount === 0 ? (
-                        <span className="text-muted-foreground text-sm">None — run Sync rates</span>
+                        <span className="text-muted-foreground text-sm">None – run Sync rates</span>
                       ) : (
                         <span>
                           {wallet.activePairCount} active
@@ -370,7 +370,7 @@ export function OfficeCryptoRatesPanel() {
         <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
           <DialogHeader className="border-b pb-4">
             <DialogTitle>
-              Edit crypto rates — {editingMeta?.name} ({editingSource})
+              Edit crypto rates – {editingMeta?.name} ({editingSource})
             </DialogTitle>
           </DialogHeader>
 

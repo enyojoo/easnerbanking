@@ -8,7 +8,7 @@
  *   YC_PROBE_COUNTRY=PH
  *   YC_PROBE_CURRENCY=PHP
  *   YC_PROBE_CHANNEL_ID=109b40ff-887c-4441-9c0b-19bd6b4be18f
- *   YC_PROBE_RAIL=bank_transfer   — bank_transfer | mobile_money
+ *   YC_PROBE_RAIL=bank_transfer   – bank_transfer | mobile_money
  */
 import { getYellowcardEnvironment } from "../lib/yellowcard/config"
 import { listYellowcardChannels } from "../lib/yellowcard/channels"
@@ -32,7 +32,7 @@ function networkId(row: YcNetwork): string {
 
 function networkLabel(row: YcNetwork): string {
   const raw = row.name ?? row.code ?? networkId(row)
-  return String(raw || "—").trim()
+  return String(raw || "–").trim()
 }
 
 function isActive(row: YcNetwork): boolean {
@@ -54,10 +54,10 @@ function printNetworkTable(title: string, rows: YcNetwork[]) {
     return
   }
   for (const row of rows.sort((a, b) => networkLabel(a).localeCompare(networkLabel(b)))) {
-    const id = networkId(row) || "—"
+    const id = networkId(row) || "–"
     const label = networkLabel(row)
     const code = String(row.code ?? "").trim()
-    const status = String(row.status ?? "—")
+    const status = String(row.status ?? "–")
     const channelIds = Array.isArray(row.channelIds)
       ? row.channelIds.map((c) => String(c).trim()).filter(Boolean)
       : []
@@ -90,7 +90,7 @@ async function main() {
     const status = String(ch.status ?? ch.apiStatus ?? "").trim()
     const marker = id === CHANNEL_ID ? " ← probe target" : ""
     console.log(`  ${id}${marker}`)
-    console.log(`    rampType: ${ramp || "—"}, channelType: ${type || "—"}, status: ${status || "—"}`)
+    console.log(`    rampType: ${ramp || "–"}, channelType: ${type || "–"}, status: ${status || "–"}`)
   }
 
   const resolvedChannel = await findYcSendChannel({
@@ -114,7 +114,7 @@ async function main() {
 
   const bankEnum = [...new Set(channelScoped.map((n) => networkLabel(n)).filter(Boolean))].sort()
   console.log("\n=== fields_schema.yellowcard.bank_enum (preview) ===")
-  if (!bankEnum.length) console.log("  (empty — run corridor schema sync after networks are available)")
+  if (!bankEnum.length) console.log("  (empty – run corridor schema sync after networks are available)")
   else bankEnum.forEach((name) => console.log(`  - ${name}`))
 
   const manual = channelScoped.find((n) =>

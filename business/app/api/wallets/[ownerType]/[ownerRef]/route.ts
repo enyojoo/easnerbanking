@@ -5,7 +5,7 @@ import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 export const runtime = "nodejs"
 
 /**
- * GET — wallet owner + Turnkey accounts for authorized subject only.
+ * GET – wallet owner + Turnkey accounts for authorized subject only.
  */
 export async function GET(
   request: Request,

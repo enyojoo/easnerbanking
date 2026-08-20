@@ -162,7 +162,7 @@ function resolveTransactionStatusFromSlug(status: string): Omit<TransactionStatu
 /**
  * Map ledger status slug (+ optional API label) to display label, color, and tone.
  * Tone drives list + hero colors: green completed, orange processing, red failed.
- * When `statusLabel` is provided it overrides the label only — tone still comes from `status`.
+ * When `statusLabel` is provided it overrides the label only – tone still comes from `status`.
  */
 export function getTransactionStatusDisplay(
   status: string,

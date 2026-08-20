@@ -85,7 +85,7 @@ export default function AdminDashboardPage() {
   }
 
   const formatVolumeBalance = (vb: OfficeVolumeBalance | undefined) => {
-    if (!vb) return "—"
+    if (!vb) return "–"
     const parts: string[] = []
     if (vb.USD.total > 0) parts.push(formatMoneyDisplay(vb.USD.total, "USD"))
     if (vb.EUR.total > 0) parts.push(formatMoneyDisplay(vb.EUR.total, "EUR"))

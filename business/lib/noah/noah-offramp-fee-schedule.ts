@@ -1,6 +1,6 @@
 /**
  * Noah Local Currency Offramp fee schedule (merchant PDF + API-discovered rows).
- * Used for validation/reconciliation only — never overrides prepare noahFloor.
+ * Used for validation/reconciliation only – never overrides prepare noahFloor.
  */
 
 export type NoahOfframpFeeBasis = "noah_floor" | "mid_notional"
@@ -12,7 +12,7 @@ export type NoahOfframpScheduleRow = {
   paymentMethodKey: string
   fixedUsd: number
   variablePct: number
-  /** When true, row was inferred from API probe — update when Noah confirms. */
+  /** When true, row was inferred from API probe – update when Noah confirms. */
   apiDiscovered?: boolean
 }
 
@@ -26,7 +26,7 @@ export const NOAH_OFFRAMP_FEE_SCHEDULE: NoahOfframpScheduleRow[] = [
   { currency: "KES", countryCode: "KE", paymentMethodKey: "mobile_money", fixedUsd: 1.25, variablePct: 0.0055 },
   { currency: "GHS", countryCode: "GH", paymentMethodKey: "bank", fixedUsd: 1.5, variablePct: 0.0055 },
   { currency: "GHS", countryCode: "GH", paymentMethodKey: "digital_wallet_f4b", fixedUsd: 1.5, variablePct: 0.0055 },
-  // RWF: placeholder until probe updates — same structure as KES until API confirms
+  // RWF: placeholder until probe updates – same structure as KES until API confirms
   {
     currency: "RWF",
     countryCode: "RW",

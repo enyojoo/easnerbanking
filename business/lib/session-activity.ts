@@ -61,7 +61,7 @@ function clearHeartbeat(): void {
 /**
  * Pause idle soft-lock while the user is in an immersive flow that may not emit
  * parent-window activity (dialogs with cross-origin iframes, etc.).
- * Reference-counted — pair every begin with end.
+ * Reference-counted – pair every begin with end.
  */
 export function beginIdleLockSuspend(): void {
   suspendCount += 1
@@ -75,7 +75,7 @@ export function endIdleLockSuspend(): void {
   if (suspendCount === 0) clearHeartbeat()
 }
 
-/** Test helper — resets in-memory suspend state. */
+/** Test helper – resets in-memory suspend state. */
 export function __resetIdleLockSuspendForTests(): void {
   suspendCount = 0
   clearHeartbeat()

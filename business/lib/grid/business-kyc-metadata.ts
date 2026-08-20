@@ -29,7 +29,7 @@ function digitsOnly(value: string): string {
 
 /**
  * Stable 9-digit placeholder historically sent on Grid BUSINESS create.
- * Kept only for detecting leaked shell values — do not send on new creates.
+ * Kept only for detecting leaked shell values – do not send on new creates.
  */
 export function gridShellBusinessTaxId(platformCustomerId: string): string {
   let hash = 0
@@ -95,7 +95,7 @@ export function buildGridBusinessCustomerPayload(input: {
   profile: GridBusinessProfile
   /**
    * Grid POST /customers on production still requires country, incorporatedOn, and taxId.
-   * Use only on create — hosted KYB collects real values in Sumsub.
+   * Use only on create – hosted KYB collects real values in Sumsub.
    */
   forGridCreate?: boolean
 }): Record<string, unknown> {
@@ -119,7 +119,7 @@ export function buildGridBusinessCustomerPayload(input: {
     if (registrationNumber) businessInfo.registrationNumber = registrationNumber
   }
 
-  // Hosted KYB: country/incorporation trigger Grid taxId validation — only send with a real taxId.
+  // Hosted KYB: country/incorporation trigger Grid taxId validation – only send with a real taxId.
   if (taxId) {
     if (countryIso2) businessInfo.country = countryIso2
     const incorporatedOn = isoDateFromTimestamp(input.profile.createdAt)
@@ -263,7 +263,7 @@ export function buildGridBusinessInfoResyncPatch(input: {
 
 /**
  * Clear Grid fields that block hosted KYB (shell taxId, country/incorporation without a real tax id).
- * PATCH merges — omitted keys stay — so these must be sent as null.
+ * PATCH merges – omitted keys stay – so these must be sent as null.
  */
 export function buildGridBusinessInfoScrubPatch(input: {
   platformCustomerId: string

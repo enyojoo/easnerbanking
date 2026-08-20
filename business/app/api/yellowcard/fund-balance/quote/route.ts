@@ -104,7 +104,7 @@ function mapServiceError(e: unknown) {
   return ycFundBalanceQuoteError("yc_quote_failed", message, 400)
 }
 
-/** Indicative pricing — no YC API calls, no ledger rows. */
+/** Indicative pricing – no YC API calls, no ledger rows. */
 export async function POST(request: Request) {
   const resolved = await resolveFundBalanceContext(request)
   if ("error" in resolved) return resolved.error

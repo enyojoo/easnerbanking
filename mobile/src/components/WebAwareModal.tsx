@@ -27,7 +27,7 @@ type WebAwareModalProps = {
 /**
  * Bottom sheet on native; centered dialog on Expo web (business parity).
  *
- * Do not put `onStartShouldSetResponder` on the panel — that steals the
+ * Do not put `onStartShouldSetResponder` on the panel – that steals the
  * responder from nested ScrollView / FlatList and blocks scrolling.
  */
 export function WebAwareModal({

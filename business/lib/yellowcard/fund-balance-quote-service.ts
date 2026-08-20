@@ -461,7 +461,7 @@ function formatFundBalanceTransferResponse(input: {
   }
 }
 
-/** Indicative pricing only — no YC API calls, no DB rows. */
+/** Indicative pricing only – no YC API calls, no DB rows. */
 export async function previewFundBalanceQuote(ctx: FundBalanceQuoteInput) {
   const prepared = await prepareFundBalanceQuote(ctx)
   const expiresAt = resolveYcQuoteExpiresAt()
@@ -536,7 +536,7 @@ async function confirmFundBalanceOrderInner(ctx: FundBalanceQuoteInput) {
       networkFeeAmountUsd: ycLegFeesUsd > 0 ? ycLegFeesUsd : 0,
       serviceFeeAmountUsd: 0,
     }
-    // Keep locked credit/fees from the original confirm — do not re-solve credit from
+    // Keep locked credit/fees from the original confirm – do not re-solve credit from
     // padded localPayIn (that inflated usdCredit, e.g. $3 → $3.09 on idempotent reuse).
     const pricingRaw =
       quotedReceive > 0

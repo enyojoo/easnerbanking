@@ -1,5 +1,5 @@
 /**
- * Leaf narration parser — no imports from verification/inbound label modules
+ * Leaf narration parser – no imports from verification/inbound label modules
  * (those previously formed a circular dependency).
  */
 

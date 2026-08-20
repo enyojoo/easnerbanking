@@ -6,7 +6,7 @@
  * `scopeKey(scope)` so invalidating `qk.wallets.root(scope)` matches every
  * wallet-related query for that entity without touching siblings.
  *
- * Never build keys by hand at a call site — always go through `qk.*`.
+ * Never build keys by hand at a call site – always go through `qk.*`.
  */
 
 import { scopeKey, type Scope } from "./scope"
@@ -22,7 +22,7 @@ export type DateRange = {
  * Free-form filter bag for list queries (transactions, invoices, etc.).
  *
  * Kept permissive on purpose: the shape of a filter object IS the cache
- * identity. Stable `JSON.stringify`-able scalars only — no Dates, no
+ * identity. Stable `JSON.stringify`-able scalars only – no Dates, no
  * functions, no class instances.
  */
 export type QueryFilters = Readonly<Record<string, string | number | boolean | null | undefined | readonly (string | number)[]>>

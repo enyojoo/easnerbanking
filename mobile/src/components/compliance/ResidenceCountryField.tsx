@@ -65,7 +65,7 @@ export function ResidenceCountryField({
   const { height: windowHeight } = useWindowDimensions()
 
   // Product hard-blocks only (Noah fully prohibited VA). Do not use the Business
-  // Office allowlist API — that strips Grid-blocked countries (e.g. KE) and keeps
+  // Office allowlist API – that strips Grid-blocked countries (e.g. KE) and keeps
   // Mobile-blocked ones (e.g. GB).
   const countries = useMemo(
     () => filterNoahSupportedCountries(RESIDENCE_COUNTRY_CATALOG),

@@ -18,9 +18,9 @@ function statusVariant(status: string): "emerald" | "amber" | "oxblood" | "slate
 }
 
 function formatTs(iso: string | null | undefined) {
-  if (!iso) return "—"
+  if (!iso) return "–"
   const d = new Date(iso)
-  if (!Number.isFinite(d.getTime())) return "—"
+  if (!Number.isFinite(d.getTime())) return "–"
   return d.toLocaleString("en-US", {
     month: "short",
     day: "2-digit",
@@ -116,7 +116,7 @@ export function EventInboxPanel() {
                     </TableCell>
                     <TableCell>{formatTs(event.received_at)}</TableCell>
                     <TableCell className="max-w-[240px] truncate text-xs text-muted-foreground">
-                      {event.error ?? "—"}
+                      {event.error ?? "–"}
                     </TableCell>
                   </TableRow>
                 ))}

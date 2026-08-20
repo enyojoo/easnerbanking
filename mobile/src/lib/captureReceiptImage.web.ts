@@ -4,7 +4,7 @@ import type { ReceiptDetails } from '../components/receipt/receipt-types'
 
 /**
  * Web: react-native-view-shot delegates to html2canvas, which defaults to
- * window.devicePixelRatio — soft on low-DPI screens. Call html2canvas directly at an
+ * window.devicePixelRatio – soft on low-DPI screens. Call html2canvas directly at an
  * explicit high scale so the downloaded/shared PNG (logo + text) stays crisp everywhere.
  * On react-native-web a View ref resolves to the underlying DOM node.
  */

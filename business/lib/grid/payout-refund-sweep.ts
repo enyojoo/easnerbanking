@@ -176,7 +176,7 @@ function quoteLooksFailed(status: string | undefined): boolean {
 
 /**
  * Move USDC stranded on Grid's customer internal account back to the owner Turnkey vault.
- * Does not create a user-facing ledger row — Turnkey inbound is suppressed as a payout refund.
+ * Does not create a user-facing ledger row – Turnkey inbound is suppressed as a payout refund.
  */
 export async function startGridPayoutRefundTurnkeySweep(
   admin: SupabaseClient,

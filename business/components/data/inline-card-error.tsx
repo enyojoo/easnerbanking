@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils"
  *
  * Rule: NEVER replace the whole surface with an error screen while we have
  * any cached state. Render this compact banner above/below the last-known
- * data instead — the user can still read numbers while we reconcile.
+ * data instead – the user can still read numbers while we reconcile.
  *
  * Use the full-screen error only for routes that have truly never rendered
  * (first load failure, no SSR snapshot).

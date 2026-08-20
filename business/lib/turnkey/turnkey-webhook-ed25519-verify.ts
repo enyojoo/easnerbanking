@@ -32,7 +32,7 @@ export function verifyTurnkeyCanonicalEd25519Noble(
 
 /**
  * Turnkey-recommended Ed25519 verify (@noble/curves).
- * @see Turnkey support — `v1.<algorithm>.<keyId>.<timestamp>.<eventId>.<rawBody>`
+ * @see Turnkey support – `v1.<algorithm>.<keyId>.<timestamp>.<eventId>.<rawBody>`
  */
 export function verifyTurnkeyWebhookEd25519Noble(
   fields: TurnkeyWebhookEd25519HeaderFields,

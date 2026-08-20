@@ -7,7 +7,7 @@ import { BUSINESS_APP_SESSION_COOKIE } from "@/lib/app-session"
  *
  * We hit the same Next.js API routes the browser uses, carrying the
  * business app session cookie forward. This keeps the shape of server
- * prefetched data identical to what client components would receive —
+ * prefetched data identical to what client components would receive –
  * which is what makes the dehydrated cache hydrate cleanly.
  *
  * All server fetches are `cache: "no-store"` by default: RSC prefetch

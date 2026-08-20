@@ -375,7 +375,7 @@ export default function SendConfirmPage() {
 
   /**
    * Cross-border review shows preview rates immediately. POST /receive (full lock)
-   * runs on Pay via YcPayInReviewSection — do not auto-confirm on mount.
+   * runs on Pay via YcPayInReviewSection – do not auto-confirm on mount.
    */
   useEffect(() => {
     if (!state || !crossBorderMeta || isDraftRecipientId(state.recipient.id)) return
@@ -613,7 +613,7 @@ export default function SendConfirmPage() {
         if (!res.ok || !data.ok) {
           const err = typeof data.error === "string" ? data.error : "Easetag transfer failed"
           const hint = typeof data.hint === "string" ? data.hint : ""
-          setAuthorizeError(hint ? `${err} — ${hint}` : err)
+          setAuthorizeError(hint ? `${err} – ${hint}` : err)
           return
         }
         const serverEtid = String(data.easner_transaction_id ?? "").trim().toUpperCase()
@@ -1233,7 +1233,7 @@ export default function SendConfirmPage() {
       {!easenetSend && !isYcCrossBorder && (wq?.expiresAt || pq?.expiresAt) ? (
         <div className="text-xs text-muted-foreground">
           {quoteCountdown.expired
-            ? "Quote expired — go back and continue again for a fresh quote."
+            ? "Quote expired – go back and continue again for a fresh quote."
             : `Quote valid for ${quoteCountdown.label}`}
         </div>
       ) : null}

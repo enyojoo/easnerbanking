@@ -8,7 +8,7 @@
  *   YC_PROBE_USER_ID=c7ace38e-be38-43e7-86e1-6e66b90d4243
  *   YC_PROBE_PAYOUT_RECEIVE_NGN=50000
  *   YC_PROBE_CROSS_RECEIVE_KES=10000
- *   YC_PROBE_SKIP_LIVE=1  — DB pricing only, no YC API
+ *   YC_PROBE_SKIP_LIVE=1  – DB pricing only, no YC API
  */
 import { randomUUID } from "crypto"
 import {
@@ -50,7 +50,7 @@ const PAYOUT_RECEIVE_NGN = Number(process.env.YC_PROBE_PAYOUT_RECEIVE_NGN || "50
 const CROSS_RECEIVE_KES = Number(process.env.YC_PROBE_CROSS_RECEIVE_KES || "10000")
 
 function fmt(n: number, d = 2) {
-  return Number.isFinite(n) ? n.toFixed(d) : "—"
+  return Number.isFinite(n) ? n.toFixed(d) : "–"
 }
 
 function userProfile(row: Record<string, unknown>) {
@@ -196,7 +196,7 @@ async function probeBalancePayout(input: {
     return
   }
   if (input.turnkeyIsProbeFallback) {
-    console.log("\n[WARN] Using deposit omnibus as refund — fee probe only, not a real payout path")
+    console.log("\n[WARN] Using deposit omnibus as refund – fee probe only, not a real payout path")
   }
 
   const channelId = await resolveYcSendChannelId({
@@ -353,7 +353,7 @@ async function probeCrossBorder(input: {
   console.log(`Leg rates: yc_buy_from=${fmt(ycBuyFrom)} yc_sell_to=${fmt(ycSellTo)} easner_sell=${fmt(easnerSellFrom)} yc_cross_mid=${fmt(Number(cross.yc_cross_mid ?? 0), 6)}`)
   console.log(`Receive target: ${receiveAmount.toLocaleString()} ${receiveCurrency}`)
   console.log("")
-  console.log("Easner pricing (zero-fee preview — amount screen principal):")
+  console.log("Easner pricing (zero-fee preview – amount screen principal):")
   console.log(`  Principal local:          ₦${fmt(principalLocal, 0)}`)
   console.log(`  Provisional pay-in:       ₦${fmt(zeroFeePreview.provisionalPayIn, 0)}`)
   console.log(`  Full local (zero-fee):    ₦${fmt(zeroFeePreview.localPayIn, 0)}`)
@@ -578,7 +578,7 @@ async function main() {
     null
 
   if (!ngnRecipient) {
-    console.log("\n[WARN] No NGN recipient — payout probe skipped")
+    console.log("\n[WARN] No NGN recipient – payout probe skipped")
   } else {
     await probeBalancePayout({
       admin,
@@ -590,7 +590,7 @@ async function main() {
   }
 
   if (!foreignRecipient) {
-    console.log("\n[WARN] No foreign-currency recipient — cross-border probe skipped")
+    console.log("\n[WARN] No foreign-currency recipient – cross-border probe skipped")
     console.log("Available:", ctx.recipients.map((r) => `${r.currency}/${resolveRecipientPayoutCountry(r)}`).join(", ") || "(none)")
   } else {
     await probeCrossBorder({

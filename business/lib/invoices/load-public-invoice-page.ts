@@ -6,7 +6,7 @@ import {
 } from "@/lib/invoices/json-public-invoice-from-row"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
-/** Server load for the public invoice HTML document — includes checkout when payable. */
+/** Server load for the public invoice HTML document – includes checkout when payable. */
 export async function loadPublicInvoicePage(parts: string[]): Promise<PublicInvoicePayload | null> {
   const segments = parts.map((part) => part.trim()).filter(Boolean)
   if (segments.length !== 1 && segments.length !== 2) return null

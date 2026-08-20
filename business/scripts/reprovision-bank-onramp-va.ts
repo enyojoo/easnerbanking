@@ -1,6 +1,6 @@
 /**
  * Force re-bind Noah bank on-ramp VAs to the current destination (omnibus or user vault).
- * Works for customers who already have VAs — does not require new KYC.
+ * Works for customers who already have VAs – does not require new KYC.
  *
  * Usage:
  *   cd business
@@ -56,7 +56,7 @@ async function main() {
       .maybeSingle()
     if (businessUsesGridVerification(biz as { verification_provider?: string | null } | null)) {
       console.error(
-        "Grid-verified business — use Grid sync / refreshGridBusinessReceiveRails instead of Noah on-ramp.",
+        "Grid-verified business – use Grid sync / refreshGridBusinessReceiveRails instead of Noah on-ramp.",
       )
       process.exit(1)
     }

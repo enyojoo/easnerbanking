@@ -1,9 +1,9 @@
 /**
- * Easner Design System — Mobile colors
+ * Easner Design System – Mobile colors
  *
  * Graphite + ivory + Easner blue primary; emerald for success. No neon greens,
  * no purple gradients. Frosted blur uses tokenized `glass` roles for system
- * chrome (tab bar, sheets)—not full-screen decorative glassmorphism. Customer
+ * chrome (tab bar, sheets)–not full-screen decorative glassmorphism. Customer
  * app is light-only; optional dark keys exist for shared typings only.
  *
  * Structural shape is preserved for backwards-compat with existing
@@ -14,7 +14,7 @@
 
 import { easnerBrand } from '@easner/shared'
 
-/** Core neutrals — identical values to `easnerBrand` in packages/shared (RN flat hex). */
+/** Core neutrals – identical values to `easnerBrand` in packages/shared (RN flat hex). */
 const brand = {
   graphite: easnerBrand.graphite,
   carbon: easnerBrand.carbon,
@@ -239,11 +239,11 @@ export const lightColors: ColorPalette = {
     /** Canonical hairline used for dividers, section frames, and inputs. */
     light: '#E5E7EB',
     default: '#E5E7EB',
-    /** Slightly darker — reserved for switch tracks and other edge cases. */
+    /** Slightly darker – reserved for switch tracks and other edge cases. */
     dark: '#D3D8E0',
   },
 
-  /** Raised plates on the gray canvas — crisp white with hairline border. */
+  /** Raised plates on the gray canvas – crisp white with hairline border. */
   frame: {
     background: '#FFFFFF',
     border: '#E5E7EB',
@@ -387,7 +387,7 @@ export const darkColors: ColorPalette = {
 }
 
 /**
- * Default export — preserves backwards-compat for call sites that
+ * Default export – preserves backwards-compat for call sites that
  * `import { colors }`. Defaults to the light palette; screens that
  * need dynamic theming should use `useThemeColors()` from
  * `ThemePaletteContext` instead.

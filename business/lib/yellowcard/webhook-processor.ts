@@ -144,7 +144,7 @@ export async function handleYcBalancePayoutSendWebhook(
   )
 
   if (input.classified.isTerminalSuccess) {
-    // Ignore orphan YC send webhooks — fee sweep and settle only after PIN + Turnkey deposit leg.
+    // Ignore orphan YC send webhooks – fee sweep and settle only after PIN + Turnkey deposit leg.
     if (!String(prior.turnkey_send_id ?? "").trim()) {
       console.warn("[yellowcard-webhook] balance_payout success ignored (no turnkey_send_id)", {
         transactionId: row.id,
@@ -387,7 +387,7 @@ export async function handleYcCrossBorderWebhook(
           },
         )
       }
-      console.error("[yc-cross-border] SEND.FAILED — refund to fee wallet; NGN recovery runbook", {
+      console.error("[yc-cross-border] SEND.FAILED – refund to fee wallet; NGN recovery runbook", {
         transferId: transfer.id,
       })
       return

@@ -5,7 +5,7 @@ import { apiFetch } from '../../query/api-client'
 import { useScope } from '../../query/scope'
 import { ACCOUNT_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 
-/** Noah `/api/noah/virtual-accounts` JSON — aligned with business `VaJson`. */
+/** Noah `/api/noah/virtual-accounts` JSON – aligned with business `VaJson`. */
 export type NoahVirtualAccountDisplayJson = {
   hasAccount?: boolean
   currency?: string
@@ -113,7 +113,7 @@ export function prefetchReceiveDepositQueries(
 }
 
 /**
- * Personal-scope virtual accounts (USD/EUR) for Receive — same API and key family as
+ * Personal-scope virtual accounts (USD/EUR) for Receive – same API and key family as
  * `business/hooks/use-business-account-rows` so `invalidateQueries(qk.wallets.root(scope))`
  * refreshes this together with balances.
  */
@@ -147,7 +147,7 @@ async function fetchConsumerRelayDepositAddresses(): Promise<{
 }
 
 /**
- * Turnkey USDC / EURC deposit lines — same route as `noahService.getTurnkeyDepositAddresses`.
+ * Turnkey USDC / EURC deposit lines – same route as `noahService.getTurnkeyDepositAddresses`.
  */
 export function useConsumerDepositAddresses() {
   const { scope, isReady } = useScope()

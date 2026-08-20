@@ -6,7 +6,7 @@ function normalizeReceiveForCurrency(currency: string, amount: number): number {
   return normalized
 }
 
-/** @deprecated Use normalizeGlobalPayoutQuoteReceiveAmount from @easner/shared — send/receive entry share one rate. */
+/** @deprecated Use normalizeGlobalPayoutQuoteReceiveAmount from @easner/shared – send/receive entry share one rate. */
 export function seedQuoteReceiveForSendBudget(input: {
   sendBudget: number
   sourceCurrency: string

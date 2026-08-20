@@ -3,7 +3,7 @@
 import { Toaster as SonnerToaster, type ToasterProps } from 'sonner'
 
 /**
- * Easner toast wrapper — muted semantic palette, private-bank tone.
+ * Easner toast wrapper – muted semantic palette, private-bank tone.
  *
  * Use `next-themes` if available; otherwise default to system colour scheme.
  */

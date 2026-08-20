@@ -15,7 +15,7 @@ export function gridPlatformCustomerIdFresh(businessId: string, nonce = Date.now
   return `${gridPlatformCustomerIdFromBusinessId(businessId)}_g${nonce}`
 }
 
-/** Unrelated `eb_` id — Grid 404s if the new id is a prefix of a deleted customer's platform id. */
+/** Unrelated `eb_` id – Grid 404s if the new id is a prefix of a deleted customer's platform id. */
 export function gridPlatformCustomerIdRandom(): string {
   return ebFromBusinessId(crypto.randomUUID())
 }

@@ -35,7 +35,7 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
     return handleDepositOmnibusInbound(admin, deposit, eventId)
   }
 
-  // Cross-border leg2 fail refunds land on fee wallet — suppress + mark transfer.
+  // Cross-border leg2 fail refunds land on fee wallet – suppress + mark transfer.
   const feeUsd = resolveWalletSendFeeSolanaAddress({ ledgerCurrency: "USD" })
   const feeEur = resolveWalletSendFeeSolanaAddress({ ledgerCurrency: "EUR" })
   const addr = String(deposit.address || "").trim()
@@ -67,7 +67,7 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
         .eq("id", match.transferId)
       return true
     }
-    // Unmatched fee-wallet inbound — do not create user ledger rows.
+    // Unmatched fee-wallet inbound – do not create user ledger rows.
     return true
   }
 

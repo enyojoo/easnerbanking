@@ -82,10 +82,10 @@ async function main() {
   }
 
   console.log(
-    `${dryRun ? "[dry-run] " : ""}delete ${noahDeleteIds.length} Noah orchestration Out row(s): ${noahDeleteIds.join(", ") || "—"}`,
+    `${dryRun ? "[dry-run] " : ""}delete ${noahDeleteIds.length} Noah orchestration Out row(s): ${noahDeleteIds.join(", ") || "–"}`,
   )
   console.log(
-    `${dryRun ? "[dry-run] " : ""}delete ${turnkeyDeleteIds.length} Turnkey mirror row(s): ${turnkeyDeleteIds.join(", ") || "—"}`,
+    `${dryRun ? "[dry-run] " : ""}delete ${turnkeyDeleteIds.length} Turnkey mirror row(s): ${turnkeyDeleteIds.join(", ") || "–"}`,
   )
 
   if (!dryRun) {

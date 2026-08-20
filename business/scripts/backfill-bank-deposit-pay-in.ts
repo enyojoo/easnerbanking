@@ -289,9 +289,9 @@ async function main() {
     }
 
     const senderLabel =
-      typeof metadata.sender_name === "string" ? metadata.sender_name : "—"
+      typeof metadata.sender_name === "string" ? metadata.sender_name : "–"
     const narrationLabel =
-      typeof metadata.deposit_narration === "string" ? metadata.deposit_narration : "—"
+      typeof metadata.deposit_narration === "string" ? metadata.deposit_narration : "–"
 
     if (dryRun) {
       const settleNote =

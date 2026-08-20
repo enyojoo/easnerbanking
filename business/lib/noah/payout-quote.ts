@@ -294,7 +294,7 @@ function roundUsdc(n: number): number {
   return Math.round(n * 1_000_000) / 1_000_000
 }
 
-/** DB-only Noah balance payout preview — no prepare (lock on `/confirm`). */
+/** DB-only Noah balance payout preview – no prepare (lock on `/confirm`). */
 export async function buildNoahBalancePayoutPreview(input: {
   userId: string
   noahCustomerId: string

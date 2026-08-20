@@ -1,7 +1,7 @@
 import type { GlobalPayoutMarginCaptureMode } from "@easner/shared"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-/** @deprecated Legacy env ignored — Noah payouts always use fee_wallet_deferred. */
+/** @deprecated Legacy env ignored – Noah payouts always use fee_wallet_deferred. */
 export function getGlobalPayoutMarginCaptureMode(): GlobalPayoutMarginCaptureMode {
   const raw = String(process.env.GLOBAL_PAYOUT_MARGIN_CAPTURE_MODE || "")
     .trim()

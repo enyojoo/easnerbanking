@@ -4,7 +4,7 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
 /**
- * Easner alert — calm and trustworthy.
+ * Easner alert – calm and trustworthy.
  * Success feels reassuring, warnings feel operational, errors feel serious but not aggressive.
  */
 const alertVariants = cva(

@@ -20,7 +20,7 @@ export type RefreshLiveOperationalDataOpts = {
 
 /**
  * Invalidate + refetch all live operational feeds after money movement or resume.
- * Non-blocking by default — callers opening TransactionDetails should not await this.
+ * Non-blocking by default – callers opening TransactionDetails should not await this.
  */
 export async function refreshLiveOperationalData(
   scope: PersonalScope,
@@ -44,7 +44,7 @@ export async function refreshLiveOperationalData(
   }
 
   void prefetchReceiveDepositQueries(qc, scope)
-  // Payout corridor catalog (bank/MoMo enums, fields_schema) — office can change without app release.
+  // Payout corridor catalog (bank/MoMo enums, fields_schema) – office can change without app release.
   void refreshSendDestinations().catch(() => undefined)
   void warmOperationalRecipientCaches(qc, scope).catch(() => undefined)
 }

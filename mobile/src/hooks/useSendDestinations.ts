@@ -9,7 +9,7 @@ import {
 
 /**
  * Keeps recipient-form catalog in sync with office fiat/crypto (Platform Control).
- * Data is prefetched at login and read from memory — no loading UI; lists render when ready.
+ * Data is prefetched at login and read from memory – no loading UI; lists render when ready.
  */
 export function useSendDestinations() {
   const [data, setData] = useState<SendDestinationsResponse | null>(() => getSendDestinationsMemory())

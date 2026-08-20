@@ -37,7 +37,7 @@ describe("resolveNgLocalVerification", () => {
       ngLocalIdNumber: "10987654321",
     })
     expect(s.complete).toBe(true)
-    expect(ngLocalVerificationComplete(s as never)).toBe(false) // wrong shape — use profile
+    expect(ngLocalVerificationComplete(s as never)).toBe(false) // wrong shape – use profile
     expect(
       ngLocalVerificationComplete({
         kycIdType: "NationalID",

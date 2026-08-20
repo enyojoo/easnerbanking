@@ -44,7 +44,7 @@ export const officeReferenceQueryDefaults = {
   meta: { webPersist: "none" as const, freshness: "reference" as const },
 }
 
-/** Admin rate catalogs — cron-synced; always fetch fresh, never persist to disk. */
+/** Admin rate catalogs – cron-synced; always fetch fresh, never persist to disk. */
 export const officeRatesQueryDefaults = {
   staleTime: 0,
   gcTime: OFFICE_REFERENCE_GC_MS,

@@ -12,7 +12,7 @@ type Props = {
   size?: number
 }
 
-/** Full token or country flag avatar — no corner badge (send chip + recipient lists). */
+/** Full token or country flag avatar – no corner badge (send chip + recipient lists). */
 export function PayoutRecipientAvatar({ recipient, size = 36 }: Props) {
   const isWalletRecipient = isWalletSendRecipient(recipient)
   const tokenIcon = getTokenIconUrl(recipient.currency)

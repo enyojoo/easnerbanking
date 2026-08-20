@@ -9,7 +9,7 @@ function mapLedgerStatusForPresentation(status: string): string {
   return st || "pending"
 }
 
-/** Re-apply ledger direction/amount/status after detail enrichers — YC payloads must not become Noah sends. */
+/** Re-apply ledger direction/amount/status after detail enrichers – YC payloads must not become Noah sends. */
 export function restoreInboundLedgerPresentation(
   row: Record<string, unknown>,
   transaction: Record<string, unknown>,

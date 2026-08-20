@@ -2,7 +2,7 @@ import type { PayoutQuote } from './noahService'
 import type { PayoutPrepareSession } from './payoutPrepareSession'
 import { computeFootedDisplayProcessingFee } from '../../../packages/shared/src/payout-processing-fee'
 
-/** Inline — avoid `@easner/shared` barrel (pulls flag assets into Metro on EAS). */
+/** Inline – avoid `@easner/shared` barrel (pulls flag assets into Metro on EAS). */
 function normalizeReceiveForCurrency(currency: string, amount: number): number {
   const cur = currency.trim().toUpperCase()
   const normalized = Math.round(amount * 100) / 100
@@ -108,7 +108,7 @@ export function isUsablePayoutQuotePreview(quote: PayoutQuote | null | undefined
   )
 }
 
-/** Locked order from `/confirm` — required before PIN execute. DB `/quote` previews are never complete. */
+/** Locked order from `/confirm` – required before PIN execute. DB `/quote` previews are never complete. */
 export function isCompletePayoutQuote(quote: PayoutQuote | null | undefined): quote is PayoutQuote {
   if (!isUsablePayoutQuotePreview(quote)) return false
   if (new Date(quote.expiresAt).getTime() <= Date.now()) return false
@@ -135,7 +135,7 @@ export function payoutQuoteNeedsConfirmLock(quote: PayoutQuote | null | undefine
   return quote.requiresConfirm !== false
 }
 
-/** Review / PIN CTA — YC preview is valid before POST /send lock; Noah needs confirm lock. */
+/** Review / PIN CTA – YC preview is valid before POST /send lock; Noah needs confirm lock. */
 export function isPayoutSessionReadyForExecute(
   session: PayoutPrepareSession | undefined,
   recipientId: string | undefined,
@@ -150,7 +150,7 @@ export function isPayoutSessionReadyForExecute(
     return false
   }
   if (session.lockId || session.ycSendId || session.gridQuoteId) return true
-  // YC lock-on-review: preview sequenceId alone is not enough — need confirm lock.
+  // YC lock-on-review: preview sequenceId alone is not enough – need confirm lock.
   if (session.payoutProvider === 'yellowcard') return false
   if (session.payoutProvider === 'grid') return false
   return Boolean(session.formSessionId.trim())
@@ -242,7 +242,7 @@ function quoteMetaKey(meta: SendPayoutQuoteStashMeta): string {
   ].join('|')
 }
 
-/** Deduped quote fetch — used for background prefetch and Continue gate. */
+/** Deduped quote fetch – used for background prefetch and Continue gate. */
 export async function ensureSendPayoutQuoteStashed(
   fetchQuote: () => Promise<PayoutQuote>,
   meta: SendPayoutQuoteStashMeta,
@@ -279,7 +279,7 @@ export async function ensureSendPayoutQuoteStashed(
   return inflightQuote
 }
 
-/** Preview (if needed) + optional confirm — one provider lock call when confirm is required. */
+/** Preview (if needed) + optional confirm – one provider lock call when confirm is required. */
 export async function ensureSendPayoutQuoteLocked(
   fetchQuote: () => Promise<PayoutQuote>,
   fetchConfirm: () => Promise<PayoutQuote>,
@@ -299,7 +299,7 @@ export async function ensureSendPayoutQuoteLocked(
   return ensureSendPayoutOrderConfirmed(fetchConfirm, meta)
 }
 
-/** Lock payout order at review — idempotent by quote key on server. */
+/** Lock payout order at review – idempotent by quote key on server. */
 export async function ensureSendPayoutOrderConfirmed(
   fetchConfirm: () => Promise<PayoutQuote>,
   meta: SendPayoutQuoteStashMeta,

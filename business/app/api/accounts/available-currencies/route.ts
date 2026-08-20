@@ -8,7 +8,7 @@ import { getGlobalCurrencyPolicies } from "@/lib/accounts/currency-controls"
 const DEFAULTS = ["USD", "EUR"] as const
 
 /**
- * Catalog for **Open Currency Account** — Noah + Tier 2 placeholders; merged with org/user enabled extras.
+ * Catalog for **Open Currency Account** – Noah + Tier 2 placeholders; merged with org/user enabled extras.
  */
 export async function GET(request: Request) {
   const user = await getUserFromApiRequest(request)

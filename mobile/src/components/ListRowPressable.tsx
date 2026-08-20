@@ -12,7 +12,7 @@ type ListRowPressableProps = {
 }
 
 /**
- * List row press target — subtle scale (via global PressablesConfig minScale 0.97).
+ * List row press target – subtle scale (via global PressablesConfig minScale 0.97).
  * Preserves onPressIn for prefetch when provided.
  */
 export function ListRowPressable({

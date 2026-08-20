@@ -6,7 +6,7 @@ import { useQueryClient, type FetchQueryOptions, type QueryKey } from '@tanstack
  *
  * React Native has no hover, so we prefetch on `onPressIn`: the first
  * frame of a touch is the user's commitment signal, and detail screens
- * typically take 80-150ms to transition — ample room to swap the
+ * typically take 80-150ms to transition – ample room to swap the
  * network fetch under the animation. Returning from the detail screen
  * then also uses the fresh cache.
  *

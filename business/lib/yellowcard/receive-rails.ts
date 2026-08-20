@@ -26,7 +26,7 @@ function channelMatchesReceiveRail(
   return rail === "mobile_money" ? t.includes("momo") : t.includes("bank") || !t.includes("momo")
 }
 
-/** YC may return disabled corridor rows — never submit receive against them. */
+/** YC may return disabled corridor rows – never submit receive against them. */
 export function isYcReceiveChannelActive(ch: YcChannel): boolean {
   const apiStatus = String(ch.apiStatus ?? "").trim().toLowerCase()
   const status = String(ch.status ?? "").trim().toLowerCase()

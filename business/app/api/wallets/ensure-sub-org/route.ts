@@ -7,7 +7,7 @@ import { ensureTurnkeySubOrgForEasnerOwner } from "@/lib/wallet/ensure-turnkey-s
 export const runtime = "nodejs"
 
 /**
- * POST — Create Turnkey sub-org server-side (if missing) and link to `wallet_owners`.
+ * POST – Create Turnkey sub-org server-side (if missing) and link to `wallet_owners`.
  * Idempotent. Use when bootstrap was skipped or Turnkey creation failed earlier.
  */
 export async function POST(request: Request) {

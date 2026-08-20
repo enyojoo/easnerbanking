@@ -137,7 +137,7 @@ export async function finalizeAccountClosure(
     return { ok: false, error: updateErr.message || "Unable to close account." }
   }
   if (!row?.id) {
-    // Already closed or missing profile — still attempt auth/push cleanup below.
+    // Already closed or missing profile – still attempt auth/push cleanup below.
   }
 
   await admin.from("user_push_devices").delete().eq("user_id", userId)
