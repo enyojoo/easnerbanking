@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { SETTINGS_INPUT_CLASS } from "@/lib/settings-control-surface"
-import { fetchWithSession } from "@/lib/fetch-with-session"
+import { uploadKybDocument } from "@/lib/grid/upload-kyb-document"
 import type { KybDocumentPacket } from "@/lib/grid/kyb-packet-types"
 import { GridKybEnumSelect } from "./grid-kyb-enum-select"
 import { GridKybCountrySelect } from "./grid-kyb-country-select"
@@ -106,22 +106,19 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
     setSaving(true)
     setError(null)
     try {
+      const document = await uploadKybDocument(nextFile, {
+        category,
+        personId,
+        documentType,
+        issuingCountry,
+        issuingAuthority,
+        documentNumber,
+      })
       if (existingDocuments.length) await removeExistingRows()
-      const form = new FormData()
-      form.set("file", nextFile)
-      form.set("category", category)
-      form.set("documentType", documentType)
-      form.set("issuingCountry", issuingCountry)
-      if (personId) form.set("personId", personId)
-      if (issuingAuthority) form.set("issuingAuthority", issuingAuthority)
-      if (documentNumber) form.set("documentNumber", documentNumber)
-      const res = await fetchWithSession("/api/grid/kyb/documents", { method: "POST", body: form })
-      const json = (await res.json().catch(() => ({}))) as { error?: string; document?: KybDocumentPacket }
-      if (!res.ok) throw new Error(json.error || "Could not store the file.")
       setFile(null)
       if (inputRef.current) inputRef.current.value = ""
-      await onUploaded(json.document)
-      return json.document
+      await onUploaded(document)
+      return document
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not store the file."
       setError(message)
@@ -280,7 +277,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
           <p className="text-sm text-muted-foreground">No file chosen yet.</p>
         )}
         <p className="text-xs text-muted-foreground">
-          {fileHint || "PDF, JPEG, or PNG. Maximum file size is 10 MB."}
+          {fileHint || "PDF, JPEG, PNG, or HEIC. Maximum 10 MB – photograph the ID if the PDF is large."}
         </p>
         <input
           ref={inputRef}

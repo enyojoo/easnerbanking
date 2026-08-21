@@ -8,58 +8,115 @@ import {
 import { encryptKybPii } from "@/lib/grid/kyb-pii-crypto"
 import { deleteGridKybDocument } from "@/lib/grid/kyb-grid-writes"
 import { normalizeKybDocumentBytes } from "@/lib/grid/kyb-document-file"
-
-const MAX_BYTES = 10 * 1024 * 1024
+import {
+  extensionFromKybContentType,
+  extensionFromKybFileName,
+  isOwnedKybDocumentPath,
+  KYB_DOCUMENT_MAX_BYTES,
+  KYB_DOCUMENT_TOO_LARGE,
+} from "@/lib/grid/kyb-document-limits"
 
 export async function POST(request: Request) {
   const ctx = await requireKybContext(request)
   if ("error" in ctx) return ctx.error
   const application = await ensureKybApplication(ctx.admin, ctx.businessId)
-  const form = await request.formData()
-  const file = form.get("file")
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Choose a PDF, JPEG, or PNG file." }, { status: 400 })
-  }
-  if (file.size > MAX_BYTES) {
-    return NextResponse.json({ error: "Maximum file size is 10 MB." }, { status: 400 })
-  }
-  const rawBytes = Buffer.from(await file.arrayBuffer())
-  const normalized = await normalizeKybDocumentBytes({
-    bytes: rawBytes,
-    contentType: file.type || "application/octet-stream",
-    fileName: file.name,
-  })
-  if ("error" in normalized) {
-    return NextResponse.json({ error: normalized.error }, { status: 400 })
-  }
-  const { bytes, contentType, fileName } = normalized
-
-  const category = String(form.get("category") ?? "").trim()
-  if (!category) return NextResponse.json({ error: "Document category is required" }, { status: 400 })
-  const personId = String(form.get("personId") ?? "").trim() || null
-  const documentType = String(form.get("documentType") ?? "").trim() || null
-  const issuingCountry = String(form.get("issuingCountry") ?? "").trim() || null
-  const issuingAuthority = String(form.get("issuingAuthority") ?? "").trim() || null
-  const documentNumber = encryptKybPii(String(form.get("documentNumber") ?? ""))
-  const side = String(form.get("side") ?? "").trim() || null
-  const ext = contentType === "application/pdf" ? "pdf" : contentType === "image/png" ? "png" : "jpg"
-  const storagePath = `${ctx.businessId}/${application.id}/${crypto.randomUUID()}.${ext}`
-
-  const { error: uploadError } = await ctx.admin.storage.from(KYB_DOCUMENTS_BUCKET).upload(storagePath, bytes, {
-    contentType,
-    upsert: false,
-  })
-  if (uploadError) {
-    console.error("[grid/kyb/documents] storage upload:", {
-      bucket: KYB_DOCUMENTS_BUCKET,
-      storagePath,
-      message: uploadError.message,
-    })
+  const contentType = request.headers.get("content-type") || ""
+  if (contentType.includes("multipart/form-data")) {
     return NextResponse.json(
-      { error: uploadError.message || "Could not store the file. Try a JPEG or PNG under 10 MB." },
+      { error: KYB_DOCUMENT_TOO_LARGE },
       { status: 400 },
     )
   }
+
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null
+  const phase = String(body?.phase ?? "")
+
+  if (phase === "prepare") {
+    const fileName = String(body?.fileName ?? "").trim() || "document"
+    const byteSize = Number(body?.byteSize ?? 0)
+    if (!Number.isFinite(byteSize) || byteSize <= 0) {
+      return NextResponse.json({ error: "Choose a PDF, JPEG, or PNG file." }, { status: 400 })
+    }
+    if (byteSize > KYB_DOCUMENT_MAX_BYTES) {
+      return NextResponse.json({ error: KYB_DOCUMENT_TOO_LARGE }, { status: 400 })
+    }
+    const ext = extensionFromKybFileName(fileName) || extensionFromKybContentType(String(body?.contentType ?? ""))
+    const storagePath = `${ctx.businessId}/${application.id}/${crypto.randomUUID()}.${ext}`
+    const { data, error } = await ctx.admin.storage
+      .from(KYB_DOCUMENTS_BUCKET)
+      .createSignedUploadUrl(storagePath)
+    if (error || !data?.token || !data.path) {
+      console.error("[grid/kyb/documents] signed upload url:", error)
+      return NextResponse.json({ error: "Could not start the file upload." }, { status: 400 })
+    }
+    return NextResponse.json({ storagePath: data.path, token: data.token })
+  }
+
+  if (phase !== "complete") {
+    return NextResponse.json({ error: "Invalid upload request." }, { status: 400 })
+  }
+
+  const storagePath = String(body?.storagePath ?? "").trim()
+  if (!isOwnedKybDocumentPath(ctx.businessId, application.id, storagePath)) {
+    return NextResponse.json({ error: "Invalid file path." }, { status: 400 })
+  }
+
+  const { data: blob, error: downloadError } = await ctx.admin.storage
+    .from(KYB_DOCUMENTS_BUCKET)
+    .download(storagePath)
+  if (downloadError || !blob) {
+    console.error("[grid/kyb/documents] storage download:", downloadError)
+    return NextResponse.json({ error: "Could not read the uploaded file." }, { status: 400 })
+  }
+
+  const rawBytes = Buffer.from(await blob.arrayBuffer())
+  if (rawBytes.length > KYB_DOCUMENT_MAX_BYTES) {
+    await ctx.admin.storage.from(KYB_DOCUMENTS_BUCKET).remove([storagePath])
+    return NextResponse.json({ error: KYB_DOCUMENT_TOO_LARGE }, { status: 400 })
+  }
+
+  const normalized = await normalizeKybDocumentBytes({
+    bytes: rawBytes,
+    contentType: blob.type || "application/octet-stream",
+    fileName: String(body?.fileName ?? "document"),
+  })
+  if ("error" in normalized) {
+    await ctx.admin.storage.from(KYB_DOCUMENTS_BUCKET).remove([storagePath])
+    return NextResponse.json({ error: normalized.error }, { status: 400 })
+  }
+
+  let finalPath = storagePath
+  const { bytes, contentType: storedType, fileName } = normalized
+  const wantedExt = extensionFromKybContentType(storedType)
+  if (!finalPath.endsWith(`.${wantedExt}`) || bytes.length !== rawBytes.length) {
+    const nextPath = `${ctx.businessId}/${application.id}/${crypto.randomUUID()}.${wantedExt}`
+    const { error: rewriteError } = await ctx.admin.storage.from(KYB_DOCUMENTS_BUCKET).upload(nextPath, bytes, {
+      contentType: storedType,
+      upsert: false,
+    })
+    if (rewriteError) {
+      console.error("[grid/kyb/documents] storage rewrite:", rewriteError)
+      await ctx.admin.storage.from(KYB_DOCUMENTS_BUCKET).remove([storagePath])
+      return NextResponse.json(
+        { error: rewriteError.message || "Could not store the file. Try a JPEG or PNG under 10 MB." },
+        { status: 400 },
+      )
+    }
+    await ctx.admin.storage.from(KYB_DOCUMENTS_BUCKET).remove([storagePath])
+    finalPath = nextPath
+  }
+
+  const category = String(body?.category ?? "").trim()
+  if (!category) {
+    await ctx.admin.storage.from(KYB_DOCUMENTS_BUCKET).remove([finalPath])
+    return NextResponse.json({ error: "Document category is required" }, { status: 400 })
+  }
+  const personId = String(body?.personId ?? "").trim() || null
+  const documentType = String(body?.documentType ?? "").trim() || null
+  const issuingCountry = String(body?.issuingCountry ?? "").trim() || null
+  const issuingAuthority = String(body?.issuingAuthority ?? "").trim() || null
+  const documentNumber = encryptKybPii(String(body?.documentNumber ?? ""))
+  const side = String(body?.side ?? "").trim() || null
 
   const { data, error } = await ctx.admin
     .from("business_kyb_documents")
@@ -73,16 +130,16 @@ export async function POST(request: Request) {
       issuing_authority: issuingAuthority,
       document_number_ciphertext: documentNumber.ciphertext,
       document_number_key_id: documentNumber.keyId,
-      storage_path: storagePath,
+      storage_path: finalPath,
       file_name: fileName,
-      content_type: contentType,
+      content_type: storedType,
       byte_size: bytes.length,
       side,
     })
     .select("*")
     .single()
   if (error || !data) {
-    await ctx.admin.storage.from(KYB_DOCUMENTS_BUCKET).remove([storagePath])
+    await ctx.admin.storage.from(KYB_DOCUMENTS_BUCKET).remove([finalPath])
     return NextResponse.json({ error: error?.message || "Could not save document" }, { status: 400 })
   }
 

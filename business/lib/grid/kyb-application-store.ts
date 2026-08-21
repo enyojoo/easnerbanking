@@ -12,7 +12,7 @@ import {
 } from "@easner/shared"
 import { decryptKybPii, encryptKybPii } from "./kyb-pii-crypto"
 
-export const KYB_DOCUMENTS_BUCKET = "kyb-documents"
+export { KYB_DOCUMENTS_BUCKET } from "./kyb-document-limits"
 
 export type KybApplicationRow = {
   id: string

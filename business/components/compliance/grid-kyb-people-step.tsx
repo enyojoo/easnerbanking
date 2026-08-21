@@ -285,7 +285,7 @@ export function GridKybPeopleStep({
         hideSubmit
         rejected={identityRejected}
         rejectionReason={identityError?.reason}
-        fileHint="PDF, JPEG, PNG, or HEIC. If you upload an image, photograph the physical ID – not a screenshot or a crop from Photos."
+        fileHint="PDF, JPEG, PNG, or HEIC. Maximum 10 MB. Photograph the physical ID – not a screenshot or a crop from Photos."
         onUploaded={async (doc) => {
           if (doc) onDocumentAdded(doc)
           await onReload()

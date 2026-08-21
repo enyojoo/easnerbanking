@@ -69,7 +69,7 @@ export function GridKybDocumentsStep({ documents, errors, disabled, onReload, on
                     disabled={disabled}
                     rejected={Boolean(error?.gridDocumentId)}
                     rejectionReason={error?.reason}
-                    fileHint="PDF, JPEG, PNG, or HEIC. Maximum file size is 10 MB."
+                    fileHint="PDF, JPEG, PNG, or HEIC. Maximum 10 MB – photograph the ID if the PDF is large."
                     onUploaded={async (document) => {
                       if (document) onUploaded(document)
                       await onReload()
