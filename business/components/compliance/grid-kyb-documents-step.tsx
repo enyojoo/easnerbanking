@@ -74,6 +74,7 @@ export function GridKybDocumentsStep({ documents, errors, disabled, onReload, on
                       if (document) onUploaded(document)
                       await onReload()
                     }}
+                    hideSubmit
                   />
                 </div>
               ) : null}

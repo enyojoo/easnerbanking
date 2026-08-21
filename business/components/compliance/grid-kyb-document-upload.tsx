@@ -30,6 +30,8 @@ type Props = {
   fileHint?: string
   rejected?: boolean
   rejectionReason?: string
+  resolvePersonId?: () => Promise<string | undefined>
+  onBusyChange?: (busy: boolean) => void
 }
 
 export type GridKybDocumentUploadHandle = {
@@ -47,12 +49,13 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
     onUploaded,
     extraFields,
     category,
-    hideSubmit,
     existingDocuments = [],
     onRemoveExisting,
     fileHint,
     rejected,
     rejectionReason,
+    resolvePersonId,
+    onBusyChange,
   }: Props,
   ref,
 ) {
@@ -68,6 +71,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [removingId, setRemovingId] = useState<string | null>(null)
+  const uploadPromiseRef = useRef<Promise<KybDocumentPacket | undefined> | null>(null)
 
   useEffect(() => {
     const latest = existingDocuments[existingDocuments.length - 1]
@@ -83,7 +87,6 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
     label: GRID_KYB_DOCUMENT_TYPE_LABELS[value] ?? value,
   }))
   const hasStoredFile = existingDocuments.length > 0
-  const showUpload = Boolean(file) && !hideSubmit && !saving
   const needsReplacement = Boolean(rejected || rejectionReason)
 
   async function removeExistingRows() {
@@ -99,38 +102,52 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
   }
 
   async function upload(personId = extraFields?.personId, nextFile = file) {
+    if (uploadPromiseRef.current) return uploadPromiseRef.current
     if (!nextFile) {
       setError("Choose a file.")
       throw new Error("Choose a file.")
     }
-    setSaving(true)
-    setError(null)
+    const run = (async () => {
+      setSaving(true)
+      onBusyChange?.(true)
+      setError(null)
+      try {
+        const document = await uploadKybDocument(nextFile, {
+          category,
+          personId,
+          documentType,
+          issuingCountry,
+          issuingAuthority,
+          documentNumber,
+        })
+        if (existingDocuments.length) await removeExistingRows()
+        setFile(null)
+        if (inputRef.current) inputRef.current.value = ""
+        await onUploaded(document)
+        return document
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Could not store the file."
+        setError(message)
+        throw err instanceof Error ? err : new Error(message)
+      } finally {
+        setSaving(false)
+        onBusyChange?.(false)
+      }
+    })()
+    uploadPromiseRef.current = run
     try {
-      const document = await uploadKybDocument(nextFile, {
-        category,
-        personId,
-        documentType,
-        issuingCountry,
-        issuingAuthority,
-        documentNumber,
-      })
-      if (existingDocuments.length) await removeExistingRows()
-      setFile(null)
-      if (inputRef.current) inputRef.current.value = ""
-      await onUploaded(document)
-      return document
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not store the file."
-      setError(message)
-      throw err instanceof Error ? err : new Error(message)
+      return await run
     } finally {
-      setSaving(false)
+      if (uploadPromiseRef.current === run) uploadPromiseRef.current = null
     }
   }
 
   useImperativeHandle(ref, () => ({
-    hasPendingFile: () => Boolean(file),
-    submit: (personId) => upload(personId ?? extraFields?.personId),
+    hasPendingFile: () => Boolean(file) || Boolean(uploadPromiseRef.current),
+    submit: (personId) => {
+      if (uploadPromiseRef.current) return uploadPromiseRef.current
+      return upload(personId ?? extraFields?.personId)
+    },
   }))
 
   return (
@@ -279,6 +296,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
         <p className="text-xs text-muted-foreground">
           {fileHint || "PDF, JPEG, PNG, or HEIC. Maximum 10 MB – photograph the ID if the PDF is large."}
         </p>
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <input
           ref={inputRef}
           type="file"
@@ -289,21 +307,17 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
             setFile(next)
             setError(null)
             if (!next) return
-            if (extraFields?.personId) {
-              void upload(extraFields.personId, next)
-              return
-            }
-            if (!hideSubmit) void upload(undefined, next)
+            void (async () => {
+              try {
+                const personId = extraFields?.personId ?? (await resolvePersonId?.())
+                await upload(personId, next)
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Could not store the file.")
+              }
+            })()
           }}
         />
       </div>
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      {showUpload ? (
-        <Button type="button" size="sm" disabled={disabled || saving} onClick={() => void upload()}>
-          {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-          Upload
-        </Button>
-      ) : null}
     </div>
   )
 })

@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button"
 import { ensureBusinessOperationalAddressCountryRegistered } from "@/lib/address/register-lib-address-countries"
 import { GRID_KYB_WIZARD_COPY } from "@/lib/copy/business-ui-copy"
 import { cn } from "@/lib/utils"
-import type { KybDocumentPacket, KybPacket } from "@/lib/grid/kyb-packet-types"
+import type { KybDocumentPacket, KybPacket, KybPersonPacket } from "@/lib/grid/kyb-packet-types"
 import { fetchKybPacket, KYB_PACKET_QUERY_KEY } from "@/lib/grid/kyb-packet-query"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { useQueryClient } from "@tanstack/react-query"
@@ -212,6 +212,18 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
     })
   }
 
+  function rememberPerson(person: KybPersonPacket) {
+    setPacket((prev) => {
+      const exists = prev.people.some((row) => row.id === person.id)
+      return {
+        ...prev,
+        people: exists
+          ? prev.people.map((row) => (row.id === person.id ? person : row))
+          : [...prev.people, person],
+      }
+    })
+  }
+
   function forgetDocument(id: string) {
     setPacket((prev) => ({ ...prev, documents: prev.documents.filter((row) => row.id !== id) }))
   }
@@ -230,9 +242,7 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
     })
     if (!res.ok) {
       const json = (await res.json().catch(() => ({}))) as { error?: string }
-      const message = json.error || "Could not remove document"
-      setError(message)
-      throw new Error(message)
+      throw new Error(json.error || "Could not remove document")
     }
     forgetDocument(id)
   }
@@ -309,6 +319,7 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
               disabled={!editable}
               onReload={reloadQuiet}
               onDocumentAdded={rememberDocument}
+              onPersonSaved={rememberPerson}
               onRemoveDocument={removeDocument}
             />
           ) : null}

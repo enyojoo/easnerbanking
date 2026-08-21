@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import { AlertTriangle, Loader2, Plus } from "lucide-react"
+import { useRef, useState } from "react"
+import { AlertTriangle, Loader2, Pencil, Plus, Trash2 } from "lucide-react"
 import {
   GRID_KYB_DOCUMENT_CATEGORIES,
   GRID_KYB_OWNER_ROLES,
@@ -39,6 +39,7 @@ type Props = {
   disabled?: boolean
   onReload: () => Promise<void>
   onDocumentAdded: (document: KybDocumentPacket) => void
+  onPersonSaved: (person: KybPersonPacket) => void
   onRemoveDocument: (id: string) => Promise<void>
 }
 
@@ -70,14 +71,17 @@ export function GridKybPeopleStep({
   disabled,
   onReload,
   onDocumentAdded,
+  onPersonSaved,
   onRemoveDocument,
 }: Props) {
   const [editingId, setEditingId] = useState<string | "new" | null>(null)
+  const [formSession, setFormSession] = useState(0)
   const [form, setForm] = useState(emptyPerson)
   const [saving, setSaving] = useState(false)
+  const [idUploading, setIdUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [removingId, setRemovingId] = useState<string | null>(null)
   const idUploadRef = useRef<GridKybDocumentUploadHandle>(null)
-  const autoOpenedRef = useRef(false)
 
   function patchForm(
     patch: Partial<typeof emptyPerson> | ((prev: typeof emptyPerson) => Partial<typeof emptyPerson>),
@@ -116,7 +120,9 @@ export function GridKybPeopleStep({
   }
 
   function openNew() {
+    setError(null)
     setForm(emptyPerson)
+    setFormSession((n) => n + 1)
     setEditingId("new")
   }
 
@@ -148,41 +154,76 @@ export function GridKybPeopleStep({
       identifier: person.identifier,
       countryOfIssuance,
     })
+    setError(null)
+    setFormSession((n) => n + 1)
     setEditingId(person.id)
+  }
+
+  function ownerPayload() {
+    const ownership = String(form.ownershipPercentage).trim()
+    const parsedOwnership = ownership === "" ? null : Number(ownership)
+    return {
+      ...form,
+      nationality: resolveCountryIso2(form.nationality) || form.nationality,
+      addressCountry: resolveCountryIso2(form.addressCountry) || form.addressCountry,
+      countryOfIssuance: resolveCountryIso2(form.countryOfIssuance) || form.countryOfIssuance,
+      idType: resolveGridKybOwnerIdType(form),
+      ownershipPercentage:
+        parsedOwnership != null && Number.isFinite(parsedOwnership) ? parsedOwnership : null,
+    }
+  }
+
+  async function persistOwner() {
+    const payload = ownerPayload()
+    const res = await fetchWithSession("/api/grid/kyb/owners", {
+      method: editingId && editingId !== "new" ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(editingId && editingId !== "new" ? { id: editingId, ...payload } : payload),
+    })
+    const json = (await res.json().catch(() => ({}))) as { error?: string; person?: KybPersonPacket }
+    if (!res.ok || !json.person?.id) throw new Error(json.error || "Could not save owner")
+    onPersonSaved(json.person)
+    if (editingId === "new") setEditingId(json.person.id)
+    return json.person
+  }
+
+  async function ensureOwnerId() {
+    if (editingId && editingId !== "new") return editingId
+    const person = await persistOwner()
+    return person.id
+  }
+
+  async function removeOwner(person: KybPersonPacket) {
+    if (disabled || removingId) return
+    setRemovingId(person.id)
+    setError(null)
+    try {
+      const res = await fetchWithSession(`/api/grid/kyb/owners?id=${encodeURIComponent(person.id)}`, {
+        method: "DELETE",
+      })
+      const json = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(json.error || "Could not remove owner")
+      await onReload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not remove owner")
+    } finally {
+      setRemovingId(null)
+    }
   }
 
   async function save() {
     setSaving(true)
     setError(null)
     try {
-      const ownership = String(form.ownershipPercentage).trim()
-      const parsedOwnership = ownership === "" ? null : Number(ownership)
-      const payload = {
-        ...form,
-        nationality: resolveCountryIso2(form.nationality) || form.nationality,
-        addressCountry: resolveCountryIso2(form.addressCountry) || form.addressCountry,
-        countryOfIssuance: resolveCountryIso2(form.countryOfIssuance) || form.countryOfIssuance,
-        idType: resolveGridKybOwnerIdType(form),
-        ownershipPercentage:
-          parsedOwnership != null && Number.isFinite(parsedOwnership) ? parsedOwnership : null,
-      }
-      const res = await fetchWithSession("/api/grid/kyb/owners", {
-        method: editingId && editingId !== "new" ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editingId && editingId !== "new" ? { id: editingId, ...payload } : payload),
-      })
-      const json = (await res.json().catch(() => ({}))) as { error?: string; person?: { id?: string } }
-      if (!res.ok) throw new Error(json.error || "Could not save owner")
-      const personId = json.person?.id || (editingId && editingId !== "new" ? editingId : "")
-      if (personId && editingId === "new") setEditingId(personId)
+      const person = await persistOwner()
       if (idUploadRef.current?.hasPendingFile()) {
-        if (!personId) throw new Error("Could not attach the ID document")
-        const uploaded = await idUploadRef.current.submit(personId)
+        const uploaded = await idUploadRef.current.submit(person.id)
         if (uploaded) onDocumentAdded(uploaded)
       }
       setEditingId(null)
       await onReload()
     } catch (err) {
+      if (idUploadRef.current?.hasPendingFile()) return
       setError(err instanceof Error ? err.message : "Could not save owner")
     } finally {
       setSaving(false)
@@ -258,34 +299,30 @@ export function GridKybPeopleStep({
     identityError?.gridDocumentId || identityError?.resourceId?.startsWith("Document:"),
   )
 
-  useEffect(() => {
-    if (autoOpenedRef.current || editingId) return
-    const flagged =
-      people.find((person) => peopleErrorsFor(person).some((error) => error.documentCategory === "identity")) ??
-      people.find((person) => peopleErrorsFor(person).length > 0)
-    if (!flagged) return
-    autoOpenedRef.current = true
-    openExisting(flagged)
-  }, [people, errors, editingId])
-
   const identityUpload = (
     <div id="owner-id-upload">
       <GridKybDocumentUpload
-        key={selected?.id ?? "new"}
+        key={formSession}
         ref={idUploadRef}
         title="Owner ID document"
         category="identity"
         acceptedDocumentTypes={
           identityError?.acceptedDocumentTypes ?? GRID_KYB_DOCUMENT_CATEGORIES.identity.acceptedDocumentTypes
         }
-        extraFields={{ personId: selected?.id, issuingAuthority: true, documentNumber: true }}
-        existingDocuments={identityDocsFor(selected?.id)}
+        extraFields={{
+          personId: selected?.id ?? (editingId && editingId !== "new" ? editingId : undefined),
+          issuingAuthority: true,
+          documentNumber: true,
+        }}
+        existingDocuments={identityDocsFor(selected?.id ?? (editingId !== "new" ? editingId : undefined))}
         onRemoveExisting={onRemoveDocument}
         disabled={disabled}
         hideSubmit
         rejected={identityRejected}
         rejectionReason={identityError?.reason}
         fileHint="PDF, JPEG, PNG, or HEIC. Maximum 10 MB. Photograph the physical ID – not a screenshot or a crop from Photos."
+        resolvePersonId={ensureOwnerId}
+        onBusyChange={setIdUploading}
         onUploaded={async (doc) => {
           if (doc) onDocumentAdded(doc)
           await onReload()
@@ -308,6 +345,7 @@ export function GridKybPeopleStep({
               {errors.find((error) => error.section === "people")?.reason || "Add a business owner."}
             </p>
           ) : null}
+          {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <button
             type="button"
             disabled={disabled}
@@ -325,36 +363,57 @@ export function GridKybPeopleStep({
             const personErrors = peopleErrorsFor(person)
             const needsAttention = personErrors.length > 0
             const needsId = personErrors.some((error) => error.documentCategory === "identity")
+            const name = `${person.firstName} ${person.lastName}`.trim() || "Owner"
+            const docs = identityDocsFor(person.id)
+            const subtitle = needsAttention
+              ? personErrors[0]?.reason || (needsId ? "Needs ID document" : "Needs attention")
+              : docs.length
+                ? docs.map((doc) => doc.fileName).join(", ")
+                : person.roles.join(", ") || "Owner"
             return (
-              <button
+              <div
                 key={person.id}
-                type="button"
-                onClick={() => openExisting(person)}
                 className={cn(
-                  "flex w-full items-center justify-between rounded-2xl border bg-card px-4 py-3 text-left",
+                  "flex w-full items-center gap-3 rounded-2xl border bg-card px-4 py-3",
                   needsAttention && "border-destructive",
                 )}
               >
-                <span>
-                  <span className="block text-sm font-medium">
-                    {person.firstName} {person.lastName}
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium">{name}</span>
+                  <span className={cn("text-xs", needsAttention ? "text-destructive" : "text-muted-foreground")}>
+                    {subtitle}
                   </span>
-                  {needsAttention ? (
-                    <span className="text-xs text-destructive">
-                      {personErrors[0]?.reason || (needsId ? "Needs ID document" : "Needs attention")}
-                    </span>
-                  ) : identityDocsFor(person.id).length ? (
-                    <span className="text-xs text-muted-foreground">
-                      {identityDocsFor(person.id)
-                        .map((doc) => doc.fileName)
-                        .join(", ")}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">{person.roles.join(", ") || "Owner"}</span>
-                  )}
                 </span>
-                {needsAttention ? <AlertTriangle className="size-4 text-destructive" /> : null}
-              </button>
+                {needsAttention ? <AlertTriangle className="size-4 shrink-0 text-destructive" /> : null}
+                <span className="flex shrink-0 items-center gap-0.5">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 px-0"
+                    aria-label={`Edit ${name}`}
+                    disabled={disabled || Boolean(removingId)}
+                    onClick={() => openExisting(person)}
+                  >
+                    <Pencil className="size-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 px-0"
+                    aria-label={`Remove ${name}`}
+                    disabled={disabled || Boolean(removingId)}
+                    onClick={() => void removeOwner(person)}
+                  >
+                    {removingId === person.id ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="size-4" />
+                    )}
+                  </Button>
+                </span>
+              </div>
             )
           })}
         </div>
@@ -509,9 +568,9 @@ export function GridKybPeopleStep({
           {identityUpload}
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <div className="flex gap-2">
-            <Button type="button" size="sm" disabled={disabled || saving} onClick={() => void save()}>
+            <Button type="button" size="sm" disabled={disabled || saving || idUploading} onClick={() => void save()}>
               {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-              Save owner
+              {idUploading ? "Uploading ID…" : "Save owner"}
             </Button>
             <Button type="button" size="sm" variant="outline" onClick={() => setEditingId(null)}>
               Back to list

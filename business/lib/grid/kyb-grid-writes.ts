@@ -116,6 +116,13 @@ export async function deleteGridKybDocument(documentId: string): Promise<void> {
   })
 }
 
+export async function deleteGridBeneficialOwner(ownerId: string): Promise<void> {
+  await gridFetch({
+    method: "DELETE",
+    path: `/beneficial-owners/${encodeURIComponent(ownerId)}`,
+  })
+}
+
 export async function submitGridKybVerification(customerId: string): Promise<{
   id: string
   verificationStatus: string
