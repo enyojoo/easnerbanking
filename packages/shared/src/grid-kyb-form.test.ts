@@ -12,6 +12,7 @@ import {
   gridKybOwnerCountriesFromNationality,
   gridKybOwnerIdTypeForGrid,
   gridKybWizardReadiness,
+  hasAllRequiredKybCompanyDocuments,
   mapGridKybVerificationErrors,
   normalizeGridKybIdType,
   resolveGridKybOwnerIdType,
@@ -450,7 +451,7 @@ describe("gridKybWizardReadiness", () => {
         company: { ...emptyGridKybCompanyDraft(), legalName: "Acme" },
         peopleCount: 0,
         hasIdentityDocument: false,
-        hasCompanyDocument: false,
+        hasAllRequiredCompanyDocuments: false,
       }),
     ).toBe("not_submitted")
   })
@@ -461,10 +462,40 @@ describe("gridKybWizardReadiness", () => {
       company: { ...emptyGridKybCompanyDraft(), legalName: "Acme" },
       peopleCount: 1,
       hasIdentityDocument: true,
-      hasCompanyDocument: true,
+      hasAllRequiredCompanyDocuments: true,
     }
     expect(gridKybWizardReadiness({ ...base, remainingPointers: 2 })).toBe("needs_attention")
     expect(gridKybWizardReadiness({ ...base, remainingPointers: 0 })).toBe("ready_to_submit")
+  })
+
+  it("stays not_submitted until every required company document is uploaded", () => {
+    expect(
+      gridKybWizardReadiness({
+        status: "draft",
+        remainingPointers: 0,
+        company: { ...emptyGridKybCompanyDraft(), legalName: "Acme" },
+        peopleCount: 1,
+        hasIdentityDocument: true,
+        hasAllRequiredCompanyDocuments: false,
+      }),
+    ).toBe("not_submitted")
+  })
+
+  it("requires a company file in each required category", () => {
+    expect(
+      hasAllRequiredKybCompanyDocuments([
+        { category: "legal_presence", personId: null },
+        { category: "identity", personId: "p1" },
+      ]),
+    ).toBe(false)
+    expect(
+      hasAllRequiredKybCompanyDocuments([
+        { category: "legal_presence", personId: null },
+        { category: "control_structure", personId: null },
+        { category: "ownership_structure", personId: null },
+        { category: "proof_of_address", personId: null },
+      ]),
+    ).toBe(true)
   })
 
   it("stays needs_attention when Grid job is submitted but pointers remain", () => {
@@ -475,7 +506,7 @@ describe("gridKybWizardReadiness", () => {
         company: { ...emptyGridKybCompanyDraft(), legalName: "Acme" },
         peopleCount: 1,
         hasIdentityDocument: true,
-        hasCompanyDocument: true,
+        hasAllRequiredCompanyDocuments: true,
       }),
     ).toBe("needs_attention")
   })

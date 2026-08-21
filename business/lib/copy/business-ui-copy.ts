@@ -596,7 +596,7 @@ export const GRID_KYB_WIZARD_COPY = {
   peopleRolesHint:
     "Select UBO for anyone with 25%+ ownership, and Control person for at least one person who runs the company – often the same person. The other roles are optional extras.",
   documentsTitle: "Upload required documents",
-  documentsSubtitle: "One file can often cover more than one requirement.",
+  documentsSubtitle: "Upload a file for each requirement.",
   continue: "Continue",
   saveAndExit: "Save and exit",
   complete: "Complete",

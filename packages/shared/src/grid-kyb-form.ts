@@ -395,6 +395,14 @@ export const GRID_KYB_COMPANY_DOCUMENT_CATEGORIES: GridKybDocumentCategory[] = [
   "proof_of_address",
 ]
 
+export function hasAllRequiredKybCompanyDocuments(
+  documents: Array<{ category?: string | null; personId?: string | null }>,
+): boolean {
+  return GRID_KYB_COMPANY_DOCUMENT_CATEGORIES.every((category) =>
+    documents.some((doc) => doc.category === category && !doc.personId),
+  )
+}
+
 export const GRID_KYB_DOCUMENT_TYPE_LABELS: Record<string, string> = {
   PASSPORT: "Passport",
   DRIVERS_LICENSE: "Driver’s license",
@@ -855,7 +863,7 @@ export function gridKybWizardReadiness(input: {
   company: GridKybCompanyDraft
   peopleCount: number
   hasIdentityDocument: boolean
-  hasCompanyDocument: boolean
+  hasAllRequiredCompanyDocuments: boolean
 }): GridKybWizardReadiness {
   const status = input.status ?? "draft"
   if (status === "approved") return "approved"
@@ -865,7 +873,7 @@ export function gridKybWizardReadiness(input: {
     Boolean(input.company.legalName.trim()) &&
     input.peopleCount > 0 &&
     input.hasIdentityDocument &&
-    input.hasCompanyDocument
+    input.hasAllRequiredCompanyDocuments
   return ready ? "ready_to_submit" : "not_submitted"
 }
 

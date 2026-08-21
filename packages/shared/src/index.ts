@@ -508,6 +508,7 @@ export {
   gridKybErrorIsDocumentQuality,
   gridKybOwnerResourceMatches,
   gridKybWizardReadiness,
+  hasAllRequiredKybCompanyDocuments,
   mapGridKybVerificationError,
   mapGridKybVerificationErrors,
   rejectedGridDocumentIdsFromErrors,

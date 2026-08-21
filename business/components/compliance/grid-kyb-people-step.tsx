@@ -570,7 +570,7 @@ export function GridKybPeopleStep({
           <div className="flex gap-2">
             <Button type="button" size="sm" disabled={disabled || saving || idUploading} onClick={() => void save()}>
               {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-              {idUploading ? "Uploading ID…" : "Save owner"}
+              Save owner
             </Button>
             <Button type="button" size="sm" variant="outline" onClick={() => setEditingId(null)}>
               Back to list

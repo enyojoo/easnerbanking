@@ -1,6 +1,6 @@
 "use client"
 
-import { AlertTriangle, ChevronRight } from "lucide-react"
+import { AlertTriangle, Check, ChevronRight } from "lucide-react"
 import {
   GRID_KYB_COMPANY_DOCUMENT_CATEGORIES,
   GRID_KYB_DOCUMENT_CATEGORIES,
@@ -38,22 +38,29 @@ export function GridKybDocumentsStep({ documents, errors, disabled, onReload, on
           const meta = GRID_KYB_DOCUMENT_CATEGORIES[category]
           const uploaded = documents.filter((doc) => doc.category === category && !doc.personId)
           const error = errors.find((row) => row.documentCategory === category)
+          const complete = uploaded.length > 0 && !error
           return (
             <div
               key={category}
-              className={cn("rounded-2xl border bg-card", error && "border-destructive")}
+              className={cn("rounded-2xl border bg-card", (error || uploaded.length === 0) && "border-destructive")}
             >
               <button
                 type="button"
                 className="flex w-full items-center gap-3 px-4 py-3 text-left"
                 onClick={() => setOpenCategory(openCategory === category ? null : category)}
               >
-                {error ? <AlertTriangle className="size-4 text-destructive" /> : <span className="size-4" />}
+                {error || uploaded.length === 0 ? (
+                  <AlertTriangle className="size-4 text-destructive" />
+                ) : complete ? (
+                  <Check className="size-4 text-emerald-600" />
+                ) : (
+                  <span className="size-4" />
+                )}
                 <span className="flex-1">
                   <span className="block text-sm font-medium">{meta.label}</span>
-                  <span className={cn("text-xs", error ? "text-destructive" : "text-muted-foreground")}>
+                  <span className={cn("text-xs", error || uploaded.length === 0 ? "text-destructive" : "text-muted-foreground")}>
                     {error?.reason ||
-                      (uploaded.length ? uploaded.map((doc) => doc.fileName).join(", ") : meta.caption)}
+                      (uploaded.length ? uploaded.map((doc) => doc.fileName).join(", ") : "Required")}
                   </span>
                 </span>
                 <ChevronRight className="size-4 text-muted-foreground" />

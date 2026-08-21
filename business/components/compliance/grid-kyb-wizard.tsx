@@ -7,6 +7,7 @@ import {
   firstGridKybErrorSection,
   gridKybApplicationIsEditable,
   gridKybWizardReadiness,
+  hasAllRequiredKybCompanyDocuments,
   mergeGridKybCompanyDraft,
   type GridKybCompanyDraft,
   type GridKybFormSection,
@@ -121,7 +122,7 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
       company,
       peopleCount: packet?.people.length ?? 0,
       hasIdentityDocument: documents.some((row) => row.category === "identity"),
-      hasCompanyDocument: documents.some((row) => !row.personId),
+      hasAllRequiredCompanyDocuments: hasAllRequiredKybCompanyDocuments(documents),
     })
   }, [status, pointers.length, company, packet])
 
