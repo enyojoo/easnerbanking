@@ -39,41 +39,42 @@
         }
 
         function mount(el) {
-          showUi()
           if (!el || !el.appendChild) return false
           host.replaceChildren()
           host.appendChild(el)
           return true
         }
 
-        /** Stripe renders its popup inside this frame; the controller iframe is always present. */
         function popupIsOpen() {
           if (host.childElementCount > 0) return true
           var frames = document.querySelectorAll('iframe')
           for (var i = 0; i < frames.length; i++) {
-            if (!/controller/i.test(frames[i].src || '')) return true
+            var src = frames[i].src || ''
+            if (!/controller|deploy_status|henson/i.test(src)) return true
           }
           return false
         }
 
-        function watchPopup(onClosed) {
+        function watchPopup(onOpen, onClosed) {
           var sawOpen = false
           var timer = setInterval(function () {
             if (popupIsOpen()) {
-              sawOpen = true
+              if (!sawOpen) {
+                sawOpen = true
+                if (onOpen) onOpen()
+              }
               return
             }
             if (!sawOpen) return
             clearInterval(timer)
-            onClosed()
-          }, 400)
+            if (onClosed) onClosed()
+          }, 250)
           return function () {
             clearInterval(timer)
           }
         }
 
         function waitForUi(start, onResult) {
-          showUi()
           return new Promise(function (resolve, reject) {
             var settled = false
             var stopWatch = null
@@ -82,17 +83,24 @@
               if (settled) return
               settled = true
               if (stopWatch) stopWatch()
-              onResult(result)
               hideUi()
+              onResult(result)
               resolve(null)
             }
 
-            stopWatch = watchPopup(function () {
-              settle({ result: 'canceled' })
-            })
+            stopWatch = watchPopup(
+              function () {
+                showUi()
+              },
+              function () {
+                settle({ result: 'canceled' })
+              },
+            )
 
             Promise.resolve(start(settle))
-              .then(mount)
+              .then(function (el) {
+                mount(el)
+              })
               .catch(function (error) {
                 if (stopWatch) stopWatch()
                 hideUi()
@@ -138,11 +146,13 @@
 
           Promise.resolve()
             .then(function () {
-              if (method === 'init') return loadScript().then(function (loader) {
-                return loader(args[0], args[1] || { theme: 'stripe' }).then(function (client) {
-                  sdk = client
+              if (method === 'init') {
+                return loadScript().then(function (loader) {
+                  return loader(args[0], args[1] || { theme: 'stripe' }).then(function (client) {
+                    sdk = client
+                  })
                 })
-              })
+              }
               if (!sdk) throw new Error('unavailable')
               if (method === 'registerLinkUser') {
                 return sdk.registerLinkUser.apply(sdk, args)

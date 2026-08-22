@@ -43,11 +43,11 @@ import {
   EXPRESS_NATIVE_AUTH_REQUIRED,
   loadMobileExpressOnramp,
   prefetchMobileExpressOnramp,
+  subscribeExpressOnrampUi,
   type ExpressOnrampSdk,
 } from '../../lib/express-onramp'
 import { isStripeHostElement } from '../../lib/expressStripeElement'
 import { ExpressStripeHost } from '../../components/receive/ExpressStripeHost'
-import { watchExpressIdentityOverlay } from '../../lib/expressIdentityOverlay'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToast } from '../../components/ToastProvider'
 import {
@@ -276,13 +276,18 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           const verify = client.verifyDocuments || client.verifyIdentity
           if (!verify) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
           const pending = verify(finish)
-          void Promise.resolve(pending).then((first) => {
-            if (isStripeHostElement(first)) {
-              setStripeEl(first)
-              return
-            }
-            if (first != null) finish(first)
-          })
+          void Promise.resolve(pending)
+            .then((first) => {
+              if (isStripeHostElement(first)) {
+                setStripeEl(first)
+                return
+              }
+              if (first != null) finish(first)
+            })
+            .catch((e) => {
+              setOpeningIdentity(false)
+              setMessage(expressSetupUserMessage(e instanceof Error ? e.message : null))
+            })
           return true
         }
         const authorizeLink = async () => {
@@ -417,14 +422,15 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
     onCta()
   }, [step])
 
-  useEffect(() => {
-    if (step !== 'us_l2' && step !== 'eu_l2') return
-    return watchExpressIdentityOverlay({
-      onOpen: () => {
-        setOpeningIdentity(false)
-        setBusy(false)
-      },
-      onClosed: () => {
+  useEffect(
+    () =>
+      subscribeExpressOnrampUi((open) => {
+        if (open) {
+          setOpeningIdentity(false)
+          setBusy(false)
+          return
+        }
+        if (step !== 'us_l2' && step !== 'eu_l2') return
         if (identitySucceededRef.current || identityNoticeRef.current) return
         identityNoticeRef.current = true
         l2StartedRef.current = false
@@ -432,9 +438,9 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
         setOpeningIdentity(false)
         setBusy(false)
         showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
-      },
-    })
-  }, [step, showInfo])
+      }),
+    [step, showInfo],
+  )
 
   return (
     <ScreenWrapper>
