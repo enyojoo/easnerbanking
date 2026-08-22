@@ -1,3 +1,4 @@
+import { expressOnrampWebInitOptions } from '@easner/shared'
 import { EXPRESS_NATIVE_AUTH_REQUIRED, type ExpressOnrampSdk } from './express-onramp-types'
 
 export { EXPRESS_NATIVE_AUTH_REQUIRED }
@@ -107,7 +108,7 @@ export async function loadMobileExpressOnramp(publishableKey: string): Promise<E
   if (inflight) return inflight
   inflight = (async () => {
     const loader = await ensureScript()
-    const client = (await loader(publishableKey, { theme: 'stripe' })) as StripeClient
+    const client = (await loader(publishableKey, expressOnrampWebInitOptions())) as StripeClient
     if (client.ready) await client.ready
     cached = bindClient(client)
     return cached

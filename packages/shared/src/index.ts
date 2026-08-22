@@ -476,6 +476,11 @@ export {
   toExpressLinkE164Phone,
 } from "./express-deposits-copy"
 export {
+  EXPRESS_ONRAMP_MERCHANT_NAME,
+  expressOnrampNativeAppearance,
+  expressOnrampWebInitOptions,
+} from "./express-onramp-appearance"
+export {
   EXPRESS_DEPOSITS_PROCESSING_DESCRIPTION,
   buildExpressDepositsLifecycle,
   normalizeExpressDepositsReview,

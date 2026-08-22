@@ -1,5 +1,7 @@
 "use client"
 
+import { expressOnrampWebInitOptions } from "@easner/shared"
+
 export type CryptoOnrampClient = {
   registerLinkUser: (
     email: string,
@@ -56,7 +58,7 @@ export async function loadExpressOnramp(publishableKey: string): Promise<CryptoO
     }
     const loader = mod.loadCryptoOnrampAndInitialize || mod.loadStripeOnramp
     if (!loader) throw new Error("Express deposits is not available in this browser.")
-    cached = await loader(publishableKey, { theme: "stripe" })
+    cached = await loader(publishableKey, expressOnrampWebInitOptions())
     return cached
   })()
   try {

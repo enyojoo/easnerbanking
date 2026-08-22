@@ -1,5 +1,8 @@
 import React, { Component, useEffect, useRef, useState } from 'react'
-import { colors } from '../theme'
+import {
+  EXPRESS_ONRAMP_MERCHANT_NAME,
+  expressOnrampNativeAppearance,
+} from '@easner/shared'
 import {
   adaptNativeOnramp,
   failNativeExpressOnramp,
@@ -109,19 +112,12 @@ function ConfiguredOnrampBridge({
 
     let cancelled = false
     void configureWhenReady(api.configure as (config: Record<string, unknown>) => Promise<{ error?: { message?: string } }>, {
-      merchantDisplayName: 'Easner',
-      appearance: {
-        style: 'ALWAYS_LIGHT',
-        lightColors: {
-          primary: colors.primary.main,
-          contentOnPrimary: colors.neutral.white,
-          borderSelected: colors.primary.main,
-        },
-      },
+      merchantDisplayName: EXPRESS_ONRAMP_MERCHANT_NAME,
+      appearance: expressOnrampNativeAppearance(),
       ...(customerId ? { cryptoCustomerId: customerId } : {}),
       googlePay: {
         merchantCountryCode: country,
-        merchantName: 'Easner',
+        merchantName: EXPRESS_ONRAMP_MERCHANT_NAME,
         testEnv: publishableKey.startsWith('pk_test'),
       },
     })
