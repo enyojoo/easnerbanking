@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { SETTINGS_INPUT_CLASS } from "@/lib/settings-control-surface"
-import { uploadKybDocument } from "@/lib/grid/upload-kyb-document"
+import { patchKybDocumentMetadata, uploadKybDocument } from "@/lib/grid/upload-kyb-document"
 import type { KybDocumentPacket } from "@/lib/grid/kyb-packet-types"
 import { GridKybEnumSelect } from "./grid-kyb-enum-select"
 import { GridKybCountrySelect } from "./grid-kyb-country-select"
@@ -20,7 +20,6 @@ type Props = {
   onUploaded: (document?: KybDocumentPacket) => Promise<void> | void
   extraFields?: {
     personId?: string
-    issuingAuthority?: boolean
     documentNumber?: boolean
   }
   category: string
@@ -37,6 +36,7 @@ type Props = {
 export type GridKybDocumentUploadHandle = {
   hasPendingFile: () => boolean
   submit: (personId?: string) => Promise<KybDocumentPacket | undefined>
+  persistMetadata: () => Promise<void>
 }
 
 const FILE_ACCEPT = "application/pdf,image/jpeg,image/png,image/heic,image/heif,.heic,.heif,.jpg,.jpeg,.png,.pdf"
@@ -88,6 +88,15 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
   }))
   const hasStoredFile = existingDocuments.length > 0
   const needsReplacement = Boolean(rejected || rejectionReason)
+  const requiresIdentityMeta = category === "identity" && Boolean(extraFields?.documentNumber)
+
+  function identityMetaError() {
+    if (!requiresIdentityMeta) return null
+    if (!documentType.trim()) return "Select a document type before uploading."
+    if (!issuingCountry.trim()) return "Select the issuing country before uploading."
+    if (!documentNumber.trim()) return "Enter the document number before uploading."
+    return null
+  }
 
   async function removeExistingRows() {
     if (!onRemoveExisting) return
@@ -106,6 +115,11 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
     if (!nextFile) {
       setError("Choose a file.")
       throw new Error("Choose a file.")
+    }
+    const missing = identityMetaError()
+    if (missing) {
+      setError(missing)
+      throw new Error(missing)
     }
     const run = (async () => {
       setSaving(true)
@@ -142,12 +156,57 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
     }
   }
 
+  async function persistMetadata(overrides?: {
+    documentType?: string
+    issuingCountry?: string
+    issuingAuthority?: string
+    documentNumber?: string
+  }) {
+    const latest = existingDocuments[existingDocuments.length - 1]
+    if (!latest) return
+    const nextType = overrides?.documentType ?? documentType
+    const nextCountry = overrides?.issuingCountry ?? issuingCountry
+    const nextAuthority = overrides?.issuingAuthority ?? issuingAuthority
+    const nextNumber = overrides?.documentNumber ?? documentNumber
+    if (requiresIdentityMeta) {
+      if (!nextType.trim() || !nextCountry.trim() || !nextNumber.trim()) {
+        const missing = !nextCountry.trim()
+          ? "Select the issuing country before uploading."
+          : !nextNumber.trim()
+            ? "Enter the document number before uploading."
+            : "Select a document type before uploading."
+        setError(missing)
+        throw new Error(missing)
+      }
+    }
+    setSaving(true)
+    onBusyChange?.(true)
+    setError(null)
+    try {
+      const document = await patchKybDocumentMetadata(latest.id, {
+        documentType: nextType,
+        issuingCountry: nextCountry,
+        issuingAuthority: nextAuthority,
+        documentNumber: nextNumber,
+      })
+      await onUploaded(document)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not update document details."
+      setError(message)
+      throw err instanceof Error ? err : new Error(message)
+    } finally {
+      setSaving(false)
+      onBusyChange?.(false)
+    }
+  }
+
   useImperativeHandle(ref, () => ({
     hasPendingFile: () => Boolean(file) || Boolean(uploadPromiseRef.current),
     submit: (personId) => {
       if (uploadPromiseRef.current) return uploadPromiseRef.current
       return upload(personId ?? extraFields?.personId)
     },
+    persistMetadata,
   }))
 
   return (
@@ -160,47 +219,56 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
       <div>
         <h3 className="text-base font-semibold">{title}</h3>
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
+      <div
+        className={cn(
+          "grid gap-4",
+          extraFields?.documentNumber ? "min-[720px]:grid-cols-3" : "md:grid-cols-2",
+        )}
+      >
         <div className="space-y-2">
-          <Label>Document type</Label>
+          <Label>Document type{requiresIdentityMeta ? " *" : ""}</Label>
           <GridKybEnumSelect
             value={documentType}
-            onChange={setDocumentType}
+            onChange={(next) => {
+              setDocumentType(next)
+              if (hasStoredFile && next.trim() && issuingCountry.trim() && documentNumber.trim()) {
+                void persistMetadata({ documentType: next }).catch(() => undefined)
+              }
+            }}
             options={options}
             placeholder="Select document type"
             disabled={disabled}
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor={`issuing-country-${category}`}>Issuing country</Label>
+          <Label htmlFor={`issuing-country-${category}`}>
+            Issuing country{requiresIdentityMeta ? " *" : ""}
+          </Label>
           <GridKybCountrySelect
             id={`issuing-country-${category}`}
             value={issuingCountry}
-            onChange={setIssuingCountry}
+            onChange={(next) => {
+              setIssuingCountry(next)
+              if (hasStoredFile && next.trim() && documentNumber.trim()) {
+                void persistMetadata({ issuingCountry: next }).catch(() => undefined)
+              }
+            }}
             placeholder="Select issuing country"
             catalog="all"
             disabled={disabled}
           />
         </div>
-        {extraFields?.issuingAuthority ? (
-          <div className="space-y-2">
-            <Label>Issuing authority</Label>
-            <Input
-              className={SETTINGS_INPUT_CLASS}
-              value={issuingAuthority}
-              onChange={(event) => setIssuingAuthority(event.target.value)}
-              placeholder="e.g. California DMV, U.S. Department of State"
-              disabled={disabled}
-            />
-          </div>
-        ) : null}
         {extraFields?.documentNumber ? (
           <div className="space-y-2">
-            <Label>Document number</Label>
+            <Label>Document number{requiresIdentityMeta ? " *" : ""}</Label>
             <Input
               className={SETTINGS_INPUT_CLASS}
               value={documentNumber}
               onChange={(event) => setDocumentNumber(event.target.value)}
+              onBlur={() => {
+                if (!hasStoredFile || !documentNumber.trim() || !issuingCountry.trim()) return
+                void persistMetadata().catch(() => undefined)
+              }}
               placeholder="Passport number, license number, or similar ID"
               disabled={disabled}
             />
@@ -230,7 +298,14 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
             size="sm"
             className="shrink-0"
             disabled={disabled || saving}
-            onClick={() => inputRef.current?.click()}
+            onClick={() => {
+              const missing = identityMetaError()
+              if (missing) {
+                setError(missing)
+                return
+              }
+              inputRef.current?.click()
+            }}
           >
             {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
             {saving ? "Uploading…" : hasStoredFile || file ? "Replace file" : "Choose file"}

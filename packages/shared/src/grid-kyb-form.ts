@@ -403,6 +403,39 @@ export function hasAllRequiredKybCompanyDocuments(
   )
 }
 
+export function isKybIdentityDocumentReady(document: {
+  category?: string | null
+  personId?: string | null
+  documentType?: string | null
+  issuingCountry?: string | null
+  documentNumber?: string | null
+}): boolean {
+  if (document.category !== "identity") return false
+  return Boolean(
+    String(document.documentType ?? "").trim() &&
+      String(document.issuingCountry ?? "").trim() &&
+      String(document.documentNumber ?? "").trim(),
+  )
+}
+
+export function hasReadyKybIdentityDocuments(
+  people: Array<{ id?: string | null }>,
+  documents: Array<{
+    category?: string | null
+    personId?: string | null
+    documentType?: string | null
+    issuingCountry?: string | null
+    documentNumber?: string | null
+  }>,
+): boolean {
+  if (people.length === 0) return false
+  return people.every((person) =>
+    documents.some(
+      (doc) => doc.personId && person.id && doc.personId === person.id && isKybIdentityDocumentReady(doc),
+    ),
+  )
+}
+
 export const GRID_KYB_DOCUMENT_TYPE_LABELS: Record<string, string> = {
   PASSPORT: "Passport",
   DRIVERS_LICENSE: "Driver’s license",

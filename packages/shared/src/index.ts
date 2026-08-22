@@ -574,6 +574,8 @@ export {
   gridKybOwnerResourceMatches,
   gridKybWizardReadiness,
   hasAllRequiredKybCompanyDocuments,
+  hasReadyKybIdentityDocuments,
+  isKybIdentityDocumentReady,
   mapGridKybVerificationError,
   mapGridKybVerificationErrors,
   rejectedGridDocumentIdsFromErrors,

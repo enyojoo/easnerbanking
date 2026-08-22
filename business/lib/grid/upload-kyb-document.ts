@@ -83,3 +83,29 @@ export async function uploadKybDocument(file: File, fields: UploadFields): Promi
   }
   return completeJson.document
 }
+
+export async function patchKybDocumentMetadata(
+  id: string,
+  fields: Omit<UploadFields, "category" | "personId">,
+): Promise<KybDocumentPacket> {
+  const res = await fetchWithSession("/api/grid/kyb/documents", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id,
+      documentType: fields.documentType,
+      issuingCountry: fields.issuingCountry,
+      issuingAuthority: fields.issuingAuthority,
+      documentNumber: fields.documentNumber,
+      side: fields.side,
+    }),
+  })
+  const json = (await res.json().catch(() => ({}))) as {
+    error?: string
+    document?: KybDocumentPacket
+  }
+  if (!res.ok || !json.document) {
+    throw new Error(json.error || "Could not update document details.")
+  }
+  return json.document
+}

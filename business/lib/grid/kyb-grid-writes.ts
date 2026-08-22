@@ -93,9 +93,19 @@ export async function uploadGridKybDocument(input: {
   const form = new FormData()
   form.set("documentHolder", input.documentHolder)
   form.set("documentType", input.document.documentType || "OTHER")
-  form.set("country", (input.document.issuingCountry || "US").toUpperCase())
+  const country = String(input.document.issuingCountry ?? "").trim()
+  const documentNumber = String(input.document.documentNumber ?? "").trim()
+  if (input.document.category === "identity") {
+    if (!country || !documentNumber) {
+      throw new Error("Add issuing country and document number on each owner ID before submitting.")
+    }
+    form.set("country", country.toUpperCase())
+    form.set("documentNumber", documentNumber)
+  } else {
+    form.set("country", (country || "US").toUpperCase())
+    if (documentNumber) form.set("documentNumber", documentNumber)
+  }
   if (input.document.issuingAuthority) form.set("issuingAuthority", input.document.issuingAuthority)
-  if (input.document.documentNumber) form.set("documentNumber", input.document.documentNumber)
   if (input.document.side) form.set("side", input.document.side)
   const blob = new Blob([new Uint8Array(input.bytes)], {
     type: input.document.contentType || "application/octet-stream",

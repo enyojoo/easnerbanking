@@ -8,6 +8,7 @@ import {
   gridDocumentIdFromResource,
   gridKybIdTypeOptionsForPerson,
   gridKybOwnerResourceMatches,
+  isKybIdentityDocumentReady,
   resolveGridKybOwnerIdType,
   gridKybOwnerCountriesFromNationality,
   type GridKybErrorPointer,
@@ -121,7 +122,10 @@ export function GridKybPeopleStep({
 
   function openNew() {
     setError(null)
-    setForm(emptyPerson)
+    setForm({
+      ...emptyPerson,
+      roles: people.length === 0 ? ["UBO"] : [],
+    })
     setFormSession((n) => n + 1)
     setEditingId("new")
   }
@@ -219,6 +223,8 @@ export function GridKybPeopleStep({
       if (idUploadRef.current?.hasPendingFile()) {
         const uploaded = await idUploadRef.current.submit(person.id)
         if (uploaded) onDocumentAdded(uploaded)
+      } else {
+        await idUploadRef.current?.persistMetadata()
       }
       setEditingId(null)
       await onReload()
@@ -311,7 +317,6 @@ export function GridKybPeopleStep({
         }
         extraFields={{
           personId: selected?.id ?? (editingId && editingId !== "new" ? editingId : undefined),
-          issuingAuthority: true,
           documentNumber: true,
         }}
         existingDocuments={identityDocsFor(selected?.id ?? (editingId !== "new" ? editingId : undefined))}
@@ -365,11 +370,14 @@ export function GridKybPeopleStep({
             const needsId = personErrors.some((error) => error.documentCategory === "identity")
             const name = `${person.firstName} ${person.lastName}`.trim() || "Owner"
             const docs = identityDocsFor(person.id)
+            const idReady = docs.some(isKybIdentityDocumentReady)
             const subtitle = needsAttention
               ? personErrors[0]?.reason || (needsId ? "Needs ID document" : "Needs attention")
-              : docs.length
+              : idReady
                 ? docs.map((doc) => doc.fileName).join(", ")
-                : person.roles.join(", ") || "Owner"
+                : docs.length
+                  ? "Add issuing country and document number"
+                  : person.roles.join(", ") || "Owner"
             return (
               <div
                 key={person.id}

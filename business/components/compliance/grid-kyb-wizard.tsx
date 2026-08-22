@@ -8,6 +8,7 @@ import {
   gridKybApplicationIsEditable,
   gridKybWizardReadiness,
   hasAllRequiredKybCompanyDocuments,
+  hasReadyKybIdentityDocuments,
   mergeGridKybCompanyDraft,
   type GridKybCompanyDraft,
   type GridKybFormSection,
@@ -121,7 +122,7 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
       remainingPointers: pointers.length,
       company,
       peopleCount: packet?.people.length ?? 0,
-      hasIdentityDocument: documents.some((row) => row.category === "identity"),
+      hasIdentityDocument: hasReadyKybIdentityDocuments(packet?.people ?? [], documents),
       hasAllRequiredCompanyDocuments: hasAllRequiredKybCompanyDocuments(documents),
     })
   }, [status, pointers.length, company, packet])
@@ -208,8 +209,13 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
 
   function rememberDocument(doc: KybDocumentPacket) {
     setPacket((prev) => {
-      if (prev.documents.some((row) => row.id === doc.id)) return prev
-      return { ...prev, documents: [...prev.documents, doc] }
+      const exists = prev.documents.some((row) => row.id === doc.id)
+      return {
+        ...prev,
+        documents: exists
+          ? prev.documents.map((row) => (row.id === doc.id ? doc : row))
+          : [...prev.documents, doc],
+      }
     })
   }
 

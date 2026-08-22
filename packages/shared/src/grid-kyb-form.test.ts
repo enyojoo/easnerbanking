@@ -13,6 +13,8 @@ import {
   gridKybOwnerIdTypeForGrid,
   gridKybWizardReadiness,
   hasAllRequiredKybCompanyDocuments,
+  hasReadyKybIdentityDocuments,
+  isKybIdentityDocumentReady,
   mapGridKybVerificationErrors,
   normalizeGridKybIdType,
   resolveGridKybOwnerIdType,
@@ -495,6 +497,47 @@ describe("gridKybWizardReadiness", () => {
         { category: "ownership_structure", personId: null },
         { category: "proof_of_address", personId: null },
       ]),
+    ).toBe(true)
+  })
+
+  it("does not treat an identity file as ready without country and document number", () => {
+    expect(
+      isKybIdentityDocumentReady({
+        category: "identity",
+        personId: "p1",
+        documentType: "PASSPORT",
+        issuingCountry: "",
+        documentNumber: "",
+      }),
+    ).toBe(false)
+    expect(
+      isKybIdentityDocumentReady({
+        category: "identity",
+        personId: "p1",
+        documentType: "PASSPORT",
+        issuingCountry: "NG",
+        documentNumber: "A12345678",
+      }),
+    ).toBe(true)
+    expect(
+      hasReadyKybIdentityDocuments(
+        [{ id: "p1" }],
+        [{ category: "identity", personId: "p1", documentType: "PASSPORT" }],
+      ),
+    ).toBe(false)
+    expect(
+      hasReadyKybIdentityDocuments(
+        [{ id: "p1" }],
+        [
+          {
+            category: "identity",
+            personId: "p1",
+            documentType: "PASSPORT",
+            issuingCountry: "NG",
+            documentNumber: "A12345678",
+          },
+        ],
+      ),
     ).toBe(true)
   })
 

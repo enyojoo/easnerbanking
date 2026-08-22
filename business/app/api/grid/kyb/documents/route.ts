@@ -115,7 +115,15 @@ export async function POST(request: Request) {
   const documentType = String(body?.documentType ?? "").trim() || null
   const issuingCountry = String(body?.issuingCountry ?? "").trim() || null
   const issuingAuthority = String(body?.issuingAuthority ?? "").trim() || null
-  const documentNumber = encryptKybPii(String(body?.documentNumber ?? ""))
+  const rawDocumentNumber = String(body?.documentNumber ?? "").trim()
+  if (category === "identity" && (!documentType || !issuingCountry || !rawDocumentNumber)) {
+    await ctx.admin.storage.from(KYB_DOCUMENTS_BUCKET).remove([finalPath])
+    return NextResponse.json(
+      { error: "Select issuing country and enter the document number before uploading an ID." },
+      { status: 400 },
+    )
+  }
+  const documentNumber = encryptKybPii(rawDocumentNumber)
   const side = String(body?.side ?? "").trim() || null
 
   const { data, error } = await ctx.admin
@@ -180,4 +188,55 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: deleteError.message || "Could not remove document" }, { status: 400 })
   }
   return NextResponse.json({ ok: true })
+}
+
+export async function PATCH(request: Request) {
+  const ctx = await requireKybContext(request)
+  if ("error" in ctx) return ctx.error
+  const application = await ensureKybApplication(ctx.admin, ctx.businessId)
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null
+  const id = String(body?.id ?? "").trim()
+  if (!id) return NextResponse.json({ error: "Document id is required" }, { status: 400 })
+
+  const { data: row } = await ctx.admin
+    .from("business_kyb_documents")
+    .select("id,category")
+    .eq("id", id)
+    .eq("application_id", application.id)
+    .maybeSingle()
+  if (!row) return NextResponse.json({ error: "Document not found" }, { status: 404 })
+
+  const documentType = String(body?.documentType ?? "").trim() || null
+  const issuingCountry = String(body?.issuingCountry ?? "").trim() || null
+  const issuingAuthority = String(body?.issuingAuthority ?? "").trim() || null
+  const rawDocumentNumber = String(body?.documentNumber ?? "").trim()
+  if (row.category === "identity" && (!documentType || !issuingCountry || !rawDocumentNumber)) {
+    return NextResponse.json(
+      { error: "Select issuing country and enter the document number for this ID." },
+      { status: 400 },
+    )
+  }
+  const documentNumber = encryptKybPii(rawDocumentNumber)
+  const side = String(body?.side ?? "").trim() || null
+
+  const { data, error } = await ctx.admin
+    .from("business_kyb_documents")
+    .update({
+      document_type: documentType,
+      issuing_country: issuingCountry,
+      issuing_authority: issuingAuthority,
+      document_number_ciphertext: documentNumber.ciphertext,
+      document_number_key_id: documentNumber.keyId,
+      side,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select("*")
+    .single()
+  if (error || !data) {
+    return NextResponse.json({ error: error?.message || "Could not update document" }, { status: 400 })
+  }
+
+  const mapped = mapKybDocumentRow(data as Record<string, unknown>, true)
+  return NextResponse.json({ document: { ...mapped, storagePath: undefined } })
 }

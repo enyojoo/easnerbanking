@@ -3,6 +3,7 @@ import {
   gridDocumentIdFromResource,
   gridKybApplicationStatusFromVerification,
   gridKybOwnerIdTypeForGrid,
+  hasReadyKybIdentityDocuments,
   mapGridKybVerificationErrors,
   rejectedGridDocumentIdsFromErrors,
 } from "@easner/shared"
@@ -80,6 +81,12 @@ export async function POST(request: Request) {
     }
 
     const documents = await listKybDocuments(ctx.admin, application.id, true)
+    if (!hasReadyKybIdentityDocuments(people, documents)) {
+      return NextResponse.json(
+        { error: "Add issuing country and document number on each owner ID before submitting." },
+        { status: 400 },
+      )
+    }
     const rejectedIds = new Set(rejectedGridDocumentIdsFromErrors(application.last_errors))
     for (const document of documents) {
       const existingGridId = gridDocumentIdFromResource(document.gridDocumentId)
