@@ -7,6 +7,7 @@ import {
   expressIdentityOutcome,
   expressSetupUserMessage,
   isExpressIdentitySuccess,
+  isExpressIdentitySetupStep,
   isExpressKycAlreadyVerified,
   isExpressSetupDismissed,
   toExpressLinkE164Phone,
@@ -45,6 +46,10 @@ export function ExpressDepositsSetup({ onClose }: Props) {
   const router = useRouter()
   const [status, setStatus] = useState<Status | null>(null)
   const [busy, setBusy] = useState(false)
+  const [openingIdentity, setOpeningIdentity] = useState(() => {
+    const peeked = peekBusinessExpressOnrampStatus()
+    return isExpressIdentitySetupStep(peeked?.nextStep, peeked?.cryptoCustomerId)
+  })
   const [message, setMessage] = useState<string | null>(null)
   const [slot, setSlot] = useState<HTMLElement | null>(null)
   const [form, setForm] = useState<Record<string, string>>({})
@@ -112,6 +117,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
   const closeHost = (message?: string | null) => {
     setSlot(null)
     if (message === EXPRESS_DEPOSITS_COPY.setupDismissed) {
+      setOpeningIdentity(false)
       toast.message(EXPRESS_DEPOSITS_COPY.setupDismissed)
       setMessage(null)
       return
@@ -143,6 +149,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
       const keepOpen = await fn()
       if (!keepOpen) await refresh()
     } catch (e) {
+      setOpeningIdentity(false)
       setMessage(expressSetupUserMessage(e instanceof Error ? e.message : null))
     } finally {
       setBusy(false)
@@ -255,7 +262,8 @@ export function ExpressDepositsSetup({ onClose }: Props) {
       return true
     })
 
-  const startL2 = () =>
+  const startL2 = () => {
+    setOpeningIdentity(true)
     void run(async () => {
       const sdk = await ensureSdk()
       const verify = sdk.verifyDocuments || sdk.verifyIdentity
@@ -266,6 +274,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
         settled = true
         const outcome = expressIdentityOutcome(raw)
         l2StartedRef.current = false
+        setOpeningIdentity(false)
         if (isExpressIdentitySuccess(outcome)) {
           closeHost(null)
           void refresh()
@@ -283,11 +292,13 @@ export function ExpressDepositsSetup({ onClose }: Props) {
       })
       return true
     })
+  }
 
   useEffect(() => {
     if (l2StartedRef.current) return
     if (step !== "us_l2" && step !== "eu_l2") return
     l2StartedRef.current = true
+    setOpeningIdentity(true)
     startL2()
   }, [step])
 
@@ -381,8 +392,9 @@ export function ExpressDepositsSetup({ onClose }: Props) {
         <div className="space-y-3">
           <p className="text-sm font-medium">{EXPRESS_DEPOSITS_COPY.identityTitle}</p>
           <p className="text-sm text-muted-foreground">{EXPRESS_DEPOSITS_COPY.identityHint}</p>
-          <Button disabled={busy} onClick={startL2}>
-            {EXPRESS_DEPOSITS_COPY.verifyCta}
+          <Button disabled={busy || openingIdentity} onClick={startL2}>
+            {openingIdentity ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {openingIdentity ? EXPRESS_DEPOSITS_COPY.openingCta : EXPRESS_DEPOSITS_COPY.verifyCta}
           </Button>
         </div>
       ) : null}

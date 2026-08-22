@@ -6,6 +6,7 @@ export const EXPRESS_DEPOSITS_COPY = {
   setupCta: "Set up",
   continueCta: "Continue",
   verifyCta: "Verify identity",
+  openingCta: "Opening...",
   readyBadge: "Ready",
   payCta: "Pay",
   cardTitle: "Card",

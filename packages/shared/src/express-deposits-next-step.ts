@@ -10,6 +10,16 @@ export type ExpressDepositsNextStep =
   | "payment"
   | "ready"
 
+/** Link already done — identity popup is the remaining setup step. */
+export function isExpressIdentitySetupStep(
+  nextStep?: string | null,
+  cryptoCustomerId?: string | null,
+): boolean {
+  const raw = String(nextStep || "link")
+  if ((raw === "us_kyc" || raw === "eu_kyc") && cryptoCustomerId) return true
+  return raw === "us_l2" || raw === "eu_l2"
+}
+
 export type ExpressDepositsKycTier = {
   tier?: string | null
   verification_status?: string | null

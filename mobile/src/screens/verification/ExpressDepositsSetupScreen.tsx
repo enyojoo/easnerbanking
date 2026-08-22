@@ -17,6 +17,7 @@ import {
   expressSetupUserMessage,
   isExpressIdentitySuccess,
   isExpressKycAlreadyVerified,
+  isExpressIdentitySetupStep,
   isExpressSetupDismissed,
   toExpressLinkE164Phone,
   type ExpressDepositsNextStep,
@@ -63,6 +64,10 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
   const { showInfo } = useToast()
   const [status, setStatus] = useState<ExpressOnrampStatus | null>(() => peekExpressOnrampStatus())
   const [busy, setBusy] = useState(false)
+  const [openingIdentity, setOpeningIdentity] = useState(() => {
+    const peeked = peekExpressOnrampStatus()
+    return isExpressIdentitySetupStep(peeked?.nextStep, peeked?.cryptoCustomerId)
+  })
   const [message, setMessage] = useState<string | null>(null)
   const [form, setForm] = useState<Record<string, string>>(() =>
     mergeExpressForm(
@@ -121,6 +126,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
       const keepOpen = await fn()
       if (!keepOpen) await refresh(true)
     } catch (e) {
+      setOpeningIdentity(false)
       setMessage(expressSetupUserMessage(e instanceof Error ? e.message : null))
     } finally {
       setBusy(false)
@@ -238,6 +244,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
         return
       }
       if (step === 'us_l2' || step === 'eu_l2') {
+        setOpeningIdentity(true)
         let settled = false
         identitySucceededRef.current = false
         identityNoticeRef.current = false
@@ -246,6 +253,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           settled = true
           const outcome = expressIdentityOutcome(raw)
           setStripeEl(null)
+          setOpeningIdentity(false)
           l2StartedRef.current = false
           if (isExpressIdentitySuccess(outcome)) {
             identitySucceededRef.current = true
@@ -335,6 +343,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
     if (l2StartedRef.current) return
     if (step !== 'us_l2' && step !== 'eu_l2') return
     l2StartedRef.current = true
+    setOpeningIdentity(true)
     onCta()
   }, [step])
 
@@ -345,6 +354,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
       identityNoticeRef.current = true
       l2StartedRef.current = false
       setStripeEl(null)
+      setOpeningIdentity(false)
       showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
     })
   }, [step, showInfo])
@@ -420,7 +430,12 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
               {step === 'ready' ? <Text style={styles.ready}>{EXPRESS_DEPOSITS_COPY.readyBadge}</Text> : null}
 
               {cta ? (
-                busy ? (
+                openingIdentity || (busy && (step === 'us_l2' || step === 'eu_l2')) ? (
+                  <View style={styles.ctaBusy}>
+                    <ActivityIndicator color={colors.neutral.white} />
+                    <Text style={styles.ctaBusyLabel}>{EXPRESS_DEPOSITS_COPY.openingCta}</Text>
+                  </View>
+                ) : busy ? (
                   <View style={styles.ctaBusy}>
                     <ActivityIndicator color={colors.neutral.white} />
                   </View>
@@ -554,8 +569,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary.main,
     borderRadius: borderRadius.full,
     minHeight: 52,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing[2],
+    paddingHorizontal: spacing[5],
+  },
+  ctaBusyLabel: {
+    ...textStyles.titleMedium,
+    color: colors.neutral.white,
+    fontWeight: '600',
+    fontSize: 15,
+    letterSpacing: -0.1,
   },
   ready: {
     ...textStyles.bodyMedium,

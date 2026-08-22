@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { expressDepositsNextStep } from "./express-deposits-next-step"
+import { expressDepositsNextStep, isExpressIdentitySetupStep } from "./express-deposits-next-step"
 
 describe("expressDepositsNextStep", () => {
   it("starts at link without a customer", () => {
@@ -133,5 +133,15 @@ describe("expressDepositsNextStep", () => {
         walletRegistered: true,
       }),
     ).toBe("us_l2")
+  })
+})
+
+describe("isExpressIdentitySetupStep", () => {
+  it("treats L2 and post-Link KYC as identity", () => {
+    expect(isExpressIdentitySetupStep("us_l2")).toBe(true)
+    expect(isExpressIdentitySetupStep("eu_l2")).toBe(true)
+    expect(isExpressIdentitySetupStep("us_kyc", "crc_1")).toBe(true)
+    expect(isExpressIdentitySetupStep("us_kyc")).toBe(false)
+    expect(isExpressIdentitySetupStep("link")).toBe(false)
   })
 })

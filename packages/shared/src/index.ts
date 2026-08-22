@@ -494,6 +494,7 @@ export type { ExpressDepositsAmountValidation } from "./express-deposits-limits"
 export {
   expressDepositsKycReady,
   expressDepositsNextStep,
+  isExpressIdentitySetupStep,
   normalizeExpressDepositsCustomer,
 } from "./express-deposits-next-step"
 export type {
