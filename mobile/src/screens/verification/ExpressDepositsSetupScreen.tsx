@@ -266,8 +266,9 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           setMessage(null)
           showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
         }
-        // Native coordinator is cold each launch — Link must authorize before the ID sheet can present.
-        if (client.authenticate) {
+        // Native only: coordinator is cold each launch. Web @stripe/crypto already has a session;
+        // calling authenticate here creates an iframe that is never mounted (Opening... hangs).
+        if (Platform.OS !== 'web' && client.authenticate) {
           const auth = await apiFetch<{ authIntentId?: string | null; needsRegister?: boolean }>(
             '/api/stripe/onramp/link-auth',
             { method: 'POST', body: {} },
@@ -287,7 +288,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
             intentId = again.authIntentId
           }
           if (intentId) {
-            await client.authenticate(intentId, async (result) => {
+            const authEl = await client.authenticate(intentId, async (result) => {
               const outcome = String(result.result || '')
               if (outcome === 'success' && result.crypto_customer_id) {
                 await apiFetch('/api/stripe/onramp/link-complete', {
@@ -301,19 +302,18 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
                 finish({ result: 'canceled' })
               }
             })
+            if (isStripeHostElement(authEl)) setStripeEl(authEl)
             if (settled) return true
           }
         }
         const verify = client.verifyDocuments || client.verifyIdentity
         if (!verify) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
-        const pending = verify(finish)
-        void Promise.resolve(pending).then((first) => {
-          if (isStripeHostElement(first)) {
-            setStripeEl(first)
-            return
-          }
-          if (first !== undefined) finish(first)
-        })
+        const first = await Promise.resolve(verify(finish))
+        if (isStripeHostElement(first)) {
+          setStripeEl(first)
+          return true
+        }
+        if (first !== undefined) finish(first)
         return true
       }
       if (step === 'us_kyc' || step === 'eu_kyc') {

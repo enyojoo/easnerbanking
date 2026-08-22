@@ -10,7 +10,13 @@ import {
   subscribeExpressOnrampStatus,
 } from '../lib/expressOnrampStatusCache'
 
-export function ExpressOnrampNativeBridge({ children }: { children: React.ReactNode }) {
+function onrampErrorMessage(error: unknown): string {
+  if (!error || typeof error !== 'object') return 'Express deposits is not ready. Try again in a moment.'
+  const row = error as { message?: string; localizedMessage?: string }
+  return row.message || row.localizedMessage || 'Express deposits is not ready. Try again in a moment.'
+}
+
+export function ExpressOnrampNativeBridge() {
   let useOnramp: (() => Parameters<typeof adaptNativeOnramp>[0]) | null = null
   try {
     useOnramp = (
@@ -22,15 +28,13 @@ export function ExpressOnrampNativeBridge({ children }: { children: React.ReactN
     useOnramp = null
   }
 
-  if (!useOnramp) return <>{children}</>
-  return <ConfiguredOnrampBridge useOnramp={useOnramp}>{children}</ConfiguredOnrampBridge>
+  if (!useOnramp) return null
+  return <ConfiguredOnrampBridge useOnramp={useOnramp} />
 }
 
 function ConfiguredOnrampBridge({
-  children,
   useOnramp,
 }: {
-  children: React.ReactNode
   useOnramp: () => Parameters<typeof adaptNativeOnramp>[0]
 }) {
   const onramp = useOnramp()
@@ -48,6 +52,10 @@ function ConfiguredOnrampBridge({
 
   useEffect(() => {
     const api = onrampRef.current
+    if (typeof api.configure !== 'function') {
+      failNativeExpressOnramp(new Error('Express deposits is not ready. Try again in a moment.'))
+      return
+    }
     if (configuredFor.current === configKey) {
       setNativeExpressOnrampSdk(adaptNativeOnramp(api))
       return
@@ -74,9 +82,7 @@ function ConfiguredOnrampBridge({
       .then((result) => {
         if (cancelled) return
         if (result.error) {
-          failNativeExpressOnramp(
-            new Error(result.error.message || 'Express deposits is not ready. Try again in a moment.'),
-          )
+          failNativeExpressOnramp(new Error(onrampErrorMessage(result.error)))
           return
         }
         configuredFor.current = configKey
@@ -85,9 +91,7 @@ function ConfiguredOnrampBridge({
       .catch((error) => {
         if (cancelled) return
         failNativeExpressOnramp(
-          error instanceof Error
-            ? error
-            : new Error('Express deposits is not ready. Try again in a moment.'),
+          error instanceof Error ? error : new Error(onrampErrorMessage(error)),
         )
       })
 
@@ -96,9 +100,5 @@ function ConfiguredOnrampBridge({
     }
   }, [configKey, customerId, country])
 
-  useEffect(() => {
-    return () => setNativeExpressOnrampSdk(null)
-  }, [])
-
-  return <>{children}</>
+  return null
 }

@@ -204,6 +204,8 @@ PODS:
     - Yoga
   - ExpoAppleAuthentication (57.0.1):
     - ExpoModulesCore
+  - ExpoAsset (57.0.13):
+    - ExpoModulesCore
   - ExpoBackgroundTask (57.0.12):
     - ExpoModulesCore
     - ExpoTaskManager
@@ -242,6 +244,8 @@ PODS:
     - ExpoModulesCore
     - SDWebImageWebPCoder
   - ExpoImagePicker (57.0.12):
+    - ExpoModulesCore
+  - ExpoKeepAwake (57.0.1):
     - ExpoModulesCore
   - ExpoLinearGradient (57.0.1):
     - ExpoModulesCore
@@ -2820,10 +2824,48 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - stripe-react-native/Onramp (0.64.0):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - stripe-react-native/Core
+    - StripeCryptoOnramp (~> 25.11.0)
+    - Yoga
   - StripeApplePay (25.11.0):
     - StripeCore (= 25.11.0)
+  - StripeCameraCore (25.11.0):
+    - StripeCore (= 25.11.0)
   - StripeCore (25.11.0)
+  - StripeCryptoOnramp (25.11.0):
+    - StripeApplePay (= 25.11.0)
+    - StripeCore (= 25.11.0)
+    - StripeIdentity (= 25.11.0)
+    - StripePayments (= 25.11.0)
+    - StripePaymentSheet (= 25.11.0)
+    - StripePaymentsUI (= 25.11.0)
+    - StripeUICore (= 25.11.0)
   - StripeFinancialConnections (25.11.0):
+    - StripeCore (= 25.11.0)
+    - StripeUICore (= 25.11.0)
+  - StripeIdentity (25.11.0):
+    - StripeCameraCore (= 25.11.0)
     - StripeCore (= 25.11.0)
     - StripeUICore (= 25.11.0)
   - StripeIssuing (25.11.0):
@@ -2866,6 +2908,7 @@ DEPENDENCIES:
   - expo-dev-menu (from `../../node_modules/expo-dev-menu`)
   - expo-dev-menu-interface (from `../../node_modules/expo-dev-menu-interface/ios`)
   - ExpoAppleAuthentication (from `../../node_modules/expo-apple-authentication/ios`)
+  - ExpoAsset (from `../../node_modules/expo-asset/ios`)
   - ExpoBackgroundTask (from `../../node_modules/expo-background-task/ios`)
   - ExpoBlur (from `../../node_modules/expo-blur/ios`)
   - ExpoCamera (from `../../node_modules/expo-camera/ios`)
@@ -2881,6 +2924,7 @@ DEPENDENCIES:
   - ExpoImage (from `../../node_modules/expo-image/ios`)
   - ExpoImageManipulator (from `../../node_modules/expo-image-manipulator/ios`)
   - ExpoImagePicker (from `../../node_modules/expo-image-picker/ios`)
+  - ExpoKeepAwake (from `../../node_modules/expo-keep-awake/ios`)
   - ExpoLinearGradient (from `../../node_modules/expo-linear-gradient/ios`)
   - ExpoLinking (from `../../node_modules/expo-linking/ios`)
   - ExpoLocalization (from `../../node_modules/expo-localization/ios`)
@@ -2989,6 +3033,7 @@ DEPENDENCIES:
   - RNSVG (from `../../node_modules/react-native-svg`)
   - RNWorklets (from `../node_modules/react-native-worklets`)
   - "stripe-react-native (from `../node_modules/@stripe/stripe-react-native`)"
+  - "stripe-react-native/Onramp (from `../node_modules/@stripe/stripe-react-native`)"
   - UMAppLoader (from `../../node_modules/unimodules-app-loader/ios`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
@@ -3006,8 +3051,11 @@ SPEC REPOS:
     - SDWebImageWebPCoder
     - Stripe
     - StripeApplePay
+    - StripeCameraCore
     - StripeCore
+    - StripeCryptoOnramp
     - StripeFinancialConnections
+    - StripeIdentity
     - StripeIssuing
     - StripePayments
     - StripePaymentSheet
@@ -3038,6 +3086,8 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/expo-dev-menu-interface/ios"
   ExpoAppleAuthentication:
     :path: "../../node_modules/expo-apple-authentication/ios"
+  ExpoAsset:
+    :path: "../../node_modules/expo-asset/ios"
   ExpoBackgroundTask:
     :path: "../../node_modules/expo-background-task/ios"
   ExpoBlur:
@@ -3068,6 +3118,8 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/expo-image-manipulator/ios"
   ExpoImagePicker:
     :path: "../../node_modules/expo-image-picker/ios"
+  ExpoKeepAwake:
+    :path: "../../node_modules/expo-keep-awake/ios"
   ExpoLinearGradient:
     :path: "../../node_modules/expo-linear-gradient/ios"
   ExpoLinking:
@@ -3300,6 +3352,7 @@ SPEC CHECKSUMS:
   expo-dev-menu: b41853fe77c76379f51c4f7ca0635c6b8b7d0a97
   expo-dev-menu-interface: 7a59e803916fbfd1b96c75ff91ea8dddac7e722f
   ExpoAppleAuthentication: 97d113f0f2680067e6e76d3c9249e7e1fc026b42
+  ExpoAsset: 2b03d46bfa5827ac7b11e22f812cf99995f2ed4b
   ExpoBackgroundTask: fe20b70e1b42785c91a0256709386d329f761a2b
   ExpoBlur: 69e67b4fbfed6f7325377af2aefa8aa4f00cd2af
   ExpoCamera: 00a098da25adbc6013f051b5db47279cb10a716c
@@ -3315,6 +3368,7 @@ SPEC CHECKSUMS:
   ExpoImage: b37accc4b12647e5cf939b2335eea2bdb874ad7f
   ExpoImageManipulator: ac9553f6bcbbf0b58c0435777212cf1511e365f0
   ExpoImagePicker: 09fafe2ab0257a41a0e6625ebbe56d73cb6611fa
+  ExpoKeepAwake: c26f14275017370cc8a4b7b43a0e23361f2053a5
   ExpoLinearGradient: 903b3f5fe566c666ff78b2599add51d094483613
   ExpoLinking: 2e9ead00fcb0d3e623a8d4935fadae3cdb6d4d97
   ExpoLocalization: 659243b03b3a3e9589793cee2f728a899e181329
@@ -3434,8 +3488,11 @@ SPEC CHECKSUMS:
   Stripe: 0421dcc510a52f2abf63bbf03a547caf6639dce7
   stripe-react-native: a3e3f2e3f7cc3a62bc4e5fae6daeccde21cbbd3e
   StripeApplePay: b74b487cdc4176b32ea3f250d63ceb7b0ab7dedb
+  StripeCameraCore: 44611536255dca20009f3b6ac60ddd1f0f4cedce
   StripeCore: c9d8b48d4b9b14e73edfa2ca714dea44c0849f73
+  StripeCryptoOnramp: ddc07b93157710513de6d94ef1242a79d7116d90
   StripeFinancialConnections: 0209e955d46e927089a017f56e4a34f2e3e85bfd
+  StripeIdentity: 258f917af1c587d33a4ad1f5692066a6ab5247aa
   StripeIssuing: 2b1f0054ee9439e7e716f101099a22bb95addc08
   StripePayments: c54ac68d13e5ef09c98aa5c12314a73d1e6a1fc6
   StripePaymentSheet: 46ca981c6106b559d323d41b5ee9af0485252a63
@@ -3445,6 +3502,6 @@ SPEC CHECKSUMS:
   Yoga: 9891cfb1c680f64de9c41b09e7453dea33454d2b
   ZXingObjC: 8898711ab495761b2dbbdec76d90164a6d7e14c5
 
-PODFILE CHECKSUM: 48e2720b0ce5d8c6aa0dcf94f44f777acfd3c18b
+PODFILE CHECKSUM: 8ad410943ccfe4bf6e7c4a25d88baa292f370f76
 
 COCOAPODS: 1.16.2

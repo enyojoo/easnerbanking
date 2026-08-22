@@ -39,22 +39,31 @@ export function ExpressStripeProvider({ children, publishableKey }: Props) {
       .catch(() => undefined)
   }, [user?.id])
 
-  if (!pk) return <>{children}</>
-
-  try {
-    const { StripeProvider } = require('@stripe/stripe-react-native') as {
-      StripeProvider: React.ComponentType<{
-        children: React.ReactNode
-        publishableKey: string
-        merchantIdentifier?: string
-      }>
+  // Keep navigation mounted. Only the onramp bridge needs StripeProvider.
+  let stripe: React.ReactNode = null
+  if (pk) {
+    try {
+      const { StripeProvider } = require('@stripe/stripe-react-native') as {
+        StripeProvider: React.ComponentType<{
+          children: React.ReactNode
+          publishableKey: string
+          merchantIdentifier?: string
+        }>
+      }
+      stripe = (
+        <StripeProvider publishableKey={pk} merchantIdentifier={getApplePayMerchantId()}>
+          <ExpressOnrampNativeBridge />
+        </StripeProvider>
+      )
+    } catch {
+      stripe = null
     }
-    return (
-      <StripeProvider publishableKey={pk} merchantIdentifier={getApplePayMerchantId()}>
-        <ExpressOnrampNativeBridge>{children}</ExpressOnrampNativeBridge>
-      </StripeProvider>
-    )
-  } catch {
-    return <>{children}</>
   }
+
+  return (
+    <>
+      {stripe}
+      {children}
+    </>
+  )
 }

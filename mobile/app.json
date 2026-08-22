@@ -115,7 +115,8 @@
         "@stripe/stripe-react-native",
         {
           "merchantIdentifier": "merchant.com.easner.mobile",
-          "enableGooglePay": true
+          "enableGooglePay": true,
+          "includeOnramp": true
         }
       ]
     ],
