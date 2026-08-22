@@ -41,10 +41,8 @@ import { apiFetch } from '../../query/api-client'
 import { WEB_FLOW_MAX_WIDTH } from '../../components/layout/CenteredWebFlowPage'
 import {
   EXPRESS_NATIVE_AUTH_REQUIRED,
-  hideExpressOnrampFrame,
   loadMobileExpressOnramp,
   prefetchMobileExpressOnramp,
-  subscribeExpressOnrampUi,
   type ExpressOnrampSdk,
 } from '../../lib/express-onramp'
 import { isStripeHostElement } from '../../lib/expressStripeElement'
@@ -263,7 +261,6 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           setStripeEl(null)
           setOpeningIdentity(false)
           l2StartedRef.current = false
-          hideExpressOnrampFrame()
           if (isExpressIdentitySuccess(outcome)) {
             identitySucceededRef.current = true
             setMessage(null)
@@ -427,24 +424,14 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
     onCta()
   }, [step])
 
-  useEffect(
-    () =>
-      subscribeExpressOnrampUi((open) => {
-        if (open) {
-          setOpeningIdentity(false)
-          setBusy(false)
-          return
-        }
-        hideExpressOnrampFrame()
-      }),
-    [],
-  )
-
   useEffect(() => {
     if (step !== 'us_l2' && step !== 'eu_l2') return
     return watchExpressIdentityOverlay({
+      onOpen: () => {
+        setOpeningIdentity(false)
+        setBusy(false)
+      },
       onClosed: () => {
-        hideExpressOnrampFrame()
         dismissL2Ref.current()
       },
     })

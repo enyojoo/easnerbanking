@@ -5,13 +5,10 @@ type OverlayHandlers =
       onClosed: () => void
     }
 
-const PROXY_FRAME_ID = 'easner-express-onramp-frame'
-
 function isStripePopupIframe(el: Element): boolean {
   if (!(el instanceof HTMLIFrameElement)) return false
-  if (el.id === PROXY_FRAME_ID) return false
   const src = el.src || ''
-  if (/controller|deploy_status|henson|express-onramp-frame|messages-/i.test(src)) return false
+  if (/controller|deploy_status|henson|messages-/i.test(src)) return false
   if (!/stripecdn\.com|stripe\.com|gelato|js\.stripe\.com/i.test(src)) return false
   const rect = el.getBoundingClientRect()
   return rect.width > 80 && rect.height > 80

@@ -32,14 +32,11 @@
       ]
     }
   ],
-  "redirects": [
+  "rewrites": [
     {
       "source": "/crypto-onramp/:path*",
-      "destination": "https://js.stripe.com/crypto-onramp/:path*",
-      "permanent": false
-    }
-  ],
-  "rewrites": [
+      "destination": "https://js.stripe.com/crypto-onramp/:path*"
+    },
     {
       "source": "/.well-known/apple-app-site-association",
       "destination": "/api/apple-app-site-association"
@@ -53,7 +50,7 @@
       "destination": "/api/assetlinks"
     },
     {
-      "source": "/((?!api/|_expo/|assets/|express-onramp-frame\\.html).*)",
+      "source": "/((?!api/|_expo/|assets/|crypto-onramp/).*)",
       "destination": "/index.html"
     }
   ]

@@ -97,10 +97,13 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     return { type: 'sourceFile', filePath: nobleHashesCrypto }
   }
   // Native Stripe SDK talks to the RN bridge; never evaluate it in the web bundle.
+  // @stripe/crypto must load from a same-origin script tag, not Metro chunks.
   if (
     platform === 'web' &&
     (moduleName === '@stripe/stripe-react-native' ||
-      moduleName.startsWith('@stripe/stripe-react-native/'))
+      moduleName.startsWith('@stripe/stripe-react-native/') ||
+      moduleName === '@stripe/crypto' ||
+      moduleName.startsWith('@stripe/crypto/'))
   ) {
     return { type: 'empty' }
   }
