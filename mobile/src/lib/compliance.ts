@@ -1,17 +1,9 @@
 /**
- * Until African banking (Tier 2) is available in the app – gate local rails in UI.
- */
-export const TIER2_COMPLETE_PLACEHOLDER = false
-
-/** Cards / Tier 3 – not wired yet; More tab badge uses this with Tier 2 for “Tier x” display. */
-export const TIER3_COMPLETE_PLACEHOLDER = false
-
-/**
- * Consumer mobile Tier 1: personal KYC approved.
+ * Consumer Global banking: personal KYC approved.
  * Prefer progressed canonical `verification_status`; if missing/`not_started`, fall back to Noah mirror
  * (matches server `canonicalVerificationStatus` for non-Grid SoR).
  */
-export function isTier1Complete(
+export function isGlobalBankingVerified(
   profile:
     | {
         verification_status?: string | null

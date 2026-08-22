@@ -52,7 +52,7 @@ import {
   type ConnectPanelAction,
   type ConnectStatusSnapshot,
 } from "@/lib/stripe/connect-panel-ux"
-import { BUSINESS_TIER_LADDER } from "@/lib/compliance-tier-ladder-copy"
+import { BUSINESS_VERIFICATION_PRODUCTS } from "@/lib/compliance-tier-ladder-copy"
 import { Tier1VerificationBadge } from "@/components/compliance/tier1-verification-badge"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { useSuspendIdleLock } from "@/hooks/use-suspend-idle-lock"
@@ -62,6 +62,7 @@ import {
 } from "@/lib/compliance/cutover-comms"
 import { useSearchParams } from "next/navigation"
 import { verificationStatusLabel } from "@easner/shared"
+import { VERIFICATION_SECTION_COPY } from "@/lib/copy/business-ui-copy"
 import { cn } from "@/lib/utils"
 
 const ONLINE_PAYMENTS_VERIFICATION_TITLE = "Online payments Verification"
@@ -88,6 +89,7 @@ function ConnectStatusChecklistTooltip({
             aria-label={`${label}. Show setup checklist.`}
           >
             <Tier1VerificationBadge
+              compact
               tier1Complete={complete}
               tier1VerificationStatus={status}
             />
@@ -322,7 +324,7 @@ export function SettingsStripeConnectPanel({
 
   const startOnboarding = useCallback(async () => {
     if (!tier1Complete) {
-      toast.message("Complete Tier 1 business verification before setting up online payments.")
+      toast.message(VERIFICATION_SECTION_COPY.onlinePaymentsTier1Required)
       return
     }
     if (!publishableKey || !isStripePublishableConfigured()) {
@@ -365,7 +367,7 @@ export function SettingsStripeConnectPanel({
 
   const openConnectFlow = useCallback(() => {
     if (!tier1Complete) {
-      toast.message("Complete Tier 1 business verification before setting up online payments.")
+      toast.message(VERIFICATION_SECTION_COPY.onlinePaymentsTier1Required)
       return
     }
     if (!publishableKey || !isStripePublishableConfigured()) {
@@ -539,15 +541,15 @@ export function SettingsStripeConnectPanel({
     return unavailableFallback ?? null
   }
 
-  const tier3 = BUSINESS_TIER_LADDER.tiers.find((t) => t.tier === 3)
+  const onlinePayments = BUSINESS_VERIFICATION_PRODUCTS.find((t) => t.id === "online_payments")
 
   return (
       <Card className="flex h-full flex-col border-primary/25 md:border-primary/40">
         <CardHeader className="pb-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <CardTitle className="text-base">{tier3?.title ?? "Online payments"}</CardTitle>
+          <div className="flex items-center gap-1.5">
             {badgePresentation.complete ? (
               <Tier1VerificationBadge
+                compact
                 tier1Complete={badgePresentation.complete}
                 tier1VerificationStatus={badgePresentation.status}
               />
@@ -559,9 +561,12 @@ export function SettingsStripeConnectPanel({
                 checklist={panelUx.checklist}
               />
             )}
+            <CardTitle className="min-w-0 text-base leading-tight">
+              {onlinePayments?.title ?? "Online payments"}
+            </CardTitle>
           </div>
           <CardDescription className="text-sm">
-            {tier3?.description ??
+            {onlinePayments?.description ??
               "Accept card payments on invoices. Settled to your Easner balance."}
           </CardDescription>
         </CardHeader>

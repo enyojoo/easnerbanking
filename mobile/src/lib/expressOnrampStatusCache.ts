@@ -4,6 +4,7 @@ import { loadMobileExpressOnramp, prefetchMobileExpressOnramp } from './express-
 
 export type ExpressOnrampStatus = {
   ready?: boolean
+  status?: string
   nextStep?: ExpressDepositsNextStep
   publishableKey?: string
   prefill?: Record<string, unknown>

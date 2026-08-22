@@ -50,7 +50,7 @@ import {
   saveMfaVerified,
   shouldListFactorsForMfaRow,
 } from '../../lib/mfaStatusCache'
-import { isTier1Complete, TIER2_COMPLETE_PLACEHOLDER, TIER3_COMPLETE_PLACEHOLDER } from '../../lib/compliance'
+import { isGlobalBankingVerified } from '../../lib/compliance'
 import { VERIFICATION_STATUS_COPY } from '@easner/shared'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { apiFetch } from '../../query/api-client'
@@ -65,14 +65,11 @@ import {
 
 type TierBadge = { label: string; tone: 'green' | 'yellow' }
 
-function tierBadgeForProfile(
-  userProfile: Parameters<typeof isTier1Complete>[0],
+function verificationBadgeForProfile(
+  userProfile: Parameters<typeof isGlobalBankingVerified>[0],
   verificationStatus: 'approved' | 'in_review' | 'take_action',
 ): TierBadge {
-  const tier1 = isTier1Complete(userProfile)
-  const tier2 = TIER2_COMPLETE_PLACEHOLDER
-  const tier3 = TIER3_COMPLETE_PLACEHOLDER
-  if (tier1 || tier2 || tier3) {
+  if (isGlobalBankingVerified(userProfile)) {
     return { label: VERIFICATION_STATUS_COPY.verified, tone: 'green' }
   }
   if (verificationStatus === 'in_review') {
@@ -335,7 +332,7 @@ function MoreContent({ navigation }: NavigationProps) {
   }
 
   const verificationStatus = getVerificationStatus()
-  const tierBadge = tierBadgeForProfile(userProfile, verificationStatus)
+  const tierBadge = verificationBadgeForProfile(userProfile, verificationStatus)
 
   const handleSignOut = async () => {
     setIsLoggingOut(true)
@@ -421,8 +418,8 @@ function MoreContent({ navigation }: NavigationProps) {
 
   // Conditional gradient banner – verify identity OR set up MFA when applicable.
   const profileReady = !authLoading && userProfile != null
-  const tier1Complete = isTier1Complete(userProfile)
-  const showVerifyBanner = profileReady && !tier1Complete && verificationStatus !== 'in_review'
+  const globalBankingVerified = isGlobalBankingVerified(userProfile)
+  const showVerifyBanner = profileReady && !globalBankingVerified && verificationStatus !== 'in_review'
   const showMfaBanner = profileReady && !showVerifyBanner && mfaStatusResolved && mfaStatusLine === 'Off'
   const banner = showVerifyBanner
     ? {

@@ -13,7 +13,7 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { BUSINESS_TIER_LADDER } from "@/lib/compliance-tier-ladder-copy"
+import { BUSINESS_VERIFICATION_PRODUCTS } from "@/lib/compliance-tier-ladder-copy"
 import { cn } from "@/lib/utils"
 import { KybRequiredDocumentsNotice } from "@/components/compliance/kyb-required-documents-notice"
 import { Tier1VerificationBadge } from "@/components/compliance/tier1-verification-badge"
@@ -45,10 +45,6 @@ function tier1StatusIsInReview(status: string | null | undefined): boolean {
   const s = (status || "").toLowerCase()
   if (s === "in_progress") return false
   return s === "pending" || s === "in_review" || s === "under_review" || s.includes("review")
-}
-
-function tierLadderCopy(tier: 1 | 2 | 3) {
-  return BUSINESS_TIER_LADDER.tiers.find((x) => x.tier === tier)
 }
 
 type BusinessVerificationSectionProps = {
@@ -98,6 +94,10 @@ export function BusinessVerificationSection({
   const showOnlinePayments = onlinePaymentsEnabled !== false
   const expressQuery = useBusinessExpressOnrampStatus()
   const showExpressCard = expressQuery.data?.eligible === true
+  const expressReady = expressQuery.data?.ready === true
+  const expressStatus = expressReady
+    ? "approved"
+    : expressQuery.data?.status || "not_started"
 
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
@@ -348,37 +348,43 @@ export function BusinessVerificationSection({
                   connectFlowActive && "flex min-h-0 flex-1 flex-col gap-0 md:grid-cols-1",
                 )}
               >
-                {BUSINESS_TIER_LADDER.tiers.map((t) => {
-                  const isT1 = t.tier === 1
-                  const isT3 = t.tier === 3
+                {BUSINESS_VERIFICATION_PRODUCTS.map((t) => {
+                  const isGlobalBanking = t.id === "global_banking"
+                  const isOnlinePayments = t.id === "online_payments"
 
                   const comingLaterCard = (
                     <Card
-                      key={t.tier}
+                      key={t.id}
                       className={cn(
                         "flex h-full flex-col",
-                        isT1 && "border-primary/25 md:border-primary/40",
+                        isGlobalBanking && "border-primary/25 md:border-primary/40",
                         connectFlowActive && "hidden",
                       )}
                     >
                       <CardHeader className="pb-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <CardTitle className="text-base">{t.title}</CardTitle>
-                          {isT1 ? (
+                        <div className="flex items-center gap-1.5">
+                          {isGlobalBanking ? (
                             <Tier1VerificationBadge
+                              compact
                               tier1Complete={tier1Complete}
                               tier1VerificationStatus={tier1VerificationStatus}
                             />
                           ) : (
-                            <Badge variant="secondary">Coming later</Badge>
+                            <Badge
+                              variant="secondary"
+                              className="h-5 px-1.5 py-0 text-[10px] leading-none font-medium"
+                            >
+                              Coming later
+                            </Badge>
                           )}
+                          <CardTitle className="min-w-0 text-base leading-tight">{t.title}</CardTitle>
                         </div>
                         <CardDescription className="text-sm">{t.description}</CardDescription>
                         {t.footnote ? (
                           <p className="text-xs text-muted-foreground pt-1">{t.footnote}</p>
                         ) : null}
                       </CardHeader>
-                      {isT1 ? (
+                      {isGlobalBanking ? (
                         <CardContent className="mt-auto space-y-4 pt-0">
                           {error ? <p className="text-sm text-destructive">{error}</p> : null}
                           {info ? <p className="text-sm text-muted-foreground">{info}</p> : null}
@@ -442,10 +448,10 @@ export function BusinessVerificationSection({
                     </Card>
                   )
 
-                  if (isT3 && showOnlinePayments) {
+                  if (isOnlinePayments && showOnlinePayments) {
                     return (
                       <div
-                        key={t.tier}
+                        key={t.id}
                         className={cn(
                           "min-w-0 h-full",
                           connectFlowActive && "flex min-h-0 flex-1 flex-col",
@@ -465,8 +471,16 @@ export function BusinessVerificationSection({
                 {showExpressCard ? (
                   <Card className="flex h-full flex-col border-primary/20">
                     <CardHeader className="pb-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <CardTitle className="text-base">{EXPRESS_DEPOSITS_COPY.title}</CardTitle>
+                      <div className="flex items-center gap-1.5">
+                        <Tier1VerificationBadge
+                          compact
+                          isLoading={expressQuery.isLoading && !expressQuery.data}
+                          tier1Complete={expressReady}
+                          tier1VerificationStatus={expressStatus}
+                        />
+                        <CardTitle className="min-w-0 text-base leading-tight">
+                          {EXPRESS_DEPOSITS_COPY.title}
+                        </CardTitle>
                       </div>
                       <CardDescription className="text-sm">
                         {EXPRESS_DEPOSITS_COPY.description}
@@ -475,7 +489,7 @@ export function BusinessVerificationSection({
                     <CardContent className="mt-auto space-y-3 pt-0">
                       {!tier1Complete ? (
                         <p className="text-sm text-muted-foreground">
-                          {EXPRESS_DEPOSITS_COPY.tier1Required}
+                          {EXPRESS_DEPOSITS_COPY.globalBankingRequired}
                         </p>
                       ) : !canManageBusinessVerification ? (
                         <p className="text-sm text-muted-foreground">{EXPRESS_DEPOSITS_COPY.ownerOnly}</p>

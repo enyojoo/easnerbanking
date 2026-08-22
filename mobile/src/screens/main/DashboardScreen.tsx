@@ -57,7 +57,7 @@ import { ListRowSkeleton } from '../../components/skeletons'
 import { SectionCard } from '../../components/ui'
 import { formatSignedCurrency, getTransactionStatusDisplay } from '../../utils/formatters'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
-import { isTier1Complete } from '../../lib/compliance'
+import { isGlobalBankingVerified } from '../../lib/compliance'
 import { noahService } from '../../lib/noahService'
 import { useTransactionsList, prefetchRecentTransactionDetailsInBackground, warmTransactionDetailForNavigation, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
 import { prefetchReceiveDepositQueries } from '../../hooks/queries/use-receive-deposit-queries'
@@ -265,7 +265,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
 
   const warmReceiveLocalDeposit = useCallback(() => {
     const corridor = resolveWarmYcLocalDepositCorridor(userProfile, {
-      kycApproved: isTier1Complete(userProfile),
+      kycApproved: isGlobalBankingVerified(userProfile),
     })
     if (!corridor) return
     void warmYcLocalDepositCaches(corridor)
@@ -280,7 +280,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
        */
       const role = userProfile?.role ?? userProfile?.profile?.role
       const needsConsumerTier1Sync =
-        !!user?.id && !!userProfile?.id && role !== 'business' && !isTier1Complete(userProfile)
+        !!user?.id && !!userProfile?.id && role !== 'business' && !isGlobalBankingVerified(userProfile)
       if (needsConsumerTier1Sync) {
         const now = Date.now()
         const MIN_MS = 10 * 60_000
@@ -352,9 +352,9 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
 
   const shouldShowBalanceSkeleton = balanceVisible && !hasResolvedBalance
 
-  /** Only after `userProfile` is loaded: `isTier1Complete(undefined)` is false and would flash the banner. */
+  /** Only after `userProfile` is loaded: `isGlobalBankingVerified(undefined)` is false and would flash the banner. */
   const showVerifyIdentityBanner =
-    !authLoading && userProfile != null && !isTier1Complete(userProfile)
+    !authLoading && userProfile != null && !isGlobalBankingVerified(userProfile)
 
   // Get user's first name for greeting - use only the first word if multiple names exist
   const dashboardAvatarFullName =

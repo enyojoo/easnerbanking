@@ -46,13 +46,15 @@ import {
   fontFamily,
 } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
-import { CONSUMER_TIER_LADDER } from '../../lib/compliance-tier-ladder-copy'
+import { CONSUMER_VERIFICATION_PRODUCTS } from '../../lib/compliance-tier-ladder-copy'
+
+const GLOBAL_BANKING_PRODUCT = CONSUMER_VERIFICATION_PRODUCTS.find((p) => p.id === 'global_banking')!
 import {
   fetchExpressOnrampStatus,
   peekExpressOnrampStatus,
   warmExpressOnrampStatus,
 } from '../../lib/expressOnrampStatusCache'
-import { isTier1Complete } from '../../lib/compliance'
+import { isGlobalBankingVerified } from '../../lib/compliance'
 import { loadMobileExpressOnramp } from '../../lib/express-onramp'
 import { needsNoahVirtualAccountProvision } from '../../lib/noahAccountSync'
 import {
@@ -68,27 +70,34 @@ import { ResidenceCountryField } from '../../components/compliance/ResidenceCoun
 import { WebAwareModal } from '../../components/WebAwareModal'
 import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 
-const TIER_ICONS: Record<1 | 2 | 3, LucideIcon> = {
-  1: Globe,
-  2: CreditCard,
-  3: CreditCard,
+const PRODUCT_ICONS: Record<string, LucideIcon> = {
+  global_banking: Globe,
+  cards: CreditCard,
 }
 
-function TierGlyph({
-  tier,
+function ProductGlyph({
+  id,
   size,
   color,
 }: {
-  tier: 1 | 2 | 3
+  id: string
   size: number
   color: string
 }) {
-  const Icon = TIER_ICONS[tier]
+  const Icon = PRODUCT_ICONS[id] || Globe
   return <Icon size={size} color={color} strokeWidth={2} />
 }
 
 function tierTitleDisplay(title: string) {
   return title.replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function expressVerificationStatus(data: { ready?: boolean; status?: string } | null | undefined) {
+  if (data?.ready) return 'approved'
+  const status = String(data?.status || '').toLowerCase()
+  if (status === 'ready') return 'approved'
+  if (status === 'in_progress') return 'in_progress'
+  return 'not_started'
 }
 
 function AccountVerificationContent({ navigation }: NavigationProps) {
@@ -309,15 +318,30 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   const [expressEligible, setExpressEligible] = useState(
     () => peekExpressOnrampStatus()?.eligible === true,
   )
+  const [expressStatus, setExpressStatus] = useState(
+    () => expressVerificationStatus(peekExpressOnrampStatus()),
+  )
 
-  const tier1Complete = isTier1Complete(userProfile)
+  const tier1Complete = isGlobalBankingVerified(userProfile)
+  const applyExpressStatus = useCallback((data: { eligible?: boolean; ready?: boolean; status?: string } | null) => {
+    setExpressEligible(data?.eligible === true)
+    setExpressStatus(expressVerificationStatus(data))
+  }, [])
   useEffect(() => {
     if (!tier1Complete) return
     warmExpressOnrampStatus()
     void fetchExpressOnrampStatus()
-      .then((data) => setExpressEligible(data.eligible === true))
-      .catch(() => setExpressEligible(false))
-  }, [tier1Complete, userProfile?.id])
+      .then((data) => applyExpressStatus(data))
+      .catch(() => applyExpressStatus(null))
+  }, [applyExpressStatus, tier1Complete, userProfile?.id])
+  useFocusEffect(
+    useCallback(() => {
+      if (!tier1Complete) return
+      void fetchExpressOnrampStatus(true)
+        .then((data) => applyExpressStatus(data))
+        .catch(() => undefined)
+    }, [applyExpressStatus, tier1Complete]),
+  )
 
   // Initial Noah sync after login runs from `useConsumerKycNoahSync` (main tabs). This screen keeps
   // periodic sync while viewing in-review/rejected flows below.
@@ -335,7 +359,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
       return
     }
 
-    const shouldPeriodicSync = !isTier1Complete(userProfile)
+    const shouldPeriodicSync = !isGlobalBankingVerified(userProfile)
     
     if (shouldPeriodicSync) {
       // Clear any existing interval first
@@ -380,7 +404,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   }, [userProfile?.id, userProfile?.noah_kyc_status, userProfile?.noah_kyc_rejection_reasons, userProfile?.role]) // Don't include syncNoahStatus to prevent loops
 
   // Check if individual KYC (Noah) is approved
-  const noahKycApproved = isTier1Complete(userProfile)
+  const noahKycApproved = isGlobalBankingVerified(userProfile)
   const kycStatusLower = String(userProfile?.noah_kyc_status ?? '')
     .trim()
     .toLowerCase()
@@ -639,6 +663,13 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         </View>
       )
     }
+    if (label === VERIFICATION_STATUS_COPY.inProgress) {
+      return (
+        <View style={styles.badgeYellow}>
+          <Text style={styles.badgeTextYellow}>{label}</Text>
+        </View>
+      )
+    }
     if (label === VERIFICATION_STATUS_COPY.inReview) {
       return (
         <View style={styles.badgeYellow}>
@@ -757,7 +788,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
               </View>
             )}
 
-            {/* Tier cards: 1 = Noah KYC; 2–3 = roadmap – always visible (approved = read-only, like business). */}
+            {/* Verification products: Global banking is live; others stay visible as coming later. */}
             {!noahKycApproved && !kycFinalReject ? (
               <KycRequiredDocumentsNotice />
             ) : null}
@@ -767,19 +798,16 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                   <View style={styles.cardContent}>
                     <View style={styles.cardLeft}>
                       <View style={styles.iconContainer}>
-                        <TierGlyph tier={1} size={24} color={colors.primary.main} />
+                        <ProductGlyph id="global_banking" size={24} color={colors.primary.main} />
                       </View>
                       <Text style={styles.cardTitle}>
-                        {tierTitleDisplay(CONSUMER_TIER_LADDER.tiers[0].title)}
+                        {tierTitleDisplay(GLOBAL_BANKING_PRODUCT.title)}
                       </Text>
                       <Text style={styles.cardDescription}>
-                        {CONSUMER_TIER_LADDER.tiers[0].description}
+                        {GLOBAL_BANKING_PRODUCT.description}
                       </Text>
                     </View>
                     <View style={styles.cardRight}>
-                      <View style={styles.tierPill}>
-                        <Text style={styles.tierPillText}>Tier 1</Text>
-                      </View>
                       {getStatusBadge(
                         userProfile?.noah_kyc_status ||
                           userProfile?.profile?.noah_kyc_status ||
@@ -793,19 +821,16 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                   <View style={styles.cardContent}>
                     <View style={styles.cardLeft}>
                       <View style={styles.iconContainer}>
-                        <TierGlyph tier={1} size={24} color={colors.primary.main} />
+                        <ProductGlyph id="global_banking" size={24} color={colors.primary.main} />
                       </View>
                       <Text style={styles.cardTitle}>
-                        {tierTitleDisplay(CONSUMER_TIER_LADDER.tiers[0].title)}
+                        {tierTitleDisplay(GLOBAL_BANKING_PRODUCT.title)}
                       </Text>
                       <Text style={styles.cardDescription}>
-                        {CONSUMER_TIER_LADDER.tiers[0].description}
+                        {GLOBAL_BANKING_PRODUCT.description}
                       </Text>
                     </View>
                     <View style={styles.cardRight}>
-                      <View style={styles.tierPill}>
-                        <Text style={styles.tierPillText}>Tier 1</Text>
-                      </View>
                       {getStatusBadge(
                         userProfile?.noah_kyc_status ||
                           userProfile?.profile?.noah_kyc_status ||
@@ -815,74 +840,54 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                   </View>
                 </View>
               ) : (
-                <Pressable
-                  onPress={async () => {
-                    haptics.tap()
-                    await handleOpenKYC()
-                  }}
-                  disabled={loadingKyc}
-                  style={({ pressed }) => [
-                    styles.card,
-                    styles.cardInteractive,
-                    pressed && Platform.OS === 'ios' && styles.cardPressed,
-                  ]}
-                  android_ripple={{ color: 'rgba(0, 122, 204, 0.12)', borderless: false }}
-                >
+                <View style={styles.card}>
                   <View style={styles.cardInner}>
                     <View style={styles.cardContent}>
                       <View style={styles.cardLeft}>
                         <View style={styles.iconContainer}>
-                          <TierGlyph tier={1} size={24} color={colors.primary.main} />
+                          <ProductGlyph id="global_banking" size={24} color={colors.primary.main} />
                         </View>
                         <Text style={styles.cardTitle}>
-                          {tierTitleDisplay(CONSUMER_TIER_LADDER.tiers[0].title)}
+                          {tierTitleDisplay(GLOBAL_BANKING_PRODUCT.title)}
                         </Text>
                         <Text style={styles.cardDescription}>
-                          {CONSUMER_TIER_LADDER.tiers[0].description}
+                          {GLOBAL_BANKING_PRODUCT.description}
                         </Text>
                       </View>
                       <View style={styles.cardRight}>
                         {loadingKyc ? (
                           <ActivityIndicator size="small" color={colors.primary.main} />
                         ) : (
-                          <>
-                            <View style={styles.tierPill}>
-                              <Text style={styles.tierPillText}>Tier 1</Text>
-                            </View>
-                            {getStatusBadge(
-                              userProfile?.noah_kyc_status ||
-                                userProfile?.profile?.noah_kyc_status ||
-                                'not_started',
-                            )}
-                          </>
+                          getStatusBadge(
+                            userProfile?.noah_kyc_status ||
+                              userProfile?.profile?.noah_kyc_status ||
+                              'not_started',
+                          )
                         )}
                       </View>
                     </View>
                     {!loadingKyc ? (
-                      <View style={styles.startBadge}>
+                      <Pressable
+                        onPress={async () => {
+                          haptics.tap()
+                          await handleOpenKYC()
+                        }}
+                        style={({ pressed }) => [
+                          styles.startBadge,
+                          pressed && Platform.OS === 'ios' && styles.cardPressed,
+                        ]}
+                        android_ripple={{ color: 'rgba(0, 122, 204, 0.12)', borderless: false }}
+                      >
                         <Text style={styles.startBadgeText}>Start</Text>
                         <ChevronRight size={12} color={colors.neutral.white} strokeWidth={2} />
-                      </View>
+                      </Pressable>
                     ) : null}
                   </View>
-                </Pressable>
+                </View>
               )}
 
               {noahKycApproved && expressEligible ? (
-                <Pressable
-                  onPress={() => {
-                    haptics.tap()
-                    const pk = peekExpressOnrampStatus()?.publishableKey
-                    if (pk) void loadMobileExpressOnramp(pk).catch(() => undefined)
-                    navigation.navigate('ExpressDepositsSetup' as never)
-                  }}
-                  style={({ pressed }) => [
-                    styles.card,
-                    styles.cardInteractive,
-                    pressed && Platform.OS === 'ios' && styles.cardPressed,
-                  ]}
-                  android_ripple={{ color: 'rgba(0, 122, 204, 0.12)', borderless: false }}
-                >
+                <View style={styles.card}>
                   <View style={styles.cardInner}>
                     <View style={[styles.cardContent, styles.expressCardContent]}>
                       <View style={styles.cardLeft}>
@@ -894,29 +899,39 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                           {EXPRESS_DEPOSITS_COPY.description}
                         </Text>
                       </View>
+                      <View style={styles.cardRight}>{getStatusBadge(expressStatus)}</View>
                     </View>
-                    <View style={styles.startBadge}>
+                    <Pressable
+                      onPress={() => {
+                        haptics.tap()
+                        const pk = peekExpressOnrampStatus()?.publishableKey
+                        if (pk) void loadMobileExpressOnramp(pk).catch(() => undefined)
+                        navigation.navigate('ExpressDepositsSetup' as never)
+                      }}
+                      style={({ pressed }) => [
+                        styles.startBadge,
+                        pressed && Platform.OS === 'ios' && styles.cardPressed,
+                      ]}
+                      android_ripple={{ color: 'rgba(0, 122, 204, 0.12)', borderless: false }}
+                    >
                       <Text style={styles.startBadgeText}>{EXPRESS_DEPOSITS_COPY.setupCta}</Text>
                       <ChevronRight size={12} color={colors.neutral.white} strokeWidth={2} />
-                    </View>
+                    </Pressable>
                   </View>
-                </Pressable>
+                </View>
               ) : null}
 
-              {CONSUMER_TIER_LADDER.tiers.slice(1).map((tier) => (
-                <View key={tier.tier} style={styles.card}>
+              {CONSUMER_VERIFICATION_PRODUCTS.filter((product) => product.id !== 'global_banking').map((product) => (
+                <View key={product.id} style={styles.card}>
                   <View style={styles.cardContent}>
                     <View style={styles.cardLeft}>
                       <View style={styles.iconContainer}>
-                        <TierGlyph tier={tier.tier as 1 | 2 | 3} size={24} color={colors.text.secondary} />
+                        <ProductGlyph id={product.id} size={24} color={colors.text.secondary} />
                       </View>
-                      <Text style={styles.cardTitle}>{tierTitleDisplay(tier.title)}</Text>
-                      <Text style={styles.cardDescription}>{tier.description}</Text>
+                      <Text style={styles.cardTitle}>{tierTitleDisplay(product.title)}</Text>
+                      <Text style={styles.cardDescription}>{product.description}</Text>
                     </View>
                     <View style={styles.cardRight}>
-                      <View style={styles.tierPill}>
-                        <Text style={styles.tierPillText}>Tier {tier.tier}</Text>
-                      </View>
                       <View style={styles.comingLaterPill}>
                         <Text style={styles.comingLaterPillText}>Coming later</Text>
                       </View>
@@ -1078,23 +1093,6 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: spacing[4],
     minWidth: 0,
-  },
-  tierPill: {
-    paddingHorizontal: spacing[2],
-    paddingVertical: 2,
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-    borderColor: colors.frame.border,
-    backgroundColor: colors.background.primary,
-  },
-  tierPillText: {
-    fontSize: 11,
-    fontFamily: fontFamily.medium,
-    color: colors.text.secondary,
-    ...Platform.select({
-      android: { lineHeight: 16, includeFontPadding: false },
-      default: {},
-    }),
   },
   iconContainer: {
     width: 48,

@@ -8,7 +8,7 @@ import {
   type YcRateClientRow,
 } from '@easner/shared'
 import { apiFetch } from '../query/api-client'
-import { isTier1Complete } from './compliance'
+import { isGlobalBankingVerified } from './compliance'
 import { ensurePayInNetworksCached, seedCachedPayInNetworks } from './sendFlowFundBalanceQuote'
 
 export type YcReceiveRailsResponse = {
@@ -382,7 +382,7 @@ export function resolveWarmYcLocalDepositCorridor(
 ): WarmYcLocalDepositInput | null {
   const country = String(profile?.residence_country ?? '').trim().toUpperCase()
   const currency = country ? mapResidenceToLocalPayInCurrency(country) : null
-  const kycApproved = opts?.kycApproved ?? isTier1Complete(profile)
+  const kycApproved = opts?.kycApproved ?? isGlobalBankingVerified(profile)
   if (!kycApproved || !country || !currency) return null
   return { residenceCountry: country, localPayInCurrency: currency, kycApproved: true }
 }

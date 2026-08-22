@@ -50,7 +50,7 @@ import { useSendDestinations } from '../../hooks/useSendDestinations'
 import { resolveMobilePayInProvider } from '../../lib/resolveMobilePayInProvider'
 import { CountryFlag } from '../../components/flags/CountryFlag'
 import { useAuth } from '../../contexts/AuthContext'
-import { isTier1Complete, TIER2_COMPLETE_PLACEHOLDER } from '../../lib/compliance'
+import { isGlobalBankingVerified } from '../../lib/compliance'
 import { generateTransactionId } from '../../lib/transactionId'
 import { useBalance } from '../../contexts/BalanceContext'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
@@ -1143,19 +1143,18 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     setSendAmount(formatAmount(toSwitchInputAmount(receiveAmount)))
   }
 
-  const tier1Ok = isTier1Complete(userProfile)
-  const tier2Ok = TIER2_COMPLETE_PLACEHOLDER
-  const showVerificationNotice = !tier1Ok
+  const globalBankingOk = isGlobalBankingVerified(userProfile)
+  const showVerificationNotice = !globalBankingOk
   const ctaTopPadding = showVerificationNotice ? spacing[2] : spacing[2]
   const verificationBlocksSend =
     receiveAmount > 0 &&
     (selectedPaymentMethod === 'balance' || selectedPaymentMethod === 'otherCurrency'
-      ? !tier1Ok
+      ? !globalBankingOk
       : false)
 
   const needsBackgroundPayoutQuote =
     selectedPaymentMethod === 'balance' &&
-    tier1Ok &&
+    globalBankingOk &&
     !isEasetagRecipient &&
     !isWalletRecipient &&
     receiveAmount > 0 &&
@@ -1896,7 +1895,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       note={note}
       paymentPurpose={paymentPurpose}
       amountFieldError={amountFieldError}
-      tier1Ok={tier1Ok}
+      globalBankingOk={globalBankingOk}
       sendButtonDisabled={sendButtonDisabled}
       isContinueLoading={isContinueLoading}
       onAmountChange={handleWebAmountChange}
@@ -2246,7 +2245,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             { paddingTop: ctaTopPadding, paddingBottom: footerPadding },
           ]}
         >
-          {!tier1Ok ? (
+          {!globalBankingOk ? (
             <Pressable
              android_ripple={ripple.neutral}
               style={styles.verifyInlineCta}

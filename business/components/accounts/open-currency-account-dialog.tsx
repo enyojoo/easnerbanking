@@ -157,9 +157,7 @@ export function OpenCurrencyAccountDialog({ onAdded }: { onAdded: () => void }) 
                       <p className="text-xs text-muted-foreground">{o.disabledReason}</p>
                     ) : o.alreadyAdded ? (
                       <p className="text-xs text-muted-foreground">Already added</p>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">Tier {o.tierRequired}</p>
-                    )}
+                    ) : null}
                   </div>
                   <Button
                     size="sm"

@@ -101,9 +101,11 @@ export default function OpenCurrencyAccountScreen({ navigation }: NavigationProp
                 <View style={styles.item}>
                   <View style={styles.itemTextWrap}>
                     <Text style={styles.itemTitle}>{item.code} - {item.label}</Text>
-                    <Text style={styles.itemSubtitle}>
-                      {item.disabledReason || (item.alreadyAdded ? 'Already added' : `Tier ${item.tierRequired}`)}
-                    </Text>
+                    {item.disabledReason || item.alreadyAdded ? (
+                      <Text style={styles.itemSubtitle}>
+                        {item.disabledReason || 'Already added'}
+                      </Text>
+                    ) : null}
                   </View>
                   <Pressable
                    android_ripple={ripple.neutral}

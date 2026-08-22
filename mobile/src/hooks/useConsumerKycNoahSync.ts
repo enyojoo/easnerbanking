@@ -5,7 +5,7 @@ import { qk } from '@easner/shared'
 import { useAuth } from '../contexts/AuthContext'
 import { useDocumentVisibility } from './useDocumentVisibility'
 import { noahService } from '../lib/noahService'
-import { isTier1Complete } from '../lib/compliance'
+import { isGlobalBankingVerified } from '../lib/compliance'
 import { needsNoahVirtualAccountProvision } from '../lib/noahAccountSync'
 import {
   readFiatProvisionResolved,
@@ -47,7 +47,7 @@ export function useConsumerKycNoahSync(): void {
   const shouldSync =
     !!user?.id &&
     role !== 'business' &&
-    (!isTier1Complete(userProfile) ||
+    (!isGlobalBankingVerified(userProfile) ||
       needsNoahVirtualAccountProvision(userProfile, { fiatProvisionResolved }))
 
   const runSync = useCallback(async () => {
@@ -59,7 +59,7 @@ export function useConsumerKycNoahSync(): void {
 
     try {
       const kycApproved =
-        isTier1Complete(userProfile) ||
+        isGlobalBankingVerified(userProfile) ||
         String(userProfile?.noah_kyc_status ?? '').trim().toLowerCase() === 'approved'
       const result = kycApproved
         ? await noahService.syncStatusUntilAccountsReady({ scope: 'individual' })
@@ -88,7 +88,7 @@ export function useConsumerKycNoahSync(): void {
 
     const id = setInterval(() => {
       void runSync()
-    }, shouldSync && isTier1Complete(userProfile) ? 10_000 : 5 * 60 * 1000)
+    }, shouldSync && isGlobalBankingVerified(userProfile) ? 10_000 : 5 * 60 * 1000)
 
     return () => clearInterval(id)
   }, [shouldSync, runSync])

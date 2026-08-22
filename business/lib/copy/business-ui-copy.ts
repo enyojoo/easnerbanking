@@ -304,7 +304,7 @@ export const INVOICE_BANNER_COPY = {
     "Online payments are enabled but not fully set up. Finish setup in Verification to let customers pay online.",
   onlinePaymentsCta: "Go to Verification",
   bankTransferIncomplete:
-    "Bank transfer details need Tier 2 verification before they appear on invoices.",
+    "Bank transfer details need additional verification before they appear on invoices.",
   stablecoinIncomplete: "Add a stablecoin wallet in Accounts to show deposit addresses on invoices.",
 } as const
 
@@ -576,7 +576,7 @@ export const SETTINGS_CARD_COPY = {
   verifiedIdentity: "Your identity as the organization owner.",
   businessAddress: "Street address for invoices and statements.",
   publicInfo: "Add contact details shown to customers.",
-  complianceTiers: "Start Tier 1 verification to unlock banking.",
+  complianceTiers: "Start verification to unlock banking.",
   teamMembers: "Invite teammates and manage access.",
   recipients: "Add payees to send money faster.",
   customers: "Add contacts before you create invoices.",
@@ -610,7 +610,7 @@ export const GRID_KYB_WIZARD_COPY = {
 } as const
 
 export const VERIFICATION_SECTION_COPY = {
-  complianceTiers: "Start Tier 1 verification to unlock banking.",
+  complianceTiers: "Start verification to unlock banking.",
   accountsProvisioning:
     "Setting up your accounts and deposit details. This usually completes within a few minutes.",
   verificationOnHold:

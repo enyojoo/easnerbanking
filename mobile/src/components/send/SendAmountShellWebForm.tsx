@@ -92,7 +92,7 @@ export type SendAmountShellWebFormProps = {
   note: string
   paymentPurpose: string
   amountFieldError: string | null
-  tier1Ok: boolean
+  globalBankingOk: boolean
   sendButtonDisabled: boolean
   isContinueLoading?: boolean
   onAmountChange: (text: string) => void
@@ -141,7 +141,7 @@ export function SendAmountShellWebForm({
   note,
   paymentPurpose,
   amountFieldError,
-  tier1Ok,
+  globalBankingOk,
   sendButtonDisabled,
   isContinueLoading = false,
   onAmountChange,
@@ -376,7 +376,7 @@ export function SendAmountShellWebForm({
         </View>
       ) : null}
 
-      {!tier1Ok ? (
+      {!globalBankingOk ? (
         <Pressable
           android_ripple={ripple.neutral}
           style={styles.verifyInlineCta}
