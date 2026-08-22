@@ -85,8 +85,8 @@
               if (settled) return
               settled = true
               if (stopWatch) stopWatch()
-              hideUi()
               onResult(result)
+              hideUi()
               resolve(null)
             }
 

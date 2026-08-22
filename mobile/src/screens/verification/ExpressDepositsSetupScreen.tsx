@@ -436,7 +436,6 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           return
         }
         hideExpressOnrampFrame()
-        dismissL2Ref.current()
       }),
     [],
   )
