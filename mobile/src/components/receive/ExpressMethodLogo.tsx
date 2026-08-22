@@ -10,14 +10,14 @@ type ExpressCashKind = 'express_card' | 'express_apple_pay' | 'express_google_pa
 const SIZE = 48
 const ICON = 22
 
-/** Official Apple mark (Simple Icons), not the Lucide stand-in. */
-function AppleLogoMark() {
+/** Official Apple mark from `payment-brands/apple.svg` (bitten apple + leaf). */
+const APPLE_LOGO_PATH =
+  'M46.2 28.4c1.5-1.8 2.5-4.3 2.2-6.8-2.1.1-4.7 1.4-6.2 3.2-1.4 1.6-2.6 4.2-2.3 6.6 2.5.2 4.8-1.2 6.3-3zM48.4 32.2c-3.6-.2-6.6 2-8.3 2-1.8 0-4.5-1.9-7.4-1.9-3.8.1-7.3 2.2-9.2 5.6-4 6.9-1 17.1 2.8 22.7 1.8 2.8 4 5.8 6.9 5.7 2.7-.1 3.8-1.8 7.1-1.8s4.3 1.8 7.2 1.7c3-.1 4.9-2.7 6.7-5.5 2.1-3.2 3-6.4 3-6.5-.1 0-5.8-2.2-5.8-8.9 0-5.6 4.6-8.3 4.8-8.4-2.6-3.9-6.7-4.3-8.1-4.4z'
+
+function AppleLogo() {
   return (
-    <Svg width={ICON} height={ICON} viewBox="0 0 24 24" accessibilityElementsHidden>
-      <Path
-        fill="#111111"
-        d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27 1.29-1.08.5-2.23-.25-3.1-1.98C4.72 16.57 5.2 12.29 6.55 9.91c.96-1.7 2.75-2.73 4.65-2.76 1.44-.03 2.8.98 3.57.98s2.43-1.22 4.11-1.03c.69.09 2.63.55 3.89 2.08-.1.06-2.32 1.36-2.3 4.04.03 3.22 2.83 4.29 2.86 4.31-.03.07-.44 1.49-1.48 2.94zM16 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"
-      />
+    <Svg width={26} height={26} viewBox="23.4 21.4 36.2 45.2" accessibilityElementsHidden>
+      <Path fill="#FFFFFF" d={APPLE_LOGO_PATH} />
     </Svg>
   )
 }
@@ -50,7 +50,7 @@ export function ExpressMethodLogo({ kind }: { kind: ExpressCashKind }) {
   if (kind === 'express_apple_pay') {
     return (
       <View style={[styles.circle, styles.apple]} accessibilityLabel={label}>
-        <AppleLogoMark />
+        <AppleLogo />
       </View>
     )
   }
@@ -84,9 +84,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   apple: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 0.5,
-    borderColor: colors.frame.border,
+    backgroundColor: '#111111',
   },
   google: {
     backgroundColor: '#FFFFFF',

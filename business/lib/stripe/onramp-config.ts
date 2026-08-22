@@ -38,13 +38,26 @@ export function getStripeLinkOAuthClientSecret(): string {
   return process.env.STRIPE_LINK_OAUTH_CLIENT_SECRET?.trim() || ""
 }
 
-/** Space-separated scopes. login.link.com rejects arrays (`oauth_scopes must be a string`). */
+const LINK_OAUTH_SCOPE_ALIASES: Record<string, string> = {
+  crypto_onramp: "crypto:ramp",
+  "crypto.onramp": "crypto:ramp",
+}
+
+/** Official Link Auth scopes. login.link.com wants a comma-separated string, not an array. */
+export const STRIPE_LINK_OAUTH_SCOPES_DEFAULT = [
+  "kyc.status:read",
+  "crypto:ramp",
+  "auth.persist_login:read",
+] as const
+
 export function getStripeLinkOAuthScopes(): string {
   const raw = process.env.STRIPE_LINK_OAUTH_SCOPES?.trim()
-  const scopes = raw
+  const parts = raw
     ? raw.split(/[\s,]+/).filter(Boolean)
-    : ["crypto_onramp", "auth.persist_login:read"]
-  return scopes.join(" ")
+    : [...STRIPE_LINK_OAUTH_SCOPES_DEFAULT]
+  const scopes = new Set(parts.map((scope) => LINK_OAUTH_SCOPE_ALIASES[scope] || scope))
+  for (const required of STRIPE_LINK_OAUTH_SCOPES_DEFAULT) scopes.add(required)
+  return [...scopes].join(",")
 }
 
 export function getApplePayMerchantId(): string {

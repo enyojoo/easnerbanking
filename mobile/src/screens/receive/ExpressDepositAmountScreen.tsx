@@ -17,6 +17,8 @@ import { apiFetch } from '../../query/api-client'
 import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
 import type { ExpressCashKind } from '../../components/receive/ReceiveCashMethodList'
 import { loadMobileExpressOnramp } from '../../lib/express-onramp'
+import { isStripeHostElement } from '../../lib/expressStripeElement'
+import { ExpressStripeHost } from '../../components/receive/ExpressStripeHost'
 
 export default function ExpressDepositAmountScreen({ navigation, route }: NavigationProps) {
   const method = ((route.params as { method?: ExpressCashKind } | undefined)?.method ||
@@ -31,6 +33,7 @@ export default function ExpressDepositAmountScreen({ navigation, route }: Naviga
   const [publishableKey, setPublishableKey] = useState<string | null>(null)
   const [paymentTokenId, setPaymentTokenId] = useState<string | null>(null)
   const [last4, setLast4] = useState<string | null>(null)
+  const [stripeEl, setStripeEl] = useState<unknown>(null)
 
   const handleBack = useCallback(() => navigateStackBack(navigation), [navigation])
   useStackHardwareBack(handleBack)
@@ -122,32 +125,43 @@ export default function ExpressDepositAmountScreen({ navigation, route }: Naviga
       let token = paymentTokenId
       if (!token && sdk.collectPaymentMethod) {
         await new Promise<void>((resolve, reject) => {
-          void sdk.collectPaymentMethod?.(
-            {
-              payment_method_types: method === 'express_ach' ? ['us_bank_account'] : ['card'],
-              wallets: {
-                applePay: method === 'express_apple_pay' ? 'auto' : 'never',
-                googlePay: method === 'express_google_pay' ? 'auto' : 'never',
+          void sdk
+            .collectPaymentMethod?.(
+              {
+                payment_method_types: method === 'express_ach' ? ['us_bank_account'] : ['card'],
+                wallets: {
+                  applePay: method === 'express_apple_pay' ? 'auto' : 'never',
+                  googlePay: method === 'express_google_pay' ? 'auto' : 'never',
+                },
               },
-            },
-            async (result) => {
-              if (!result.cryptoPaymentToken) {
-                reject(new Error(EXPRESS_DEPOSITS_COPY.savePaymentHint))
-                return
+              async (result) => {
+                if (!result.cryptoPaymentToken) {
+                  setStripeEl(null)
+                  reject(new Error(EXPRESS_DEPOSITS_COPY.savePaymentHint))
+                  return
+                }
+                token = result.cryptoPaymentToken
+                setPaymentTokenId(token)
+                const card = result.paymentMethodDetails?.card as { last4?: string } | undefined
+                setLast4(card?.last4 || null)
+                await apiFetch('/api/stripe/onramp/payment-tokens', {
+                  method: 'POST',
+                  body: { paymentTokenId: token },
+                })
+                setStripeEl(null)
+                resolve()
+              },
+            )
+            .then((el) => {
+              if (isStripeHostElement(el)) {
+                setStripeEl(el)
+                setBusy(false)
               }
-              token = result.cryptoPaymentToken
-              setPaymentTokenId(token)
-              const card = result.paymentMethodDetails?.card as { last4?: string } | undefined
-              setLast4(card?.last4 || null)
-              await apiFetch('/api/stripe/onramp/payment-tokens', {
-                method: 'POST',
-                body: { paymentTokenId: token },
-              })
-              resolve()
-            },
-          )
+            })
+            .catch(reject)
         })
       }
+      setBusy(true)
       const created = await apiFetch<{ session?: { id?: string } }>('/api/stripe/onramp/sessions', {
         method: 'POST',
         body: { usdCredit, sourceAmount: youPay, paymentMethod, paymentTokenId: token },
@@ -210,13 +224,16 @@ export default function ExpressDepositAmountScreen({ navigation, route }: Naviga
               <Text style={styles.label}>
                 {EXPRESS_DEPOSITS_COPY.youPay}: {formatMoneyDisplay(youPay ?? usdCredit, sourceCurrency)}
               </Text>
-              <Pressable style={styles.pay} disabled={busy} onPress={() => void handlePay()}>
-                {busy ? (
-                  <ActivityIndicator color={colors.neutral.white} />
-                ) : (
-                  <Text style={styles.payText}>{EXPRESS_DEPOSITS_COPY.payCta}</Text>
-                )}
-              </Pressable>
+              <ExpressStripeHost element={stripeEl} />
+              {!stripeEl ? (
+                <Pressable style={styles.pay} disabled={busy} onPress={() => void handlePay()}>
+                  {busy ? (
+                    <ActivityIndicator color={colors.neutral.white} />
+                  ) : (
+                    <Text style={styles.payText}>{EXPRESS_DEPOSITS_COPY.payCta}</Text>
+                  )}
+                </Pressable>
+              ) : null}
             </>
           ) : null}
           {step === 'complete' ? (

@@ -12,5 +12,8 @@ export function mapStripeOnrampError(code: string | null | undefined, fallback?:
   if (c.includes("abandon") || c.includes("canceled") || c.includes("cancelled")) {
     return EXPRESS_DEPOSITS_COPY.paymentFailed
   }
+  if (c.includes("scope") || c.includes("oauth") || c.includes("crypto") || c.includes("onramp")) {
+    return EXPRESS_DEPOSITS_COPY.somethingWentWrong
+  }
   return fallback || EXPRESS_DEPOSITS_COPY.somethingWentWrong
 }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   EXPRESS_DEPOSITS_COPY,
+  expressSetupUserMessage,
   type ExpressDepositsNextStep,
 } from "@easner/shared"
 import { Button } from "@/components/ui/button"
@@ -96,7 +97,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
       await fn()
       await refresh()
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : EXPRESS_DEPOSITS_COPY.somethingWentWrong)
+      setMessage(expressSetupUserMessage(e instanceof Error ? e.message : null))
     } finally {
       setBusy(false)
     }

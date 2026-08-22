@@ -9,7 +9,7 @@ import {
   Keyboard,
   Platform,
 } from 'react-native'
-import { EXPRESS_DEPOSITS_COPY, type ExpressDepositsNextStep } from '@easner/shared'
+import { EXPRESS_DEPOSITS_COPY, expressSetupUserMessage, type ExpressDepositsNextStep } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import {
@@ -25,6 +25,8 @@ import { navigateStackBack } from '../../navigation/stackBackNavigation'
 import { apiFetch } from '../../query/api-client'
 import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
 import { loadMobileExpressOnramp, type ExpressOnrampSdk } from '../../lib/express-onramp'
+import { isStripeHostElement } from '../../lib/expressStripeElement'
+import { ExpressStripeHost } from '../../components/receive/ExpressStripeHost'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   cacheExpressOnrampStatus,
@@ -56,6 +58,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
     ),
   )
   const [sdk, setSdk] = useState<ExpressOnrampSdk | null>(null)
+  const [stripeEl, setStripeEl] = useState<unknown>(null)
 
   const handleBack = useCallback(() => navigateStackBack(navigation), [navigation])
   useStackHardwareBack(handleBack)
@@ -82,14 +85,14 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
   const lockedCountry = expressLockedCountry(form, status?.payerCountry)
   const step: ExpressDepositsNextStep = status?.nextStep ?? 'link'
 
-  const run = async (fn: () => Promise<void>) => {
+  const run = async (fn: () => Promise<boolean | void>) => {
     setBusy(true)
     setMessage(null)
     try {
-      await fn()
-      await refresh(true)
+      const keepOpen = await fn()
+      if (!keepOpen) await refresh(true)
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : EXPRESS_DEPOSITS_COPY.somethingWentWrong)
+      setMessage(expressSetupUserMessage(e instanceof Error ? e.message : null))
     } finally {
       setBusy(false)
     }
@@ -165,24 +168,35 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
             fullName: `${form.given_name} ${form.surname}`.trim(),
           })
         }
-        const intentId = auth.authIntentId
+        let intentId = auth.authIntentId
+        if (!intentId) {
+          const again = await apiFetch<{ authIntentId?: string | null }>(
+            '/api/stripe/onramp/link-auth',
+            { method: 'POST', body: {} },
+          )
+          intentId = again.authIntentId
+        }
         if (intentId && client.authenticate) {
-          await new Promise<void>((resolve, reject) => {
-            void client.authenticate?.(intentId, async (result) => {
-              if (result.result === 'success' && result.crypto_customer_id) {
-                await apiFetch('/api/stripe/onramp/link-complete', {
-                  method: 'POST',
-                  body: {
-                    cryptoCustomerId: result.crypto_customer_id,
-                    accessToken: result.access_token || result.oauth_token,
-                  },
-                })
-                resolve()
-              } else if (result.result && result.result !== 'success') {
-                reject(new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong))
-              }
-            })
+          const el = await client.authenticate(intentId, async (result) => {
+            if (result.result === 'success' && result.crypto_customer_id) {
+              await apiFetch('/api/stripe/onramp/link-complete', {
+                method: 'POST',
+                body: {
+                  cryptoCustomerId: result.crypto_customer_id,
+                  accessToken: result.access_token || result.oauth_token,
+                },
+              })
+              setStripeEl(null)
+              await refresh(true)
+            } else if (result.result && result.result !== 'success') {
+              setStripeEl(null)
+              setMessage(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
+            }
           })
+          if (isStripeHostElement(el)) {
+            setStripeEl(el)
+            return true
+          }
         }
         return
       }
@@ -221,11 +235,27 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
         return
       }
       if (step === 'eu_attestation') {
-        await client.promptUserAttestation?.(() => undefined)
+        const el = await client.promptUserAttestation?.((result) => {
+          if (result.result === 'success' || result.result === 'accepted') {
+            setStripeEl(null)
+            void refresh(true)
+          }
+        })
+        if (isStripeHostElement(el)) {
+          setStripeEl(el)
+          return true
+        }
         return
       }
       if (step === 'us_l2' || step === 'eu_l2') {
-        await client.verifyDocuments?.()
+        const el = await client.verifyDocuments?.(() => {
+          setStripeEl(null)
+          void refresh(true)
+        })
+        if (isStripeHostElement(el)) {
+          setStripeEl(el)
+          return true
+        }
         return
       }
       if (step === 'wallet') {
@@ -281,7 +311,9 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
 
           {step === 'ready' ? <Text style={styles.ready}>{EXPRESS_DEPOSITS_COPY.readyBadge}</Text> : null}
 
-          {cta ? (
+          <ExpressStripeHost element={stripeEl} />
+
+          {cta && !stripeEl ? (
             busy ? (
               <View style={styles.ctaBusy}>
                 <ActivityIndicator color={colors.neutral.white} />

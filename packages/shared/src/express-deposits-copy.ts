@@ -35,6 +35,16 @@ export const EXPRESS_DEPOSITS_COPY = {
   paymentFailed: "Payment could not be completed. Try again.",
 } as const
 
+/** Drop vendor/scope strings so setup never shows crypto / OAuth errors. */
+export function expressSetupUserMessage(raw?: string | null): string {
+  const text = String(raw || "").trim()
+  if (!text) return EXPRESS_DEPOSITS_COPY.somethingWentWrong
+  if (/crypto|onramp|oauth|scope|stripe|link\.com|authintent/i.test(text)) {
+    return EXPRESS_DEPOSITS_COPY.somethingWentWrong
+  }
+  return text
+}
+
 export function expressDepositActivityLabel(paymentMethod?: string | null): string {
   const m = String(paymentMethod || "").toLowerCase()
   if (m === "apple_pay" || m === "express_apple_pay") return "Apple Pay deposit"

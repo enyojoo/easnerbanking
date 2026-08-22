@@ -467,6 +467,7 @@ export {
   EXPRESS_DEPOSITS_COPY,
   expressDepositActivityLabel,
   expressDepositMethodTitle,
+  expressSetupUserMessage,
   isExpressDepositsMetadata,
 } from "./express-deposits-copy"
 export {

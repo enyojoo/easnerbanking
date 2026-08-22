@@ -166,13 +166,9 @@ function ExpressMethodMark({ kind }: { kind: ExpressKind }) {
   const label = expressDepositMethodTitle(kind)
   if (kind === "express_apple_pay") {
     return (
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border/80 bg-white" aria-label={label}>
-        <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden>
-          <path
-            fill="#111111"
-            d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27 1.29-1.08.5-2.23-.25-3.1-1.98C4.72 16.57 5.2 12.29 6.55 9.91c.96-1.7 2.75-2.73 4.65-2.76 1.44-.03 2.8.98 3.57.98s2.43-1.22 4.11-1.03c.69.09 2.63.55 3.89 2.08-.1.06-2.32 1.36-2.3 4.04.03 3.22 2.83 4.29 2.86 4.31-.03.07-.44 1.49-1.48 2.94zM16 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"
-          />
-        </svg>
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-neutral-950" aria-label={label}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- official Apple logo */}
+        <img src="/payment-brands/apple.svg" alt="" width={26} height={26} className="h-[26px] w-[26px]" />
       </div>
     )
   }
