@@ -23,6 +23,9 @@ export type ConnectPanelAction = {
   variant: "default" | "secondary" | "outline"
   dialogTitle: string
   dialogDescription?: string
+  /** Shown disabled (e.g. Global banking not complete yet). */
+  disabled?: boolean
+  disabledReason?: string
 }
 
 export type ConnectChecklistItem = {
@@ -172,8 +175,12 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
         phase,
         verificationStatus: presentation.status,
         verificationComplete: presentation.complete,
-        bodyCopy: VERIFICATION_SECTION_COPY.onlinePaymentsTier1Required,
         checklist,
+        primary: {
+          ...onboardingAction(BEGIN_VERIFICATION, ONLINE_PAYMENT_VERIFICATION),
+          disabled: true,
+          disabledReason: VERIFICATION_SECTION_COPY.onlinePaymentsTier1Required,
+        },
       }
 
     case "not_started":

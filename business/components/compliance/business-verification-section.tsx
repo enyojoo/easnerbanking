@@ -488,9 +488,9 @@ export function BusinessVerificationSection({
                     </CardHeader>
                     <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
                       {!tier1Complete ? (
-                        <p className="text-xs text-muted-foreground">
-                          {EXPRESS_DEPOSITS_COPY.globalBankingRequired}
-                        </p>
+                        <Button size="sm" disabled>
+                          {EXPRESS_DEPOSITS_COPY.setupCta}
+                        </Button>
                       ) : !canManageBusinessVerification ? (
                         <p className="text-xs text-muted-foreground">{EXPRESS_DEPOSITS_COPY.ownerOnly}</p>
                       ) : (

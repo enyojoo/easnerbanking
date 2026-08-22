@@ -83,8 +83,10 @@ describe("resolveConnectPanelUx", () => {
     const ux = resolveConnectPanelUx(optimisticConnectStatus())
     expect(ux.phase).toBe("kyb_required")
     expect(ux.verificationStatus).toBe("not_started")
-    expect(ux.bodyCopy).toBe(VERIFICATION_SECTION_COPY.onlinePaymentsTier1Required)
-    expect(ux.primary).toBeUndefined()
+    expect(ux.bodyCopy).toBeUndefined()
+    expect(ux.primary?.label).toBe("Begin verification")
+    expect(ux.primary?.disabled).toBe(true)
+    expect(ux.primary?.disabledReason).toBe(VERIFICATION_SECTION_COPY.onlinePaymentsTier1Required)
   })
 
   it("locks online payments until Tier 1 is approved", () => {
@@ -95,8 +97,9 @@ describe("resolveConnectPanelUx", () => {
       }),
     )
     expect(ux.phase).toBe("kyb_required")
-    expect(ux.primary).toBeUndefined()
-    expect(ux.bodyCopy).toBe(VERIFICATION_SECTION_COPY.onlinePaymentsTier1Required)
+    expect(ux.primary?.label).toBe("Begin verification")
+    expect(ux.primary?.disabled).toBe(true)
+    expect(ux.bodyCopy).toBeUndefined()
   })
 
   it("shows Begin verification after Tier 1 is approved", () => {

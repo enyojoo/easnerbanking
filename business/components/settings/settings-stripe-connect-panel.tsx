@@ -580,7 +580,8 @@ export function SettingsStripeConnectPanel({
           {panelUx?.primary || panelUx?.secondary ? (
             <div className="flex flex-wrap gap-2">
               {panelUx?.primary ? (
-                panelUx.primary.kind === "link_payout" && !status.hasGridVa ? (
+                panelUx.primary.disabled ||
+                (panelUx.primary.kind === "link_payout" && !status.hasGridVa) ? (
                   <TooltipProvider delayDuration={200}>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -596,7 +597,8 @@ export function SettingsStripeConnectPanel({
                         </span>
                       </TooltipTrigger>
                       <TooltipContent>
-                        Complete business verification and open a virtual account before linking payouts.
+                        {panelUx.primary.disabledReason ||
+                          "Complete business verification and open a virtual account before linking payouts."}
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
