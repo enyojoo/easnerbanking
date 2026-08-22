@@ -300,7 +300,8 @@ interface AuthContextType {
   signUp: (
     email: string,
     password: string,
-    name: string
+    name: string,
+    residenceCountry?: string,
   ) => Promise<{ error: any; needsEmailConfirmation?: boolean }>
   signOut: (options?: { preserveOnboarding?: boolean }) => Promise<void>
   refreshUserProfile: () => Promise<void>
@@ -1282,14 +1283,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [])
 
-  const signUp = async (email: string, password: string, name: string) => {
+  const signUp = async (email: string, password: string, name: string, residenceCountry?: string) => {
     try {
       const emailRedirectTo = Linking.createURL('auth/callback')
+      const residence = residenceCountry?.trim().toUpperCase()
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
-          data: { name: name.trim() },
+          data: {
+            name: name.trim(),
+            ...(residence && /^[A-Z]{2}$/.test(residence) ? { residence_country: residence } : {}),
+          },
           emailRedirectTo,
         },
       })

@@ -116,10 +116,10 @@ export async function POST(request: Request) {
   const issuingCountry = String(body?.issuingCountry ?? "").trim() || null
   const issuingAuthority = String(body?.issuingAuthority ?? "").trim() || null
   const rawDocumentNumber = String(body?.documentNumber ?? "").trim()
-  if (category === "identity" && (!documentType || !issuingCountry || !rawDocumentNumber)) {
+  if (category === "identity" && (!documentType || !issuingCountry || !issuingAuthority || !rawDocumentNumber)) {
     await ctx.admin.storage.from(KYB_DOCUMENTS_BUCKET).remove([finalPath])
     return NextResponse.json(
-      { error: "Select issuing country and enter the document number before uploading an ID." },
+      { error: "Add issuing country, issuing authority, and document number before uploading an ID." },
       { status: 400 },
     )
   }
@@ -210,9 +210,9 @@ export async function PATCH(request: Request) {
   const issuingCountry = String(body?.issuingCountry ?? "").trim() || null
   const issuingAuthority = String(body?.issuingAuthority ?? "").trim() || null
   const rawDocumentNumber = String(body?.documentNumber ?? "").trim()
-  if (row.category === "identity" && (!documentType || !issuingCountry || !rawDocumentNumber)) {
+  if (row.category === "identity" && (!documentType || !issuingCountry || !issuingAuthority || !rawDocumentNumber)) {
     return NextResponse.json(
-      { error: "Select issuing country and enter the document number for this ID." },
+      { error: "Add issuing country, issuing authority, and document number for this ID." },
       { status: 400 },
     )
   }

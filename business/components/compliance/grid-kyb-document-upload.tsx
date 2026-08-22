@@ -94,6 +94,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
     if (!requiresIdentityMeta) return null
     if (!documentType.trim()) return "Select a document type before uploading."
     if (!issuingCountry.trim()) return "Select the issuing country before uploading."
+    if (!issuingAuthority.trim()) return "Enter the issuing authority before uploading."
     if (!documentNumber.trim()) return "Enter the document number before uploading."
     return null
   }
@@ -168,16 +169,16 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
     const nextCountry = overrides?.issuingCountry ?? issuingCountry
     const nextAuthority = overrides?.issuingAuthority ?? issuingAuthority
     const nextNumber = overrides?.documentNumber ?? documentNumber
-    if (requiresIdentityMeta) {
-      if (!nextType.trim() || !nextCountry.trim() || !nextNumber.trim()) {
-        const missing = !nextCountry.trim()
-          ? "Select the issuing country before uploading."
+    if (requiresIdentityMeta && (!nextType.trim() || !nextCountry.trim() || !nextAuthority.trim() || !nextNumber.trim())) {
+      const message = !nextCountry.trim()
+        ? "Select the issuing country before uploading."
+        : !nextAuthority.trim()
+          ? "Enter the issuing authority before uploading."
           : !nextNumber.trim()
             ? "Enter the document number before uploading."
             : "Select a document type before uploading."
-        setError(missing)
-        throw new Error(missing)
-      }
+      setError(message)
+      throw new Error(message)
     }
     setSaving(true)
     onBusyChange?.(true)
@@ -222,7 +223,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
       <div
         className={cn(
           "grid gap-4",
-          extraFields?.documentNumber ? "min-[720px]:grid-cols-3" : "md:grid-cols-2",
+          extraFields?.documentNumber ? "sm:grid-cols-2" : "md:grid-cols-2",
         )}
       >
         <div className="space-y-2">
@@ -231,7 +232,13 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
             value={documentType}
             onChange={(next) => {
               setDocumentType(next)
-              if (hasStoredFile && next.trim() && issuingCountry.trim() && documentNumber.trim()) {
+              if (
+                hasStoredFile &&
+                next.trim() &&
+                issuingCountry.trim() &&
+                issuingAuthority.trim() &&
+                documentNumber.trim()
+              ) {
                 void persistMetadata({ documentType: next }).catch(() => undefined)
               }
             }}
@@ -249,7 +256,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
             value={issuingCountry}
             onChange={(next) => {
               setIssuingCountry(next)
-              if (hasStoredFile && next.trim() && documentNumber.trim()) {
+              if (hasStoredFile && next.trim() && issuingAuthority.trim() && documentNumber.trim()) {
                 void persistMetadata({ issuingCountry: next }).catch(() => undefined)
               }
             }}
@@ -259,20 +266,50 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
           />
         </div>
         {extraFields?.documentNumber ? (
-          <div className="space-y-2">
-            <Label>Document number{requiresIdentityMeta ? " *" : ""}</Label>
-            <Input
-              className={SETTINGS_INPUT_CLASS}
-              value={documentNumber}
-              onChange={(event) => setDocumentNumber(event.target.value)}
-              onBlur={() => {
-                if (!hasStoredFile || !documentNumber.trim() || !issuingCountry.trim()) return
-                void persistMetadata().catch(() => undefined)
-              }}
-              placeholder="Passport number, license number, or similar ID"
-              disabled={disabled}
-            />
-          </div>
+          <>
+            <div className="space-y-2">
+              <Label>Issuing authority{requiresIdentityMeta ? " *" : ""}</Label>
+              <Input
+                className={SETTINGS_INPUT_CLASS}
+                value={issuingAuthority}
+                onChange={(event) => setIssuingAuthority(event.target.value)}
+                onBlur={() => {
+                  if (
+                    !hasStoredFile ||
+                    !issuingAuthority.trim() ||
+                    !issuingCountry.trim() ||
+                    !documentNumber.trim()
+                  ) {
+                    return
+                  }
+                  void persistMetadata().catch(() => undefined)
+                }}
+                placeholder="e.g. Immigration Service, passport office"
+                disabled={disabled}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Document number{requiresIdentityMeta ? " *" : ""}</Label>
+              <Input
+                className={SETTINGS_INPUT_CLASS}
+                value={documentNumber}
+                onChange={(event) => setDocumentNumber(event.target.value)}
+                onBlur={() => {
+                  if (
+                    !hasStoredFile ||
+                    !documentNumber.trim() ||
+                    !issuingCountry.trim() ||
+                    !issuingAuthority.trim()
+                  ) {
+                    return
+                  }
+                  void persistMetadata().catch(() => undefined)
+                }}
+                placeholder="Passport number, license number, or similar ID"
+                disabled={disabled}
+              />
+            </div>
+          </>
         ) : null}
       </div>
       <div

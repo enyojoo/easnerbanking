@@ -145,7 +145,12 @@ export async function POST(request: Request) {
   }
 
   const role: "business" | "individual" = body.role === "individual" ? "individual" : "business"
-  const countryCode = normalizeCountryCode(body.countryCode)
+  const countryFromMetadata = normalizeCountryCode(
+    user.user_metadata?.residence_country ??
+      user.user_metadata?.countryCode ??
+      user.user_metadata?.country,
+  )
+  const countryCode = normalizeCountryCode(body.countryCode) ?? countryFromMetadata
   const country = countryNameFromCode(countryCode)
   const metadataName = typeof user.user_metadata?.name === "string" ? user.user_metadata.name : null
   /** Only JSON string counts as explicit – `fullName: null` must not wipe DB (treat as omit; preserve/seed). */

@@ -150,7 +150,12 @@ export function GridKybPeopleStep({
       addressCountry,
       ownershipPercentage:
         person.ownershipPercentage == null ? "" : String(person.ownershipPercentage),
-      roles: person.roles,
+      roles:
+        !person.roles.includes("UBO") &&
+        !people.some((row) => row.roles.includes("UBO")) &&
+        people[0]?.id === person.id
+          ? [...person.roles, "UBO"]
+          : person.roles,
       idType: resolveGridKybOwnerIdType({
         idType: person.idType,
         countryOfIssuance,
@@ -376,7 +381,7 @@ export function GridKybPeopleStep({
               : idReady
                 ? docs.map((doc) => doc.fileName).join(", ")
                 : docs.length
-                  ? "Add issuing country and document number"
+                  ? "Add issuing country, authority, and document number"
                   : person.roles.join(", ") || "Owner"
             return (
               <div

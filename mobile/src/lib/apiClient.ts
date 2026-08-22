@@ -116,6 +116,12 @@ export async function ensureBusinessAppUserBootstrap(options?: {
     if (savedResidence && (!countryCode || savedResidence === countryCode)) {
       await AsyncStorage.removeItem(PENDING_RESIDENCE_COUNTRY_KEY).catch(() => undefined)
     }
+    const metaResidence = countryCode || savedResidence
+    if (metaResidence) {
+      await supabase.auth
+        .updateUser({ data: { residence_country: metaResidence } })
+        .catch(() => undefined)
+    }
 
     /** Retry ensure only when bootstrap did not link a Turnkey sub-org. */
     if (bootJson.turnkeySubOrgReady !== true) {

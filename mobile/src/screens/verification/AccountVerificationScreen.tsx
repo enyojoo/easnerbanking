@@ -55,6 +55,12 @@ import {
   warmExpressOnrampStatus,
 } from '../../lib/expressOnrampStatusCache'
 import { isGlobalBankingVerified } from '../../lib/compliance'
+import {
+  readPendingResidenceCountry,
+  residenceCountryFromProfile,
+  resolveResidenceCountryForUser,
+  saveResidenceCountryToUser,
+} from '../../lib/residenceCountryPersist'
 import { loadMobileExpressOnramp } from '../../lib/express-onramp'
 import { needsNoahVirtualAccountProvision } from '../../lib/noahAccountSync'
 import {
@@ -315,6 +321,24 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     }, [userProfile?.id]),
   )
 
+  useEffect(() => {
+    const id = userProfile?.id
+    if (!id || residenceCountryFromProfile(userProfile)) return
+    let cancelled = false
+    void readPendingResidenceCountry().then(async (pending) => {
+      if (!pending || cancelled) return
+      try {
+        await saveResidenceCountryToUser(id, pending)
+        if (!cancelled && refreshUserProfile) await refreshUserProfile()
+      } catch {
+        // Start still uses pending via resolveResidenceCountryForUser.
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [refreshUserProfile, userProfile])
+
   const [expressEligible, setExpressEligible] = useState(
     () => peekExpressOnrampStatus()?.eligible === true,
   )
@@ -415,11 +439,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   const rejectionDisplay = noahKycRejected ? getNoahRejectionDisplay(rejectionReasons) : null
   const kycFinalReject = rejectionDisplay?.isFinal === true
   const kycCanResubmit = noahKycRejected ? canResubmitNoahVerification(rejectionReasons) : true
-  const residenceCountry =
-    (typeof userProfile?.residence_country === 'string' && userProfile.residence_country.trim()) ||
-    (typeof userProfile?.profile?.residence_country === 'string' &&
-      userProfile.profile.residence_country.trim()) ||
-    ''
+  const residenceCountry = residenceCountryFromProfile(userProfile)
 
   const proceedOpenKyc = async (residenceOverride?: string) => {
     const email =
@@ -614,7 +634,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
       return
     }
 
-    const effectiveResidence = residenceCountry.trim()
+    const effectiveResidence = await resolveResidenceCountryForUser(userProfile?.id, userProfile)
     if (!effectiveResidence) {
       setLegacyResidenceCode('')
       setLegacyResidenceError(null)
@@ -634,9 +654,12 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     setSavingLegacyResidence(true)
     setLegacyResidenceError(null)
     try {
+      if (userProfile?.id) {
+        await saveResidenceCountryToUser(userProfile.id, code)
+        if (refreshUserProfile) await refreshUserProfile()
+      }
       await proceedOpenKyc(code)
       setLegacyResidenceOpen(false)
-      if (refreshUserProfile) await refreshUserProfile()
     } catch (error: any) {
       const msg = error?.message ?? 'Could not save your country of residence.'
       if (/not available|COUNTRY_NOT_SUPPORTED/i.test(msg)) {

@@ -4,6 +4,7 @@ import {
   gridKybApplicationStatusFromVerification,
   gridKybOwnerIdTypeForGrid,
   hasReadyKybIdentityDocuments,
+  withFirstKybOwnerUbo,
   mapGridKybVerificationErrors,
   rejectedGridDocumentIdsFromErrors,
 } from "@easner/shared"
@@ -60,7 +61,15 @@ export async function POST(request: Request) {
       email: contact.email,
     })
 
-    const people = await listKybPeople(ctx.admin, application.id, true)
+    const listedPeople = await listKybPeople(ctx.admin, application.id, true)
+    const people = withFirstKybOwnerUbo(listedPeople)
+    if (people[0] && listedPeople[0] && people[0].roles !== listedPeople[0].roles) {
+      await ctx.admin
+        .from("business_kyb_people")
+        .update({ roles: people[0].roles, updated_at: new Date().toISOString() })
+        .eq("id", people[0].id)
+        .eq("application_id", application.id)
+    }
     for (const person of people) {
       const idType = gridKybOwnerIdTypeForGrid(person)
       if (idType && idType !== person.idType) {
@@ -83,7 +92,7 @@ export async function POST(request: Request) {
     const documents = await listKybDocuments(ctx.admin, application.id, true)
     if (!hasReadyKybIdentityDocuments(people, documents)) {
       return NextResponse.json(
-        { error: "Add issuing country and document number on each owner ID before submitting." },
+        { error: "Add issuing country, issuing authority, and document number on each owner ID before submitting." },
         { status: 400 },
       )
     }
@@ -91,7 +100,7 @@ export async function POST(request: Request) {
     for (const document of documents) {
       const existingGridId = gridDocumentIdFromResource(document.gridDocumentId)
       const rejected = Boolean(existingGridId && rejectedIds.has(existingGridId))
-      if (existingGridId && !rejected) continue
+      if (existingGridId && !rejected && document.category !== "identity") continue
       const downloaded = await ctx.admin.storage.from(KYB_DOCUMENTS_BUCKET).download(document.storagePath)
       if (downloaded.error || !downloaded.data) {
         return NextResponse.json({ error: "Could not read an uploaded document." }, { status: 400 })

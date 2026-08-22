@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server"
-import { mapGridKybVerificationErrors, mergeGridKybCompanyDraft, type GridKybCompanyDraft } from "@easner/shared"
+import {
+  mapGridKybVerificationErrors,
+  mergeGridKybCompanyDraft,
+  withFirstKybOwnerUbo,
+  type GridKybCompanyDraft,
+} from "@easner/shared"
 import { requireKybContext } from "../_context"
 import {
   ensureKybApplication,
@@ -66,6 +71,15 @@ export async function GET(request: Request) {
       }),
   ])
   people = await linkKybPeopleToGridOwnerErrors(ctx.admin, people, application.last_errors)
+  const peopleWithUbo = withFirstKybOwnerUbo(people)
+  if (peopleWithUbo[0] && peopleWithUbo[0].roles !== people[0]?.roles) {
+    await ctx.admin
+      .from("business_kyb_people")
+      .update({ roles: peopleWithUbo[0].roles, updated_at: new Date().toISOString() })
+      .eq("id", peopleWithUbo[0].id)
+      .eq("application_id", application.id)
+    people = peopleWithUbo
+  }
   const company = prefillCompanyFromProfile(application.company, profile)
   if (JSON.stringify(application.company) !== JSON.stringify(company)) {
     await ctx.admin

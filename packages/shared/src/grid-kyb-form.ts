@@ -408,13 +408,23 @@ export function isKybIdentityDocumentReady(document: {
   personId?: string | null
   documentType?: string | null
   issuingCountry?: string | null
+  issuingAuthority?: string | null
   documentNumber?: string | null
 }): boolean {
   if (document.category !== "identity") return false
   return Boolean(
     String(document.documentType ?? "").trim() &&
       String(document.issuingCountry ?? "").trim() &&
+      String(document.issuingAuthority ?? "").trim() &&
       String(document.documentNumber ?? "").trim(),
+  )
+}
+
+export function withFirstKybOwnerUbo<T extends { roles?: string[] | null }>(people: T[]): T[] {
+  if (people.length === 0) return people
+  if (people.some((person) => (person.roles ?? []).includes("UBO"))) return people
+  return people.map((person, index) =>
+    index === 0 ? { ...person, roles: [...(person.roles ?? []), "UBO"] } : person,
   )
 }
 
@@ -425,6 +435,7 @@ export function hasReadyKybIdentityDocuments(
     personId?: string | null
     documentType?: string | null
     issuingCountry?: string | null
+    issuingAuthority?: string | null
     documentNumber?: string | null
   }>,
 ): boolean {
@@ -542,8 +553,19 @@ export function mapGridKybVerificationError(
 
   if (type === "MISSING_FIELD" || type === "INVALID_FIELD") {
     const field = String(error.field ?? "").trim()
+    const identityMetaField = /issuingAuthority|documentNumber|issuingCountry/i.test(field)
     if (resourceId?.startsWith("BeneficialOwner:")) {
       return { section: "people", field: field || undefined, resourceId, reason }
+    }
+    if (identityMetaField || joined?.personId || joined?.category === "identity") {
+      return {
+        section: "people",
+        field: field || undefined,
+        documentCategory: "identity",
+        resourceId,
+        gridDocumentId,
+        reason,
+      }
     }
     return { section: "company", field: field || undefined, resourceId, reason }
   }
@@ -685,6 +707,10 @@ export type GridKybPointerDocument = {
   personId: string | null
   category: string
   gridDocumentId?: string | null
+  documentType?: string | null
+  issuingCountry?: string | null
+  issuingAuthority?: string | null
+  documentNumber?: string | null
 }
 
 export function gridBeneficialOwnerIdFromResource(resourceId: string | null | undefined): string {
@@ -805,12 +831,13 @@ function personHasAcceptedIdentity(
   personId: string,
   rejectedIds: Set<string>,
 ): boolean {
-  return documents.some(
-    (row) =>
-      row.category === "identity" &&
-      row.personId === personId &&
-      documentIsAcceptedReplacement(row, rejectedIds),
-  )
+  return documents.some((row) => {
+    if (row.category !== "identity" || row.personId !== personId) return false
+    if (!documentIsAcceptedReplacement(row, rejectedIds)) return false
+    const hasMetaShape =
+      row.issuingCountry != null || row.issuingAuthority != null || row.documentNumber != null
+    return !hasMetaShape || isKybIdentityDocumentReady(row)
+  })
 }
 
 export function filterResolvedGridKybErrorPointers(input: {

@@ -15,6 +15,7 @@ import {
   hasAllRequiredKybCompanyDocuments,
   hasReadyKybIdentityDocuments,
   isKybIdentityDocumentReady,
+  withFirstKybOwnerUbo,
   mapGridKybVerificationErrors,
   normalizeGridKybIdType,
   resolveGridKybOwnerIdType,
@@ -106,7 +107,7 @@ describe("mapGridKybVerificationErrors", () => {
     expect(pointers[2]).toMatchObject({
       section: "people",
       documentCategory: "identity",
-      resourceId: "BeneficialOwner:abc",
+      acceptedDocumentTypes: ["PASSPORT"],
     })
     expect(
       firstGridKybErrorSection([
@@ -117,6 +118,22 @@ describe("mapGridKybVerificationErrors", () => {
         },
       ]),
     ).toBe("company")
+  })
+
+  it("maps passport issuingAuthority errors onto People", () => {
+    const pointers = mapGridKybVerificationErrors([
+      {
+        type: "MISSING_FIELD",
+        field: "issuingAuthority",
+        reason: "issuingAuthority is required for PASSPORT documents",
+        resourceId: "Document:abc",
+      },
+    ])
+    expect(pointers[0]).toMatchObject({
+      section: "people",
+      field: "issuingAuthority",
+      documentCategory: "identity",
+    })
   })
 
   it("points Document quality and fraud errors at People, not Company", () => {
@@ -500,14 +517,15 @@ describe("gridKybWizardReadiness", () => {
     ).toBe(true)
   })
 
-  it("does not treat an identity file as ready without country and document number", () => {
+  it("does not treat an identity file as ready without country, authority, and document number", () => {
     expect(
       isKybIdentityDocumentReady({
         category: "identity",
         personId: "p1",
         documentType: "PASSPORT",
-        issuingCountry: "",
-        documentNumber: "",
+        issuingCountry: "NG",
+        issuingAuthority: "",
+        documentNumber: "A12345678",
       }),
     ).toBe(false)
     expect(
@@ -516,6 +534,7 @@ describe("gridKybWizardReadiness", () => {
         personId: "p1",
         documentType: "PASSPORT",
         issuingCountry: "NG",
+        issuingAuthority: "Nigerian Immigration Service",
         documentNumber: "A12345678",
       }),
     ).toBe(true)
@@ -534,11 +553,27 @@ describe("gridKybWizardReadiness", () => {
             personId: "p1",
             documentType: "PASSPORT",
             issuingCountry: "NG",
+            issuingAuthority: "Nigerian Immigration Service",
             documentNumber: "A12345678",
           },
         ],
       ),
     ).toBe(true)
+  })
+
+  it("adds UBO to the first owner when nobody has it", () => {
+    expect(
+      withFirstKybOwnerUbo([
+        { id: "p1", roles: ["DIRECTOR", "CONTROL_PERSON"] },
+        { id: "p2", roles: ["DIRECTOR"] },
+      ]),
+    ).toEqual([
+      { id: "p1", roles: ["DIRECTOR", "CONTROL_PERSON", "UBO"] },
+      { id: "p2", roles: ["DIRECTOR"] },
+    ])
+    expect(withFirstKybOwnerUbo([{ id: "p1", roles: ["UBO"] }])).toEqual([
+      { id: "p1", roles: ["UBO"] },
+    ])
   })
 
   it("stays needs_attention when Grid job is submitted but pointers remain", () => {

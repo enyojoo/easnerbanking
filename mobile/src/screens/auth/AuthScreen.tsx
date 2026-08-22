@@ -306,7 +306,8 @@ export default function AuthScreen({ navigation }: NavigationProps) {
         const { error: signUpError, needsEmailConfirmation } = await signUp(
           email,
           password,
-          fullName.trim()
+          fullName.trim(),
+          residenceCountry.trim().toUpperCase(),
         )
         if (signUpError) {
           showError(signUpError.message || 'Something went wrong.')

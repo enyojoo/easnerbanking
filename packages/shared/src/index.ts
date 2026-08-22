@@ -579,6 +579,7 @@ export {
   hasAllRequiredKybCompanyDocuments,
   hasReadyKybIdentityDocuments,
   isKybIdentityDocumentReady,
+  withFirstKybOwnerUbo,
   mapGridKybVerificationError,
   mapGridKybVerificationErrors,
   rejectedGridDocumentIdsFromErrors,
