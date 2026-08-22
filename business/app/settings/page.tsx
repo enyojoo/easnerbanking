@@ -20,6 +20,7 @@ import {
 } from "@/lib/compliance/cutover-comms"
 import { primeBusinessVerificationFlow } from "@/lib/compliance/prime-business-verification-flow"
 import { usePrimeKybPacket } from "@/lib/grid/kyb-packet-query"
+import { usePrimeExpressOnrampStatus } from "@/hooks/queries/use-express-onramp-status-query"
 import { cn } from "@/lib/utils"
 
 const TABS = ["personal", "business", "verification", "payments", "team", "recipients", "customers", "communication", "invoice"] as const
@@ -85,6 +86,7 @@ function SettingsContent() {
   }, [searchParams])
 
   usePrimeKybPacket(Boolean(businessId && canManageBusinessVerification))
+  usePrimeExpressOnrampStatus(true)
 
   useEffect(() => {
     primeConnectStatus(businessId)

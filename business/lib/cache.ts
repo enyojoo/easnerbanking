@@ -111,6 +111,8 @@ export const CACHE_KEYS = {
   /** Pay-in details per org user + invoice fiat currency (VA + wallet). */
   INVOICE_PAY_IN: (userId: string, currency: string) =>
     `invoice_pay_in_${userId}_${currency.trim().toUpperCase()}`,
+  /** Express deposits eligibility + setup status (`GET /api/stripe/onramp/status`). */
+  EXPRESS_ONRAMP_STATUS: (userId: string) => `express_onramp_status_${userId}`,
 } as const
 
 const BUSINESS_NOAH_ACCOUNTS_LS_PREFIX = "business_noah_accounts_"

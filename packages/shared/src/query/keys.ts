@@ -165,6 +165,7 @@ export const qk = {
   verification: {
     root: (scope: Scope) => [...scopeKey(scope), "verification"] as const,
     packet: (scope: Scope) => [...scopeKey(scope), "verification", "packet"] as const,
+    expressOnramp: (scope: Scope) => [...scopeKey(scope), "verification", "express-onramp"] as const,
   },
   notifications: {
     root: (userId: string) => ["notifications", userId] as const,

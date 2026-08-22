@@ -10,6 +10,7 @@ import {
   isExpressIdentitySetupStep,
   isExpressKycAlreadyVerified,
   isExpressSetupDismissed,
+  qk,
   toExpressLinkE164Phone,
   type ExpressDepositsNextStep,
 } from "@easner/shared"
@@ -18,7 +19,13 @@ import { Input } from "@/components/ui/input"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { Loader2 } from "lucide-react"
 import { loadExpressOnramp, prefetchExpressOnramp, type CryptoOnrampClient } from "@/lib/stripe/load-crypto-onramp"
-import { peekBusinessExpressOnrampStatus } from "@/lib/express-onramp-status-cache"
+import {
+  fetchBusinessExpressOnrampStatus,
+  peekBusinessExpressOnrampStatus,
+} from "@/lib/express-onramp-status-cache"
+import { useAuth } from "@/lib/auth-context"
+import { useMaybeScope } from "@/lib/query/scope"
+import { useQueryClient } from "@tanstack/react-query"
 import { ExpressDepositsStripeSlot } from "@/components/compliance/express-deposits-stripe-slot"
 import { mapStripeOnrampError } from "@/lib/stripe/onramp-sdk-map"
 import { toast } from "sonner"
@@ -44,7 +51,10 @@ function asRecord(v: unknown): Record<string, unknown> {
 
 export function ExpressDepositsSetup({ onClose }: Props) {
   const router = useRouter()
-  const [status, setStatus] = useState<Status | null>(null)
+  const queryClient = useQueryClient()
+  const scope = useMaybeScope()
+  const { user } = useAuth()
+  const [status, setStatus] = useState<Status | null>(() => peekBusinessExpressOnrampStatus() as Status | null)
   const [busy, setBusy] = useState(false)
   const [openingIdentity, setOpeningIdentity] = useState(() => {
     const peeked = peekBusinessExpressOnrampStatus()
@@ -57,12 +67,12 @@ export function ExpressDepositsSetup({ onClose }: Props) {
   const l2StartedRef = useRef(false)
 
   const refresh = useCallback(async () => {
-    const res = await fetchWithSession("/api/stripe/onramp/status", { headers: SCOPE })
-    const data = (await res.json().catch(() => ({}))) as Status
-    if (!res.ok) {
+    const data = (await fetchBusinessExpressOnrampStatus(true, user?.id)) as Status
+    if (data.error && !data.publishableKey) {
       setMessage(data.error || EXPRESS_DEPOSITS_COPY.geoUnavailable)
       return data
     }
+    if (scope) queryClient.setQueryData(qk.verification.expressOnramp(scope), data)
     setStatus(data)
     const pre = asRecord(data.prefill)
     const address = asRecord(pre.address)
@@ -86,7 +96,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
       identifier: prev.identifier || "",
     }))
     return data
-  }, [])
+  }, [queryClient, scope, user?.id])
 
   useEffect(() => {
     const peeked = peekBusinessExpressOnrampStatus()

@@ -300,7 +300,11 @@ export async function prefetchRouteWorkspaceData(
   }
   if (href === "/settings" || href.startsWith("/settings")) {
     const { prefetchCheckoutSettings } = await import("@/hooks/queries/use-checkout-settings-query")
-    await prefetchCheckoutSettings(queryClient, scope)
+    const { prefetchExpressOnrampStatus } = await import("@/hooks/queries/use-express-onramp-status-query")
+    await Promise.all([
+      prefetchCheckoutSettings(queryClient, scope),
+      prefetchExpressOnrampStatus(queryClient, scope),
+    ])
     return
   }
   if (

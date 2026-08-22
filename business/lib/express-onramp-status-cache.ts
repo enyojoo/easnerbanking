@@ -1,4 +1,5 @@
 import { fetchWithSession } from "@/lib/fetch-with-session"
+import { CACHE_KEYS, dataCache } from "@/lib/cache"
 import { loadExpressOnramp, prefetchExpressOnramp } from "@/lib/stripe/load-crypto-onramp"
 
 export type BusinessExpressOnrampStatus = {
@@ -10,24 +11,86 @@ export type BusinessExpressOnrampStatus = {
   cryptoCustomerId?: string | null
   nextStep?: string
   office?: { stripeOnrampEnabled?: boolean; stripeOnrampEuEnabled?: boolean }
+  prefill?: Record<string, unknown>
+  error?: string
 }
 
 const SCOPE = { "X-Easner-Account-Scope": "business" } as const
+const LS_PREFIX = "express_onramp_status_v1_"
+const LS_LAST = "express_onramp_status_v1_last"
+const LS_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
+const MEMORY_TTL_MS = 5 * 60 * 1000
 
 let cached: BusinessExpressOnrampStatus | null = null
+let cachedUserId: string | null = null
 let inflight: Promise<BusinessExpressOnrampStatus> | null = null
 
-export function peekBusinessExpressOnrampStatus(): BusinessExpressOnrampStatus | null {
+function persistKey(userId: string) {
+  return `${LS_PREFIX}${userId}`
+}
+
+function readPersisted(userId?: string | null): BusinessExpressOnrampStatus | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = userId
+      ? localStorage.getItem(persistKey(userId))
+      : localStorage.getItem(LS_LAST)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as {
+      data?: BusinessExpressOnrampStatus
+      timestamp?: number
+      userId?: string | null
+    }
+    const ts = typeof parsed.timestamp === "number" ? parsed.timestamp : 0
+    if (!parsed.data || Date.now() - ts > LS_MAX_AGE_MS) return null
+    if (userId && parsed.userId && parsed.userId !== userId) return null
+    return parsed.data
+  } catch {
+    return null
+  }
+}
+
+function writePersisted(data: BusinessExpressOnrampStatus, userId?: string | null) {
+  if (typeof window === "undefined") return
+  const payload = JSON.stringify({ data, timestamp: Date.now(), userId: userId ?? null })
+  try {
+    localStorage.setItem(LS_LAST, payload)
+    if (userId) {
+      localStorage.setItem(persistKey(userId), payload)
+      dataCache.set(CACHE_KEYS.EXPRESS_ONRAMP_STATUS(userId), data, MEMORY_TTL_MS)
+    }
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
+export function cacheBusinessExpressOnrampStatus(
+  data: BusinessExpressOnrampStatus,
+  userId?: string | null,
+) {
+  cached = data
+  cachedUserId = userId ?? cachedUserId
+  writePersisted(data, userId ?? cachedUserId)
+}
+
+export function peekBusinessExpressOnrampStatus(userId?: string | null): BusinessExpressOnrampStatus | null {
+  if (cached && (!userId || !cachedUserId || cachedUserId === userId)) return cached
+  const persisted = readPersisted(userId)
+  if (persisted) {
+    cached = persisted
+    cachedUserId = userId ?? cachedUserId
+    return persisted
+  }
   return cached
 }
 
-function loadStatus(): Promise<BusinessExpressOnrampStatus> {
+function loadStatus(userId?: string | null): Promise<BusinessExpressOnrampStatus> {
   if (inflight) return inflight
   inflight = fetchWithSession("/api/stripe/onramp/status", { headers: SCOPE })
     .then(async (res) => {
       const data = (await res.json().catch(() => ({}))) as BusinessExpressOnrampStatus
       if (res.ok) {
-        cached = data
+        cacheBusinessExpressOnrampStatus(data, userId)
         if (data.publishableKey) void loadExpressOnramp(data.publishableKey).catch(() => undefined)
         else prefetchExpressOnramp()
       }
@@ -39,14 +102,18 @@ function loadStatus(): Promise<BusinessExpressOnrampStatus> {
   return inflight
 }
 
-export function fetchBusinessExpressOnrampStatus(force = false): Promise<BusinessExpressOnrampStatus> {
-  if (!force && cached) {
-    void loadStatus().catch(() => undefined)
-    return Promise.resolve(cached)
+export function fetchBusinessExpressOnrampStatus(
+  force = false,
+  userId?: string | null,
+): Promise<BusinessExpressOnrampStatus> {
+  const hit = peekBusinessExpressOnrampStatus(userId)
+  if (!force && hit) {
+    void loadStatus(userId).catch(() => undefined)
+    return Promise.resolve(hit)
   }
-  return loadStatus()
+  return loadStatus(userId)
 }
 
-export function warmBusinessExpressOnrampStatus() {
-  void loadStatus().catch(() => undefined)
+export function warmBusinessExpressOnrampStatus(userId?: string | null) {
+  void loadStatus(userId).catch(() => undefined)
 }

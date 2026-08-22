@@ -39,6 +39,10 @@ export type { FxRate } from "./use-fx"
 
 export { usePaymentLinksQuery, prefetchPaymentLinks } from "./use-payment-links-query"
 export { useCheckoutSettingsQuery, prefetchCheckoutSettings } from "./use-checkout-settings-query"
+export {
+  useBusinessExpressOnrampStatus,
+  prefetchExpressOnrampStatus,
+} from "./use-express-onramp-status-query"
 
 export { useIncomingBalances, useIncomingBalance } from "./use-incoming-balance"
 export type { IncomingBalances } from "./use-incoming-balance"
