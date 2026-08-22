@@ -8,6 +8,7 @@ export type ExpressOnrampStatus = {
   prefill?: Record<string, unknown>
   payerCountry?: string | null
   eligible?: boolean
+  cryptoCustomerId?: string | null
   methods?: string[]
   office?: { stripeOnrampEnabled?: boolean; stripeOnrampEuEnabled?: boolean }
 }

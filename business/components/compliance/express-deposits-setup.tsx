@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   EXPRESS_DEPOSITS_COPY,
@@ -28,6 +28,7 @@ type Status = {
   prefill?: Record<string, unknown>
   payerCountry?: string | null
   eligible?: boolean
+  cryptoCustomerId?: string | null
   error?: string
 }
 
@@ -45,6 +46,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
   const [slot, setSlot] = useState<HTMLElement | null>(null)
   const [form, setForm] = useState<Record<string, string>>({})
   const [sdk, setSdk] = useState<CryptoOnrampClient | null>(null)
+  const l2StartedRef = useRef(false)
 
   const refresh = useCallback(async () => {
     const res = await fetchWithSession("/api/stripe/onramp/status", { headers: SCOPE })
@@ -139,7 +141,13 @@ export function ExpressDepositsSetup({ onClose }: Props) {
     }
   }
 
-  const step = status?.nextStep ?? "link"
+  const rawStep = status?.nextStep ?? "link"
+  const step =
+    (rawStep === "us_kyc" || rawStep === "eu_kyc") && status?.cryptoCustomerId
+      ? rawStep === "eu_kyc"
+        ? "eu_l2"
+        : "us_l2"
+      : rawStep
 
   const startLink = () =>
     void run(async () => {
@@ -256,6 +264,13 @@ export function ExpressDepositsSetup({ onClose }: Props) {
       setSlot(el)
       return true
     })
+
+  useEffect(() => {
+    if (l2StartedRef.current) return
+    if (step !== "us_l2" && step !== "eu_l2") return
+    l2StartedRef.current = true
+    startL2()
+  }, [step])
 
   const registerWallet = () =>
     void run(async () => {

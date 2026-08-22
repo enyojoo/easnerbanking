@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   View,
   Text,
@@ -73,6 +73,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
   )
   const [sdk, setSdk] = useState<ExpressOnrampSdk | null>(null)
   const [stripeEl, setStripeEl] = useState<unknown>(null)
+  const l2StartedRef = useRef(false)
 
   const handleBack = useCallback(() => navigateStackBack(navigation), [navigation])
   useStackHardwareBack(handleBack)
@@ -91,13 +92,19 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
   }, [applyStatus])
 
   useEffect(() => {
-    void refresh(false).catch((e) =>
+    void refresh(true).catch((e) =>
       setMessage(e instanceof Error ? e.message : EXPRESS_DEPOSITS_COPY.geoUnavailable),
     )
   }, [refresh])
 
   const lockedCountry = expressLockedCountry(form, status?.payerCountry)
-  const step: ExpressDepositsNextStep = status?.nextStep ?? 'link'
+  const rawStep: ExpressDepositsNextStep = status?.nextStep ?? 'link'
+  const step: ExpressDepositsNextStep =
+    (rawStep === 'us_kyc' || rawStep === 'eu_kyc') && status?.cryptoCustomerId
+      ? rawStep === 'eu_kyc'
+        ? 'eu_l2'
+        : 'us_l2'
+      : rawStep
 
   const run = async (fn: () => Promise<boolean | void>) => {
     setBusy(true)
@@ -220,6 +227,24 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
         }
         return
       }
+      if (step === 'us_l2' || step === 'eu_l2') {
+        const el = await client.verifyDocuments?.((result) => {
+          const outcome = result && typeof result === 'object' ? String((result as { result?: string }).result || '') : ''
+          setStripeEl(null)
+          if (isExpressSetupDismissed(outcome)) {
+            setMessage(null)
+            showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
+            return
+          }
+          setMessage(null)
+          void refresh(true)
+        })
+        if (isStripeHostElement(el)) {
+          setStripeEl(el)
+          return true
+        }
+        return
+      }
       if (step === 'us_kyc' || step === 'eu_kyc') {
         try {
           await client.submitKycInfo?.({
@@ -277,29 +302,18 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
         }
         return
       }
-      if (step === 'us_l2' || step === 'eu_l2') {
-        const el = await client.verifyDocuments?.((result) => {
-          const outcome = result && typeof result === 'object' ? String((result as { result?: string }).result || '') : ''
-          setStripeEl(null)
-          if (isExpressSetupDismissed(outcome)) {
-            setMessage(null)
-            showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
-            return
-          }
-          setMessage(null)
-          void refresh(true)
-        })
-        if (isStripeHostElement(el)) {
-          setStripeEl(el)
-          return true
-        }
-        return
-      }
       if (step === 'wallet') {
         await apiFetch('/api/stripe/onramp/wallets/register', { method: 'POST' })
       }
     })
   }
+
+  useEffect(() => {
+    if (l2StartedRef.current) return
+    if (step !== 'us_l2' && step !== 'eu_l2') return
+    l2StartedRef.current = true
+    onCta()
+  }, [step])
 
   return (
     <ScreenWrapper>

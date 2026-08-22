@@ -40,12 +40,14 @@ function asStringList(v: unknown): string[] {
 /** Retrieve CryptoCustomer may return `kyc_tiers` and/or `verifications` (kyc_verified, id_document_verified). */
 export function normalizeExpressDepositsCustomer(raw: unknown): ExpressDepositsCustomerSnapshot | null {
   const row = asRecord(raw)
-  const id = typeof row.id === "string" ? row.id : null
+  const nested = asRecord(row.crypto_customer ?? row.customer ?? row.data)
+  const src = typeof nested.id === "string" ? nested : row
+  const id = typeof src.id === "string" ? src.id : null
   if (!id) return null
-  const tiersRaw = row.kyc_tiers ?? row.kycTiers
-  const verificationsRaw = row.verifications
-  const providedRaw = row.provided_fields ?? row.providedFields
-  const region = row.kyc_region ?? row.kycRegion
+  const tiersRaw = src.kyc_tiers ?? src.kycTiers
+  const verificationsRaw = src.verifications
+  const providedRaw = src.provided_fields ?? src.providedFields
+  const region = src.kyc_region ?? src.kycRegion
   return {
     id,
     kyc_region: typeof region === "string" ? region : null,
@@ -100,6 +102,18 @@ function inFlightOrDone(status: string): boolean {
   return Boolean(status) && status !== "not_started" && status !== "not_available"
 }
 
+function hasSubmittedIdentityFields(customer: ExpressDepositsCustomerSnapshot): boolean {
+  const hasName =
+    (provided(customer, "first_name") || provided(customer, "given_name")) &&
+    (provided(customer, "last_name") || provided(customer, "surname"))
+  return (
+    hasName &&
+    (provided(customer, "address_line_1") ||
+      provided(customer, "dob") ||
+      provided(customer, "date_of_birth"))
+  )
+}
+
 function identityVerified(customer: ExpressDepositsCustomerSnapshot): boolean {
   if (
     isVerifiedStatus(tierStatus(customer, "l1")) ||
@@ -108,11 +122,17 @@ function identityVerified(customer: ExpressDepositsCustomerSnapshot): boolean {
   ) {
     return true
   }
-  // L2 already in progress means name/address KYC was accepted.
-  return (
+  if (
     inFlightOrDone(tierStatus(customer, "l2")) ||
     inFlightOrDone(verificationStatus(customer, "id_document_verified"))
-  )
+  ) {
+    return true
+  }
+  if (hasSubmittedIdentityFields(customer)) return true
+  const kyc = verificationStatus(customer, "kyc_verified")
+  if (kyc === "not_started" || kyc === "rejected" || kyc === "not_available") return false
+  // Link already created the customer; retrieve often omits tiers. Do not collect name/address again.
+  return Boolean(customer.id) && !(customer.kyc_tiers?.length) && !(customer.verifications?.length)
 }
 
 function documentsVerified(customer: ExpressDepositsCustomerSnapshot): boolean {

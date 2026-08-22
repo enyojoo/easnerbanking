@@ -74,6 +74,17 @@ describe("expressDepositsNextStep", () => {
     ).toBe("eu_l2")
   })
 
+  it("skips US name/address when retrieve only returns the customer id", () => {
+    expect(
+      expressDepositsNextStep({
+        cryptoCustomerId: "crc_1",
+        customer: { id: "crc_1" },
+        payerCountry: "US",
+        walletRegistered: true,
+      }),
+    ).toBe("us_l2")
+  })
+
   it("skips US name/address when Link already verified KYC", () => {
     expect(
       expressDepositsNextStep({
