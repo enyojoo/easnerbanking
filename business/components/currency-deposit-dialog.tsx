@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowRight, ArrowLeft, Copy, Check, Plus, Share2, ShieldCheck } from "lucide-react"
+import { Apple, ArrowRight, ArrowLeft, Copy, Check, CreditCard, Landmark, Plus, Share2, ShieldCheck } from "lucide-react"
 import type { Account } from "@/lib/finance-types"
 import { QRCodeSVG } from "qrcode.react"
 import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
@@ -29,11 +29,9 @@ import {
   type StablecoinReceiveMethod,
 } from "@/components/receive/ReceiveStablecoinMethodList"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import { resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, resolvePayInProvider, type NgLocalIdType, resolveReceiveCountryName, receiveInternationalBankTitle, receiveInternationalDepositSubtitle, receiveLocalBankTitle, receiveLocalMomoTitle, receiveLocalDepositSubtitle, localPayInCountries, expressDepositMethodTitle, EXPRESS_DEPOSITS_COPY, type CashPayInMethodKind } from "@easner/shared"
+import { resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, resolvePayInProvider, type NgLocalIdType, resolveReceiveCountryName, receiveInternationalBankTitle, receiveInternationalDepositSubtitle, receiveLocalBankTitle, receiveLocalMomoTitle, receiveLocalDepositSubtitle, localPayInCountries, expressDepositMethodTitle, EXPRESS_DEPOSITS_COPY, isExpressCashKind, listExpressCashKinds, type CashPayInMethodKind } from "@easner/shared"
 import { LocalDepositWizard } from "@/components/local-deposit-wizard"
 import { AccountsExpressDepositFlow } from "@/components/accounts/accounts-express-deposit-flow"
-import { PaymentMethodBrandIcon } from "@/components/payment-method-brand-icon"
-import type { PaymentBrandIconKey } from "@/lib/stripe/payment-method-display"
 import { NgLocalVerificationNotice } from "@/components/compliance/ng-local-verification-notice"
 import {
   prefetchReceiveRails,
@@ -43,6 +41,11 @@ import {
   type ReceiveRailsResponse,
 } from "@/lib/yc-local-deposit-cache"
 import { effectivePayInCountry } from "@/lib/pay-in-residence"
+import {
+  fetchBusinessExpressOnrampStatus,
+  peekBusinessExpressOnrampStatus,
+  warmBusinessExpressOnrampStatus,
+} from "@/lib/express-onramp-status-cache"
 
 function tier1StatusIsInReview(status: string | null | undefined): boolean {
   const s = (status || "").toLowerCase()
@@ -124,11 +127,74 @@ type ExpressKind = Extract<
   "express_card" | "express_apple_pay" | "express_google_pay" | "express_ach"
 >
 
-function expressBrandIconKey(kind: ExpressKind): PaymentBrandIconKey {
-  if (kind === "express_apple_pay") return "apple_pay"
-  if (kind === "express_google_pay") return "google_pay"
-  if (kind === "express_ach") return "bank"
-  return "card"
+function instantExpressStatus(country: string | null): {
+  eligible: boolean
+  ready: boolean
+  officeOn: boolean
+  payerCountry: string | null
+  methods: ExpressKind[]
+} {
+  const cached = peekBusinessExpressOnrampStatus()
+  const payerCountry = cached?.payerCountry || country
+  if (cached?.eligible === false || cached?.office?.stripeOnrampEnabled === false) {
+    return {
+      eligible: false,
+      ready: false,
+      officeOn: Boolean(cached.office?.stripeOnrampEnabled),
+      payerCountry,
+      methods: [],
+    }
+  }
+  const fromApi = (cached?.methods ?? []).filter(isExpressCashKind)
+  const methods = fromApi.length
+    ? fromApi
+    : listExpressCashKinds({
+        payerCountry,
+        officeEnabled: cached?.office?.stripeOnrampEnabled !== false,
+        euEnabled: cached?.office?.stripeOnrampEuEnabled !== false,
+      })
+  return {
+    eligible: true,
+    ready: Boolean(cached?.ready),
+    officeOn: cached?.office?.stripeOnrampEnabled !== false,
+    payerCountry,
+    methods: methods.length ? methods : ["express_card", "express_apple_pay", "express_google_pay"],
+  }
+}
+
+function ExpressMethodMark({ kind }: { kind: ExpressKind }) {
+  const label = expressDepositMethodTitle(kind)
+  if (kind === "express_apple_pay") {
+    return (
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-neutral-950" aria-label={label}>
+        <Apple className="h-[22px] w-[22px] text-white fill-white" />
+      </div>
+    )
+  }
+  if (kind === "express_google_pay") {
+    return (
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border/80 bg-white" aria-label={label}>
+        <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden>
+          <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.4h6.4c-.3 1.5-1.1 2.8-2.4 3.7v3h3.9c2.3-2.1 3.6-5.2 3.6-8.8z" />
+          <path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.2 0-5.8-2.1-6.8-5H1.2v3.1C3.3 21.3 7.3 24 12 24z" />
+          <path fill="#FBBC05" d="M5.2 14.3c-.5-1.4-.5-2.9 0-4.3V7H1.2C-.4 10.2-.4 13.8 1.2 17l4-2.7z" />
+          <path fill="#EA4335" d="M12 4.8c1.8 0 3.4.6 4.6 1.8l3.5-3.5C18 1.1 15.2 0 12 0 7.3 0 3.3 2.7 1.2 7l4 3.1c1-2.9 3.6-5.3 6.8-5.3z" />
+        </svg>
+      </div>
+    )
+  }
+  if (kind === "express_ach") {
+    return (
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border/80 bg-muted/40" aria-label={label}>
+        <Landmark className="h-[22px] w-[22px]" />
+      </div>
+    )
+  }
+  return (
+    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border/80 bg-muted/40" aria-label={label}>
+      <CreditCard className="h-[22px] w-[22px]" />
+    </div>
+  )
 }
 
 function BankDepositDetailsPanel({
@@ -269,7 +335,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
     officeOn: boolean
     payerCountry: string | null
     methods: ExpressKind[]
-  } | null>(null)
+  } | null>(() => (account.currency === "USD" ? instantExpressStatus(countryCode) : null))
   const [relayDepositMethods, setRelayDepositMethods] = useState<StablecoinReceiveMethod[]>([])
   const [selectedStablecoinMethod, setSelectedStablecoinMethod] = useState<StablecoinReceiveMethod | null>(null)
 
@@ -415,39 +481,45 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
   }, [account.currency])
 
   useEffect(() => {
-    if (!dialogOpen || account.currency !== "USD") return
+    if (account.currency !== "USD") return
+    warmBusinessExpressOnrampStatus()
     let cancelled = false
     void (async () => {
-      const res = await fetchWithSession("/api/stripe/onramp/status", {
-        headers: BUSINESS_ACCOUNT_SCOPE_HEADERS,
-      })
-      const data = (await res.json().catch(() => ({}))) as {
-        eligible?: boolean
-        ready?: boolean
-        office?: { stripeOnrampEnabled?: boolean }
-        payerCountry?: string | null
-        methods?: string[]
+      try {
+        const data = await fetchBusinessExpressOnrampStatus(false)
+        if (cancelled) return
+        if (data.office?.stripeOnrampEnabled === false || data.eligible === false) {
+          setExpressStatus({
+            eligible: false,
+            ready: false,
+            officeOn: Boolean(data.office?.stripeOnrampEnabled),
+            payerCountry: data.payerCountry ?? countryCode,
+            methods: [],
+          })
+          return
+        }
+        const methods = (Array.isArray(data.methods) ? data.methods : []).filter(isExpressCashKind)
+        setExpressStatus({
+          eligible: true,
+          ready: Boolean(data.ready),
+          officeOn: data.office?.stripeOnrampEnabled !== false,
+          payerCountry: data.payerCountry ?? countryCode,
+          methods: methods.length
+            ? methods
+            : listExpressCashKinds({
+                payerCountry: data.payerCountry ?? countryCode,
+                officeEnabled: true,
+                euEnabled: data.office?.stripeOnrampEuEnabled !== false,
+              }),
+        })
+      } catch {
+        // Keep the optimistic rows already on screen.
       }
-      if (cancelled) return
-      const methods = (Array.isArray(data.methods) ? data.methods : []).filter(
-        (k): k is ExpressKind =>
-          k === "express_card" ||
-          k === "express_apple_pay" ||
-          k === "express_google_pay" ||
-          k === "express_ach",
-      )
-      setExpressStatus({
-        eligible: Boolean(data.eligible),
-        ready: Boolean(data.ready),
-        officeOn: Boolean(data.office?.stripeOnrampEnabled),
-        payerCountry: data.payerCountry ?? null,
-        methods,
-      })
     })()
     return () => {
       cancelled = true
     }
-  }, [dialogOpen, account.currency])
+  }, [account.currency, countryCode])
 
   useEffect(() => {
     if (account.currency !== "USD" || !effectiveResidence || !localPayInCurrency) {
@@ -804,14 +876,14 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                         )
                       })}
 
-                      {expressStatus?.officeOn && expressStatus.eligible
-                        ? expressStatus.methods.map((kind) => (
+                      {account.currency === "USD" && (expressStatus?.methods.length ?? 0) > 0
+                        ? (expressStatus?.methods ?? []).map((kind) => (
                             <button
                               key={kind}
                               type="button"
                               className="flex w-full items-center gap-4 rounded-xl border border-border p-4 min-h-[76px] hover:bg-muted/50 transition-colors text-left disabled:opacity-55"
                               onClick={() => {
-                                if (!expressStatus.ready) {
+                                if (!expressStatus?.ready) {
                                   window.location.href = "/settings?tab=verification&flow=express"
                                   return
                                 }
@@ -819,17 +891,11 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                                 setCashView("express")
                               }}
                             >
-                              <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border/80 bg-muted/40">
-                                <PaymentMethodBrandIcon
-                                  iconKey={expressBrandIconKey(kind)}
-                                  alt={expressDepositMethodTitle(kind)}
-                                  className="h-7 w-auto max-w-[2.25rem]"
-                                />
-                              </div>
+                              <ExpressMethodMark kind={kind} />
                               <div className="min-w-0 flex-1">
                                 <p className="font-medium">{expressDepositMethodTitle(kind)}</p>
                                 <p className="text-sm text-muted-foreground mt-0.5">
-                                  {expressStatus.ready
+                                  {expressStatus?.ready}
                                     ? EXPRESS_DEPOSITS_COPY.description
                                     : EXPRESS_DEPOSITS_COPY.setupRequiredHint}
                                 </p>

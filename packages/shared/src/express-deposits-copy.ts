@@ -11,7 +11,7 @@ export const EXPRESS_DEPOSITS_COPY = {
   cardTitle: "Card",
   applePayTitle: "Apple Pay",
   googlePayTitle: "Google Pay",
-  achTitle: "Bank account (ACH)",
+  achTitle: "ACH Direct",
   setupRequiredHint: "Set up Express deposits to use this method.",
   geoUnavailable: "Express deposits is not available in your region.",
   ownerOnly: "Only the account owner can set up Express deposits.",

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
-import { qk, isVaAnswerSettled, shouldShowBankDepositTab, mapResidenceToLocalPayInCurrency, type NgLocalIdType } from '@easner/shared'
+import { qk, isVaAnswerSettled, shouldShowBankDepositTab, mapResidenceToLocalPayInCurrency, expressDepositsPayerCountry, isExpressCashKind, listExpressCashKinds, type NgLocalIdType } from '@easner/shared'
 import {
   View,
   Text,
@@ -39,7 +39,11 @@ import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import { useSendDestinations } from '../../hooks/useSendDestinations'
 import { resolveMobilePayInProvider } from '../../lib/resolveMobilePayInProvider'
 import { ReceiveCashMethodList, type ExpressCashKind } from '../../components/receive/ReceiveCashMethodList'
-import { apiFetch } from '../../query/api-client'
+import {
+  fetchExpressOnrampStatus,
+  peekExpressOnrampStatus,
+  warmExpressOnrampStatus,
+} from '../../lib/expressOnrampStatusCache'
 import {
   resolveWarmYcLocalDepositCorridor,
   ensureYcLocalDepositCachesReady,
@@ -63,8 +67,46 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
   const [activeTab, setActiveTab] = useState<TabType>('cash')
   const [ngMissingType, setNgMissingType] = useState<NgLocalIdType | null>(null)
-  const [expressReady, setExpressReady] = useState(false)
-  const [expressMethods, setExpressMethods] = useState<ExpressCashKind[]>([])
+  const expressDeviceWallets = useMemo(
+    () => ({
+      applePay: Platform.OS === 'ios' || Platform.OS === 'web',
+      googlePay: Platform.OS === 'android' || Platform.OS === 'web',
+    }),
+    [],
+  )
+
+  const instantExpressPayerCountry = expressDepositsPayerCountry({
+    residenceCountry: userProfile?.residence_country ?? userProfile?.profile?.residence_country,
+    kycAddressCountry: userProfile?.profile?.kyc_address_country,
+  })
+
+  const [expressReady, setExpressReady] = useState(() => Boolean(peekExpressOnrampStatus()?.ready))
+  const [expressMethods, setExpressMethods] = useState<ExpressCashKind[]>(() => {
+    const kycApproved =
+      String(userProfile?.noah_kyc_status || userProfile?.profile?.noah_kyc_status || '').toLowerCase() ===
+      'approved'
+    if (currency !== 'USD' || !kycApproved) return []
+    const cached = peekExpressOnrampStatus()
+    const country = cached?.payerCountry || instantExpressPayerCountry
+    if (cached && cached.eligible === false) return []
+    const fromApi = (cached?.methods ?? []).filter(isExpressCashKind)
+    const filterDevice = (kinds: ExpressCashKind[]) =>
+      kinds.filter((kind) => {
+        if (kind === 'express_apple_pay') return expressDeviceWallets.applePay
+        if (kind === 'express_google_pay') return expressDeviceWallets.googlePay
+        return true
+      })
+    if (fromApi.length) return filterDevice(fromApi)
+    if (country) {
+      return listExpressCashKinds({
+        payerCountry: country,
+        officeEnabled: cached?.office?.stripeOnrampEnabled !== false,
+        euEnabled: cached?.office?.stripeOnrampEuEnabled !== false,
+        deviceWallets: expressDeviceWallets,
+      })
+    }
+    return filterDevice(['express_card', 'express_apple_pay', 'express_google_pay'])
+  })
 
   const supportsStablecoins = currency === 'USD' || currency === 'EUR'
 
@@ -252,45 +294,41 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
       setExpressMethods([])
       return
     }
+    warmExpressOnrampStatus()
     let cancelled = false
     void (async () => {
       try {
-        const data = await apiFetch<{
-          eligible?: boolean
-          ready?: boolean
-          payerCountry?: string | null
-          methods?: string[]
-          office?: { stripeOnrampEnabled?: boolean }
-        }>('/api/stripe/onramp/status')
+        const data = await fetchExpressOnrampStatus(false)
         if (cancelled) return
-        if (data.office?.stripeOnrampEnabled && data.eligible) {
-          setExpressReady(Boolean(data.ready))
-          const allowed = new Set<ExpressCashKind>([
-            'express_card',
-            'express_apple_pay',
-            'express_google_pay',
-            'express_ach',
-          ])
-          const fromApi = (Array.isArray(data.methods) ? data.methods : []).filter(
-            (k): k is ExpressCashKind => allowed.has(k as ExpressCashKind),
-          )
-          const methods = fromApi.filter((kind) => {
-            if (kind === 'express_apple_pay') return Platform.OS === 'ios' || Platform.OS === 'web'
-            if (kind === 'express_google_pay') return Platform.OS === 'android' || Platform.OS === 'web'
-            return true
-          })
-          setExpressMethods(methods)
-        } else {
+        if (data.office?.stripeOnrampEnabled === false || data.eligible === false) {
+          setExpressReady(false)
           setExpressMethods([])
+          return
         }
+        setExpressReady(Boolean(data.ready))
+        const fromApi = (Array.isArray(data.methods) ? data.methods : []).filter(isExpressCashKind)
+        const methods = (fromApi.length
+          ? fromApi
+          : listExpressCashKinds({
+              payerCountry: data.payerCountry || instantExpressPayerCountry,
+              officeEnabled: true,
+              euEnabled: data.office?.stripeOnrampEuEnabled !== false,
+              deviceWallets: expressDeviceWallets,
+            })
+        ).filter((kind) => {
+          if (kind === 'express_apple_pay') return expressDeviceWallets.applePay
+          if (kind === 'express_google_pay') return expressDeviceWallets.googlePay
+          return true
+        })
+        setExpressMethods(methods)
       } catch {
-        if (!cancelled) setExpressMethods([])
+        // Keep the optimistic rows already on screen.
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [currency, verificationComplete, residenceCountry])
+  }, [currency, verificationComplete, instantExpressPayerCountry, expressDeviceWallets])
 
   const accountReady = hasAccountData
 

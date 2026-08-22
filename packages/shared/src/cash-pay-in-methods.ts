@@ -134,3 +134,47 @@ export function resolveCashPayInMethods(input: ResolveCashPayInMethodsInput): Ca
 
   return methods
 }
+
+export type ExpressCashKind = Extract<
+  CashPayInMethodKind,
+  "express_card" | "express_apple_pay" | "express_google_pay" | "express_ach"
+>
+
+const EXPRESS_KINDS = new Set<ExpressCashKind>([
+  "express_card",
+  "express_apple_pay",
+  "express_google_pay",
+  "express_ach",
+])
+
+export function isExpressCashKind(value: string): value is ExpressCashKind {
+  return EXPRESS_KINDS.has(value as ExpressCashKind)
+}
+
+/** Instant Add money / Deposit rows from payer geo. Office defaults on so the list does not wait on status. */
+export function listExpressCashKinds(input: {
+  payerCountry?: string | null
+  payerState?: string | null
+  officeEnabled?: boolean
+  euEnabled?: boolean
+  deviceWallets?: CashPayInDeviceWallets
+}): ExpressCashKind[] {
+  return resolveCashPayInMethods({
+    product: "mobile",
+    ledgerCurrency: "USD",
+    payerCountry: input.payerCountry,
+    payerState: input.payerState,
+    tier1Complete: true,
+    expressDepositsReady: false,
+    deviceWallets: input.deviceWallets,
+    officeFlags: {
+      stripeOnrampEnabled: input.officeEnabled !== false,
+      stripeOnrampEuEnabled: input.euEnabled !== false,
+    },
+    showVaBank: false,
+    localBankAvailable: false,
+    localMomoAvailable: false,
+  })
+    .map((m) => m.kind)
+    .filter(isExpressCashKind)
+}

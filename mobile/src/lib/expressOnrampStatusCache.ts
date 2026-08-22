@@ -8,6 +8,8 @@ export type ExpressOnrampStatus = {
   prefill?: Record<string, unknown>
   payerCountry?: string | null
   eligible?: boolean
+  methods?: string[]
+  office?: { stripeOnrampEnabled?: boolean; stripeOnrampEuEnabled?: boolean }
 }
 
 let cached: ExpressOnrampStatus | null = null

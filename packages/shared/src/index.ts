@@ -448,6 +448,8 @@ export {
 } from "./stripe-onramp-geo"
 export type { StripeOnrampPayerGeoInput } from "./stripe-onramp-geo"
 export {
+  isExpressCashKind,
+  listExpressCashKinds,
   localPayInCountries,
   resolveCashPayInMethods,
 } from "./cash-pay-in-methods"
@@ -458,6 +460,7 @@ export type {
   CashPayInMethodStatus,
   CashPayInOfficeFlags,
   CashPayInProduct,
+  ExpressCashKind,
   ResolveCashPayInMethodsInput,
 } from "./cash-pay-in-methods"
 export {

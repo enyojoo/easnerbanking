@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { localPayInCountries, resolveCashPayInMethods } from "./cash-pay-in-methods"
+import { listExpressCashKinds, localPayInCountries, resolveCashPayInMethods } from "./cash-pay-in-methods"
 
 describe("localPayInCountries", () => {
   it("unions payer and business country", () => {
@@ -82,5 +82,24 @@ describe("resolveCashPayInMethods", () => {
     })
     expect(methods.some((m) => m.kind === "express_card")).toBe(true)
     expect(methods.some((m) => m.kind === "express_ach")).toBe(false)
+  })
+})
+
+describe("listExpressCashKinds", () => {
+  it("returns US methods immediately without waiting for ready", () => {
+    expect(listExpressCashKinds({ payerCountry: "US", payerState: "CA" })).toEqual([
+      "express_card",
+      "express_apple_pay",
+      "express_google_pay",
+      "express_ach",
+    ])
+  })
+
+  it("hides ACH for EU payers", () => {
+    expect(listExpressCashKinds({ payerCountry: "DE" })).toEqual([
+      "express_card",
+      "express_apple_pay",
+      "express_google_pay",
+    ])
   })
 })

@@ -38,10 +38,13 @@ export function getStripeLinkOAuthClientSecret(): string {
   return process.env.STRIPE_LINK_OAUTH_CLIENT_SECRET?.trim() || ""
 }
 
-export function getStripeLinkOAuthScopes(): string[] {
+/** Space-separated scopes. login.link.com rejects arrays (`oauth_scopes must be a string`). */
+export function getStripeLinkOAuthScopes(): string {
   const raw = process.env.STRIPE_LINK_OAUTH_SCOPES?.trim()
-  if (raw) return raw.split(/[\s,]+/).filter(Boolean)
-  return ["crypto_onramp", "auth.persist_login:read"]
+  const scopes = raw
+    ? raw.split(/[\s,]+/).filter(Boolean)
+    : ["crypto_onramp", "auth.persist_login:read"]
+  return scopes.join(" ")
 }
 
 export function getApplePayMerchantId(): string {

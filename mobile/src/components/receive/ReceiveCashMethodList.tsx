@@ -14,7 +14,7 @@ import {
 import { colors, spacing, textStyles } from '../../theme'
 import { getCountryName } from '../../lib/countryService'
 import { CountryFlag } from '../flags/CountryFlag'
-import { BundledImage } from '../BundledImage'
+import { ExpressMethodLogo } from './ExpressMethodLogo'
 import { ReceiveLocalRailCard } from './ReceiveLocalRailCard'
 
 const FLAG_SIZE = 48
@@ -42,13 +42,6 @@ type Props = {
   onExpressPress?: (kind: ExpressCashKind) => void
 }
 
-const EXPRESS_BRAND = {
-  express_card: require('../../../assets/payment-brands/card.png'),
-  express_apple_pay: require('../../../assets/payment-brands/apple_pay.png'),
-  express_google_pay: require('../../../assets/payment-brands/google_pay.png'),
-  express_ach: require('../../../assets/payment-brands/bank.png'),
-} as const
-
 function CashMethodFlag({ code }: { code: string }) {
   return (
     <CountryFlag
@@ -56,17 +49,6 @@ function CashMethodFlag({ code }: { code: string }) {
       size={FLAG_SIZE}
       style={{ width: FLAG_SIZE, height: FLAG_SIZE }}
       contentFit="cover"
-    />
-  )
-}
-
-function ExpressMethodLogo({ kind }: { kind: ExpressCashKind }) {
-  return (
-    <BundledImage
-      source={EXPRESS_BRAND[kind]}
-      resizeMode="contain"
-      accessibilityLabel={expressDepositMethodTitle(kind)}
-      style={{ width: 32, height: 22 }}
     />
   )
 }
@@ -162,6 +144,7 @@ export function ReceiveCashMethodList({
             expressReady ? EXPRESS_DEPOSITS_COPY.description : EXPRESS_DEPOSITS_COPY.setupRequiredHint
           }
           leading={<ExpressMethodLogo kind={kind} />}
+          frameLeading={false}
           onPress={() => onExpressPress?.(kind)}
         />
       ))}

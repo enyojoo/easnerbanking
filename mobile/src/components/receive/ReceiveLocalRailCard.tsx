@@ -13,10 +13,19 @@ type Props = {
   leading: React.ReactNode
   onPress: () => void
   disabled?: boolean
+  /** When false, `leading` already includes its own 48px circle (brand marks). */
+  frameLeading?: boolean
 }
 
 /** Full-width stacked rail row for receive cash / local deposit (single column list). */
-export function ReceiveLocalRailCard({ title, subtitle, leading, onPress, disabled }: Props) {
+export function ReceiveLocalRailCard({
+  title,
+  subtitle,
+  leading,
+  onPress,
+  disabled,
+  frameLeading = true,
+}: Props) {
   return (
     <Pressable
       android_ripple={ripple.neutral}
@@ -29,7 +38,7 @@ export function ReceiveLocalRailCard({ title, subtitle, leading, onPress, disabl
       onPress={onPress}
       disabled={disabled}
     >
-      <View style={styles.flagWrap}>{leading}</View>
+      <View style={frameLeading ? styles.flagWrap : styles.logoWrap}>{leading}</View>
       <View style={styles.textCol}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.subtitle}>{subtitle}</Text>
@@ -62,6 +71,12 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: colors.frame.border,
     backgroundColor: colors.primary.main + '10',
+  },
+  logoWrap: {
+    width: FLAG_SIZE,
+    height: FLAG_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   textCol: {
     flex: 1,
