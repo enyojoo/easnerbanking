@@ -107,9 +107,13 @@ const nextConfig = {
     const invoiceHosts = [...new Set(["invoice.easner.com", hostnameFromOrigin(process.env.NEXT_PUBLIC_INVOICE_APP_URL, "invoice.easner.com")])]
       .filter((host) => host === "invoice.easner.com" || host.startsWith("invoice."))
     const skip =
-      "api|_next|auth|pay-customer|invoice|og|favicon.ico|robots.txt|manifest.webmanifest|checkout.js"
+      "api|_next|auth|pay-customer|invoice|og|favicon.ico|robots.txt|manifest.webmanifest|checkout.js|crypto-onramp"
     return {
       beforeFiles: [
+        {
+          source: "/crypto-onramp/:path*",
+          destination: "https://js.stripe.com/crypto-onramp/:path*",
+        },
         ...payHosts.map((host) => ({
           source: `/((?!${skip}).*)`,
           has: [{ type: "host", value: host }],

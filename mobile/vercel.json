@@ -5,6 +5,10 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/crypto-onramp/:path*",
+      "destination": "https://js.stripe.com/crypto-onramp/:path*"
+    },
+    {
       "source": "/.well-known/apple-app-site-association",
       "destination": "/api/apple-app-site-association"
     },
