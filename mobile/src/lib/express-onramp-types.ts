@@ -1,5 +1,10 @@
 export type ExpressOnrampSdk = {
-  registerLinkUser?: (info: Record<string, unknown>) => Promise<unknown>
+  registerLinkUser?: (
+    email: string,
+    phone: string,
+    country: string,
+    fullName?: string,
+  ) => Promise<unknown>
   authenticate?: (id: string, cb: (r: Record<string, unknown>) => void) => Promise<unknown>
   submitKycInfo?: (info: Record<string, unknown>) => Promise<unknown>
   getMissingIdentifiers?: () => Promise<{ identifiers?: Array<{ type?: string }> }>

@@ -17,7 +17,7 @@ const APPLE_LOGO_PATH =
 function AppleLogo() {
   return (
     <Svg width={26} height={26} viewBox="23.4 21.4 36.2 45.2" accessibilityElementsHidden>
-      <Path fill="#FFFFFF" d={APPLE_LOGO_PATH} />
+      <Path fill="#111111" d={APPLE_LOGO_PATH} />
     </Svg>
   )
 }
@@ -84,7 +84,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   apple: {
-    backgroundColor: '#111111',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 0.5,
+    borderColor: colors.frame.border,
   },
   google: {
     backgroundColor: '#FFFFFF',

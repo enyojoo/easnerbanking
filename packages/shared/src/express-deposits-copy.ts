@@ -65,3 +65,15 @@ export function expressDepositMethodTitle(
   if (kind === "express_ach") return EXPRESS_DEPOSITS_COPY.achTitle
   return EXPRESS_DEPOSITS_COPY.cardTitle
 }
+
+/** Link registerLinkUser wants E.164, e.g. +12025551234. */
+export function toExpressLinkE164Phone(phone: string, country?: string | null): string {
+  const raw = String(phone || "").trim()
+  const digits = raw.replace(/\D/g, "")
+  if (!digits) return raw
+  if (raw.startsWith("+")) return `+${digits}`
+  const iso = String(country || "").toUpperCase()
+  if ((iso === "US" || iso === "CA") && digits.length === 10) return `+1${digits}`
+  if ((iso === "US" || iso === "CA") && digits.length === 11 && digits.startsWith("1")) return `+${digits}`
+  return `+${digits}`
+}

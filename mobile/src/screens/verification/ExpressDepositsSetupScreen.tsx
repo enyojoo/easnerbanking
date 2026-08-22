@@ -9,7 +9,12 @@ import {
   Keyboard,
   Platform,
 } from 'react-native'
-import { EXPRESS_DEPOSITS_COPY, expressSetupUserMessage, type ExpressDepositsNextStep } from '@easner/shared'
+import {
+  EXPRESS_DEPOSITS_COPY,
+  expressSetupUserMessage,
+  toExpressLinkE164Phone,
+  type ExpressDepositsNextStep,
+} from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import {
@@ -161,12 +166,12 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           { method: 'POST', body: {} },
         )
         if (auth.needsRegister) {
-          await client.registerLinkUser?.({
-            email: form.email,
-            phone: form.phone,
-            country: lockedCountry,
-            fullName: `${form.given_name} ${form.surname}`.trim(),
-          })
+          await client.registerLinkUser?.(
+            form.email.trim(),
+            toExpressLinkE164Phone(form.phone, lockedCountry),
+            lockedCountry,
+            `${form.given_name} ${form.surname}`.trim(),
+          )
         }
         let intentId = auth.authIntentId
         if (!intentId) {

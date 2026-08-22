@@ -469,6 +469,7 @@ export {
   expressDepositMethodTitle,
   expressSetupUserMessage,
   isExpressDepositsMetadata,
+  toExpressLinkE164Phone,
 } from "./express-deposits-copy"
 export {
   EXPRESS_DEPOSITS_PROCESSING_DESCRIPTION,

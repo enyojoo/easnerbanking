@@ -1,7 +1,12 @@
 "use client"
 
 export type CryptoOnrampClient = {
-  registerLinkUser: (info: Record<string, unknown>) => Promise<{ created?: boolean }>
+  registerLinkUser: (
+    email: string,
+    phone: string,
+    country: string,
+    fullName?: string,
+  ) => Promise<{ created?: boolean }>
   authenticate: (
     authIntentId: string,
     cb: (result: {

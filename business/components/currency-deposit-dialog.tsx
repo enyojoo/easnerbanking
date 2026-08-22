@@ -166,7 +166,7 @@ function ExpressMethodMark({ kind }: { kind: ExpressKind }) {
   const label = expressDepositMethodTitle(kind)
   if (kind === "express_apple_pay") {
     return (
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-neutral-950" aria-label={label}>
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border/80 bg-white" aria-label={label}>
         {/* eslint-disable-next-line @next/next/no-img-element -- official Apple logo */}
         <img src="/payment-brands/apple.svg" alt="" width={26} height={26} className="h-[26px] w-[26px]" />
       </div>

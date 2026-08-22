@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import {
   EXPRESS_DEPOSITS_COPY,
   expressSetupUserMessage,
+  toExpressLinkE164Phone,
   type ExpressDepositsNextStep,
 } from "@easner/shared"
 import { Button } from "@/components/ui/button"
@@ -119,12 +120,13 @@ export function ExpressDepositsSetup({ onClose }: Props) {
         error?: string
       }
       if (authJson.needsRegister || !authJson.authIntentId) {
-        await sdk.registerLinkUser({
-          email: form.email,
-          phone: form.phone,
-          country: status?.payerCountry || form.country,
-          fullName: `${form.given_name} ${form.surname}`.trim(),
-        })
+        const country = status?.payerCountry || form.country
+        await sdk.registerLinkUser(
+          form.email.trim(),
+          toExpressLinkE164Phone(form.phone, country),
+          country,
+          `${form.given_name} ${form.surname}`.trim(),
+        )
         const again = await fetchWithSession("/api/stripe/onramp/link-auth", {
           method: "POST",
           headers: { ...SCOPE, "Content-Type": "application/json" },
