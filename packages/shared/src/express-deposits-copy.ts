@@ -2,7 +2,7 @@
 
 export const EXPRESS_DEPOSITS_COPY = {
   title: "Express deposits",
-  description: "Add money from a card, Apple Pay, Google Pay, or a US bank account.",
+  description: "Add money from a card, Apple Pay, Google Pay, or an ACH Direct.",
   setupCta: "Set up",
   continueCta: "Continue",
   verifyCta: "Verify identity",

@@ -49,6 +49,7 @@ import {
   ensureYcLocalDepositCachesReady,
   prefetchNgLocalVerification,
   readCachedNgLocalMissingType,
+  resolveReceiveRailsForDisplay,
 } from '../../lib/warmYcLocalDepositCaches'
 import { useStackHardwareBack } from '../../hooks/useStackHardwareBack'
 import { navigateStackBack } from '../../navigation/stackBackNavigation'
@@ -239,13 +240,17 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
   const expectLocalCorridor =
     Boolean(localPayInCurrency) && verificationComplete && currency === 'USD'
-  // Instant from cache/optimistic rails – residence rarely changes.
-  const showLocalTab = expectLocalCorridor && Boolean(receiveRails?.anyAvailable)
-  const showCashTab = showBankTab || showLocalTab
+  const displayRails =
+    receiveRails ??
+    (expectLocalCorridor
+      ? resolveReceiveRailsForDisplay(residenceCountry, localPayInCurrency, payInProvider)
+      : null)
+  const showLocalTab = expectLocalCorridor && Boolean(displayRails?.anyAvailable)
+  const showCashTab = showBankTab || showLocalTab || expressMethods.length > 0
   const showTabBar = showCashTab && showStablecoinTab
 
-  const bankAvailable = receiveRails?.rails.bank_transfer.available ?? false
-  const momoAvailable = receiveRails?.rails.mobile_money.available ?? false
+  const bankAvailable = displayRails?.rails.bank_transfer.available ?? false
+  const momoAvailable = displayRails?.rails.mobile_money.available ?? false
   const localDepositBlocked = Boolean(localPayInCurrency === 'NGN' && ngMissingType)
 
   const navigateToBankDetails = () => {

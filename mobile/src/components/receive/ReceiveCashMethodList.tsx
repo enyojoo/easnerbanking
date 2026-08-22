@@ -92,17 +92,18 @@ export function ReceiveCashMethodList({
     )
   }
 
-  return (
-    <View style={styles.list}>
-      {showBankRow ? (
-        <ReceiveLocalRailCard
-          title={receiveInternationalBankTitle(currency)}
-          subtitle={receiveInternationalDepositSubtitle(currency)}
-          leading={<CashMethodFlag code={intlBankFlagCode} />}
-          onPress={onBankPress}
-        />
-      ) : null}
+  const vaRow = showBankRow ? (
+    <ReceiveLocalRailCard
+      key="va-bank"
+      title={receiveInternationalBankTitle(currency)}
+      subtitle={receiveInternationalDepositSubtitle(currency)}
+      leading={<CashMethodFlag code={intlBankFlagCode} />}
+      onPress={onBankPress}
+    />
+  ) : null
 
+  const localRows = (
+    <>
       {showLocalRows && bankAvailable ? (
         <ReceiveLocalRailCard
           title={receiveLocalBankTitle(countryName)}
@@ -135,19 +136,29 @@ export function ReceiveCashMethodList({
           />
         )
       })}
+    </>
+  )
 
-      {expressMethods.map((kind) => (
-        <ReceiveLocalRailCard
-          key={kind}
-          title={expressDepositMethodTitle(kind)}
-          subtitle={
-            expressReady ? EXPRESS_DEPOSITS_COPY.description : EXPRESS_DEPOSITS_COPY.setupRequiredHint
-          }
-          leading={<ExpressMethodLogo kind={kind} />}
-          frameLeading={false}
-          onPress={() => onExpressPress?.(kind)}
-        />
-      ))}
+  const expressRows = expressMethods.map((kind) => (
+    <ReceiveLocalRailCard
+      key={kind}
+      title={expressDepositMethodTitle(kind)}
+      subtitle={
+        expressReady ? EXPRESS_DEPOSITS_COPY.description : EXPRESS_DEPOSITS_COPY.setupRequiredHint
+      }
+      leading={<ExpressMethodLogo kind={kind} />}
+      frameLeading={false}
+      onPress={() => onExpressPress?.(kind)}
+    />
+  ))
+
+  const expressFirst = expressMethods.length > 0
+
+  return (
+    <View style={styles.list}>
+      {expressFirst ? expressRows : vaRow}
+      {localRows}
+      {expressFirst ? vaRow : expressRows}
     </View>
   )
 }

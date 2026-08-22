@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Apple, ArrowRight, ArrowLeft, Copy, Check, CreditCard, Landmark, Plus, Share2, ShieldCheck } from "lucide-react"
+import { ArrowRight, ArrowLeft, Copy, Check, CreditCard, Landmark, Plus, Share2, ShieldCheck } from "lucide-react"
 import type { Account } from "@/lib/finance-types"
 import { QRCodeSVG } from "qrcode.react"
 import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
@@ -35,8 +35,8 @@ import { AccountsExpressDepositFlow } from "@/components/accounts/accounts-expre
 import { NgLocalVerificationNotice } from "@/components/compliance/ng-local-verification-notice"
 import {
   prefetchReceiveRails,
-  readCachedReceiveRails,
   readCachedReceiveRailsForProvider,
+  resolveReceiveRailsForDisplay,
   warmYcLocalDepositCaches,
   type ReceiveRailsResponse,
 } from "@/lib/yc-local-deposit-cache"
@@ -166,8 +166,13 @@ function ExpressMethodMark({ kind }: { kind: ExpressKind }) {
   const label = expressDepositMethodTitle(kind)
   if (kind === "express_apple_pay") {
     return (
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-neutral-950" aria-label={label}>
-        <Apple className="h-[22px] w-[22px] text-white fill-white" />
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border/80 bg-white" aria-label={label}>
+        <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden>
+          <path
+            fill="#111111"
+            d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27 1.29-1.08.5-2.23-.25-3.1-1.98C4.72 16.57 5.2 12.29 6.55 9.91c.96-1.7 2.75-2.73 4.65-2.76 1.44-.03 2.8.98 3.57.98s2.43-1.22 4.11-1.03c.69.09 2.63.55 3.89 2.08-.1.06-2.32 1.36-2.3 4.04.03 3.22 2.83 4.29 2.86 4.31-.03.07-.44 1.49-1.48 2.94zM16 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"
+          />
+        </svg>
       </div>
     )
   }
@@ -442,7 +447,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
 
   const [receiveRails, setReceiveRails] = useState<ReceiveRailsResponse | null>(() =>
     effectiveResidence && localPayInCurrency
-      ? readCachedReceiveRails(effectiveResidence, localPayInCurrency)
+      ? resolveReceiveRailsForDisplay(effectiveResidence, localPayInCurrency)
       : null,
   )
   const [receiveRailsLoading, setReceiveRailsLoading] = useState(false)
@@ -562,12 +567,10 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
         effectiveResidence,
         localPayInCurrency,
       )
-      if (cached) {
-        setReceiveRails(cached)
-        setReceiveRailsLoading(false)
-      } else {
-        setReceiveRailsLoading(true)
-      }
+      setReceiveRails(
+        cached ?? resolveReceiveRailsForDisplay(effectiveResidence, localPayInCurrency, payInProvider),
+      )
+      setReceiveRailsLoading(false)
       await warmYcLocalDepositCaches({
         residenceCountry: effectiveResidence,
         localPayInCurrency,
@@ -588,17 +591,22 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
     }
   }, [account.currency, effectiveResidence, localPayInCurrency])
 
+  const displayRails =
+    receiveRails ??
+    (account.currency === "USD" && effectiveResidence && localPayInCurrency
+      ? resolveReceiveRailsForDisplay(effectiveResidence, localPayInCurrency)
+      : null)
   const showLocalTab =
     account.currency === "USD" &&
     Boolean(localPayInCurrency) &&
-    !(receiveRails != null && !receiveRailsLoading && !receiveRails.anyAvailable)
+    Boolean(displayRails?.anyAvailable)
 
-  const showCashTab = showBankTab || showLocalTab
+  const showCashTab = showBankTab || showLocalTab || Boolean(expressStatus?.methods.length)
   const showTabBar = showCashTab && showStablecoinTab
   const defaultTab = showCashTab ? "cash" : "stablecoin"
 
-  const bankAvailable = receiveRails?.rails.bank_transfer.available ?? false
-  const momoAvailable = receiveRails?.rails.mobile_money.available ?? false
+  const bankAvailable = displayRails?.rails.bank_transfer.available ?? false
+  const momoAvailable = displayRails?.rails.mobile_money.available ?? false
   const localDepositBlocked = Boolean(localPayInCurrency === "NGN" && ngMissingType)
   const countryName = effectiveResidence ? resolveReceiveCountryName(effectiveResidence) : ""
   const localDepositSubtitle = localPayInCurrency
@@ -703,6 +711,55 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
     }
   }
 
+  const expressFirst = (expressStatus?.methods.length ?? 0) > 0
+  const vaBankRow = showBankTab ? (
+    <button
+      type="button"
+      className="flex w-full items-center gap-4 rounded-xl border border-border p-4 min-h-[76px] hover:bg-muted/50 transition-colors text-left"
+      onClick={() => setCashView("bank")}
+    >
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border/80 bg-muted/40">
+        <CountryFlag code={intlBankFlagCode} size={48} className="size-full rounded-full" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="font-medium">{intlBankTitle}</p>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          {receiveInternationalDepositSubtitle(account.currency)}
+        </p>
+      </div>
+      <ArrowRight className="h-5 w-5 text-muted-foreground shrink-0" />
+    </button>
+  ) : null
+  const expressRows =
+    account.currency === "USD" && expressFirst
+      ? (expressStatus?.methods ?? []).map((kind) => (
+          <button
+            key={kind}
+            type="button"
+            className="flex w-full items-center gap-4 rounded-xl border border-border p-4 min-h-[76px] hover:bg-muted/50 transition-colors text-left disabled:opacity-55"
+            onClick={() => {
+              if (!expressStatus?.ready) {
+                window.location.href = "/settings?tab=verification&flow=express"
+                return
+              }
+              setExpressMethod(kind)
+              setCashView("express")
+            }}
+          >
+            <ExpressMethodMark kind={kind} />
+            <div className="min-w-0 flex-1">
+              <p className="font-medium">{expressDepositMethodTitle(kind)}</p>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {expressStatus?.ready
+                  ? EXPRESS_DEPOSITS_COPY.description
+                  : EXPRESS_DEPOSITS_COPY.setupRequiredHint}
+              </p>
+            </div>
+            <ArrowRight className="h-5 w-5 text-muted-foreground shrink-0" />
+          </button>
+        ))
+      : null
+
   return (
     <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
       <DialogTrigger asChild>
@@ -780,24 +837,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                     ) : null}
 
                     <div className="flex flex-col gap-3">
-                      {showBankTab ? (
-                        <button
-                          type="button"
-                          className="flex w-full items-center gap-4 rounded-xl border border-border p-4 min-h-[76px] hover:bg-muted/50 transition-colors text-left"
-                          onClick={() => setCashView("bank")}
-                        >
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border/80 bg-muted/40">
-                            <CountryFlag code={intlBankFlagCode} size={48} className="size-full rounded-full" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="font-medium">{intlBankTitle}</p>
-                            <p className="text-sm text-muted-foreground mt-0.5">
-                              {receiveInternationalDepositSubtitle(account.currency)}
-                            </p>
-                          </div>
-                          <ArrowRight className="h-5 w-5 text-muted-foreground shrink-0" />
-                        </button>
-                      ) : null}
+                      {expressFirst ? expressRows : vaBankRow}
 
                       {showLocalTab && bankAvailable ? (
                         <button
@@ -876,34 +916,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                         )
                       })}
 
-                      {account.currency === "USD" && (expressStatus?.methods.length ?? 0) > 0
-                        ? (expressStatus?.methods ?? []).map((kind) => (
-                            <button
-                              key={kind}
-                              type="button"
-                              className="flex w-full items-center gap-4 rounded-xl border border-border p-4 min-h-[76px] hover:bg-muted/50 transition-colors text-left disabled:opacity-55"
-                              onClick={() => {
-                                if (!expressStatus?.ready) {
-                                  window.location.href = "/settings?tab=verification&flow=express"
-                                  return
-                                }
-                                setExpressMethod(kind)
-                                setCashView("express")
-                              }}
-                            >
-                              <ExpressMethodMark kind={kind} />
-                              <div className="min-w-0 flex-1">
-                                <p className="font-medium">{expressDepositMethodTitle(kind)}</p>
-                                <p className="text-sm text-muted-foreground mt-0.5">
-                                  {expressStatus?.ready}
-                                    ? EXPRESS_DEPOSITS_COPY.description
-                                    : EXPRESS_DEPOSITS_COPY.setupRequiredHint}
-                                </p>
-                              </div>
-                              <ArrowRight className="h-5 w-5 text-muted-foreground shrink-0" />
-                            </button>
-                          ))
-                        : null}
+                      {expressFirst ? vaBankRow : expressRows}
 
                       {showLocalTab &&
                       !receiveRailsLoading &&

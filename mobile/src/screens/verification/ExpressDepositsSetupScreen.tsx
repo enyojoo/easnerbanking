@@ -70,11 +70,8 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
   const refresh = useCallback(async (force = false) => {
     const data = await fetchExpressOnrampStatus(force)
     applyStatus(data)
-    if (data.publishableKey && !sdk) {
-      setSdk(await loadMobileExpressOnramp(data.publishableKey))
-    }
     return data
-  }, [applyStatus, sdk])
+  }, [applyStatus])
 
   useEffect(() => {
     void refresh(false).catch((e) =>
