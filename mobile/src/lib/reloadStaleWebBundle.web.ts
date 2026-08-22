@@ -19,27 +19,41 @@ export function reloadOnceForStaleWebBundle(): void {
   window.location.reload()
 }
 
-function shouldReload(message: string, filename: string): boolean {
-  if (message.includes("Unexpected token '<'")) return true
-  if (message.includes('unknown module')) return true
-  return /\/_expo\/static\/.+\.js(?:\?|$)/.test(filename)
+function isHtmlServedAsJs(message: string): boolean {
+  return message.includes("Unexpected token '<'")
+}
+
+function isFailedExpoChunkFetch(message: string): boolean {
+  return /Failed to fetch dynamically imported module|error loading dynamically imported module|Loading chunk/i.test(
+    message,
+  )
+}
+
+function isExpoStaticScript(src: string): boolean {
+  return /\/_expo\/static\/.+\.js(?:\?|$)/.test(src)
 }
 
 export function installStaleWebBundleReload(): void {
-  window.addEventListener('error', (event) => {
-    const target = event.target
-    const src =
-      event.filename ||
-      (target instanceof HTMLScriptElement ? target.src : '') ||
-      ''
-    if (shouldReload(String(event.message || ''), src)) {
-      reloadOnceForStaleWebBundle()
-    }
-  })
+  // Resource load failures do not bubble; listen in capture.
+  window.addEventListener(
+    'error',
+    (event) => {
+      const target = event.target
+      if (target instanceof HTMLScriptElement && isExpoStaticScript(target.src)) {
+        reloadOnceForStaleWebBundle()
+        return
+      }
+      if (event.target !== window && event.target != null) return
+      if (isHtmlServedAsJs(String(event.message || ''))) {
+        reloadOnceForStaleWebBundle()
+      }
+    },
+    true,
+  )
   window.addEventListener('unhandledrejection', (event) => {
     const reason = event.reason
     const message = reason instanceof Error ? reason.message : String(reason || '')
-    if (shouldReload(message, '')) {
+    if (isHtmlServedAsJs(message) || isFailedExpoChunkFetch(message)) {
       reloadOnceForStaleWebBundle()
     }
   })

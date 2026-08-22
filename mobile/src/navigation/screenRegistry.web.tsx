@@ -1,7 +1,6 @@
 import React, { lazy, Suspense, type ComponentType } from 'react'
 import { ActivityIndicator, StyleSheet, View } from 'react-native'
 import { colors } from '../theme'
-import { importWebScreen } from './importWebScreen'
 
 function WebLazyFallback() {
   return (
@@ -12,7 +11,7 @@ function WebLazyFallback() {
 }
 
 function webLazy<P extends object>(importFn: () => Promise<{ default: ComponentType<P> }>) {
-  const LazyComponent = lazy(() => importWebScreen(importFn))
+  const LazyComponent = lazy(importFn)
   function WebLazyScreen(props: P) {
     return (
       <Suspense fallback={<WebLazyFallback />}>
