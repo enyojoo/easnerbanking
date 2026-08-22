@@ -1,6 +1,7 @@
 import React, { Suspense, lazy, type ComponentType } from 'react'
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native'
 import { colors } from '../theme'
+import { importWebScreen } from './importWebScreen'
 
 function WebLazyFallback() {
   return (
@@ -22,7 +23,7 @@ export function createWebLazyScreen<P extends object>(
     return NativeComponent
   }
 
-  const LazyComponent = lazy(importFn)
+  const LazyComponent = lazy(() => importWebScreen(importFn))
 
   function WebLazyScreen(props: P) {
     return (

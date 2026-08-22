@@ -61,6 +61,7 @@ import { lightColors } from './src/theme/colors'
 import { isIosOnMac, MAC_INSTALLED_MOBILE_DESIGN_POINTS } from './src/lib/effective-window'
 import { supabaseConfigError } from './src/lib/supabase'
 import { warmBundledFlagCache } from './src/lib/warmBundledFlagCache'
+import { clearStaleWebBundleReloadFlag } from './src/lib/reloadStaleWebBundle'
 import { hydrateWarmImageUrls } from './src/lib/imageCache'
 import { prefetchIntercomModule } from './src/lib/intercom'
 import { USE_NATIVE_DRIVER } from './src/lib/animation'
@@ -305,6 +306,7 @@ export default function App() {
       const startWarm = () => {
         void hydrateWarmImageUrls()
         warmBundledFlagCache()
+        clearStaleWebBundleReloadFlag()
       }
       const w = window as Window & {
         requestIdleCallback?: (cb: IdleRequestCallback, opts?: IdleRequestOptions) => number

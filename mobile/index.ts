@@ -1,5 +1,8 @@
 import './src/lib/backgroundTasks';
 import './src/lib/posthog';
+import { installStaleWebBundleReload } from './src/lib/reloadStaleWebBundle';
+
+installStaleWebBundleReload();
 import React from 'react';
 import { registerRootComponent } from 'expo';
 

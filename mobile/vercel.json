@@ -3,6 +3,35 @@
   "installCommand": "cd .. && npm ci --ignore-scripts --workspace=easner-mobile --workspace=@easner/shared --include-workspace-root",
   "buildCommand": "npm run build:web",
   "outputDirectory": "dist",
+  "headers": [
+    {
+      "source": "/",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, no-cache, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/index.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, no-cache, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/_expo/static/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/crypto-onramp/:path*",
@@ -21,7 +50,7 @@
       "destination": "/api/assetlinks"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/((?!api/|_expo/|assets/).*)",
       "destination": "/index.html"
     }
   ]
