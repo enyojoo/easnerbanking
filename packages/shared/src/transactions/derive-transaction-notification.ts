@@ -1,6 +1,7 @@
 import { formatDisplayPersonName } from "../format-display-name"
 import { formatMoneyDisplay } from "../format-money-display"
 import { truncateMiddle } from "../payout-recipient-subtitle"
+import { expressDepositActivityLabel, isExpressDepositsMetadata } from "../express-deposits-copy"
 import { isGlobalPayoutOffRampFlow } from "./global-payout-flow"
 import { displayPayoutReceiveAmount, type GlobalPayoutReviewSnapshot } from "./global-payout-types"
 import { rawPayoutReviewFromMetadata } from "./payout-review-from-metadata"
@@ -431,6 +432,25 @@ export function deriveTransactionNotification(
       )
     }
 
+    if (direction === "in" && meta && isExpressDepositsMetadata(meta)) {
+      const activityLabel = expressDepositActivityLabel(String(meta.payment_method ?? ""))
+      const body = failureReason
+        ? `Your ${activityLabel.toLowerCase()} could not be completed. ${failureReason}`
+        : outcome === "success"
+          ? `You've received ${amountText} via ${activityLabel}`
+          : `Your ${activityLabel.toLowerCase()} could not be completed.`
+      return finalizeDescriptor(
+        {
+          ...base,
+          kind: "bank_deposit",
+          body,
+          pushBody: body,
+          category: activityLabel,
+        },
+        activityLabel,
+      )
+    }
+
     if (direction === "in" && meta && isYcFundBalanceDepositMetadata(meta)) {
       const review = normalizeYcFundBalanceDepositReview(meta.deposit_review)
       const activityLabel = resolveYcFundBalanceNotificationActivityLabelFromMetadata(meta, review)
@@ -848,6 +868,20 @@ export function deriveTransactionNotification(
       activityLabelForNotification("bank_verification_credit", "Bank verification"),
       { successUsesCompleteSuffix: false },
     )
+    }
+    if (meta && isExpressDepositsMetadata(meta)) {
+      const activityLabel = expressDepositActivityLabel(String(meta.payment_method ?? ""))
+      const body = `You've received ${amountText} via ${activityLabel}`
+      return finalizeDescriptor(
+        {
+          ...base,
+          kind: "bank_deposit",
+          body,
+          pushBody: body,
+          category: activityLabel,
+        },
+        activityLabel,
+      )
     }
     if (
       meta &&

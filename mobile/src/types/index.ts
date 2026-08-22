@@ -176,6 +176,9 @@ export interface User {
   kyc_address_state?: string | null
   kyc_address_post_code?: string | null
   kyc_address_country?: string | null
+  stripe_crypto_customer_id?: string | null
+  stripe_express_deposits_status?: string | null
+  stripe_express_kyc_tier?: string | null
   residence_country?: string | null
   kyc_verified_at?: string | null
   status: "active" | "inactive"

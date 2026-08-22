@@ -846,6 +846,35 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                 </Pressable>
               )}
 
+              {noahKycApproved ? (
+                <Pressable
+                  onPress={() => {
+                    haptics.tap()
+                    navigation.navigate('ExpressDepositsSetup' as never)
+                  }}
+                  style={({ pressed }) => [
+                    styles.card,
+                    styles.cardInteractive,
+                    pressed && Platform.OS === 'ios' && styles.cardPressed,
+                  ]}
+                >
+                  <View style={styles.cardContent}>
+                    <View style={styles.cardLeft}>
+                      <Text style={styles.cardTitle}>Express deposits</Text>
+                      <Text style={styles.cardDescription}>
+                        Add money from a card, Apple Pay, Google Pay, or a US bank account.
+                      </Text>
+                    </View>
+                    <View style={styles.cardRight}>
+                      <View style={styles.startBadge}>
+                        <Text style={styles.startBadgeText}>Set up</Text>
+                        <ChevronRight size={12} color={colors.neutral.white} strokeWidth={2} />
+                      </View>
+                    </View>
+                  </View>
+                </Pressable>
+              ) : null}
+
               {CONSUMER_TIER_LADDER.tiers.slice(1).map((tier) => (
                 <View key={tier.tier} style={styles.card}>
                   <View style={styles.cardContent}>

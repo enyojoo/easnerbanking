@@ -25,6 +25,7 @@ import {
 } from "./stripe-invoice-settlement-lifecycle"
 import { isRelayTronDepositMetadata } from "./relay-tron-deposit"
 import { isBalanceConvertMetadata, balanceConvertListProductLabel } from "./balance-move-types"
+import { expressDepositActivityLabel, isExpressDepositsMetadata } from "../express-deposits-copy"
 
 export type EasnerLedgerDirection = "in" | "out"
 
@@ -219,6 +220,9 @@ export function toEasnerTransactionProductCategory(input: {
   ) {
     return resolveVaFundingDepositTitleFromMeta(meta)
   }
+  if (direction === "in" && isExpressDepositsMetadata(meta)) {
+    return expressDepositActivityLabel(String(meta.payment_method ?? ""))
+  }
   if (direction === "in" && isStripeInvoiceSettlementMetadata(meta)) {
     return "Invoice payment"
   }
@@ -293,6 +297,9 @@ export function toEasnerTransactionPrimaryLabel(input: {
     })
   ) {
     return resolveVaFundingDepositTitleFromMeta(meta)
+  }
+  if (direction === "in" && isExpressDepositsMetadata(meta)) {
+    return expressDepositActivityLabel(String(meta.payment_method ?? ""))
   }
   if (direction === "in" && isStripeCollectionSettlementMetadata(meta)) {
     return stripeCollectionSettlementTitle(meta)

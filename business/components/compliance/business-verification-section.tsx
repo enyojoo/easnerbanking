@@ -28,9 +28,12 @@ import {
 } from "@easner/shared"
 import {
   SETTINGS_CONNECT_FLOW_PARAM,
+  SETTINGS_EXPRESS_FLOW_PARAM,
   SETTINGS_VERIFICATION_FLOW_PARAM,
   type SettingsVerificationEmbeddedFlow,
 } from "@/lib/compliance/cutover-comms"
+import { ExpressDepositsSetup } from "@/components/compliance/express-deposits-setup"
+import { EXPRESS_DEPOSITS_COPY } from "@easner/shared"
 import { useSuspendIdleLock } from "@/hooks/use-suspend-idle-lock"
 import { GridKybWizard } from "@/components/compliance/grid-kyb-wizard"
 import { useKybPacket } from "@/lib/grid/kyb-packet-query"
@@ -60,6 +63,7 @@ export function BusinessVerificationSection({
   const searchParams = useSearchParams()
   const flowFromUrl = searchParams.get("flow") === SETTINGS_VERIFICATION_FLOW_PARAM
   const connectFromUrl = searchParams.get("flow") === SETTINGS_CONNECT_FLOW_PARAM
+  const expressFromUrl = searchParams.get("flow") === SETTINGS_EXPRESS_FLOW_PARAM
   const {
     tier1Complete,
     tier1VerificationStatus,
@@ -100,9 +104,10 @@ export function BusinessVerificationSection({
 
   const hostedFlowActive = hostedOpen || flowFromUrl || embeddedFlow === "hosted"
   const connectFlowActive = embeddedFlow === "connect" || connectFromUrl
+  const expressFlowActive = embeddedFlow === "express" || expressFromUrl
 
   // SumSub runs in a cross-origin iframe; parent window does not receive pointer/keyboard events.
-  useSuspendIdleLock(hostedFlowActive || connectFlowActive)
+  useSuspendIdleLock(hostedFlowActive || connectFlowActive || expressFlowActive)
 
   const pushVerificationFlowUrl = useCallback(() => {
     onFlowOpenChange?.(true, "hosted")
@@ -121,7 +126,7 @@ export function BusinessVerificationSection({
   }, [onFlowOpenChange, searchParams])
 
   useEffect(() => {
-    if (hostedFlowActive || connectFlowActive) {
+    if (hostedFlowActive || connectFlowActive || expressFlowActive) {
       document.documentElement.dataset.verificationFlowOpen = "true"
       document.querySelector("main")?.scrollTo({ top: 0 })
     } else {
@@ -130,7 +135,7 @@ export function BusinessVerificationSection({
     return () => {
       delete document.documentElement.dataset.verificationFlowOpen
     }
-  }, [hostedFlowActive, connectFlowActive])
+  }, [hostedFlowActive, connectFlowActive, expressFlowActive])
 
   const syncBusinessTier1FromGrid = useCallback(async (): Promise<boolean> => {
     const result = await syncBusinessGridStatusUntilAccountsReady()
@@ -256,7 +261,7 @@ export function BusinessVerificationSection({
           : "Begin verification"
 
   /** Full-page flow fills remaining main; in-tab fallback keeps title/tabs chrome. */
-  const verificationFlowPanelClass = hostedFlowActive
+  const verificationFlowPanelClass = hostedFlowActive || expressFlowActive
     ? "flex min-h-0 flex-1 flex-col"
     : "h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))] max-h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))]"
 
@@ -272,6 +277,26 @@ export function BusinessVerificationSection({
       </div>
     </div>
   ) : null
+
+  if (expressFlowActive) {
+    return (
+      <div
+        id="business-verification"
+        className={verificationFlowPanelClass}
+        data-verification-flow="open"
+      >
+        <ExpressDepositsSetup
+          onClose={() => {
+            onFlowOpenChange?.(false)
+            const next = new URLSearchParams(searchParams.toString())
+            next.set("tab", "verification")
+            next.delete("flow")
+            window.history.replaceState(null, "", `/settings?${next.toString()}`)
+          }}
+        />
+      </div>
+    )
+  }
 
   if (hostedFlowActive) {
     return (
@@ -313,7 +338,7 @@ export function BusinessVerificationSection({
             >
               <div
                 className={cn(
-                  "grid gap-4 md:grid-cols-3",
+                  "grid gap-4 md:grid-cols-2 xl:grid-cols-4",
                   connectFlowActive && "flex min-h-0 flex-1 flex-col gap-0 md:grid-cols-1",
                 )}
               >
@@ -431,6 +456,32 @@ export function BusinessVerificationSection({
 
                   return comingLaterCard
                 })}
+                {tier1Complete && canManageBusinessVerification ? (
+                  <Card className="flex h-full flex-col border-primary/20">
+                    <CardHeader className="pb-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <CardTitle className="text-base">{EXPRESS_DEPOSITS_COPY.title}</CardTitle>
+                      </div>
+                      <CardDescription className="text-sm">
+                        {EXPRESS_DEPOSITS_COPY.description}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="mt-auto pt-0">
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          onFlowOpenChange?.(true, "express")
+                          const next = new URLSearchParams(searchParams.toString())
+                          next.set("tab", "verification")
+                          next.set("flow", SETTINGS_EXPRESS_FLOW_PARAM)
+                          window.history.replaceState(null, "", `/settings?${next.toString()}`)
+                        }}
+                      >
+                        {EXPRESS_DEPOSITS_COPY.setupCta}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ) : null}
               </div>
             </CardContent>
       </Card>

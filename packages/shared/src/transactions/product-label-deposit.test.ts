@@ -53,6 +53,23 @@ describe("product labels for deposits", () => {
     expect(isVaFundingDeposit({ provider: "noah", direction: "in", metadata: meta })).toBe(false)
   })
 
+  it("Express deposits uses method label, not invoice copy", () => {
+    expect(
+      toEasnerTransactionPrimaryLabel({
+        provider: "stripe",
+        direction: "in",
+        metadata: { flow: "express_deposits", payment_method: "card" },
+      }),
+    ).toBe("Card deposit")
+    expect(
+      toEasnerTransactionProductCategory({
+        provider: "stripe",
+        direction: "in",
+        metadata: { flow: "express_deposits", payment_method: "apple_pay" },
+      }),
+    ).toBe("Apple Pay deposit")
+  })
+
   it("Stripe invoice settlement → Invoice #number (not Bank Deposit)", () => {
     const meta = {
       source: "invoice_stripe",

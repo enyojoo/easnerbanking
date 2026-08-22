@@ -59,6 +59,9 @@ vi.mock("@/lib/deposit-omnibus/execute-deposit-split", () => ({
 vi.mock("@/lib/yellowcard/yc-ledger", () => ({
   findYcFundBalanceChainSettlementForSuppression: vi.fn().mockResolvedValue(false),
 }))
+vi.mock("@/lib/stripe/onramp-ledger", () => ({
+  findStripeOnrampChainSettlementForSuppression: vi.fn().mockResolvedValue(false),
+}))
 vi.mock("@/lib/yellowcard/execute-yc-fund-balance-split", () => ({
   tryCompleteYcFundBalanceFromUserVaultInbound: vi.fn().mockResolvedValue(false),
 }))

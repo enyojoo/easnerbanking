@@ -64,6 +64,7 @@ import { warmBundledFlagCache } from './src/lib/warmBundledFlagCache'
 import { hydrateWarmImageUrls } from './src/lib/imageCache'
 import { prefetchIntercomModule } from './src/lib/intercom'
 import { USE_NATIVE_DRIVER } from './src/lib/animation'
+import { ExpressStripeProvider } from './src/components/ExpressStripeProvider'
 
 // Keep the splash screen visible while we load fonts
 SplashScreen.preventAutoHideAsync()
@@ -463,6 +464,7 @@ export default function App() {
           <ThemePaletteProvider>
               <AuthProvider>
                 <QueryProvider>
+                  <ExpressStripeProvider>
                   <PushNotificationBootstrap />
                   <WebIntercomMessenger />
                   <WebVitalsReporter />
@@ -473,6 +475,7 @@ export default function App() {
                       </ToastProvider>
                     </NotificationsProvider>
                   </BalanceProvider>
+                  </ExpressStripeProvider>
                 </QueryProvider>
               </AuthProvider>
           </ThemePaletteProvider>

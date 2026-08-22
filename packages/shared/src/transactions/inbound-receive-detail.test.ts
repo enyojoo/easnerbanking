@@ -32,6 +32,36 @@ describe("classifyInboundReceiveKind", () => {
     ).toBe("bank_verification")
   })
 
+  it("classifies Express deposits before YC deposit_review", () => {
+    expect(
+      classifyInboundReceiveKind({
+        direction: "in",
+        metadata: {
+          flow: "express_deposits",
+          payment_method: "card",
+          deposit_review: {
+            you_get: 50,
+            you_get_currency: "USD",
+            you_pay: 48.2,
+            you_pay_currency: "EUR",
+            payment_method: "card",
+          },
+        },
+        deposit_review: {
+          local_pay_in: 1000,
+          local_currency: "NGN",
+          usd_credit: 1,
+          processing_fee: 0,
+          exchange_rate: 1500,
+          transfer_method: "Bank Transfer",
+          credit_to: "USD Balance",
+          residence_country: "NG",
+          pay_in_rail: "bank_transfer",
+        },
+      }),
+    ).toBe("express_deposits")
+  })
+
   it("classifies yc fund_balance from deposit_review", () => {
     expect(
       classifyInboundReceiveKind({
@@ -456,5 +486,46 @@ describe("resolveInboundReceiveNotification", () => {
     })!
     const notify = resolveInboundReceiveNotification(snapshot)
     expect(notify.successBody).toBe("You've received $100 from Acme Corp")
+  })
+})
+
+describe("Express deposits inbound receive", () => {
+  const euMeta = {
+    flow: "express_deposits",
+    payment_method: "card",
+    usd_credit: 50,
+    deposit_review: {
+      you_get: 50,
+      you_get_currency: "USD",
+      you_pay: 46.2,
+      you_pay_currency: "EUR",
+      payment_method: "card",
+    },
+  }
+
+  it("shows you pay, you get, credit destination, and method", () => {
+    const snapshot = resolveInboundReceiveDetail({
+      direction: "in",
+      provider: "stripe",
+      metadata: euMeta,
+      amount: 50,
+      currency: "USD",
+      ledger_created_at: "2026-01-15T12:00:00.000Z",
+    })
+    expect(snapshot?.kind).toBe("express_deposits")
+    expect(snapshot?.displayTitle).toBe("Card deposit")
+    expect(snapshot?.amountPaid).toEqual({ amount: 46.2, currency: "EUR" })
+    expect(snapshot?.amountCredited).toEqual({ amount: 50, currency: "USD" })
+    const map = rowMap(buildInboundReceiveDetailRows(snapshot!, { surface: "detail" }))
+    expect(map[REVIEW_ROW_LABELS.amountPaid]).toBe("€46.20")
+    expect(map[REVIEW_ROW_LABELS.amountCredited]).toBe("+$50")
+    expect(map[REVIEW_ROW_LABELS.creditTo]).toBe("USD Balance")
+    expect(map[REVIEW_ROW_LABELS.depositMethod]).toBe("Card deposit")
+    expect(map[REVIEW_ROW_LABELS.exchangeRate]).toBeTruthy()
+    const email = rowMap(buildInboundReceiveEmailDetailRows(snapshot!))
+    expect(email[REVIEW_ROW_LABELS.amountCredited]).toBe("+$50")
+    expect(resolveInboundReceiveNotification(snapshot!).successBody).toBe(
+      "You've received $50 via Card deposit",
+    )
   })
 })

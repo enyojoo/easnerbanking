@@ -17,6 +17,7 @@ export function isStablecoinDepositPayInRow(row: Record<string, unknown>): boole
   const meta = (row.metadata as Record<string, unknown> | null | undefined) ?? {}
   if (String(meta.source ?? "").toLowerCase() === "easetag_p2p") return false
   if (String(meta.flow ?? "").toLowerCase() === "bank_onramp") return false
+  if (String(meta.flow ?? "").toLowerCase() === "express_deposits") return false
   if (isRelayTronDepositMetadata(meta)) return true
   const sourceType = String(meta.source_type ?? "").toLowerCase()
   if (sourceType === "liquidation_address") return true

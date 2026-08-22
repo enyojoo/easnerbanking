@@ -33,6 +33,9 @@
         "aps-environment": "production",
         "com.apple.developer.applesignin": [
           "Default"
+        ],
+        "com.apple.developer.in-app-payments": [
+          "merchant.com.easner.mobile"
         ]
       }
     },
@@ -76,7 +79,8 @@
     "extra": {
       "eas": {
         "projectId": "b1e3438a-faea-4359-a86f-6b279ebe2743"
-      }
+      },
+      "applePayMerchantId": "merchant.com.easner.mobile"
     },
     "androidStatusBar": {
       "backgroundColor": "#007ACC",
@@ -104,7 +108,14 @@
       "expo-apple-authentication",
       "expo-web-browser",
       "expo-background-task",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.easner.mobile",
+          "enableGooglePay": true
+        }
+      ]
     ],
     "owner": "easner"
   }

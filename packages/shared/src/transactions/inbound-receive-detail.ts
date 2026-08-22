@@ -33,6 +33,8 @@ import {
   isVerificationDepositMetadata,
 } from "./verification-deposit"
 import { isStripeCollectionSettlementMetadata } from "./stripe-invoice-settlement-lifecycle"
+import { expressDepositActivityLabel, isExpressDepositsMetadata } from "../express-deposits-copy"
+import { normalizeExpressDepositsReview } from "../express-deposits-detail"
 
 export type InboundReceiveKind =
   | "yc_fund_balance"
@@ -40,6 +42,7 @@ export type InboundReceiveKind =
   | "bank_verification"
   | "stablecoin"
   | "easetag_receive"
+  | "express_deposits"
 
 export type InboundReceiveCreditDestination = {
   label: "credit_to" | "credit_for"
@@ -173,6 +176,7 @@ function deriveStablecoinSchemeLabel(input: InboundReceiveResolveInput): string 
 
 function isStablecoinInbound(input: InboundReceiveResolveInput): boolean {
   const meta = input.metadata ?? {}
+  if (isExpressDepositsMetadata(meta)) return false
   if (String(meta.flow ?? "").toLowerCase() === "bank_onramp") return false
   if (isRelayTronDepositInbound(input)) return true
   const sourceType = String(meta.source_type ?? input.source_type ?? "").toLowerCase()
@@ -209,7 +213,7 @@ function readEasetagHandle(meta: Record<string, unknown>): string {
   return raw ? raw.replace(/^@+/, "") : ""
 }
 
-/** Priority: easetag → verification → yc_fund_balance → stablecoin → va_funding */
+/** Priority: easetag → verification → express → yc_fund_balance → stablecoin → va_funding */
 export function classifyInboundReceiveKind(
   input: InboundReceiveResolveInput,
 ): InboundReceiveKind | null {
@@ -220,6 +224,7 @@ export function classifyInboundReceiveKind(
 
   if (isEasetagInbound(input)) return "easetag_receive"
   if (isVerificationDepositMetadata(meta)) return "bank_verification"
+  if (isExpressDepositsMetadata(meta)) return "express_deposits"
   if (input.deposit_review || isYcFundBalanceDepositMetadata(meta)) return "yc_fund_balance"
   if (isStripeCollectionSettlementMetadata(meta)) return null
   if (isStablecoinInbound(input)) return "stablecoin"
@@ -264,6 +269,8 @@ function resolveDisplayTitle(kind: InboundReceiveKind, input: InboundReceiveReso
       const handle = readEasetagHandle(meta)
       return handle ? `Received from @${handle}` : "Easetag deposit"
     }
+    case "express_deposits":
+      return expressDepositActivityLabel(String(meta.payment_method ?? ""))
     default:
       return "Deposit"
   }
@@ -335,6 +342,34 @@ export function resolveInboundReceiveDetail(
     meta.created_at,
   )
   const note = pickIso(input.send_note, meta.send_note, meta.note)
+
+  if (kind === "express_deposits") {
+    const review = normalizeExpressDepositsReview(meta)
+    const credited =
+      review?.youGet ??
+      pickAmount(input.posted_amount, input.settled_amount, input.amount, meta.usd_credit) ??
+      0
+    const paid = review?.youPay ?? credited
+    const payCurrency = review?.youPayCurrency ?? "USD"
+    const getCurrency = review?.youGetCurrency ?? "USD"
+    const scheme = expressDepositActivityLabel(review?.paymentMethod ?? String(meta.payment_method ?? ""))
+    const crossCurrency = payCurrency !== getCurrency && paid > 0 && credited > 0
+    return {
+      kind,
+      displayTitle: scheme,
+      notificationActivityLabel: scheme,
+      transactionId,
+      whenAt,
+      amountCredited: { amount: credited, currency: getCurrency },
+      creditDestination: resolveCreditDestination(getCurrency, kind),
+      scheme,
+      amountPaid: { amount: paid, currency: payCurrency },
+      ...(crossCurrency
+        ? { exchangeRate: { from: getCurrency, to: payCurrency, rate: paid / credited } }
+        : {}),
+      ...(note ? { note } : {}),
+    }
+  }
 
   if (kind === "yc_fund_balance") {
     const review =
@@ -528,7 +563,7 @@ function pushSenderRow(rows: InboundReceiveDetailRow[], snapshot: InboundReceive
 
 /** Amount credited is already in the hero for VA/crypto without a fee delta; local pay-in always shows it. */
 function shouldShowAmountCreditedRow(snapshot: InboundReceiveDetailSnapshot): boolean {
-  if (snapshot.kind === "yc_fund_balance") return true
+  if (snapshot.kind === "yc_fund_balance" || snapshot.kind === "express_deposits") return true
   if (snapshot.kind === "bank_verification" || snapshot.kind === "easetag_receive") return false
   return Boolean(snapshot.processingFee && snapshot.processingFee.amount > 0)
 }
@@ -687,6 +722,33 @@ export function buildInboundReceiveDetailRows(
       pushIf(rows, REVIEW_ROW_LABELS.note, snapshot.note)
       break
     }
+    case "express_deposits": {
+      if (snapshot.exchangeRate && snapshot.exchangeRate.rate > 0) {
+        pushIf(
+          rows,
+          REVIEW_ROW_LABELS.exchangeRate,
+          formatSendRateLabel(
+            snapshot.exchangeRate.from,
+            snapshot.exchangeRate.to,
+            snapshot.exchangeRate.rate,
+          ),
+        )
+      }
+      if (snapshot.amountPaid) {
+        pushIf(
+          rows,
+          REVIEW_ROW_LABELS.amountPaid,
+          formatReviewRowMoneyDisplay(
+            REVIEW_ROW_LABELS.amountPaid,
+            snapshot.amountPaid.amount,
+            snapshot.amountPaid.currency,
+          ),
+        )
+      }
+      pushAmountCreditedIfNeeded(rows, snapshot)
+      pushCreditDestination(rows, snapshot.creditDestination)
+      break
+    }
   }
 
   // Deposit method sits with Transfer method on payouts – last content row before When.
@@ -715,6 +777,7 @@ export function resolveInboundDepositReceivedAmount(snapshot: InboundReceiveDeta
   currency: string
 } {
   if (snapshot.kind === "easetag_receive") return snapshot.amountCredited
+  if (snapshot.kind === "express_deposits") return snapshot.amountCredited
   if (snapshot.kind === "yc_fund_balance" && snapshot.amountPaid) return snapshot.amountPaid
   if (snapshot.depositAmount) return snapshot.depositAmount
   if (snapshot.amountPaid) return snapshot.amountPaid
@@ -742,7 +805,8 @@ export function formatInboundDepositReceivedNotificationBody(
         ? `You've received ${receivedText} from @${handle}`
         : `You've received ${receivedText}`
     }
-    case "yc_fund_balance": {
+    case "yc_fund_balance":
+    case "express_deposits": {
       const scheme = String(snapshot.scheme ?? "").trim()
       return scheme
         ? `You've received ${receivedText} via ${scheme}`

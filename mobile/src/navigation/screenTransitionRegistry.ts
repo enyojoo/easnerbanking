@@ -47,6 +47,8 @@ export type ScreenRouteName =
   | 'ReceiveStablecoinDetails'
   | 'ReceiveLocalRail'
   | 'ReceiveLocalAmount'
+  | 'ExpressDepositAmount'
+  | 'ExpressDepositsSetup'
   | 'ReceiveLocalMomoSetup'
   | 'ReceiveLocalReview'
   | 'OpenCurrencyAccount'
@@ -108,6 +110,8 @@ export const SCREEN_TRANSITION_MAP: Record<ScreenRouteName, ScreenTransitionEntr
   ReceiveStablecoinDetails: { intent: 'flowStep' },
   ReceiveLocalRail: { intent: 'flowHub', hubGroup: 'receiveLocalHub' },
   ReceiveLocalAmount: { intent: 'flowStep' },
+  ExpressDepositAmount: { intent: 'flowStep' },
+  ExpressDepositsSetup: { intent: 'flowStep' },
   ReceiveLocalMomoSetup: { intent: 'flowStep' },
   ReceiveLocalReview: { intent: 'flowStep', flowStepTerminal: true },
 

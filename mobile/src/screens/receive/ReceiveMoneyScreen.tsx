@@ -8,6 +8,7 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
+  Platform,
 } from 'react-native'
 import {
   ArrowLeft,
@@ -37,7 +38,8 @@ import { useYcReceiveRails } from '../../hooks/useYcFundBalanceFlow'
 import type { YcPayInRail } from '../../hooks/useYcCrossBorderFlow'
 import { useSendDestinations } from '../../hooks/useSendDestinations'
 import { resolveMobilePayInProvider } from '../../lib/resolveMobilePayInProvider'
-import { ReceiveCashMethodList } from '../../components/receive/ReceiveCashMethodList'
+import { ReceiveCashMethodList, type ExpressCashKind } from '../../components/receive/ReceiveCashMethodList'
+import { apiFetch } from '../../query/api-client'
 import {
   resolveWarmYcLocalDepositCorridor,
   ensureYcLocalDepositCachesReady,
@@ -61,6 +63,9 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
   const [activeTab, setActiveTab] = useState<TabType>('cash')
   const [ngMissingType, setNgMissingType] = useState<NgLocalIdType | null>(null)
+  const [expressReady, setExpressReady] = useState(false)
+  const [expressMethods, setExpressMethods] = useState<ExpressCashKind[]>([])
+  const [expressFlagCode, setExpressFlagCode] = useState('US')
 
   const supportsStablecoins = currency === 'USD' || currency === 'EUR'
 
@@ -207,12 +212,16 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     navigation.navigate('ReceiveBankDetails' as never, { currency } as never)
   }
 
-  const navigateToLocalDeposit = (payInRail: YcPayInRail) => {
-    if (!localPayInCurrency || !residenceCountry || localDepositBlocked) return
+  const navigateToLocalDeposit = (payInRail: YcPayInRail, country?: string) => {
+    const cc = String(country || residenceCountry || '').trim().toUpperCase()
+    const cur = country
+      ? mapResidenceToLocalPayInCurrency(cc)
+      : localPayInCurrency
+    if (!cur || !cc || localDepositBlocked) return
     haptics.medium()
     navigation.navigate('ReceiveLocalAmount' as never, {
-      localPayInCurrency,
-      residenceCountry,
+      localPayInCurrency: cur,
+      residenceCountry: cc,
       payInRail,
       bankAvailable,
       momoAvailable,
@@ -238,6 +247,52 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
       cancelled = true
     }
   }, [localPayInCurrency, verificationComplete, currency, residenceCountry])
+
+  useEffect(() => {
+    if (currency !== 'USD' || !verificationComplete) {
+      setExpressMethods([])
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const data = await apiFetch<{
+          eligible?: boolean
+          ready?: boolean
+          payerCountry?: string | null
+          methods?: string[]
+          office?: { stripeOnrampEnabled?: boolean }
+        }>('/api/stripe/onramp/status')
+        if (cancelled) return
+        if (data.office?.stripeOnrampEnabled && data.eligible) {
+          setExpressReady(Boolean(data.ready))
+          setExpressFlagCode(String(data.payerCountry || residenceCountry || 'US').toUpperCase())
+          const allowed = new Set<ExpressCashKind>([
+            'express_card',
+            'express_apple_pay',
+            'express_google_pay',
+            'express_ach',
+          ])
+          const fromApi = (Array.isArray(data.methods) ? data.methods : []).filter(
+            (k): k is ExpressCashKind => allowed.has(k as ExpressCashKind),
+          )
+          const methods = fromApi.filter((kind) => {
+            if (kind === 'express_apple_pay') return Platform.OS === 'ios' || Platform.OS === 'web'
+            if (kind === 'express_google_pay') return Platform.OS === 'android' || Platform.OS === 'web'
+            return true
+          })
+          setExpressMethods(methods)
+        } else {
+          setExpressMethods([])
+        }
+      } catch {
+        if (!cancelled) setExpressMethods([])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [currency, verificationComplete, residenceCountry])
 
   const accountReady = hasAccountData
 
@@ -593,8 +648,19 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                   momoAvailable={momoAvailable}
                   localDepositBlocked={localDepositBlocked}
                   onBankPress={navigateToBankDetails}
-                  onLocalBankPress={() => navigateToLocalDeposit('bank_transfer')}
+                  onLocalBankPress={(country) => navigateToLocalDeposit('bank_transfer', country)}
                   onLocalMomoPress={() => navigateToLocalDeposit('mobile_money')}
+                  expressMethods={expressMethods}
+                  expressReady={expressReady}
+                  expressFlagCode={expressFlagCode}
+                  onExpressPress={(kind) => {
+                    haptics.medium()
+                    if (!expressReady) {
+                      navigation.navigate('ExpressDepositsSetup' as never)
+                      return
+                    }
+                    navigation.navigate('ExpressDepositAmount' as never, { method: kind } as never)
+                  }}
                 />
               </View>
               )

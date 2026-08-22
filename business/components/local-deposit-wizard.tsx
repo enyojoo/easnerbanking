@@ -3,11 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
   ArrowLeft,
-  ArrowUpDown,
   Check,
   Copy,
   Landmark,
@@ -45,6 +43,7 @@ import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
 import { useWalletBalances } from "@/hooks/queries/use-wallets"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { useYcPayInMinEnforcement } from "@/hooks/use-yc-pay-in-min-enforcement"
+import { MoveAmountStep } from "@/components/accounts/move-amount-step"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 
 type LocalRail = "bank_transfer" | "mobile_money"
@@ -719,6 +718,27 @@ export function LocalDepositWizard({
             })
         : { ok: true as const }
     const canContinue = enteredAmount > 0 && Boolean(customerRate) && amountLimitCheck.ok
+    const inboundSourceCurrency = amountMode === "usd" ? "USD" : localPayInCurrency
+    const inboundDestCurrency = amountMode === "usd" ? localPayInCurrency : "USD"
+    const inboundReceivePreview =
+      enteredAmount > 0 && customerRate
+        ? amountMode === "usd"
+          ? displayPreview.feeInclusive
+            ? `${REVIEW_ROW_LABELS.totalToPay}: ${formatMoneyDisplay(displayPreview.localPayIn, localPayInCurrency)}`
+            : `Pay ≈ ${formatMoneyDisplay(displayPreview.localPayIn, localPayInCurrency)}`
+          : `Receive ≈ ${formatMoneyDisplay(displayPreview.usdCredit, "USD")}`
+        : null
+    const destUsdAccount = {
+      id: "usd-balance",
+      currency: "USD" as const,
+      accountName: "USD Balance",
+      bankName: "",
+      accountNumber: "",
+      fullAccountNumber: "",
+      balance: usdBalance,
+      availableBalance: usdBalance,
+      status: "active" as const,
+    }
     return (
       <div className="space-y-4">
         <button
@@ -730,55 +750,49 @@ export function LocalDepositWizard({
           Back
         </button>
 
-        <div className="rounded-xl border border-border p-4 flex items-center gap-3">
-          <CurrencyFlagCircle currency="USD" size={28} />
-          <div>
-            <p className="text-xs text-muted-foreground">{REVIEW_ROW_LABELS.creditTo}</p>
-            <p className="font-medium">
-              USD Balance • ${usdBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="local-deposit-amount">
-            {amountMode === "usd" ? "Amount (USD)" : `Amount (${localPayInCurrency})`}
-          </Label>
-          <Input
-            id="local-deposit-amount"
-            inputMode="decimal"
-            placeholder="0.00"
-            value={amountStr}
-            onChange={(e) => setAmountStr(e.target.value)}
-          />
-          {enteredAmount > 0 && customerRate ? (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-              onClick={() => {
-                if (amountMode === "usd" && displayPreview.localPayIn > 0) {
-                  setAmountMode("local")
-                  setAmountStr(String(displayPreview.localPayIn))
-                } else if (amountMode === "local" && displayPreview.usdCredit > 0) {
-                  setAmountMode("usd")
-                  setAmountStr(String(displayPreview.usdCredit))
-                } else {
-                  setAmountMode(amountMode === "usd" ? "local" : "usd")
-                }
-              }}
-            >
-              <ArrowUpDown className="h-3.5 w-3.5 text-primary" />
-              {amountMode === "usd"
-                ? displayPreview.feeInclusive
-                  ? `${REVIEW_ROW_LABELS.totalToPay}: ${formatMoneyDisplay(displayPreview.localPayIn, localPayInCurrency)}`
-                  : `Pay ≈ ${formatMoneyDisplay(displayPreview.localPayIn, localPayInCurrency)}`
-                : `Receive ≈ ${formatMoneyDisplay(displayPreview.usdCredit, "USD")}`}
-            </button>
-          ) : null}
-          {!amountLimitCheck.ok ? (
-            <p className="text-sm text-destructive">{amountLimitCheck.message}</p>
-          ) : null}
-        </div>
+        <MoveAmountStep
+          variant="inbound"
+          direction="usd_to_eur"
+          onDirectionChange={() => {}}
+          destAccount={destUsdAccount}
+          amountStr={amountStr}
+          onAmountStrChange={setAmountStr}
+          quote={null}
+          indicativeRate={customerRate}
+          quoteRateLoading={false}
+          quoteLoading={isContinueLoading}
+          quoteError={!amountLimitCheck.ok ? amountLimitCheck.message : quoteError}
+          onContinue={() => {
+            void (async () => {
+              setQuoteError(null)
+              if (isMomo) {
+                setStep("momo_setup")
+                return
+              }
+              const locked = await lockBeforeReview()
+              if (locked) setStep("review")
+            })()
+          }}
+          continueDisabled={!canContinue || isContinueLoading}
+          continueLoading={isContinueLoading}
+          inboundSourceCurrency={inboundSourceCurrency}
+          inboundDestCurrency={inboundDestCurrency}
+          sourceTitle={amountMode === "usd" ? "USD you get" : `${localPayInCurrency} you pay`}
+          destTitle="USD Balance"
+          onInboundToggle={() => {
+            if (amountMode === "usd" && displayPreview.localPayIn > 0) {
+              setAmountMode("local")
+              setAmountStr(String(displayPreview.localPayIn))
+            } else if (amountMode === "local" && displayPreview.usdCredit > 0) {
+              setAmountMode("usd")
+              setAmountStr(String(displayPreview.usdCredit))
+            } else {
+              setAmountMode(amountMode === "usd" ? "local" : "usd")
+            }
+          }}
+          inboundReceivePreview={inboundReceivePreview}
+          continueLabel={isContinueLoading ? "Locking details…" : undefined}
+        />
 
         <div className="flex items-center gap-2 rounded-full border border-border px-4 py-2 w-fit">
           <CurrencyFlagCircle currency={localPayInCurrency} size={20} />
@@ -795,29 +809,6 @@ export function LocalDepositWizard({
             </button>
           ) : null}
         </div>
-
-        <Button
-          className="w-full"
-          disabled={!canContinue || isContinueLoading}
-          onClick={async () => {
-            setQuoteError(null)
-            if (isMomo) {
-              setStep("momo_setup")
-              return
-            }
-            const locked = await lockBeforeReview()
-            if (locked) setStep("review")
-          }}
-        >
-          {isContinueLoading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Locking details…
-            </>
-          ) : (
-            "Continue"
-          )}
-        </Button>
       </div>
     )
   }

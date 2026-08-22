@@ -45,6 +45,8 @@ import {
   CardScreen,
   ReceiveBankDetailsScreen,
   ReceiveLocalAmountScreen,
+  ExpressDepositAmountScreen,
+  ExpressDepositsSetupScreen,
   ReceiveLocalMomoSetupScreen,
   ReceiveLocalRailScreen,
   ReceiveLocalReviewScreen,
@@ -337,6 +339,16 @@ function MainStack() {
           name="ReceiveLocalAmount"
           component={ReceiveLocalAmountScreen}
           options={transitionOptions('ReceiveLocalAmount')}
+        />
+        <Stack.Screen
+          name="ExpressDepositAmount"
+          component={ExpressDepositAmountScreen}
+          options={transitionOptions('ExpressDepositAmount')}
+        />
+        <Stack.Screen
+          name="ExpressDepositsSetup"
+          component={ExpressDepositsSetupScreen}
+          options={transitionOptions('ExpressDepositsSetup')}
         />
         <Stack.Screen
           name="ReceiveLocalMomoSetup"

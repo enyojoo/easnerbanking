@@ -54,8 +54,8 @@ function quoteMatchesAmount(
 type Props = {
   direction: "usd_to_eur" | "eur_to_usd"
   onDirectionChange: (direction: "usd_to_eur" | "eur_to_usd") => void
-  sourceAccount: Account
-  destAccount: Account
+  sourceAccount?: Account | null
+  destAccount?: Account | null
   amountStr: string
   onAmountStrChange: (value: string) => void
   quote: MoveQuoteState | null
@@ -66,6 +66,18 @@ type Props = {
   onContinue: () => void
   continueDisabled: boolean
   continueLoading?: boolean
+  /** Inbound pay-in: no source Easner balance. */
+  variant?: "convert" | "inbound"
+  inboundSourceCurrency?: string
+  inboundDestCurrency?: string
+  sourceTitle?: string
+  destTitle?: string
+  onInboundToggle?: () => void
+  inboundReceivePreview?: string | null
+  inboundRateDisplay?: string | null
+  continueLabel?: string
+  /** Inbound pay-in min/max (same treatment as send amount screens). */
+  limitError?: string | null
 }
 
 function balanceRowLabel(currency: string): string {
@@ -87,15 +99,38 @@ export function MoveAmountStep({
   onContinue,
   continueDisabled,
   continueLoading,
+  variant = "convert",
+  inboundSourceCurrency,
+  inboundDestCurrency,
+  sourceTitle,
+  destTitle,
+  onInboundToggle,
+  inboundReceivePreview,
+  inboundRateDisplay,
+  continueLabel,
+  limitError,
 }: Props) {
-  const sourceCurrency = sourceCurrencyForDirection(direction)
-  const destCurrency = destCurrencyForDirection(direction)
+  const inbound = variant === "inbound"
+  const sourceCurrency = inbound
+    ? String(inboundSourceCurrency || "USD")
+    : sourceCurrencyForDirection(direction)
+  const destCurrency = inbound
+    ? String(inboundDestCurrency || "USD")
+    : destCurrencyForDirection(direction)
   const enteredAmount = parseAmountFromDisplay(amountStr)
-  const matchedQuote = quoteMatchesAmount(quote, enteredAmount) ? quote : null
+  const matchedQuote = inbound ? null : quoteMatchesAmount(quote, enteredAmount) ? quote : null
   const debitAmount = matchedQuote?.totalDebited ?? enteredAmount
   const hasInsufficientBalance =
-    enteredAmount > 0 && debitAmount > sourceAccount.availableBalance
-  const shortfallAmount = Math.max(0, debitAmount - sourceAccount.availableBalance)
+    !inbound &&
+    enteredAmount > 0 &&
+    Boolean(sourceAccount) &&
+    debitAmount > sourceAccount!.availableBalance
+  const shortfallAmount = Math.max(
+    0,
+    (sourceAccount?.availableBalance ?? 0) > 0
+      ? debitAmount - sourceAccount!.availableBalance
+      : 0,
+  )
 
   const forwardRate = matchedQuote
     ? resolveMoveQuoteRate(matchedQuote)
@@ -109,9 +144,19 @@ export function MoveAmountStep({
         ? roundMoneyAmount(enteredAmount * forwardRate)
         : 0
 
-  const hasFx = enteredAmount > 0 && receiveAmount > 0
-  const rateDisplay = hasFx ? formatSendRateLabel(sourceCurrency, destCurrency, forwardRate) : null
-  const receivingPreview = hasFx ? formatMoneyDisplay(receiveAmount, destCurrency) : null
+  const hasFx = inbound
+    ? Boolean(inboundReceivePreview)
+    : enteredAmount > 0 && receiveAmount > 0
+  const rateDisplay = inbound
+    ? inboundRateDisplay ?? null
+    : hasFx
+      ? formatSendRateLabel(sourceCurrency, destCurrency, forwardRate)
+      : null
+  const receivingPreview = inbound
+    ? inboundReceivePreview ?? null
+    : hasFx
+      ? formatMoneyDisplay(receiveAmount, destCurrency)
+      : null
 
   const minAmountError =
     quoteError === "min_amount_not_met"
@@ -131,17 +176,21 @@ export function MoveAmountStep({
     <div className="space-y-6">
       <div className="rounded-lg border border-border bg-muted/30 p-4">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Moving from
+          {inbound ? "You pay from" : "Moving from"}
         </p>
         <div className="mt-2 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <CurrencyFlagCircle currency={sourceCurrency} size={28} />
             <div>
-              <p className="text-sm font-semibold text-foreground">{balanceRowLabel(sourceCurrency)}</p>
-              <p className="text-xs text-muted-foreground">
-                Available{" "}
-                {formatMoneyDisplay(sourceAccount.availableBalance, sourceCurrency)}
+              <p className="text-sm font-semibold text-foreground">
+                {sourceTitle ?? balanceRowLabel(sourceCurrency)}
               </p>
+              {!inbound ? (
+                <p className="text-xs text-muted-foreground">
+                  Available{" "}
+                  {formatMoneyDisplay(sourceAccount.availableBalance, sourceCurrency)}
+                </p>
+              ) : null}
             </div>
           </div>
         </div>
@@ -162,9 +211,13 @@ export function MoveAmountStep({
             ) : hasFx && rateDisplay ? (
               <div className="flex max-w-full flex-col items-end gap-0.5 text-sm text-muted-foreground">
                 <div className="flex max-w-full items-center justify-end gap-x-1 whitespace-nowrap">
-                  <button
+                    <button
                     type="button"
-                    onClick={() => onDirectionChange(oppositeMoveDirection(direction))}
+                    onClick={() =>
+                      inbound
+                        ? onInboundToggle?.()
+                        : onDirectionChange(oppositeMoveDirection(direction))
+                    }
                     className="inline-flex min-w-0 max-w-full items-center gap-1 hover:text-foreground"
                   >
                     <ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={2} aria-hidden />
@@ -221,6 +274,13 @@ export function MoveAmountStep({
           </div>
         ) : null}
 
+        {limitError ? (
+          <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{limitError}</span>
+          </div>
+        ) : null}
+
         {quoteError === "relay_not_configured" ? (
           <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
             <AlertCircle className="h-4 w-4 shrink-0" />
@@ -231,15 +291,23 @@ export function MoveAmountStep({
 
       <div className="rounded-lg border border-border bg-muted/20 p-4">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Moving to
+          {inbound ? "You get" : "Moving to"}
         </p>
         <div className="mt-2 flex items-center gap-2">
           <CurrencyFlagCircle currency={destCurrency} size={28} />
           <div>
-            <p className="text-sm font-semibold text-foreground">{balanceRowLabel(destCurrency)}</p>
-            <p className="text-xs text-muted-foreground">
-              Available {formatMoneyDisplay(destAccount.availableBalance, destCurrency)}
+            <p className="text-sm font-semibold text-foreground">
+              {destTitle ?? balanceRowLabel(destCurrency)}
             </p>
+            {!inbound ? (
+              <p className="text-xs text-muted-foreground">
+                Available {formatMoneyDisplay(destAccount.availableBalance, destCurrency)}
+              </p>
+            ) : destAccount ? (
+              <p className="text-xs text-muted-foreground">
+                Available {formatMoneyDisplay(destAccount.availableBalance, destCurrency)}
+              </p>
+            ) : null}
           </div>
         </div>
       </div>
@@ -250,7 +318,7 @@ export function MoveAmountStep({
         disabled={continueDisabled}
         onClick={onContinue}
       >
-        {continueLoading ? "Loading…" : "Continue"}
+        {continueLoading ? "Loading…" : continueLabel ?? "Continue"}
       </Button>
     </div>
   )

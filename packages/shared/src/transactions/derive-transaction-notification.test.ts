@@ -216,3 +216,21 @@ describe("deriveTransactionNotification failed Grid payout", () => {
     expect(descriptor.failureReason).toBeUndefined()
   })
 })
+
+describe("deriveTransactionNotification Express deposits", () => {
+  it("uses card deposit copy without Stripe", () => {
+    const descriptor = deriveTransactionNotification({
+      provider: "stripe",
+      direction: "in",
+      amount: 50,
+      currency: "USD",
+      metadata: { flow: "express_deposits", payment_method: "card" },
+      outcome: "success",
+    })
+    expect(descriptor.category).toBe("Card deposit")
+    expect(descriptor.body).toContain("You've received")
+    expect(descriptor.body).toContain("Card deposit")
+    expect(descriptor.title.toLowerCase()).not.toContain("stripe")
+    expect(descriptor.body.toLowerCase()).not.toContain("stripe")
+  })
+})

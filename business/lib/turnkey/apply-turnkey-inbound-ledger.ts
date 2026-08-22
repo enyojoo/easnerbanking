@@ -8,6 +8,7 @@ import {
 } from "@/lib/noah/global-payout-ledger"
 import { reconcileNoahBankOnrampCreditForSolanaTx, linkBankOnrampPayInToSolanaTxHash } from "@/lib/noah/credit-bank-onramp-wallet"
 import { findYcFundBalanceChainSettlementForSuppression } from "@/lib/yellowcard/yc-ledger"
+import { findStripeOnrampChainSettlementForSuppression } from "@/lib/stripe/onramp-ledger"
 import {
   findNoahBankOnrampChainSettlementForSuppression,
   findPendingNoahBankOnrampForInboundAmount,
@@ -194,6 +195,15 @@ export async function applyTurnkeyInboundLedgerEvent(
         businessId,
       })
       if (ycSuppressed) {
+        return { kind: "suppressed_noah" }
+      }
+
+      const stripeOnrampSuppressed = await findStripeOnrampChainSettlementForSuppression(admin, {
+        txHash,
+        userId,
+        businessId,
+      })
+      if (stripeOnrampSuppressed) {
         return { kind: "suppressed_noah" }
       }
     }

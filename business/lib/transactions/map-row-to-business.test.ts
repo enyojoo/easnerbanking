@@ -31,6 +31,11 @@ vi.mock("@easner/shared", () => ({
   resolveYcFundBalanceDepositDisplayTitle: () => undefined,
   resolveVaFundingDepositTitleFromMeta: () => undefined,
   resolveInboundReceiveDetail: () => null,
+  isExpressDepositsMetadata: (meta?: Record<string, unknown> | null) =>
+    String(meta?.flow ?? "") === "express_deposits",
+  expressDepositActivityLabel: (method?: string) =>
+    String(method || "").includes("apple") ? "Apple Pay deposit" : "Card deposit",
+  buildExpressDepositsLifecycle: () => [],
   resolveLedgerWhenAt: (input: { occurredAt?: string | null; createdAt?: string | null }) =>
     input.occurredAt ?? input.createdAt ?? null,
   resolveAccountImpactAmount: (row: Record<string, unknown>) => ({

@@ -68,6 +68,8 @@ export const webLinking: LinkingOptions<Record<string, unknown>> = {
       ReceiveStablecoinDetails: 'user/receive/stablecoin',
       ReceiveLocalRail: 'user/receive/local/rail',
       ReceiveLocalAmount: 'user/receive/local/amount',
+      ExpressDepositAmount: 'user/receive/express/amount',
+      ExpressDepositsSetup: 'user/verification/express',
       ReceiveLocalMomoSetup: 'user/receive/local/momo',
       ReceiveLocalReview: 'user/receive/local/review',
       ReceiveTransactionDetails: 'user/receive/transactions/:transactionId',

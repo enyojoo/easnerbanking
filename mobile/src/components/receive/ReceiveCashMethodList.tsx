@@ -6,6 +6,10 @@ import {
   receiveLocalBankTitle,
   receiveLocalMomoTitle,
   receiveLocalDepositSubtitle,
+  mapResidenceToLocalPayInCurrency,
+  EXPRESS_DEPOSITS_COPY,
+  expressDepositMethodTitle,
+  type CashPayInMethodKind,
 } from '@easner/shared'
 import { colors, spacing, textStyles } from '../../theme'
 import { getCountryName } from '../../lib/countryService'
@@ -13,6 +17,11 @@ import { CountryFlag } from '../flags/CountryFlag'
 import { ReceiveLocalRailCard } from './ReceiveLocalRailCard'
 
 const FLAG_SIZE = 48
+
+export type ExpressCashKind = Extract<
+  CashPayInMethodKind,
+  'express_card' | 'express_apple_pay' | 'express_google_pay' | 'express_ach'
+>
 
 type Props = {
   currency: 'USD' | 'EUR'
@@ -23,9 +32,14 @@ type Props = {
   bankAvailable: boolean
   momoAvailable: boolean
   localDepositBlocked: boolean
+  extraLocalCountries?: string[]
+  expressMethods?: ExpressCashKind[]
+  expressReady?: boolean
+  expressFlagCode?: string
   onBankPress: () => void
-  onLocalBankPress: () => void
+  onLocalBankPress: (country?: string) => void
   onLocalMomoPress: () => void
+  onExpressPress?: (kind: ExpressCashKind) => void
 }
 
 function CashMethodFlag({ code }: { code: string }) {
@@ -48,9 +62,14 @@ export function ReceiveCashMethodList({
   bankAvailable,
   momoAvailable,
   localDepositBlocked,
+  extraLocalCountries = [],
+  expressMethods = [],
+  expressReady = false,
+  expressFlagCode = "US",
   onBankPress,
   onLocalBankPress,
   onLocalMomoPress,
+  onExpressPress,
 }: Props) {
   const countryName = getCountryName(residenceCountry)
   const localSubtitle = localPayInCurrency
@@ -59,7 +78,10 @@ export function ReceiveCashMethodList({
   const intlBankFlagCode = currency === 'USD' ? 'US' : 'EU'
 
   const hasAnyRow =
-    showBankRow || (showLocalRows && (bankAvailable || momoAvailable))
+    showBankRow ||
+    (showLocalRows && (bankAvailable || momoAvailable)) ||
+    extraLocalCountries.length > 0 ||
+    expressMethods.length > 0
 
   if (!hasAnyRow) {
     return (
@@ -87,7 +109,7 @@ export function ReceiveCashMethodList({
           title={receiveLocalBankTitle(countryName)}
           subtitle={localSubtitle}
           leading={<CashMethodFlag code={residenceCountry} />}
-          onPress={onLocalBankPress}
+          onPress={() => onLocalBankPress()}
           disabled={localDepositBlocked}
         />
       ) : null}
@@ -101,6 +123,31 @@ export function ReceiveCashMethodList({
           disabled={localDepositBlocked}
         />
       ) : null}
+
+      {extraLocalCountries.map((cc) => {
+        const cur = mapResidenceToLocalPayInCurrency(cc)
+        return (
+          <ReceiveLocalRailCard
+            key={cc}
+            title={receiveLocalBankTitle(getCountryName(cc))}
+            subtitle={cur ? receiveLocalDepositSubtitle(cur) : ''}
+            leading={<CashMethodFlag code={cc} />}
+            onPress={() => onLocalBankPress(cc)}
+          />
+        )
+      })}
+
+      {expressMethods.map((kind) => (
+        <ReceiveLocalRailCard
+          key={kind}
+          title={expressDepositMethodTitle(kind)}
+          subtitle={
+            expressReady ? EXPRESS_DEPOSITS_COPY.description : EXPRESS_DEPOSITS_COPY.setupRequiredHint
+          }
+          leading={<CashMethodFlag code={expressFlagCode} />}
+          onPress={() => onExpressPress?.(kind)}
+        />
+      ))}
     </View>
   )
 }

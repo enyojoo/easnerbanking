@@ -20,6 +20,9 @@ import {
   resolveVaFundingDepositTitleFromMeta,
   resolveInboundReceiveDetail,
   resolvePayoutReviewFlow,
+  isExpressDepositsMetadata,
+  expressDepositActivityLabel,
+  buildExpressDepositsLifecycle,
   resolveRelayTronDepositListDisplay,
   resolveLedgerWhenAt,
   resolveAccountImpactAmount,
@@ -134,6 +137,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
       : null
   const isVerification = isVerificationDepositMetadata(meta)
   const isYcFundBalance = isYcFundBalanceDepositMetadata(meta)
+  const isExpressDeposits = isExpressDepositsMetadata(meta)
   const ycDepositTitle = isYcFundBalance ? resolveYcFundBalanceDepositDisplayTitle(meta ?? {}) : undefined
   const noahVaDepositTitle =
     !isVerification &&
@@ -162,7 +166,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
       ? resolveBankDepositPayInDetail(row)
       : null
   const stripeInvoiceSettlementDetail =
-    !globalPayoutDetail && !walletSendPayoutReview && !bankDepositDetail
+    !globalPayoutDetail && !walletSendPayoutReview && !bankDepositDetail && !isExpressDeposits
       ? resolveStripeInvoiceSettlementDetail(row)
       : null
   const stablecoinDepositDetail =
@@ -170,7 +174,8 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     !walletSendPayoutReview &&
     !bankDepositDetail &&
     !stripeInvoiceSettlementDetail &&
-    !isVerification
+    !isVerification &&
+    !isExpressDeposits
       ? resolveStablecoinDepositPayInDetail(row)
       : null
   const globalPayoutList = globalPayoutDetail ? null : resolveGlobalPayoutListDisplay(row)
@@ -261,15 +266,16 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     : row.base_currency != null
       ? String(row.base_currency)
       : undefined
-  const paymentRail = stripeInvoiceSettlementDetail
-    ? undefined
-    : (String(
-        meta?.payment_rail ??
-          meta?.source_payment_rail ??
-          meta?.destination_payment_rail ??
-          row.chain ??
-          "",
-      ).trim() || undefined)
+  const paymentRail =
+    stripeInvoiceSettlementDetail || isExpressDeposits
+      ? undefined
+      : (String(
+          meta?.payment_rail ??
+            meta?.source_payment_rail ??
+            meta?.destination_payment_rail ??
+            row.chain ??
+            "",
+        ).trim() || undefined)
   const isEasetagP2p = String(meta?.source ?? "").toLowerCase() === "easetag_p2p"
   const easetagHandle =
     isEasetagP2p
@@ -322,6 +328,7 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
 
   const hasStablecoinSignals =
     !stripeInvoiceSettlementDetail &&
+    !isExpressDeposits &&
     (paymentRail != null ||
       row.chain != null ||
       row.asset != null ||
@@ -462,6 +469,17 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
             ledgerCurrency: walletSendList.ledgerCurrency,
             ledgerCreatedAt,
           }
+      : isExpressDeposits
+        ? {
+            displayHeroTitle: expressDepositActivityLabel(String(meta?.payment_method ?? "")),
+            lifecycle: buildExpressDepositsLifecycle({
+              status: ledgerStatusRaw,
+              metadata: meta,
+              createdAt: ledgerCreatedAt ?? null,
+              settledAt: row.settled_at != null ? String(row.settled_at) : null,
+            }),
+            ledgerCreatedAt,
+          }
       : bankDepositDetail
         ? {
             lifecycle: bankDepositDetail.lifecycle,
@@ -547,12 +565,19 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
       meta?.autopayout_config_id != null ? String(meta.autopayout_config_id) : undefined,
     paymentRail,
     counterpartyName,
-    txHash: row.tx_hash != null ? String(row.tx_hash) : undefined,
-    walletAddress: row.wallet_address != null ? String(row.wallet_address) : undefined,
-    counterpartyAddress:
-      row.counterparty_address != null ? String(row.counterparty_address) : undefined,
-    asset: row.asset != null ? String(row.asset) : undefined,
-    chain: row.chain != null ? String(row.chain) : undefined,
+    txHash: isExpressDeposits ? undefined : row.tx_hash != null ? String(row.tx_hash) : undefined,
+    walletAddress: isExpressDeposits
+      ? undefined
+      : row.wallet_address != null
+        ? String(row.wallet_address)
+        : undefined,
+    counterpartyAddress: isExpressDeposits
+      ? undefined
+      : row.counterparty_address != null
+        ? String(row.counterparty_address)
+        : undefined,
+    asset: isExpressDeposits ? undefined : row.asset != null ? String(row.asset) : undefined,
+    chain: isExpressDeposits ? undefined : row.chain != null ? String(row.chain) : undefined,
     settledAt: row.settled_at != null ? String(row.settled_at) : undefined,
     ledgerCreatedAt,
     ...(sendNote ? { sendNote } : {}),

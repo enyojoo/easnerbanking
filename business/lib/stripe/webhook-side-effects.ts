@@ -300,6 +300,17 @@ export async function applyStripeWebhookSideEffects(
       return
     }
     default:
+      if (
+        event.type.includes("onramp") ||
+        (event.data?.object &&
+          typeof event.data.object === "object" &&
+          String((event.data.object as { object?: string }).object || "").includes("onramp"))
+      ) {
+        const { creditOnrampSessionIfFulfilled } = await import("./onramp-ledger")
+        await creditOnrampSessionIfFulfilled(admin, {
+          stripeSession: event.data.object as unknown as Record<string, unknown>,
+        })
+      }
       return
   }
 }

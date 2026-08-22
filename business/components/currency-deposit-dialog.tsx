@@ -29,8 +29,9 @@ import {
   type StablecoinReceiveMethod,
 } from "@/components/receive/ReceiveStablecoinMethodList"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import { resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, resolvePayInProvider, type NgLocalIdType, resolveReceiveCountryName, receiveInternationalBankTitle, receiveInternationalDepositSubtitle, receiveLocalBankTitle, receiveLocalMomoTitle, receiveLocalDepositSubtitle } from "@easner/shared"
+import { resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, resolvePayInProvider, type NgLocalIdType, resolveReceiveCountryName, receiveInternationalBankTitle, receiveInternationalDepositSubtitle, receiveLocalBankTitle, receiveLocalMomoTitle, receiveLocalDepositSubtitle, localPayInCountries, expressDepositMethodTitle, EXPRESS_DEPOSITS_COPY, type CashPayInMethodKind } from "@easner/shared"
 import { LocalDepositWizard } from "@/components/local-deposit-wizard"
+import { AccountsExpressDepositFlow } from "@/components/accounts/accounts-express-deposit-flow"
 import { NgLocalVerificationNotice } from "@/components/compliance/ng-local-verification-notice"
 import {
   prefetchReceiveRails,
@@ -114,8 +115,12 @@ interface CurrencyDepositDialogProps {
   onCopy: (text: string, field: string) => void
 }
 
-type CashView = "list" | "bank" | "local"
+type CashView = "list" | "bank" | "local" | "express"
 type LocalRail = "bank_transfer" | "mobile_money"
+type ExpressKind = Extract<
+  CashPayInMethodKind,
+  "express_card" | "express_apple_pay" | "express_google_pay" | "express_ach"
+>
 
 function BankDepositDetailsPanel({
   account,
@@ -247,6 +252,15 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
   const [dialogOpen, setDialogOpen] = useState(false)
   const [cashView, setCashView] = useState<CashView>("list")
   const [localRail, setLocalRail] = useState<LocalRail | null>(null)
+  const [localCountry, setLocalCountry] = useState<string | null>(null)
+  const [expressMethod, setExpressMethod] = useState<ExpressKind | null>(null)
+  const [expressStatus, setExpressStatus] = useState<{
+    eligible: boolean
+    ready: boolean
+    officeOn: boolean
+    payerCountry: string | null
+    methods: ExpressKind[]
+  } | null>(null)
   const [relayDepositMethods, setRelayDepositMethods] = useState<StablecoinReceiveMethod[]>([])
   const [selectedStablecoinMethod, setSelectedStablecoinMethod] = useState<StablecoinReceiveMethod | null>(null)
 
@@ -338,7 +352,11 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
   const showStablecoinMethodList = hasStablecoin && !activeStablecoinMethod
   const showStablecoinDetail = hasStablecoin && Boolean(activeStablecoinMethod?.address)
 
-  const effectiveResidence = effectivePayInCountry({
+  const payInCountries = localPayInCountries({
+    payerCountry: residenceCountry,
+    businessCountry: countryCode,
+  })
+  const effectiveResidence = payInCountries[0] ?? effectivePayInCountry({
     businessCountryCode: countryCode,
     userResidenceCountry: residenceCountry,
   })
@@ -386,6 +404,41 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
       cancelled = true
     }
   }, [account.currency])
+
+  useEffect(() => {
+    if (!dialogOpen || account.currency !== "USD") return
+    let cancelled = false
+    void (async () => {
+      const res = await fetchWithSession("/api/stripe/onramp/status", {
+        headers: BUSINESS_ACCOUNT_SCOPE_HEADERS,
+      })
+      const data = (await res.json().catch(() => ({}))) as {
+        eligible?: boolean
+        ready?: boolean
+        office?: { stripeOnrampEnabled?: boolean }
+        payerCountry?: string | null
+        methods?: string[]
+      }
+      if (cancelled) return
+      const methods = (Array.isArray(data.methods) ? data.methods : []).filter(
+        (k): k is ExpressKind =>
+          k === "express_card" ||
+          k === "express_apple_pay" ||
+          k === "express_google_pay" ||
+          k === "express_ach",
+      )
+      setExpressStatus({
+        eligible: Boolean(data.eligible),
+        ready: Boolean(data.ready),
+        officeOn: Boolean(data.office?.stripeOnrampEnabled),
+        payerCountry: data.payerCountry ?? null,
+        methods,
+      })
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [dialogOpen, account.currency])
 
   useEffect(() => {
     if (account.currency !== "USD" || !effectiveResidence || !localPayInCurrency) {
@@ -480,6 +533,8 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
   const resetCashView = () => {
     setCashView("list")
     setLocalRail(null)
+    setLocalCountry(null)
+    setExpressMethod(null)
   }
 
   const handleDialogOpenChange = (open: boolean) => {
@@ -670,6 +725,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                           disabled={localDepositBlocked}
                           onClick={() => {
                             setLocalRail("bank_transfer")
+                            setLocalCountry(effectiveResidence)
                             setCashView("local")
                           }}
                         >
@@ -693,6 +749,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                           disabled={localDepositBlocked}
                           onClick={() => {
                             setLocalRail("mobile_money")
+                            setLocalCountry(effectiveResidence)
                             setCashView("local")
                           }}
                         >
@@ -708,6 +765,70 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                           <ArrowRight className="h-5 w-5 text-muted-foreground shrink-0" />
                         </button>
                       ) : null}
+
+                      {payInCountries.slice(1).map((cc) => {
+                        const extraName = resolveReceiveCountryName(cc)
+                        const extraCur = mapResidenceToLocalPayInCurrency(cc)
+                        if (!extraCur) return null
+                        return (
+                          <button
+                            key={`local-extra-${cc}`}
+                            type="button"
+                            className="flex w-full items-center gap-4 rounded-xl border border-border p-4 min-h-[76px] hover:bg-muted/50 transition-colors text-left"
+                            onClick={() => {
+                              setLocalRail("bank_transfer")
+                              setLocalCountry(cc)
+                              setCashView("local")
+                            }}
+                          >
+                            <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border/80 bg-muted/40">
+                              <CountryFlag code={cc} size={48} className="size-full rounded-full" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium">{receiveLocalBankTitle(extraName)}</p>
+                              <p className="text-sm text-muted-foreground mt-0.5">
+                                {receiveLocalDepositSubtitle(extraCur)}
+                              </p>
+                            </div>
+                            <ArrowRight className="h-5 w-5 text-muted-foreground shrink-0" />
+                          </button>
+                        )
+                      })}
+
+                      {expressStatus?.officeOn && expressStatus.eligible
+                        ? expressStatus.methods.map((kind) => (
+                            <button
+                              key={kind}
+                              type="button"
+                              className="flex w-full items-center gap-4 rounded-xl border border-border p-4 min-h-[76px] hover:bg-muted/50 transition-colors text-left disabled:opacity-55"
+                              onClick={() => {
+                                if (!expressStatus.ready) {
+                                  window.location.href = "/settings?tab=verification&flow=express"
+                                  return
+                                }
+                                setExpressMethod(kind)
+                                setCashView("express")
+                              }}
+                            >
+                              <div className="flex h-12 w-12 shrink-0 items-center overflow-hidden rounded-full border border-border/80 bg-muted/40">
+                                <CountryFlag
+                                  code={expressStatus.payerCountry || "US"}
+                                  size={48}
+                                  className="size-full rounded-full"
+                                />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium">{expressDepositMethodTitle(kind)}</p>
+                                <p className="text-sm text-muted-foreground mt-0.5">
+                                  {expressStatus.ready
+                                    ? EXPRESS_DEPOSITS_COPY.description
+                                    : EXPRESS_DEPOSITS_COPY.setupRequiredHint}
+                                </p>
+                              </div>
+                              <ArrowRight className="h-5 w-5 text-muted-foreground shrink-0" />
+                            </button>
+                          ))
+                        : null}
 
                       {showLocalTab &&
                       !receiveRailsLoading &&
@@ -731,9 +852,9 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                   />
                 ) : null}
 
-                {cashView === "local" && localPayInCurrency && effectiveResidence && localRail ? (
+                {cashView === "local" && localPayInCurrency && (localCountry || effectiveResidence) && localRail ? (
                   <LocalDepositWizard
-                    residenceCountry={effectiveResidence}
+                    residenceCountry={localCountry || effectiveResidence!}
                     ngMissingType={localPayInCurrency === "NGN" ? ngMissingType : null}
                     onNgSaved={() => setNgMissingType(null)}
                     copiedField={copiedField}
@@ -741,6 +862,16 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                     initialRail={localRail}
                     initialStep="amount"
                     onExitToCashList={resetCashView}
+                  />
+                ) : null}
+
+                {cashView === "express" && expressMethod ? (
+                  <AccountsExpressDepositFlow
+                    method={expressMethod}
+                    onBack={resetCashView}
+                    onNeedSetup={() => {
+                      window.location.href = "/settings?tab=verification&flow=express"
+                    }}
                   />
                 ) : null}
               </TabsContent>

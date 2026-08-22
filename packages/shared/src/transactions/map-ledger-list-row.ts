@@ -98,6 +98,7 @@ export function inferLedgerListSourceType(
 ): string | undefined {
   if (!meta) return undefined
   if (String(meta.source ?? "").toLowerCase() === "easetag_p2p") return "easetag_p2p"
+  if (String(meta.flow ?? "").toLowerCase() === "express_deposits") return "express_deposits"
   if (isRelayTronDepositMetadata(meta)) return "relay_tron_deposit"
   const explicit = String(meta.source_type ?? "").trim()
   if (explicit) return explicit

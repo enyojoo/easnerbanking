@@ -11,14 +11,22 @@ export const SETTINGS_CONNECT_FLOW_HREF = "/settings?tab=verification&flow=conne
 
 export const SETTINGS_CONNECT_FLOW_PARAM = "connect" as const
 
+export const SETTINGS_EXPRESS_FLOW_HREF = "/settings?tab=verification&flow=express"
+export const SETTINGS_EXPRESS_FLOW_PARAM = "express" as const
+
 export type SettingsVerificationEmbeddedFlow =
   | typeof SETTINGS_VERIFICATION_FLOW_PARAM
   | typeof SETTINGS_CONNECT_FLOW_PARAM
+  | typeof SETTINGS_EXPRESS_FLOW_PARAM
 
 export function parseSettingsVerificationFlow(
   flow: string | null | undefined,
 ): SettingsVerificationEmbeddedFlow | null {
-  if (flow === SETTINGS_VERIFICATION_FLOW_PARAM || flow === SETTINGS_CONNECT_FLOW_PARAM) {
+  if (
+    flow === SETTINGS_VERIFICATION_FLOW_PARAM ||
+    flow === SETTINGS_CONNECT_FLOW_PARAM ||
+    flow === SETTINGS_EXPRESS_FLOW_PARAM
+  ) {
     return flow
   }
   return null
