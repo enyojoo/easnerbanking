@@ -41,6 +41,7 @@ import { apiFetch } from '../../query/api-client'
 import { WEB_FLOW_MAX_WIDTH } from '../../components/layout/CenteredWebFlowPage'
 import { loadMobileExpressOnramp, prefetchMobileExpressOnramp, type ExpressOnrampSdk } from '../../lib/express-onramp'
 import { isStripeHostElement } from '../../lib/expressStripeElement'
+import { hideExpressStripeHost, mountExpressStripeElement } from '../../lib/expressStripeWebMount'
 import { ExpressStripeHost } from '../../components/receive/ExpressStripeHost'
 import { watchExpressIdentityOverlay } from '../../lib/expressIdentityOverlay'
 import { useAuth } from '../../contexts/AuthContext'
@@ -126,6 +127,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
       const keepOpen = await fn()
       if (!keepOpen) await refresh(true)
     } catch (e) {
+      hideExpressStripeHost()
       setOpeningIdentity(false)
       setMessage(expressSetupUserMessage(e instanceof Error ? e.message : null))
     } finally {
@@ -142,6 +144,23 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
     const client = await loadMobileExpressOnramp(key)
     setSdk(client)
     return client
+  }
+
+  const showStripeUi = (el: unknown) => {
+    if (Platform.OS === 'web' && mountExpressStripeElement(el)) {
+      setStripeEl(el)
+      return true
+    }
+    if (isStripeHostElement(el)) {
+      setStripeEl(el)
+      return true
+    }
+    return false
+  }
+
+  const clearStripeUi = () => {
+    hideExpressStripeHost()
+    setStripeEl(null)
   }
 
   const field = (
@@ -224,22 +243,19 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
                   accessToken: result.access_token || result.oauth_token,
                 },
               })
-              setStripeEl(null)
+              clearStripeUi()
               setMessage(null)
               await refresh(true)
             } else if (isExpressSetupDismissed(outcome)) {
-              setStripeEl(null)
+              clearStripeUi()
               setMessage(null)
               showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
             } else if (outcome && outcome !== 'success') {
-              setStripeEl(null)
+              clearStripeUi()
               setMessage(expressSetupUserMessage(outcome))
             }
           })
-          if (isStripeHostElement(el)) {
-            setStripeEl(el)
-            return true
-          }
+          if (showStripeUi(el)) return true
         }
         return
       }
@@ -252,7 +268,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           if (settled) return
           settled = true
           const outcome = expressIdentityOutcome(raw)
-          setStripeEl(null)
+          clearStripeUi()
           setOpeningIdentity(false)
           l2StartedRef.current = false
           if (isExpressIdentitySuccess(outcome)) {
@@ -266,9 +282,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           setMessage(null)
           showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
         }
-        // Native only: coordinator is cold each launch. Web @stripe/crypto already has a session;
-        // calling authenticate here creates an iframe that is never mounted (Opening... hangs).
-        if (Platform.OS !== 'web' && client.authenticate) {
+        if (client.authenticate) {
           const auth = await apiFetch<{ authIntentId?: string | null; needsRegister?: boolean }>(
             '/api/stripe/onramp/link-auth',
             { method: 'POST', body: {} },
@@ -288,7 +302,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
             intentId = again.authIntentId
           }
           if (intentId) {
-            const authEl = await client.authenticate(intentId, async (result) => {
+            const authPromise = client.authenticate(intentId, async (result) => {
               const outcome = String(result.result || '')
               if (outcome === 'success' && result.crypto_customer_id) {
                 await apiFetch('/api/stripe/onramp/link-complete', {
@@ -302,17 +316,23 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
                 finish({ result: 'canceled' })
               }
             })
-            if (isStripeHostElement(authEl)) setStripeEl(authEl)
+            const authEl =
+              Platform.OS === 'web'
+                ? await Promise.race([
+                    authPromise,
+                    new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 8000)),
+                  ])
+                : await authPromise
+            if (showStripeUi(authEl)) {
+              await new Promise((r) => setTimeout(r, 50))
+            }
             if (settled) return true
           }
         }
         const verify = client.verifyDocuments || client.verifyIdentity
         if (!verify) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
         const first = await Promise.resolve(verify(finish))
-        if (isStripeHostElement(first)) {
-          setStripeEl(first)
-          return true
-        }
+        if (showStripeUi(first)) return true
         if (first !== undefined) finish(first)
         return true
       }
@@ -358,19 +378,16 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
         const el = await client.promptUserAttestation?.((result) => {
           const outcome = String(result.result || '')
           if (outcome === 'success' || outcome === 'accepted') {
-            setStripeEl(null)
+            clearStripeUi()
             setMessage(null)
             void refresh(true)
           } else if (isExpressSetupDismissed(outcome)) {
-            setStripeEl(null)
+            clearStripeUi()
             setMessage(null)
             showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
           }
         })
-        if (isStripeHostElement(el)) {
-          setStripeEl(el)
-          return true
-        }
+        if (showStripeUi(el)) return true
         return
       }
       if (step === 'wallet') {
@@ -393,7 +410,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
       if (identitySucceededRef.current || identityNoticeRef.current) return
       identityNoticeRef.current = true
       l2StartedRef.current = false
-      setStripeEl(null)
+      clearStripeUi()
       setOpeningIdentity(false)
       showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
     })

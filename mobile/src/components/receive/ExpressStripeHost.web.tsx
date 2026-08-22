@@ -1,14 +1,15 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useLayoutEffect, useRef } from 'react'
 import { isStripeHostElement } from '../../lib/expressStripeElement'
 
 export function ExpressStripeHost({ element }: { element: unknown }) {
   const ref = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const host = ref.current
-    if (!host) return
+    if (!host || !isStripeHostElement(element)) return
+    if (element.closest('#easner-express-onramp-host, #easner-express-onramp-live')) return
     host.replaceChildren()
-    if (isStripeHostElement(element)) host.appendChild(element)
+    host.appendChild(element)
     return () => {
       host.replaceChildren()
     }

@@ -19,6 +19,7 @@ import type { ExpressCashKind } from '../../components/receive/ReceiveCashMethod
 import { loadMobileExpressOnramp } from '../../lib/express-onramp'
 import { isStripeHostElement } from '../../lib/expressStripeElement'
 import { ExpressStripeHost } from '../../components/receive/ExpressStripeHost'
+import { hideExpressStripeHost, mountExpressStripeElement } from '../../lib/expressStripeWebMount'
 
 export default function ExpressDepositAmountScreen({ navigation, route }: NavigationProps) {
   const method = ((route.params as { method?: ExpressCashKind } | undefined)?.method ||
@@ -136,6 +137,7 @@ export default function ExpressDepositAmountScreen({ navigation, route }: Naviga
               },
               async (result) => {
                 if (!result.cryptoPaymentToken) {
+                  hideExpressStripeHost()
                   setStripeEl(null)
                   reject(new Error(EXPRESS_DEPOSITS_COPY.savePaymentHint))
                   return
@@ -148,12 +150,13 @@ export default function ExpressDepositAmountScreen({ navigation, route }: Naviga
                   method: 'POST',
                   body: { paymentTokenId: token },
                 })
+                hideExpressStripeHost()
                 setStripeEl(null)
                 resolve()
               },
             )
             .then((el) => {
-              if (isStripeHostElement(el)) {
+              if (mountExpressStripeElement(el) || isStripeHostElement(el)) {
                 setStripeEl(el)
                 setBusy(false)
               }

@@ -1,4 +1,5 @@
 import type { ExpressOnrampSdk } from './express-onramp-types'
+import { prepareExpressStripeWebDom } from './expressStripeWebMount'
 
 export type { ExpressOnrampSdk }
 
@@ -6,10 +7,12 @@ let cached: ExpressOnrampSdk | null = null
 let inflight: Promise<ExpressOnrampSdk> | null = null
 
 export function prefetchMobileExpressOnramp(): void {
+  prepareExpressStripeWebDom()
   void import('@stripe/crypto')
 }
 
 export async function loadMobileExpressOnramp(publishableKey: string): Promise<ExpressOnrampSdk> {
+  prepareExpressStripeWebDom()
   if (cached) return cached
   if (inflight) return inflight
   inflight = (async () => {

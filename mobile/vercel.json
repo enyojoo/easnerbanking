@@ -50,7 +50,7 @@
       "destination": "/api/assetlinks"
     },
     {
-      "source": "/((?!api/|_expo/|assets/).*)",
+      "source": "/((?!api/|_expo/|assets/|crypto-onramp/).*)",
       "destination": "/index.html"
     }
   ]
