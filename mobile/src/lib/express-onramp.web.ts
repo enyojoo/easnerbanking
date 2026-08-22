@@ -3,10 +3,15 @@ import { EXPRESS_NATIVE_AUTH_REQUIRED, type ExpressOnrampSdk } from './express-o
 export { EXPRESS_NATIVE_AUTH_REQUIRED }
 export type { ExpressOnrampSdk }
 
-const SCRIPT_SRC = '/crypto-onramp/v1/crypto-onramp.js'
+/** Stripe requires this script from their domain so the controller iframe origin matches postMessage. */
+const SCRIPT_SRC = 'https://js.stripe.com/crypto-onramp/v1/crypto-onramp.js'
 const SCRIPT_ID = 'easner-express-crypto-onramp'
 
 type StripeLoader = (publishableKey: string, opts?: Record<string, unknown>) => Promise<ExpressOnrampSdk>
+
+type StripeClient = ExpressOnrampSdk & {
+  ready?: Promise<unknown>
+}
 
 declare global {
   interface Window {
@@ -31,6 +36,30 @@ function readLoader(): StripeLoader | null {
   return window.loadCryptoOnrampAndInitialize || window.loadStripeOnramp || null
 }
 
+function bindMethod<T extends (...args: never[]) => unknown>(
+  client: StripeClient,
+  method: T | undefined,
+): T | undefined {
+  if (!method) return undefined
+  return method.bind(client) as T
+}
+
+/** CDN class methods throw "reading 'messenger'" if extracted without binding `this`. */
+function bindClient(client: StripeClient): ExpressOnrampSdk {
+  return {
+    registerLinkUser: bindMethod(client, client.registerLinkUser),
+    authenticate: bindMethod(client, client.authenticate),
+    submitKycInfo: bindMethod(client, client.submitKycInfo),
+    getMissingIdentifiers: bindMethod(client, client.getMissingIdentifiers),
+    updateKycInfo: bindMethod(client, client.updateKycInfo),
+    promptUserAttestation: bindMethod(client, client.promptUserAttestation),
+    verifyDocuments: bindMethod(client, client.verifyDocuments),
+    verifyIdentity: bindMethod(client, client.verifyIdentity),
+    collectPaymentMethod: bindMethod(client, client.collectPaymentMethod),
+    performCheckout: bindMethod(client, client.performCheckout),
+  }
+}
+
 function ensureScript(): Promise<StripeLoader> {
   const existing = readLoader()
   if (existing) return Promise.resolve(existing)
@@ -46,7 +75,7 @@ function ensureScript(): Promise<StripeLoader> {
     }
     if (done()) return
     let script = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null
-    if (script && script.type !== 'module') {
+    if (script && (script.type !== 'module' || script.src !== SCRIPT_SRC)) {
       script.remove()
       script = null
     }
@@ -78,7 +107,9 @@ export async function loadMobileExpressOnramp(publishableKey: string): Promise<E
   if (inflight) return inflight
   inflight = (async () => {
     const loader = await ensureScript()
-    cached = await loader(publishableKey, { theme: 'stripe' })
+    const client = (await loader(publishableKey, { theme: 'stripe' })) as StripeClient
+    if (client.ready) await client.ready
+    cached = bindClient(client)
     return cached
   })()
   try {

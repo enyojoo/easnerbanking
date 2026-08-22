@@ -275,7 +275,11 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
         dismissL2Ref.current = () => finish({ result: 'canceled' })
         // Direct SDK on web: do not await verify or Link auth detaches Stripe's popup.
         if (Platform.OS === 'web') {
-          const verify = client.verifyDocuments || client.verifyIdentity
+          const verify = client.verifyDocuments
+            ? (cb?: (r: unknown) => void) => client.verifyDocuments?.(cb)
+            : client.verifyIdentity
+              ? (cb?: (r: unknown) => void) => client.verifyIdentity?.(cb)
+              : null
           if (!verify) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
           const pending = verify(finish)
           void Promise.resolve(pending)
