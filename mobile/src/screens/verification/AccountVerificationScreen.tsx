@@ -19,6 +19,7 @@ import {
   Globe,
   Info,
   Map,
+  Zap,
 } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from '@react-navigation/native'
@@ -886,6 +887,9 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                   <View style={styles.cardInner}>
                     <View style={[styles.cardContent, styles.expressCardContent]}>
                       <View style={styles.cardLeft}>
+                        <View style={styles.iconContainer}>
+                          <Zap size={24} color={colors.primary.main} strokeWidth={2} />
+                        </View>
                         <Text style={styles.cardTitle}>{EXPRESS_DEPOSITS_COPY.title}</Text>
                         <Text style={styles.cardDescription}>
                           {EXPRESS_DEPOSITS_COPY.description}
