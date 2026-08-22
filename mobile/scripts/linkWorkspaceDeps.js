@@ -110,6 +110,8 @@ for (const name of names) {
 
 /** Expo autolinking / CocoaPods resolve these from mobile/node_modules even when npm hoists them. */
 for (const name of [
+  'expo-asset',
+  'expo-keep-awake',
   'expo-modules-autolinking',
   'expo-modules-core',
   'expo-modules-jsi',
