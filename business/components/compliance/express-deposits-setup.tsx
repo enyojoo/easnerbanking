@@ -254,8 +254,11 @@ export function ExpressDepositsSetup({ onClose }: Props) {
       const sdk = await ensureSdk()
       const verify = sdk.verifyDocuments || sdk.verifyIdentity
       if (!verify) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
-      const el = await verify((result) => {
-        const outcome = expressIdentityOutcome(result)
+      let settled = false
+      const finish = (raw: unknown) => {
+        if (settled) return
+        settled = true
+        const outcome = expressIdentityOutcome(raw)
         l2StartedRef.current = false
         if (isExpressIdentitySuccess(outcome)) {
           closeHost(null)
@@ -263,8 +266,15 @@ export function ExpressDepositsSetup({ onClose }: Props) {
           return
         }
         closeHost(EXPRESS_DEPOSITS_COPY.setupDismissed)
+      }
+      const pending = verify(finish)
+      void Promise.resolve(pending).then((first) => {
+        if (first instanceof HTMLElement) {
+          setSlot(first)
+          return
+        }
+        if (first !== undefined) finish(first)
       })
-      setSlot(el)
       return true
     })
 

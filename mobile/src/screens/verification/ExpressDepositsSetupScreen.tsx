@@ -41,6 +41,7 @@ import { WEB_FLOW_MAX_WIDTH } from '../../components/layout/CenteredWebFlowPage'
 import { loadMobileExpressOnramp, type ExpressOnrampSdk } from '../../lib/express-onramp'
 import { isStripeHostElement } from '../../lib/expressStripeElement'
 import { ExpressStripeHost } from '../../components/receive/ExpressStripeHost'
+import { watchExpressIdentityOverlay } from '../../lib/expressIdentityOverlay'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToast } from '../../components/ToastProvider'
 import {
@@ -76,6 +77,8 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
   const [sdk, setSdk] = useState<ExpressOnrampSdk | null>(null)
   const [stripeEl, setStripeEl] = useState<unknown>(null)
   const l2StartedRef = useRef(false)
+  const identitySucceededRef = useRef(false)
+  const identityNoticeRef = useRef(false)
 
   const handleBack = useCallback(() => navigateStackBack(navigation), [navigation])
   useStackHardwareBack(handleBack)
@@ -230,23 +233,35 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
         return
       }
       if (step === 'us_l2' || step === 'eu_l2') {
-        const el = await client.verifyDocuments?.((result) => {
-          const outcome = expressIdentityOutcome(result)
+        let settled = false
+        identitySucceededRef.current = false
+        identityNoticeRef.current = false
+        const finish = (raw: unknown) => {
+          if (settled) return
+          settled = true
+          const outcome = expressIdentityOutcome(raw)
           setStripeEl(null)
           l2StartedRef.current = false
           if (isExpressIdentitySuccess(outcome)) {
+            identitySucceededRef.current = true
             setMessage(null)
             void refresh(true)
             return
           }
+          if (identityNoticeRef.current) return
+          identityNoticeRef.current = true
           setMessage(null)
           showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
-        })
-        if (isStripeHostElement(el)) {
-          setStripeEl(el)
-          return true
         }
-        return
+        const pending = client.verifyDocuments?.(finish)
+        void Promise.resolve(pending).then((first) => {
+          if (isStripeHostElement(first)) {
+            setStripeEl(first)
+            return
+          }
+          if (first !== undefined) finish(first)
+        })
+        return true
       }
       if (step === 'us_kyc' || step === 'eu_kyc') {
         try {
@@ -317,6 +332,17 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
     l2StartedRef.current = true
     onCta()
   }, [step])
+
+  useEffect(() => {
+    if (step !== 'us_l2' && step !== 'eu_l2') return
+    return watchExpressIdentityOverlay(() => {
+      if (identitySucceededRef.current || identityNoticeRef.current) return
+      identityNoticeRef.current = true
+      l2StartedRef.current = false
+      setStripeEl(null)
+      showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
+    })
+  }, [step, showInfo])
 
   return (
     <ScreenWrapper>
