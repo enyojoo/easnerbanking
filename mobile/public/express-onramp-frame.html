@@ -30,12 +30,33 @@
           window.parent.postMessage(Object.assign({ channel: CHANNEL }, payload), parentOrigin || '*')
         }
 
+        function showUi() {
+          send({ type: 'ui', open: true })
+        }
+
+        function hideUi() {
+          send({ type: 'ui', open: false })
+        }
+
         function mount(el) {
+          showUi()
           if (!el || !el.appendChild) return false
           host.replaceChildren()
           host.appendChild(el)
-          send({ type: 'ui', open: true })
           return true
+        }
+
+        function waitForUi(start, onResult) {
+          showUi()
+          return new Promise(function (resolve, reject) {
+            Promise.resolve(start(function (result) {
+              onResult(result)
+              hideUi()
+              resolve(null)
+            }))
+              .then(mount)
+              .catch(reject)
+          })
         }
 
         function loadScript() {
@@ -85,35 +106,49 @@
                 return sdk.registerLinkUser.apply(sdk, args)
               }
               if (method === 'authenticate') {
-                return sdk.authenticate(args[0], function (result) {
-                  send({ type: 'cb', method: 'authenticate', payload: result })
-                  send({ type: 'ui', open: false })
-                }).then(mount)
+                return waitForUi(
+                  function (done) {
+                    return sdk.authenticate(args[0], done)
+                  },
+                  function (result) {
+                    send({ type: 'cb', method: 'authenticate', payload: result })
+                  },
+                )
               }
               if (method === 'submitKycInfo') return sdk.submitKycInfo(args[0])
               if (method === 'getMissingIdentifiers') return sdk.getMissingIdentifiers()
               if (method === 'updateKycInfo') return sdk.updateKycInfo(args[0])
               if (method === 'promptUserAttestation') {
-                return sdk.promptUserAttestation(function (result) {
-                  send({ type: 'cb', method: 'promptUserAttestation', payload: result })
-                  send({ type: 'ui', open: false })
-                }).then(mount)
+                return waitForUi(
+                  function (done) {
+                    return sdk.promptUserAttestation(done)
+                  },
+                  function (result) {
+                    send({ type: 'cb', method: 'promptUserAttestation', payload: result })
+                  },
+                )
               }
               if (method === 'verifyDocuments' || method === 'verifyIdentity') {
                 var verify = sdk.verifyDocuments || sdk.verifyIdentity
                 if (!verify) throw new Error('unavailable')
-                return Promise.resolve(
-                  verify.call(sdk, function (result) {
+                return waitForUi(
+                  function (done) {
+                    return verify.call(sdk, done)
+                  },
+                  function (result) {
                     send({ type: 'cb', method: method, payload: result })
-                    send({ type: 'ui', open: false })
-                  }),
-                ).then(mount)
+                  },
+                )
               }
               if (method === 'collectPaymentMethod') {
-                return sdk.collectPaymentMethod(args[0], function (result) {
-                  send({ type: 'cb', method: 'collectPaymentMethod', payload: result })
-                  send({ type: 'ui', open: false })
-                }).then(mount)
+                return waitForUi(
+                  function (done) {
+                    return sdk.collectPaymentMethod(args[0], done)
+                  },
+                  function (result) {
+                    send({ type: 'cb', method: 'collectPaymentMethod', payload: result })
+                  },
+                )
               }
               if (method === 'performCheckout') {
                 return sdk.performCheckout(args[0], function (sessionId) {

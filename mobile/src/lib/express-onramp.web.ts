@@ -125,8 +125,13 @@ function waitForReady(frame: HTMLIFrameElement): Promise<void> {
   })
 }
 
-function rpc(method: string, args: unknown[] = []): Promise<unknown> {
+function showFrame() {
+  styleFrame(ensureFrame(), true)
+}
+
+function rpc(method: string, args: unknown[] = [], opts?: { show?: boolean }): Promise<unknown> {
   const frame = ensureFrame()
+  if (opts?.show) styleFrame(frame, true)
   const id = `${++callSeq}`
   return new Promise((resolve, reject) => {
     pending.set(id, { resolve, reject })
@@ -139,31 +144,31 @@ function createProxy(): ExpressOnrampSdk {
     registerLinkUser: (email, phone, country, fullName) => rpc('registerLinkUser', [email, phone, country, fullName]),
     authenticate: async (id, cb) => {
       callbacks.set('authenticate', cb)
-      await rpc('authenticate', [id])
-      return null
+      showFrame()
+      await rpc('authenticate', [id], { show: true })
     },
     submitKycInfo: (info) => rpc('submitKycInfo', [info]),
     getMissingIdentifiers: () => rpc('getMissingIdentifiers') as Promise<{ identifiers?: Array<{ type?: string }> }>,
     updateKycInfo: (info) => rpc('updateKycInfo', [info]) as Promise<{ completed?: boolean }>,
     promptUserAttestation: async (cb) => {
       callbacks.set('promptUserAttestation', cb)
-      await rpc('promptUserAttestation')
-      return null
+      showFrame()
+      await rpc('promptUserAttestation', [], { show: true })
     },
     verifyDocuments: async (cb) => {
       if (cb) callbacks.set('verifyDocuments', cb)
-      await rpc('verifyDocuments')
-      return null
+      showFrame()
+      await rpc('verifyDocuments', [], { show: true })
     },
     verifyIdentity: async (cb) => {
       if (cb) callbacks.set('verifyIdentity', cb)
-      await rpc('verifyIdentity')
-      return null
+      showFrame()
+      await rpc('verifyIdentity', [], { show: true })
     },
     collectPaymentMethod: async (opts, cb) => {
       callbacks.set('collectPaymentMethod', cb)
-      await rpc('collectPaymentMethod', [opts])
-      return null
+      showFrame()
+      await rpc('collectPaymentMethod', [opts], { show: true })
     },
     performCheckout: async (sessionId, provideSecret) => {
       secretProvider = provideSecret

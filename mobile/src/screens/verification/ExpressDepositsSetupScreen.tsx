@@ -282,7 +282,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
               setStripeEl(first)
               return true
             }
-            if (first !== undefined) finish(first)
+            if (first != null) finish(first)
             return true
           } catch (e) {
             setOpeningIdentity(false)
