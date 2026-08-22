@@ -1,0 +1,25 @@
+diff --git a/node_modules/react-native-quick-crypto/android/build.gradle b/node_modules/react-native-quick-crypto/android/build.gradle
+index fb29ca5..8e4798d 100644
+--- a/node_modules/react-native-quick-crypto/android/build.gradle
++++ b/node_modules/react-native-quick-crypto/android/build.gradle
+@@ -53,11 +53,20 @@ static def findNodeModules(baseDir) {
+   // Node's module resolution algorithm searches up to the root directory,
+   // after which the base path will be null
+   while (basePath) {
++    def here = basePath.toFile()
++    if (here.getName() == "node_modules" && new File(here, "react-native").exists()) {
++      return here.toString()
++    }
+     def nodeModulesPath = Paths.get(basePath.toString(), "node_modules")
+     def reactNativePath = Paths.get(nodeModulesPath.toString(), "react-native")
+     if (nodeModulesPath.toFile().exists() && reactNativePath.toFile().exists()) {
+       return nodeModulesPath.toString()
+     }
++    // npm workspaces: this package is hoisted, react-native stays in mobile/
++    def mobileNm = Paths.get(basePath.toString(), "mobile", "node_modules")
++    if (Paths.get(mobileNm.toString(), "react-native").toFile().exists()) {
++      return mobileNm.toString()
++    }
+     basePath = basePath.getParent()
+   }
+   throw new GradleException("react-native-quick-crypto: Failed to find node_modules/ path!")

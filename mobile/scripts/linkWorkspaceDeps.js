@@ -182,6 +182,45 @@ function linkExpoToRoot() {
 
 linkExpoToRoot()
 
+/**
+ * react-native-quick-crypto is hoisted to root, but npm keeps `react-native` under
+ * mobile/node_modules. Its android/build.gradle walks up from the package and looks
+ * for node_modules/react-native — never entering mobile/ — so EAS Gradle fails with
+ * "Failed to find node_modules/ path!".
+ */
+function linkReactNativeToRoot() {
+  const src = path.join(mobileNm, 'react-native')
+  const dest = path.join(rootNm, 'react-native')
+  if (!fs.existsSync(src)) return
+
+  if (fs.existsSync(dest)) {
+    try {
+      const st = fs.lstatSync(dest)
+      if (st.isSymbolicLink()) {
+        try {
+          if (fs.realpathSync(dest) === fs.realpathSync(src)) return
+        } catch {}
+        fs.unlinkSync(dest)
+      } else {
+        return
+      }
+    } catch {
+      return
+    }
+  }
+
+  try {
+    fs.symlinkSync(src, dest)
+  } catch (e) {
+    const err = e
+    if (err && err.code !== 'EEXIST') {
+      console.warn('[linkWorkspaceDeps] react-native → root:', err.message)
+    }
+  }
+}
+
+linkReactNativeToRoot()
+
 /** Config plugins resolve from mobile/plugins; ensure hoisted @expo packages exist under mobile/node_modules. */
 for (const name of ['@expo/config-plugins', '@expo/config']) {
   linkDep(name)

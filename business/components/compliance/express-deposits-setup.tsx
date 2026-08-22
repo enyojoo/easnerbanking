@@ -336,9 +336,6 @@ export function ExpressDepositsSetup({ onClose }: Props) {
     <div className="mx-auto flex max-w-lg flex-col gap-6 px-4 py-8">
       <div>
         <h1 className="text-xl font-semibold">{EXPRESS_DEPOSITS_COPY.title}</h1>
-        {!slot ? (
-          <p className="mt-2 text-sm text-muted-foreground">{EXPRESS_DEPOSITS_COPY.description}</p>
-        ) : null}
       </div>
 
       {step === "link" && !slot ? (

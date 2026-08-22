@@ -22,7 +22,7 @@ export const CONSUMER_TIER_LADDER: { tiers: TierLadderTier[] } = {
       tier: 2,
       title: "Cards",
       description:
-        "Your access to personal debit/credit cards for your online and physical payments.",
+        "Personal debit/credit cards for your online and physical payments.",
     },
   ],
 }

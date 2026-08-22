@@ -469,7 +469,6 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
             </View>
           ) : (
             <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-              <Text style={styles.bodyText}>{EXPRESS_DEPOSITS_COPY.description}</Text>
               {step === 'link' ? (
                 <View style={styles.profileCard}>
                   {field('email', 'Email', { keyboard: 'email', autoCapitalize: 'none' })}
