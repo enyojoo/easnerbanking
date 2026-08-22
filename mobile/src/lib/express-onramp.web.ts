@@ -87,8 +87,7 @@ function onMessage(event: MessageEvent) {
   }
   if (data.type === 'ui') {
     const open = Boolean((data as { open?: boolean }).open)
-    // Popups mount on the parent page; never cover it with the proxy frame.
-    styleFrame(frame, false)
+    styleFrame(frame, open)
     for (const listener of uiListeners) listener(open)
     return
   }

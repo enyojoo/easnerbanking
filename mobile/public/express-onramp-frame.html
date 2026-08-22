@@ -50,7 +50,9 @@
           var frames = document.querySelectorAll('iframe')
           for (var i = 0; i < frames.length; i++) {
             var src = frames[i].src || ''
-            if (!/controller|deploy_status|henson/i.test(src)) return true
+            if (/controller|deploy_status|henson|messages-/i.test(src)) continue
+            var rect = frames[i].getBoundingClientRect()
+            if (rect.width > 80 && rect.height > 80) return true
           }
           return false
         }

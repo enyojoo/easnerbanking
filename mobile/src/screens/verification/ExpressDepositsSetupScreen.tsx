@@ -430,9 +430,13 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
   useEffect(
     () =>
       subscribeExpressOnrampUi((open) => {
-        if (!open) return
-        setOpeningIdentity(false)
-        setBusy(false)
+        if (open) {
+          setOpeningIdentity(false)
+          setBusy(false)
+          return
+        }
+        hideExpressOnrampFrame()
+        dismissL2Ref.current()
       }),
     [],
   )
@@ -440,10 +444,6 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
   useEffect(() => {
     if (step !== 'us_l2' && step !== 'eu_l2') return
     return watchExpressIdentityOverlay({
-      onOpen: () => {
-        setOpeningIdentity(false)
-        setBusy(false)
-      },
       onClosed: () => {
         hideExpressOnrampFrame()
         dismissL2Ref.current()
