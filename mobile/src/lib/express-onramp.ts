@@ -1,3 +1,4 @@
+import { EXPRESS_DEPOSITS_COPY } from '@easner/shared'
 import { EXPRESS_NATIVE_AUTH_REQUIRED, type ExpressOnrampSdk } from './express-onramp-types'
 
 export { EXPRESS_NATIVE_AUTH_REQUIRED }
@@ -92,6 +93,9 @@ async function presentIdentity(
   cb?: (r: unknown) => void,
 ) {
   const result = await onramp.verifyIdentity()
+  if (result.error && isAttestationError(result.error)) {
+    throw new Error(EXPRESS_DEPOSITS_COPY.nativeTrustedInstall)
+  }
   if (result.error && onramp.isAuthError?.(result.error)) {
     throw new Error(EXPRESS_NATIVE_AUTH_REQUIRED)
   }
@@ -125,9 +129,19 @@ function platformPayParams(
   }
 }
 
+function isAttestationError(error?: { message?: string; stripeErrorCode?: string; code?: string }) {
+  return /attestation|native link|devicecheck|app attest|play integrity/i.test(
+    `${error?.message || ''} ${error?.stripeErrorCode || ''} ${error?.code || ''}`,
+  )
+}
+
 export function adaptNativeOnramp(onramp: NativeOnramp): ExpressOnrampSdk {
-  const throwIf = (error?: { message?: string }) => {
-    if (error?.message) throw new Error(error.message)
+  const throwIf = (error?: { message?: string; stripeErrorCode?: string; code?: string }) => {
+    if (!error?.message) return
+    if (isAttestationError(error)) {
+      throw new Error(EXPRESS_DEPOSITS_COPY.nativeTrustedInstall)
+    }
+    throw new Error(error.message)
   }
 
   return {

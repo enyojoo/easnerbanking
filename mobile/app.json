@@ -35,6 +35,7 @@
         "com.apple.developer.applesignin": [
           "Default"
         ],
+        "com.apple.developer.devicecheck.appattest-environment": "production",
         "com.apple.developer.in-app-payments": [
           "merchant.com.easner.mobile"
         ]

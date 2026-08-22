@@ -33,6 +33,8 @@ export const EXPRESS_DEPOSITS_COPY = {
   identifierHint: "Enter the ID number we requested.",
   travelRuleBlock: "Additional confirmation is required for this amount. Try a smaller amount or finish verification.",
   somethingWentWrong: "Something went wrong. Try again.",
+  nativeTrustedInstall:
+    "This install can’t verify this device. Install the latest TestFlight or store build and try again.",
   paymentFailed: "Payment could not be completed. Try again.",
   setupDismissed: "Setup wasn’t finished. You can continue whenever you’re ready.",
 } as const
@@ -83,7 +85,10 @@ export function expressSetupUserMessage(raw?: string | null): string {
   if (/already been verified|cannot be updated/i.test(text)) {
     return EXPRESS_DEPOSITS_COPY.identityHint
   }
-  if (/crypto|onramp|oauth|scope|stripe|link\.com|authintent/i.test(text)) {
+  if (/attestation|native link|devicecheck|app attest|play integrity/i.test(text)) {
+    return EXPRESS_DEPOSITS_COPY.nativeTrustedInstall
+  }
+  if (/crypto|onramp|oauth|scope|stripe|link\.com|link\b|authintent/i.test(text)) {
     return EXPRESS_DEPOSITS_COPY.somethingWentWrong
   }
   return text
