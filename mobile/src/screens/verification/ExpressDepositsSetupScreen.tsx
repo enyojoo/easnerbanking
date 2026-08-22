@@ -41,6 +41,7 @@ import { apiFetch } from '../../query/api-client'
 import { WEB_FLOW_MAX_WIDTH } from '../../components/layout/CenteredWebFlowPage'
 import {
   EXPRESS_NATIVE_AUTH_REQUIRED,
+  hideExpressOnrampFrame,
   loadMobileExpressOnramp,
   prefetchMobileExpressOnramp,
   subscribeExpressOnrampUi,
@@ -48,6 +49,7 @@ import {
 } from '../../lib/express-onramp'
 import { isStripeHostElement } from '../../lib/expressStripeElement'
 import { ExpressStripeHost } from '../../components/receive/ExpressStripeHost'
+import { watchExpressIdentityOverlay } from '../../lib/expressIdentityOverlay'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToast } from '../../components/ToastProvider'
 import {
@@ -89,6 +91,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
   const l2StartedRef = useRef(false)
   const identitySucceededRef = useRef(false)
   const identityNoticeRef = useRef(false)
+  const dismissL2Ref = useRef<() => void>(() => {})
 
   const handleBack = useCallback(() => navigateStackBack(navigation), [navigation])
   useStackHardwareBack(handleBack)
@@ -260,6 +263,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           setStripeEl(null)
           setOpeningIdentity(false)
           l2StartedRef.current = false
+          hideExpressOnrampFrame()
           if (isExpressIdentitySuccess(outcome)) {
             identitySucceededRef.current = true
             setMessage(null)
@@ -271,6 +275,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           setMessage(null)
           showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
         }
+        dismissL2Ref.current = () => finish({ result: 'canceled' })
         // Direct SDK on web: do not await verify or Link auth detaches Stripe's popup.
         if (Platform.OS === 'web') {
           const verify = client.verifyDocuments || client.verifyIdentity
@@ -425,22 +430,26 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
   useEffect(
     () =>
       subscribeExpressOnrampUi((open) => {
-        if (open) {
-          setOpeningIdentity(false)
-          setBusy(false)
-          return
-        }
-        if (step !== 'us_l2' && step !== 'eu_l2') return
-        if (identitySucceededRef.current || identityNoticeRef.current) return
-        identityNoticeRef.current = true
-        l2StartedRef.current = false
-        setStripeEl(null)
+        if (!open) return
         setOpeningIdentity(false)
         setBusy(false)
-        showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
       }),
-    [step, showInfo],
+    [],
   )
+
+  useEffect(() => {
+    if (step !== 'us_l2' && step !== 'eu_l2') return
+    return watchExpressIdentityOverlay({
+      onOpen: () => {
+        setOpeningIdentity(false)
+        setBusy(false)
+      },
+      onClosed: () => {
+        hideExpressOnrampFrame()
+        dismissL2Ref.current()
+      },
+    })
+  }, [step])
 
   return (
     <ScreenWrapper>

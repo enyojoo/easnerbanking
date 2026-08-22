@@ -87,7 +87,8 @@ function onMessage(event: MessageEvent) {
   }
   if (data.type === 'ui') {
     const open = Boolean((data as { open?: boolean }).open)
-    styleFrame(frame, open)
+    // Popups mount on the parent page; never cover it with the proxy frame.
+    styleFrame(frame, false)
     for (const listener of uiListeners) listener(open)
     return
   }
@@ -191,6 +192,14 @@ function createProxy(): ExpressOnrampSdk {
       return result || { success: true }
     },
   }
+}
+
+/** Drop any full-screen proxy frame left open after Stripe UI closes on the parent page. */
+export function hideExpressOnrampFrame(): void {
+  if (typeof document === 'undefined') return
+  const frame = document.getElementById(FRAME_ID) as HTMLIFrameElement | null
+  if (frame) styleFrame(frame, false)
+  document.getElementById('root')?.removeAttribute('aria-hidden')
 }
 
 export function prefetchMobileExpressOnramp(): void {

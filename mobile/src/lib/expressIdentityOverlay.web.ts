@@ -5,12 +5,29 @@ type OverlayHandlers =
       onClosed: () => void
     }
 
+const PROXY_FRAME_ID = 'easner-express-onramp-frame'
+
+function isStripePopupIframe(el: Element): boolean {
+  if (!(el instanceof HTMLIFrameElement)) return false
+  if (el.id === PROXY_FRAME_ID) return false
+  const src = el.src || ''
+  if (/controller|deploy_status|henson|express-onramp-frame|messages-/i.test(src)) return false
+  if (!/stripecdn\.com|stripe\.com|gelato|js\.stripe\.com/i.test(src)) return false
+  const rect = el.getBoundingClientRect()
+  return rect.width > 80 && rect.height > 80
+}
+
+function stripeOverlayOpen(): boolean {
+  const root = document.getElementById('root')
+  if (root?.getAttribute('aria-hidden') === 'true') return true
+  return Array.from(document.querySelectorAll('iframe')).some(isStripePopupIframe)
+}
+
 /** Stripe Link / Identity sets aria-hidden on #root and injects popup iframes into the live document. */
 export function watchExpressIdentityOverlay(handlers: OverlayHandlers): () => void {
   if (typeof document === 'undefined') return () => {}
   const onClosed = typeof handlers === 'function' ? handlers : handlers.onClosed
   const onOpen = typeof handlers === 'function' ? undefined : handlers.onOpen
-  const root = document.getElementById('root')
   let sawOpen = false
   let opened = false
   let closed = false
@@ -20,11 +37,7 @@ export function watchExpressIdentityOverlay(handlers: OverlayHandlers): () => vo
     onClosed()
   }
   const check = () => {
-    const hidden = root?.getAttribute('aria-hidden') === 'true'
-    const overlay = document.querySelector(
-      'iframe[src*="stripecdn.com"], iframe[src*="stripe.com/identity"], iframe[src*="gelato"]',
-    )
-    if (hidden || overlay) {
+    if (stripeOverlayOpen()) {
       if (!opened) {
         opened = true
         onOpen?.()
@@ -34,10 +47,11 @@ export function watchExpressIdentityOverlay(handlers: OverlayHandlers): () => vo
     }
     if (sawOpen) fireClosed()
   }
+  const root = document.getElementById('root')
   const mo = new MutationObserver(check)
   if (root) mo.observe(root, { attributes: true, attributeFilter: ['aria-hidden'] })
   mo.observe(document.body, { childList: true, subtree: true })
-  const timer = window.setInterval(check, 400)
+  const timer = window.setInterval(check, 250)
   return () => {
     window.clearInterval(timer)
     mo.disconnect()

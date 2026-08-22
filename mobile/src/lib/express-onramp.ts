@@ -57,6 +57,8 @@ export function subscribeExpressOnrampUi(_listener: (open: boolean) => void): ()
   return () => {}
 }
 
+export function hideExpressOnrampFrame(): void {}
+
 function flushWaiters(sdk: ExpressOnrampSdk) {
   while (waiters.length) {
     const waiter = waiters.shift()
