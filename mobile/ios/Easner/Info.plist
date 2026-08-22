@@ -8,6 +8,8 @@
     </array>
     <key>CADisableMinimumFrameDurationOnPhone</key>
     <true/>
+    <key>CFBundleAllowMixedLocalizations</key>
+    <true/>
     <key>CFBundleDevelopmentRegion</key>
     <string>$(DEVELOPMENT_LANGUAGE)</string>
     <key>CFBundleDisplayName</key>
@@ -64,7 +66,7 @@
       <string>_expo._tcp</string>
     </array>
     <key>NSCameraUsageDescription</key>
-    <string>Easner uses the camera when you take or attach photos.</string>
+    <string>Allow Easner to access your camera to scan wallet address QR codes.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
     <key>NSLocalNetworkUsageDescription</key>
@@ -75,6 +77,8 @@
     <string>Allow Easner to save transaction receipts to your photos.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Allow Easner to save transaction receipts to your photos.</string>
+    <key>RCTMetroPort</key>
+    <string>$(RCT_METRO_PORT)</string>
     <key>RCTNewArchEnabled</key>
     <true/>
     <key>UIBackgroundModes</key>

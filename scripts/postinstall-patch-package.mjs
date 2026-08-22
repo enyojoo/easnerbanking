@@ -10,7 +10,8 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:f
 const require = createRequire(import.meta.url)
 import { join } from "node:path"
 
-const patchesDir = join(process.cwd(), "patches")
+const rootDir = process.cwd()
+const patchesDir = join(rootDir, "patches")
 if (!existsSync(patchesDir)) {
   process.exit(0)
 }
@@ -26,11 +27,20 @@ function packageNameFromPatchFile(filename) {
   return `${scope}/${parts.slice(1).join("+")}`
 }
 
+function packageInstallRoots(pkg) {
+  return [join(rootDir, "node_modules", pkg), join(rootDir, "mobile", "node_modules", pkg)]
+    .filter((dir) => existsSync(dir))
+    .map((dir) => {
+      if (dir.startsWith(join(rootDir, "mobile", "node_modules"))) return join(rootDir, "mobile")
+      return rootDir
+    })
+}
+
 const patchFiles = readdirSync(patchesDir).filter((f) => f.endsWith(".patch"))
 const applicable = patchFiles.filter((file) => {
   const pkg = packageNameFromPatchFile(file)
   if (!pkg) return false
-  return existsSync(join(process.cwd(), "node_modules", pkg))
+  return packageInstallRoots(pkg).length > 0
 })
 
 if (applicable.length === 0) {
@@ -47,19 +57,33 @@ const packageNames = [
 ]
 
 const patchPackageBin = require.resolve("patch-package/index.js")
-// patch-package requires --patch-dir to be relative to the project root.
-const tempPatchDir = ".patch-package-staging"
-rmSync(join(process.cwd(), tempPatchDir), { recursive: true, force: true })
-mkdirSync(join(process.cwd(), tempPatchDir), { recursive: true })
-try {
-  for (const file of applicable) {
-    copyFileSync(join(patchesDir, file), join(process.cwd(), tempPatchDir, file))
+const tempPatchDirName = ".patch-package-staging"
+
+const byCwd = new Map()
+for (const file of applicable) {
+  const pkg = packageNameFromPatchFile(file)
+  if (!pkg) continue
+  for (const cwd of new Set(packageInstallRoots(pkg))) {
+    const list = byCwd.get(cwd) || []
+    list.push(file)
+    byCwd.set(cwd, list)
   }
-  console.log(`patch-package: applying ${packageNames.join(", ")}`)
-  execSync(
-    `"${process.execPath}" "${patchPackageBin}" --patch-dir "${tempPatchDir}"`,
-    { stdio: "inherit" },
-  )
-} finally {
-  rmSync(join(process.cwd(), tempPatchDir), { recursive: true, force: true })
+}
+
+console.log(`patch-package: applying ${packageNames.join(", ")}`)
+for (const [cwd, files] of byCwd) {
+  const tempPatchDir = join(cwd, tempPatchDirName)
+  rmSync(tempPatchDir, { recursive: true, force: true })
+  mkdirSync(tempPatchDir, { recursive: true })
+  try {
+    for (const file of files) {
+      copyFileSync(join(patchesDir, file), join(tempPatchDir, file))
+    }
+    execSync(
+      `"${process.execPath}" "${patchPackageBin}" --patch-dir "${tempPatchDirName}"`,
+      { stdio: "inherit", cwd },
+    )
+  } finally {
+    rmSync(tempPatchDir, { recursive: true, force: true })
+  }
 }

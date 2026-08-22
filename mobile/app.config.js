@@ -252,6 +252,7 @@ module.exports = ({ config }) => {
       './plugins/withHermesCompilerPath.js',
       './plugins/withInternalExpoImport.js',
       './plugins/withAndroidStoragePermissionsMaxSdk.js',
+      './plugins/withStripeOnrampAndroid.js',
       ...intercomPlugins,
     ],
     extra: {

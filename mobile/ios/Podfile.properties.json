@@ -4,5 +4,6 @@
   "newArchEnabled": "true",
   "ios.deploymentTarget": "16.4",
   "EXPO_USE_PRECOMPILED_MODULES": "false",
-  "expo.inlineModules.watchedDirectories": "[]"
+  "expo.inlineModules.watchedDirectories": "[]",
+  "expo.inlineModules.xcodeProjectTargets": "{\"mainTarget\":\"Easner\",\"targets\":[]}"
 }
