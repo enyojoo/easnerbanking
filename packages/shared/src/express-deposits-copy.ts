@@ -54,10 +54,17 @@ export function expressSetupUserMessage(raw?: string | null): string {
   if (isExpressSetupDismissed(text) || /abandon|cancel|declin|dismiss/i.test(text)) {
     return EXPRESS_DEPOSITS_COPY.setupDismissed
   }
+  if (/already been verified|cannot be updated/i.test(text)) {
+    return EXPRESS_DEPOSITS_COPY.identityHint
+  }
   if (/crypto|onramp|oauth|scope|stripe|link\.com|authintent/i.test(text)) {
     return EXPRESS_DEPOSITS_COPY.somethingWentWrong
   }
   return text
+}
+
+export function isExpressKycAlreadyVerified(raw?: string | null): boolean {
+  return /already been verified|cannot be updated/i.test(String(raw || ""))
 }
 
 export function expressDepositActivityLabel(paymentMethod?: string | null): string {

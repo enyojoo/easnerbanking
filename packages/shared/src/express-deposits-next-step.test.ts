@@ -59,6 +59,53 @@ describe("expressDepositsNextStep", () => {
         walletRegistered: true,
       }),
     ).toBe("ready")
+    expect(
+      expressDepositsNextStep({
+        cryptoCustomerId: "crc_1",
+        customer: {
+          id: "crc_1",
+          kyc_region: "eu",
+          verifications: [{ name: "kyc_verified", status: "verified" }],
+          provided_fields: ["id_number", "attestation"],
+        },
+        payerCountry: "DE",
+        walletRegistered: true,
+      }),
+    ).toBe("eu_l2")
+  })
+
+  it("skips US name/address when Link already verified KYC", () => {
+    expect(
+      expressDepositsNextStep({
+        cryptoCustomerId: "crc_1",
+        customer: {
+          id: "crc_1",
+          verifications: [
+            { name: "kyc_verified", status: "verified" },
+            { name: "id_document_verified", status: "not_started" },
+          ],
+        },
+        payerCountry: "US",
+        walletRegistered: true,
+      }),
+    ).toBe("us_l2")
+  })
+
+  it("uses official retrieve fields for ready", () => {
+    expect(
+      expressDepositsNextStep({
+        cryptoCustomerId: "crc_1",
+        customer: {
+          id: "crc_1",
+          verifications: [
+            { name: "kyc_verified", status: "verified" },
+            { name: "id_document_verified", status: "verified" },
+          ],
+        },
+        payerCountry: "US",
+        walletRegistered: true,
+      }),
+    ).toBe("ready")
   })
 
   it("requires US L2 before ready", () => {

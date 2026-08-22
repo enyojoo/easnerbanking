@@ -14,6 +14,7 @@ import { ArrowLeft } from 'lucide-react-native'
 import {
   EXPRESS_DEPOSITS_COPY,
   expressSetupUserMessage,
+  isExpressKycAlreadyVerified,
   isExpressSetupDismissed,
   toExpressLinkE164Phone,
   type ExpressDepositsNextStep,
@@ -220,29 +221,33 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
         return
       }
       if (step === 'us_kyc' || step === 'eu_kyc') {
-        await client.submitKycInfo?.({
-          given_name: form.given_name,
-          surname: form.surname,
-          date_of_birth: {
-            day: Number(form.dob_day) || undefined,
-            month: Number(form.dob_month) || undefined,
-            year: Number(form.dob_year) || undefined,
-          },
-          address: {
-            line1: form.line1,
-            city: form.city,
-            state: form.state,
-            postal_code: form.postal_code,
-            country: lockedCountry,
-          },
-          ...(step === 'eu_kyc'
-            ? {
-                nationalities: form.nationalities.split(/[\s,]+/).filter(Boolean),
-                birth_city: form.birth_city,
-                birth_country: form.birth_country,
-              }
-            : {}),
-        })
+        try {
+          await client.submitKycInfo?.({
+            given_name: form.given_name,
+            surname: form.surname,
+            date_of_birth: {
+              day: Number(form.dob_day) || undefined,
+              month: Number(form.dob_month) || undefined,
+              year: Number(form.dob_year) || undefined,
+            },
+            address: {
+              line1: form.line1,
+              city: form.city,
+              state: form.state,
+              postal_code: form.postal_code,
+              country: lockedCountry,
+            },
+            ...(step === 'eu_kyc'
+              ? {
+                  nationalities: form.nationalities.split(/[\s,]+/).filter(Boolean),
+                  birth_city: form.birth_city,
+                  birth_country: form.birth_country,
+                }
+              : {}),
+          })
+        } catch (e) {
+          if (!isExpressKycAlreadyVerified(e instanceof Error ? e.message : String(e))) throw e
+        }
         return
       }
       if (step === 'eu_identifiers') {

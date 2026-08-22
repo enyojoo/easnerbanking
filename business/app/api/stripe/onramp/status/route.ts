@@ -4,8 +4,8 @@ import {
   expressDepositsLimits,
   expressDepositsNextStep,
   expressDepositsSourceCurrency,
+  normalizeExpressDepositsCustomer,
   resolveCashPayInMethods,
-  type ExpressDepositsCustomerSnapshot,
 } from "@easner/shared"
 import { getApplePayMerchantId } from "@/lib/stripe/onramp-config"
 import { getStripePublishableKey } from "@/lib/stripe/config"
@@ -20,14 +20,16 @@ export async function GET(request: Request) {
   if ("error" in resolved) return resolved.error
   const { payer, businessId, eligible, payerCountry, oauthToken } = resolved.ctx
   const office = stripeOnrampOfficeFlags()
-  let customer: ExpressDepositsCustomerSnapshot | null = null
+  let customer = payer.stripe_crypto_customer_id
+    ? { id: payer.stripe_crypto_customer_id }
+    : null
   let walletRegistered = false
   if (payer.stripe_crypto_customer_id) {
     try {
-      customer = (await stripeOnramp.retrieveCustomer(
-        payer.stripe_crypto_customer_id,
-        oauthToken || undefined,
-      )) as ExpressDepositsCustomerSnapshot
+      customer =
+        normalizeExpressDepositsCustomer(
+          await stripeOnramp.retrieveCustomer(payer.stripe_crypto_customer_id, oauthToken || undefined),
+        ) ?? { id: payer.stripe_crypto_customer_id }
     } catch {
       customer = { id: payer.stripe_crypto_customer_id }
     }

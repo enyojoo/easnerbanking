@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import {
   EXPRESS_DEPOSITS_COPY,
   expressSetupUserMessage,
+  isExpressKycAlreadyVerified,
   isExpressSetupDismissed,
   toExpressLinkE164Phone,
   type ExpressDepositsNextStep,
@@ -201,7 +202,11 @@ export function ExpressDepositsSetup({ onClose }: Props) {
         payload.birth_city = form.birth_city
         payload.birth_country = form.birth_country
       }
-      await sdk.submitKycInfo(payload)
+      try {
+        await sdk.submitKycInfo(payload)
+      } catch (e) {
+        if (!isExpressKycAlreadyVerified(e instanceof Error ? e.message : String(e))) throw e
+      }
     })
 
   const submitIdentifiers = () =>

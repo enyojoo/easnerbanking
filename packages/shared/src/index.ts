@@ -469,6 +469,7 @@ export {
   expressDepositMethodTitle,
   expressSetupUserMessage,
   isExpressDepositsMetadata,
+  isExpressKycAlreadyVerified,
   isExpressSetupDismissed,
   toExpressLinkE164Phone,
 } from "./express-deposits-copy"
@@ -491,11 +492,13 @@ export type { ExpressDepositsAmountValidation } from "./express-deposits-limits"
 export {
   expressDepositsKycReady,
   expressDepositsNextStep,
+  normalizeExpressDepositsCustomer,
 } from "./express-deposits-next-step"
 export type {
   ExpressDepositsCustomerSnapshot,
   ExpressDepositsKycTier,
   ExpressDepositsNextStep,
+  ExpressDepositsVerification,
 } from "./express-deposits-next-step"
 export {
   GRID_PROHIBITED_RESIDENCE_ISO2,
