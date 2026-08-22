@@ -46,6 +46,7 @@ import {
   peekBusinessExpressOnrampStatus,
   warmBusinessExpressOnrampStatus,
 } from "@/lib/express-onramp-status-cache"
+import { loadExpressOnramp, prefetchExpressOnramp } from "@/lib/stripe/load-crypto-onramp"
 
 function tier1StatusIsInReview(status: string | null | undefined): boolean {
   const s = (status || "").toLowerCase()
@@ -734,6 +735,9 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
             type="button"
             className="flex w-full items-center gap-4 rounded-xl border border-border p-4 min-h-[76px] hover:bg-muted/50 transition-colors text-left disabled:opacity-55"
             onClick={() => {
+              const pk = peekBusinessExpressOnrampStatus()?.publishableKey
+              if (pk) void loadExpressOnramp(pk).catch(() => undefined)
+              else prefetchExpressOnramp()
               if (!expressStatus?.ready) {
                 window.location.href = "/settings?tab=verification&flow=express"
                 return

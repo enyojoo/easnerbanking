@@ -38,7 +38,7 @@ import { useStackHardwareBack } from '../../hooks/useStackHardwareBack'
 import { navigateStackBack } from '../../navigation/stackBackNavigation'
 import { apiFetch } from '../../query/api-client'
 import { WEB_FLOW_MAX_WIDTH } from '../../components/layout/CenteredWebFlowPage'
-import { loadMobileExpressOnramp, type ExpressOnrampSdk } from '../../lib/express-onramp'
+import { loadMobileExpressOnramp, prefetchMobileExpressOnramp, type ExpressOnrampSdk } from '../../lib/express-onramp'
 import { isStripeHostElement } from '../../lib/expressStripeElement'
 import { ExpressStripeHost } from '../../components/receive/ExpressStripeHost'
 import { watchExpressIdentityOverlay } from '../../lib/expressIdentityOverlay'
@@ -97,7 +97,10 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
   }, [applyStatus])
 
   useEffect(() => {
-    void refresh(true).catch((e) =>
+    const peeked = peekExpressOnrampStatus()
+    if (peeked?.publishableKey) void loadMobileExpressOnramp(peeked.publishableKey).catch(() => undefined)
+    else prefetchMobileExpressOnramp()
+    void refresh(false).catch((e) =>
       setMessage(e instanceof Error ? e.message : EXPRESS_DEPOSITS_COPY.geoUnavailable),
     )
   }, [refresh])
@@ -126,9 +129,11 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
 
   const ensureSdk = async () => {
     if (sdk) return sdk
-    const data = await refresh(true)
-    if (!data.publishableKey) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
-    const client = await loadMobileExpressOnramp(data.publishableKey)
+    const pk = status?.publishableKey || peekExpressOnrampStatus()?.publishableKey
+    const data = pk ? (status ?? peekExpressOnrampStatus()) : await refresh(false)
+    const key = pk || data?.publishableKey
+    if (!key) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
+    const client = await loadMobileExpressOnramp(key)
     setSdk(client)
     return client
   }

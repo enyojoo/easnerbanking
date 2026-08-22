@@ -1,5 +1,6 @@
 import { apiFetch } from '../query/api-client'
 import type { ExpressDepositsNextStep } from '@easner/shared'
+import { loadMobileExpressOnramp, prefetchMobileExpressOnramp } from './express-onramp'
 
 export type ExpressOnrampStatus = {
   ready?: boolean
@@ -29,6 +30,8 @@ function loadStatus(): Promise<ExpressOnrampStatus> {
   inflight = apiFetch<ExpressOnrampStatus>('/api/stripe/onramp/status')
     .then((data) => {
       cached = data
+      if (data.publishableKey) void loadMobileExpressOnramp(data.publishableKey).catch(() => undefined)
+      else prefetchMobileExpressOnramp()
       return data
     })
     .finally(() => {

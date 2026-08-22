@@ -38,6 +38,7 @@ import {
   fetchBusinessExpressOnrampStatus,
   peekBusinessExpressOnrampStatus,
 } from "@/lib/express-onramp-status-cache"
+import { loadExpressOnramp, prefetchExpressOnramp } from "@/lib/stripe/load-crypto-onramp"
 import { useSuspendIdleLock } from "@/hooks/use-suspend-idle-lock"
 import { GridKybWizard } from "@/components/compliance/grid-kyb-wizard"
 import { useKybPacket } from "@/lib/grid/kyb-packet-query"
@@ -492,6 +493,12 @@ export function BusinessVerificationSection({
                         <Button
                           size="sm"
                           onClick={() => {
+                            const peeked = peekBusinessExpressOnrampStatus()
+                            if (peeked?.publishableKey) {
+                              void loadExpressOnramp(peeked.publishableKey).catch(() => undefined)
+                            } else {
+                              prefetchExpressOnramp()
+                            }
                             onFlowOpenChange?.(true, "express")
                             const next = new URLSearchParams(searchParams.toString())
                             next.set("tab", "verification")

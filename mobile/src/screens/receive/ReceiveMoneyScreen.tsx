@@ -44,6 +44,7 @@ import {
   peekExpressOnrampStatus,
   warmExpressOnrampStatus,
 } from '../../lib/expressOnrampStatusCache'
+import { loadMobileExpressOnramp } from '../../lib/express-onramp'
 import {
   resolveWarmYcLocalDepositCorridor,
   ensureYcLocalDepositCachesReady,
@@ -696,6 +697,8 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                   onExpressPress={(kind) => {
                     haptics.medium()
                     if (!expressReady) {
+                      const pk = peekExpressOnrampStatus()?.publishableKey
+                      if (pk) void loadMobileExpressOnramp(pk).catch(() => undefined)
                       navigation.navigate('ExpressDepositsSetup' as never)
                       return
                     }

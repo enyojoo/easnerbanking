@@ -53,6 +53,7 @@ import {
   warmExpressOnrampStatus,
 } from '../../lib/expressOnrampStatusCache'
 import { isTier1Complete } from '../../lib/compliance'
+import { loadMobileExpressOnramp } from '../../lib/express-onramp'
 import { needsNoahVirtualAccountProvision } from '../../lib/noahAccountSync'
 import {
   readFiatProvisionResolved,
@@ -871,6 +872,8 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                 <Pressable
                   onPress={() => {
                     haptics.tap()
+                    const pk = peekExpressOnrampStatus()?.publishableKey
+                    if (pk) void loadMobileExpressOnramp(pk).catch(() => undefined)
                     navigation.navigate('ExpressDepositsSetup' as never)
                   }}
                   style={({ pressed }) => [

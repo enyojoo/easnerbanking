@@ -1,10 +1,14 @@
 import { fetchWithSession } from "@/lib/fetch-with-session"
+import { loadExpressOnramp, prefetchExpressOnramp } from "@/lib/stripe/load-crypto-onramp"
 
 export type BusinessExpressOnrampStatus = {
   eligible?: boolean
   ready?: boolean
   payerCountry?: string | null
   methods?: string[]
+  publishableKey?: string
+  cryptoCustomerId?: string | null
+  nextStep?: string
   office?: { stripeOnrampEnabled?: boolean; stripeOnrampEuEnabled?: boolean }
 }
 
@@ -22,7 +26,11 @@ function loadStatus(): Promise<BusinessExpressOnrampStatus> {
   inflight = fetchWithSession("/api/stripe/onramp/status", { headers: SCOPE })
     .then(async (res) => {
       const data = (await res.json().catch(() => ({}))) as BusinessExpressOnrampStatus
-      if (res.ok) cached = data
+      if (res.ok) {
+        cached = data
+        if (data.publishableKey) void loadExpressOnramp(data.publishableKey).catch(() => undefined)
+        else prefetchExpressOnramp()
+      }
       return data
     })
     .finally(() => {

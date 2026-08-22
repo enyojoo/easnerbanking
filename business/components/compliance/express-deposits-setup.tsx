@@ -16,7 +16,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { Loader2 } from "lucide-react"
-import { loadExpressOnramp, type CryptoOnrampClient } from "@/lib/stripe/load-crypto-onramp"
+import { loadExpressOnramp, prefetchExpressOnramp, type CryptoOnrampClient } from "@/lib/stripe/load-crypto-onramp"
+import { peekBusinessExpressOnrampStatus } from "@/lib/express-onramp-status-cache"
 import { ExpressDepositsStripeSlot } from "@/components/compliance/express-deposits-stripe-slot"
 import { mapStripeOnrampError } from "@/lib/stripe/onramp-sdk-map"
 import { toast } from "sonner"
@@ -83,6 +84,9 @@ export function ExpressDepositsSetup({ onClose }: Props) {
   }, [])
 
   useEffect(() => {
+    const peeked = peekBusinessExpressOnrampStatus()
+    if (peeked?.publishableKey) void loadExpressOnramp(peeked.publishableKey).catch(() => undefined)
+    else prefetchExpressOnramp()
     void refresh()
   }, [refresh])
 
@@ -96,9 +100,11 @@ export function ExpressDepositsSetup({ onClose }: Props) {
 
   const ensureSdk = async () => {
     if (sdk) return sdk
-    const data = status ?? (await refresh())
-    if (!data.publishableKey) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
-    const client = await loadExpressOnramp(data.publishableKey)
+    const pk = status?.publishableKey || peekBusinessExpressOnrampStatus()?.publishableKey
+    const data = pk ? status : await refresh()
+    const key = pk || data?.publishableKey
+    if (!key) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
+    const client = await loadExpressOnramp(key)
     setSdk(client)
     return client
   }

@@ -40,15 +40,28 @@ export type CryptoOnrampClient = {
 }
 
 let cached: CryptoOnrampClient | null = null
+let inflight: Promise<CryptoOnrampClient> | null = null
+
+export function prefetchExpressOnramp(): void {
+  void import("@stripe/crypto")
+}
 
 export async function loadExpressOnramp(publishableKey: string): Promise<CryptoOnrampClient> {
   if (cached) return cached
-  const mod = (await import("@stripe/crypto")) as {
-    loadCryptoOnrampAndInitialize?: (pk: string, opts?: Record<string, unknown>) => Promise<CryptoOnrampClient>
-    loadStripeOnramp?: (pk: string) => Promise<CryptoOnrampClient>
+  if (inflight) return inflight
+  inflight = (async () => {
+    const mod = (await import("@stripe/crypto")) as {
+      loadCryptoOnrampAndInitialize?: (pk: string, opts?: Record<string, unknown>) => Promise<CryptoOnrampClient>
+      loadStripeOnramp?: (pk: string) => Promise<CryptoOnrampClient>
+    }
+    const loader = mod.loadCryptoOnrampAndInitialize || mod.loadStripeOnramp
+    if (!loader) throw new Error("Express deposits is not available in this browser.")
+    cached = await loader(publishableKey, { theme: "stripe" })
+    return cached
+  })()
+  try {
+    return await inflight
+  } finally {
+    inflight = null
   }
-  const loader = mod.loadCryptoOnrampAndInitialize || mod.loadStripeOnramp
-  if (!loader) throw new Error("Express deposits is not available in this browser.")
-  cached = await loader(publishableKey, { theme: "stripe" })
-  return cached
 }
