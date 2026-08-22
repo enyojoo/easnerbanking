@@ -158,7 +158,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         kycNorm !== 'approved' ||
         needsNoahVirtualAccountProvision(userProfile, { fiatProvisionResolved })
 
-      if (!shouldSyncByStatus && !force) {
+      if (!shouldSyncByStatus) {
         if (!silent) {
           console.log('[SYNC-STATUS] Approved with fiat accounts present, skipping sync')
         }
@@ -221,10 +221,9 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
       }
 
       const needsAccounts = needsNoahVirtualAccountProvision(userProfile, { fiatProvisionResolved })
-      const result =
-        needsAccounts || kycNorm === 'approved'
-          ? await noahService.syncStatusUntilAccountsReady({ scope: 'individual' })
-          : await noahService.syncStatus({ scope: 'individual' })
+      const result = needsAccounts
+        ? await noahService.syncStatusUntilAccountsReady({ scope: 'individual' })
+        : await noahService.syncStatus({ scope: 'individual' })
 
       if (result.success && result.synced) {
         if (!silent) {
@@ -294,25 +293,30 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     scope,
   ])
 
-  // Force Noah pull when opening this screen (success path calls refreshUserProfile – avoid double-fetch).
+  const syncNoahStatusRef = useRef(syncNoahStatus)
+  syncNoahStatusRef.current = syncNoahStatus
+
+  // One pull per visit. Do not depend on `syncNoahStatus` — a successful sync refreshes
+  // the profile and would retrigger this while focused (looks like a 1s loop).
   useFocusEffect(
-    React.useCallback(() => {
+    useCallback(() => {
       if (!userProfile?.id) return
-      void syncNoahStatus(false, true)
-    }, [userProfile?.id, syncNoahStatus]),
+      void syncNoahStatusRef.current(false, true)
+    }, [userProfile?.id]),
   )
 
   const [expressEligible, setExpressEligible] = useState(
     () => peekExpressOnrampStatus()?.eligible === true,
   )
 
+  const tier1Complete = isTier1Complete(userProfile)
   useEffect(() => {
-    if (!isTier1Complete(userProfile)) return
+    if (!tier1Complete) return
     warmExpressOnrampStatus()
     void fetchExpressOnrampStatus()
       .then((data) => setExpressEligible(data.eligible === true))
       .catch(() => setExpressEligible(false))
-  }, [userProfile])
+  }, [tier1Complete, userProfile?.id])
 
   // Initial Noah sync after login runs from `useConsumerKycNoahSync` (main tabs). This screen keeps
   // periodic sync while viewing in-review/rejected flows below.
