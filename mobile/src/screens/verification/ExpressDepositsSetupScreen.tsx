@@ -43,7 +43,6 @@ import {
   EXPRESS_NATIVE_AUTH_REQUIRED,
   loadMobileExpressOnramp,
   prefetchMobileExpressOnramp,
-  subscribeExpressOnrampUi,
   type ExpressOnrampSdk,
 } from '../../lib/express-onramp'
 import { isStripeHostElement } from '../../lib/expressStripeElement'
@@ -272,23 +271,19 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           setMessage(null)
           showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
         }
-        // Expo web matches the pre-upgrade + business host: start verifyDocuments
-        // without awaiting Link auth. Awaiting authenticate detaches Stripe's iframe.
+        // Direct SDK on web: do not await verify or Link auth detaches Stripe's popup.
         if (Platform.OS === 'web') {
           const verify = client.verifyDocuments || client.verifyIdentity
           if (!verify) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
-          try {
-            const first = await Promise.resolve(verify(finish))
+          const pending = verify(finish)
+          void Promise.resolve(pending).then((first) => {
             if (isStripeHostElement(first)) {
               setStripeEl(first)
-              return true
+              return
             }
             if (first != null) finish(first)
-            return true
-          } catch (e) {
-            setOpeningIdentity(false)
-            throw e
-          }
+          })
+          return true
         }
         const authorizeLink = async () => {
           if (!client.authenticate) return
@@ -422,25 +417,22 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
     onCta()
   }, [step])
 
-  useEffect(
-    () =>
-      subscribeExpressOnrampUi((open) => {
-        if (!open) return
-        setOpeningIdentity(false)
-        setBusy(false)
-      }),
-    [],
-  )
-
   useEffect(() => {
     if (step !== 'us_l2' && step !== 'eu_l2') return
-    return watchExpressIdentityOverlay(() => {
-      if (identitySucceededRef.current || identityNoticeRef.current) return
-      identityNoticeRef.current = true
-      l2StartedRef.current = false
-      setStripeEl(null)
-      setOpeningIdentity(false)
-      showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
+    return watchExpressIdentityOverlay({
+      onOpen: () => {
+        setOpeningIdentity(false)
+        setBusy(false)
+      },
+      onClosed: () => {
+        if (identitySucceededRef.current || identityNoticeRef.current) return
+        identityNoticeRef.current = true
+        l2StartedRef.current = false
+        setStripeEl(null)
+        setOpeningIdentity(false)
+        setBusy(false)
+        showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
+      },
     })
   }, [step, showInfo])
 
