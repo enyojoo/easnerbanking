@@ -32,6 +32,8 @@ import { fetchWithSession } from "@/lib/fetch-with-session"
 import { resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, resolvePayInProvider, type NgLocalIdType, resolveReceiveCountryName, receiveInternationalBankTitle, receiveInternationalDepositSubtitle, receiveLocalBankTitle, receiveLocalMomoTitle, receiveLocalDepositSubtitle, localPayInCountries, expressDepositMethodTitle, EXPRESS_DEPOSITS_COPY, type CashPayInMethodKind } from "@easner/shared"
 import { LocalDepositWizard } from "@/components/local-deposit-wizard"
 import { AccountsExpressDepositFlow } from "@/components/accounts/accounts-express-deposit-flow"
+import { PaymentMethodBrandIcon } from "@/components/payment-method-brand-icon"
+import type { PaymentBrandIconKey } from "@/lib/stripe/payment-method-display"
 import { NgLocalVerificationNotice } from "@/components/compliance/ng-local-verification-notice"
 import {
   prefetchReceiveRails,
@@ -121,6 +123,13 @@ type ExpressKind = Extract<
   CashPayInMethodKind,
   "express_card" | "express_apple_pay" | "express_google_pay" | "express_ach"
 >
+
+function expressBrandIconKey(kind: ExpressKind): PaymentBrandIconKey {
+  if (kind === "express_apple_pay") return "apple_pay"
+  if (kind === "express_google_pay") return "google_pay"
+  if (kind === "express_ach") return "bank"
+  return "card"
+}
 
 function BankDepositDetailsPanel({
   account,
@@ -810,11 +819,11 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                                 setCashView("express")
                               }}
                             >
-                              <div className="flex h-12 w-12 shrink-0 items-center overflow-hidden rounded-full border border-border/80 bg-muted/40">
-                                <CountryFlag
-                                  code={expressStatus.payerCountry || "US"}
-                                  size={48}
-                                  className="size-full rounded-full"
+                              <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border/80 bg-muted/40">
+                                <PaymentMethodBrandIcon
+                                  iconKey={expressBrandIconKey(kind)}
+                                  alt={expressDepositMethodTitle(kind)}
+                                  className="h-7 w-auto max-w-[2.25rem]"
                                 />
                               </div>
                               <div className="min-w-0 flex-1">

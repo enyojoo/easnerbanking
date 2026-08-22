@@ -65,7 +65,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const [ngMissingType, setNgMissingType] = useState<NgLocalIdType | null>(null)
   const [expressReady, setExpressReady] = useState(false)
   const [expressMethods, setExpressMethods] = useState<ExpressCashKind[]>([])
-  const [expressFlagCode, setExpressFlagCode] = useState('US')
 
   const supportsStablecoins = currency === 'USD' || currency === 'EUR'
 
@@ -266,7 +265,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
         if (cancelled) return
         if (data.office?.stripeOnrampEnabled && data.eligible) {
           setExpressReady(Boolean(data.ready))
-          setExpressFlagCode(String(data.payerCountry || residenceCountry || 'US').toUpperCase())
           const allowed = new Set<ExpressCashKind>([
             'express_card',
             'express_apple_pay',
@@ -652,7 +650,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                   onLocalMomoPress={() => navigateToLocalDeposit('mobile_money')}
                   expressMethods={expressMethods}
                   expressReady={expressReady}
-                  expressFlagCode={expressFlagCode}
                   onExpressPress={(kind) => {
                     haptics.medium()
                     if (!expressReady) {
