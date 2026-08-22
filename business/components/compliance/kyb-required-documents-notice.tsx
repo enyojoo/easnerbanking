@@ -20,7 +20,7 @@ export function KybRequiredDocumentsNotice({ className }: Props) {
 
   return (
     <>
-      <p className={className ?? "text-sm text-muted-foreground"}>
+      <p className={className ?? "text-xs text-muted-foreground"}>
         {copy.inlinePrompt}
         <button
           type="button"

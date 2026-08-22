@@ -25,6 +25,6 @@ export const BUSINESS_VERIFICATION_PRODUCTS: VerificationProduct[] = [
   {
     id: "online_payments",
     title: "Online payments",
-    description: "Accept card payments on invoices. Settled to your Easner balance.",
+    description: "Accept card payments on checkout, links and invoices.",
   },
 ]

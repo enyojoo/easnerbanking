@@ -386,31 +386,31 @@ export function BusinessVerificationSection({
                       </CardHeader>
                       {isGlobalBanking ? (
                         <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
-                          {error ? <p className="text-sm text-destructive">{error}</p> : null}
-                          {info ? <p className="text-sm text-muted-foreground">{info}</p> : null}
+                          {error ? <p className="text-xs text-destructive">{error}</p> : null}
+                          {info ? <p className="text-xs text-muted-foreground">{info}</p> : null}
                           {tier1OnHold ? (
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-xs text-muted-foreground">
                               {VERIFICATION_SECTION_COPY.verificationOnHold}
                             </p>
                           ) : null}
                           {tier1AwaitingReview && !tier1ActionRequired ? (
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-xs text-muted-foreground">
                               {NOAH_VERIFICATION_IN_REVIEW_COPY}
                             </p>
                           ) : null}
                           {tier1Rejected && tier1FinalReject ? (
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-xs text-muted-foreground">
                               {NOAH_FINAL_REJECTION_USER_MESSAGE}
                             </p>
                           ) : tier1ActionRequired &&
                             (tier1RetryGuidance?.length || rejectionDisplay?.guidanceLines.length) ? (
-                            <p className="text-sm text-destructive">
+                            <p className="text-xs text-destructive">
                               {(tier1RetryGuidance ?? rejectionDisplay?.guidanceLines ?? []).join(
                                 " ",
                               )}
                             </p>
                           ) : tier1Rejected ? (
-                            <p className="text-sm text-destructive">
+                            <p className="text-xs text-destructive">
                               Verification was declined. Review your documents and try again.
                             </p>
                           ) : null}
@@ -420,7 +420,7 @@ export function BusinessVerificationSection({
                             </p>
                           ) : null}
                           {!canManageBusinessVerification ? (
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-xs text-muted-foreground">
                               Only the organization owner can start verification.
                             </p>
                           ) : null}
@@ -488,11 +488,11 @@ export function BusinessVerificationSection({
                     </CardHeader>
                     <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
                       {!tier1Complete ? (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           {EXPRESS_DEPOSITS_COPY.globalBankingRequired}
                         </p>
                       ) : !canManageBusinessVerification ? (
-                        <p className="text-sm text-muted-foreground">{EXPRESS_DEPOSITS_COPY.ownerOnly}</p>
+                        <p className="text-xs text-muted-foreground">{EXPRESS_DEPOSITS_COPY.ownerOnly}</p>
                       ) : (
                         <Button
                           size="sm"

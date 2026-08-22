@@ -567,15 +567,15 @@ export function SettingsStripeConnectPanel({
           </div>
           <CardDescription className="text-sm">
             {onlinePayments?.description ??
-              "Accept card payments on invoices. Settled to your Easner balance."}
+              "Accept card payments on checkout, links and invoices."}
           </CardDescription>
         </CardHeader>
         <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
           {panelUx?.bodyCopyDestructive ? (
-            <p className="text-sm text-destructive">{panelUx.bodyCopyDestructive}</p>
+            <p className="text-xs text-destructive">{panelUx.bodyCopyDestructive}</p>
           ) : null}
           {panelUx?.bodyCopy ? (
-            <p className="text-sm text-muted-foreground">{panelUx.bodyCopy}</p>
+            <p className="text-xs text-muted-foreground">{panelUx.bodyCopy}</p>
           ) : null}
           {panelUx?.primary || panelUx?.secondary ? (
             <div className="flex flex-wrap gap-2">
