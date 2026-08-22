@@ -13,7 +13,9 @@ import {
 import { ArrowLeft } from 'lucide-react-native'
 import {
   EXPRESS_DEPOSITS_COPY,
+  expressIdentityOutcome,
   expressSetupUserMessage,
+  isExpressIdentitySuccess,
   isExpressKycAlreadyVerified,
   isExpressSetupDismissed,
   toExpressLinkE164Phone,
@@ -229,15 +231,16 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
       }
       if (step === 'us_l2' || step === 'eu_l2') {
         const el = await client.verifyDocuments?.((result) => {
-          const outcome = result && typeof result === 'object' ? String((result as { result?: string }).result || '') : ''
+          const outcome = expressIdentityOutcome(result)
           setStripeEl(null)
-          if (isExpressSetupDismissed(outcome)) {
+          l2StartedRef.current = false
+          if (isExpressIdentitySuccess(outcome)) {
             setMessage(null)
-            showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
+            void refresh(true)
             return
           }
           setMessage(null)
-          void refresh(true)
+          showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
         })
         if (isStripeHostElement(el)) {
           setStripeEl(el)

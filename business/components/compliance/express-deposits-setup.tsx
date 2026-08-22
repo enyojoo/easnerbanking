@@ -4,7 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   EXPRESS_DEPOSITS_COPY,
+  expressIdentityOutcome,
   expressSetupUserMessage,
+  isExpressIdentitySuccess,
   isExpressKycAlreadyVerified,
   isExpressSetupDismissed,
   toExpressLinkE164Phone,
@@ -253,13 +255,14 @@ export function ExpressDepositsSetup({ onClose }: Props) {
       const verify = sdk.verifyDocuments || sdk.verifyIdentity
       if (!verify) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
       const el = await verify((result) => {
-        const outcome = result && typeof result === "object" ? String((result as { result?: string }).result || "") : ""
-        if (isExpressSetupDismissed(outcome)) {
-          closeHost(EXPRESS_DEPOSITS_COPY.setupDismissed)
+        const outcome = expressIdentityOutcome(result)
+        l2StartedRef.current = false
+        if (isExpressIdentitySuccess(outcome)) {
+          closeHost(null)
+          void refresh()
           return
         }
-        closeHost(null)
-        void refresh()
+        closeHost(EXPRESS_DEPOSITS_COPY.setupDismissed)
       })
       setSlot(el)
       return true

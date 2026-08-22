@@ -43,7 +43,32 @@ export function isExpressSetupDismissed(result?: string | null): boolean {
     value === "declined" ||
     value === "canceled" ||
     value === "cancelled" ||
-    value === "dismissed"
+    value === "dismissed" ||
+    value === "closed" ||
+    value === "close" ||
+    value === "exit"
+  )
+}
+
+export function expressIdentityOutcome(raw: unknown): string {
+  if (raw == null) return ""
+  if (typeof raw === "string") return raw
+  if (typeof raw === "object") {
+    const row = raw as { result?: unknown; status?: unknown; outcome?: unknown }
+    return String(row.result ?? row.status ?? row.outcome ?? "")
+  }
+  return String(raw)
+}
+
+export function isExpressIdentitySuccess(result?: string | null): boolean {
+  const value = String(result || "").toLowerCase()
+  return (
+    value === "success" ||
+    value === "verified" ||
+    value === "completed" ||
+    value === "complete" ||
+    value === "accepted" ||
+    value === "done"
   )
 }
 
