@@ -544,9 +544,12 @@ export function SettingsStripeConnectPanel({
   const onlinePayments = BUSINESS_VERIFICATION_PRODUCTS.find((t) => t.id === "online_payments")
 
   return (
-      <Card className="flex h-full flex-col border-primary/25 md:border-primary/40">
-        <CardHeader className="pb-2">
-          <div className="flex items-center gap-1.5">
+      <Card className="flex h-full flex-col gap-3 border-primary/25 py-4 md:border-primary/40">
+        <CardHeader className="gap-1.5 px-4 pb-0 md:px-4">
+          <div className="flex flex-nowrap items-center gap-1.5">
+            <CardTitle className="min-w-0 text-base leading-tight">
+              {onlinePayments?.title ?? "Online payments"}
+            </CardTitle>
             {badgePresentation.complete ? (
               <Tier1VerificationBadge
                 compact
@@ -561,16 +564,13 @@ export function SettingsStripeConnectPanel({
                 checklist={panelUx.checklist}
               />
             )}
-            <CardTitle className="min-w-0 text-base leading-tight">
-              {onlinePayments?.title ?? "Online payments"}
-            </CardTitle>
           </div>
           <CardDescription className="text-sm">
             {onlinePayments?.description ??
               "Accept card payments on invoices. Settled to your Easner balance."}
           </CardDescription>
         </CardHeader>
-        <CardContent className="mt-auto space-y-4 pt-0">
+        <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
           {panelUx?.bodyCopyDestructive ? (
             <p className="text-sm text-destructive">{panelUx.bodyCopyDestructive}</p>
           ) : null}

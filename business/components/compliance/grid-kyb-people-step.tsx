@@ -234,7 +234,7 @@ export function GridKybPeopleStep({
       setEditingId(null)
       await onReload()
     } catch (err) {
-      if (idUploadRef.current?.hasPendingFile()) return
+      if (idUploadRef.current?.hasPendingFile() || idUploadRef.current?.showingError()) return
       setError(err instanceof Error ? err.message : "Could not save owner")
     } finally {
       setSaving(false)

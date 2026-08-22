@@ -35,6 +35,7 @@ type Props = {
 
 export type GridKybDocumentUploadHandle = {
   hasPendingFile: () => boolean
+  showingError: () => boolean
   submit: (personId?: string) => Promise<KybDocumentPacket | undefined>
   persistMetadata: () => Promise<void>
 }
@@ -69,6 +70,17 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
   const [documentNumber, setDocumentNumber] = useState(latestExisting?.documentNumber ?? "")
   const [file, setFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [errorKind, setErrorKind] = useState<"meta" | "file">("file")
+
+  function showMetaError(message: string) {
+    setErrorKind("meta")
+    setError(message)
+  }
+
+  function showFileError(message: string) {
+    setErrorKind("file")
+    setError(message)
+  }
   const [saving, setSaving] = useState(false)
   const [removingId, setRemovingId] = useState<string | null>(null)
   const uploadPromiseRef = useRef<Promise<KybDocumentPacket | undefined> | null>(null)
@@ -114,12 +126,12 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
   async function upload(personId = extraFields?.personId, nextFile = file) {
     if (uploadPromiseRef.current) return uploadPromiseRef.current
     if (!nextFile) {
-      setError("Choose a file.")
+      showFileError("Choose a file.")
       throw new Error("Choose a file.")
     }
     const missing = identityMetaError()
     if (missing) {
-      setError(missing)
+      showMetaError(missing)
       throw new Error(missing)
     }
     const run = (async () => {
@@ -142,7 +154,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
         return document
       } catch (err) {
         const message = err instanceof Error ? err.message : "Could not store the file."
-        setError(message)
+        showFileError(message)
         throw err instanceof Error ? err : new Error(message)
       } finally {
         setSaving(false)
@@ -177,7 +189,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
           : !nextNumber.trim()
             ? "Enter the document number before uploading."
             : "Select a document type before uploading."
-      setError(message)
+      showMetaError(message)
       throw new Error(message)
     }
     setSaving(true)
@@ -193,7 +205,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
       await onUploaded(document)
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not update document details."
-      setError(message)
+      showFileError(message)
       throw err instanceof Error ? err : new Error(message)
     } finally {
       setSaving(false)
@@ -203,6 +215,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
 
   useImperativeHandle(ref, () => ({
     hasPendingFile: () => Boolean(file) || Boolean(uploadPromiseRef.current),
+    showingError: () => Boolean(error),
     submit: (personId) => {
       if (uploadPromiseRef.current) return uploadPromiseRef.current
       return upload(personId ?? extraFields?.personId)
@@ -312,6 +325,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
           </>
         ) : null}
       </div>
+      {error && errorKind === "meta" ? <p className="text-sm text-destructive">{error}</p> : null}
       <div
         className={cn(
           "space-y-3 rounded-md border p-3",
@@ -338,7 +352,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
             onClick={() => {
               const missing = identityMetaError()
               if (missing) {
-                setError(missing)
+                showMetaError(missing)
                 return
               }
               inputRef.current?.click()
@@ -369,7 +383,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
                     onClick={() => {
                       setRemovingId(doc.id)
                       void onRemoveExisting(doc.id)
-                        .catch((err) => setError(err instanceof Error ? err.message : "Could not remove document"))
+                        .catch((err) => showFileError(err instanceof Error ? err.message : "Could not remove document"))
                         .finally(() => setRemovingId(null))
                     }}
                     className="rounded-md p-0.5 text-muted-foreground hover:text-foreground"
@@ -408,7 +422,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
         <p className="text-xs text-muted-foreground">
           {fileHint || "PDF, JPEG, PNG, or HEIC. Maximum 10 MB – photograph the ID if the PDF is large."}
         </p>
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        {error && errorKind === "file" ? <p className="text-sm text-destructive">{error}</p> : null}
         <input
           ref={inputRef}
           type="file"
@@ -424,7 +438,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
                 const personId = extraFields?.personId ?? (await resolvePersonId?.())
                 await upload(personId, next)
               } catch (err) {
-                setError(err instanceof Error ? err.message : "Could not store the file.")
+                showFileError(err instanceof Error ? err.message : "Could not store the file.")
               }
             })()
           }}

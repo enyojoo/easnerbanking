@@ -356,13 +356,14 @@ export function BusinessVerificationSection({
                     <Card
                       key={t.id}
                       className={cn(
-                        "flex h-full flex-col",
+                        "flex h-full flex-col gap-3 py-4",
                         isGlobalBanking && "border-primary/25 md:border-primary/40",
                         connectFlowActive && "hidden",
                       )}
                     >
-                      <CardHeader className="pb-2">
-                        <div className="flex items-center gap-1.5">
+                      <CardHeader className="gap-1.5 px-4 pb-0 md:px-4">
+                        <div className="flex flex-nowrap items-center gap-1.5">
+                          <CardTitle className="min-w-0 text-base leading-tight">{t.title}</CardTitle>
                           {isGlobalBanking ? (
                             <Tier1VerificationBadge
                               compact
@@ -372,12 +373,11 @@ export function BusinessVerificationSection({
                           ) : (
                             <Badge
                               variant="secondary"
-                              className="h-5 px-1.5 py-0 text-[10px] leading-none font-medium"
+                              className="h-5 shrink-0 px-1.5 py-0 text-[10px] leading-none font-medium"
                             >
                               Coming later
                             </Badge>
                           )}
-                          <CardTitle className="min-w-0 text-base leading-tight">{t.title}</CardTitle>
                         </div>
                         <CardDescription className="text-sm">{t.description}</CardDescription>
                         {t.footnote ? (
@@ -385,7 +385,7 @@ export function BusinessVerificationSection({
                         ) : null}
                       </CardHeader>
                       {isGlobalBanking ? (
-                        <CardContent className="mt-auto space-y-4 pt-0">
+                        <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
                           {error ? <p className="text-sm text-destructive">{error}</p> : null}
                           {info ? <p className="text-sm text-muted-foreground">{info}</p> : null}
                           {tier1OnHold ? (
@@ -469,24 +469,24 @@ export function BusinessVerificationSection({
                   return comingLaterCard
                 })}
                 {showExpressCard ? (
-                  <Card className="flex h-full flex-col border-primary/20">
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center gap-1.5">
+                  <Card className="flex h-full flex-col gap-3 border-primary/20 py-4">
+                    <CardHeader className="gap-1.5 px-4 pb-0 md:px-4">
+                      <div className="flex flex-nowrap items-center gap-1.5">
+                        <CardTitle className="min-w-0 text-base leading-tight">
+                          {EXPRESS_DEPOSITS_COPY.title}
+                        </CardTitle>
                         <Tier1VerificationBadge
                           compact
                           isLoading={expressQuery.isLoading && !expressQuery.data}
                           tier1Complete={expressReady}
                           tier1VerificationStatus={expressStatus}
                         />
-                        <CardTitle className="min-w-0 text-base leading-tight">
-                          {EXPRESS_DEPOSITS_COPY.title}
-                        </CardTitle>
                       </div>
                       <CardDescription className="text-sm">
                         {EXPRESS_DEPOSITS_COPY.description}
                       </CardDescription>
                     </CardHeader>
-                    <CardContent className="mt-auto space-y-3 pt-0">
+                    <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
                       {!tier1Complete ? (
                         <p className="text-sm text-muted-foreground">
                           {EXPRESS_DEPOSITS_COPY.globalBankingRequired}
