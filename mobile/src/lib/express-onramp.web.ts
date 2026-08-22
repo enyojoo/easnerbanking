@@ -23,7 +23,16 @@ function frameUrl(): string {
 
 function styleFrame(frame: HTMLIFrameElement, open: boolean) {
   frame.style.cssText = open
-    ? 'position:fixed;inset:0;z-index:2147483000;width:100%;height:100%;border:0;background:#fff'
+    ? [
+        'position:fixed',
+        'inset:0',
+        'z-index:9999',
+        'width:100%',
+        'height:100%',
+        'border:0',
+        'background:transparent',
+        'pointer-events:auto',
+      ].join(';')
     : 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:-9999px;border:0'
 }
 
@@ -42,6 +51,7 @@ function ensureFrame(): HTMLIFrameElement {
   frame.id = FRAME_ID
   frame.title = 'Easner'
   frame.setAttribute('allow', 'payment; camera; microphone; clipboard-write')
+  frame.setAttribute('allowtransparency', 'true')
   styleFrame(frame, false)
   document.body.appendChild(frame)
   frame.src = frameUrl()
