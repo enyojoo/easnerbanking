@@ -274,59 +274,63 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
       <CenteredWebFlowPage>
         <ReceiveFlowHeader title={EXPRESS_DEPOSITS_COPY.title} onBack={handleBack} />
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-          <Text style={styles.bodyText}>{EXPRESS_DEPOSITS_COPY.description}</Text>
-          {step === 'link' ? (
-            <View style={styles.profileCard}>
-              {field('email', 'Email', { keyboard: 'email', autoCapitalize: 'none' })}
-              {field('phone', 'Phone number', { keyboard: 'phone' })}
-              {field('given_name', 'First name')}
-              {field('surname', 'Last name')}
-            </View>
-          ) : null}
-          {step === 'us_kyc' || step === 'eu_kyc' ? (
-            <View style={styles.profileCard}>
-              {field('given_name', 'First name')}
-              {field('surname', 'Last name')}
-              {field('line1', 'Address')}
-              {field('city', 'City')}
-              {field('postal_code', 'Postal code')}
-              {field('dob_day', 'Birth day', { keyboard: 'number' })}
-              {field('dob_month', 'Birth month', { keyboard: 'number' })}
-              {field('dob_year', 'Birth year', { keyboard: 'number' })}
-              {step === 'eu_kyc' ? (
-                <>
-                  {field('nationalities', EXPRESS_DEPOSITS_COPY.nationalitiesLabel)}
-                  {field('birth_city', EXPRESS_DEPOSITS_COPY.birthCityLabel)}
-                  {field('birth_country', EXPRESS_DEPOSITS_COPY.birthCountryLabel)}
-                </>
+          {stripeEl ? (
+            <ExpressStripeHost element={stripeEl} />
+          ) : (
+            <>
+              <Text style={styles.bodyText}>{EXPRESS_DEPOSITS_COPY.description}</Text>
+              {step === 'link' ? (
+                <View style={styles.profileCard}>
+                  {field('email', 'Email', { keyboard: 'email', autoCapitalize: 'none' })}
+                  {field('phone', 'Phone number', { keyboard: 'phone' })}
+                  {field('given_name', 'First name')}
+                  {field('surname', 'Last name')}
+                </View>
               ) : null}
-            </View>
-          ) : null}
-          {step === 'eu_identifiers' ? (
-            <View style={styles.profileCard}>{field('identifier', 'ID number')}</View>
-          ) : null}
+              {step === 'us_kyc' || step === 'eu_kyc' ? (
+                <View style={styles.profileCard}>
+                  {field('given_name', 'First name')}
+                  {field('surname', 'Last name')}
+                  {field('line1', 'Address')}
+                  {field('city', 'City')}
+                  {field('postal_code', 'Postal code')}
+                  {field('dob_day', 'Birth day', { keyboard: 'number' })}
+                  {field('dob_month', 'Birth month', { keyboard: 'number' })}
+                  {field('dob_year', 'Birth year', { keyboard: 'number' })}
+                  {step === 'eu_kyc' ? (
+                    <>
+                      {field('nationalities', EXPRESS_DEPOSITS_COPY.nationalitiesLabel)}
+                      {field('birth_city', EXPRESS_DEPOSITS_COPY.birthCityLabel)}
+                      {field('birth_country', EXPRESS_DEPOSITS_COPY.birthCountryLabel)}
+                    </>
+                  ) : null}
+                </View>
+              ) : null}
+              {step === 'eu_identifiers' ? (
+                <View style={styles.profileCard}>{field('identifier', 'ID number')}</View>
+              ) : null}
 
-          {step === 'eu_attestation' ? (
-            <Text style={styles.bodyText}>{EXPRESS_DEPOSITS_COPY.acceptTermsHint}</Text>
-          ) : null}
+              {step === 'eu_attestation' ? (
+                <Text style={styles.bodyText}>{EXPRESS_DEPOSITS_COPY.acceptTermsHint}</Text>
+              ) : null}
 
-          {step === 'us_l2' || step === 'eu_l2' ? (
-            <Text style={styles.bodyText}>{EXPRESS_DEPOSITS_COPY.identityHint}</Text>
-          ) : null}
+              {step === 'us_l2' || step === 'eu_l2' ? (
+                <Text style={styles.bodyText}>{EXPRESS_DEPOSITS_COPY.identityHint}</Text>
+              ) : null}
 
-          {step === 'ready' ? <Text style={styles.ready}>{EXPRESS_DEPOSITS_COPY.readyBadge}</Text> : null}
+              {step === 'ready' ? <Text style={styles.ready}>{EXPRESS_DEPOSITS_COPY.readyBadge}</Text> : null}
 
-          <ExpressStripeHost element={stripeEl} />
-
-          {cta && !stripeEl ? (
-            busy ? (
-              <View style={styles.ctaBusy}>
-                <ActivityIndicator color={colors.neutral.white} />
-              </View>
-            ) : (
-              <GlossyPrimaryButton title={cta} onPress={onCta} />
-            )
-          ) : null}
+              {cta ? (
+                busy ? (
+                  <View style={styles.ctaBusy}>
+                    <ActivityIndicator color={colors.neutral.white} />
+                  </View>
+                ) : (
+                  <GlossyPrimaryButton title={cta} onPress={onCta} />
+                )
+              ) : null}
+            </>
+          )}
           {message ? <Text style={styles.error}>{message}</Text> : null}
         </ScrollView>
       </CenteredWebFlowPage>

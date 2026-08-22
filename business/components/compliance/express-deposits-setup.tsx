@@ -241,10 +241,12 @@ export function ExpressDepositsSetup({ onClose }: Props) {
     <div className="mx-auto flex max-w-lg flex-col gap-6 px-4 py-8">
       <div>
         <h1 className="text-xl font-semibold">{EXPRESS_DEPOSITS_COPY.title}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{EXPRESS_DEPOSITS_COPY.description}</p>
+        {!slot ? (
+          <p className="mt-2 text-sm text-muted-foreground">{EXPRESS_DEPOSITS_COPY.description}</p>
+        ) : null}
       </div>
 
-      {step === "link" ? (
+      {step === "link" && !slot ? (
         <div className="space-y-3">
           {field("email", "Email", "email")}
           {field("phone", "Phone")}
@@ -291,7 +293,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
         </div>
       ) : null}
 
-      {step === "eu_attestation" ? (
+      {step === "eu_attestation" && !slot ? (
         <div className="space-y-3">
           <p className="text-sm font-medium">{EXPRESS_DEPOSITS_COPY.acceptTermsTitle}</p>
           <p className="text-sm text-muted-foreground">{EXPRESS_DEPOSITS_COPY.acceptTermsHint}</p>
@@ -301,7 +303,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
         </div>
       ) : null}
 
-      {(step === "us_l2" || step === "eu_l2") ? (
+      {(step === "us_l2" || step === "eu_l2") && !slot ? (
         <div className="space-y-3">
           <p className="text-sm font-medium">{EXPRESS_DEPOSITS_COPY.identityTitle}</p>
           <p className="text-sm text-muted-foreground">{EXPRESS_DEPOSITS_COPY.identityHint}</p>
