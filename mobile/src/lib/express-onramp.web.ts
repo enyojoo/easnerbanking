@@ -14,7 +14,16 @@ let frameReady = false
 let listening = false
 const pending = new Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void }>()
 const callbacks = new Map<string, (payload: never) => void>()
+const uiListeners = new Set<(open: boolean) => void>()
 let secretProvider: ((sessionId: string) => Promise<string>) | null = null
+
+/** Fires when the Stripe popup becomes visible or closes, so callers can drop their spinner. */
+export function subscribeExpressOnrampUi(listener: (open: boolean) => void): () => void {
+  uiListeners.add(listener)
+  return () => {
+    uiListeners.delete(listener)
+  }
+}
 
 function frameUrl(): string {
   const origin = window.location.origin
@@ -77,7 +86,9 @@ function onMessage(event: MessageEvent) {
     return
   }
   if (data.type === 'ui') {
-    styleFrame(frame, Boolean((data as { open?: boolean }).open))
+    const open = Boolean((data as { open?: boolean }).open)
+    styleFrame(frame, open)
+    for (const listener of uiListeners) listener(open)
     return
   }
   if (data.type === 'cb' && data.method) {

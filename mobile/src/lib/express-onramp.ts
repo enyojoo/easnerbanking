@@ -52,6 +52,11 @@ const waiters: Waiter[] = []
 
 export function prefetchMobileExpressOnramp(): void {}
 
+/** Web-only: native sheets are presented by Stripe, so there is nothing to observe. */
+export function subscribeExpressOnrampUi(_listener: (open: boolean) => void): () => void {
+  return () => {}
+}
+
 function flushWaiters(sdk: ExpressOnrampSdk) {
   while (waiters.length) {
     const waiter = waiters.shift()
@@ -94,6 +99,28 @@ async function presentIdentity(
     : { result: 'success' }
   cb?.(payload)
   return payload
+}
+
+/** Apple Pay and Google Pay both refuse to present without an amount and currency. */
+function platformPayParams(
+  opts: Record<string, unknown>,
+  wallets: { applePay?: string; googlePay?: string },
+): Record<string, unknown> {
+  const currencyCode = String(opts.currency || 'USD').toUpperCase()
+  const amount = Number(opts.amount) || 0
+  const merchantCountryCode = String(opts.merchantCountryCode || 'US').toUpperCase()
+  if (wallets.googlePay === 'auto') {
+    return {
+      googlePay: { currencyCode, amount: Math.round(amount * 100), label: 'Easner' },
+    }
+  }
+  return {
+    applePay: {
+      merchantCountryCode,
+      currencyCode,
+      cartItems: [{ paymentType: 'Immediate', label: 'Easner', amount: amount.toFixed(2) }],
+    },
+  }
 }
 
 export function adaptNativeOnramp(onramp: NativeOnramp): ExpressOnrampSdk {
@@ -141,7 +168,7 @@ export function adaptNativeOnramp(onramp: NativeOnramp): ExpressOnrampSdk {
       const wallets = (opts.wallets as { applePay?: string; googlePay?: string } | undefined) || {}
       const usePlatform = wallets.applePay === 'auto' || wallets.googlePay === 'auto'
       const collected = usePlatform
-        ? await onramp.collectPaymentMethod('PlatformPay', {})
+        ? await onramp.collectPaymentMethod('PlatformPay', platformPayParams(opts, wallets))
         : await onramp.collectPaymentMethod(types.includes('us_bank_account') ? 'BankAccount' : 'Card')
       throwIf(collected.error)
       const token = await onramp.createCryptoPaymentToken()

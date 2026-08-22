@@ -43,6 +43,7 @@ import {
   EXPRESS_NATIVE_AUTH_REQUIRED,
   loadMobileExpressOnramp,
   prefetchMobileExpressOnramp,
+  subscribeExpressOnrampUi,
   type ExpressOnrampSdk,
 } from '../../lib/express-onramp'
 import { isStripeHostElement } from '../../lib/expressStripeElement'
@@ -420,6 +421,16 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
     setOpeningIdentity(true)
     onCta()
   }, [step])
+
+  useEffect(
+    () =>
+      subscribeExpressOnrampUi((open) => {
+        if (!open) return
+        setOpeningIdentity(false)
+        setBusy(false)
+      }),
+    [],
+  )
 
   useEffect(() => {
     if (step !== 'us_l2' && step !== 'eu_l2') return

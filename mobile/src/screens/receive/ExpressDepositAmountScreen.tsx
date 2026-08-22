@@ -133,6 +133,8 @@ export default function ExpressDepositAmountScreen({ navigation, route }: Naviga
                   applePay: method === 'express_apple_pay' ? 'auto' : 'never',
                   googlePay: method === 'express_google_pay' ? 'auto' : 'never',
                 },
+                amount: youPay,
+                currency: 'USD',
               },
               async (result) => {
                 if (!result.cryptoPaymentToken) {

@@ -46,16 +46,58 @@
           return true
         }
 
+        /** Stripe renders its popup inside this frame; the controller iframe is always present. */
+        function popupIsOpen() {
+          if (host.childElementCount > 0) return true
+          var frames = document.querySelectorAll('iframe')
+          for (var i = 0; i < frames.length; i++) {
+            if (!/controller/i.test(frames[i].src || '')) return true
+          }
+          return false
+        }
+
+        function watchPopup(onClosed) {
+          var sawOpen = false
+          var timer = setInterval(function () {
+            if (popupIsOpen()) {
+              sawOpen = true
+              return
+            }
+            if (!sawOpen) return
+            clearInterval(timer)
+            onClosed()
+          }, 400)
+          return function () {
+            clearInterval(timer)
+          }
+        }
+
         function waitForUi(start, onResult) {
           showUi()
           return new Promise(function (resolve, reject) {
-            Promise.resolve(start(function (result) {
+            var settled = false
+            var stopWatch = null
+
+            function settle(result) {
+              if (settled) return
+              settled = true
+              if (stopWatch) stopWatch()
               onResult(result)
               hideUi()
               resolve(null)
-            }))
+            }
+
+            stopWatch = watchPopup(function () {
+              settle({ result: 'canceled' })
+            })
+
+            Promise.resolve(start(settle))
               .then(mount)
-              .catch(reject)
+              .catch(function (error) {
+                if (stopWatch) stopWatch()
+                hideUi()
+                reject(error)
+              })
           })
         }
 
