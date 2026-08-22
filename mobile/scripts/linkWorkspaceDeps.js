@@ -108,6 +108,15 @@ for (const name of names) {
   linkDep(name)
 }
 
+/** Expo autolinking / CocoaPods resolve these from mobile/node_modules even when npm hoists them. */
+for (const name of [
+  'expo-modules-autolinking',
+  'expo-modules-core',
+  'expo-modules-jsi',
+]) {
+  linkDep(name)
+}
+
 /** npm workspaces may link @expo/cli as expo-internal but not `expo`. */
 function linkExpoBin(dir) {
   const binDir = path.join(dir, 'node_modules', '.bin')
