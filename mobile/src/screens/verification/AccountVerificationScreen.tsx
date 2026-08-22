@@ -18,7 +18,6 @@ import {
   CreditCard,
   Globe,
   Info,
-  Map,
   Zap,
 } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -71,7 +70,7 @@ import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 
 const TIER_ICONS: Record<1 | 2 | 3, LucideIcon> = {
   1: Globe,
-  2: Map,
+  2: CreditCard,
   3: CreditCard,
 }
 
