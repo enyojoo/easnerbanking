@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Easner</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: #fff;
+      }
+      #host {
+        min-height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="host"></div>
+    <script>
+      (function () {
+        var CHANNEL = 'easner-express'
+        var parentOrigin = new URLSearchParams(location.search).get('origin') || ''
+        var sdk = null
+        var host = document.getElementById('host')
+
+        function send(payload) {
+          if (!window.parent || window.parent === window) return
+          window.parent.postMessage(Object.assign({ channel: CHANNEL }, payload), parentOrigin || '*')
+        }
+
+        function mount(el) {
+          if (!el || !el.appendChild) return false
+          host.replaceChildren()
+          host.appendChild(el)
+          send({ type: 'ui', open: true })
+          return true
+        }
+
+        function loadScript() {
+          return new Promise(function (resolve, reject) {
+            if (window.loadCryptoOnrampAndInitialize) {
+              resolve(window.loadCryptoOnrampAndInitialize)
+              return
+            }
+            var script = document.createElement('script')
+            script.type = 'module'
+            script.src = 'https://js.stripe.com/crypto-onramp/v1/crypto-onramp.js'
+            script.addEventListener('load', function () {
+              if (window.loadCryptoOnrampAndInitialize) resolve(window.loadCryptoOnrampAndInitialize)
+              else reject(new Error('unavailable'))
+            })
+            script.addEventListener('error', function () {
+              reject(new Error('unavailable'))
+            })
+            document.head.appendChild(script)
+          })
+        }
+
+        window.addEventListener('message', function (event) {
+          var data = event.data
+          if (!data || data.channel !== CHANNEL) return
+          if (data.type === 'ping') {
+            send({ type: 'ready' })
+            return
+          }
+          if (data.type !== 'call') return
+          if (parentOrigin && event.origin !== parentOrigin) return
+          if (!parentOrigin) parentOrigin = event.origin
+
+          var id = data.id
+          var method = data.method
+          var args = data.args || []
+
+          Promise.resolve()
+            .then(function () {
+              if (method === 'init') return loadScript().then(function (loader) {
+                return loader(args[0], args[1] || { theme: 'stripe' }).then(function (client) {
+                  sdk = client
+                })
+              })
+              if (!sdk) throw new Error('unavailable')
+              if (method === 'registerLinkUser') {
+                return sdk.registerLinkUser.apply(sdk, args)
+              }
+              if (method === 'authenticate') {
+                return sdk.authenticate(args[0], function (result) {
+                  send({ type: 'cb', method: 'authenticate', payload: result })
+                  send({ type: 'ui', open: false })
+                }).then(mount)
+              }
+              if (method === 'submitKycInfo') return sdk.submitKycInfo(args[0])
+              if (method === 'getMissingIdentifiers') return sdk.getMissingIdentifiers()
+              if (method === 'updateKycInfo') return sdk.updateKycInfo(args[0])
+              if (method === 'promptUserAttestation') {
+                return sdk.promptUserAttestation(function (result) {
+                  send({ type: 'cb', method: 'promptUserAttestation', payload: result })
+                  send({ type: 'ui', open: false })
+                }).then(mount)
+              }
+              if (method === 'verifyDocuments' || method === 'verifyIdentity') {
+                var verify = sdk.verifyDocuments || sdk.verifyIdentity
+                if (!verify) throw new Error('unavailable')
+                return Promise.resolve(
+                  verify.call(sdk, function (result) {
+                    send({ type: 'cb', method: method, payload: result })
+                    send({ type: 'ui', open: false })
+                  }),
+                ).then(mount)
+              }
+              if (method === 'collectPaymentMethod') {
+                return sdk.collectPaymentMethod(args[0], function (result) {
+                  send({ type: 'cb', method: 'collectPaymentMethod', payload: result })
+                  send({ type: 'ui', open: false })
+                }).then(mount)
+              }
+              if (method === 'performCheckout') {
+                return sdk.performCheckout(args[0], function (sessionId) {
+                  var askId = 'secret-' + Date.now() + '-' + Math.random().toString(16).slice(2)
+                  return new Promise(function (resolve, reject) {
+                    function onSecret(ev) {
+                      var reply = ev.data
+                      if (!reply || reply.channel !== CHANNEL || reply.type !== 'secret' || reply.id !== askId) return
+                      window.removeEventListener('message', onSecret)
+                      if (reply.error) reject(new Error(reply.error))
+                      else resolve(reply.value)
+                    }
+                    window.addEventListener('message', onSecret)
+                    send({ type: 'secret', id: askId, sessionId: sessionId })
+                  })
+                })
+              }
+              throw new Error('unavailable')
+            })
+            .then(function (value) {
+              send({ type: 'ok', id: id, value: value === true ? true : null })
+            })
+            .catch(function (err) {
+              send({ type: 'err', id: id, message: (err && err.message) || 'unavailable' })
+            })
+        })
+
+        send({ type: 'ready' })
+      })()
+    </script>
+  </body>
+</html>

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { Component, useEffect, useRef, useState } from 'react'
 import { colors } from '../theme'
 import {
   adaptNativeOnramp,
@@ -16,6 +16,47 @@ function onrampErrorMessage(error: unknown): string {
   return row.message || row.localizedMessage || 'Express deposits is not ready. Try again in a moment.'
 }
 
+function isMissingNativeModule(error: unknown): boolean {
+  return /not available|includeOnramp/i.test(error instanceof Error ? error.message : onrampErrorMessage(error))
+}
+
+async function configureWhenReady(
+  configure: (config: Record<string, unknown>) => Promise<{ error?: { message?: string } }>,
+  config: Record<string, unknown>,
+) {
+  let last: unknown
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      const result = await configure(config)
+      if (!result?.error) return
+      last = result.error
+      if (isMissingNativeModule(result.error)) throw new Error(onrampErrorMessage(result.error))
+    } catch (error) {
+      last = error
+      if (isMissingNativeModule(error)) throw error instanceof Error ? error : new Error(onrampErrorMessage(error))
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)))
+  }
+  throw last instanceof Error ? last : new Error(onrampErrorMessage(last))
+}
+
+class BridgeGuard extends Component<{ children: React.ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  componentDidCatch() {
+    failNativeExpressOnramp(new Error('Express deposits is not ready. Try again in a moment.'))
+  }
+
+  render() {
+    if (this.state.failed) return null
+    return this.props.children
+  }
+}
+
 export function ExpressOnrampNativeBridge() {
   let useOnramp: (() => Parameters<typeof adaptNativeOnramp>[0]) | null = null
   try {
@@ -29,7 +70,11 @@ export function ExpressOnrampNativeBridge() {
   }
 
   if (!useOnramp) return null
-  return <ConfiguredOnrampBridge useOnramp={useOnramp} />
+  return (
+    <BridgeGuard>
+      <ConfiguredOnrampBridge useOnramp={useOnramp} />
+    </BridgeGuard>
+  )
 }
 
 function ConfiguredOnrampBridge({
@@ -48,7 +93,8 @@ function ConfiguredOnrampBridge({
   const status = peekExpressOnrampStatus()
   const customerId = status?.cryptoCustomerId || undefined
   const country = (status?.payerCountry || 'US').slice(0, 2).toUpperCase()
-  const configKey = `${customerId || ''}:${country}`
+  const publishableKey = status?.publishableKey || ''
+  const configKey = `${customerId || ''}:${country}:${publishableKey}`
 
   useEffect(() => {
     const api = onrampRef.current
@@ -62,43 +108,41 @@ function ConfiguredOnrampBridge({
     }
 
     let cancelled = false
-    void api
-      .configure({
-        merchantDisplayName: 'Easner',
-        appearance: {
-          style: 'ALWAYS_LIGHT',
-          lightColors: {
-            primary: colors.primary.main,
-            contentOnPrimary: colors.neutral.white,
-            borderSelected: colors.primary.main,
-          },
+    void configureWhenReady(api.configure as (config: Record<string, unknown>) => Promise<{ error?: { message?: string } }>, {
+      merchantDisplayName: 'Easner',
+      appearance: {
+        style: 'ALWAYS_LIGHT',
+        lightColors: {
+          primary: colors.primary.main,
+          contentOnPrimary: colors.neutral.white,
+          borderSelected: colors.primary.main,
         },
-        ...(customerId ? { cryptoCustomerId: customerId } : {}),
-        googlePay: {
-          merchantCountryCode: country,
-          merchantName: 'Easner',
-        },
-      })
-      .then((result) => {
+      },
+      ...(customerId ? { cryptoCustomerId: customerId } : {}),
+      googlePay: {
+        merchantCountryCode: country,
+        merchantName: 'Easner',
+        testEnv: publishableKey.startsWith('pk_test'),
+      },
+    })
+      .then(() => {
         if (cancelled) return
-        if (result.error) {
-          failNativeExpressOnramp(new Error(onrampErrorMessage(result.error)))
-          return
-        }
         configuredFor.current = configKey
         setNativeExpressOnrampSdk(adaptNativeOnramp(onrampRef.current))
       })
       .catch((error) => {
         if (cancelled) return
-        failNativeExpressOnramp(
-          error instanceof Error ? error : new Error(onrampErrorMessage(error)),
-        )
+        if (configuredFor.current) {
+          setNativeExpressOnrampSdk(adaptNativeOnramp(onrampRef.current))
+          return
+        }
+        failNativeExpressOnramp(error instanceof Error ? error : new Error(onrampErrorMessage(error)))
       })
 
     return () => {
       cancelled = true
     }
-  }, [configKey, customerId, country])
+  }, [configKey, customerId, country, publishableKey])
 
   return null
 }

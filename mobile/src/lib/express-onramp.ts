@@ -1,5 +1,6 @@
-import type { ExpressOnrampSdk } from './express-onramp-types'
+import { EXPRESS_NATIVE_AUTH_REQUIRED, type ExpressOnrampSdk } from './express-onramp-types'
 
+export { EXPRESS_NATIVE_AUTH_REQUIRED }
 export type { ExpressOnrampSdk }
 
 type NativeOnramp = {
@@ -21,10 +22,11 @@ type NativeOnramp = {
   authorize: (linkAuthIntentId: string) => Promise<{
     status?: string
     customerId?: string
-    error?: { message?: string }
+    error?: { message?: string; stripeErrorCode?: string }
   }>
+  isAuthError?: (error?: { message?: string; stripeErrorCode?: string }) => boolean
   attachKycInfo: (kycInfo: Record<string, unknown>) => Promise<{ error?: { message?: string } }>
-  verifyIdentity: () => Promise<{ error?: { message?: string; code?: string } }>
+  verifyIdentity: () => Promise<{ error?: { message?: string; code?: string; stripeErrorCode?: string } }>
   collectPaymentMethod: (
     paymentMethod: 'Card' | 'BankAccount' | 'CardAndBankAccount' | 'PlatformPay',
     platformPayParams?: Record<string, unknown>,
@@ -78,6 +80,22 @@ export function failNativeExpressOnramp(error: Error): void {
   failWaiters(error)
 }
 
+async function presentIdentity(
+  onramp: NativeOnramp,
+  cb?: (r: unknown) => void,
+) {
+  const result = await onramp.verifyIdentity()
+  if (result.error && onramp.isAuthError?.(result.error)) {
+    throw new Error(EXPRESS_NATIVE_AUTH_REQUIRED)
+  }
+  const canceled = /cancel/i.test(String(result.error?.code || result.error?.message || ''))
+  const payload = result.error
+    ? { result: canceled ? 'canceled' : 'error' }
+    : { result: 'success' }
+  cb?.(payload)
+  return payload
+}
+
 export function adaptNativeOnramp(onramp: NativeOnramp): ExpressOnrampSdk {
   const throwIf = (error?: { message?: string }) => {
     if (error?.message) throw new Error(error.message)
@@ -92,26 +110,18 @@ export function adaptNativeOnramp(onramp: NativeOnramp): ExpressOnrampSdk {
     authenticate: async (id, cb) => {
       const result = await onramp.authorize(id)
       const status = String(result.status || '')
-      const denied = /denied|cancel|dismiss/i.test(status)
-      if (result.customerId && !denied && !result.error) {
+      if ((status === 'Consented' || result.customerId) && !result.error) {
         await cb({
           result: 'success',
           crypto_customer_id: result.customerId,
         })
         return
       }
-      if (denied) {
+      if (status === 'Denied' || /denied|cancel|dismiss/i.test(status)) {
         await cb({ result: 'canceled' })
         return
       }
       throwIf(result.error)
-      if (result.customerId) {
-        await cb({
-          result: 'success',
-          crypto_customer_id: result.customerId,
-        })
-        return
-      }
       await cb({ result: status || 'error' })
     },
     submitKycInfo: async (info) => {
@@ -124,24 +134,8 @@ export function adaptNativeOnramp(onramp: NativeOnramp): ExpressOnrampSdk {
       })
       throwIf(result.error)
     },
-    verifyDocuments: async (cb) => {
-      const result = await onramp.verifyIdentity()
-      const canceled = /cancel/i.test(String(result.error?.code || result.error?.message || ''))
-      const payload = result.error
-        ? { result: canceled ? 'canceled' : 'error' }
-        : { result: 'success' }
-      cb?.(payload)
-      return payload
-    },
-    verifyIdentity: async (cb) => {
-      const result = await onramp.verifyIdentity()
-      const canceled = /cancel/i.test(String(result.error?.code || result.error?.message || ''))
-      const payload = result.error
-        ? { result: canceled ? 'canceled' : 'error' }
-        : { result: 'success' }
-      cb?.(payload)
-      return payload
-    },
+    verifyDocuments: async (cb) => presentIdentity(onramp, cb),
+    verifyIdentity: async (cb) => presentIdentity(onramp, cb),
     collectPaymentMethod: async (opts, cb) => {
       const types = (opts.payment_method_types as string[] | undefined) || []
       const wallets = (opts.wallets as { applePay?: string; googlePay?: string } | undefined) || {}
@@ -179,7 +173,7 @@ export async function loadMobileExpressOnramp(_publishableKey?: string): Promise
         const index = waiters.indexOf(waiter)
         if (index >= 0) waiters.splice(index, 1)
         reject(new Error('Express deposits is not ready. Try again in a moment.'))
-      }, 12000),
+      }, 20000),
     }
     waiters.push(waiter)
   })

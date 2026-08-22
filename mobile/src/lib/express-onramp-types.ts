@@ -1,3 +1,5 @@
+export const EXPRESS_NATIVE_AUTH_REQUIRED = 'EXPRESS_NATIVE_AUTH_REQUIRED'
+
 export type ExpressOnrampSdk = {
   registerLinkUser?: (
     email: string,

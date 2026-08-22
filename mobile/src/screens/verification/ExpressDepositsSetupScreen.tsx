@@ -39,7 +39,12 @@ import { useStackHardwareBack } from '../../hooks/useStackHardwareBack'
 import { navigateStackBack } from '../../navigation/stackBackNavigation'
 import { apiFetch } from '../../query/api-client'
 import { WEB_FLOW_MAX_WIDTH } from '../../components/layout/CenteredWebFlowPage'
-import { loadMobileExpressOnramp, prefetchMobileExpressOnramp, type ExpressOnrampSdk } from '../../lib/express-onramp'
+import {
+  EXPRESS_NATIVE_AUTH_REQUIRED,
+  loadMobileExpressOnramp,
+  prefetchMobileExpressOnramp,
+  type ExpressOnrampSdk,
+} from '../../lib/express-onramp'
 import { isStripeHostElement } from '../../lib/expressStripeElement'
 import { ExpressStripeHost } from '../../components/receive/ExpressStripeHost'
 import { watchExpressIdentityOverlay } from '../../lib/expressIdentityOverlay'
@@ -269,17 +274,23 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
         // Expo web matches the pre-upgrade + business host: start verifyDocuments
         // without awaiting Link auth. Awaiting authenticate detaches Stripe's iframe.
         if (Platform.OS === 'web') {
-          const pending = (client.verifyDocuments || client.verifyIdentity)?.(finish)
-          void Promise.resolve(pending).then((first) => {
+          const verify = client.verifyDocuments || client.verifyIdentity
+          if (!verify) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
+          try {
+            const first = await Promise.resolve(verify(finish))
             if (isStripeHostElement(first)) {
               setStripeEl(first)
-              return
+              return true
             }
             if (first !== undefined) finish(first)
-          })
-          return true
+            return true
+          } catch (e) {
+            setOpeningIdentity(false)
+            throw e
+          }
         }
-        if (client.authenticate) {
+        const authorizeLink = async () => {
+          if (!client.authenticate) return
           const auth = await apiFetch<{ authIntentId?: string | null; needsRegister?: boolean }>(
             '/api/stripe/onramp/link-auth',
             { method: 'POST', body: {} },
@@ -298,33 +309,45 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
             )
             intentId = again.authIntentId
           }
-          if (intentId) {
-            const authEl = await client.authenticate(intentId, async (result) => {
-              const outcome = String(result.result || '')
-              if (outcome === 'success' && result.crypto_customer_id) {
-                await apiFetch('/api/stripe/onramp/link-complete', {
-                  method: 'POST',
-                  body: {
-                    cryptoCustomerId: result.crypto_customer_id,
-                    accessToken: result.access_token || result.oauth_token,
-                  },
-                })
-              } else if (isExpressSetupDismissed(outcome)) {
-                finish({ result: 'canceled' })
-              }
-            })
-            if (isStripeHostElement(authEl)) setStripeEl(authEl)
-            if (settled) return true
-          }
+          if (!intentId) return
+          await client.authenticate(intentId, async (result) => {
+            const outcome = String(result.result || '')
+            if (outcome === 'success' && result.crypto_customer_id) {
+              await apiFetch('/api/stripe/onramp/link-complete', {
+                method: 'POST',
+                body: {
+                  cryptoCustomerId: result.crypto_customer_id,
+                  accessToken: result.access_token || result.oauth_token,
+                },
+              })
+            } else if (isExpressSetupDismissed(outcome)) {
+              finish({ result: 'canceled' })
+            }
+          })
         }
+
+        if (!status?.cryptoCustomerId) await authorizeLink()
+        if (settled) return true
         const verify = client.verifyDocuments || client.verifyIdentity
         if (!verify) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
-        const first = await Promise.resolve(verify(finish))
-        if (isStripeHostElement(first)) {
-          setStripeEl(first)
-          return true
+        try {
+          const first = await Promise.resolve(verify(finish))
+          if (isStripeHostElement(first)) {
+            setStripeEl(first)
+            return true
+          }
+          if (first !== undefined) finish(first)
+        } catch (e) {
+          if (!(e instanceof Error) || e.message !== EXPRESS_NATIVE_AUTH_REQUIRED) throw e
+          await authorizeLink()
+          if (settled) return true
+          const again = await Promise.resolve(verify(finish))
+          if (isStripeHostElement(again)) {
+            setStripeEl(again)
+            return true
+          }
+          if (again !== undefined) finish(again)
         }
-        if (first !== undefined) finish(first)
         return true
       }
       if (step === 'us_kyc' || step === 'eu_kyc') {

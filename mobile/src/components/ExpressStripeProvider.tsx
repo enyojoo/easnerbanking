@@ -51,7 +51,11 @@ export function ExpressStripeProvider({ children, publishableKey }: Props) {
         }>
       }
       stripe = (
-        <StripeProvider publishableKey={pk} merchantIdentifier={getApplePayMerchantId()}>
+        <StripeProvider
+          publishableKey={pk}
+          merchantIdentifier={getApplePayMerchantId()}
+          urlScheme="easner"
+        >
           <ExpressOnrampNativeBridge />
         </StripeProvider>
       )
