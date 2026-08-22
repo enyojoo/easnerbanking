@@ -121,7 +121,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
         await sdk.registerLinkUser({
           email: form.email,
           phone: form.phone,
-          country: form.country || status?.payerCountry,
+          country: status?.payerCountry || form.country,
           fullName: `${form.given_name} ${form.surname}`.trim(),
         })
         const again = await fetchWithSession("/api/stripe/onramp/link-auth", {
@@ -167,7 +167,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
           city: form.city,
           state: form.state || undefined,
           postal_code: form.postal_code,
-          country: form.country,
+          country: status?.payerCountry || form.country,
         },
       }
       if (step.startsWith("eu")) {
@@ -241,20 +241,12 @@ export function ExpressDepositsSetup({ onClose }: Props) {
         <p className="mt-2 text-sm text-muted-foreground">{EXPRESS_DEPOSITS_COPY.description}</p>
       </div>
 
-      {!status ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Loading…
-        </div>
-      ) : null}
-
-      {step === "link" && status ? (
+      {step === "link" ? (
         <div className="space-y-3">
           {field("email", "Email", "email")}
           {field("phone", "Phone")}
           {field("given_name", "First name")}
           {field("surname", "Last name")}
-          {field("country", "Country")}
           <Button disabled={busy} onClick={startLink}>
             {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             {EXPRESS_DEPOSITS_COPY.setupCta}
@@ -270,7 +262,6 @@ export function ExpressDepositsSetup({ onClose }: Props) {
           {field("city", "City")}
           {step === "us_kyc" || form.country === "IE" ? field("state", "State / county") : null}
           {field("postal_code", "Postal code")}
-          {field("country", "Country")}
           {field("dob_day", "Birth day")}
           {field("dob_month", "Birth month")}
           {field("dob_year", "Birth year")}

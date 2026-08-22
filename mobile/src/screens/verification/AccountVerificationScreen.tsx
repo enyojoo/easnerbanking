@@ -23,7 +23,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
-import { qk, canResubmitNoahVerification, getNoahRejectionDisplay, NOAH_FINAL_REJECTION_USER_MESSAGE, NOAH_VERIFICATION_IN_REVIEW_COPY, VERIFICATION_STATUS_COPY, verificationStatusLabel } from '@easner/shared'
+import { qk, canResubmitNoahVerification, getNoahRejectionDisplay, NOAH_FINAL_REJECTION_USER_MESSAGE, NOAH_VERIFICATION_IN_REVIEW_COPY, VERIFICATION_STATUS_COPY, verificationStatusLabel, EXPRESS_DEPOSITS_COPY } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
 import ExternalLinkModal from '../../components/ExternalLinkModal'
@@ -47,6 +47,7 @@ import {
 } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { CONSUMER_TIER_LADDER } from '../../lib/compliance-tier-ladder-copy'
+import { warmExpressOnrampStatus } from '../../lib/expressOnrampStatusCache'
 import { isTier1Complete } from '../../lib/compliance'
 import { needsNoahVirtualAccountProvision } from '../../lib/noahAccountSync'
 import {
@@ -296,6 +297,11 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
       void syncNoahStatus(false, true)
     }, [userProfile?.id, syncNoahStatus]),
   )
+
+  useEffect(() => {
+    if (!isTier1Complete(userProfile)) return
+    warmExpressOnrampStatus()
+  }, [userProfile])
 
   // Initial Noah sync after login runs from `useConsumerKycNoahSync` (main tabs). This screen keeps
   // periodic sync while viewing in-review/rejected flows below.
@@ -857,19 +863,20 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                     styles.cardInteractive,
                     pressed && Platform.OS === 'ios' && styles.cardPressed,
                   ]}
+                  android_ripple={{ color: 'rgba(0, 122, 204, 0.12)', borderless: false }}
                 >
-                  <View style={styles.cardContent}>
-                    <View style={styles.cardLeft}>
-                      <Text style={styles.cardTitle}>Express deposits</Text>
-                      <Text style={styles.cardDescription}>
-                        Add money from a card, Apple Pay, Google Pay, or a US bank account.
-                      </Text>
-                    </View>
-                    <View style={styles.cardRight}>
-                      <View style={styles.startBadge}>
-                        <Text style={styles.startBadgeText}>Set up</Text>
-                        <ChevronRight size={12} color={colors.neutral.white} strokeWidth={2} />
+                  <View style={styles.cardInner}>
+                    <View style={[styles.cardContent, styles.expressCardContent]}>
+                      <View style={styles.cardLeft}>
+                        <Text style={styles.cardTitle}>{EXPRESS_DEPOSITS_COPY.title}</Text>
+                        <Text style={styles.cardDescription}>
+                          {EXPRESS_DEPOSITS_COPY.description}
+                        </Text>
                       </View>
+                    </View>
+                    <View style={styles.startBadge}>
+                      <Text style={styles.startBadgeText}>{EXPRESS_DEPOSITS_COPY.setupCta}</Text>
+                      <ChevronRight size={12} color={colors.neutral.white} strokeWidth={2} />
                     </View>
                   </View>
                 </Pressable>
@@ -1041,6 +1048,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+  },
+  expressCardContent: {
+    paddingRight: spacing[5] + 72,
+    paddingBottom: spacing[8],
   },
   cardLeft: {
     flex: 1,
