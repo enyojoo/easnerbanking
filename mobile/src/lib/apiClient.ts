@@ -118,9 +118,14 @@ export async function ensureBusinessAppUserBootstrap(options?: {
     }
     const metaResidence = countryCode || savedResidence
     if (metaResidence) {
-      await supabase.auth
-        .updateUser({ data: { residence_country: metaResidence } })
-        .catch(() => undefined)
+      const existingResidence = String(session.user.user_metadata?.residence_country || '')
+        .trim()
+        .toUpperCase()
+      if (existingResidence !== metaResidence) {
+        await supabase.auth
+          .updateUser({ data: { residence_country: metaResidence } })
+          .catch(() => undefined)
+      }
     }
 
     /** Retry ensure only when bootstrap did not link a Turnkey sub-org. */

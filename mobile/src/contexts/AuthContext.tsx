@@ -165,12 +165,7 @@ async function markAccountClosureCancelledIfNeeded(deletionCancelled?: boolean):
 }
 
 function shouldRunPostAuthBootstrap(sourceEvent?: string): boolean {
-  return (
-    sourceEvent === 'SIGNED_IN' ||
-    sourceEvent === 'INITIAL_SESSION' ||
-    sourceEvent === 'USER_UPDATED' ||
-    sourceEvent === 'PASSWORD_RECOVERY'
-  )
+  return sourceEvent === 'SIGNED_IN' || sourceEvent === 'INITIAL_SESSION' || sourceEvent === 'PASSWORD_RECOVERY'
 }
 
 /** True when we asked for a native deep link but Supabase substituted an https Site URL. */
@@ -883,6 +878,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return
       }
 
+      /** Metadata-only updates (e.g. residence_country backfill) must not reopen the MFA gate or PIN bootstrap. */
+      if (
+        event === 'USER_UPDATED' &&
+        session?.user &&
+        mfaHydratedUserIdRef.current === session.user.id &&
+        !mfaPendingRef.current
+      ) {
+        void syncIntercomSession(session)
+        void fetchUserProfile(session.user.id, mapSessionUser(session.user), {
+          sourceEvent: event,
+        }).catch((error) => {
+          console.error('Background profile fetch error:', error)
+        })
+        if (mounted) setLoading(false)
+        return
+      }
+
       try {
         if (session?.user) {
           if (event === 'INITIAL_SESSION') {
@@ -1173,7 +1185,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } catch (e) {
       return { error: e instanceof Error ? e : new Error('Unable to continue with Google.') }
     }
-  }, [])
+  }, [consumeOAuthCallbackIfPresent])
 
   const signInWithApple = useCallback(async (): Promise<{ error: Error | null }> => {
     const relayBlocked = (): { error: Error } => ({
