@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import {
   EXPRESS_DEPOSITS_COPY,
   expressSetupUserMessage,
+  isExpressSetupDismissed,
   toExpressLinkE164Phone,
   type ExpressDepositsNextStep,
 } from "@easner/shared"
@@ -72,12 +73,8 @@ export function ExpressDepositsSetup({ onClose }: Props) {
       birth_country: prev.birth_country || String(address.country || data.payerCountry || ""),
       identifier: prev.identifier || "",
     }))
-    if (data.publishableKey && !sdk) {
-      const client = await loadExpressOnramp(data.publishableKey)
-      setSdk(client)
-    }
     return data
-  }, [sdk])
+  }, [])
 
   useEffect(() => {
     void refresh()
@@ -91,12 +88,43 @@ export function ExpressDepositsSetup({ onClose }: Props) {
     })
   }
 
-  const run = async (fn: () => Promise<void>) => {
+  const ensureSdk = async () => {
+    if (sdk) return sdk
+    const data = status ?? (await refresh())
+    if (!data.publishableKey) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
+    const client = await loadExpressOnramp(data.publishableKey)
+    setSdk(client)
+    return client
+  }
+
+  const closeHost = (message?: string | null) => {
+    setSlot(null)
+    setMessage(message ?? null)
+  }
+
+  const onHostResult = async (result: { result?: string; crypto_customer_id?: string; access_token?: string; oauth_token?: string }) => {
+    const outcome = String(result.result || "")
+    if (outcome === "success" && result.crypto_customer_id) {
+      await persistLink(result.crypto_customer_id, result.access_token || result.oauth_token)
+      closeHost(null)
+      await refresh()
+      return
+    }
+    if (isExpressSetupDismissed(outcome)) {
+      closeHost(EXPRESS_DEPOSITS_COPY.setupDismissed)
+      return
+    }
+    if (outcome && outcome !== "success") {
+      closeHost(expressSetupUserMessage(outcome))
+    }
+  }
+
+  const run = async (fn: () => Promise<boolean | void>) => {
     setBusy(true)
     setMessage(null)
     try {
-      await fn()
-      await refresh()
+      const keepOpen = await fn()
+      if (!keepOpen) await refresh()
     } catch (e) {
       setMessage(expressSetupUserMessage(e instanceof Error ? e.message : null))
     } finally {
@@ -108,7 +136,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
 
   const startLink = () =>
     void run(async () => {
-      if (!sdk) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
+      const client = await ensureSdk()
       const auth = await fetchWithSession("/api/stripe/onramp/link-auth", {
         method: "POST",
         headers: { ...SCOPE, "Content-Type": "application/json" },
@@ -121,7 +149,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
       }
       if (authJson.needsRegister || !authJson.authIntentId) {
         const country = status?.payerCountry || form.country
-        await sdk.registerLinkUser(
+        await client.registerLinkUser(
           form.email.trim(),
           toExpressLinkE164Phone(form.phone, country),
           country,
@@ -134,29 +162,18 @@ export function ExpressDepositsSetup({ onClose }: Props) {
         })
         const againJson = (await again.json().catch(() => ({}))) as { authIntentId?: string }
         if (!againJson.authIntentId) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
-        const el = await sdk.authenticate(againJson.authIntentId, async (result) => {
-          if (result.result === "success" && result.crypto_customer_id) {
-            await persistLink(result.crypto_customer_id, result.access_token || result.oauth_token)
-            setSlot(null)
-            await refresh()
-          }
-        })
+        const el = await client.authenticate(againJson.authIntentId, onHostResult)
         setSlot(el)
-        return
+        return true
       }
-      const el = await sdk.authenticate(authJson.authIntentId, async (result) => {
-        if (result.result === "success" && result.crypto_customer_id) {
-          await persistLink(result.crypto_customer_id, result.access_token || result.oauth_token)
-          setSlot(null)
-          await refresh()
-        }
-      })
+      const el = await client.authenticate(authJson.authIntentId, onHostResult)
       setSlot(el)
+      return true
     })
 
   const submitKyc = () =>
     void run(async () => {
-      if (!sdk) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
+      const sdk = await ensureSdk()
       const payload: Record<string, unknown> = {
         given_name: form.given_name,
         surname: form.surname,
@@ -183,7 +200,8 @@ export function ExpressDepositsSetup({ onClose }: Props) {
 
   const submitIdentifiers = () =>
     void run(async () => {
-      if (!sdk?.getMissingIdentifiers || !sdk.updateKycInfo) {
+      const sdk = await ensureSdk()
+      if (!sdk.getMissingIdentifiers || !sdk.updateKycInfo) {
         throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
       }
       const missing = await sdk.getMissingIdentifiers()
@@ -195,26 +213,37 @@ export function ExpressDepositsSetup({ onClose }: Props) {
 
   const startAttestation = () =>
     void run(async () => {
-      if (!sdk?.promptUserAttestation) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
+      const sdk = await ensureSdk()
+      if (!sdk.promptUserAttestation) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
       const el = await sdk.promptUserAttestation((result) => {
-        if (result.result === "success" || result.result === "accepted") {
-          setSlot(null)
+        const outcome = String(result.result || "")
+        if (outcome === "success" || outcome === "accepted") {
+          closeHost(null)
           void refresh()
+        } else if (isExpressSetupDismissed(outcome)) {
+          closeHost(EXPRESS_DEPOSITS_COPY.setupDismissed)
         }
       })
       setSlot(el)
+      return true
     })
 
   const startL2 = () =>
     void run(async () => {
-      if (!sdk) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
+      const sdk = await ensureSdk()
       const verify = sdk.verifyDocuments || sdk.verifyIdentity
       if (!verify) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
-      const el = await verify(() => {
-        setSlot(null)
+      const el = await verify((result) => {
+        const outcome = result && typeof result === "object" ? String((result as { result?: string }).result || "") : ""
+        if (isExpressSetupDismissed(outcome)) {
+          closeHost(EXPRESS_DEPOSITS_COPY.setupDismissed)
+          return
+        }
+        closeHost(null)
         void refresh()
       })
       setSlot(el)
+      return true
     })
 
   const registerWallet = () =>
@@ -259,7 +288,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
         </div>
       ) : null}
 
-      {(step === "us_kyc" || step === "eu_kyc") && status ? (
+      {(step === "us_kyc" || step === "eu_kyc") && status && !slot ? (
         <div className="space-y-3">
           {field("given_name", "First name")}
           {field("surname", "Last name")}
@@ -283,7 +312,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
         </div>
       ) : null}
 
-      {step === "eu_identifiers" ? (
+      {step === "eu_identifiers" && !slot ? (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">{EXPRESS_DEPOSITS_COPY.identifierHint}</p>
           {field("identifier", "ID number")}
@@ -313,13 +342,13 @@ export function ExpressDepositsSetup({ onClose }: Props) {
         </div>
       ) : null}
 
-      {step === "wallet" ? (
+      {step === "wallet" && !slot ? (
         <Button disabled={busy} onClick={registerWallet}>
           Finish setup
         </Button>
       ) : null}
 
-      {step === "ready" || status?.ready ? (
+      {(step === "ready" || status?.ready) && !slot ? (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">{EXPRESS_DEPOSITS_COPY.readyBadge}</p>
           <Button
@@ -334,7 +363,17 @@ export function ExpressDepositsSetup({ onClose }: Props) {
       ) : null}
 
       <ExpressDepositsStripeSlot element={slot} />
-      {message ? <p className="text-sm text-destructive">{message}</p> : null}
+      {message ? (
+        <p
+          className={
+            message === EXPRESS_DEPOSITS_COPY.setupDismissed
+              ? "text-sm text-muted-foreground"
+              : "text-sm text-destructive"
+          }
+        >
+          {message}
+        </p>
+      ) : null}
       <Button variant="ghost" onClick={onClose}>
         Back
       </Button>

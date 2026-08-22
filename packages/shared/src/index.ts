@@ -469,6 +469,7 @@ export {
   expressDepositMethodTitle,
   expressSetupUserMessage,
   isExpressDepositsMetadata,
+  isExpressSetupDismissed,
   toExpressLinkE164Phone,
 } from "./express-deposits-copy"
 export {

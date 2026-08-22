@@ -93,6 +93,7 @@ export function BusinessVerificationSection({
   } = useBusinessProfile()
 
   const showOnlinePayments = onlinePaymentsEnabled !== false
+  const showExpressCard = true
 
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
@@ -338,7 +339,8 @@ export function BusinessVerificationSection({
             >
               <div
                 className={cn(
-                  "grid gap-4 md:grid-cols-2 xl:grid-cols-4",
+                  "grid gap-4 md:grid-cols-2",
+                  showExpressCard ? "xl:grid-cols-4" : "xl:grid-cols-3",
                   connectFlowActive && "flex min-h-0 flex-1 flex-col gap-0 md:grid-cols-1",
                 )}
               >
@@ -456,7 +458,7 @@ export function BusinessVerificationSection({
 
                   return comingLaterCard
                 })}
-                {tier1Complete && canManageBusinessVerification ? (
+                {showExpressCard ? (
                   <Card className="flex h-full flex-col border-primary/20">
                     <CardHeader className="pb-2">
                       <div className="flex flex-wrap items-center gap-2">
@@ -466,19 +468,27 @@ export function BusinessVerificationSection({
                         {EXPRESS_DEPOSITS_COPY.description}
                       </CardDescription>
                     </CardHeader>
-                    <CardContent className="mt-auto pt-0">
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          onFlowOpenChange?.(true, "express")
-                          const next = new URLSearchParams(searchParams.toString())
-                          next.set("tab", "verification")
-                          next.set("flow", SETTINGS_EXPRESS_FLOW_PARAM)
-                          window.history.replaceState(null, "", `/settings?${next.toString()}`)
-                        }}
-                      >
-                        {EXPRESS_DEPOSITS_COPY.setupCta}
-                      </Button>
+                    <CardContent className="mt-auto space-y-3 pt-0">
+                      {!tier1Complete ? (
+                        <p className="text-sm text-muted-foreground">
+                          {EXPRESS_DEPOSITS_COPY.tier1Required}
+                        </p>
+                      ) : !canManageBusinessVerification ? (
+                        <p className="text-sm text-muted-foreground">{EXPRESS_DEPOSITS_COPY.ownerOnly}</p>
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            onFlowOpenChange?.(true, "express")
+                            const next = new URLSearchParams(searchParams.toString())
+                            next.set("tab", "verification")
+                            next.set("flow", SETTINGS_EXPRESS_FLOW_PARAM)
+                            window.history.replaceState(null, "", `/settings?${next.toString()}`)
+                          }}
+                        >
+                          {EXPRESS_DEPOSITS_COPY.setupCta}
+                        </Button>
+                      )}
                     </CardContent>
                   </Card>
                 ) : null}

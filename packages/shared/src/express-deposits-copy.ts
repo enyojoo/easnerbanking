@@ -33,12 +33,27 @@ export const EXPRESS_DEPOSITS_COPY = {
   travelRuleBlock: "Additional confirmation is required for this amount. Try a smaller amount or finish verification.",
   somethingWentWrong: "Something went wrong. Try again.",
   paymentFailed: "Payment could not be completed. Try again.",
+  setupDismissed: "Setup wasn’t finished. You can continue whenever you’re ready.",
 } as const
+
+export function isExpressSetupDismissed(result?: string | null): boolean {
+  const value = String(result || "").toLowerCase()
+  return (
+    value === "abandoned" ||
+    value === "declined" ||
+    value === "canceled" ||
+    value === "cancelled" ||
+    value === "dismissed"
+  )
+}
 
 /** Drop vendor/scope strings so setup never shows crypto / OAuth errors. */
 export function expressSetupUserMessage(raw?: string | null): string {
   const text = String(raw || "").trim()
   if (!text) return EXPRESS_DEPOSITS_COPY.somethingWentWrong
+  if (isExpressSetupDismissed(text) || /abandon|cancel|declin|dismiss/i.test(text)) {
+    return EXPRESS_DEPOSITS_COPY.setupDismissed
+  }
   if (/crypto|onramp|oauth|scope|stripe|link\.com|authintent/i.test(text)) {
     return EXPRESS_DEPOSITS_COPY.somethingWentWrong
   }

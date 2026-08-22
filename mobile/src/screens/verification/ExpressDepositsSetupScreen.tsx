@@ -12,6 +12,7 @@ import {
 import {
   EXPRESS_DEPOSITS_COPY,
   expressSetupUserMessage,
+  isExpressSetupDismissed,
   toExpressLinkE164Phone,
   type ExpressDepositsNextStep,
 } from '@easner/shared'
@@ -183,7 +184,8 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
         }
         if (intentId && client.authenticate) {
           const el = await client.authenticate(intentId, async (result) => {
-            if (result.result === 'success' && result.crypto_customer_id) {
+            const outcome = String(result.result || '')
+            if (outcome === 'success' && result.crypto_customer_id) {
               await apiFetch('/api/stripe/onramp/link-complete', {
                 method: 'POST',
                 body: {
@@ -192,10 +194,14 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
                 },
               })
               setStripeEl(null)
+              setMessage(null)
               await refresh(true)
-            } else if (result.result && result.result !== 'success') {
+            } else if (isExpressSetupDismissed(outcome)) {
               setStripeEl(null)
-              setMessage(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
+              setMessage(EXPRESS_DEPOSITS_COPY.setupDismissed)
+            } else if (outcome && outcome !== 'success') {
+              setStripeEl(null)
+              setMessage(expressSetupUserMessage(outcome))
             }
           })
           if (isStripeHostElement(el)) {
@@ -241,9 +247,14 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
       }
       if (step === 'eu_attestation') {
         const el = await client.promptUserAttestation?.((result) => {
-          if (result.result === 'success' || result.result === 'accepted') {
+          const outcome = String(result.result || '')
+          if (outcome === 'success' || outcome === 'accepted') {
             setStripeEl(null)
+            setMessage(null)
             void refresh(true)
+          } else if (isExpressSetupDismissed(outcome)) {
+            setStripeEl(null)
+            setMessage(EXPRESS_DEPOSITS_COPY.setupDismissed)
           }
         })
         if (isStripeHostElement(el)) {
@@ -253,8 +264,14 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
         return
       }
       if (step === 'us_l2' || step === 'eu_l2') {
-        const el = await client.verifyDocuments?.(() => {
+        const el = await client.verifyDocuments?.((result) => {
+          const outcome = result && typeof result === 'object' ? String((result as { result?: string }).result || '') : ''
           setStripeEl(null)
+          if (isExpressSetupDismissed(outcome)) {
+            setMessage(EXPRESS_DEPOSITS_COPY.setupDismissed)
+            return
+          }
+          setMessage(null)
           void refresh(true)
         })
         if (isStripeHostElement(el)) {
@@ -331,7 +348,11 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
               ) : null}
             </>
           )}
-          {message ? <Text style={styles.error}>{message}</Text> : null}
+          {message ? (
+            <Text style={message === EXPRESS_DEPOSITS_COPY.setupDismissed ? styles.hint : styles.error}>
+              {message}
+            </Text>
+          ) : null}
         </ScrollView>
       </CenteredWebFlowPage>
     </ScreenWrapper>
@@ -413,6 +434,10 @@ const styles = StyleSheet.create({
   ready: {
     ...textStyles.bodyMedium,
     color: colors.success.dark,
+  },
+  hint: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
   },
   error: {
     ...textStyles.bodySmall,
