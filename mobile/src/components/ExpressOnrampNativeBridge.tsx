@@ -1,7 +1,7 @@
 import React, { Component, useEffect, useRef, useState } from 'react'
 import {
   EXPRESS_ONRAMP_MERCHANT_NAME,
-  expressOnrampNativeAppearance,
+  expressOnrampLinkConfigure,
 } from '@easner/shared'
 import {
   adaptNativeOnramp,
@@ -112,8 +112,7 @@ function ConfiguredOnrampBridge({
 
     let cancelled = false
     void configureWhenReady(api.configure as (config: Record<string, unknown>) => Promise<{ error?: { message?: string } }>, {
-      merchantDisplayName: EXPRESS_ONRAMP_MERCHANT_NAME,
-      appearance: expressOnrampNativeAppearance(),
+      ...expressOnrampLinkConfigure(),
       ...(customerId ? { cryptoCustomerId: customerId } : {}),
       googlePay: {
         merchantCountryCode: country,

@@ -1,14 +1,24 @@
 /**
  * Appearance / branding for Stripe Embedded Components crypto onramp
- * (Express deposits). Applies to Stripe-hosted sheets (auth, identity, PM)
- * where the SDK allows customization. Icon/logo still come from Dashboard
- * Branding settings — not passable via the web SDK.
+ * (Express deposits).
+ *
+ * Native: `configure({ merchantDisplayName, appearance })` affects Link OTP,
+ * identity, and payment sheets.
+ *
+ * Web: init `variables` affect payment/KYC chrome where supported. The Link
+ * identity consent popup ("Verify your identity with Link") is a separate
+ * product from the Dashboard Identity preview ("Easner works with Stripe").
+ * Merchant icon/co-brand on web also depends on LinkAuthIntent
+ * `data_sharing_merchant` plus Dashboard → Branding → Identity tab.
  */
 
 import { BRAND } from "./constants/brand"
 import { easnerBrand, fontFamilies } from "./design/tokens"
 
 export const EXPRESS_ONRAMP_MERCHANT_NAME = BRAND.name
+
+/** Bump when appearance changes so web clients re-init the CDN SDK. */
+export const EXPRESS_ONRAMP_APPEARANCE_REV = "2"
 
 /** Web: `loadCryptoOnrampAndInitialize(pk, options)` */
 export function expressOnrampWebInitOptions() {
@@ -32,6 +42,14 @@ export function expressOnrampWebInitOptions() {
       borderRadius: "12px",
       buttonBorderRadius: "9999px",
     },
+  }
+}
+
+/** Optional web/native configure payload when the SDK exposes `configure()`. */
+export function expressOnrampLinkConfigure() {
+  return {
+    merchantDisplayName: EXPRESS_ONRAMP_MERCHANT_NAME,
+    appearance: expressOnrampNativeAppearance(),
   }
 }
 

@@ -1,4 +1,8 @@
-import { expressOnrampWebInitOptions } from '@easner/shared'
+import {
+  EXPRESS_ONRAMP_APPEARANCE_REV,
+  expressOnrampLinkConfigure,
+  expressOnrampWebInitOptions,
+} from '@easner/shared'
 import { EXPRESS_NATIVE_AUTH_REQUIRED, type ExpressOnrampSdk } from './express-onramp-types'
 
 export { EXPRESS_NATIVE_AUTH_REQUIRED }
@@ -22,8 +26,19 @@ declare global {
 }
 
 let cached: ExpressOnrampSdk | null = null
+let cachedFor: string | null = null
 let inflight: Promise<ExpressOnrampSdk> | null = null
 let scriptPromise: Promise<StripeLoader> | null = null
+
+async function tryConfigureWebOnramp(client: StripeClient): Promise<void> {
+  const configure = (client as { configure?: (config: Record<string, unknown>) => Promise<unknown> }).configure
+  if (typeof configure !== 'function') return
+  try {
+    await configure(expressOnrampLinkConfigure() as Record<string, unknown>)
+  } catch {
+    // Some CDN builds omit configure(); init options still apply where supported.
+  }
+}
 
 /** Native sheets are presented by Stripe; web UI is observed via the parent overlay watcher. */
 export function subscribeExpressOnrampUi(_listener: (open: boolean) => void): () => void {
@@ -104,12 +119,15 @@ export function prefetchMobileExpressOnramp(): void {
 }
 
 export async function loadMobileExpressOnramp(publishableKey: string): Promise<ExpressOnrampSdk> {
-  if (cached) return cached
+  const cacheKey = `${publishableKey}:${EXPRESS_ONRAMP_APPEARANCE_REV}`
+  if (cached && cachedFor === cacheKey) return cached
   if (inflight) return inflight
   inflight = (async () => {
     const loader = await ensureScript()
     const client = (await loader(publishableKey, expressOnrampWebInitOptions())) as StripeClient
     if (client.ready) await client.ready
+    await tryConfigureWebOnramp(client)
+    cachedFor = cacheKey
     cached = bindClient(client)
     return cached
   })()

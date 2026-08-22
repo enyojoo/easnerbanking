@@ -1,6 +1,10 @@
 "use client"
 
-import { expressOnrampWebInitOptions } from "@easner/shared"
+import {
+  EXPRESS_ONRAMP_APPEARANCE_REV,
+  expressOnrampLinkConfigure,
+  expressOnrampWebInitOptions,
+} from "@easner/shared"
 
 export type CryptoOnrampClient = {
   registerLinkUser: (
@@ -42,14 +46,26 @@ export type CryptoOnrampClient = {
 }
 
 let cached: CryptoOnrampClient | null = null
+let cachedFor: string | null = null
 let inflight: Promise<CryptoOnrampClient> | null = null
+
+async function tryConfigureWebOnramp(client: CryptoOnrampClient): Promise<void> {
+  const configure = (client as { configure?: (config: Record<string, unknown>) => Promise<unknown> }).configure
+  if (typeof configure !== "function") return
+  try {
+    await configure(expressOnrampLinkConfigure() as Record<string, unknown>)
+  } catch {
+    // Optional on some CDN builds.
+  }
+}
 
 export function prefetchExpressOnramp(): void {
   void import("@stripe/crypto")
 }
 
 export async function loadExpressOnramp(publishableKey: string): Promise<CryptoOnrampClient> {
-  if (cached) return cached
+  const cacheKey = `${publishableKey}:${EXPRESS_ONRAMP_APPEARANCE_REV}`
+  if (cached && cachedFor === cacheKey) return cached
   if (inflight) return inflight
   inflight = (async () => {
     const mod = (await import("@stripe/crypto")) as {
@@ -58,7 +74,10 @@ export async function loadExpressOnramp(publishableKey: string): Promise<CryptoO
     }
     const loader = mod.loadCryptoOnrampAndInitialize || mod.loadStripeOnramp
     if (!loader) throw new Error("Express deposits is not available in this browser.")
-    cached = await loader(publishableKey, expressOnrampWebInitOptions())
+    const client = await loader(publishableKey, expressOnrampWebInitOptions())
+    await tryConfigureWebOnramp(client)
+    cachedFor = cacheKey
+    cached = client
     return cached
   })()
   try {

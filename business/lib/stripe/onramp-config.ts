@@ -38,6 +38,17 @@ export function getStripeLinkOAuthClientSecret(): string {
   return process.env.STRIPE_LINK_OAUTH_CLIENT_SECRET?.trim() || ""
 }
 
+/** Easner platform Stripe account — Link OAuth co-branding recipient. */
+export const STRIPE_LINK_DATA_SHARING_MERCHANT_DEFAULT = "acct_1TRLDYFtxW9Zk3ZB"
+
+/** Recipient business ID for Link OAuth co-branding (icon/name on Link identity). */
+export function getStripeLinkDataSharingMerchant(): string {
+  return (
+    process.env.STRIPE_LINK_DATA_SHARING_MERCHANT?.trim() ||
+    STRIPE_LINK_DATA_SHARING_MERCHANT_DEFAULT
+  )
+}
+
 const LINK_OAUTH_SCOPE_ALIASES: Record<string, string> = {
   crypto_onramp: "crypto:ramp",
   "crypto.onramp": "crypto:ramp",

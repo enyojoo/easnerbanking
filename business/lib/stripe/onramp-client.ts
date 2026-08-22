@@ -1,5 +1,6 @@
 import { getStripeSecretKey } from "./config"
 import {
+  getStripeLinkDataSharingMerchant,
   getStripeLinkOAuthClientId,
   getStripeLinkOAuthScopes,
   getStripeOnrampBetaVersion,
@@ -99,6 +100,7 @@ export async function createLinkAuthIntent(input: {
   oauthToken?: string
 }): Promise<Record<string, unknown>> {
   const clientId = getStripeLinkOAuthClientId()
+  const dataSharingMerchant = getStripeLinkDataSharingMerchant()
   return stripeOnrampRequest(
     "POST",
     "/v1/link_auth_intent",
@@ -106,6 +108,7 @@ export async function createLinkAuthIntent(input: {
       email: input.email,
       oauth_scopes: getStripeLinkOAuthScopes(),
       oauth_client_id: clientId || undefined,
+      ...(dataSharingMerchant ? { data_sharing_merchant: dataSharingMerchant } : {}),
     },
     { absoluteUrl: "https://login.link.com/v1/link_auth_intent", json: true, oauthToken: input.oauthToken },
   )
