@@ -46,11 +46,15 @@ function ensureScript(): Promise<StripeLoader> {
     }
     if (done()) return
     let script = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null
+    if (script && script.type !== 'module') {
+      script.remove()
+      script = null
+    }
     if (!script) {
       script = document.createElement('script')
       script.id = SCRIPT_ID
+      script.type = 'module'
       script.src = SCRIPT_SRC
-      script.async = true
       document.head.appendChild(script)
     }
     script.addEventListener('load', () => {
