@@ -23,7 +23,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
-import { qk, canResubmitNoahVerification, getNoahRejectionDisplay, NOAH_FINAL_REJECTION_USER_MESSAGE, NOAH_VERIFICATION_IN_REVIEW_COPY, VERIFICATION_STATUS_COPY, verificationStatusLabel, EXPRESS_DEPOSITS_COPY } from '@easner/shared'
+import { qk, canResubmitNoahVerification, getNoahRejectionDisplay, NOAH_FINAL_REJECTION_USER_MESSAGE, NOAH_VERIFICATION_IN_REVIEW_COPY, VERIFICATION_STATUS_COPY, verificationStatusLabel, EXPRESS_DEPOSITS_COPY, expressDepositsPayerCountry, isStripeOnrampPayerEligible } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
 import ExternalLinkModal from '../../components/ExternalLinkModal'
@@ -339,32 +339,38 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     }
   }, [refreshUserProfile, userProfile])
 
-  const [expressEligible, setExpressEligible] = useState(
-    () => peekExpressOnrampStatus()?.eligible === true,
-  )
+  const [expressEligible, setExpressEligible] = useState<boolean | null>(() => {
+    const peeked = peekExpressOnrampStatus()
+    return typeof peeked?.eligible === 'boolean' ? peeked.eligible : null
+  })
   const [expressStatus, setExpressStatus] = useState(
     () => expressVerificationStatus(peekExpressOnrampStatus()),
   )
 
-  const tier1Complete = isGlobalBankingVerified(userProfile)
+  const localExpressCountry = expressDepositsPayerCountry({
+    residenceCountry: userProfile?.residence_country ?? userProfile?.profile?.residence_country,
+    kycAddressCountry: userProfile?.profile?.kyc_address_country,
+  })
+  const localExpressEligible = isStripeOnrampPayerEligible({ country: localExpressCountry })
+  const showExpressCard =
+    isGlobalBankingVerified(userProfile) && (expressEligible ?? localExpressEligible)
+
   const applyExpressStatus = useCallback((data: { eligible?: boolean; ready?: boolean; status?: string } | null) => {
-    setExpressEligible(data?.eligible === true)
+    setExpressEligible(typeof data?.eligible === 'boolean' ? data.eligible : null)
     setExpressStatus(expressVerificationStatus(data))
   }, [])
   useEffect(() => {
-    if (!tier1Complete) return
     warmExpressOnrampStatus()
     void fetchExpressOnrampStatus()
       .then((data) => applyExpressStatus(data))
-      .catch(() => applyExpressStatus(null))
-  }, [applyExpressStatus, tier1Complete, userProfile?.id])
+      .catch(() => undefined)
+  }, [applyExpressStatus, userProfile?.id])
   useFocusEffect(
     useCallback(() => {
-      if (!tier1Complete) return
       void fetchExpressOnrampStatus(true)
         .then((data) => applyExpressStatus(data))
         .catch(() => undefined)
-    }, [applyExpressStatus, tier1Complete]),
+    }, [applyExpressStatus]),
   )
 
   // Initial Noah sync after login runs from `useConsumerKycNoahSync` (main tabs). This screen keeps
@@ -865,7 +871,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
               ) : (
                 <View style={styles.card}>
                   <View style={styles.cardInner}>
-                    <View style={styles.cardContent}>
+                    <View style={[styles.cardContent, styles.cardContentWithCta]}>
                       <View style={styles.cardLeft}>
                         <View style={styles.iconContainer}>
                           <ProductGlyph id="global_banking" size={24} color={colors.primary.main} />
@@ -909,10 +915,10 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                 </View>
               )}
 
-              {noahKycApproved && expressEligible ? (
+              {showExpressCard ? (
                 <View style={styles.card}>
                   <View style={styles.cardInner}>
-                    <View style={[styles.cardContent, styles.expressCardContent]}>
+                    <View style={[styles.cardContent, styles.cardContentWithCta]}>
                       <View style={styles.cardLeft}>
                         <View style={styles.iconContainer}>
                           <Zap size={24} color={colors.primary.main} strokeWidth={2} />
@@ -1108,8 +1114,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
-  expressCardContent: {
-    paddingRight: spacing[5] + 72,
+  cardContentWithCta: {
     paddingBottom: spacing[8],
   },
   cardLeft: {
@@ -1165,11 +1170,10 @@ const styles = StyleSheet.create({
   },
   cardRight: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[3],
-    width: 100,
+    alignItems: 'flex-start',
     justifyContent: 'flex-end',
     flexShrink: 0,
+    minWidth: 88,
   },
   startBadge: {
     position: 'absolute',
