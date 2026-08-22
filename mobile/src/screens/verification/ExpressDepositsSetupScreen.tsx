@@ -39,6 +39,7 @@ import { loadMobileExpressOnramp, type ExpressOnrampSdk } from '../../lib/expres
 import { isStripeHostElement } from '../../lib/expressStripeElement'
 import { ExpressStripeHost } from '../../components/receive/ExpressStripeHost'
 import { useAuth } from '../../contexts/AuthContext'
+import { useToast } from '../../components/ToastProvider'
 import {
   cacheExpressOnrampStatus,
   fetchExpressOnrampStatus,
@@ -55,6 +56,7 @@ import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 
 export default function ExpressDepositsSetupScreen({ navigation }: NavigationProps) {
   const { userProfile } = useAuth()
+  const { showInfo } = useToast()
   const [status, setStatus] = useState<ExpressOnrampStatus | null>(() => peekExpressOnrampStatus())
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -203,7 +205,8 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
               await refresh(true)
             } else if (isExpressSetupDismissed(outcome)) {
               setStripeEl(null)
-              setMessage(EXPRESS_DEPOSITS_COPY.setupDismissed)
+              setMessage(null)
+              showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
             } else if (outcome && outcome !== 'success') {
               setStripeEl(null)
               setMessage(expressSetupUserMessage(outcome))
@@ -259,7 +262,8 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
             void refresh(true)
           } else if (isExpressSetupDismissed(outcome)) {
             setStripeEl(null)
-            setMessage(EXPRESS_DEPOSITS_COPY.setupDismissed)
+            setMessage(null)
+            showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
           }
         })
         if (isStripeHostElement(el)) {
@@ -273,7 +277,8 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           const outcome = result && typeof result === 'object' ? String((result as { result?: string }).result || '') : ''
           setStripeEl(null)
           if (isExpressSetupDismissed(outcome)) {
-            setMessage(EXPRESS_DEPOSITS_COPY.setupDismissed)
+            setMessage(null)
+            showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
             return
           }
           setMessage(null)
@@ -370,11 +375,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
                   <GlossyPrimaryButton title={cta} onPress={onCta} />
                 )
               ) : null}
-              {message ? (
-                <Text style={message === EXPRESS_DEPOSITS_COPY.setupDismissed ? styles.hint : styles.error}>
-                  {message}
-                </Text>
-              ) : null}
+              {message ? <Text style={styles.error}>{message}</Text> : null}
             </ScrollView>
           )}
         </View>
@@ -506,10 +507,6 @@ const styles = StyleSheet.create({
   ready: {
     ...textStyles.bodyMedium,
     color: colors.success.dark,
-  },
-  hint: {
-    ...textStyles.bodySmall,
-    color: colors.text.secondary,
   },
   error: {
     ...textStyles.bodySmall,

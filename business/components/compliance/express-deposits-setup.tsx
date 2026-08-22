@@ -16,6 +16,7 @@ import { Loader2 } from "lucide-react"
 import { loadExpressOnramp, type CryptoOnrampClient } from "@/lib/stripe/load-crypto-onramp"
 import { ExpressDepositsStripeSlot } from "@/components/compliance/express-deposits-stripe-slot"
 import { mapStripeOnrampError } from "@/lib/stripe/onramp-sdk-map"
+import { toast } from "sonner"
 
 const SCOPE = { "X-Easner-Account-Scope": "business" } as const
 
@@ -99,6 +100,11 @@ export function ExpressDepositsSetup({ onClose }: Props) {
 
   const closeHost = (message?: string | null) => {
     setSlot(null)
+    if (message === EXPRESS_DEPOSITS_COPY.setupDismissed) {
+      toast.message(EXPRESS_DEPOSITS_COPY.setupDismissed)
+      setMessage(null)
+      return
+    }
     setMessage(message ?? null)
   }
 
@@ -363,17 +369,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
       ) : null}
 
       <ExpressDepositsStripeSlot element={slot} />
-      {message ? (
-        <p
-          className={
-            message === EXPRESS_DEPOSITS_COPY.setupDismissed
-              ? "text-sm text-muted-foreground"
-              : "text-sm text-destructive"
-          }
-        >
-          {message}
-        </p>
-      ) : null}
+      {message ? <p className="text-sm text-destructive">{message}</p> : null}
       <Button variant="ghost" onClick={onClose}>
         Back
       </Button>
