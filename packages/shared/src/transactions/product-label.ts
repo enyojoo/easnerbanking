@@ -220,7 +220,7 @@ export function toEasnerTransactionProductCategory(input: {
   ) {
     return resolveVaFundingDepositTitleFromMeta(meta)
   }
-  if (direction === "in" && isExpressDepositsMetadata(meta)) {
+  if (direction === "in" && meta && isExpressDepositsMetadata(meta)) {
     return expressDepositActivityLabel(String(meta.payment_method ?? ""))
   }
   if (direction === "in" && isStripeInvoiceSettlementMetadata(meta)) {
@@ -298,7 +298,7 @@ export function toEasnerTransactionPrimaryLabel(input: {
   ) {
     return resolveVaFundingDepositTitleFromMeta(meta)
   }
-  if (direction === "in" && isExpressDepositsMetadata(meta)) {
+  if (direction === "in" && meta && isExpressDepositsMetadata(meta)) {
     return expressDepositActivityLabel(String(meta.payment_method ?? ""))
   }
   if (direction === "in" && isStripeCollectionSettlementMetadata(meta)) {

@@ -436,9 +436,7 @@ export function deriveTransactionNotification(
       const activityLabel = expressDepositActivityLabel(String(meta.payment_method ?? ""))
       const body = failureReason
         ? `Your ${activityLabel.toLowerCase()} could not be completed. ${failureReason}`
-        : outcome === "success"
-          ? `You've received ${amountText} via ${activityLabel}`
-          : `Your ${activityLabel.toLowerCase()} could not be completed.`
+        : `Your ${activityLabel.toLowerCase()} could not be completed.`
       return finalizeDescriptor(
         {
           ...base,

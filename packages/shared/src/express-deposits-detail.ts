@@ -21,7 +21,7 @@ function positive(n: unknown): number | null {
 export function normalizeExpressDepositsReview(
   meta: Record<string, unknown> | null | undefined,
 ): ExpressDepositsReview | null {
-  if (!isExpressDepositsMetadata(meta)) return null
+  if (!meta || !isExpressDepositsMetadata(meta)) return null
   const review = asRecord(meta.deposit_review)
   const youGet =
     positive(review.you_get) ??
