@@ -8,7 +8,9 @@ import {
   ScrollView,
   Keyboard,
   Platform,
+  Pressable,
 } from 'react-native'
+import { ArrowLeft } from 'lucide-react-native'
 import {
   EXPRESS_DEPOSITS_COPY,
   expressSetupUserMessage,
@@ -24,12 +26,15 @@ import {
   textStyles,
   borderRadius,
   surfaceFrameStyle,
+  surfaceChromeCircleStyle,
+  fontSize,
+  lineHeight as lineHeightScale,
 } from '../../theme'
-import { ReceiveFlowHeader } from '../../components/receive/ReceiveFlowHeader'
+import { haptics } from '../../lib/haptics'
 import { useStackHardwareBack } from '../../hooks/useStackHardwareBack'
 import { navigateStackBack } from '../../navigation/stackBackNavigation'
 import { apiFetch } from '../../query/api-client'
-import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
+import { WEB_FLOW_MAX_WIDTH } from '../../components/layout/CenteredWebFlowPage'
 import { loadMobileExpressOnramp, type ExpressOnrampSdk } from '../../lib/express-onramp'
 import { isStripeHostElement } from '../../lib/expressStripeElement'
 import { ExpressStripeHost } from '../../components/receive/ExpressStripeHost'
@@ -288,13 +293,32 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
 
   return (
     <ScreenWrapper>
-      <CenteredWebFlowPage>
-        <ReceiveFlowHeader title={EXPRESS_DEPOSITS_COPY.title} onBack={handleBack} />
-        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+      <View style={styles.page}>
+        <View style={styles.header}>
+          <Pressable
+            onPress={() => {
+              haptics.tap()
+              handleBack()
+            }}
+            style={({ pressed }) => [
+              styles.backButton,
+              pressed && Platform.OS === 'ios' && styles.backButtonPressed,
+            ]}
+            android_ripple={{ color: 'rgba(0, 0, 0, 0.12)', borderless: false }}
+          >
+            <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
+          </Pressable>
+          <View style={styles.headerContent}>
+            <Text style={styles.title}>{EXPRESS_DEPOSITS_COPY.title}</Text>
+          </View>
+        </View>
+        <View style={styles.bodySlot}>
           {stripeEl ? (
-            <ExpressStripeHost element={stripeEl} />
+            <View style={styles.hostWrap}>
+              <ExpressStripeHost element={stripeEl} />
+            </View>
           ) : (
-            <>
+            <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
               <Text style={styles.bodyText}>{EXPRESS_DEPOSITS_COPY.description}</Text>
               {step === 'link' ? (
                 <View style={styles.profileCard}>
@@ -346,20 +370,68 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
                   <GlossyPrimaryButton title={cta} onPress={onCta} />
                 )
               ) : null}
-            </>
+              {message ? (
+                <Text style={message === EXPRESS_DEPOSITS_COPY.setupDismissed ? styles.hint : styles.error}>
+                  {message}
+                </Text>
+              ) : null}
+            </ScrollView>
           )}
-          {message ? (
-            <Text style={message === EXPRESS_DEPOSITS_COPY.setupDismissed ? styles.hint : styles.error}>
-              {message}
-            </Text>
-          ) : null}
-        </ScrollView>
-      </CenteredWebFlowPage>
+        </View>
+      </View>
     </ScreenWrapper>
   )
 }
 
 const styles = StyleSheet.create({
+  page: {
+    flex: 1,
+    width: '100%',
+    maxWidth: WEB_FLOW_MAX_WIDTH,
+    alignSelf: 'center',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[4],
+    paddingBottom: spacing[4],
+  },
+  backButton: {
+    ...surfaceChromeCircleStyle(colors, 44),
+    marginRight: spacing[3],
+  },
+  backButtonPressed: {
+    opacity: 0.7,
+  },
+  headerContent: {
+    flex: 1,
+  },
+  title: {
+    ...textStyles.headlineMedium,
+    color: colors.text.primary,
+    marginBottom: 2,
+    ...Platform.select({
+      android: {
+        lineHeight: Math.round(fontSize.xl * lineHeightScale.snug) + 4,
+        includeFontPadding: false,
+      },
+      default: {},
+    }),
+  },
+  bodySlot: {
+    flex: 1,
+    minHeight: 0,
+  },
+  hostWrap: {
+    flex: 1,
+    minHeight: 0,
+    paddingHorizontal: spacing[5],
+    ...Platform.select({
+      web: { overflow: 'hidden' as const },
+      default: {},
+    }),
+  },
   body: {
     padding: spacing[5],
     gap: spacing[4],

@@ -15,5 +15,15 @@ export function ExpressStripeHost({ element }: { element: unknown }) {
   }, [element])
 
   if (!isStripeHostElement(element)) return null
-  return <div ref={ref} style={{ minHeight: 280, width: '100%' }} />
+  return (
+    <div
+      ref={ref}
+      style={{
+        width: '100%',
+        height: '100%',
+        minHeight: 280,
+        overflow: 'auto',
+      }}
+    />
+  )
 }

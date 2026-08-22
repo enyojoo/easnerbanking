@@ -47,7 +47,11 @@ import {
 } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { CONSUMER_TIER_LADDER } from '../../lib/compliance-tier-ladder-copy'
-import { warmExpressOnrampStatus } from '../../lib/expressOnrampStatusCache'
+import {
+  fetchExpressOnrampStatus,
+  peekExpressOnrampStatus,
+  warmExpressOnrampStatus,
+} from '../../lib/expressOnrampStatusCache'
 import { isTier1Complete } from '../../lib/compliance'
 import { needsNoahVirtualAccountProvision } from '../../lib/noahAccountSync'
 import {
@@ -298,9 +302,16 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     }, [userProfile?.id, syncNoahStatus]),
   )
 
+  const [expressEligible, setExpressEligible] = useState(
+    () => peekExpressOnrampStatus()?.eligible === true,
+  )
+
   useEffect(() => {
     if (!isTier1Complete(userProfile)) return
     warmExpressOnrampStatus()
+    void fetchExpressOnrampStatus()
+      .then((data) => setExpressEligible(data.eligible === true))
+      .catch(() => setExpressEligible(false))
   }, [userProfile])
 
   // Initial Noah sync after login runs from `useConsumerKycNoahSync` (main tabs). This screen keeps
@@ -852,7 +863,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                 </Pressable>
               )}
 
-              {noahKycApproved ? (
+              {noahKycApproved && expressEligible ? (
                 <Pressable
                   onPress={() => {
                     haptics.tap()

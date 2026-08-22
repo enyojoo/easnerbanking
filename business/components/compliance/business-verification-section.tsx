@@ -34,6 +34,10 @@ import {
 } from "@/lib/compliance/cutover-comms"
 import { ExpressDepositsSetup } from "@/components/compliance/express-deposits-setup"
 import { EXPRESS_DEPOSITS_COPY } from "@easner/shared"
+import {
+  fetchBusinessExpressOnrampStatus,
+  peekBusinessExpressOnrampStatus,
+} from "@/lib/express-onramp-status-cache"
 import { useSuspendIdleLock } from "@/hooks/use-suspend-idle-lock"
 import { GridKybWizard } from "@/components/compliance/grid-kyb-wizard"
 import { useKybPacket } from "@/lib/grid/kyb-packet-query"
@@ -93,7 +97,10 @@ export function BusinessVerificationSection({
   } = useBusinessProfile()
 
   const showOnlinePayments = onlinePaymentsEnabled !== false
-  const showExpressCard = true
+  const [expressEligible, setExpressEligible] = useState(
+    () => peekBusinessExpressOnrampStatus()?.eligible === true,
+  )
+  const showExpressCard = expressEligible
 
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
@@ -125,6 +132,12 @@ export function BusinessVerificationSection({
     next.delete("flow")
     window.history.replaceState(null, "", `/settings?${next.toString()}`)
   }, [onFlowOpenChange, searchParams])
+
+  useEffect(() => {
+    void fetchBusinessExpressOnrampStatus()
+      .then((data) => setExpressEligible(data.eligible === true))
+      .catch(() => setExpressEligible(false))
+  }, [])
 
   useEffect(() => {
     if (hostedFlowActive || connectFlowActive || expressFlowActive) {
