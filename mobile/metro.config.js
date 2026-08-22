@@ -96,6 +96,14 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   ) {
     return { type: 'sourceFile', filePath: nobleHashesCrypto }
   }
+  // Native Stripe SDK talks to the RN bridge; never evaluate it in the web bundle.
+  if (
+    platform === 'web' &&
+    (moduleName === '@stripe/stripe-react-native' ||
+      moduleName.startsWith('@stripe/stripe-react-native/'))
+  ) {
+    return { type: 'empty' }
+  }
   if (
     moduleName === '@easner/shared/currency-flag' ||
     moduleName === '@easner/shared/src/components/CountryFlag.native'
