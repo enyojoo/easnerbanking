@@ -21,7 +21,7 @@ import { User, AuthUser } from '../types'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { analytics } from '../lib/analytics'
 import { ensureBusinessAppUserBootstrap } from '../lib/apiClient'
-import { stashSignupBlockedMessage } from '../lib/signupBlockedMessage'
+import { stashSignupBlockedMessage, clearSignupBlockedMessage } from '../lib/signupBlockedMessage'
 import { clearPinAuth, updateSessionActivity, markFirstLoginAfterVerification } from '../lib/pinAuth'
 import { AUTH_INITIAL_MODE_KEY, ACCOUNT_CLOSURE_CANCELLED_KEY } from '../constants/auth'
 import {
@@ -666,6 +666,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return regularUser
       }
 
+      const {
+        data: { session: postQuerySession },
+      } = await supabase.auth.getSession()
+      if (!postQuerySession?.user?.id || postQuerySession.user.id !== userId) {
+        return null
+      }
+
       console.log('AuthContext: No user row in public.users yet')
       analytics.trackError('sign_in_failed', {
         reason: 'missing_user_profile',
@@ -691,8 +698,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       lastAutoProfileFetchAtRef.current[userId] = Date.now()
       if (profileFetchPendingRef.current) {
         profileFetchPendingRef.current = false
-        /** Second caller while in flight – must not be dropped by throttle. */
-        void fetchUserProfile(userId, user, { ...(opts ?? {}), force: true, sourceEvent: opts?.sourceEvent })
+        const {
+          data: { session: retrySession },
+        } = await supabase.auth.getSession()
+        if (retrySession?.user?.id === userId) {
+          /** Second caller while in flight – must not be dropped by throttle. */
+          void fetchUserProfile(userId, user, { ...(opts ?? {}), force: true, sourceEvent: opts?.sourceEvent })
+        }
       }
     }
   }
@@ -951,6 +963,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         } else {
           // No user session - clear state immediately
           // This happens when user logs out via signOut() or session expires
+          profileFetchInFlightRef.current.clear()
+          profileFetchPendingRef.current = false
           lastAutoProfileFetchAtRef.current = {}
           clearSessionUserHydrated()
           setUser(null)
@@ -1368,6 +1382,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setMfaPending(null)
       setMfaGateResolved(true)
       clearSessionUserHydrated()
+      profileFetchInFlightRef.current.clear()
+      profileFetchPendingRef.current = false
+      await clearSignupBlockedMessage()
 
       // Track sign out
       analytics.trackSignOut()

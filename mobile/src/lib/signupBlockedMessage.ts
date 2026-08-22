@@ -10,6 +10,14 @@ export async function stashSignupBlockedMessage(message: string): Promise<void> 
   }
 }
 
+export async function clearSignupBlockedMessage(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(SIGNUP_BLOCKED_MESSAGE_KEY)
+  } catch {
+    // ignore
+  }
+}
+
 export async function consumeSignupBlockedMessage(): Promise<string | null> {
   try {
     const message = await AsyncStorage.getItem(SIGNUP_BLOCKED_MESSAGE_KEY)
