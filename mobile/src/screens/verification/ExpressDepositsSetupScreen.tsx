@@ -266,7 +266,47 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           setMessage(null)
           showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
         }
-        const pending = client.verifyDocuments?.(finish)
+        // Native coordinator is cold each launch — Link must authorize before the ID sheet can present.
+        if (client.authenticate) {
+          const auth = await apiFetch<{ authIntentId?: string | null; needsRegister?: boolean }>(
+            '/api/stripe/onramp/link-auth',
+            { method: 'POST', body: {} },
+          )
+          let intentId = auth.authIntentId
+          if (!intentId && auth.needsRegister) {
+            await client.registerLinkUser?.(
+              form.email.trim(),
+              toExpressLinkE164Phone(form.phone, lockedCountry),
+              lockedCountry,
+              `${form.given_name} ${form.surname}`.trim(),
+            )
+            const again = await apiFetch<{ authIntentId?: string | null }>(
+              '/api/stripe/onramp/link-auth',
+              { method: 'POST', body: {} },
+            )
+            intentId = again.authIntentId
+          }
+          if (intentId) {
+            await client.authenticate(intentId, async (result) => {
+              const outcome = String(result.result || '')
+              if (outcome === 'success' && result.crypto_customer_id) {
+                await apiFetch('/api/stripe/onramp/link-complete', {
+                  method: 'POST',
+                  body: {
+                    cryptoCustomerId: result.crypto_customer_id,
+                    accessToken: result.access_token || result.oauth_token,
+                  },
+                })
+              } else if (isExpressSetupDismissed(outcome)) {
+                finish({ result: 'canceled' })
+              }
+            })
+            if (settled) return true
+          }
+        }
+        const verify = client.verifyDocuments || client.verifyIdentity
+        if (!verify) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
+        const pending = verify(finish)
         void Promise.resolve(pending).then((first) => {
           if (isStripeHostElement(first)) {
             setStripeEl(first)

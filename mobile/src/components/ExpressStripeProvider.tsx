@@ -1,5 +1,12 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
+import { useAuth } from '../contexts/AuthContext'
 import { getApplePayMerchantId } from '../lib/apple-pay-merchant'
+import {
+  fetchExpressOnrampStatus,
+  peekExpressOnrampStatus,
+  subscribeExpressOnrampStatus,
+} from '../lib/expressOnrampStatusCache'
+import { ExpressOnrampNativeBridge } from './ExpressOnrampNativeBridge'
 
 type Props = {
   children: React.ReactNode
@@ -7,7 +14,33 @@ type Props = {
 }
 
 export function ExpressStripeProvider({ children, publishableKey }: Props) {
-  if (!publishableKey) return <>{children}</>
+  const { user } = useAuth()
+  const [pk, setPk] = useState(
+    () => publishableKey || peekExpressOnrampStatus()?.publishableKey || null,
+  )
+
+  useEffect(() => {
+    if (publishableKey) setPk(publishableKey)
+  }, [publishableKey])
+
+  useEffect(() => {
+    return subscribeExpressOnrampStatus(() => {
+      const next = peekExpressOnrampStatus()?.publishableKey
+      if (next) setPk(next)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!user?.id) return
+    void fetchExpressOnrampStatus(true)
+      .then((data) => {
+        if (data.publishableKey) setPk(data.publishableKey)
+      })
+      .catch(() => undefined)
+  }, [user?.id])
+
+  if (!pk) return <>{children}</>
+
   try {
     const { StripeProvider } = require('@stripe/stripe-react-native') as {
       StripeProvider: React.ComponentType<{
@@ -17,8 +50,8 @@ export function ExpressStripeProvider({ children, publishableKey }: Props) {
       }>
     }
     return (
-      <StripeProvider publishableKey={publishableKey} merchantIdentifier={getApplePayMerchantId()}>
-        {children}
+      <StripeProvider publishableKey={pk} merchantIdentifier={getApplePayMerchantId()}>
+        <ExpressOnrampNativeBridge>{children}</ExpressOnrampNativeBridge>
       </StripeProvider>
     )
   } catch {

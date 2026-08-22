@@ -16,20 +16,29 @@ export type ExpressOnrampStatus = {
 
 let cached: ExpressOnrampStatus | null = null
 let inflight: Promise<ExpressOnrampStatus> | null = null
+const listeners = new Set<() => void>()
 
 export function peekExpressOnrampStatus(): ExpressOnrampStatus | null {
   return cached
 }
 
+export function subscribeExpressOnrampStatus(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
+}
+
 export function cacheExpressOnrampStatus(data: ExpressOnrampStatus) {
   cached = data
+  for (const listener of listeners) listener()
 }
 
 function loadStatus(): Promise<ExpressOnrampStatus> {
   if (inflight) return inflight
   inflight = apiFetch<ExpressOnrampStatus>('/api/stripe/onramp/status')
     .then((data) => {
-      cached = data
+      cacheExpressOnrampStatus(data)
       if (data.publishableKey) void loadMobileExpressOnramp(data.publishableKey).catch(() => undefined)
       else prefetchMobileExpressOnramp()
       return data

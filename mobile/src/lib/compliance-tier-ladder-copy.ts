@@ -16,7 +16,7 @@ export const CONSUMER_TIER_LADDER: { tiers: TierLadderTier[] } = {
       tier: 1,
       title: "Global banking",
       description:
-        "USD and EUR bank accounts, pay-in and pay-out, stablecoin flows, and local currency deposits where available.",
+        "USD/EUR accounts, payments, and stablecoin flows.",
     },
     {
       tier: 2,
