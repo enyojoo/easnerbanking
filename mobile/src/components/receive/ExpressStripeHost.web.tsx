@@ -14,7 +14,6 @@ export function ExpressStripeHost({ element }: { element: unknown }) {
     }
   }, [element])
 
-  if (!isStripeHostElement(element)) return null
   return (
     <div
       ref={ref}

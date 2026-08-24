@@ -148,6 +148,7 @@ function safeJson(text: string): unknown {
 function extractMessage(payload: unknown): string | null {
   if (!payload || typeof payload !== 'object') return null
   const p = payload as Record<string, unknown>
+  if (typeof p.reason === 'string' && p.reason.trim()) return p.reason
   if (typeof p.message === 'string') return p.message
   if (typeof p.error === 'string') return p.error
   if (typeof p.error === 'object' && p.error && typeof (p.error as { message?: unknown }).message === 'string') {

@@ -22,9 +22,21 @@ export class StripeOnrampApiError extends Error {
 
 function readErrorCode(body: unknown): string | null {
   if (!body || typeof body !== "object") return null
-  const err = (body as { error?: { code?: unknown; type?: unknown } }).error
-  const code = err?.code ?? err?.type
+  const row = body as {
+    error?: { code?: unknown; type?: unknown; error_code?: unknown }
+    code?: unknown
+    type?: unknown
+  }
+  const err = row.error
+  const code = err?.code ?? err?.type ?? err?.error_code ?? row.code ?? row.type
   return typeof code === "string" ? code : null
+}
+
+function readErrorMessage(body: unknown, fallback = "Request failed"): string {
+  if (!body || typeof body !== "object") return fallback
+  const row = body as { error?: { message?: unknown }; message?: unknown }
+  const message = row.error?.message ?? row.message
+  return typeof message === "string" && message.trim() ? message : fallback
 }
 
 function toForm(params: Record<string, unknown>, prefix = ""): string[] {
@@ -55,7 +67,7 @@ export async function stripeOnrampRequest<T = Record<string, unknown>>(
   method: "GET" | "POST" | "DELETE",
   path: string,
   params?: Record<string, unknown>,
-  opts?: { oauthToken?: string; absoluteUrl?: string; json?: boolean },
+  opts?: { oauthToken?: string; absoluteUrl?: string; json?: boolean; omitStripeVersion?: boolean },
 ): Promise<T> {
   const secret = getStripeSecretKey()
   if (!secret) throw new StripeOnrampApiError("Stripe is not configured", 503, null)
@@ -63,7 +75,9 @@ export async function stripeOnrampRequest<T = Record<string, unknown>>(
   const url = new URL(opts?.absoluteUrl || `https://api.stripe.com${path}`)
   const headers: Record<string, string> = {
     Authorization: `Bearer ${secret}`,
-    "Stripe-Version": getStripeOnrampBetaVersion(),
+  }
+  if (!opts?.omitStripeVersion) {
+    headers["Stripe-Version"] = getStripeOnrampBetaVersion()
   }
   if (opts?.oauthToken) headers["Stripe-OAuth-Token"] = opts.oauthToken
 
@@ -86,11 +100,7 @@ export async function stripeOnrampRequest<T = Record<string, unknown>>(
   const res = await fetch(url.toString(), { method, headers, body })
   const json = (await res.json().catch(() => null)) as T | { error?: { message?: string } }
   if (!res.ok) {
-    const message =
-      json && typeof json === "object" && "error" in json
-        ? String((json as { error?: { message?: string } }).error?.message || "Request failed")
-        : "Request failed"
-    throw new StripeOnrampApiError(message, res.status, json)
+    throw new StripeOnrampApiError(readErrorMessage(json), res.status, json)
   }
   return json as T
 }
@@ -107,17 +117,38 @@ export async function createLinkAuthIntent(input: {
   }
   const dataSharingMerchant = getStripeLinkDataSharingMerchant()
   const oauthToken = input.forClientAuth ? undefined : input.oauthToken
-  return stripeOnrampRequest(
-    "POST",
-    "/v1/link_auth_intent",
-    {
-      email: input.email,
-      oauth_scopes: getStripeLinkOAuthScopes(),
-      oauth_client_id: clientId,
-      ...(dataSharingMerchant ? { data_sharing_merchant: dataSharingMerchant } : {}),
-    },
-    { absoluteUrl: "https://login.link.com/v1/link_auth_intent", json: true, oauthToken },
-  )
+  const baseParams = {
+    email: input.email,
+    oauth_scopes: getStripeLinkOAuthScopes(),
+    oauth_client_id: clientId,
+  }
+  const withMerchant = {
+    ...baseParams,
+    ...(dataSharingMerchant ? { data_sharing_merchant: dataSharingMerchant } : {}),
+  }
+  try {
+    return await stripeOnrampRequest(
+      "POST",
+      "/v1/link_auth_intent",
+      withMerchant,
+      { absoluteUrl: "https://login.link.com/v1/link_auth_intent", json: true, oauthToken, omitStripeVersion: true },
+    )
+  } catch (e) {
+    if (
+      dataSharingMerchant &&
+      e instanceof StripeOnrampApiError &&
+      e.status >= 400 &&
+      e.status < 500
+    ) {
+      return stripeOnrampRequest(
+        "POST",
+        "/v1/link_auth_intent",
+        baseParams,
+        { absoluteUrl: "https://login.link.com/v1/link_auth_intent", json: true, oauthToken, omitStripeVersion: true },
+      )
+    }
+    throw e
+  }
 }
 
 /** Stripe recommends retrieving OAuth tokens server-side after Link consent. */
@@ -133,6 +164,7 @@ export async function retrieveLinkAuthTokens(authIntentId: string): Promise<{
   }>("POST", `/v1/link_auth_intent/${encodeURIComponent(id)}/tokens`, undefined, {
     absoluteUrl: `https://login.link.com/v1/link_auth_intent/${encodeURIComponent(id)}/tokens`,
     json: true,
+    omitStripeVersion: true,
   })
   return {
     access_token: res.access_token,

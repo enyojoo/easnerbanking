@@ -12,6 +12,7 @@ function mapError(e: unknown) {
       {
         error: expressSetupUserMessage(mapStripeOnrampError(e.code, e.message)),
         code: e.code,
+        reason: e.message,
       },
       { status: e.status >= 400 ? e.status : 400 },
     )
@@ -25,15 +26,22 @@ function mapError(e: unknown) {
 function linkAuthEmail(ctx: {
   payer: { email?: string | null }
   actorEmail?: string | null
-}): string | undefined {
-  const email = String(ctx.payer.email || ctx.actorEmail || "").trim()
+}, bodyEmail?: string): string | undefined {
+  const email = String(bodyEmail || ctx.payer.email || ctx.actorEmail || "").trim()
   return email || undefined
 }
 
 export async function POST(request: Request) {
   const resolved = await resolveExpressDepositsContext(request)
   if ("error" in resolved) return resolved.error
-  const email = linkAuthEmail(resolved.ctx)
+  const body = (await request.json().catch(() => ({}))) as { email?: string }
+  const email = linkAuthEmail(resolved.ctx, body.email)
+  if (!email) {
+    return NextResponse.json(
+      { error: EXPRESS_DEPOSITS_COPY.somethingWentWrong, code: "email_required" },
+      { status: 400 },
+    )
+  }
   try {
     /** Client authenticate() needs a fresh LinkAuthIntent — never attach a stored OAuth token. */
     const intent = await createLinkAuthIntent({
@@ -54,6 +62,7 @@ export async function POST(request: Request) {
         {
           error: expressSetupUserMessage("Link connection was revoked. Sign in again."),
           code: e.code,
+          reason: e.message,
         },
         { status: 409 },
       )

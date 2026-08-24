@@ -151,6 +151,10 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
     return client
   }
 
+  const linkAuthBody = () => ({
+    email: form.email.trim() || userProfile?.email || userProfile?.profile?.email || undefined,
+  })
+
   const field = (
     key: string,
     label: string,
@@ -202,7 +206,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
       if (step === 'link') {
         const auth = await apiFetch<{ authIntentId?: string | null; needsRegister?: boolean }>(
           '/api/stripe/onramp/link-auth',
-          { method: 'POST', body: {} },
+          { method: 'POST', body: linkAuthBody() },
         )
         if (auth.needsRegister) {
           await client.registerLinkUser?.(
@@ -216,7 +220,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
         if (!intentId) {
           const again = await apiFetch<{ authIntentId?: string | null }>(
             '/api/stripe/onramp/link-auth',
-            { method: 'POST', body: {} },
+            { method: 'POST', body: linkAuthBody() },
           )
           intentId = again.authIntentId
         }
@@ -283,7 +287,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           try {
             auth = await apiFetch<{ authIntentId?: string | null; needsRegister?: boolean }>(
               '/api/stripe/onramp/link-auth',
-              { method: 'POST', body: {} },
+              { method: 'POST', body: linkAuthBody() },
             )
           } catch (e) {
             watchIdentityOverlayRef.current = false
@@ -299,15 +303,18 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
             )
             const again = await apiFetch<{ authIntentId?: string | null }>(
               '/api/stripe/onramp/link-auth',
-              { method: 'POST', body: {} },
+              { method: 'POST', body: linkAuthBody() },
             )
             intentId = again.authIntentId
           }
-          if (!intentId) return false
+          if (!intentId) {
+            throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
+          }
 
           if (Platform.OS === 'web') {
-            return new Promise((resolve) => {
-              void client.authenticate!(intentId!, async (result) => {
+            return new Promise((resolve, reject) => {
+              void client
+                .authenticate!(intentId!, async (result) => {
                 const outcome = String(result.result || '')
                 if (outcome === 'success') {
                   if (result.crypto_customer_id) {
@@ -334,7 +341,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
                 resolve(false)
               }).then((el) => {
                 if (isStripeHostElement(el)) setStripeEl(el)
-              })
+              }).catch(reject)
             })
           }
 
@@ -490,11 +497,16 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           </View>
         </View>
         <View style={styles.bodySlot}>
-          {stripeEl ? (
+          {Platform.OS === 'web' && (step === 'link' || step === 'us_l2' || step === 'eu_l2') ? (
+            <View style={[styles.hostWrap, !stripeEl && styles.hostHidden]}>
+              <ExpressStripeHost element={stripeEl} />
+            </View>
+          ) : stripeEl ? (
             <View style={styles.hostWrap}>
               <ExpressStripeHost element={stripeEl} />
             </View>
-          ) : (
+          ) : null}
+          {!stripeEl || Platform.OS !== 'web' ? (
             <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
               {step === 'link' ? (
                 <View style={styles.profileCard}>
@@ -553,7 +565,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
               ) : null}
               {message ? <Text style={styles.error}>{message}</Text> : null}
             </ScrollView>
-          )}
+          ) : null}
         </View>
       </View>
     </ScreenWrapper>
@@ -606,6 +618,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[5],
     ...Platform.select({
       web: { overflow: 'hidden' as const },
+      default: {},
+    }),
+  },
+  hostHidden: {
+    ...Platform.select({
+      web: {
+        position: 'absolute' as const,
+        width: 1,
+        height: 1,
+        overflow: 'hidden' as const,
+        opacity: 0,
+        pointerEvents: 'none' as const,
+      },
       default: {},
     }),
   },

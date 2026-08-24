@@ -137,10 +137,13 @@ export function ExpressDepositsSetup({ onClose }: Props) {
 
   /** SDK verifyDocuments needs a live Link session in this browser, even when cryptoCustomerId exists. */
   const ensureLinkSession = async (client: CryptoOnrampClient): Promise<boolean> => {
+    const linkEmail =
+      form.email.trim() ||
+      String(status?.prefill?.email || peekBusinessExpressOnrampStatus()?.prefill?.email || "")
     const auth = await fetchWithSession("/api/stripe/onramp/link-auth", {
       method: "POST",
       headers: { ...SCOPE, "Content-Type": "application/json" },
-      body: "{}",
+      body: JSON.stringify({ email: linkEmail || undefined }),
     })
     const authJson = (await auth.json().catch(() => ({}))) as {
       authIntentId?: string
@@ -158,7 +161,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
       const again = await fetchWithSession("/api/stripe/onramp/link-auth", {
         method: "POST",
         headers: { ...SCOPE, "Content-Type": "application/json" },
-        body: "{}",
+        body: JSON.stringify({ email: linkEmail || undefined }),
       })
       const againJson = (await again.json().catch(() => ({}))) as { authIntentId?: string }
       intentId = againJson.authIntentId
@@ -257,10 +260,13 @@ export function ExpressDepositsSetup({ onClose }: Props) {
   const startLink = () =>
     void run(async () => {
       const client = await ensureSdk()
+      const linkEmail =
+        form.email.trim() ||
+        String(status?.prefill?.email || peekBusinessExpressOnrampStatus()?.prefill?.email || "")
       const auth = await fetchWithSession("/api/stripe/onramp/link-auth", {
         method: "POST",
         headers: { ...SCOPE, "Content-Type": "application/json" },
-        body: "{}",
+        body: JSON.stringify({ email: linkEmail || undefined }),
       })
       const authJson = (await auth.json().catch(() => ({}))) as {
         authIntentId?: string
@@ -278,7 +284,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
         const again = await fetchWithSession("/api/stripe/onramp/link-auth", {
           method: "POST",
           headers: { ...SCOPE, "Content-Type": "application/json" },
-          body: "{}",
+          body: JSON.stringify({ email: linkEmail || undefined }),
         })
         const againJson = (await again.json().catch(() => ({}))) as { authIntentId?: string }
         if (!againJson.authIntentId) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
