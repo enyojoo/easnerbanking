@@ -6,7 +6,11 @@ import {
   gridAddressFromKybParts,
   gridBusinessInfoFromKybCompany,
 } from "./kyb-company-to-grid"
-import { gridKybOwnerIdTypeForGrid, type GridKybCompanyDraft } from "@easner/shared"
+import {
+  gridKybOwnerIdTypeForGrid,
+  normalizeGridKybOwnershipPercentageForGrid,
+  type GridKybCompanyDraft,
+} from "@easner/shared"
 import type { KybDocumentRow, KybPersonRow } from "./kyb-application-store"
 
 export async function patchGridBusinessKybCustomer(input: {
@@ -54,10 +58,15 @@ function ownerPersonalInfo(person: KybPersonRow): Record<string, unknown> {
 export async function upsertGridBeneficialOwner(input: {
   customerId: string
   person: KybPersonRow
+  ownershipPercentage?: number
 }): Promise<string> {
+  const ownershipPercentage =
+    input.ownershipPercentage ??
+    normalizeGridKybOwnershipPercentageForGrid(input.person.ownershipPercentage) ??
+    0
   const body = {
     customerId: normalizeGridCustomerId(input.customerId),
-    ownershipPercentage: input.person.ownershipPercentage ?? 0,
+    ownershipPercentage,
     roles: input.person.roles.length ? input.person.roles : ["UBO"],
     personalInfo: ownerPersonalInfo(input.person),
   }

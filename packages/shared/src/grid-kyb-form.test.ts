@@ -18,6 +18,9 @@ import {
   withFirstKybOwnerUbo,
   mapGridKybVerificationErrors,
   normalizeGridKybIdType,
+  normalizeGridKybOwnershipPercentageForGrid,
+  allocateGridKybOwnershipPercentagesForGrid,
+  parseGridKybOwnershipPercentageInput,
   resolveGridKybOwnerIdType,
   resolveGridKybSourceOfFunds,
   sourceOfFundsIdFromStored,
@@ -255,6 +258,39 @@ describe("mergeGridKybCompanyDraft", () => {
       legalName: "Acme Ltd",
       purposeOfAccount: "CONTRACTOR_PAYOUTS",
     })
+  })
+})
+
+describe("parseGridKybOwnershipPercentageInput", () => {
+  it("accepts whole numbers, decimals, and empty input", () => {
+    expect(parseGridKybOwnershipPercentageInput("")).toBeNull()
+    expect(parseGridKybOwnershipPercentageInput("33")).toBe(33)
+    expect(parseGridKybOwnershipPercentageInput("33.3")).toBe(33.3)
+    expect(parseGridKybOwnershipPercentageInput("33.34")).toBe(33.3)
+    expect(parseGridKybOwnershipPercentageInput("100")).toBe(100)
+  })
+
+  it("rejects out-of-range values", () => {
+    expect(() => parseGridKybOwnershipPercentageInput("-1")).toThrow("Ownership % must be between 0 and 100.")
+    expect(() => parseGridKybOwnershipPercentageInput("101")).toThrow("Ownership % must be between 0 and 100.")
+  })
+})
+
+describe("allocateGridKybOwnershipPercentagesForGrid", () => {
+  it("preserves a three-way split that totals 100", () => {
+    expect(allocateGridKybOwnershipPercentagesForGrid([33.4, 33.3, 33.3])).toEqual([34, 33, 33])
+  })
+
+  it("rounds a single owner normally", () => {
+    expect(allocateGridKybOwnershipPercentagesForGrid([33.3])).toEqual([33])
+    expect(allocateGridKybOwnershipPercentagesForGrid([50.5])).toEqual([51])
+  })
+})
+
+describe("normalizeGridKybOwnershipPercentageForGrid", () => {
+  it("rounds decimals before sending to Grid", () => {
+    expect(normalizeGridKybOwnershipPercentageForGrid(33.3)).toBe(33)
+    expect(normalizeGridKybOwnershipPercentageForGrid(33.6)).toBe(34)
   })
 })
 

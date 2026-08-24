@@ -10,6 +10,7 @@ import {
   gridKybOwnerResourceMatches,
   isKybIdentityDocumentReady,
   resolveGridKybOwnerIdType,
+  parseGridKybOwnershipPercentageInput,
   gridKybOwnerCountriesFromNationality,
   type GridKybErrorPointer,
 } from "@easner/shared"
@@ -169,16 +170,13 @@ export function GridKybPeopleStep({
   }
 
   function ownerPayload() {
-    const ownership = String(form.ownershipPercentage).trim()
-    const parsedOwnership = ownership === "" ? null : Number(ownership)
     return {
       ...form,
       nationality: resolveCountryIso2(form.nationality) || form.nationality,
       addressCountry: resolveCountryIso2(form.addressCountry) || form.addressCountry,
       countryOfIssuance: resolveCountryIso2(form.countryOfIssuance) || form.countryOfIssuance,
       idType: resolveGridKybOwnerIdType(form),
-      ownershipPercentage:
-        parsedOwnership != null && Number.isFinite(parsedOwnership) ? parsedOwnership : null,
+      ownershipPercentage: parseGridKybOwnershipPercentageInput(String(form.ownershipPercentage)),
     }
   }
 
@@ -305,6 +303,7 @@ export function GridKybPeopleStep({
             pointerTargetsPerson(error, selected),
         )
       : errors.find((error) => error.section === "people" && error.documentCategory === "identity"))
+  const ownershipError = fieldError("ownershipPercentage")
   const idTypeError = fieldError("idType") || fieldError("identifier") || fieldError("countryOfIssuance")
   const identityRejected = Boolean(
     identityError?.gridDocumentId || identityError?.resourceId?.startsWith("Document:"),
@@ -497,9 +496,13 @@ export function GridKybPeopleStep({
                 inputMode="decimal"
                 value={form.ownershipPercentage}
                 onChange={(e) => patchForm({ ownershipPercentage: e.target.value })}
-                placeholder="e.g. 25"
+                placeholder="e.g. 33.3"
                 disabled={disabled}
+                aria-invalid={Boolean(ownershipError)}
               />
+              {ownershipError ? (
+                <p className="text-sm text-destructive">{ownershipError.reason}</p>
+              ) : null}
             </div>
           </div>
           <div className="grid grid-cols-1 gap-4 min-[720px]:grid-cols-[minmax(0,1.15fr)_max-content_minmax(0,1.15fr)]">

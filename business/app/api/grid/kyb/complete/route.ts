@@ -3,6 +3,7 @@ import {
   gridDocumentIdFromResource,
   gridKybApplicationStatusFromVerification,
   gridKybOwnerIdTypeForGrid,
+  allocateGridKybOwnershipPercentagesForGrid,
   hasReadyKybIdentityDocuments,
   withFirstKybOwnerUbo,
   mapGridKybVerificationErrors,
@@ -63,6 +64,9 @@ export async function POST(request: Request) {
 
     const listedPeople = await listKybPeople(ctx.admin, application.id, true)
     const people = withFirstKybOwnerUbo(listedPeople)
+    const gridOwnershipPercentages = allocateGridKybOwnershipPercentagesForGrid(
+      people.map((person) => person.ownershipPercentage),
+    )
     if (people[0] && listedPeople[0] && people[0].roles !== listedPeople[0].roles) {
       await ctx.admin
         .from("business_kyb_people")
@@ -70,7 +74,7 @@ export async function POST(request: Request) {
         .eq("id", people[0].id)
         .eq("application_id", application.id)
     }
-    for (const person of people) {
+    for (const [index, person] of people.entries()) {
       const idType = gridKybOwnerIdTypeForGrid(person)
       if (idType && idType !== person.idType) {
         person.idType = idType
@@ -79,7 +83,11 @@ export async function POST(request: Request) {
           .update({ id_type: idType, updated_at: new Date().toISOString() })
           .eq("id", person.id)
       }
-      const gridId = await upsertGridBeneficialOwner({ customerId, person })
+      const gridId = await upsertGridBeneficialOwner({
+        customerId,
+        person,
+        ownershipPercentage: gridOwnershipPercentages[index] ?? 0,
+      })
       if (gridId !== person.gridBeneficialOwnerId) {
         await ctx.admin
           .from("business_kyb_people")

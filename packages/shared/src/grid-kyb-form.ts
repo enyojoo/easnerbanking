@@ -173,6 +173,55 @@ export function resolveGridKybOwnerIdType(input: {
   return normalized
 }
 
+/** Parse ownership % for Easner storage (decimals allowed). Grid receives integers via allocateGridKybOwnershipPercentagesForGrid. */
+export function parseGridKybOwnershipPercentageInput(raw: string): number | null {
+  const trimmed = raw.trim()
+  if (trimmed === "") return null
+  const parsed = Number(trimmed)
+  if (!Number.isFinite(parsed)) {
+    throw new Error("Ownership % must be a number.")
+  }
+  if (parsed < 0 || parsed > 100) {
+    throw new Error("Ownership % must be between 0 and 100.")
+  }
+  return Math.round(parsed * 10) / 10
+}
+
+/** Round a single ownership % for Grid when only one owner is synced. */
+export function normalizeGridKybOwnershipPercentageForGrid(value: number | null | undefined): number | null {
+  if (value == null || !Number.isFinite(value)) return null
+  return Math.min(100, Math.max(0, Math.round(value)))
+}
+
+/**
+ * Convert fractional ownership percentages to integers for Grid while preserving the total.
+ * Uses largest-remainder allocation (e.g. 33.4 + 33.3 + 33.3 → 34 + 33 + 33).
+ */
+export function allocateGridKybOwnershipPercentagesForGrid(
+  values: Array<number | null | undefined>,
+): number[] {
+  const exact = values.map((value) => {
+    if (value == null || !Number.isFinite(value)) return 0
+    return Math.min(100, Math.max(0, value))
+  })
+  const floors = exact.map((value) => Math.floor(value))
+  const targetTotal = Math.min(100, Math.max(0, Math.round(exact.reduce((sum, value) => sum + value, 0))))
+  let remainder = targetTotal - floors.reduce((sum, value) => sum + value, 0)
+  if (remainder <= 0) return floors
+
+  const ranked = exact
+    .map((value, index) => ({ index, fraction: value - floors[index] }))
+    .sort((a, b) => b.fraction - a.fraction || a.index - b.index)
+
+  const allocated = [...floors]
+  for (const row of ranked) {
+    if (remainder <= 0) break
+    allocated[row.index] += 1
+    remainder -= 1
+  }
+  return allocated
+}
+
 export function gridKybIdTypeOptionsForPerson(input: {
   countryOfIssuance?: string | null
 }): readonly GridKybSelectOption<GridKybIdType>[] {
