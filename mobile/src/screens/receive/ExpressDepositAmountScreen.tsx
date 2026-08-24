@@ -13,6 +13,7 @@ import { colors, spacing, textStyles, surfaceFrameStyle } from '../../theme'
 import { ReceiveFlowHeader } from '../../components/receive/ReceiveFlowHeader'
 import { useStackHardwareBack } from '../../hooks/useStackHardwareBack'
 import { navigateStackBack } from '../../navigation/stackBackNavigation'
+import { navigateToTransactionDetailAfterPayIn } from '../../navigation/transactionDetailNavigation'
 import { apiFetch } from '../../query/api-client'
 import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
 import type { ExpressCashKind } from '../../components/receive/ReceiveCashMethodList'
@@ -167,11 +168,15 @@ export default function ExpressDepositAmountScreen({ navigation, route }: Naviga
         })
       }
       setBusy(true)
-      const created = await apiFetch<{ session?: { id?: string } }>('/api/stripe/onramp/sessions', {
-        method: 'POST',
-        body: { usdCredit, sourceAmount: youPay, paymentMethod, paymentTokenId: token },
-      })
+      const created = await apiFetch<{ session?: { id?: string }; easnerTransactionId?: string | null }>(
+        '/api/stripe/onramp/sessions',
+        {
+          method: 'POST',
+          body: { usdCredit, sourceAmount: youPay, paymentMethod, paymentTokenId: token },
+        },
+      )
       const id = created.session?.id
+      const transactionId = String(created.easnerTransactionId || '').trim()
       if (!id) throw new Error('Could not start payment')
       if (sdk.performCheckout) {
         await sdk.performCheckout(id, async (sessionId) => {
@@ -184,6 +189,10 @@ export default function ExpressDepositAmountScreen({ navigation, route }: Naviga
         })
       } else {
         throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
+      }
+      if (transactionId) {
+        navigateToTransactionDetailAfterPayIn(navigation, transactionId, 'ReceiveFlow')
+        return
       }
       setStep('complete')
     } catch (e) {

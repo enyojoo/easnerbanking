@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import {
   EXPRESS_DEPOSITS_COPY,
   expressDepositMethodTitle,
@@ -15,6 +16,7 @@ import type { CashPayInMethodKind } from "@easner/shared"
 import { loadExpressOnramp } from "@/lib/stripe/load-crypto-onramp"
 import { ExpressDepositsStripeSlot } from "@/components/compliance/express-deposits-stripe-slot"
 import { mapStripeOnrampError } from "@/lib/stripe/onramp-sdk-map"
+import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 
 const SCOPE = { "X-Easner-Account-Scope": "business" } as const
 
@@ -39,6 +41,7 @@ function paymentMethodParam(kind: ExpressKind): string {
 }
 
 export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Props) {
+  const router = useRouter()
   const [step, setStep] = useState<Step>("amount")
   const [amountStr, setAmountStr] = useState("")
   const [youPay, setYouPay] = useState<number | null>(null)
@@ -228,6 +231,7 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
       })
       const createdJson = (await created.json().catch(() => ({}))) as {
         session?: { id?: string }
+        easnerTransactionId?: string | null
         error?: string
         code?: string
       }
@@ -269,13 +273,18 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
         setConfirmError(EXPRESS_DEPOSITS_COPY.paymentFailed)
         return
       }
+      const transactionId = String(createdJson.easnerTransactionId || "").trim()
+      if (transactionId) {
+        router.replace(transactionWebDetailPath(transactionId, { returnTo: "dashboard" }))
+        return
+      }
       setStep("complete")
     } catch (e) {
       setConfirmError(e instanceof Error ? e.message : EXPRESS_DEPOSITS_COPY.paymentFailed)
     } finally {
       setLoading(false)
     }
-  }, [amountLimit, cryptoCustomerId, method, onNeedSetup, paymentTokenId, publishableKey, usdCredit, youPay])
+  }, [amountLimit, cryptoCustomerId, method, onNeedSetup, paymentTokenId, publishableKey, router, usdCredit, youPay])
 
   if (step === "amount") {
     return (

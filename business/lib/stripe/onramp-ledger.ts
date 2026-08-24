@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
+import { readEasnerTransactionId } from "@/lib/easner-transaction-id"
 import { buildWalletReportingSnapshot } from "@/lib/transactions/reporting-snapshot"
 import { buildStripeOnrampCreditKey } from "@/lib/stripe/onramp-credit-key"
 
@@ -55,7 +56,7 @@ export async function insertPendingOnrampSession(
     paymentMethod: string
     walletAddress: string
   },
-): Promise<void> {
+): Promise<string | null> {
   const now = new Date().toISOString()
   await admin.from("stripe_onramp_sessions").upsert(
     {
@@ -78,7 +79,7 @@ export async function insertPendingOnrampSession(
     { onConflict: "stripe_session_id" },
   )
   if (input.usdCredit && input.usdCredit > 0) {
-    await upsertLedgerTransaction(admin, {
+    const upserted = await upsertLedgerTransaction(admin, {
       userId: input.userId,
       businessId: input.businessId,
       provider: "stripe",
@@ -104,7 +105,18 @@ export async function insertPendingOnrampSession(
       occurredAt: now,
       baseCurrency: "USD",
     })
+    const { data: row } = await admin
+      .from("transactions")
+      .select("easner_transaction_id, metadata")
+      .eq("id", upserted.transactionId)
+      .maybeSingle()
+    return (
+      String(row?.easner_transaction_id || "").trim() ||
+      readEasnerTransactionId(row?.metadata) ||
+      null
+    )
   }
+  return null
 }
 
 export async function markOnrampSessionFailed(

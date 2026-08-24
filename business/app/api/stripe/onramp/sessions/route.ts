@@ -73,8 +73,9 @@ export async function POST(request: Request) {
       resolved.ctx.oauthToken || undefined,
     )
     const stripeSessionId = String((session as { id?: string }).id || "")
+    let easnerTransactionId: string | null = null
     if (stripeSessionId) {
-      await insertPendingOnrampSession(resolved.ctx.admin, {
+      easnerTransactionId = await insertPendingOnrampSession(resolved.ctx.admin, {
         userId: resolved.ctx.payerUserId,
         businessId: resolved.ctx.businessId,
         stripeSessionId,
@@ -86,7 +87,7 @@ export async function POST(request: Request) {
         walletAddress: wallet,
       })
     }
-    return NextResponse.json({ session, walletAddress: wallet, sourceCurrency })
+    return NextResponse.json({ session, walletAddress: wallet, sourceCurrency, easnerTransactionId })
   } catch (e) {
     return mapError(e)
   }

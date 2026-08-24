@@ -98,6 +98,24 @@ export function BusinessVerificationSection({
   const expressStatus = expressReady
     ? "approved"
     : expressQuery.data?.status || "not_started"
+  const expressInProgress = expressStatus === "in_progress"
+  const expressSetupCta = expressInProgress
+    ? EXPRESS_DEPOSITS_COPY.continueCta
+    : EXPRESS_DEPOSITS_COPY.setupCta
+
+  const openExpressSetup = useCallback(() => {
+    const peeked = peekBusinessExpressOnrampStatus()
+    if (peeked?.publishableKey) {
+      void loadExpressOnramp(peeked.publishableKey).catch(() => undefined)
+    } else {
+      prefetchExpressOnramp()
+    }
+    onFlowOpenChange?.(true, "express")
+    const next = new URLSearchParams(searchParams.toString())
+    next.set("tab", "verification")
+    next.set("flow", SETTINGS_EXPRESS_FLOW_PARAM)
+    window.history.replaceState(null, "", `/settings?${next.toString()}`)
+  }, [onFlowOpenChange, searchParams])
 
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
@@ -242,9 +260,11 @@ export function BusinessVerificationSection({
   const tier1FinalReject = tier1RejectionType === "Final" || rejectionDisplay?.isFinal === true
   const tier1UnderReview = tier1StatusIsInReview(tier1VerificationStatus)
   const tier1InProgress = tier1VerificationStatus === "in_progress"
-  const packetWaiting = kybPacket?.status === "in_review"
+  const packetAwaitingReview =
+    kybPacket?.status === "in_review" ||
+    (kybPacket?.status === "submitted" && Boolean(kybPacket?.submittedAt))
   const tier1AwaitingReview =
-    !tier1Rejected && !tier1OnHold && (tier1UnderReview || packetWaiting)
+    !tier1Rejected && !tier1OnHold && (tier1UnderReview || packetAwaitingReview)
   const hasGridCustomer = Boolean(noahKybCustomerId?.trim())
   const tier1StartedNotSubmitted =
     !tier1Rejected &&
@@ -485,35 +505,27 @@ export function BusinessVerificationSection({
                       <CardDescription className="text-sm">
                         {EXPRESS_DEPOSITS_COPY.description}
                       </CardDescription>
+                      {!expressReady ? (
+                        <p className="text-xs text-muted-foreground pt-1">
+                          {EXPRESS_DEPOSITS_COPY.verificationFootnote}
+                        </p>
+                      ) : null}
                     </CardHeader>
-                    <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
-                      {!tier1Complete ? (
-                        <Button size="sm" disabled>
-                          {EXPRESS_DEPOSITS_COPY.setupCta}
-                        </Button>
-                      ) : !canManageBusinessVerification ? (
-                        <p className="text-xs text-muted-foreground">{EXPRESS_DEPOSITS_COPY.ownerOnly}</p>
-                      ) : (
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            const peeked = peekBusinessExpressOnrampStatus()
-                            if (peeked?.publishableKey) {
-                              void loadExpressOnramp(peeked.publishableKey).catch(() => undefined)
-                            } else {
-                              prefetchExpressOnramp()
-                            }
-                            onFlowOpenChange?.(true, "express")
-                            const next = new URLSearchParams(searchParams.toString())
-                            next.set("tab", "verification")
-                            next.set("flow", SETTINGS_EXPRESS_FLOW_PARAM)
-                            window.history.replaceState(null, "", `/settings?${next.toString()}`)
-                          }}
-                        >
-                          {EXPRESS_DEPOSITS_COPY.setupCta}
-                        </Button>
-                      )}
-                    </CardContent>
+                    {!expressReady ? (
+                      <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
+                        {!tier1Complete ? (
+                          <Button size="sm" disabled>
+                            {EXPRESS_DEPOSITS_COPY.setupCta}
+                          </Button>
+                        ) : !canManageBusinessVerification ? (
+                          <p className="text-xs text-muted-foreground">{EXPRESS_DEPOSITS_COPY.ownerOnly}</p>
+                        ) : (
+                          <Button size="sm" onClick={openExpressSetup}>
+                            {expressSetupCta}
+                          </Button>
+                        )}
+                      </CardContent>
+                    ) : null}
                   </Card>
                 ) : null}
               </div>
