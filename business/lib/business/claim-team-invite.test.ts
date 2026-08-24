@@ -182,7 +182,7 @@ describe("getInvitePreviewByMembershipId", () => {
           return {
             eq: () => ({
               maybeSingle: async () => ({
-                data: { display_name: "Acme Ltd" },
+                data: { name: "Acme Ltd" },
                 error: null,
               }),
             }),

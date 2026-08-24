@@ -275,13 +275,11 @@ export async function getInvitePreviewByMembershipId(
 
   const { data: business } = await admin
     .from("businesses")
-    .select("legal_name,display_name,name")
+    .select("name")
     .eq("id", row.business_id)
     .maybeSingle()
 
-  const businessName =
-    String(business?.display_name ?? business?.legal_name ?? business?.name ?? "Easner Business").trim() ||
-    "Easner Business"
+  const businessName = String(business?.name ?? "Easner Business").trim() || "Easner Business"
 
   const fullName =
     typeof row.full_name === "string" && row.full_name.trim() ? row.full_name.trim() : null

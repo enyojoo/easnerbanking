@@ -236,12 +236,10 @@ export async function POST(request: Request) {
 
   const { data: business } = await admin
     .from("businesses")
-    .select("legal_name,display_name")
+    .select("name")
     .eq("id", ownerCheck.orgId)
     .maybeSingle()
-  const businessName =
-    String(business?.display_name ?? business?.legal_name ?? "Easner Business").trim() ||
-    "Easner Business"
+  const businessName = String(business?.name ?? "Easner Business").trim() || "Easner Business"
   const inviterName =
     (typeof user.user_metadata?.name === "string" ? user.user_metadata.name.trim() : "") ||
     user.email?.split("@")[0] ||
