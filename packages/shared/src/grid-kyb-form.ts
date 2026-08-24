@@ -452,6 +452,18 @@ export function hasAllRequiredKybCompanyDocuments(
   )
 }
 
+export type GridKybDocumentSide = "FRONT" | "BACK"
+
+export function gridKybIdentityDocumentRequiresSides(input: {
+  documentType?: string | null
+  issuingCountry?: string | null
+}): GridKybDocumentSide[] | null {
+  const documentType = String(input.documentType ?? "").trim().toUpperCase()
+  const issuingCountry = String(input.issuingCountry ?? "").trim().toUpperCase()
+  if (issuingCountry === "US" && documentType === "DRIVERS_LICENSE") return ["FRONT", "BACK"]
+  return null
+}
+
 export function isKybIdentityDocumentReady(document: {
   category?: string | null
   personId?: string | null
@@ -459,13 +471,43 @@ export function isKybIdentityDocumentReady(document: {
   issuingCountry?: string | null
   issuingAuthority?: string | null
   documentNumber?: string | null
+  side?: string | null
 }): boolean {
   if (document.category !== "identity") return false
-  return Boolean(
-    String(document.documentType ?? "").trim() &&
-      String(document.issuingCountry ?? "").trim() &&
-      String(document.issuingAuthority ?? "").trim() &&
-      String(document.documentNumber ?? "").trim(),
+  if (
+    !String(document.documentType ?? "").trim() ||
+    !String(document.issuingCountry ?? "").trim() ||
+    !String(document.issuingAuthority ?? "").trim() ||
+    !String(document.documentNumber ?? "").trim()
+  ) {
+    return false
+  }
+  const requiredSides = gridKybIdentityDocumentRequiresSides(document)
+  if (!requiredSides) return true
+  const side = String(document.side ?? "").trim().toUpperCase()
+  return requiredSides.includes(side as GridKybDocumentSide)
+}
+
+export function personKybIdentityDocumentsReady(
+  personId: string,
+  documents: Array<{
+    category?: string | null
+    personId?: string | null
+    documentType?: string | null
+    issuingCountry?: string | null
+    issuingAuthority?: string | null
+    documentNumber?: string | null
+    side?: string | null
+  }>,
+): boolean {
+  const identityDocs = documents.filter(
+    (document) => document.category === "identity" && document.personId === personId && isKybIdentityDocumentReady(document),
+  )
+  if (identityDocs.length === 0) return false
+  const requiredSides = gridKybIdentityDocumentRequiresSides(identityDocs[0])
+  if (!requiredSides) return true
+  return requiredSides.every((side) =>
+    identityDocs.some((document) => String(document.side ?? "").trim().toUpperCase() === side),
   )
 }
 
@@ -486,14 +528,11 @@ export function hasReadyKybIdentityDocuments(
     issuingCountry?: string | null
     issuingAuthority?: string | null
     documentNumber?: string | null
+    side?: string | null
   }>,
 ): boolean {
   if (people.length === 0) return false
-  return people.every((person) =>
-    documents.some(
-      (doc) => doc.personId && person.id && doc.personId === person.id && isKybIdentityDocumentReady(doc),
-    ),
-  )
+  return people.every((person) => person.id && personKybIdentityDocumentsReady(person.id, documents))
 }
 
 export const GRID_KYB_DOCUMENT_TYPE_LABELS: Record<string, string> = {
@@ -880,13 +919,19 @@ function personHasAcceptedIdentity(
   personId: string,
   rejectedIds: Set<string>,
 ): boolean {
-  return documents.some((row) => {
-    if (row.category !== "identity" || row.personId !== personId) return false
-    if (!documentIsAcceptedReplacement(row, rejectedIds)) return false
-    const hasMetaShape =
-      row.issuingCountry != null || row.issuingAuthority != null || row.documentNumber != null
-    return !hasMetaShape || isKybIdentityDocumentReady(row)
-  })
+  const accepted = documents.filter(
+    (row) =>
+      row.category === "identity" &&
+      row.personId === personId &&
+      documentIsAcceptedReplacement(row, rejectedIds),
+  )
+  if (accepted.length === 0) return false
+  const hasMetaShape = accepted.some(
+    (row) =>
+      row.issuingCountry != null || row.issuingAuthority != null || row.documentNumber != null,
+  )
+  if (!hasMetaShape) return true
+  return personKybIdentityDocumentsReady(personId, accepted)
 }
 
 export function filterResolvedGridKybErrorPointers(input: {

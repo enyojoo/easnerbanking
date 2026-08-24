@@ -2,7 +2,11 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react"
 import { Loader2, X } from "lucide-react"
-import { GRID_KYB_DOCUMENT_TYPE_LABELS } from "@easner/shared"
+import {
+  GRID_KYB_DOCUMENT_TYPE_LABELS,
+  gridKybIdentityDocumentRequiresSides,
+  type GridKybDocumentSide,
+} from "@easner/shared"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -42,6 +46,16 @@ export type GridKybDocumentUploadHandle = {
 
 const FILE_ACCEPT = "application/pdf,image/jpeg,image/png,image/heic,image/heif,.heic,.heif,.jpg,.jpeg,.png,.pdf"
 
+const SIDE_LABELS: Record<GridKybDocumentSide, string> = {
+  FRONT: "Front of license",
+  BACK: "Back of license",
+}
+
+function normalizeSide(value: string | null | undefined): GridKybDocumentSide | null {
+  const side = String(value ?? "").trim().toUpperCase()
+  return side === "FRONT" || side === "BACK" ? side : null
+}
+
 export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Props>(function GridKybDocumentUpload(
   {
     title,
@@ -61,6 +75,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
   ref,
 ) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const sideInputRefs = useRef<Partial<Record<GridKybDocumentSide, HTMLInputElement | null>>>({})
   const latestExisting = existingDocuments[existingDocuments.length - 1]
   const [documentType, setDocumentType] = useState(
     latestExisting?.documentType || acceptedDocumentTypes[0] || "",
@@ -69,6 +84,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
   const [issuingAuthority, setIssuingAuthority] = useState(latestExisting?.issuingAuthority ?? "")
   const [documentNumber, setDocumentNumber] = useState(latestExisting?.documentNumber ?? "")
   const [file, setFile] = useState<File | null>(null)
+  const [filesBySide, setFilesBySide] = useState<Partial<Record<GridKybDocumentSide, File>>>({})
   const [error, setError] = useState<string | null>(null)
   const [errorKind, setErrorKind] = useState<"meta" | "file">("file")
 
@@ -85,14 +101,16 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
   const [removingId, setRemovingId] = useState<string | null>(null)
   const uploadPromiseRef = useRef<Promise<KybDocumentPacket | undefined> | null>(null)
 
+  const requiredSides = gridKybIdentityDocumentRequiresSides({ documentType, issuingCountry })
+
   useEffect(() => {
     const latest = existingDocuments[existingDocuments.length - 1]
-    if (!latest || file) return
+    if (!latest || file || Object.keys(filesBySide).length > 0) return
     if (latest.documentType) setDocumentType(latest.documentType)
     if (latest.issuingCountry) setIssuingCountry(latest.issuingCountry)
     if (latest.issuingAuthority) setIssuingAuthority(latest.issuingAuthority)
     if (latest.documentNumber) setDocumentNumber(latest.documentNumber)
-  }, [existingDocuments, file])
+  }, [existingDocuments, file, filesBySide])
 
   const options = acceptedDocumentTypes.map((value) => ({
     value,
@@ -101,6 +119,13 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
   const hasStoredFile = existingDocuments.length > 0
   const needsReplacement = Boolean(rejected || rejectionReason)
   const requiresIdentityMeta = category === "identity" && Boolean(extraFields?.documentNumber)
+
+  function existingForSide(side: GridKybDocumentSide | null) {
+    if (side) {
+      return existingDocuments.filter((doc) => normalizeSide(doc.side) === side)
+    }
+    return existingDocuments.filter((doc) => !normalizeSide(doc.side))
+  }
 
   function identityMetaError() {
     if (!requiresIdentityMeta) return null
@@ -111,9 +136,9 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
     return null
   }
 
-  async function removeExistingRows() {
+  async function removeExistingRows(side: GridKybDocumentSide | null) {
     if (!onRemoveExisting) return
-    for (const doc of existingDocuments) {
+    for (const doc of existingForSide(side)) {
       setRemovingId(doc.id)
       try {
         await onRemoveExisting(doc.id)
@@ -123,7 +148,11 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
     }
   }
 
-  async function upload(personId = extraFields?.personId, nextFile = file) {
+  async function upload(
+    personId = extraFields?.personId,
+    nextFile = file,
+    side: GridKybDocumentSide | null = null,
+  ) {
     if (uploadPromiseRef.current) return uploadPromiseRef.current
     if (!nextFile) {
       showFileError("Choose a file.")
@@ -139,6 +168,16 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
       onBusyChange?.(true)
       setError(null)
       try {
+        if (side && onRemoveExisting) {
+          for (const doc of existingDocuments.filter((row) => !normalizeSide(row.side))) {
+            setRemovingId(doc.id)
+            try {
+              await onRemoveExisting(doc.id)
+            } finally {
+              setRemovingId(null)
+            }
+          }
+        }
         const document = await uploadKybDocument(nextFile, {
           category,
           personId,
@@ -146,10 +185,21 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
           issuingCountry,
           issuingAuthority,
           documentNumber,
+          side: side ?? undefined,
         })
-        if (existingDocuments.length) await removeExistingRows()
-        setFile(null)
-        if (inputRef.current) inputRef.current.value = ""
+        if (existingForSide(side).length) await removeExistingRows(side)
+        if (side) {
+          setFilesBySide((current) => {
+            const next = { ...current }
+            delete next[side]
+            return next
+          })
+          const sideInput = sideInputRefs.current[side]
+          if (sideInput) sideInput.value = ""
+        } else {
+          setFile(null)
+          if (inputRef.current) inputRef.current.value = ""
+        }
         await onUploaded(document)
         return document
       } catch (err) {
@@ -175,8 +225,12 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
     issuingAuthority?: string
     documentNumber?: string
   }) {
-    const latest = existingDocuments[existingDocuments.length - 1]
-    if (!latest) return
+    const targets = requiredSides?.length
+      ? existingDocuments.filter((doc) => requiredSides.includes(normalizeSide(doc.side) as GridKybDocumentSide))
+      : latestExisting
+        ? [latestExisting]
+        : []
+    if (!targets.length) return
     const nextType = overrides?.documentType ?? documentType
     const nextCountry = overrides?.issuingCountry ?? issuingCountry
     const nextAuthority = overrides?.issuingAuthority ?? issuingAuthority
@@ -196,13 +250,17 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
     onBusyChange?.(true)
     setError(null)
     try {
-      const document = await patchKybDocumentMetadata(latest.id, {
-        documentType: nextType,
-        issuingCountry: nextCountry,
-        issuingAuthority: nextAuthority,
-        documentNumber: nextNumber,
-      })
-      await onUploaded(document)
+      let latest: KybDocumentPacket | undefined
+      for (const doc of targets) {
+        latest = await patchKybDocumentMetadata(doc.id, {
+          documentType: nextType,
+          issuingCountry: nextCountry,
+          issuingAuthority: nextAuthority,
+          documentNumber: nextNumber,
+          side: doc.side ?? undefined,
+        })
+      }
+      await onUploaded(latest)
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not update document details."
       showFileError(message)
@@ -214,14 +272,147 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
   }
 
   useImperativeHandle(ref, () => ({
-    hasPendingFile: () => Boolean(file) || Boolean(uploadPromiseRef.current),
+    hasPendingFile: () => {
+      if (uploadPromiseRef.current) return true
+      if (requiredSides?.length) {
+        return requiredSides.some((side) => Boolean(filesBySide[side]))
+      }
+      return Boolean(file)
+    },
     showingError: () => Boolean(error),
-    submit: (personId) => {
+    submit: async (personId) => {
       if (uploadPromiseRef.current) return uploadPromiseRef.current
+      if (requiredSides?.length) {
+        let latest: KybDocumentPacket | undefined
+        for (const side of requiredSides) {
+          const pending = filesBySide[side]
+          if (pending) {
+            latest = await upload(personId ?? extraFields?.personId, pending, side)
+          }
+        }
+        return latest
+      }
       return upload(personId ?? extraFields?.personId)
     },
     persistMetadata,
   }))
+
+  function renderFilePanel(input: {
+    side: GridKybDocumentSide | null
+    label: string
+    storedDocuments: KybDocumentPacket[]
+    pendingFile: File | null
+    setInputNode: (node: HTMLInputElement | null) => void
+    onChooseFile: () => void
+    onClearPending: () => void
+    onFileSelected: (next: File | null) => void
+  }) {
+    const hasSideStoredFile = input.storedDocuments.length > 0
+    return (
+      <div
+        className={cn(
+          "space-y-3 rounded-md border p-3",
+          needsReplacement
+            ? "border-destructive bg-destructive/5"
+            : "border-border bg-muted/30",
+        )}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <Label>{input.label}</Label>
+            {needsReplacement ? (
+              <p className="mt-1 text-sm text-destructive">
+                {rejectionReason || "This file was rejected. Replace it with a clearer PDF or image of the ID."}
+              </p>
+            ) : null}
+          </div>
+          <Button
+            type="button"
+            variant={needsReplacement ? "primary" : "outline"}
+            size="sm"
+            className="shrink-0"
+            disabled={disabled || saving}
+            onClick={input.onChooseFile}
+          >
+            {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+            {saving ? "Uploading…" : hasSideStoredFile || input.pendingFile ? "Replace file" : "Choose file"}
+          </Button>
+        </div>
+        {hasSideStoredFile || input.pendingFile ? (
+          <ul className="space-y-1.5">
+            {input.storedDocuments.map((doc) => (
+              <li
+                key={doc.id}
+                className="flex items-center gap-2 rounded-lg border bg-background px-2.5 py-1.5 text-sm"
+              >
+                <span className="min-w-0 flex-1 truncate">{doc.fileName}</span>
+                {needsReplacement ? (
+                  <span className="shrink-0 text-xs font-medium text-destructive">Needs a new file</span>
+                ) : null}
+                {onRemoveExisting ? (
+                  <button
+                    type="button"
+                    aria-label={`Remove ${doc.fileName}`}
+                    disabled={disabled || removingId === doc.id || saving}
+                    onClick={() => {
+                      setRemovingId(doc.id)
+                      void onRemoveExisting(doc.id)
+                        .catch((err) => showFileError(err instanceof Error ? err.message : "Could not remove document"))
+                        .finally(() => setRemovingId(null))
+                    }}
+                    className="rounded-md p-0.5 text-muted-foreground hover:text-foreground"
+                  >
+                    {removingId === doc.id ? (
+                      <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                    ) : (
+                      <X className="size-3.5" />
+                    )}
+                  </button>
+                ) : null}
+              </li>
+            ))}
+            {input.pendingFile ? (
+              <li className="flex items-center gap-2 rounded-lg border bg-background px-2.5 py-1.5 text-sm">
+                <span className="min-w-0 flex-1 truncate">{input.pendingFile.name}</span>
+                {saving ? <span className="text-xs text-muted-foreground">Uploading…</span> : null}
+                <button
+                  type="button"
+                  aria-label="Clear selected file"
+                  disabled={disabled || saving}
+                  onClick={input.onClearPending}
+                  className="rounded-md p-0.5 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </li>
+            ) : null}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground">No file chosen yet.</p>
+        )}
+        <input
+          ref={input.setInputNode}
+          type="file"
+          accept={FILE_ACCEPT}
+          className="hidden"
+          onChange={(event) => {
+            const next = event.target.files?.[0] ?? null
+            input.onFileSelected(next)
+            setError(null)
+            if (!next) return
+            void (async () => {
+              try {
+                const personId = extraFields?.personId ?? (await resolvePersonId?.())
+                await upload(personId, next, input.side)
+              } catch (err) {
+                showFileError(err instanceof Error ? err.message : "Could not store the file.")
+              }
+            })()
+          }}
+        />
+      </div>
+    )
+  }
 
   return (
     <div
@@ -232,6 +423,11 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
     >
       <div>
         <h3 className="text-base font-semibold">{title}</h3>
+        {requiredSides?.length ? (
+          <p className="mt-1 text-sm text-muted-foreground">
+            US driver&apos;s licenses require separate front and back photos.
+          </p>
+        ) : null}
       </div>
       <div
         className={cn(
@@ -297,7 +493,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
                   }
                   void persistMetadata().catch(() => undefined)
                 }}
-                placeholder="e.g. Immigration Service, passport office"
+                placeholder="e.g. DMV, state motor vehicle department"
                 disabled={disabled}
               />
             </div>
@@ -326,124 +522,73 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
         ) : null}
       </div>
       {error && errorKind === "meta" ? <p className="text-sm text-destructive">{error}</p> : null}
-      <div
-        className={cn(
-          "space-y-3 rounded-md border p-3",
-          needsReplacement
-            ? "border-destructive bg-destructive/5"
-            : "border-border bg-muted/30",
-        )}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <Label>Upload file</Label>
-            {needsReplacement ? (
-              <p className="mt-1 text-sm text-destructive">
-                {rejectionReason || "This file was rejected. Replace it with a clearer PDF or image of the ID."}
-              </p>
-            ) : null}
-          </div>
-          <Button
-            type="button"
-            variant={needsReplacement ? "primary" : "outline"}
-            size="sm"
-            className="shrink-0"
-            disabled={disabled || saving}
-            onClick={() => {
-              const missing = identityMetaError()
-              if (missing) {
-                showMetaError(missing)
-                return
-              }
-              inputRef.current?.click()
-            }}
-          >
-            {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-            {saving ? "Uploading…" : hasStoredFile || file ? "Replace file" : "Choose file"}
-          </Button>
+      {requiredSides?.length ? (
+        <div className="space-y-3">
+          {requiredSides.map((side) =>
+            renderFilePanel({
+              side,
+              label: SIDE_LABELS[side],
+              storedDocuments: existingForSide(side),
+              pendingFile: filesBySide[side] ?? null,
+              setInputNode: (node) => {
+                sideInputRefs.current[side] = node
+              },
+              onChooseFile: () => {
+                const missing = identityMetaError()
+                if (missing) {
+                  showMetaError(missing)
+                  return
+                }
+                sideInputRefs.current[side]?.click()
+              },
+              onClearPending: () => {
+                setFilesBySide((current) => {
+                  const next = { ...current }
+                  delete next[side]
+                  return next
+                })
+                const sideInput = sideInputRefs.current[side]
+                if (sideInput) sideInput.value = ""
+              },
+              onFileSelected: (next) => {
+                setFilesBySide((current) => {
+                  const updated = { ...current }
+                  if (next) updated[side] = next
+                  else delete updated[side]
+                  return updated
+                })
+              },
+            }),
+          )}
         </div>
-        {existingDocuments.length || file ? (
-          <ul className="space-y-1.5">
-            {existingDocuments.map((doc) => (
-              <li
-                key={doc.id}
-                className="flex items-center gap-2 rounded-lg border bg-background px-2.5 py-1.5 text-sm"
-              >
-                <span className="min-w-0 flex-1 truncate">{doc.fileName}</span>
-                {needsReplacement ? (
-                  <span className="shrink-0 text-xs font-medium text-destructive">
-                    Needs a new file
-                  </span>
-                ) : null}
-                {onRemoveExisting ? (
-                  <button
-                    type="button"
-                    aria-label={`Remove ${doc.fileName}`}
-                    disabled={disabled || removingId === doc.id || saving}
-                    onClick={() => {
-                      setRemovingId(doc.id)
-                      void onRemoveExisting(doc.id)
-                        .catch((err) => showFileError(err instanceof Error ? err.message : "Could not remove document"))
-                        .finally(() => setRemovingId(null))
-                    }}
-                    className="rounded-md p-0.5 text-muted-foreground hover:text-foreground"
-                  >
-                    {removingId === doc.id ? (
-                      <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                    ) : (
-                      <X className="size-3.5" />
-                    )}
-                  </button>
-                ) : null}
-              </li>
-            ))}
-            {file ? (
-              <li className="flex items-center gap-2 rounded-lg border bg-background px-2.5 py-1.5 text-sm">
-                <span className="min-w-0 flex-1 truncate">{file.name}</span>
-                {saving ? <span className="text-xs text-muted-foreground">Uploading…</span> : null}
-                <button
-                  type="button"
-                  aria-label="Clear selected file"
-                  disabled={disabled || saving}
-                  onClick={() => {
-                    setFile(null)
-                    if (inputRef.current) inputRef.current.value = ""
-                  }}
-                  className="rounded-md p-0.5 text-muted-foreground hover:text-foreground"
-                >
-                  <X className="size-3.5" />
-                </button>
-              </li>
-            ) : null}
-          </ul>
-        ) : (
-          <p className="text-sm text-muted-foreground">No file chosen yet.</p>
-        )}
-        <p className="text-xs text-muted-foreground">
-          {fileHint || "PDF, JPEG, PNG, or HEIC. Maximum 10 MB – photograph the ID if the PDF is large."}
-        </p>
-        {error && errorKind === "file" ? <p className="text-sm text-destructive">{error}</p> : null}
-        <input
-          ref={inputRef}
-          type="file"
-          accept={FILE_ACCEPT}
-          className="hidden"
-          onChange={(event) => {
-            const next = event.target.files?.[0] ?? null
-            setFile(next)
-            setError(null)
-            if (!next) return
-            void (async () => {
-              try {
-                const personId = extraFields?.personId ?? (await resolvePersonId?.())
-                await upload(personId, next)
-              } catch (err) {
-                showFileError(err instanceof Error ? err.message : "Could not store the file.")
-              }
-            })()
-          }}
-        />
-      </div>
+      ) : (
+        renderFilePanel({
+          side: null,
+          label: "Upload file",
+          storedDocuments: existingForSide(null),
+          pendingFile: file,
+          setInputNode: (node) => {
+            inputRef.current = node
+          },
+          onChooseFile: () => {
+            const missing = identityMetaError()
+            if (missing) {
+              showMetaError(missing)
+              return
+            }
+            inputRef.current?.click()
+          },
+          onClearPending: () => {
+            setFile(null)
+            if (inputRef.current) inputRef.current.value = ""
+          },
+          onFileSelected: (next) => setFile(next),
+        })
+      )}
+      <p className="text-xs text-muted-foreground">
+        {fileHint || "PDF, JPEG, PNG, or HEIC. Maximum 10 MB – photograph the ID if the PDF is large."}
+      </p>
+      {error && errorKind === "file" ? <p className="text-sm text-destructive">{error}</p> : null}
     </div>
   )
 })

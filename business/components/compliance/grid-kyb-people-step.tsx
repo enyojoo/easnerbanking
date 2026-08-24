@@ -8,7 +8,8 @@ import {
   gridDocumentIdFromResource,
   gridKybIdTypeOptionsForPerson,
   gridKybOwnerResourceMatches,
-  isKybIdentityDocumentReady,
+  personKybIdentityDocumentsReady,
+  gridKybIdentityDocumentRequiresSides,
   resolveGridKybOwnerIdType,
   parseGridKybOwnershipPercentageInput,
   gridKybOwnerCountriesFromNationality,
@@ -374,7 +375,7 @@ export function GridKybPeopleStep({
             const needsId = personErrors.some((error) => error.documentCategory === "identity")
             const name = `${person.firstName} ${person.lastName}`.trim() || "Owner"
             const docs = identityDocsFor(person.id)
-            const idReady = docs.some(isKybIdentityDocumentReady)
+            const idReady = person.id ? personKybIdentityDocumentsReady(person.id, docs) : false
             const subtitle = needsAttention
               ? personErrors[0]?.reason || (needsId ? "Needs ID document" : "Needs attention")
               : idReady

@@ -14,6 +14,8 @@ import {
   gridKybWizardReadiness,
   hasAllRequiredKybCompanyDocuments,
   hasReadyKybIdentityDocuments,
+  gridKybIdentityDocumentRequiresSides,
+  personKybIdentityDocumentsReady,
   isKybIdentityDocumentReady,
   withFirstKybOwnerUbo,
   mapGridKybVerificationErrors,
@@ -594,6 +596,56 @@ describe("gridKybWizardReadiness", () => {
           },
         ],
       ),
+    ).toBe(true)
+  })
+
+  it("requires front and back uploads for US driver licenses", () => {
+    expect(
+      gridKybIdentityDocumentRequiresSides({
+        documentType: "DRIVERS_LICENSE",
+        issuingCountry: "US",
+      }),
+    ).toEqual(["FRONT", "BACK"])
+    expect(
+      gridKybIdentityDocumentRequiresSides({
+        documentType: "PASSPORT",
+        issuingCountry: "US",
+      }),
+    ).toBeNull()
+    expect(
+      personKybIdentityDocumentsReady("p1", [
+        {
+          category: "identity",
+          personId: "p1",
+          documentType: "DRIVERS_LICENSE",
+          issuingCountry: "US",
+          issuingAuthority: "California DMV",
+          documentNumber: "D1234567",
+          side: "FRONT",
+        },
+      ]),
+    ).toBe(false)
+    expect(
+      personKybIdentityDocumentsReady("p1", [
+        {
+          category: "identity",
+          personId: "p1",
+          documentType: "DRIVERS_LICENSE",
+          issuingCountry: "US",
+          issuingAuthority: "California DMV",
+          documentNumber: "D1234567",
+          side: "FRONT",
+        },
+        {
+          category: "identity",
+          personId: "p1",
+          documentType: "DRIVERS_LICENSE",
+          issuingCountry: "US",
+          issuingAuthority: "California DMV",
+          documentNumber: "D1234567",
+          side: "BACK",
+        },
+      ]),
     ).toBe(true)
   })
 
