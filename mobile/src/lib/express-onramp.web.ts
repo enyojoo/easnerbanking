@@ -43,6 +43,14 @@ async function tryConfigureWebOnramp(
   }
 }
 
+/** Bind Link session to the SDK only after authenticate() — avoids controller.html 403 spam. */
+export async function configureExpressOnrampLinkSession(
+  client: ExpressOnrampSdk,
+  cryptoCustomerId?: string | null,
+): Promise<void> {
+  await tryConfigureWebOnramp(client as StripeClient, cryptoCustomerId)
+}
+
 /** Native sheets are presented by Stripe; web UI is observed via the parent overlay watcher. */
 export function subscribeExpressOnrampUi(_listener: (open: boolean) => void): () => void {
   return () => {}
@@ -123,17 +131,17 @@ export function prefetchMobileExpressOnramp(): void {
 
 export async function loadMobileExpressOnramp(
   publishableKey: string,
-  cryptoCustomerId?: string | null,
+  _cryptoCustomerId?: string | null,
 ): Promise<ExpressOnrampSdk> {
-  const customerKey = String(cryptoCustomerId || '').trim() || 'none'
-  const cacheKey = `${publishableKey}:${EXPRESS_ONRAMP_APPEARANCE_REV}:${customerKey}`
+  const cacheKey = `${publishableKey}:${EXPRESS_ONRAMP_APPEARANCE_REV}`
   if (cached && cachedFor === cacheKey) return cached
   if (inflight) return inflight
   inflight = (async () => {
     const loader = await ensureScript()
     const client = (await loader(publishableKey, expressOnrampWebInitOptions())) as StripeClient
     if (client.ready) await client.ready
-    await tryConfigureWebOnramp(client, cryptoCustomerId)
+    // Appearance only on load; bind cryptoCustomerId after Link authenticate().
+    await tryConfigureWebOnramp(client, null)
     cachedFor = cacheKey
     cached = bindClient(client)
     return cached

@@ -41,6 +41,7 @@ import { apiFetch } from '../../query/api-client'
 import { WEB_FLOW_MAX_WIDTH } from '../../components/layout/CenteredWebFlowPage'
 import {
   EXPRESS_NATIVE_AUTH_REQUIRED,
+  configureExpressOnrampLinkSession,
   loadMobileExpressOnramp,
   prefetchMobileExpressOnramp,
   type ExpressOnrampSdk,
@@ -155,6 +156,11 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
     email: form.email.trim() || userProfile?.email || userProfile?.profile?.email || undefined,
   })
 
+  const bindLinkSession = async (client: ExpressOnrampSdk, cryptoCustomerId: string) => {
+    if (Platform.OS !== 'web') return
+    await configureExpressOnrampLinkSession(client, cryptoCustomerId)
+  }
+
   const field = (
     key: string,
     label: string,
@@ -228,6 +234,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           const el = await client.authenticate(intentId, async (result) => {
             const outcome = String(result.result || '')
             if (outcome === 'success' && result.crypto_customer_id) {
+              await bindLinkSession(client, result.crypto_customer_id)
               await apiFetch('/api/stripe/onramp/link-complete', {
                 method: 'POST',
                 body: {
@@ -318,6 +325,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
                 const outcome = String(result.result || '')
                 if (outcome === 'success') {
                   if (result.crypto_customer_id) {
+                    await bindLinkSession(client, result.crypto_customer_id)
                     await apiFetch('/api/stripe/onramp/link-complete', {
                       method: 'POST',
                       body: {
@@ -348,6 +356,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           await client.authenticate(intentId, async (result) => {
             const outcome = String(result.result || '')
             if (outcome === 'success' && result.crypto_customer_id) {
+              await bindLinkSession(client, result.crypto_customer_id)
               await apiFetch('/api/stripe/onramp/link-complete', {
                 method: 'POST',
                 body: {

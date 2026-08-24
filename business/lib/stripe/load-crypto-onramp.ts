@@ -62,16 +62,23 @@ async function tryConfigureWebOnramp(
   }
 }
 
+/** Bind Link session to the SDK only after authenticate() — avoids controller.html 403 spam. */
+export async function configureExpressOnrampLinkSession(
+  client: CryptoOnrampClient,
+  cryptoCustomerId?: string | null,
+): Promise<void> {
+  await tryConfigureWebOnramp(client, cryptoCustomerId)
+}
+
 export function prefetchExpressOnramp(): void {
   void import("@stripe/crypto")
 }
 
 export async function loadExpressOnramp(
   publishableKey: string,
-  cryptoCustomerId?: string | null,
+  _cryptoCustomerId?: string | null,
 ): Promise<CryptoOnrampClient> {
-  const customerKey = String(cryptoCustomerId || "").trim() || "none"
-  const cacheKey = `${publishableKey}:${EXPRESS_ONRAMP_APPEARANCE_REV}:${customerKey}`
+  const cacheKey = `${publishableKey}:${EXPRESS_ONRAMP_APPEARANCE_REV}`
   if (cached && cachedFor === cacheKey) return cached
   if (inflight) return inflight
   inflight = (async () => {
@@ -82,7 +89,8 @@ export async function loadExpressOnramp(
     const loader = mod.loadCryptoOnrampAndInitialize || mod.loadStripeOnramp
     if (!loader) throw new Error("Express deposits is not available in this browser.")
     const client = await loader(publishableKey, expressOnrampWebInitOptions())
-    await tryConfigureWebOnramp(client, cryptoCustomerId)
+    // Appearance only on load; bind cryptoCustomerId after Link authenticate().
+    await tryConfigureWebOnramp(client, null)
     cachedFor = cacheKey
     cached = client
     return cached

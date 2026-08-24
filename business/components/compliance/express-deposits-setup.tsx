@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { Loader2 } from "lucide-react"
-import { loadExpressOnramp, prefetchExpressOnramp, type CryptoOnrampClient } from "@/lib/stripe/load-crypto-onramp"
+import { loadExpressOnramp, prefetchExpressOnramp, configureExpressOnrampLinkSession, type CryptoOnrampClient } from "@/lib/stripe/load-crypto-onramp"
 import {
   fetchBusinessExpressOnrampStatus,
   peekBusinessExpressOnrampStatus,
@@ -108,7 +108,9 @@ export function ExpressDepositsSetup({ onClose }: Props) {
   const persistLink = async (
     cryptoCustomerId: string,
     opts?: { accessToken?: string; authIntentId?: string },
+    client?: CryptoOnrampClient,
   ) => {
+    if (client) await configureExpressOnrampLinkSession(client, cryptoCustomerId)
     await fetchWithSession("/api/stripe/onramp/link-complete", {
       method: "POST",
       headers: { ...SCOPE, "Content-Type": "application/json" },
@@ -177,7 +179,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
               await persistLink(result.crypto_customer_id, {
                 accessToken: result.access_token || result.oauth_token,
                 authIntentId: intentId,
-              })
+              }, client)
             }
             setSlot(null)
             resolve(true)
@@ -221,7 +223,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
       await persistLink(result.crypto_customer_id, {
         accessToken: result.access_token || result.oauth_token,
         authIntentId: result.auth_intent_id,
-      })
+      }, sdk ?? undefined)
       closeHost(null)
       await refresh()
       return

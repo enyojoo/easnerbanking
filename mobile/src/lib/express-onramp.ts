@@ -206,6 +206,11 @@ export function adaptNativeOnramp(onramp: NativeOnramp): ExpressOnrampSdk {
   }
 }
 
+export async function configureExpressOnrampLinkSession(
+  _client: ExpressOnrampSdk,
+  _cryptoCustomerId?: string | null,
+): Promise<void> {}
+
 export async function loadMobileExpressOnramp(
   _publishableKey?: string,
   _cryptoCustomerId?: string | null,
