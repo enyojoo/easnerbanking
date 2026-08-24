@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type { ProcessingFeeDirection } from "@/lib/admin/processing-fee-schedule-service"
 import {
   resolveCryptoProcessingFeeBps,
+  resolveExpressDepositsProcessingFeeBps,
   resolveFiatProcessingFeeBps,
   type FiatProcessingFeeRail,
   type ProcessingFeeSubjectContext,
@@ -38,6 +39,16 @@ export async function quoteCryptoProcessingFeeBps(
   return resolveCryptoProcessingFeeBps(admin, {
     assetCode,
     direction,
+    userId: subject?.userId,
+    businessId: subject?.businessId,
+  })
+}
+
+export async function quoteExpressDepositsProcessingFeeBps(
+  admin: SupabaseClient,
+  subject?: ProcessingFeeSubjectContext,
+): Promise<number> {
+  return resolveExpressDepositsProcessingFeeBps(admin, {
     userId: subject?.userId,
     businessId: subject?.businessId,
   })

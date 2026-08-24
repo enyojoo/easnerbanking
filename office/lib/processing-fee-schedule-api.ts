@@ -1,6 +1,6 @@
 import { officeFetch } from "@/lib/api-client"
 
-export type ProcessingFeeScheduleScope = "fiat_bank" | "fiat_mobile_money" | "crypto"
+export type ProcessingFeeScheduleScope = "fiat_bank" | "fiat_mobile_money" | "crypto" | "express_deposits"
 
 export type ProcessingFeeScheduleRow = {
   id?: string

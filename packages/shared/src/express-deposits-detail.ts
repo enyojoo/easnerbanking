@@ -1,4 +1,5 @@
 import { expressDepositActivityLabel, isExpressDepositsMetadata } from "./express-deposits-copy"
+import type { ExpressDepositsPricingBreakdown } from "./express-deposits-pricing"
 import { BANK_DEPOSIT_COMPLETED_DESCRIPTION } from "./transactions/bank-deposit-lifecycle"
 
 export type ExpressDepositsReview = {
@@ -7,6 +8,11 @@ export type ExpressDepositsReview = {
   youPay: number
   youPayCurrency: string
   paymentMethod: string
+  processingFee?: number
+  processingFeeCurrency?: string
+  easnerProcessingFeeUsd?: number
+  stripeFees?: { transaction: number; network: number; total: number }
+  exchangeRate?: { from: string; to: string; rate: number }
 }
 
 function asRecord(raw: unknown): Record<string, unknown> {
@@ -16,6 +22,49 @@ function asRecord(raw: unknown): Record<string, unknown> {
 function positive(n: unknown): number | null {
   const v = Number(n)
   return Number.isFinite(v) && v > 0 ? v : null
+}
+
+function readExchangeRate(raw: unknown): ExpressDepositsReview["exchangeRate"] {
+  const row = asRecord(raw)
+  const from = String(row.from || "").trim().toUpperCase()
+  const to = String(row.to || "").trim().toUpperCase()
+  const rate = Number(row.rate)
+  if (!from || !to || !(rate > 0)) return undefined
+  return { from, to, rate }
+}
+
+function readStripeFees(raw: unknown): ExpressDepositsReview["stripeFees"] {
+  const row = asRecord(raw)
+  const transaction = Number(row.transaction)
+  const network = Number(row.network)
+  const total = Number(row.total)
+  if (!Number.isFinite(total) && !Number.isFinite(transaction)) return undefined
+  return {
+    transaction: Number.isFinite(transaction) ? transaction : 0,
+    network: Number.isFinite(network) ? network : 0,
+    total: Number.isFinite(total)
+      ? total
+      : (Number.isFinite(transaction) ? transaction : 0) + (Number.isFinite(network) ? network : 0),
+  }
+}
+
+export function buildExpressDepositsDepositReview(input: {
+  pricing: ExpressDepositsPricingBreakdown
+  paymentMethod: string
+}): Record<string, unknown> {
+  const { pricing, paymentMethod } = input
+  return {
+    you_get: pricing.usdCredit,
+    you_get_currency: "USD",
+    you_pay: pricing.totalToPay,
+    you_pay_currency: pricing.sourceCurrency,
+    processing_fee: pricing.displayProcessingFee,
+    processing_fee_currency: pricing.sourceCurrency,
+    easner_processing_fee_usd: pricing.easnerProcessingFeeUsd,
+    stripe_fees: pricing.stripeFees,
+    exchange_rate: pricing.exchangeRate,
+    payment_method: paymentMethod,
+  }
 }
 
 export function normalizeExpressDepositsReview(
@@ -31,12 +80,28 @@ export function normalizeExpressDepositsReview(
     positive(review.you_pay) ??
     youGet
   if (youGet == null || youPay == null) return null
+  const processingFee = positive(review.processing_fee)
+  const easnerProcessingFeeUsd = positive(review.easner_processing_fee_usd)
   return {
     youGet,
     youGetCurrency: String(review.you_get_currency || "USD").trim().toUpperCase() || "USD",
     youPay,
     youPayCurrency: String(review.you_pay_currency || "USD").trim().toUpperCase() || "USD",
     paymentMethod: String(review.payment_method || meta.payment_method || "").trim(),
+    ...(processingFee != null
+      ? {
+          processingFee,
+          processingFeeCurrency:
+            String(review.processing_fee_currency || review.you_pay_currency || "USD")
+              .trim()
+              .toUpperCase() || "USD",
+        }
+      : {}),
+    ...(easnerProcessingFeeUsd != null ? { easnerProcessingFeeUsd } : {}),
+    ...(readStripeFees(review.stripe_fees) ? { stripeFees: readStripeFees(review.stripe_fees) } : {}),
+    ...(readExchangeRate(review.exchange_rate)
+      ? { exchangeRate: readExchangeRate(review.exchange_rate) }
+      : {}),
   }
 }
 

@@ -17,6 +17,7 @@ export const EXPRESS_DEPOSITS_COPY = {
   geoUnavailable: "Express deposits is not available in your region.",
   ownerOnly: "Only the account owner can set up Express deposits.",
   globalBankingRequired: "Complete Global banking verification first.",
+  estimatedTotalToPay: "Estimated total to pay",
   youPay: "You pay",
   youGet: "You get",
   reviewTitle: "Review & pay",

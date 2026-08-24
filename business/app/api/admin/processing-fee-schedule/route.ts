@@ -10,7 +10,12 @@ import { clearProcessingFeeBpsCache } from "@/lib/processing-fee/resolve-process
 
 export const runtime = "nodejs"
 
-const SCOPES = new Set<ProcessingFeeScheduleScope>(["fiat_bank", "fiat_mobile_money", "crypto"])
+const SCOPES = new Set<ProcessingFeeScheduleScope>([
+  "fiat_bank",
+  "fiat_mobile_money",
+  "crypto",
+  "express_deposits",
+])
 
 function parseScope(raw: string | null): ProcessingFeeScheduleScope | null {
   const v = String(raw ?? "").trim() as ProcessingFeeScheduleScope
@@ -23,7 +28,7 @@ export async function GET(request: Request) {
 
   const scope = parseScope(new URL(request.url).searchParams.get("scope"))
   if (!scope) {
-    return NextResponse.json({ error: "scope required (fiat_bank|fiat_mobile_money|crypto)" }, { status: 400 })
+    return NextResponse.json({ error: "scope required (fiat_bank|fiat_mobile_money|crypto|express_deposits)" }, { status: 400 })
   }
 
   try {

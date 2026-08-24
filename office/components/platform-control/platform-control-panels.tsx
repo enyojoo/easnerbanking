@@ -1,6 +1,7 @@
 "use client"
 
 import { SettingsAdminPanel } from "@/components/settings/settings-admin-panel"
+import { ExpressDepositsFeeAdminPanel } from "@/components/platform-control/express-deposits-fee-admin-panel"
 import { PayoutCorridorsAdminPanel } from "@/components/platform-control/payout-corridors-admin-panel"
 import { CryptoDestinationsAdminPanel } from "@/components/platform-control/crypto-destinations-admin-panel"
 import { OfficeNoahRatesPanel } from "@/components/settings/office-noah-rates-panel"
@@ -10,7 +11,12 @@ import { OfficeCryptoRatesPanel } from "@/components/settings/office-crypto-rate
 import { EventInboxPanel } from "@/components/platform-control/event-inbox-panel"
 
 export function PlatformConfigPanel() {
-  return <SettingsAdminPanel section="platform" />
+  return (
+    <div className="space-y-6">
+      <SettingsAdminPanel section="platform" />
+      <ExpressDepositsFeeAdminPanel />
+    </div>
+  )
 }
 
 export function FiatPanel() {

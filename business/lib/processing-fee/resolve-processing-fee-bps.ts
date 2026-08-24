@@ -231,6 +231,41 @@ async function resolveScheduleCryptoBps(
   return bps
 }
 
+export type ResolveExpressDepositsProcessingFeeInput = ProcessingFeeSubjectContext
+
+async function resolveScheduleExpressDepositsBps(admin: SupabaseClient): Promise<number> {
+  const key = cacheKey(["schedule", "express_deposits", "pay_in"])
+  const cached = readScheduleCache(key)
+  if (cached != null) return cached
+
+  const { data, error } = await admin
+    .from("processing_fee_schedule")
+    .select("pay_in_bps,pay_out_bps,cross_border_bps")
+    .eq("scope", "express_deposits")
+    .maybeSingle()
+
+  if (error) throw error
+
+  if (!data) {
+    writeScheduleCache(key, 0)
+    return 0
+  }
+
+  const n = Number((data as Record<string, unknown>).pay_in_bps)
+  const bps = Number.isFinite(n) && n >= 0 ? Math.round(n) : 0
+  writeScheduleCache(key, bps)
+  return bps
+}
+
+export async function resolveExpressDepositsProcessingFeeBps(
+  admin: SupabaseClient,
+  input: ResolveExpressDepositsProcessingFeeInput,
+): Promise<number> {
+  const subjectBps = await resolveSubjectOverrideBps(admin, input, "pay_in")
+  if (subjectBps != null) return subjectBps
+  return resolveScheduleExpressDepositsBps(admin)
+}
+
 export function clearProcessingFeeBpsCache(): void {
   scheduleCache.clear()
   overrideCache.clear()

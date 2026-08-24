@@ -6,6 +6,13 @@ import {
   getStripeOnrampBetaVersion,
 } from "./onramp-config"
 
+/**
+ * Express deposits buyer-pays surcharge: session create uses destination_amount = usdCredit.
+ * When Easner pay-in bps > 0, expressDepositsSessionCreateParams may add source_amount = totalToPay
+ * (Stripe total + Easner leg). destination-only sessions still credit full usdCredit; Easner bps
+ * defaults to 0 at launch until Stripe confirms stacked markup in sandbox.
+ */
+
 export class StripeOnrampApiError extends Error {
   readonly status: number
   readonly code: string | null

@@ -486,9 +486,24 @@ export {
 export {
   EXPRESS_DEPOSITS_PROCESSING_DESCRIPTION,
   buildExpressDepositsLifecycle,
+  buildExpressDepositsDepositReview,
   normalizeExpressDepositsReview,
 } from "./express-deposits-detail"
 export type { ExpressDepositsLifecycleStep, ExpressDepositsReview } from "./express-deposits-detail"
+export {
+  buildExpressDepositsPricing,
+  buildExpressDepositsReviewRows,
+  expressDepositsQuoteIsStale,
+  expressDepositsSessionCreateParams,
+  parseExpressStripeQuoteFees,
+  pickExpressSolanaUsdcQuote,
+} from "./express-deposits-pricing"
+export type {
+  ExpressDepositsPricingBreakdown,
+  ExpressDepositsReviewRow,
+  ExpressDepositsStripeQuoteFees,
+  ExpressSolanaUsdcQuote,
+} from "./express-deposits-pricing"
 export {
   EXPRESS_DEPOSITS_EU_MAX_YOU_PAY_EUR,
   EXPRESS_DEPOSITS_EU_TRAVEL_RULE_EUR,

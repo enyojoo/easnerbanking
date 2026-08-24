@@ -4,7 +4,7 @@ import { annotateAdminCorridorsWithProviderHealth } from "@/lib/admin/annotate-p
 import { corridorHasRailCapability } from "@/lib/admin/corridor-rail-capability"
 import { isExcludedPayoutCorridorCountry } from "@/lib/payout-corridors-exclusions"
 
-export type ProcessingFeeScheduleScope = "fiat_bank" | "fiat_mobile_money" | "crypto"
+export type ProcessingFeeScheduleScope = "fiat_bank" | "fiat_mobile_money" | "crypto" | "express_deposits"
 
 export type ProcessingFeeDirection = "pay_in" | "pay_out" | "cross_border"
 
@@ -140,6 +140,8 @@ export async function listProcessingFeeScheduleAdmin(
     if (scope === "crypto") {
       const asset = String(r.asset_code ?? "").trim().toUpperCase()
       if (asset) byKey.set(asset, r)
+    } else if (scope === "express_deposits") {
+      byKey.set("express_deposits", r)
     } else {
       const cc = String(r.country_code ?? "").trim().toUpperCase()
       const cur = String(r.currency_code ?? "").trim().toUpperCase()
@@ -164,6 +166,23 @@ export async function listProcessingFeeScheduleAdmin(
         updated_at: existing?.updated_at ? String(existing.updated_at) : undefined,
       }
     })
+  }
+
+  if (scope === "express_deposits") {
+    const existing = byKey.get("express_deposits")
+    return [
+      {
+        id: existing?.id ? String(existing.id) : undefined,
+        scope,
+        country_code: null,
+        currency_code: null,
+        asset_code: null,
+        pay_in_bps: normalizeBps(existing?.pay_in_bps ?? 0),
+        pay_out_bps: normalizeBps(existing?.pay_out_bps ?? 0),
+        cross_border_bps: normalizeBps(existing?.cross_border_bps ?? 0),
+        updated_at: existing?.updated_at ? String(existing.updated_at) : undefined,
+      },
+    ]
   }
 
   const catalog = await listFiatCatalog(admin, scope)
@@ -210,6 +229,20 @@ export async function upsertProcessingFeeScheduleAdmin(
       }
     }
 
+    if (scope === "express_deposits") {
+      return {
+        scope,
+        country_code: null,
+        currency_code: null,
+        asset_code: null,
+        pay_in_bps: normalizeBps(row.pay_in_bps),
+        pay_out_bps: normalizeBps(row.pay_out_bps ?? 0),
+        cross_border_bps: normalizeBps(row.cross_border_bps ?? 0),
+        updated_by: updatedBy,
+        updated_at: now,
+      }
+    }
+
     const cc = String(row.country_code ?? "").trim().toUpperCase()
     const cur = String(row.currency_code ?? "").trim().toUpperCase()
     if (!cc || !cur) throw new Error("country_code and currency_code required for fiat scope")
@@ -230,7 +263,10 @@ export async function upsertProcessingFeeScheduleAdmin(
   if (payload.length === 0) return
 
   const cryptoRows = payload.filter((row) => row.scope === "crypto")
-  const fiatRows = payload.filter((row) => row.scope !== "crypto")
+  const expressRows = payload.filter((row) => row.scope === "express_deposits")
+  const fiatRows = payload.filter(
+    (row) => row.scope !== "crypto" && row.scope !== "express_deposits",
+  )
 
   if (fiatRows.length > 0) {
     const { error } = await admin
@@ -244,5 +280,24 @@ export async function upsertProcessingFeeScheduleAdmin(
       .from("processing_fee_schedule")
       .upsert(cryptoRows, { onConflict: "scope,asset_code" })
     if (error) throw error
+  }
+
+  if (expressRows.length > 0) {
+    const { data: existing } = await admin
+      .from("processing_fee_schedule")
+      .select("id")
+      .eq("scope", "express_deposits")
+      .maybeSingle()
+    const row = expressRows[0]
+    if (existing?.id) {
+      const { error } = await admin
+        .from("processing_fee_schedule")
+        .update(row)
+        .eq("id", existing.id)
+      if (error) throw error
+    } else {
+      const { error } = await admin.from("processing_fee_schedule").insert(row)
+      if (error) throw error
+    }
   }
 }

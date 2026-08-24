@@ -55,6 +55,7 @@ export async function insertPendingOnrampSession(
     sourceCurrency?: string | null
     paymentMethod: string
     walletAddress: string
+    depositReview?: Record<string, unknown> | null
   },
 ): Promise<string | null> {
   const now = new Date().toISOString()
@@ -92,7 +93,7 @@ export async function insertPendingOnrampSession(
         flow: "express_deposits",
         source_type: "express_deposits",
         processing_at: now,
-        deposit_review: {
+        deposit_review: input.depositReview ?? {
           you_get: input.usdCredit,
           you_get_currency: "USD",
           you_pay: input.sourceAmount ?? input.usdCredit,

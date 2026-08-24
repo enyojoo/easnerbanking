@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server"
-import { expressDepositsSourceCurrency, validateExpressDepositsAmount } from "@easner/shared"
+import {
+  buildExpressDepositsDepositReview,
+  expressDepositsSessionCreateParams,
+  expressDepositsSourceCurrency,
+  validateExpressDepositsAmount,
+} from "@easner/shared"
 import { StripeOnrampApiError, stripeOnramp } from "@/lib/stripe/onramp-client"
 import { resolveExpressDepositsContext } from "@/lib/stripe/onramp-context"
 import { getTurnkeyDepositAddressesForBusiness, getTurnkeyDepositAddressesForContext } from "@/lib/wallet/turnkey-deposit-addresses"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { insertPendingOnrampSession } from "@/lib/stripe/onramp-ledger"
+import { quoteExpressDepositsPricing } from "@/lib/stripe/express-deposits-pricing-server"
 
 export const runtime = "nodejs"
 
@@ -27,15 +33,6 @@ export async function POST(request: Request) {
   const paymentMethod = String(body.paymentMethod ?? "card")
   const paymentToken = String(body.paymentTokenId ?? resolved.ctx.payer.stripe_express_payment_token_id ?? "")
   const sourceCurrency = expressDepositsSourceCurrency(resolved.ctx.payerCountry) ?? "usd"
-  const sourceAmount = Number(body.sourceAmount ?? body.youPay ?? 0)
-  const limit = validateExpressDepositsAmount({
-    usdCredit,
-    youPay: sourceAmount > 0 ? sourceAmount : null,
-    sourceCurrency,
-  })
-  if (!limit.ok) {
-    return NextResponse.json({ error: limit.message, code: limit.code }, { status: 400 })
-  }
 
   try {
     const accountCtx = await resolveNoahAccountContext(request, resolved.ctx.actorUserId)
@@ -50,28 +47,59 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Wallet is still provisioning. Try again shortly." }, { status: 409 })
     }
 
-    const session = await stripeOnramp.createSession(
-      {
-        crypto_customer_id: customerId,
-        destination_currency: "usdc",
-        destination_network: "solana",
-        destination_networks: ["solana"],
-        destination_amount: usdCredit > 0 ? String(usdCredit) : undefined,
-        source_currency: sourceCurrency,
-        wallet_address: wallet,
-        lock_wallet_address: true,
-        payment_method:
-          paymentMethod === "ach"
-            ? "ach"
-            : paymentMethod === "apple_pay"
-              ? "apple_pay"
-              : paymentMethod === "google_pay"
-                ? "google_pay"
-                : "card",
-        payment_token: paymentToken || undefined,
-      },
-      resolved.ctx.oauthToken || undefined,
-    )
+    const quoted = await quoteExpressDepositsPricing({
+      admin: resolved.ctx.admin,
+      usdCredit,
+      sourceCurrency,
+      paymentMethod,
+      walletAddress: wallet,
+      oauthToken: resolved.ctx.oauthToken,
+      userId: resolved.ctx.payerUserId,
+      businessId: resolved.ctx.businessId,
+    })
+    if (!quoted) {
+      return NextResponse.json({ error: "Quote unavailable", code: "quote_unavailable" }, { status: 400 })
+    }
+
+    const limit = validateExpressDepositsAmount({
+      usdCredit,
+      youPay: quoted.pricing.totalToPay,
+      sourceCurrency,
+    })
+    if (!limit.ok) {
+      return NextResponse.json({ error: limit.message, code: limit.code }, { status: 400 })
+    }
+
+    const depositReview = buildExpressDepositsDepositReview({
+      pricing: quoted.pricing,
+      paymentMethod,
+    })
+
+    const baseSessionParams = {
+      crypto_customer_id: customerId,
+      destination_currency: "usdc",
+      destination_network: "solana",
+      destination_networks: ["solana"],
+      source_currency: sourceCurrency,
+      wallet_address: wallet,
+      lock_wallet_address: true,
+      payment_method:
+        paymentMethod === "ach"
+          ? "ach"
+          : paymentMethod === "apple_pay"
+            ? "apple_pay"
+            : paymentMethod === "google_pay"
+              ? "google_pay"
+              : "card",
+      payment_token: paymentToken || undefined,
+    }
+
+    const sessionParams = expressDepositsSessionCreateParams({
+      pricing: quoted.pricing,
+      baseParams: baseSessionParams,
+    })
+
+    const session = await stripeOnramp.createSession(sessionParams, resolved.ctx.oauthToken || undefined)
     const stripeSessionId = String((session as { id?: string }).id || "")
     let easnerTransactionId: string | null = null
     if (stripeSessionId) {
@@ -81,13 +109,20 @@ export async function POST(request: Request) {
         stripeSessionId,
         cryptoCustomerId: customerId,
         usdCredit: usdCredit > 0 ? usdCredit : null,
-        sourceAmount: sourceAmount > 0 ? sourceAmount : null,
+        sourceAmount: quoted.pricing.totalToPay,
         sourceCurrency,
         paymentMethod,
         walletAddress: wallet,
+        depositReview,
       })
     }
-    return NextResponse.json({ session, walletAddress: wallet, sourceCurrency, easnerTransactionId })
+    return NextResponse.json({
+      session,
+      walletAddress: wallet,
+      sourceCurrency: sourceCurrency.toUpperCase(),
+      easnerTransactionId,
+      pricing: quoted.pricing,
+    })
   } catch (e) {
     return mapError(e)
   }

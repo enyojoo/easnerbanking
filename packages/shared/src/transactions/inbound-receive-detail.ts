@@ -354,6 +354,13 @@ export function resolveInboundReceiveDetail(
     const getCurrency = review?.youGetCurrency ?? "USD"
     const scheme = expressDepositActivityLabel(review?.paymentMethod ?? String(meta.payment_method ?? ""))
     const crossCurrency = payCurrency !== getCurrency && paid > 0 && credited > 0
+    const exchangeRate =
+      review?.exchangeRate ??
+      (crossCurrency ? { from: getCurrency, to: payCurrency, rate: paid / credited } : undefined)
+    const processingFee =
+      review?.processingFee != null && review.processingFeeCurrency
+        ? { amount: review.processingFee, currency: review.processingFeeCurrency }
+        : undefined
     return {
       kind,
       displayTitle: scheme,
@@ -364,9 +371,8 @@ export function resolveInboundReceiveDetail(
       creditDestination: resolveCreditDestination(getCurrency, kind),
       scheme,
       amountPaid: { amount: paid, currency: payCurrency },
-      ...(crossCurrency
-        ? { exchangeRate: { from: getCurrency, to: payCurrency, rate: paid / credited } }
-        : {}),
+      ...(processingFee ? { processingFee } : {}),
+      ...(exchangeRate && exchangeRate.rate > 0 ? { exchangeRate } : {}),
       ...(note ? { note } : {}),
     }
   }
@@ -734,6 +740,18 @@ export function buildInboundReceiveDetailRows(
           ),
         )
       }
+      if (snapshot.processingFee && isPayoutReviewFeeVisible(snapshot.processingFee.amount)) {
+        pushIf(
+          rows,
+          REVIEW_ROW_LABELS.processingFee,
+          formatReviewRowMoneyDisplay(
+            REVIEW_ROW_LABELS.processingFee,
+            snapshot.processingFee.amount,
+            snapshot.processingFee.currency,
+          ),
+        )
+      }
+      pushAmountCreditedIfNeeded(rows, snapshot)
       if (snapshot.amountPaid) {
         pushIf(
           rows,
@@ -745,7 +763,6 @@ export function buildInboundReceiveDetailRows(
           ),
         )
       }
-      pushAmountCreditedIfNeeded(rows, snapshot)
       pushCreditDestination(rows, snapshot.creditDestination)
       break
     }

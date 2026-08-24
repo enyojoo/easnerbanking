@@ -5,9 +5,12 @@ import { useRouter } from "next/navigation"
 import {
   EXPRESS_DEPOSITS_COPY,
   expressDepositMethodTitle,
+  expressDepositsQuoteIsStale,
   formatMoneyDisplay,
+  formatSendRateLabel,
   useExpressDepositsAmountLimits,
   validateExpressDepositsAmount,
+  type ExpressDepositsPricingBreakdown,
 } from "@easner/shared"
 import { Button } from "@/components/ui/button"
 import { MoveAmountStep } from "@/components/accounts/move-amount-step"
@@ -17,6 +20,7 @@ import { loadExpressOnramp } from "@/lib/stripe/load-crypto-onramp"
 import { ExpressDepositsStripeSlot } from "@/components/compliance/express-deposits-stripe-slot"
 import { mapStripeOnrampError } from "@/lib/stripe/onramp-sdk-map"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
+import { ExpressDepositsReviewSection } from "@/components/accounts/express-deposits-review-section"
 
 const SCOPE = { "X-Easner-Account-Scope": "business" } as const
 
@@ -44,7 +48,7 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
   const router = useRouter()
   const [step, setStep] = useState<Step>("amount")
   const [amountStr, setAmountStr] = useState("")
-  const [youPay, setYouPay] = useState<number | null>(null)
+  const [pricing, setPricing] = useState<ExpressDepositsPricingBreakdown | null>(null)
   const [sourceCurrency, setSourceCurrency] = useState("USD")
   const [quoteError, setQuoteError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -57,6 +61,7 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
   const [slot, setSlot] = useState<HTMLElement | null>(null)
 
   const usdCredit = Number.parseFloat(amountStr.replace(/,/g, "")) || 0
+  const youPay = pricing?.totalToPay ?? null
   const amountLimit = validateExpressDepositsAmount({
     usdCredit,
     youPay,
@@ -74,6 +79,35 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
       setAmountStr(rounded.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
     },
   })
+
+  const fetchQuote = useCallback(async (): Promise<ExpressDepositsPricingBreakdown | null> => {
+    const res = await fetchWithSession("/api/stripe/onramp/quote", {
+      method: "POST",
+      headers: { ...SCOPE, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        usdCredit,
+        paymentMethod: paymentMethodParam(method),
+      }),
+    })
+    const data = (await res.json().catch(() => ({}))) as {
+      pricing?: ExpressDepositsPricingBreakdown
+      sourceCurrency?: string
+      error?: string
+    }
+    if (!res.ok) {
+      setQuoteError(data.error || "Quote unavailable")
+      setPricing(null)
+      return null
+    }
+    setQuoteError(null)
+    if (data.sourceCurrency) setSourceCurrency(data.sourceCurrency.toUpperCase())
+    if (data.pricing) {
+      setPricing(data.pricing)
+      return data.pricing
+    }
+    setPricing(null)
+    return null
+  }, [method, usdCredit])
 
   useEffect(() => {
     let cancelled = false
@@ -103,48 +137,22 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
   }, [])
 
   useEffect(() => {
-    if (!(usdCredit > 0) || ready === false || !amountLimit.ok) return
+    if (!(usdCredit > 0) || ready === false || !amountLimit.ok) {
+      setPricing(null)
+      return
+    }
     let cancelled = false
     const t = setTimeout(() => {
       void (async () => {
-        setQuoteError(null)
-        const res = await fetchWithSession("/api/stripe/onramp/quote", {
-          method: "POST",
-          headers: { ...SCOPE, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            usdCredit,
-            paymentMethod: paymentMethodParam(method),
-          }),
-        })
-        const data = (await res.json().catch(() => ({}))) as {
-          source_amount?: string
-          source_total_amount?: string
-          sourceCurrency?: string
-          quotes?: Array<{ source_amount?: string; source_total_amount?: string }>
-          error?: string
-        }
+        await fetchQuote()
         if (cancelled) return
-        if (!res.ok) {
-          setQuoteError(data.error || "Quote unavailable")
-          setYouPay(null)
-          return
-        }
-        if (data.sourceCurrency) setSourceCurrency(data.sourceCurrency.toUpperCase())
-        const pay = Number(
-          data.source_total_amount ??
-            data.source_amount ??
-            data.quotes?.[0]?.source_total_amount ??
-            data.quotes?.[0]?.source_amount ??
-            usdCredit,
-        )
-        setYouPay(Number.isFinite(pay) && pay > 0 ? pay : usdCredit)
       })()
     }, 400)
     return () => {
       cancelled = true
       clearTimeout(t)
     }
-  }, [amountLimit.ok, usdCredit, method, ready])
+  }, [amountLimit.ok, fetchQuote, ready, usdCredit])
 
   const collectMethod = useCallback(async () => {
     if (!publishableKey) {
@@ -155,10 +163,7 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
     setConfirmError(null)
     try {
       const sdk = await loadExpressOnramp(publishableKey, cryptoCustomerId)
-      const types =
-        method === "express_ach"
-          ? ["us_bank_account"]
-          : ["card"]
+      const types = method === "express_ach" ? ["us_bank_account"] : ["card"]
       const el = await sdk.collectPaymentMethod(
         {
           payment_method_types: types,
@@ -202,6 +207,10 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
       setConfirmError(amountLimit.message)
       return
     }
+    if (!pricing) {
+      setConfirmError(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
+      return
+    }
     if (!paymentTokenId && method !== "express_apple_pay" && method !== "express_google_pay") {
       await collectMethod()
       return
@@ -211,20 +220,32 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
       return
     }
     setStep("review")
-  }, [amountLimit, collectMethod, method, onNeedSetup, paymentTokenId, ready, usdCredit])
+  }, [amountLimit, collectMethod, method, onNeedSetup, paymentTokenId, pricing, ready, usdCredit])
+
+  const ensureFreshPricing = useCallback(async (): Promise<ExpressDepositsPricingBreakdown> => {
+    if (pricing && !expressDepositsQuoteIsStale(pricing.rateFetchedAt)) return pricing
+    const next = await fetchQuote()
+    if (!next) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
+    const limit = validateExpressDepositsAmount({
+      usdCredit,
+      youPay: next.totalToPay,
+      sourceCurrency: next.sourceCurrency,
+    })
+    if (!limit.ok) throw new Error(limit.message)
+    return next
+  }, [fetchQuote, pricing, usdCredit])
 
   const handlePay = useCallback(async () => {
     setConfirmError(null)
     setLoading(true)
     try {
-      if (!amountLimit.ok) throw new Error(amountLimit.message)
+      await ensureFreshPricing()
       if (!publishableKey) throw new Error(EXPRESS_DEPOSITS_COPY.setupRequiredHint)
       const created = await fetchWithSession("/api/stripe/onramp/sessions", {
         method: "POST",
         headers: { ...SCOPE, "Content-Type": "application/json" },
         body: JSON.stringify({
           usdCredit,
-          sourceAmount: youPay,
           paymentMethod: paymentMethodParam(method),
           paymentTokenId,
         }),
@@ -284,7 +305,32 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
     } finally {
       setLoading(false)
     }
-  }, [amountLimit, cryptoCustomerId, method, onNeedSetup, paymentTokenId, publishableKey, router, usdCredit, youPay])
+  }, [
+    amountLimit,
+    cryptoCustomerId,
+    ensureFreshPricing,
+    method,
+    onNeedSetup,
+    paymentTokenId,
+    publishableKey,
+    router,
+    usdCredit,
+  ])
+
+  const inboundPreview = pricing
+    ? [
+        pricing.exchangeRate && pricing.exchangeRate.rate > 0
+          ? formatSendRateLabel(
+              pricing.exchangeRate.from,
+              pricing.exchangeRate.to,
+              pricing.exchangeRate.rate,
+            )
+          : null,
+        `${EXPRESS_DEPOSITS_COPY.estimatedTotalToPay}: ${formatMoneyDisplay(pricing.totalToPay, pricing.sourceCurrency)}`,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : null
 
   if (step === "amount") {
     return (
@@ -304,16 +350,12 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
           quoteLoading={false}
           quoteError={quoteError}
           onContinue={() => void handleContinue()}
-          continueDisabled={!(usdCredit > 0) || ready === false || Boolean(amountLimitError)}
+          continueDisabled={!(usdCredit > 0) || ready === false || Boolean(amountLimitError) || !pricing}
           inboundSourceCurrency="USD"
           inboundDestCurrency="USD"
           sourceTitle={expressDepositMethodTitle(method)}
           destTitle="USD Balance"
-          inboundReceivePreview={
-            youPay && youPay > 0
-              ? `${EXPRESS_DEPOSITS_COPY.youPay}: ${formatMoneyDisplay(youPay, sourceCurrency)}`
-              : null
-          }
+          inboundReceivePreview={inboundPreview}
         />
         {ready === false ? (
           <p className="text-sm text-muted-foreground">{EXPRESS_DEPOSITS_COPY.setupRequiredHint}</p>
@@ -336,27 +378,12 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
     )
   }
 
-  if (step === "complete") {
+  if (step === "complete" && pricing) {
     return (
       <div className="space-y-4">
         <h3 className="text-base font-semibold">{EXPRESS_DEPOSITS_COPY.completeTitle}</h3>
-        <div className="rounded-lg border border-border p-4 space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">{EXPRESS_DEPOSITS_COPY.youGet}</span>
-            <span>{formatMoneyDisplay(usdCredit, "USD")}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">{EXPRESS_DEPOSITS_COPY.youPay}</span>
-            <span>{formatMoneyDisplay(youPay ?? usdCredit, sourceCurrency)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Method</span>
-            <span>
-              {expressDepositMethodTitle(method)}
-              {last4 ? ` ···· ${last4}` : ""}
-            </span>
-          </div>
-        </div>
+        <ExpressDepositsReviewSection pricing={pricing} method={method} />
+        {last4 ? <p className="text-sm text-muted-foreground">···· {last4}</p> : null}
         <Button className="w-full" onClick={onBack}>
           Done
         </Button>
@@ -370,22 +397,9 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
         Back
       </Button>
       <h3 className="text-base font-semibold">{EXPRESS_DEPOSITS_COPY.reviewTitle}</h3>
-      <div className="rounded-lg border border-border p-4 space-y-2 text-sm">
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">{EXPRESS_DEPOSITS_COPY.youGet}</span>
-          <span>{formatMoneyDisplay(usdCredit, "USD")}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">{EXPRESS_DEPOSITS_COPY.youPay}</span>
-          <span>{formatMoneyDisplay(youPay ?? usdCredit, sourceCurrency)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Method</span>
-          <span>{expressDepositMethodTitle(method)}</span>
-        </div>
-      </div>
+      {pricing ? <ExpressDepositsReviewSection pricing={pricing} method={method} /> : null}
       {confirmError ? <p className="text-sm text-destructive">{confirmError}</p> : null}
-      <Button className="w-full" size="lg" disabled={loading} onClick={() => void handlePay()}>
+      <Button className="w-full" size="lg" disabled={loading || !pricing} onClick={() => void handlePay()}>
         {loading ? "Processing…" : EXPRESS_DEPOSITS_COPY.payCta}
       </Button>
     </div>

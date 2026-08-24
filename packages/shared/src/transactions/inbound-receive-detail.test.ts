@@ -503,11 +503,20 @@ describe("Express deposits inbound receive", () => {
     },
   }
 
-  it("shows you pay, you get, credit destination, and method", () => {
+  it("shows you pay, you get, credit destination, method, and processing fee", () => {
+    const withFee = {
+      ...euMeta,
+      deposit_review: {
+        ...euMeta.deposit_review,
+        processing_fee: 2.5,
+        processing_fee_currency: "EUR",
+        stripe_fees: { transaction: 2, network: 0.5, total: 2.5 },
+      },
+    }
     const snapshot = resolveInboundReceiveDetail({
       direction: "in",
       provider: "stripe",
-      metadata: euMeta,
+      metadata: withFee,
       amount: 50,
       currency: "USD",
       ledger_created_at: "2026-01-15T12:00:00.000Z",
@@ -516,13 +525,16 @@ describe("Express deposits inbound receive", () => {
     expect(snapshot?.displayTitle).toBe("Card deposit")
     expect(snapshot?.amountPaid).toEqual({ amount: 46.2, currency: "EUR" })
     expect(snapshot?.amountCredited).toEqual({ amount: 50, currency: "USD" })
+    expect(snapshot?.processingFee).toEqual({ amount: 2.5, currency: "EUR" })
     const map = rowMap(buildInboundReceiveDetailRows(snapshot!, { surface: "detail" }))
+    expect(map[REVIEW_ROW_LABELS.processingFee]).toBe("€2.50")
     expect(map[REVIEW_ROW_LABELS.amountPaid]).toBe("€46.20")
     expect(map[REVIEW_ROW_LABELS.amountCredited]).toBe("+$50")
     expect(map[REVIEW_ROW_LABELS.creditTo]).toBe("USD Balance")
     expect(map[REVIEW_ROW_LABELS.depositMethod]).toBe("Card deposit")
     expect(map[REVIEW_ROW_LABELS.exchangeRate]).toBeTruthy()
     const email = rowMap(buildInboundReceiveEmailDetailRows(snapshot!))
+    expect(email[REVIEW_ROW_LABELS.processingFee]).toBe("€2.50")
     expect(email[REVIEW_ROW_LABELS.amountCredited]).toBe("+$50")
     expect(resolveInboundReceiveNotification(snapshot!).successBody).toBe(
       "You've received $50 via Card deposit",
