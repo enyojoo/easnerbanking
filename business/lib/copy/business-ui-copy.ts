@@ -614,6 +614,10 @@ export const VERIFICATION_SECTION_COPY = {
   accountsProvisioning:
     "Setting up your accounts and deposit details. This usually completes within a few minutes.",
   verificationOnHold:
-    "We need a bit more information. Continue verification to review what’s needed and update it.",
+    "We need a bit more information. Click the button below to review what’s needed and update it.",
+  reviewAndFixCta: "Review and fix",
+  continueVerificationCta: "Continue verification",
+  beginVerificationCta: "Begin verification",
+  retryVerificationCta: "Retry verification",
   onlinePaymentsTier1Required: "Complete Global banking verification first.",
 } as const

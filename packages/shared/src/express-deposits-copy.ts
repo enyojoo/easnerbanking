@@ -34,9 +34,6 @@ export const EXPRESS_DEPOSITS_COPY = {
   identifierHint: "Enter the ID number we requested.",
   travelRuleBlock: "Additional confirmation is required for this amount. Try a smaller amount or finish verification.",
   somethingWentWrong: "Something went wrong. Try again.",
-  /** Shown on the verification hub Express card while setup is still required. */
-  verificationFootnote:
-    "Separate from Global banking. Required before card and wallet deposits.",
   nativeTrustedInstallIos:
     "This install can’t verify this device. Install the latest TestFlight or App Store build and try again.",
   nativeTrustedInstallAndroid:

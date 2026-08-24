@@ -276,13 +276,11 @@ export function BusinessVerificationSection({
     tier1CanResubmit &&
     (!tier1OnHold || tier1CanResubmit)
   const tier1HostedCtaLabel =
-    tier1Rejected
-      ? "Retry verification"
-      : tier1OnHold
-        ? "Continue verification"
-        : tier1InProgress || tier1StartedNotSubmitted
-          ? "Continue verification"
-          : "Begin verification"
+    tier1Rejected || tier1OnHold
+      ? VERIFICATION_SECTION_COPY.reviewAndFixCta
+      : tier1InProgress || tier1StartedNotSubmitted
+        ? VERIFICATION_SECTION_COPY.continueVerificationCta
+        : VERIFICATION_SECTION_COPY.beginVerificationCta
 
   /** Full-page flow fills remaining main; in-tab fallback keeps title/tabs chrome. */
   const verificationFlowPanelClass = hostedFlowActive || expressFlowActive
@@ -492,11 +490,6 @@ export function BusinessVerificationSection({
                       <CardDescription className="text-sm">
                         {EXPRESS_DEPOSITS_COPY.description}
                       </CardDescription>
-                      {!expressReady ? (
-                        <p className="text-xs text-muted-foreground pt-1">
-                          {EXPRESS_DEPOSITS_COPY.verificationFootnote}
-                        </p>
-                      ) : null}
                     </CardHeader>
                     {!expressReady ? (
                       <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">

@@ -944,11 +944,6 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                         <Text style={styles.cardDescription}>
                           {EXPRESS_DEPOSITS_COPY.description}
                         </Text>
-                        {!expressReady ? (
-                          <Text style={styles.cardFootnote}>
-                            {EXPRESS_DEPOSITS_COPY.verificationFootnote}
-                          </Text>
-                        ) : null}
                       </View>
                       <View style={styles.cardRight}>{getStatusBadge(expressStatus)}</View>
                     </View>
@@ -1184,16 +1179,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     ...Platform.select({
       android: { lineHeight: 22, includeFontPadding: false },
-      default: {},
-    }),
-  },
-  cardFootnote: {
-    ...textStyles.caption,
-    color: colors.text.tertiary,
-    marginTop: spacing[1],
-    lineHeight: 18,
-    ...Platform.select({
-      android: { includeFontPadding: false },
       default: {},
     }),
   },
