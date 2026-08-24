@@ -64,9 +64,30 @@ export interface VerificationEmailData {
   firstName?: string
   email: string
   status: "submitted" | "approved" | "rejected" | "action_needed"
+  /** Org display name – KYB merchant emails use org-centric copy when set. */
+  businessName?: string
   rejectionReasons?: string[]
   dashboardUrl?: string
   audience?: EmailAudience
+}
+
+/** Internal KYB lifecycle alert for Easner compliance / ops. */
+export interface KybOpsEmailData {
+  businessId: string
+  businessName: string
+  status: VerificationEmailData["status"]
+  rejectionReasons?: string[]
+  officeUrl?: string
+}
+
+/** Internal personal KYC lifecycle alert for Easner compliance / ops. */
+export interface KycOpsEmailData {
+  userId: string
+  userEmail: string
+  userDisplayName?: string
+  status: VerificationEmailData["status"]
+  rejectionReasons?: string[]
+  officeUrl?: string
 }
 
 /** Business online payments (invoice card payments) lifecycle emails. */

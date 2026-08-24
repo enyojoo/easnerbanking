@@ -114,8 +114,25 @@ export const kybApprovedFixture: VerificationEmailData = {
   firstName: "Alex",
   email: "alex@example.com",
   status: "approved",
+  businessName: "Acme Ltd",
   dashboardUrl: "https://business.easner.com/dashboard",
   audience: "business",
+}
+
+export const kybOpsNotificationFixture = {
+  businessId: "biz-123",
+  businessName: "Acme Ltd",
+  status: "action_needed" as const,
+  rejectionReasons: ["Upload a clearer certificate of incorporation."],
+  officeUrl: "https://bk.easner.com/businesses?highlight=biz-123",
+}
+
+export const kycOpsNotificationFixture = {
+  userId: "user-456",
+  userEmail: "sam@example.com",
+  userDisplayName: "Sam Example",
+  status: "approved" as const,
+  officeUrl: "https://bk.easner.com/users?highlight=user-456",
 }
 
 export const onlinePaymentsReadyFixture: OnlinePaymentsEmailData = {
@@ -214,6 +231,8 @@ export const templateFixtures: Record<string, unknown> = {
   mfaDisabled: { ...securityPasswordChangedFixture, alertType: "mfa_disabled" as const },
   newDeviceLogin: { ...securityPasswordChangedFixture, alertType: "new_device" as const, deviceLabel: "ios" },
   adminTransactionNotification: adminTxFixture,
+  kybOpsNotification: kybOpsNotificationFixture,
+  kycOpsNotification: kycOpsNotificationFixture,
 }
 
 /** Default audience per template (both tested where applicable). */
@@ -225,6 +244,8 @@ export const templateDefaultAudience: Record<string, "business" | "personal"> = 
   kybApproved: "business",
   kybRejected: "business",
   kybActionNeeded: "business",
+  kybOpsNotification: "business",
+  kycOpsNotification: "personal",
   kycSubmitted: "personal",
   kycApproved: "personal",
   kycRejected: "personal",

@@ -21,7 +21,7 @@ export const NOAH_PLACEHOLDER_REJECTION_MESSAGES = new Set([
 ])
 
 export const NOAH_VERIFICATION_IN_REVIEW_COPY =
-  "Verification is in progress. This usually completes within 1–3 days."
+  "Verification is in progress. This usually completes within 1–3 business days."
 
 export const NOAH_FINAL_REJECTION_USER_MESSAGE =
   "Verification could not be completed for this account. Please contact support if you have questions."

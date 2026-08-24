@@ -58,6 +58,12 @@ console.log(`  invoices: ${invoiceName} <${invoiceFrom}>`)
 console.log(`  receipts: ${receiptName} <${receiptFrom}>`)
 console.log(`  reply-to: ${replyTo}`)
 
+const complianceOpsEmail =
+  process.env.EASNER_COMPLIANCE_OPS_EMAIL ||
+  process.env.EASNER_KYB_OPS_EMAIL ||
+  "compliance@easner.com"
+console.log(`  compliance ops: ${complianceOpsEmail}`)
+
 console.log("\nLedger transaction emails:")
 const ledgerDisabled =
   ["false", "0", "off", "no"].includes(

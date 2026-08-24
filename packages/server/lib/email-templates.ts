@@ -25,6 +25,8 @@ import type {
   TransactionEmailData,
   OnlinePaymentsEmailData,
   VerificationEmailData,
+  KybOpsEmailData,
+  KycOpsEmailData,
   WelcomeEmailData,
   AppDownloadLinkEmailData,
 } from "./email-types"
@@ -351,9 +353,13 @@ ${data.dashboardUrl || profile.dashboardUrl}${profile.signatureText ?? ""}`
   kybApproved: verificationTemplate("KYB", "business", "approved"),
   kybRejected: verificationTemplate("KYB", "business", "rejected"),
   kybActionNeeded: verificationTemplate("KYB", "business", "action_needed"),
+
+  kybOpsNotification: kybOpsNotificationTemplate(),
   kycSubmitted: verificationTemplate("KYC", "personal", "submitted"),
   kycApproved: verificationTemplate("KYC", "personal", "approved"),
   kycRejected: verificationTemplate("KYC", "personal", "rejected"),
+
+  kycOpsNotification: kycOpsNotificationTemplate(),
 
   onlinePaymentsSetupStarted: onlinePaymentsTemplate("setup_started"),
   onlinePaymentsActionRequired: onlinePaymentsTemplate("action_required"),
@@ -652,7 +658,11 @@ function verificationSettingsUrl(data: VerificationEmailData, audience: EmailAud
   return `${base}/settings?tab=verification`
 }
 
-function verificationSubject(kind: "KYB" | "KYC", status: VerificationEmailData["status"]): string {
+function verificationSubject(
+  kind: "KYB" | "KYC",
+  status: VerificationEmailData["status"],
+  data?: VerificationEmailData,
+): string {
   if (kind === "KYC") {
     const kycSubjects = {
       submitted: "Your Easner KYC verification submitted",
@@ -662,6 +672,18 @@ function verificationSubject(kind: "KYB" | "KYC", status: VerificationEmailData[
     } as const
     return kycSubjects[status]
   }
+
+  const businessName = data?.businessName?.trim()
+  if (businessName) {
+    const kybOrgSubjects = {
+      submitted: `${businessName} KYB verification submitted`,
+      approved: `${businessName} KYB verification is complete`,
+      rejected: `${businessName} KYB verification update`,
+      action_needed: `Action needed for ${businessName} KYB verification`,
+    } as const
+    return kybOrgSubjects[status]
+  }
+
   const kybSubjects = {
     submitted: "Your Easner KYB verification submitted",
     approved: "Your Easner KYB verification is complete",
@@ -671,25 +693,153 @@ function verificationSubject(kind: "KYB" | "KYC", status: VerificationEmailData[
   return kybSubjects[status]
 }
 
-function verificationTemplate(
+function verificationBody(
   kind: "KYB" | "KYC",
-  audience: EmailAudience,
   status: VerificationEmailData["status"],
-): EmailTemplate {
-  const subjectLine = verificationSubject(kind, status)
+  businessName?: string,
+): string {
+  const label = businessName?.trim()
+  if (kind === "KYB" && label) {
+    const kybOrgBodies = {
+      submitted: `We've received ${label}'s KYB verification. We'll email you when there is an update.`,
+      approved: `${label}'s KYB verification is complete. Enabled features are now available where supported.`,
+      rejected: `${label}'s KYB verification could not be completed at this time.`,
+      action_needed: `We need more information to complete ${label}'s KYB verification. Sign in to review the details and continue.`,
+    } as const
+    return kybOrgBodies[status]
+  }
+
   const bodies = {
     submitted: `We've received your ${kind} verification. We'll email you when there is an update.`,
     approved: `Your ${kind} verification is complete. You can now access features where enabled for your profile.`,
     rejected: `Your ${kind} verification could not be completed at this time.`,
     action_needed: `We need a bit more information to complete your ${kind} verification. Sign in to review the details and continue.`,
   }
-  const bodyLine = bodies[status]
-  const showsReasons = (status === "rejected" || status === "action_needed") && true
+  return bodies[status]
+}
+
+function verificationOpsStatusLabel(status: VerificationEmailData["status"]): string {
+  switch (status) {
+    case "submitted":
+      return "submitted"
+    case "approved":
+      return "approved"
+    case "rejected":
+      return "rejected"
+    case "action_needed":
+      return "action needed"
+    default:
+      return status
+  }
+}
+
+function kybOpsNotificationTemplate(): EmailTemplate {
+  return {
+    subject: (data: KybOpsEmailData) =>
+      `KYB ${verificationOpsStatusLabel(data.status)} – ${data.businessName}`,
+    preheader: (data: KybOpsEmailData) =>
+      `${data.businessName} KYB verification is ${verificationOpsStatusLabel(data.status)}.`,
+    html: (data: KybOpsEmailData) => {
+      const officeUrl =
+        data.officeUrl ||
+        `${process.env.NEXT_PUBLIC_OFFICE_URL || "https://bk.easner.com"}/businesses?highlight=${encodeURIComponent(data.businessId)}`
+      const reasons =
+        data.rejectionReasons?.length
+          ? `<p class="confirmation-text"><strong>Details:</strong> ${data.rejectionReasons.join("; ")}</p>`
+          : ""
+      const content = `
+        <p class="confirmation-text">
+          <strong>${data.businessName}</strong> KYB verification is <strong>${verificationOpsStatusLabel(data.status)}</strong>.
+        </p>
+        <p class="confirmation-text">Business ID: ${data.businessId}</p>
+        ${reasons}
+      `
+      return generateBaseEmailTemplate(
+        `KYB ${verificationOpsStatusLabel(data.status)}`,
+        "",
+        content,
+        { text: "View in Office", url: officeUrl },
+        { audience: "business", showPreferencesLink: false },
+      )
+    },
+    text: (data: KybOpsEmailData) => {
+      const officeUrl =
+        data.officeUrl ||
+        `${process.env.NEXT_PUBLIC_OFFICE_URL || "https://bk.easner.com"}/businesses?highlight=${encodeURIComponent(data.businessId)}`
+      let t = `KYB ${verificationOpsStatusLabel(data.status)} – ${data.businessName}\n\nBusiness ID: ${data.businessId}`
+      if (data.rejectionReasons?.length) {
+        t += `\n\nDetails: ${data.rejectionReasons.join("; ")}`
+      }
+      t += `\n\n${officeUrl}`
+      return t
+    },
+  }
+}
+
+function kycOpsNotificationTemplate(): EmailTemplate {
+  return {
+    subject: (data: KycOpsEmailData) => {
+      const label = data.userDisplayName?.trim() || data.userEmail
+      return `KYC ${verificationOpsStatusLabel(data.status)} – ${label}`
+    },
+    preheader: (data: KycOpsEmailData) => {
+      const label = data.userDisplayName?.trim() || data.userEmail
+      return `${label} KYC verification is ${verificationOpsStatusLabel(data.status)}.`
+    },
+    html: (data: KycOpsEmailData) => {
+      const label = data.userDisplayName?.trim() || data.userEmail
+      const officeUrl =
+        data.officeUrl ||
+        `${process.env.NEXT_PUBLIC_OFFICE_URL || "https://bk.easner.com"}/users?highlight=${encodeURIComponent(data.userId)}`
+      const reasons =
+        data.rejectionReasons?.length
+          ? `<p class="confirmation-text"><strong>Details:</strong> ${data.rejectionReasons.join("; ")}</p>`
+          : ""
+      const content = `
+        <p class="confirmation-text">
+          Personal KYC for <strong>${label}</strong> is <strong>${verificationOpsStatusLabel(data.status)}</strong>.
+        </p>
+        <p class="confirmation-text">User ID: ${data.userId}</p>
+        <p class="confirmation-text">Email: ${data.userEmail}</p>
+        ${reasons}
+      `
+      return generateBaseEmailTemplate(
+        `KYC ${verificationOpsStatusLabel(data.status)}`,
+        "",
+        content,
+        { text: "View in Office", url: officeUrl },
+        { audience: "personal", showPreferencesLink: false },
+      )
+    },
+    text: (data: KycOpsEmailData) => {
+      const label = data.userDisplayName?.trim() || data.userEmail
+      const officeUrl =
+        data.officeUrl ||
+        `${process.env.NEXT_PUBLIC_OFFICE_URL || "https://bk.easner.com"}/users?highlight=${encodeURIComponent(data.userId)}`
+      let t = `KYC ${verificationOpsStatusLabel(data.status)} – ${label}\n\nUser ID: ${data.userId}\nEmail: ${data.userEmail}`
+      if (data.rejectionReasons?.length) {
+        t += `\n\nDetails: ${data.rejectionReasons.join("; ")}`
+      }
+      t += `\n\n${officeUrl}`
+      return t
+    },
+  }
+}
+
+function verificationTemplate(
+  kind: "KYB" | "KYC",
+  audience: EmailAudience,
+  status: VerificationEmailData["status"],
+): EmailTemplate {
+  const showsReasons = status === "rejected" || status === "action_needed"
   const showsVerificationCta = status === "rejected" || status === "action_needed"
   return {
-    subject: () => subjectLine,
-    preheader: () => bodyLine,
+    subject: (data: VerificationEmailData) => verificationSubject(kind, status, data),
+    preheader: (data: VerificationEmailData) =>
+      verificationBody(kind, status, data.businessName),
     html: (data: VerificationEmailData) => {
+      const bodyLine = verificationBody(kind, status, data.businessName)
+      const subjectLine = verificationSubject(kind, status, data)
       const reasons =
         showsReasons && data.rejectionReasons?.length
           ? `<p class="confirmation-text"><strong>Details:</strong> ${data.rejectionReasons.join("; ")}</p>`
@@ -697,7 +847,7 @@ function verificationTemplate(
       const profile = getEmailAudienceProfile(audience)
       const content = `
         ${easnerUserGreetingParagraphHtml(data.firstName)}
-        <p class="confirmation-text">${bodies[status]}</p>
+        <p class="confirmation-text">${bodyLine}</p>
         ${reasons}
       `
       return generateBaseEmailTemplate(
@@ -713,8 +863,10 @@ function verificationTemplate(
       )
     },
     text: (data: VerificationEmailData) => {
+      const bodyLine = verificationBody(kind, status, data.businessName)
+      const subjectLine = verificationSubject(kind, status, data)
       const profile = getEmailAudienceProfile(audience)
-      let t = `${subjectLine}\n\n${formatEasnerUserGreetingPlain(data.firstName)}\n\n${bodies[status]}`
+      let t = `${subjectLine}\n\n${formatEasnerUserGreetingPlain(data.firstName)}\n\n${bodyLine}`
       if (showsReasons && data.rejectionReasons?.length) {
         t += `\n\nDetails: ${data.rejectionReasons.join("; ")}`
       }

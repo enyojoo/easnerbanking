@@ -241,19 +241,40 @@ describe("emailTemplates", () => {
     expect(html).toContain("Acme LLC")
   })
 
-  it("business KYB subjects match brand pattern", () => {
+  it("business KYB subjects use org name when businessName is set", () => {
     expect(
       emailTemplates.kybSubmitted.subject(templateFixtures.kybSubmitted, "business"),
-    ).toBe("Your Easner KYB verification submitted")
+    ).toBe("Acme Ltd KYB verification submitted")
     expect(
       emailTemplates.kybApproved.subject(templateFixtures.kybApproved, "business"),
-    ).toBe("Your Easner KYB verification is complete")
+    ).toBe("Acme Ltd KYB verification is complete")
     expect(
       emailTemplates.kybRejected.subject(templateFixtures.kybRejected, "business"),
-    ).toBe("Your Easner KYB verification update")
+    ).toBe("Acme Ltd KYB verification update")
     expect(
       emailTemplates.kybActionNeeded.subject(templateFixtures.kybActionNeeded, "business"),
-    ).toBe("Action needed for your Easner KYB verification")
+    ).toBe("Action needed for Acme Ltd KYB verification")
+  })
+
+  it("kyb ops notification includes business context and office link", () => {
+    const html = emailTemplates.kybOpsNotification.html(
+      templateFixtures.kybOpsNotification,
+      "business",
+    )
+    expect(html).toContain("Acme Ltd")
+    expect(html).toContain("biz-123")
+    expect(html).toContain("https://bk.easner.com/businesses?highlight=biz-123")
+  })
+
+  it("kyc ops notification includes user context and office link", () => {
+    const html = emailTemplates.kycOpsNotification.html(
+      templateFixtures.kycOpsNotification,
+      "personal",
+    )
+    expect(html).toContain("Sam Example")
+    expect(html).toContain("user-456")
+    expect(html).toContain("sam@example.com")
+    expect(html).toContain("https://bk.easner.com/users?highlight=user-456")
   })
 
   it("business security uses Easner Business subjects", () => {

@@ -32,6 +32,7 @@ Welcome, KYB/KYC, team invite, security, and invoice emails are always subject t
 | `SENDGRID_FROM_EMAIL_RECEIPTS` | Optional | Checkout / Payment Link receipt from (default **`receipt@easner.com`**). Not required in env; same pattern as invoices. |
 | `EASNER_RECEIPT_TIMEZONE` | Optional | IANA zone for checkout/link receipt “When” (else Stripe Dashboard timezone, else UTC) |
 | `SENDGRID_REPLY_TO` | Recommended | Reply-to / support routing |
+| `EASNER_COMPLIANCE_OPS_EMAIL` | Optional | Internal KYB/KYC lifecycle alerts (default **`compliance@easner.com`**; `EASNER_KYB_OPS_EMAIL` still supported) |
 | `LEDGER_TRANSACTION_EMAIL_ENABLED` | Optional | Default **on**. Set `false` to disable ledger transaction emails platform-wide |
 | `NEXT_PUBLIC_MOBILE_APP_URL` | Optional | Personal email / universal-link origin (default `https://app.easner.com`) |
 | `EASNER_APP_STORE_URL` | Optional | iOS App Store listing for download emails / marketing |
@@ -141,7 +142,9 @@ Preview: `npx tsx packages/server/scripts/send-all-email-previews.ts --template 
 
 - Product name in profile: **Easner Business Banking** (`email-audience.ts`).
 - SendGrid from name: **Easner Business** (`SENDGRID_FROM_NAME_BUSINESS`).
-- Subjects use **Easner Business** for security and welcome; **KYB** matches personal KYC pattern (**Your Easner KYB verification …**).
+- Subjects use **Easner Business** for security and welcome; **KYB** uses org name when available (**{businessName} KYB verification …**).
+- **KYB lifecycle** emails go to active org **Owner + Admin**, plus internal **`compliance@easner.com`** (override with `EASNER_COMPLIANCE_OPS_EMAIL` or legacy `EASNER_KYB_OPS_EMAIL`). Merchant recipients share org-centric copy; compliance receives a separate Office-linked ops template (`kybOpsNotification`).
+- **Personal KYC lifecycle** emails go to the mobile user, plus the same compliance inbox with `kycOpsNotification` (Office user link).
 - Email header: **no product subtitle** under the H1 (logo + title only), same as personal.
 - Transaction CTAs: `https://business.easner.com/transactions/{id}`; preferences: `/settings/communication`.
 
