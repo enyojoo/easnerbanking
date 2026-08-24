@@ -30,11 +30,14 @@ let cachedFor: string | null = null
 let inflight: Promise<ExpressOnrampSdk> | null = null
 let scriptPromise: Promise<StripeLoader> | null = null
 
-async function tryConfigureWebOnramp(client: StripeClient): Promise<void> {
+async function tryConfigureWebOnramp(
+  client: StripeClient,
+  cryptoCustomerId?: string | null,
+): Promise<void> {
   const configure = (client as { configure?: (config: Record<string, unknown>) => Promise<unknown> }).configure
   if (typeof configure !== 'function') return
   try {
-    await configure(expressOnrampLinkConfigure() as Record<string, unknown>)
+    await configure(expressOnrampLinkConfigure(cryptoCustomerId) as Record<string, unknown>)
   } catch {
     // Some CDN builds omit configure(); init options still apply where supported.
   }
@@ -118,15 +121,19 @@ export function prefetchMobileExpressOnramp(): void {
   void ensureScript().catch(() => undefined)
 }
 
-export async function loadMobileExpressOnramp(publishableKey: string): Promise<ExpressOnrampSdk> {
-  const cacheKey = `${publishableKey}:${EXPRESS_ONRAMP_APPEARANCE_REV}`
+export async function loadMobileExpressOnramp(
+  publishableKey: string,
+  cryptoCustomerId?: string | null,
+): Promise<ExpressOnrampSdk> {
+  const customerKey = String(cryptoCustomerId || '').trim() || 'none'
+  const cacheKey = `${publishableKey}:${EXPRESS_ONRAMP_APPEARANCE_REV}:${customerKey}`
   if (cached && cachedFor === cacheKey) return cached
   if (inflight) return inflight
   inflight = (async () => {
     const loader = await ensureScript()
     const client = (await loader(publishableKey, expressOnrampWebInitOptions())) as StripeClient
     if (client.ready) await client.ready
-    await tryConfigureWebOnramp(client)
+    await tryConfigureWebOnramp(client, cryptoCustomerId)
     cachedFor = cacheKey
     cached = bindClient(client)
     return cached

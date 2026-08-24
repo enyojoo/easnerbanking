@@ -31,6 +31,7 @@ export default function ExpressDepositAmountScreen({ navigation, route }: Naviga
   const [sourceCurrency, setSourceCurrency] = useState('USD')
   const [ready, setReady] = useState(false)
   const [publishableKey, setPublishableKey] = useState<string | null>(null)
+  const [cryptoCustomerId, setCryptoCustomerId] = useState<string | null>(null)
   const [paymentTokenId, setPaymentTokenId] = useState<string | null>(null)
   const [last4, setLast4] = useState<string | null>(null)
   const [stripeEl, setStripeEl] = useState<unknown>(null)
@@ -67,10 +68,12 @@ export default function ExpressDepositAmountScreen({ navigation, route }: Naviga
       publishableKey?: string
       paymentTokenId?: string | null
       sourceCurrency?: string
+      cryptoCustomerId?: string | null
     }>('/api/stripe/onramp/status').then((data) => {
       setReady(Boolean(data.ready))
       setPublishableKey(data.publishableKey ?? null)
       setPaymentTokenId(data.paymentTokenId ?? null)
+      setCryptoCustomerId(data.cryptoCustomerId ?? null)
       if (data.sourceCurrency) setSourceCurrency(data.sourceCurrency.toUpperCase())
     })
   }, [])
@@ -121,7 +124,7 @@ export default function ExpressDepositAmountScreen({ navigation, route }: Naviga
     try {
       if (!amountLimit.ok) throw new Error(amountLimit.message)
       if (!publishableKey) throw new Error(EXPRESS_DEPOSITS_COPY.setupRequiredHint)
-      const sdk = await loadMobileExpressOnramp(publishableKey)
+      const sdk = await loadMobileExpressOnramp(publishableKey, cryptoCustomerId)
       let token = paymentTokenId
       if (!token && sdk.collectPaymentMethod) {
         await new Promise<void>((resolve, reject) => {

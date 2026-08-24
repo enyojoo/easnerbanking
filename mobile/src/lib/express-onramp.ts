@@ -206,7 +206,10 @@ export function adaptNativeOnramp(onramp: NativeOnramp): ExpressOnrampSdk {
   }
 }
 
-export async function loadMobileExpressOnramp(_publishableKey?: string): Promise<ExpressOnrampSdk> {
+export async function loadMobileExpressOnramp(
+  _publishableKey?: string,
+  _cryptoCustomerId?: string | null,
+): Promise<ExpressOnrampSdk> {
   if (adapter) return adapter
   return new Promise((resolve, reject) => {
     const waiter: Waiter = {

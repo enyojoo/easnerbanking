@@ -114,6 +114,26 @@ export async function createLinkAuthIntent(input: {
   )
 }
 
+/** Stripe recommends retrieving OAuth tokens server-side after Link consent. */
+export async function retrieveLinkAuthTokens(authIntentId: string): Promise<{
+  access_token?: string
+  refresh_token?: string
+}> {
+  const id = String(authIntentId || "").trim()
+  if (!id) throw new StripeOnrampApiError("authIntentId required", 400, null)
+  const res = await stripeOnrampRequest<{
+    access_token?: string
+    refresh?: { refresh_token?: string }
+  }>("POST", `/v1/link_auth_intent/${encodeURIComponent(id)}/tokens`, undefined, {
+    absoluteUrl: `https://login.link.com/v1/link_auth_intent/${encodeURIComponent(id)}/tokens`,
+    json: true,
+  })
+  return {
+    access_token: res.access_token,
+    refresh_token: res.refresh?.refresh_token,
+  }
+}
+
 export const stripeOnramp = {
   createLinkAuthIntent,
   retrieveCustomer: (id: string, oauthToken?: string) =>

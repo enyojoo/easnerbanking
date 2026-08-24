@@ -47,6 +47,7 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
   const [loading, setLoading] = useState(false)
   const [ready, setReady] = useState<boolean | null>(null)
   const [publishableKey, setPublishableKey] = useState<string | null>(null)
+  const [cryptoCustomerId, setCryptoCustomerId] = useState<string | null>(null)
   const [paymentTokenId, setPaymentTokenId] = useState<string | null>(null)
   const [last4, setLast4] = useState<string | null>(null)
   const [confirmError, setConfirmError] = useState<string | null>(null)
@@ -80,6 +81,7 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
         paymentTokenId?: string | null
         publishableKey?: string
         sourceCurrency?: string
+        cryptoCustomerId?: string | null
       }
       if (cancelled) return
       if (!res.ok) {
@@ -89,6 +91,7 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
       setReady(Boolean(data.ready))
       setPaymentTokenId(data.paymentTokenId ?? null)
       setPublishableKey(data.publishableKey ?? null)
+      setCryptoCustomerId(data.cryptoCustomerId ?? null)
       if (data.sourceCurrency) setSourceCurrency(data.sourceCurrency.toUpperCase())
     })()
     return () => {
@@ -148,7 +151,7 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
     setLoading(true)
     setConfirmError(null)
     try {
-      const sdk = await loadExpressOnramp(publishableKey)
+      const sdk = await loadExpressOnramp(publishableKey, cryptoCustomerId)
       const types =
         method === "express_ach"
           ? ["us_bank_account"]
@@ -184,7 +187,7 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
     } finally {
       setLoading(false)
     }
-  }, [method, onNeedSetup, publishableKey])
+  }, [cryptoCustomerId, method, onNeedSetup, publishableKey])
 
   const handleContinue = useCallback(async () => {
     if (!(usdCredit > 0)) return
@@ -237,7 +240,7 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
         return
       }
       const sessionId = createdJson.session.id
-      const sdk = await loadExpressOnramp(publishableKey)
+      const sdk = await loadExpressOnramp(publishableKey, cryptoCustomerId)
       const result = await sdk.performCheckout(sessionId, async (id) => {
         const paid = await fetchWithSession(`/api/stripe/onramp/sessions/${id}`, {
           method: "POST",
@@ -272,7 +275,7 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
     } finally {
       setLoading(false)
     }
-  }, [amountLimit, method, onNeedSetup, paymentTokenId, publishableKey, usdCredit, youPay])
+  }, [amountLimit, cryptoCustomerId, method, onNeedSetup, paymentTokenId, publishableKey, usdCredit, youPay])
 
   if (step === "amount") {
     return (

@@ -40,8 +40,9 @@ function loadStatus(): Promise<ExpressOnrampStatus> {
   inflight = apiFetch<ExpressOnrampStatus>('/api/stripe/onramp/status')
     .then((data) => {
       cacheExpressOnrampStatus(data)
-      if (data.publishableKey) void loadMobileExpressOnramp(data.publishableKey).catch(() => undefined)
-      else prefetchMobileExpressOnramp()
+      if (data.publishableKey) {
+        void loadMobileExpressOnramp(data.publishableKey, data.cryptoCustomerId).catch(() => undefined)
+      } else prefetchMobileExpressOnramp()
       return data
     })
     .finally(() => {

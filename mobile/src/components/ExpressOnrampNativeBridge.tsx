@@ -112,8 +112,7 @@ function ConfiguredOnrampBridge({
 
     let cancelled = false
     void configureWhenReady(api.configure as (config: Record<string, unknown>) => Promise<{ error?: { message?: string } }>, {
-      ...expressOnrampLinkConfigure(),
-      ...(customerId ? { cryptoCustomerId: customerId } : {}),
+      ...expressOnrampLinkConfigure(customerId),
       googlePay: {
         merchantCountryCode: country,
         merchantName: EXPRESS_ONRAMP_MERCHANT_NAME,

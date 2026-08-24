@@ -18,7 +18,7 @@ import { easnerBrand, fontFamilies } from "./design/tokens"
 export const EXPRESS_ONRAMP_MERCHANT_NAME = BRAND.name
 
 /** Bump when appearance changes so web clients re-init the CDN SDK. */
-export const EXPRESS_ONRAMP_APPEARANCE_REV = "2"
+export const EXPRESS_ONRAMP_APPEARANCE_REV = "3"
 
 /** Web: `loadCryptoOnrampAndInitialize(pk, options)` */
 export function expressOnrampWebInitOptions() {
@@ -46,10 +46,12 @@ export function expressOnrampWebInitOptions() {
 }
 
 /** Optional web/native configure payload when the SDK exposes `configure()`. */
-export function expressOnrampLinkConfigure() {
+export function expressOnrampLinkConfigure(cryptoCustomerId?: string | null) {
+  const id = String(cryptoCustomerId || "").trim()
   return {
     merchantDisplayName: EXPRESS_ONRAMP_MERCHANT_NAME,
     appearance: expressOnrampNativeAppearance(),
+    ...(id ? { cryptoCustomerId: id } : {}),
   }
 }
 

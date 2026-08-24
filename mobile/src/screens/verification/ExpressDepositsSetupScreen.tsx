@@ -140,12 +140,12 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
   }
 
   const ensureSdk = async () => {
-    if (sdk) return sdk
     const pk = status?.publishableKey || peekExpressOnrampStatus()?.publishableKey
     const data = pk ? (status ?? peekExpressOnrampStatus()) : await refresh(false)
     const key = pk || data?.publishableKey
     if (!key) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
-    const client = await loadMobileExpressOnramp(key)
+    const customerId = status?.cryptoCustomerId ?? data?.cryptoCustomerId ?? null
+    const client = await loadMobileExpressOnramp(key, customerId)
     setSdk(client)
     return client
   }
@@ -228,6 +228,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
                 body: {
                   cryptoCustomerId: result.crypto_customer_id,
                   accessToken: result.access_token || result.oauth_token,
+                  authIntentId: intentId,
                 },
               })
               setStripeEl(null)
@@ -273,31 +274,9 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
         }
         dismissL2Ref.current = () => finish({ result: 'canceled' })
-        // Direct SDK on web: do not await verify or Link auth detaches Stripe's popup.
-        if (Platform.OS === 'web') {
-          const verify = client.verifyDocuments
-            ? (cb?: (r: unknown) => void) => client.verifyDocuments?.(cb)
-            : client.verifyIdentity
-              ? (cb?: (r: unknown) => void) => client.verifyIdentity?.(cb)
-              : null
-          if (!verify) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
-          const pending = verify(finish)
-          void Promise.resolve(pending)
-            .then((first) => {
-              if (isStripeHostElement(first)) {
-                setStripeEl(first)
-                return
-              }
-              if (first != null) finish(first)
-            })
-            .catch((e) => {
-              setOpeningIdentity(false)
-              setMessage(expressSetupUserMessage(e instanceof Error ? e.message : null))
-            })
-          return true
-        }
-        const authorizeLink = async () => {
-          if (!client.authenticate) return
+
+        const authorizeLink = async (): Promise<boolean> => {
+          if (!client.authenticate) return true
           const auth = await apiFetch<{ authIntentId?: string | null; needsRegister?: boolean }>(
             '/api/stripe/onramp/link-auth',
             { method: 'POST', body: {} },
@@ -316,7 +295,41 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
             )
             intentId = again.authIntentId
           }
-          if (!intentId) return
+          if (!intentId) return false
+
+          if (Platform.OS === 'web') {
+            return new Promise((resolve) => {
+              void client.authenticate!(intentId!, async (result) => {
+                const outcome = String(result.result || '')
+                if (outcome === 'success') {
+                  if (result.crypto_customer_id) {
+                    await apiFetch('/api/stripe/onramp/link-complete', {
+                      method: 'POST',
+                      body: {
+                        cryptoCustomerId: result.crypto_customer_id,
+                        accessToken: result.access_token || result.oauth_token,
+                        authIntentId: intentId,
+                      },
+                    })
+                  }
+                  setStripeEl(null)
+                  resolve(true)
+                  return
+                }
+                if (isExpressSetupDismissed(outcome)) {
+                  setStripeEl(null)
+                  finish({ result: 'canceled' })
+                  resolve(false)
+                  return
+                }
+                setStripeEl(null)
+                resolve(false)
+              }).then((el) => {
+                if (isStripeHostElement(el)) setStripeEl(el)
+              })
+            })
+          }
+
           await client.authenticate(intentId, async (result) => {
             const outcome = String(result.result || '')
             if (outcome === 'success' && result.crypto_customer_id) {
@@ -325,16 +338,19 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
                 body: {
                   cryptoCustomerId: result.crypto_customer_id,
                   accessToken: result.access_token || result.oauth_token,
+                  authIntentId: intentId,
                 },
               })
             } else if (isExpressSetupDismissed(outcome)) {
               finish({ result: 'canceled' })
             }
           })
+          return !settled
         }
 
-        if (!status?.cryptoCustomerId) await authorizeLink()
-        if (settled) return true
+        const authed = await authorizeLink()
+        if (!authed || settled) return true
+
         const verify = client.verifyDocuments || client.verifyIdentity
         if (!verify) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
         try {
@@ -346,8 +362,8 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           if (first !== undefined) finish(first)
         } catch (e) {
           if (!(e instanceof Error) || e.message !== EXPRESS_NATIVE_AUTH_REQUIRED) throw e
-          await authorizeLink()
-          if (settled) return true
+          const againAuthed = await authorizeLink()
+          if (!againAuthed || settled) return true
           const again = await Promise.resolve(verify(finish))
           if (isStripeHostElement(again)) {
             setStripeEl(again)

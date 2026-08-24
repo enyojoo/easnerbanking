@@ -1,7 +1,7 @@
 import React from "react"
-import { Image as ExpoImage } from "expo-image"
+import { Image } from "expo-image"
 import type { ImageStyle, StyleProp, ViewStyle } from "react-native"
-import { Image, StyleSheet, Text, View } from "react-native"
+import { StyleSheet, Text, View } from "react-native"
 import { getTokenIconUrl } from "../crypto-icons"
 import { getCountryCodeForCurrency } from "../flags/currency-mapping"
 import { FLAG_ASSETS } from "../flags/flag-assets.manifest"
@@ -22,10 +22,6 @@ export type CountryFlagProps = {
 function flagSource(iso: string) {
   const upper = normalizeFlagIso(iso)
   return upper.length === 2 ? FLAG_ASSETS[upper] : undefined
-}
-
-function bundledResizeMode(contentFit: CountryFlagProps["contentFit"]) {
-  return contentFit === "contain" ? "contain" : "cover"
 }
 
 export function CountryFlag({ code, size = 20, style, contentFit = "cover" }: CountryFlagProps) {
@@ -51,10 +47,13 @@ export function CountryFlag({ code, size = 20, style, contentFit = "cover" }: Co
   return (
     <View style={[shellStyle, style as ViewStyle]}>
       <Image
-        key={`flag-${upper}`}
         source={source}
+        recyclingKey={upper}
         style={StyleSheet.absoluteFill}
-        resizeMode={bundledResizeMode(contentFit)}
+        contentFit={contentFit}
+        contentPosition="center"
+        cachePolicy="memory-disk"
+        transition={0}
       />
     </View>
   )
@@ -97,9 +96,9 @@ export function CurrencyFlag({
   if (tokenIconUrl) {
     return (
       <View style={[tokenShell, style as ViewStyle]}>
-        <ExpoImage
+        <Image
           source={{ uri: tokenIconUrl }}
-          recyclingKey={`token-${code}`}
+          recyclingKey={code}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
           contentPosition="center"

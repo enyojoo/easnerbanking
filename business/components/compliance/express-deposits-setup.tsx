@@ -105,23 +105,94 @@ export function ExpressDepositsSetup({ onClose }: Props) {
     void refresh()
   }, [refresh])
 
-  const persistLink = async (cryptoCustomerId: string, accessToken?: string) => {
+  const persistLink = async (
+    cryptoCustomerId: string,
+    opts?: { accessToken?: string; authIntentId?: string },
+  ) => {
     await fetchWithSession("/api/stripe/onramp/link-complete", {
       method: "POST",
       headers: { ...SCOPE, "Content-Type": "application/json" },
-      body: JSON.stringify({ cryptoCustomerId, accessToken }),
+      body: JSON.stringify({
+        cryptoCustomerId,
+        accessToken: opts?.accessToken,
+        authIntentId: opts?.authIntentId,
+      }),
     })
   }
 
   const ensureSdk = async () => {
-    if (sdk) return sdk
     const pk = status?.publishableKey || peekBusinessExpressOnrampStatus()?.publishableKey
     const data = pk ? status : await refresh()
     const key = pk || data?.publishableKey
     if (!key) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
-    const client = await loadExpressOnramp(key)
+    const customerId =
+      status?.cryptoCustomerId ??
+      data?.cryptoCustomerId ??
+      peekBusinessExpressOnrampStatus()?.cryptoCustomerId ??
+      null
+    const client = await loadExpressOnramp(key, customerId)
     setSdk(client)
     return client
+  }
+
+  /** SDK verifyDocuments needs a live Link session in this browser, even when cryptoCustomerId exists. */
+  const ensureLinkSession = async (client: CryptoOnrampClient): Promise<boolean> => {
+    const auth = await fetchWithSession("/api/stripe/onramp/link-auth", {
+      method: "POST",
+      headers: { ...SCOPE, "Content-Type": "application/json" },
+      body: "{}",
+    })
+    const authJson = (await auth.json().catch(() => ({}))) as {
+      authIntentId?: string
+      needsRegister?: boolean
+    }
+    let intentId = authJson.authIntentId
+    if (authJson.needsRegister || !intentId) {
+      const country = status?.payerCountry || form.country
+      await client.registerLinkUser(
+        form.email.trim(),
+        toExpressLinkE164Phone(form.phone, country),
+        country,
+        `${form.given_name} ${form.surname}`.trim(),
+      )
+      const again = await fetchWithSession("/api/stripe/onramp/link-auth", {
+        method: "POST",
+        headers: { ...SCOPE, "Content-Type": "application/json" },
+        body: "{}",
+      })
+      const againJson = (await again.json().catch(() => ({}))) as { authIntentId?: string }
+      intentId = againJson.authIntentId
+    }
+    if (!intentId) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
+
+    return new Promise((resolve, reject) => {
+      void client
+        .authenticate(intentId!, async (result) => {
+          const outcome = String(result.result || "")
+          if (outcome === "success") {
+            if (result.crypto_customer_id) {
+              await persistLink(result.crypto_customer_id, {
+                accessToken: result.access_token || result.oauth_token,
+                authIntentId: intentId,
+              })
+            }
+            setSlot(null)
+            resolve(true)
+            return
+          }
+          if (isExpressSetupDismissed(outcome)) {
+            setSlot(null)
+            resolve(false)
+            return
+          }
+          setSlot(null)
+          reject(new Error(expressSetupUserMessage(outcome)))
+        })
+        .then((el) => {
+          if (el) setSlot(el)
+        })
+        .catch(reject)
+    })
   }
 
   const closeHost = (message?: string | null) => {
@@ -135,10 +206,19 @@ export function ExpressDepositsSetup({ onClose }: Props) {
     setMessage(message ?? null)
   }
 
-  const onHostResult = async (result: { result?: string; crypto_customer_id?: string; access_token?: string; oauth_token?: string }) => {
+  const onHostResult = async (result: {
+    result?: string
+    crypto_customer_id?: string
+    access_token?: string
+    oauth_token?: string
+    auth_intent_id?: string
+  }) => {
     const outcome = String(result.result || "")
     if (outcome === "success" && result.crypto_customer_id) {
-      await persistLink(result.crypto_customer_id, result.access_token || result.oauth_token)
+      await persistLink(result.crypto_customer_id, {
+        accessToken: result.access_token || result.oauth_token,
+        authIntentId: result.auth_intent_id,
+      })
       closeHost(null)
       await refresh()
       return
@@ -202,11 +282,15 @@ export function ExpressDepositsSetup({ onClose }: Props) {
         })
         const againJson = (await again.json().catch(() => ({}))) as { authIntentId?: string }
         if (!againJson.authIntentId) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
-        const el = await client.authenticate(againJson.authIntentId, onHostResult)
+        const el = await client.authenticate(againJson.authIntentId, (result) =>
+          onHostResult({ ...result, auth_intent_id: againJson.authIntentId }),
+        )
         setSlot(el)
         return true
       }
-      const el = await client.authenticate(authJson.authIntentId, onHostResult)
+      const el = await client.authenticate(authJson.authIntentId, (result) =>
+        onHostResult({ ...result, auth_intent_id: authJson.authIntentId }),
+      )
       setSlot(el)
       return true
     })
@@ -275,8 +359,13 @@ export function ExpressDepositsSetup({ onClose }: Props) {
   const startL2 = () => {
     setOpeningIdentity(true)
     void run(async () => {
-      const sdk = await ensureSdk()
-      const verify = sdk.verifyDocuments || sdk.verifyIdentity
+      const client = await ensureSdk()
+      const authed = await ensureLinkSession(client)
+      if (!authed) {
+        closeHost(EXPRESS_DEPOSITS_COPY.setupDismissed)
+        return true
+      }
+      const verify = client.verifyDocuments || client.verifyIdentity
       if (!verify) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
       let settled = false
       const finish = (raw: unknown) => {

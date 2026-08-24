@@ -91,8 +91,9 @@ function loadStatus(userId?: string | null): Promise<BusinessExpressOnrampStatus
       const data = (await res.json().catch(() => ({}))) as BusinessExpressOnrampStatus
       if (res.ok) {
         cacheBusinessExpressOnrampStatus(data, userId)
-        if (data.publishableKey) void loadExpressOnramp(data.publishableKey).catch(() => undefined)
-        else prefetchExpressOnramp()
+        if (data.publishableKey) {
+          void loadExpressOnramp(data.publishableKey, data.cryptoCustomerId).catch(() => undefined)
+        } else prefetchExpressOnramp()
       }
       return data
     })
