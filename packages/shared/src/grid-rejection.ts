@@ -3,6 +3,7 @@ import {
   type NoahRejectionDisplay,
   type StoredNoahRejectionReason,
 } from "./noah-rejection"
+import { isGridMachineRejectionCode } from "./grid-kyb-form"
 
 function readTrimmedString(value: unknown): string | null {
   if (typeof value !== "string") return null
@@ -31,13 +32,15 @@ function collectFromVerificationErrors(errors: unknown, out: StoredNoahRejection
   if (!Array.isArray(errors)) return
   for (const item of errors) {
     if (typeof item === "string") {
+      if (isGridMachineRejectionCode(item)) continue
       pushUniqueMessage(out, item, "Retry")
       continue
     }
     if (!item || typeof item !== "object") continue
     const o = item as Record<string, unknown>
     const reason = readTrimmedString(o.reason ?? o.message ?? o.detail)
-    if (reason) pushUniqueMessage(out, reason, "Retry")
+    if (!reason || isGridMachineRejectionCode(reason)) continue
+    pushUniqueMessage(out, reason, "Retry")
   }
 }
 

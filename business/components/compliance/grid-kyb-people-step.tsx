@@ -9,7 +9,6 @@ import {
   gridKybIdTypeOptionsForPerson,
   gridKybOwnerResourceMatches,
   personKybIdentityDocumentsReady,
-  gridKybIdentityDocumentRequiresSides,
   resolveGridKybOwnerIdType,
   parseGridKybOwnershipPercentageInput,
   gridKybOwnerCountriesFromNationality,

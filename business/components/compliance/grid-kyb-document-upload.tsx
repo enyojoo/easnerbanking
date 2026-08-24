@@ -44,6 +44,8 @@ export type GridKybDocumentUploadHandle = {
   persistMetadata: () => Promise<void>
 }
 
+type UploadSlotKey = GridKybDocumentSide | "single"
+
 const FILE_ACCEPT = "application/pdf,image/jpeg,image/png,image/heic,image/heif,.heic,.heif,.jpg,.jpeg,.png,.pdf"
 
 const SIDE_LABELS: Record<GridKybDocumentSide, string> = {
@@ -54,6 +56,10 @@ const SIDE_LABELS: Record<GridKybDocumentSide, string> = {
 function normalizeSide(value: string | null | undefined): GridKybDocumentSide | null {
   const side = String(value ?? "").trim().toUpperCase()
   return side === "FRONT" || side === "BACK" ? side : null
+}
+
+function slotKeyForSide(side: GridKybDocumentSide | null): UploadSlotKey {
+  return side ?? "single"
 }
 
 export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Props>(function GridKybDocumentUpload(
@@ -87,6 +93,11 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
   const [filesBySide, setFilesBySide] = useState<Partial<Record<GridKybDocumentSide, File>>>({})
   const [error, setError] = useState<string | null>(null)
   const [errorKind, setErrorKind] = useState<"meta" | "file">("file")
+  const [uploadingSlots, setUploadingSlots] = useState<Set<UploadSlotKey>>(() => new Set())
+  const [metaBusy, setMetaBusy] = useState(false)
+  const [removingId, setRemovingId] = useState<string | null>(null)
+  const uploadPromisesRef = useRef<Partial<Record<UploadSlotKey, Promise<KybDocumentPacket | undefined>>>>({})
+  const busyCountRef = useRef(0)
 
   function showMetaError(message: string) {
     setErrorKind("meta")
@@ -97,11 +108,29 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
     setErrorKind("file")
     setError(message)
   }
-  const [saving, setSaving] = useState(false)
-  const [removingId, setRemovingId] = useState<string | null>(null)
-  const uploadPromiseRef = useRef<Promise<KybDocumentPacket | undefined> | null>(null)
+
+  function beginBusy() {
+    busyCountRef.current += 1
+    onBusyChange?.(true)
+  }
+
+  function endBusy() {
+    busyCountRef.current = Math.max(0, busyCountRef.current - 1)
+    if (busyCountRef.current === 0) onBusyChange?.(false)
+  }
 
   const requiredSides = gridKybIdentityDocumentRequiresSides({ documentType, issuingCountry })
+  const anyFileUploading = uploadingSlots.size > 0
+  const fieldsDisabled = Boolean(disabled || anyFileUploading || metaBusy)
+
+  function markSlotUploading(slot: UploadSlotKey, active: boolean) {
+    setUploadingSlots((current) => {
+      const next = new Set(current)
+      if (active) next.add(slot)
+      else next.delete(slot)
+      return next
+    })
+  }
 
   useEffect(() => {
     const latest = existingDocuments[existingDocuments.length - 1]
@@ -153,7 +182,9 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
     nextFile = file,
     side: GridKybDocumentSide | null = null,
   ) {
-    if (uploadPromiseRef.current) return uploadPromiseRef.current
+    const slot = slotKeyForSide(side)
+    const inFlight = uploadPromisesRef.current[slot]
+    if (inFlight) return inFlight
     if (!nextFile) {
       showFileError("Choose a file.")
       throw new Error("Choose a file.")
@@ -164,8 +195,8 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
       throw new Error(missing)
     }
     const run = (async () => {
-      setSaving(true)
-      onBusyChange?.(true)
+      markSlotUploading(slot, true)
+      beginBusy()
       setError(null)
       try {
         if (side && onRemoveExisting) {
@@ -207,15 +238,15 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
         showFileError(message)
         throw err instanceof Error ? err : new Error(message)
       } finally {
-        setSaving(false)
-        onBusyChange?.(false)
+        markSlotUploading(slot, false)
+        endBusy()
       }
     })()
-    uploadPromiseRef.current = run
+    uploadPromisesRef.current[slot] = run
     try {
       return await run
     } finally {
-      if (uploadPromiseRef.current === run) uploadPromiseRef.current = null
+      if (uploadPromisesRef.current[slot] === run) delete uploadPromisesRef.current[slot]
     }
   }
 
@@ -246,8 +277,8 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
       showMetaError(message)
       throw new Error(message)
     }
-    setSaving(true)
-    onBusyChange?.(true)
+    setMetaBusy(true)
+    beginBusy()
     setError(null)
     try {
       let latest: KybDocumentPacket | undefined
@@ -266,14 +297,14 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
       showFileError(message)
       throw err instanceof Error ? err : new Error(message)
     } finally {
-      setSaving(false)
-      onBusyChange?.(false)
+      setMetaBusy(false)
+      endBusy()
     }
   }
 
   useImperativeHandle(ref, () => ({
     hasPendingFile: () => {
-      if (uploadPromiseRef.current) return true
+      if (Object.keys(uploadPromisesRef.current).length > 0) return true
       if (requiredSides?.length) {
         return requiredSides.some((side) => Boolean(filesBySide[side]))
       }
@@ -281,7 +312,6 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
     },
     showingError: () => Boolean(error),
     submit: async (personId) => {
-      if (uploadPromiseRef.current) return uploadPromiseRef.current
       if (requiredSides?.length) {
         let latest: KybDocumentPacket | undefined
         for (const side of requiredSides) {
@@ -292,6 +322,8 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
         }
         return latest
       }
+      const inFlight = uploadPromisesRef.current.single
+      if (inFlight) return inFlight
       return upload(personId ?? extraFields?.personId)
     },
     persistMetadata,
@@ -307,7 +339,15 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
     onClearPending: () => void
     onFileSelected: (next: File | null) => void
   }) {
+    const slot = slotKeyForSide(input.side)
+    const isUploadingThis = uploadingSlots.has(slot)
     const hasSideStoredFile = input.storedDocuments.length > 0
+    const ctaLabel = isUploadingThis
+      ? "Uploading…"
+      : hasSideStoredFile || input.pendingFile
+        ? "Replace file"
+        : "Choose file"
+
     return (
       <div
         className={cn(
@@ -331,11 +371,11 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
             variant={needsReplacement ? "primary" : "outline"}
             size="sm"
             className="shrink-0"
-            disabled={disabled || saving}
+            disabled={fieldsDisabled}
             onClick={input.onChooseFile}
           >
-            {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-            {saving ? "Uploading…" : hasSideStoredFile || input.pendingFile ? "Replace file" : "Choose file"}
+            {isUploadingThis ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+            {ctaLabel}
           </Button>
         </div>
         {hasSideStoredFile || input.pendingFile ? (
@@ -353,7 +393,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
                   <button
                     type="button"
                     aria-label={`Remove ${doc.fileName}`}
-                    disabled={disabled || removingId === doc.id || saving}
+                    disabled={fieldsDisabled || removingId === doc.id}
                     onClick={() => {
                       setRemovingId(doc.id)
                       void onRemoveExisting(doc.id)
@@ -371,19 +411,25 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
                 ) : null}
               </li>
             ))}
-            {input.pendingFile ? (
+            {input.pendingFile && !hasSideStoredFile ? (
               <li className="flex items-center gap-2 rounded-lg border bg-background px-2.5 py-1.5 text-sm">
                 <span className="min-w-0 flex-1 truncate">{input.pendingFile.name}</span>
-                {saving ? <span className="text-xs text-muted-foreground">Uploading…</span> : null}
-                <button
-                  type="button"
-                  aria-label="Clear selected file"
-                  disabled={disabled || saving}
-                  onClick={input.onClearPending}
-                  className="rounded-md p-0.5 text-muted-foreground hover:text-foreground"
-                >
-                  <X className="size-3.5" />
-                </button>
+                {isUploadingThis ? (
+                  <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                    <Loader2 className="size-3 animate-spin" aria-hidden />
+                    Uploading…
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    aria-label="Clear selected file"
+                    disabled={fieldsDisabled}
+                    onClick={input.onClearPending}
+                    className="rounded-md p-0.5 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                )}
               </li>
             ) : null}
           </ul>
@@ -453,7 +499,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
             }}
             options={options}
             placeholder="Select document type"
-            disabled={disabled}
+            disabled={fieldsDisabled}
           />
         </div>
         <div className="space-y-2">
@@ -471,7 +517,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
             }}
             placeholder="Select issuing country"
             catalog="all"
-            disabled={disabled}
+            disabled={fieldsDisabled}
           />
         </div>
         {extraFields?.documentNumber ? (
@@ -494,7 +540,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
                   void persistMetadata().catch(() => undefined)
                 }}
                 placeholder="e.g. DMV, state motor vehicle department"
-                disabled={disabled}
+                disabled={fieldsDisabled}
               />
             </div>
             <div className="space-y-2">
@@ -515,7 +561,7 @@ export const GridKybDocumentUpload = forwardRef<GridKybDocumentUploadHandle, Pro
                   void persistMetadata().catch(() => undefined)
                 }}
                 placeholder="Passport number, license number, or similar ID"
-                disabled={disabled}
+                disabled={fieldsDisabled}
               />
             </div>
           </>

@@ -5,6 +5,7 @@ import {
   emptyGridKybCompanyDraft,
   filterResolvedGridKybErrorPointers,
   firstGridKybErrorSection,
+  gridKybSectionAttentionCounts,
   gridKybApplicationIsEditable,
   gridKybWizardReadiness,
   hasAllRequiredKybCompanyDocuments,
@@ -109,12 +110,12 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
     })
   }, [packet, company])
   const counts = useMemo(() => {
-    return {
-      company: pointers.filter((row) => row.section === "company").length,
-      people: pointers.filter((row) => row.section === "people").length,
-      documents: pointers.filter((row) => row.section === "documents").length,
-    }
-  }, [pointers])
+    return gridKybSectionAttentionCounts({
+      pointers,
+      people: packet?.people ?? [],
+      documents: packet?.documents ?? [],
+    })
+  }, [pointers, packet])
   const readiness = useMemo(() => {
     const documents = packet?.documents ?? []
     return gridKybWizardReadiness({
@@ -165,27 +166,29 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
       const res = await fetchWithSession("/api/grid/kyb/complete", { method: "POST" })
       const json = (await res.json().catch(() => ({}))) as {
         error?: string
-        status?: string
+        status?: KybPacket["status"]
         errors?: KybPacket["errors"]
+        errorPointers?: KybPacket["errorPointers"]
       }
       if (!res.ok) throw new Error(json.error || "Could not submit verification")
-      let next = await load()
-      for (let i = 0; i < 5; i += 1) {
-        const nextStatus = String(next.status ?? "").toLowerCase()
-        if (
-          nextStatus === "resolve_errors" ||
-          nextStatus === "hold" ||
-          nextStatus === "in_review" ||
-          (next.errorPointers?.length ?? 0) > 0
-        ) {
-          break
-        }
-        await new Promise((resolve) => setTimeout(resolve, 1500))
-        next = await load()
+
+      // Complete already persisted status/errors – one packet refresh is enough.
+      // Do not poll: successful Grid submits stay "submitted" and the old 5×1.5s
+      // wait made the CTA feel stuck for 7+ seconds.
+      const next = await load()
+      if (json.status || json.errors || json.errorPointers) {
+        setPacket((prev) => ({
+          ...prev,
+          ...next,
+          status: json.status ?? next.status,
+          errors: json.errors ?? next.errors,
+          errorPointers: json.errorPointers ?? next.errorPointers,
+        }))
       }
-      if (next.errorPointers?.length) {
+      const pointers = json.errorPointers ?? next.errorPointers ?? []
+      if (pointers.length) {
         hydratedSectionRef.current = true
-        setSection(firstGridKybErrorSection(next.errors, next.documents))
+        setSection(firstGridKybErrorSection(json.errors ?? next.errors, next.documents))
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not submit verification")

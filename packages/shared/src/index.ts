@@ -611,6 +611,8 @@ export {
   withFirstKybOwnerUbo,
   mapGridKybVerificationError,
   mapGridKybVerificationErrors,
+  gridKybSectionAttentionCounts,
+  isGridMachineRejectionCode,
   rejectedGridDocumentIdsFromErrors,
   resolveGridKybSourceOfFunds,
   sourceOfFundsIdFromStored,

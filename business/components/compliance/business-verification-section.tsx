@@ -69,7 +69,6 @@ export function BusinessVerificationSection({
     tier1RejectionReasons,
     tier1RejectionType,
     tier1CanResubmit,
-    tier1RetryGuidance,
     canManageBusinessVerification,
     isLoading,
     hasData,
@@ -408,11 +407,6 @@ export function BusinessVerificationSection({
                         <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
                           {error ? <p className="text-xs text-destructive">{error}</p> : null}
                           {info ? <p className="text-xs text-muted-foreground">{info}</p> : null}
-                          {tier1OnHold ? (
-                            <p className="text-xs text-muted-foreground">
-                              {VERIFICATION_SECTION_COPY.verificationOnHold}
-                            </p>
-                          ) : null}
                           {tier1AwaitingReview && !tier1ActionRequired ? (
                             <p className="text-xs text-muted-foreground">
                               {NOAH_VERIFICATION_IN_REVIEW_COPY}
@@ -422,16 +416,9 @@ export function BusinessVerificationSection({
                             <p className="text-xs text-muted-foreground">
                               {NOAH_FINAL_REJECTION_USER_MESSAGE}
                             </p>
-                          ) : tier1ActionRequired &&
-                            (tier1RetryGuidance?.length || rejectionDisplay?.guidanceLines.length) ? (
+                          ) : tier1ActionRequired ? (
                             <p className="text-xs text-destructive">
-                              {(tier1RetryGuidance ?? rejectionDisplay?.guidanceLines ?? []).join(
-                                " ",
-                              )}
-                            </p>
-                          ) : tier1Rejected ? (
-                            <p className="text-xs text-destructive">
-                              Verification was declined. Review your documents and try again.
+                              {VERIFICATION_SECTION_COPY.verificationOnHold}
                             </p>
                           ) : null}
                           {!businessId ? (

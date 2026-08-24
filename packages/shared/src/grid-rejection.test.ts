@@ -36,4 +36,19 @@ describe("grid-rejection", () => {
     }) as Array<{ message?: string }>
     expect(normalized[0]?.message?.toLowerCase()).toContain("hold")
   })
+
+  it("skips machine rejection codes from verification errors", () => {
+    const reasons = extractGridCustomerRejectionReasons(
+      {
+        kybStatus: "HOLD",
+        errors: [
+          { reason: "The uploaded photo is of poor quality", type: "POOR_QUALITY_DOCUMENT" },
+          { reason: "badPhoto", type: "APPLICANT_REJECTED" },
+          { reason: "badDocument_suspiciousDocument", type: "APPLICANT_REJECTED" },
+        ],
+      },
+      "HOLD",
+    )
+    expect(reasons.map((r) => r.message)).toEqual(["The uploaded photo is of poor quality"])
+  })
 })

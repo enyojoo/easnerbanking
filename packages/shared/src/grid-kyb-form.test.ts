@@ -19,6 +19,8 @@ import {
   isKybIdentityDocumentReady,
   withFirstKybOwnerUbo,
   mapGridKybVerificationErrors,
+  gridKybSectionAttentionCounts,
+  isGridMachineRejectionCode,
   normalizeGridKybIdType,
   normalizeGridKybOwnershipPercentageForGrid,
   allocateGridKybOwnershipPercentagesForGrid,
@@ -216,6 +218,83 @@ describe("mapGridKybVerificationErrors", () => {
         documents: [{ personId: "p1", category: "identity" }],
       }),
     ).toEqual([])
+  })
+})
+
+describe("gridKybSectionAttentionCounts", () => {
+  it("counts unique owners, not every Grid error row", () => {
+    expect(isGridMachineRejectionCode("badPhoto")).toBe(true)
+    expect(isGridMachineRejectionCode("badDocument_suspiciousDocument")).toBe(true)
+    expect(isGridMachineRejectionCode("The uploaded photo is of poor quality")).toBe(false)
+
+    const pointers = mapGridKybVerificationErrors(
+      [
+        {
+          resourceId: "Document:front-a",
+          type: "POOR_QUALITY_DOCUMENT",
+          reason: "The uploaded photo is of poor quality",
+        },
+        {
+          resourceId: "Document:back-a",
+          type: "SUSPECTED_FRAUD_DOCUMENT",
+          reason: "The uploaded image appears to be a screenshot rather than a photo of the document",
+        },
+        {
+          resourceId: "BeneficialOwner:owner-a",
+          type: "APPLICANT_REJECTED",
+          reason: "badPhoto",
+        },
+        {
+          resourceId: "BeneficialOwner:owner-a",
+          type: "APPLICANT_REJECTED",
+          reason: "badPhoto_screenshot",
+        },
+        {
+          resourceId: "Document:front-b",
+          type: "SUSPECTED_FRAUD_DOCUMENT",
+          reason: "The uploaded document appears suspicious",
+        },
+        {
+          resourceId: "Document:back-b",
+          type: "INVALID_DOCUMENT",
+          reason: "The uploaded document is invalid",
+        },
+        {
+          resourceId: "BeneficialOwner:owner-b",
+          type: "APPLICANT_REJECTED",
+          reason: "badDocument_suspiciousDocument",
+        },
+        {
+          resourceId: "BeneficialOwner:owner-b",
+          type: "APPLICANT_REJECTED",
+          reason: "badDocument",
+        },
+      ],
+      [
+        { personId: "p1", category: "identity", gridDocumentId: "front-a" },
+        { personId: "p1", category: "identity", gridDocumentId: "back-a" },
+        { personId: "p2", category: "identity", gridDocumentId: "front-b" },
+        { personId: "p2", category: "identity", gridDocumentId: "back-b" },
+      ],
+    )
+
+    expect(pointers.every((row) => !isGridMachineRejectionCode(row.reason))).toBe(true)
+    expect(
+      gridKybSectionAttentionCounts({
+        pointers,
+        people: [
+          { id: "p1", gridBeneficialOwnerId: "owner-a", roles: ["UBO"] },
+          { id: "p2", gridBeneficialOwnerId: "owner-b", roles: ["UBO"] },
+          { id: "p3", gridBeneficialOwnerId: "owner-c", roles: ["DIRECTOR"] },
+        ],
+        documents: [
+          { personId: "p1", category: "identity", gridDocumentId: "front-a" },
+          { personId: "p1", category: "identity", gridDocumentId: "back-a" },
+          { personId: "p2", category: "identity", gridDocumentId: "front-b" },
+          { personId: "p2", category: "identity", gridDocumentId: "back-b" },
+        ],
+      }).people,
+    ).toBe(2)
   })
 })
 

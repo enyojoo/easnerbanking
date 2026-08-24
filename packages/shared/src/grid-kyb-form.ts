@@ -629,7 +629,15 @@ export function mapGridKybVerificationError(
   documents?: GridKybPointerDocument[] | null,
 ): GridKybErrorPointer | null {
   const type = String(error.type ?? "").trim().toUpperCase()
-  const reason = String(error.reason ?? "").trim() || "This item needs attention."
+  const rawReason = String(error.reason ?? "").trim()
+  if (type === "APPLICANT_REJECTED" && isGridMachineRejectionCode(rawReason)) {
+    // Document-level errors already carry the human-readable reason for the owner.
+    return null
+  }
+  const reason =
+    rawReason && !isGridMachineRejectionCode(rawReason)
+      ? rawReason
+      : "This item needs attention."
   const resourceId = String(error.resourceId ?? "").trim() || undefined
   const accepted = Array.isArray(error.acceptedDocumentTypes)
     ? error.acceptedDocumentTypes.map((row) => String(row).trim()).filter(Boolean)
@@ -894,6 +902,74 @@ function peopleForPointer(
   }
   const matched = people.filter((row) => gridKybOwnerResourceMatches(row, resourceId))
   return matched.length > 0 ? matched : people
+}
+
+/** Grid/SumSub machine codes (e.g. badPhoto, badDocument_suspiciousDocument) – not user-facing. */
+export function isGridMachineRejectionCode(reason: string | null | undefined): boolean {
+  const s = String(reason ?? "").trim()
+  if (!s || /\s/.test(s)) return false
+  if (s.includes("_")) return /^[A-Za-z][A-Za-z0-9_]*$/.test(s)
+  return /^[a-z]+(?:[A-Z][a-z0-9]*)+$/.test(s)
+}
+
+/**
+ * Tab badges should count unique attention targets (owners / categories), not every Grid error row.
+ * A US license with front+back can produce many errors for the same two people.
+ */
+export function gridKybSectionAttentionCounts(input: {
+  pointers: GridKybErrorPointer[]
+  people: GridKybPointerPerson[]
+  documents?: GridKybPointerDocument[] | null
+}): Record<GridKybFormSection, number> {
+  const company = new Set<string>()
+  const peopleKeys = new Set<string>()
+  const documentKeys = new Set<string>()
+
+  for (const pointer of input.pointers) {
+    if (pointer.section === "company") {
+      company.add(pointer.field || pointer.resourceId || pointer.reason)
+      continue
+    }
+    if (pointer.section === "documents") {
+      documentKeys.add(
+        pointer.documentCategory ||
+          pointer.gridDocumentId ||
+          pointer.resourceId ||
+          pointer.reason,
+      )
+      continue
+    }
+    if (pointer.section !== "people") continue
+
+    const targets = peopleForPointer(input.people, pointer.resourceId, input.documents ?? undefined)
+    if (
+      pointer.resourceId &&
+      targets.length > 0 &&
+      targets.length < Math.max(input.people.length, 1)
+    ) {
+      for (const person of targets) peopleKeys.add(person.id)
+      continue
+    }
+    if (pointer.resourceId?.startsWith("BeneficialOwner:")) {
+      peopleKeys.add(pointer.resourceId)
+      continue
+    }
+    if (pointer.resourceId?.startsWith("Document:")) {
+      const documentId = gridDocumentIdFromResource(pointer.resourceId)
+      const joined = (input.documents ?? []).find(
+        (row) => gridDocumentIdFromResource(row.gridDocumentId) === documentId && row.personId,
+      )
+      peopleKeys.add(joined?.personId || pointer.resourceId)
+      continue
+    }
+    peopleKeys.add(pointer.resourceId || pointer.reason)
+  }
+
+  return {
+    company: company.size,
+    people: peopleKeys.size,
+    documents: documentKeys.size,
+  }
 }
 
 function rejectedGridDocumentIdSet(pointers: GridKybErrorPointer[]): Set<string> {
