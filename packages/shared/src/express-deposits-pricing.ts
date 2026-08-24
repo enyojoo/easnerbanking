@@ -27,6 +27,7 @@ export type ExpressDepositsStripeQuoteFees = {
 }
 
 export type ExpressSolanaUsdcQuote = {
+  destination_currency?: string
   destination_amount?: string
   source_total_amount?: string
   source_amount?: string
