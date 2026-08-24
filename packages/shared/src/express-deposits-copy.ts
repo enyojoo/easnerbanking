@@ -33,8 +33,13 @@ export const EXPRESS_DEPOSITS_COPY = {
   identifierHint: "Enter the ID number we requested.",
   travelRuleBlock: "Additional confirmation is required for this amount. Try a smaller amount or finish verification.",
   somethingWentWrong: "Something went wrong. Try again.",
+  nativeTrustedInstallIos:
+    "This install can’t verify this device. Install the latest TestFlight or App Store build and try again.",
+  nativeTrustedInstallAndroid:
+    "This install can’t verify this device. Install the latest Play Store or official Android build and try again.",
+  /** @deprecated Use platform-specific strings via expressNativeTrustedInstallMessage. */
   nativeTrustedInstall:
-    "This install can’t verify this device. Install the latest TestFlight or store build and try again.",
+    "This install can’t verify this device. Install the latest official app build and try again.",
   paymentFailed: "Payment could not be completed. Try again.",
   setupDismissed: "Setup wasn’t finished. You can continue whenever you’re ready.",
 } as const
@@ -92,6 +97,14 @@ export function expressSetupUserMessage(raw?: string | null): string {
     return EXPRESS_DEPOSITS_COPY.somethingWentWrong
   }
   return text
+}
+
+export function expressNativeTrustedInstallMessage(
+  platform?: "ios" | "android" | "web" | (string & {}),
+): string {
+  if (platform === "android") return EXPRESS_DEPOSITS_COPY.nativeTrustedInstallAndroid
+  if (platform === "ios") return EXPRESS_DEPOSITS_COPY.nativeTrustedInstallIos
+  return EXPRESS_DEPOSITS_COPY.nativeTrustedInstall
 }
 
 export function isExpressKycAlreadyVerified(raw?: string | null): boolean {

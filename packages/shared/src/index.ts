@@ -469,6 +469,7 @@ export {
   expressDepositMethodTitle,
   expressIdentityOutcome,
   expressSetupUserMessage,
+  expressNativeTrustedInstallMessage,
   isExpressDepositsMetadata,
   isExpressIdentitySuccess,
   isExpressKycAlreadyVerified,

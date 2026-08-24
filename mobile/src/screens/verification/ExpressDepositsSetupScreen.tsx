@@ -113,7 +113,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
     const peeked = peekExpressOnrampStatus()
     if (peeked?.publishableKey) void loadMobileExpressOnramp(peeked.publishableKey).catch(() => undefined)
     else prefetchMobileExpressOnramp()
-    void refresh(false).catch((e) =>
+    void refresh(true).catch((e) =>
       setMessage(e instanceof Error ? e.message : EXPRESS_DEPOSITS_COPY.geoUnavailable),
     )
   }, [refresh])
