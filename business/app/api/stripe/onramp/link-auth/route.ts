@@ -22,13 +22,23 @@ function mapError(e: unknown) {
   )
 }
 
+function linkAuthEmail(ctx: {
+  payer: { email?: string | null }
+  actorEmail?: string | null
+}): string | undefined {
+  const email = String(ctx.payer.email || ctx.actorEmail || "").trim()
+  return email || undefined
+}
+
 export async function POST(request: Request) {
   const resolved = await resolveExpressDepositsContext(request)
   if ("error" in resolved) return resolved.error
+  const email = linkAuthEmail(resolved.ctx)
   try {
+    /** Client authenticate() needs a fresh LinkAuthIntent — never attach a stored OAuth token. */
     const intent = await createLinkAuthIntent({
-      email: resolved.ctx.payer.email || undefined,
-      oauthToken: resolved.ctx.oauthToken || undefined,
+      email,
+      forClientAuth: true,
     })
     return NextResponse.json({
       authIntentId: (intent as { id?: string }).id ?? null,
@@ -38,6 +48,15 @@ export async function POST(request: Request) {
   } catch (e) {
     if (e instanceof StripeOnrampApiError && e.status === 404) {
       return NextResponse.json({ authIntentId: null, needsRegister: true })
+    }
+    if (e instanceof StripeOnrampApiError && e.status === 409) {
+      return NextResponse.json(
+        {
+          error: expressSetupUserMessage("Link connection was revoked. Sign in again."),
+          code: e.code,
+        },
+        { status: 409 },
+      )
     }
     return mapError(e)
   }

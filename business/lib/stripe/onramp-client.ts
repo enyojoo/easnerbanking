@@ -98,19 +98,25 @@ export async function stripeOnrampRequest<T = Record<string, unknown>>(
 export async function createLinkAuthIntent(input: {
   email?: string
   oauthToken?: string
+  /** When true, omit Stripe-OAuth-Token so the client can start a fresh Link consent flow. */
+  forClientAuth?: boolean
 }): Promise<Record<string, unknown>> {
   const clientId = getStripeLinkOAuthClientId()
+  if (!clientId) {
+    throw new StripeOnrampApiError("Link OAuth client is not configured", 503, null)
+  }
   const dataSharingMerchant = getStripeLinkDataSharingMerchant()
+  const oauthToken = input.forClientAuth ? undefined : input.oauthToken
   return stripeOnrampRequest(
     "POST",
     "/v1/link_auth_intent",
     {
       email: input.email,
       oauth_scopes: getStripeLinkOAuthScopes(),
-      oauth_client_id: clientId || undefined,
+      oauth_client_id: clientId,
       ...(dataSharingMerchant ? { data_sharing_merchant: dataSharingMerchant } : {}),
     },
-    { absoluteUrl: "https://login.link.com/v1/link_auth_intent", json: true, oauthToken: input.oauthToken },
+    { absoluteUrl: "https://login.link.com/v1/link_auth_intent", json: true, oauthToken },
   )
 }
 

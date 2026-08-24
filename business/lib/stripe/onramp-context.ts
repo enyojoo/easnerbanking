@@ -93,6 +93,7 @@ export async function resolveExpressDepositsContext(
     ctx: {
       admin,
       actorUserId: auth.user.id,
+      actorEmail: auth.user.email ?? null,
       payerUserId,
       businessId,
       payer: row,

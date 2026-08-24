@@ -89,6 +89,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
   const l2StartedRef = useRef(false)
   const identitySucceededRef = useRef(false)
   const identityNoticeRef = useRef(false)
+  const watchIdentityOverlayRef = useRef(false)
   const dismissL2Ref = useRef<() => void>(() => {})
 
   const handleBack = useCallback(() => navigateStackBack(navigation), [navigation])
@@ -258,6 +259,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
         const finish = (raw: unknown) => {
           if (settled) return
           settled = true
+          watchIdentityOverlayRef.current = false
           const outcome = expressIdentityOutcome(raw)
           setStripeEl(null)
           setOpeningIdentity(false)
@@ -277,12 +279,18 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
 
         const authorizeLink = async (): Promise<boolean> => {
           if (!client.authenticate) return true
-          const auth = await apiFetch<{ authIntentId?: string | null; needsRegister?: boolean }>(
-            '/api/stripe/onramp/link-auth',
-            { method: 'POST', body: {} },
-          )
+          let auth: { authIntentId?: string | null; needsRegister?: boolean }
+          try {
+            auth = await apiFetch<{ authIntentId?: string | null; needsRegister?: boolean }>(
+              '/api/stripe/onramp/link-auth',
+              { method: 'POST', body: {} },
+            )
+          } catch (e) {
+            watchIdentityOverlayRef.current = false
+            throw e
+          }
           let intentId = auth.authIntentId
-          if (!intentId && auth.needsRegister) {
+          if (!intentId && auth.needsRegister && !status?.cryptoCustomerId) {
             await client.registerLinkUser?.(
               form.email.trim(),
               toExpressLinkE164Phone(form.phone, lockedCountry),
@@ -351,6 +359,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
         const authed = await authorizeLink()
         if (!authed || settled) return true
 
+        watchIdentityOverlayRef.current = true
         const verify = client.verifyDocuments || client.verifyIdentity
         if (!verify) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
         try {
@@ -448,10 +457,12 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
     if (step !== 'us_l2' && step !== 'eu_l2') return
     return watchExpressIdentityOverlay({
       onOpen: () => {
+        if (!watchIdentityOverlayRef.current) return
         setOpeningIdentity(false)
         setBusy(false)
       },
       onClosed: () => {
+        if (!watchIdentityOverlayRef.current) return
         dismissL2Ref.current()
       },
     })
