@@ -11,7 +11,7 @@ interface UseRouteProtectionOptions {
 }
 
 export function useRouteProtection(options: UseRouteProtectionOptions = {}) {
-  const { user, loading, isAdmin } = useAuth()
+  const { user, loading, isAdmin, sessionResolved } = useAuth()
   const router = useRouter()
   const [isChecking, setIsChecking] = useState(true)
 
@@ -27,7 +27,11 @@ export function useRouteProtection(options: UseRouteProtectionOptions = {}) {
       return
     }
 
-    if (loading) return
+    // During the cached-admin fast boot `loading` is already false while the
+    // stored session is still hydrating (`user` null). Redirecting on that
+    // window sent every reload through /auth/login before bouncing back —
+    // only a RESOLVED null session means signed out.
+    if (loading || !sessionResolved) return
 
     if (!user) {
       router.push(redirectTo)
@@ -42,7 +46,7 @@ export function useRouteProtection(options: UseRouteProtectionOptions = {}) {
     }
 
     setIsChecking(false)
-  }, [user, loading, isAdmin, router, requireAuth, adminOnly, redirectTo])
+  }, [user, loading, isAdmin, sessionResolved, router, requireAuth, adminOnly, redirectTo])
 
   return {
     isChecking: loading || isChecking,

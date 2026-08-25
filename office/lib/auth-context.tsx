@@ -58,6 +58,14 @@ interface AuthContextType {
   user: User | null
   isAdmin: boolean
   loading: boolean
+  /**
+   * True once supabase has actually resolved the stored session. During the
+   * cached-admin fast boot `loading` is false while `user` is still null —
+   * that window means "hydrating", NOT "signed out". Redirect-to-login
+   * decisions must wait for this flag, or every reload bounces through
+   * /auth/login before the session lands.
+   */
+  sessionResolved: boolean
   signOut: () => Promise<void>
 }
 
@@ -65,6 +73,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   isAdmin: false,
   loading: true,
+  sessionResolved: false,
   signOut: async () => {},
 })
 
@@ -83,6 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [bootAdminOk] = useState<boolean>(() => readCachedAdminOk(probeStoredOfficeUserId()))
   const [loading, setLoading] = useState(!bootAdminOk)
   const [isAdmin, setIsAdmin] = useState(bootAdminOk)
+  const [sessionResolved, setSessionResolved] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -90,6 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const syncSession = async (session: Session | null) => {
       const u = session?.user ?? null
       setUser(u)
+      setSessionResolved(true)
       if (!u) {
         setIsAdmin(false)
         if (!cancelled) setLoading(false)
@@ -137,7 +148,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Identity-stable value: every useAuth() consumer re-renders when this
   // changes, and this provider sits above the whole app.
-  const value = useMemo(() => ({ user, isAdmin, loading, signOut }), [user, isAdmin, loading, signOut])
+  const value = useMemo(
+    () => ({ user, isAdmin, loading, sessionResolved, signOut }),
+    [user, isAdmin, loading, sessionResolved, signOut],
+  )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
