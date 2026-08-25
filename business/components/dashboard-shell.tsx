@@ -221,8 +221,15 @@ export function DashboardShell({ children }: DashboardShellProps) {
             }
             className="mx-auto min-h-0 w-full max-w-[1440px] flex-1 overflow-y-auto overscroll-contain px-8 pb-10 pt-6"
           >
-            {/* Hidden, not unmounted: the page keeps its state for instant back. */}
-            <div className={clientDetailId ? "hidden" : undefined}>{children}</div>
+            {/*
+              Hidden, not unmounted: the page keeps its state for instant back.
+              Flex fill so full-page Settings flows (hosted KYB / Connect / Express)
+              still inherit main's height chain for inner overflow-y-auto scrolling
+              when html[data-verification-flow-open] makes main a flex column.
+            */}
+            <div className={clientDetailId ? "hidden" : "flex min-h-0 flex-1 flex-col"}>
+              {children}
+            </div>
             {clientDetailId ? <TransactionDetailView rawId={clientDetailId} /> : null}
           </main>
         </div>
