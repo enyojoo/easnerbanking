@@ -160,11 +160,19 @@ export async function GET() {
               }
               button.disabled = true;
               message.style.display = "none";
+              var sessionEmail = String(
+                (typeof checkout.session === "function" && checkout.session().email) ||
+                  (checkout.email) ||
+                  ""
+              ).trim();
+              // Session already has customer_email – do not call updateEmail / confirm email.
               var confirm = function () {
-                return checkout.confirm({ email: email });
+                return sessionEmail
+                  ? checkout.confirm({})
+                  : checkout.confirm({ email: email });
               };
               var pending =
-                typeof checkout.updateEmail === "function"
+                !sessionEmail && typeof checkout.updateEmail === "function"
                   ? checkout.updateEmail(email).then(confirm, confirm)
                   : confirm();
               pending

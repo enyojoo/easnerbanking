@@ -103,7 +103,8 @@ export async function resolvePayInForBusiness(
   const turnkey = await getTurnkeyDepositAddressesForBusiness(admin, businessId)
   const walletForInvoice =
     code === "EUR" ? turnkey.EUR : code === "USD" || code === "GBP" ? turnkey.USD : turnkey.USD
-  const walletAddress = walletForInvoice.address || walletForInvoice.ownerAddress
+  // Match /accounts: show the Turnkey Solana vault (ownerAddress), not the SPL ATA.
+  const walletAddress = walletForInvoice.ownerAddress || walletForInvoice.address
   const walletMemo = walletForInvoice.memo
 
   return buildPayInAccountsFromSources({

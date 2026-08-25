@@ -146,7 +146,22 @@ function CheckoutSurface({
     if (checkoutState.type !== "success") {
       return { ok: false, message: "Payment form is not ready" }
     }
-    const payerEmail = (overrideEmail || resolvedEmail || String(knownEmail ?? "")).trim()
+    const checkout = checkoutState.checkout as typeof checkoutState.checkout & {
+      email?: string | null
+      updateEmail?: (value: string) => Promise<unknown>
+    }
+    // Session created with customer_email / customer already has email – Stripe
+    // rejects updateEmail and confirm({ email }) in that case (invoices).
+    const sessionEmail = String(checkout.email ?? "").trim()
+    const emailLocked =
+      Boolean(sessionEmail) ||
+      (!collectEmail && Boolean(String(knownEmail ?? "").trim()))
+    const payerEmail = (
+      overrideEmail ||
+      resolvedEmail ||
+      sessionEmail ||
+      String(knownEmail ?? "")
+    ).trim()
     if (!isValidEmail(payerEmail)) {
       const message = COLLECTIONS_COPY.payerEmailRequired
       setError(message)
@@ -155,15 +170,12 @@ function CheckoutSurface({
     setSubmitting(true)
     setError(null)
     try {
-      const checkout = checkoutState.checkout as typeof checkoutState.checkout & {
-        updateEmail?: (value: string) => Promise<unknown>
-      }
-      if (typeof checkout.updateEmail === "function") {
+      if (!emailLocked && typeof checkout.updateEmail === "function") {
         await checkout.updateEmail(payerEmail)
       }
       const result = await checkout.confirm({
         redirect: "if_required",
-        email: payerEmail,
+        ...(emailLocked ? {} : { email: payerEmail }),
       })
       if (result.type === "error") {
         const message = result.error.message || "Payment failed"
@@ -180,7 +192,7 @@ function CheckoutSurface({
     } finally {
       setSubmitting(false)
     }
-  }, [checkoutState, knownEmail, onPaid, resolvedEmail])
+  }, [checkoutState, collectEmail, knownEmail, onPaid, resolvedEmail])
 
   const handleExpressConfirm = useCallback(
     async (event: StripeExpressCheckoutElementConfirmEvent) => {
