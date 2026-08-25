@@ -9,24 +9,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
  * Only ONE tab renders at a time (Radix mounts active content only), but
  * static imports shipped the union of all nine tabs' code — including the
  * Stripe Connect SDK and the KYB wizard — on every /settings visit
- * (~150 KB gzip). Each tab is its own chunk; inactive ones preload at idle
- * so switching stays instant.
+ * (~150 KB gzip). Each tab is its own chunk. Per the Instant Standard the
+ * split must be INVISIBLE: the default tab is static (instant landing),
+ * chunks warm at workspace idle and on trigger hover, and a tab switch
+ * waits for its chunk (see handleTabChange) so content never flashes empty.
  */
-const TAB_MODULE_LOADERS = [
-  () => import("@/components/settings/settings-personal-tab"),
-  () => import("@/components/settings/settings-business-tab"),
-  () => import("@/components/settings/settings-verification-tab"),
-  () => import("@/components/settings/settings-team-tab"),
-  () => import("@/components/settings/settings-communication-tab"),
-  () => import("@/components/settings/settings-recipients-tab"),
-  () => import("@/components/settings/settings-customers-tab"),
-  () => import("@/components/settings/settings-invoicing-tab"),
-  () => import("@/components/settings/settings-payments-tab"),
-] as const
+import {
+  isSettingsTabLoaded,
+  loadSettingsTab,
+  warmSettingsTabModules,
+  type SettingsTabValue,
+} from "./tab-loaders"
+import { SettingsPersonalTab } from "@/components/settings/settings-personal-tab"
 
-const SettingsPersonalTab = dynamic(() =>
-  import("@/components/settings/settings-personal-tab").then((m) => m.SettingsPersonalTab),
-)
 const SettingsBusinessTab = dynamic(() =>
   import("@/components/settings/settings-business-tab").then((m) => m.SettingsBusinessTab),
 )
@@ -127,24 +122,13 @@ function SettingsContent() {
   usePrimeKybPacket(Boolean(businessId && canManageBusinessVerification))
   usePrimeExpressOnrampStatus(true)
 
-  // Warm the inactive tab chunks at idle so switching tabs never waits on a
-  // network chunk load.
+  // Warm every tab chunk the moment the page mounts (the deep-linked tab
+  // first, then the rest). The workspace idle warm usually already cached
+  // them before the user got here.
   useEffect(() => {
-    if (typeof window === "undefined") return
-    const w = window as Window & {
-      requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number
-      cancelIdleCallback?: (id: number) => void
-    }
-    const warm = () => {
-      for (const load of TAB_MODULE_LOADERS) void load().catch(() => {})
-    }
-    if (typeof w.requestIdleCallback === "function") {
-      const id = w.requestIdleCallback(warm, { timeout: 3_000 })
-      return () => w.cancelIdleCallback?.(id)
-    }
-    const id = window.setTimeout(warm, 1_000)
-    return () => window.clearTimeout(id)
-  }, [])
+    void loadSettingsTab(validTab as SettingsTabValue)
+    warmSettingsTabModules()
+  }, [validTab])
 
   useEffect(() => {
     primeConnectStatus(businessId)
@@ -162,27 +146,45 @@ function SettingsContent() {
   const handleTabChange = (value: string) => {
     if (!TABS.includes(value as TabValue)) return
     if (value === activeTab) return
-    setActiveTab(value as TabValue)
-    const next = new URLSearchParams(searchParams.toString())
-    next.set("tab", value)
-    if (value !== "customers") {
-      next.delete("customer")
+
+    const applySwitch = () => {
+      setActiveTab(value as TabValue)
+      const next = new URLSearchParams(searchParams.toString())
+      next.set("tab", value)
+      if (value !== "customers") {
+        next.delete("customer")
+      }
+      if (value !== "verification") {
+        next.delete("flow")
+        setVerificationFlow(null)
+      }
+      if (typeof window !== "undefined") {
+        window.history.replaceState(null, "", `/settings?${next.toString()}`)
+      }
+      if (value === "verification") {
+        primeBusinessVerificationFlow({
+          businessId,
+          canManageBusinessVerification,
+          tier1Complete,
+          tier1CanResubmit,
+        })
+      }
     }
-    if (value !== "verification") {
-      next.delete("flow")
-      setVerificationFlow(null)
+
+    // Instant Standard: never flash an empty pane. If the tab's chunk isn't
+    // cached yet (rare — chunks warm at workspace idle, page mount, and
+    // trigger hover), keep showing the current tab for the few ms the load
+    // takes and switch when it's ready.
+    if (value === "personal" || isSettingsTabLoaded(value as SettingsTabValue)) {
+      applySwitch()
+      return
     }
-    if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", `/settings?${next.toString()}`)
-    }
-    if (value === "verification") {
-      primeBusinessVerificationFlow({
-        businessId,
-        canManageBusinessVerification,
-        tier1Complete,
-        tier1CanResubmit,
-      })
-    }
+    void loadSettingsTab(value as SettingsTabValue).then(applySwitch)
+  }
+
+  /** Hover warm so a click can always switch synchronously. */
+  const warmTab = (value: SettingsTabValue) => {
+    void loadSettingsTab(value)
   }
 
   return (
@@ -202,14 +204,14 @@ function SettingsContent() {
         {!verificationChromeHidden ? (
           <TabsList className="w-full shrink-0 justify-start flex-wrap h-auto gap-1 p-1">
             <TabsTrigger value="personal">Personal</TabsTrigger>
-            <TabsTrigger value="business">Business</TabsTrigger>
-            <TabsTrigger value="verification">Verification</TabsTrigger>
-            <TabsTrigger value="payments">Payments</TabsTrigger>
-            <TabsTrigger value="team">Team</TabsTrigger>
-            <TabsTrigger value="recipients">Recipients</TabsTrigger>
-            <TabsTrigger value="customers">Customers</TabsTrigger>
-            <TabsTrigger value="communication">Communication</TabsTrigger>
-            <TabsTrigger value="invoice">Invoice</TabsTrigger>
+            <TabsTrigger value="business" onPointerEnter={() => warmTab("business")}>Business</TabsTrigger>
+            <TabsTrigger value="verification" onPointerEnter={() => warmTab("verification")}>Verification</TabsTrigger>
+            <TabsTrigger value="payments" onPointerEnter={() => warmTab("payments")}>Payments</TabsTrigger>
+            <TabsTrigger value="team" onPointerEnter={() => warmTab("team")}>Team</TabsTrigger>
+            <TabsTrigger value="recipients" onPointerEnter={() => warmTab("recipients")}>Recipients</TabsTrigger>
+            <TabsTrigger value="customers" onPointerEnter={() => warmTab("customers")}>Customers</TabsTrigger>
+            <TabsTrigger value="communication" onPointerEnter={() => warmTab("communication")}>Communication</TabsTrigger>
+            <TabsTrigger value="invoice" onPointerEnter={() => warmTab("invoice")}>Invoice</TabsTrigger>
           </TabsList>
         ) : null}
 
