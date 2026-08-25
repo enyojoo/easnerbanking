@@ -126,10 +126,9 @@ function CheckoutSurface({
   showMethodsHint = true,
   collectEmail = false,
   knownEmail = null,
-  knownName = null,
   hintAlign = "left",
   onPaid,
-}: Omit<Props, "clientSecret">) {
+}: Omit<Props, "clientSecret" | "knownName">) {
   const checkoutState = useCheckoutElements()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -140,7 +139,6 @@ function CheckoutSurface({
   const ready = checkoutState.type === "success"
   const resolvedEmail = email.trim()
   const emailReady = !collectEmail || isValidEmail(resolvedEmail)
-  const prefillName = String(knownName ?? "").trim()
 
   const confirmPayment = useCallback(async (overrideEmail?: string): Promise<
     { ok: true } | { ok: false; message: string }
@@ -279,9 +277,8 @@ function CheckoutSurface({
               radios: "always",
               spacedAccordionItems: true,
             },
-            ...(prefillName
-              ? { defaultValues: { billingDetails: { name: prefillName } } }
-              : {}),
+            // Prefill name via CheckoutElementsProvider defaultValues – createPaymentElement
+            // rejects options.defaultValues (classic Elements API only).
             fields: paymentElementBillingFields({ collectEmail, knownEmail }),
           }}
         />
@@ -328,10 +325,13 @@ function CheckoutSurface({
 export function EasnerPaymentElementCheckout({
   clientSecret,
   knownName,
+  knownEmail,
   ...surface
 }: Props) {
   const elementsAppearance = useMemo(() => easnerStripeElementsAppearance(), [])
   const stripePromise = useMemo(() => getStripeJs(), [])
+  const prefillName = String(knownName ?? "").trim()
+  const prefillEmail = String(knownEmail ?? "").trim()
 
   return (
     <CheckoutElementsProvider
@@ -339,9 +339,21 @@ export function EasnerPaymentElementCheckout({
       options={{
         clientSecret,
         elementsOptions: { appearance: elementsAppearance },
+        // Checkout Sessions Elements: defaultValues live on init, not PaymentElement.
+        ...(prefillName || prefillEmail
+          ? {
+              defaultValues: {
+                ...(prefillEmail ? { email: prefillEmail } : {}),
+                // Name-only is valid at runtime; StripeCheckoutContact types address as required.
+                ...(prefillName
+                  ? { billingAddress: { name: prefillName } as { name: string } & { address: never } }
+                  : {}),
+              },
+            }
+          : {}),
       }}
     >
-      <CheckoutSurface knownName={knownName} {...surface} />
+      <CheckoutSurface knownEmail={knownEmail} {...surface} />
     </CheckoutElementsProvider>
   )
 }

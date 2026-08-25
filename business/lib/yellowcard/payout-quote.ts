@@ -21,7 +21,7 @@ import {
   resolveRecipientPayoutCountry,
   type RecipientSellPrepareRow,
 } from "@/lib/terminal/recipient-sell-prepare"
-import { resolveYcSendChannelId, findYcSendChannel } from "@/lib/payout-providers/yellowcard-provider"
+import { findYcSendChannel, resolveYcSendChannelId } from "@/lib/payout-providers/yellowcard-provider"
 import { mapRecipientToYcSend } from "@/lib/yellowcard/map-recipient-to-yc-send"
 import { submitYcSend, type YcSendSubmitResult } from "@/lib/yellowcard/send-submit"
 import { submitYcSendWithDestinationAmountLock } from "@/lib/yellowcard/yc-send-leg-lock"
@@ -81,19 +81,52 @@ export async function buildYcPayoutQuote(input: {
       ? ("mobile_money" as const)
       : ("bank_transfer" as const)
 
-  const channelId = await resolveYcSendChannelId({
-    countryCode,
-    currencyCode: receiveCurrency,
-    rail,
-  })
+  /**
+   * These lookups are independent — this function sits directly behind the
+   * send flow's quote preview, and the old fully-serial chain cost up to ~3
+   * external Yellowcard round trips one after another on a cold instance
+   * (channels resolved TWICE, then networks, then fee-config, each awaited
+   * in sequence). One parallel wave; user-facing validation order preserved
+   * below. `sendChannel` covers the old `resolveYcSendChannelId` call, which
+   * was just `findYcSendChannel().id`.
+   */
+  const [sendChannel, corridorRowResult, rates, ycFeeConfig, processingFeeBps] = await Promise.all([
+    findYcSendChannel({
+      countryCode,
+      currencyCode: receiveCurrency,
+      rail,
+    }),
+    admin
+      .from("payout_corridors")
+      .select("fields_schema")
+      .eq("country_code", countryCode)
+      .eq("currency_code", receiveCurrency)
+      .eq("rail", rail)
+      .maybeSingle(),
+    listYcRates(admin, { destinations: [receiveCurrency], status: "active" }),
+    fetchYcSendServiceFeeConfig({
+      country: countryCode,
+      currency: receiveCurrency,
+      channelType: rail === "mobile_money" ? "momo" : "bank",
+      directSettlement: true,
+    }),
+    quoteFiatProcessingFeeBps(
+      admin,
+      { countryCode, currencyCode: receiveCurrency, rail },
+      "pay_out",
+      { userId: input.userId },
+    ),
+  ])
+
+  const channelId =
+    String(
+      (sendChannel as { id?: unknown; channelId?: unknown } | null)?.id ??
+        (sendChannel as { channelId?: unknown } | null)?.channelId ??
+        "",
+    ).trim() || null
   if (!channelId) {
     throw new Error("No Yellowcard send channel for this corridor.")
   }
-  const sendChannel = await findYcSendChannel({
-    countryCode,
-    currencyCode: receiveCurrency,
-    rail,
-  })
   const ycLimits = resolveYcPayoutLimits({
     country: countryCode,
     currency: receiveCurrency,
@@ -101,13 +134,7 @@ export async function buildYcPayoutQuote(input: {
     channel: sendChannel as Record<string, unknown> | null,
   })
 
-  const { data: corridorRow } = await admin
-    .from("payout_corridors")
-    .select("fields_schema")
-    .eq("country_code", countryCode)
-    .eq("currency_code", receiveCurrency)
-    .eq("rail", rail)
-    .maybeSingle()
+  const corridorRow = corridorRowResult.data
 
   const ycRecipientCheck = validateYcRecipientForCorridor({
     countryCode,
@@ -118,8 +145,6 @@ export async function buildYcPayoutQuote(input: {
   if (!ycRecipientCheck.ok) {
     throw new Error(ycRecipientCheck.message)
   }
-
-  const rates = await listYcRates(admin, { destinations: [receiveCurrency], status: "active" })
   const payoutRate = findYcBalancePayoutRate(rates, receiveCurrency)
   const customerRate = payoutRate?.rate ?? 0
   if (!customerRate || customerRate <= 0) {
@@ -172,12 +197,6 @@ export async function buildYcPayoutQuote(input: {
   })
 
   const sequenceId = `yc_preview_${randomUUID()}`
-  const ycFeeConfig = await fetchYcSendServiceFeeConfig({
-    country: countryCode,
-    currency: receiveCurrency,
-    channelType: rail === "mobile_money" ? "momo" : "bank",
-    directSettlement: true,
-  })
   const provisionalCryptoUsd =
     amountEntryMode === "send" && sendBudget != null && sendBudget > 0
       ? roundUsdc(sendBudget)
@@ -191,12 +210,6 @@ export async function buildYcPayoutQuote(input: {
     throw new Error("Could not derive USDC amount for Yellowcard payout quote.")
   }
 
-  const processingFeeBps = await quoteFiatProcessingFeeBps(
-    admin,
-    { countryCode, currencyCode: receiveCurrency, rail },
-    "pay_out",
-    { userId: input.userId },
-  )
   const pricing = computeYcBalancePayoutPricingBeforeSend({
     receiveAmount: quoteReceiveAmount,
     customerRate,

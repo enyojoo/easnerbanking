@@ -45,6 +45,7 @@ import {
   resolveGridQuoteExpiresAt,
 } from "./config"
 import type { GridQuote } from "./types"
+import { after } from "next/server"
 
 function storedGridExternalAccountId(recipient: RecipientSellPrepareRow): string | null {
   const meta = recipient.metadata
@@ -64,15 +65,17 @@ function persistRecipientGridExternalAccount(
   const obj = meta && typeof meta === "object" ? { ...(meta as Record<string, unknown>) } : {}
   if (String(obj.grid_external_account_id ?? "").trim() === externalAccountId) return
   obj.grid_external_account_id = externalAccountId
-  void admin
-    .from("recipients")
-    .update({ metadata: obj, updated_at: new Date().toISOString() })
-    .eq("id", recipientId)
-    .then(({ error }) => {
-      if (error) {
-        console.warn("[grid] persist recipient external account failed:", error.message)
-      }
-    })
+  // after(): a floating write inside the interactive quote request could be
+  // killed at response end; deferring guarantees completion without cost.
+  after(async () => {
+    const { error } = await admin
+      .from("recipients")
+      .update({ metadata: obj, updated_at: new Date().toISOString() })
+      .eq("id", recipientId)
+    if (error) {
+      console.warn("[grid] persist recipient external account failed:", error.message)
+    }
+  })
 }
 
 function roundUsdc(n: number): number {

@@ -6,6 +6,9 @@ import type {
   RelayRequestsV3ListResponse,
 } from "./types"
 
+/** Hung-socket guard — see noah/http.ts for rationale. */
+const RELAY_HTTP_TIMEOUT_MS = 20_000
+
 function relayHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     Accept: "application/json",
@@ -22,6 +25,7 @@ async function relayFetch<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: { ...relayHeaders(), ...(init?.headers as Record<string, string> | undefined) },
     cache: "no-store",
+    signal: AbortSignal.timeout(RELAY_HTTP_TIMEOUT_MS),
   })
   if (!res.ok) {
     const body = await res.text().catch(() => "")

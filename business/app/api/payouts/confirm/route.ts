@@ -126,6 +126,59 @@ export async function POST(request: Request) {
         idempotencyKey: `send_lock:${operationUserId}:${recipientId}:${Date.now()}`,
       },
     )
+
+    /**
+     * Grid fold (docs/speed-ux-plan.md money-flow pass): the client used to
+     * follow this response with a SECOND request (/api/payouts/grid-prepare)
+     * that re-did auth + 6 DB reads before attaching the live Grid quote —
+     * a full extra HTTPS round trip on every Grid review transition. Attach
+     * it here in the same request; on failure return the raw lock so the
+     * client's existing grid-prepare fallback still applies.
+     */
+    const rawLockId = String(
+      (locked.rawQuote as { lockId?: unknown } | null)?.lockId ?? "",
+    ).trim()
+    if (primary === "grid" && rawLockId) {
+      try {
+        const { data: senderRow } = await admin
+          .from("users")
+          .select(
+            "residence_country,kyc_id_type,kyc_id_number,ng_local_id_type,ng_local_id_number,full_name,phone,email,date_of_birth,kyc_address_street,kyc_address_city,kyc_address_country",
+          )
+          .eq("id", operationUserId)
+          .maybeSingle()
+        const { attachLiveGridQuoteToLockSession } = await import(
+          "@/lib/payout/confirm-grid-balance-payout"
+        )
+        const live = await attachLiveGridQuoteToLockSession({
+          admin,
+          userId: operationUserId,
+          lockId: rawLockId,
+          recipient: recipientRow,
+          senderProfile: {
+            residenceCountry: senderRow?.residence_country,
+            kycIdType: senderRow?.kyc_id_type,
+            kycIdNumber: senderRow?.kyc_id_number,
+            ngLocalIdType: senderRow?.ng_local_id_type,
+            ngLocalIdNumber: senderRow?.ng_local_id_number,
+            fullName: senderRow?.full_name,
+            phone: senderRow?.phone,
+            email: senderRow?.email,
+            dateOfBirth: senderRow?.date_of_birth,
+            addressStreet: senderRow?.kyc_address_street,
+            addressCity: senderRow?.kyc_address_city,
+            addressCountry: senderRow?.kyc_address_country,
+          },
+        })
+        return NextResponse.json({ ok: true, quote: live })
+      } catch (e) {
+        console.warn(
+          "[payouts/confirm] grid live-quote fold failed (client falls back to grid-prepare):",
+          e instanceof Error ? e.message : e,
+        )
+      }
+    }
+
     return NextResponse.json({ ok: true, quote: locked.rawQuote })
   } catch (e) {
     const ycError = asYcPayoutError(e)

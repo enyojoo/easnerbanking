@@ -213,6 +213,12 @@ export async function ensurePayoutOrderConfirmed(
       }
       stashPayoutQuote(data.quote, meta)
       if (data.quote.provider === "grid" && data.quote.lockId) {
+        // /api/payouts/confirm now attaches the live Grid quote server-side
+        // (one request instead of two). Fall through to grid-prepare only
+        // when the fold didn't produce one (older deploy / fold failure).
+        if (data.quote.grid?.quoteId) {
+          return data.quote
+        }
         const live = await ensureGridLivePayoutQuote(data.quote.lockId, businessId)
         if (!live?.grid?.quoteId) {
           lastQuoteError = "Could not lock payout order. Try again."

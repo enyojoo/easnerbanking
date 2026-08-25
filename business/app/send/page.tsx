@@ -79,25 +79,18 @@ import {
 import {
   clearCrossBorderQuote,
   crossBorderQuoteToFlowState,
+  ensureCrossBorderQuoteStashed,
   isUsableCrossBorderQuotePreview,
   prefetchCrossBorderQuotePipeline,
   peekLastCrossBorderQuoteError,
-  warmCrossBorderQuotePipeline,
 } from "@/lib/yc-cross-border-quote-cache"
 import {
   ensureWalletSendOrderConfirmed,
-  isStashedWalletQuoteFresh,
-  peekLastWalletQuoteError,
-  walletQuoteToFlowState,
   type WalletQuoteStashMeta,
 } from "@/lib/wallet-send-quote-cache"
 import {
   ensurePayoutOrderConfirmed,
   ensurePayoutQuoteStashed,
-  isCompletePayoutQuoteLocked,
-  isStashedPayoutQuoteFresh,
-  payoutQuoteToFlowState,
-  peekLastPayoutQuoteError,
   type PayoutQuoteStashMeta,
 } from "@/lib/payout-quote-cache"
 import { coerceBeneficiaryEasenetDisplay, type RecipientUpsertInput } from "@/lib/recipients-store"
@@ -1382,131 +1375,133 @@ export default function SendPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedCrossBorderBankQuotePrefetchKey, recipient?.id, otherCurrency])
 
+  // Warm the static review route as soon as a send looks likely so Continue's
+  // router.push is an instant client transition.
+  const confirmRoutePrefetchedRef = useRef(false)
+  useEffect(() => {
+    if (confirmRoutePrefetchedRef.current) return
+    if (!recipient?.id) return
+    if (!(receiveAmount > 0 || sendAmount > 0)) return
+    confirmRoutePrefetchedRef.current = true
+    router.prefetch("/send/confirm")
+  }, [recipient?.id, receiveAmount, sendAmount, router])
+
   const handleContinue = async () => {
     if (!canContinue || !recipient || isContinuePending || isContinueLoading) return
-    const activeRecipient = await ensureRecipientPersisted()
-    if (!activeRecipient) return
-    if (isEasetagRecipient && paymentMethod === "otherCurrency") {
-      setAmountFieldError("Easetag sends are only supported from your balance.")
-      return
-    }
-    const fieldCheck = validateSendAmountFields({
-      hints: payoutHints,
-      note,
-      paymentPurpose,
-      isEasetag: isEasetagRecipient,
-      receiveCurrency,
-    })
-    if (!fieldCheck.ok) {
-      setAmountFieldError(fieldCheck.message)
-      return
-    }
-    if (
-      !isEasetagRecipient &&
-      !isWalletRecipient &&
-      (isBalanceSource || paymentMethod === "otherCurrency") &&
-      receiveAmount > 0
-    ) {
-      const limitCheck = validateBalancePayoutAmountForProvider({
-        providerRouting: payoutCorridorRow?.provider_routing,
-        sourceBalanceCurrency: sendCurrency,
-        amountEntryMode,
-        receiveAmount: displayReceiveAmount,
-        sendAmount: displaySendAmount,
-        customerRate:
-          isProviderBalancePayout && providerPayoutCustomerRate
-            ? providerPayoutCustomerRate
-            : forwardRate,
-        sendCurrency,
-        receiveCurrency,
-        rail: payoutRail,
-        noahHints: payoutHints,
-        ycLimits: ycPayoutLimits,
-      })
-      if (!limitCheck.ok) {
-        setAmountFieldError(limitCheck.message)
+    // Lock synchronously before any await: blocks double-taps through the whole handler.
+    // Spinner only appears if we haven't navigated within 175ms.
+    setIsContinuePending(true)
+    continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
+    try {
+      const activeRecipient = await ensureRecipientPersisted()
+      if (!activeRecipient) return
+      if (isEasetagRecipient && paymentMethod === "otherCurrency") {
+        setAmountFieldError("Easetag sends are only supported from your balance.")
         return
       }
-    }
-    setAmountFieldError(null)
-    warmYcMetadataCacheOnContinue(
-      showThroughLocalCurrency && otherCurrency
-        ? {
-            country: residenceCountryFromPayInCurrency(otherCurrency) ?? undefined,
-            currency: otherCurrency,
-          }
-        : undefined,
-    )
-    payoutQuotePrefetchControls.flush()
-    walletQuotePrefetchControls.flush()
-    const isTlcSend = showThroughLocalCurrency && paymentMethod === "otherCurrency"
-    const transactionId = isTlcSend ? "" : generateTransactionId()
+      const fieldCheck = validateSendAmountFields({
+        hints: payoutHints,
+        note,
+        paymentPurpose,
+        isEasetag: isEasetagRecipient,
+        receiveCurrency,
+      })
+      if (!fieldCheck.ok) {
+        setAmountFieldError(fieldCheck.message)
+        return
+      }
+      if (
+        !isEasetagRecipient &&
+        !isWalletRecipient &&
+        (isBalanceSource || paymentMethod === "otherCurrency") &&
+        receiveAmount > 0
+      ) {
+        const limitCheck = validateBalancePayoutAmountForProvider({
+          providerRouting: payoutCorridorRow?.provider_routing,
+          sourceBalanceCurrency: sendCurrency,
+          amountEntryMode,
+          receiveAmount: displayReceiveAmount,
+          sendAmount: displaySendAmount,
+          customerRate:
+            isProviderBalancePayout && providerPayoutCustomerRate
+              ? providerPayoutCustomerRate
+              : forwardRate,
+          sendCurrency,
+          receiveCurrency,
+          rail: payoutRail,
+          noahHints: payoutHints,
+          ycLimits: ycPayoutLimits,
+        })
+        if (!limitCheck.ok) {
+          setAmountFieldError(limitCheck.message)
+          return
+        }
+      }
+      setAmountFieldError(null)
+      warmYcMetadataCacheOnContinue(
+        showThroughLocalCurrency && otherCurrency
+          ? {
+              country: residenceCountryFromPayInCurrency(otherCurrency) ?? undefined,
+              currency: otherCurrency,
+            }
+          : undefined,
+      )
+      payoutQuotePrefetchControls.flush()
+      walletQuotePrefetchControls.flush()
+      const isTlcSend = showThroughLocalCurrency && paymentMethod === "otherCurrency"
+      const transactionId = isTlcSend ? "" : generateTransactionId()
 
-    const feeAmount = 0
-    const totalAmount = showThroughLocalCurrency ? sendAmount : sendAmount
+      const feeAmount = 0
+      const totalAmount = showThroughLocalCurrency ? sendAmount : sendAmount
 
-    const walletAmountEntryMode = isWalletRecipient ? ("receive" as const) : amountEntryMode
+      const walletAmountEntryMode = isWalletRecipient ? ("receive" as const) : amountEntryMode
 
-    const payoutQuoteMeta: PayoutQuoteStashMeta | null =
-      needsPayoutQuoteBeforeConfirm && activeRecipient?.id
-        ? {
-            recipientId: activeRecipient.id,
-            amountEntryMode,
-            entryAmount: amountEntryMode === "send" ? sendAmount : receiveAmount,
-            receiveCurrency,
-            sourceBalanceCurrency: sendCurrency,
-            ...(note.trim() ? { note: note.trim() } : {}),
-            ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
-          }
-        : null
-    const walletQuoteMeta: WalletQuoteStashMeta | null =
-      needsWalletQuoteBeforeConfirm && activeRecipient?.id
-        ? {
-            recipientId: activeRecipient.id,
-            amountEntryMode: walletAmountEntryMode,
-            entryAmount: receiveAmount,
-            receiveCurrency,
-            sourceBalanceCurrency: sendCurrency,
-          }
-        : null
+      const payoutQuoteMeta: PayoutQuoteStashMeta | null =
+        needsPayoutQuoteBeforeConfirm && activeRecipient?.id
+          ? {
+              recipientId: activeRecipient.id,
+              amountEntryMode,
+              entryAmount: amountEntryMode === "send" ? sendAmount : receiveAmount,
+              receiveCurrency,
+              sourceBalanceCurrency: sendCurrency,
+              ...(note.trim() ? { note: note.trim() } : {}),
+              ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+            }
+          : null
+      const walletQuoteMeta: WalletQuoteStashMeta | null =
+        needsWalletQuoteBeforeConfirm && activeRecipient?.id
+          ? {
+              recipientId: activeRecipient.id,
+              amountEntryMode: walletAmountEntryMode,
+              entryAmount: receiveAmount,
+              receiveCurrency,
+              sourceBalanceCurrency: sendCurrency,
+            }
+          : null
 
-    const state: SendFlowState = {
-      recipient: coerceBeneficiaryEasenetDisplay(activeRecipient),
-      ...(isDraftRecipientId(activeRecipient.id) && draftRecipientPersistRef.current
-        ? { draftRecipientPersist: draftRecipientPersistRef.current }
-        : {}),
-      requestedReceiveAmount: receiveAmount,
-      amount: receiveAmount,
-      receiveCurrency,
-      sendAmount,
-      sendCurrency,
-      amountEntryMode: walletAmountEntryMode,
-      sourceAccountId: sourceAccount?.id,
-      paymentMethod,
-      otherCurrency: otherCurrency ?? undefined,
-      otherPaymentMethod: otherPaymentMethod ?? undefined,
-      feeAmount,
-      totalAmount,
-      note: isWalletRecipient ? "" : note.trim(),
-      ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
-      transactionId,
-    }
-    let flowState = state
-    const needsQuoteAwait = needsPayoutQuoteBeforeConfirm || needsWalletQuoteBeforeConfirm
-    const quoteAlreadyWarm =
-      (needsWalletQuoteBeforeConfirm &&
-        walletQuoteMeta &&
-        isStashedWalletQuoteFresh(walletQuoteMeta)) ||
-      (needsPayoutQuoteBeforeConfirm &&
-        payoutQuoteMeta &&
-        isStashedPayoutQuoteFresh(payoutQuoteMeta))
-    if (
-      (needsQuoteAwait && !quoteAlreadyWarm)
-    ) {
-      setIsContinuePending(true)
-      continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
-    }
-    try {
+      const state: SendFlowState = {
+        recipient: coerceBeneficiaryEasenetDisplay(activeRecipient),
+        ...(isDraftRecipientId(activeRecipient.id) && draftRecipientPersistRef.current
+          ? { draftRecipientPersist: draftRecipientPersistRef.current }
+          : {}),
+        requestedReceiveAmount: receiveAmount,
+        amount: receiveAmount,
+        receiveCurrency,
+        sendAmount,
+        sendCurrency,
+        amountEntryMode: walletAmountEntryMode,
+        sourceAccountId: sourceAccount?.id,
+        paymentMethod,
+        otherCurrency: otherCurrency ?? undefined,
+        otherPaymentMethod: otherPaymentMethod ?? undefined,
+        feeAmount,
+        totalAmount,
+        note: isWalletRecipient ? "" : note.trim(),
+        ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+        transactionId,
+      }
+      let flowState = state
+
       if (showThroughLocalCurrency && paymentMethod === "otherCurrency") {
         if (otherPaymentMethod === "mobile_money" && otherCurrency) {
           flowState = {
@@ -1538,13 +1533,16 @@ export default function SendPage() {
             receiveAmount,
             crossBorderProvider: tlcFlow.crossBorderProvider,
           }
-          const previewQuote = await warmCrossBorderQuotePipeline(crossBorderMeta)
+          // Review only needs the PREVIEW to render localPayIn; the leg2 lock keeps
+          // warming in the background (review re-prefetches it, Pay awaits confirm).
+          const previewQuote = await ensureCrossBorderQuoteStashed(crossBorderMeta)
           if (!previewQuote || !isUsableCrossBorderQuotePreview(previewQuote)) {
             setAmountFieldError(
               peekLastCrossBorderQuoteError() || "Could not load transfer quote",
             )
             return
           }
+          prefetchCrossBorderQuotePipeline(crossBorderMeta)
           flowState = {
             ...state,
             sendAmount: previewQuote.localPayIn,
@@ -1569,33 +1567,16 @@ export default function SendPage() {
         return
       }
 
+      // Fire-and-forget: navigate now, the review page's own mount call joins the same
+      // module stash + inflight promise (no duplicate provider lock) and shows
+      // "Updating quote…" with a disabled CTA until the lock resolves.
       if (needsPayoutQuoteBeforeConfirm && payoutQuoteMeta) {
-        const quote = await ensurePayoutOrderConfirmed(payoutQuoteMeta, businessId)
-        if (!isCompletePayoutQuoteLocked(quote)) {
-          setAmountFieldError(
-            peekLastPayoutQuoteError() || "Could not lock payout order. Try again.",
-          )
-          return
-        }
-        flowState = payoutQuoteToFlowState(state, quote)
+        void ensurePayoutOrderConfirmed(payoutQuoteMeta, businessId).catch(() => {})
       } else if (needsWalletQuoteBeforeConfirm && walletQuoteMeta) {
-        const quote = await ensureWalletSendOrderConfirmed(walletQuoteMeta, businessId)
-        if (!quote?.formSessionId) {
-          setAmountFieldError(
-            peekLastWalletQuoteError() || "Could not lock wallet send order. Try again.",
-          )
-          return
-        }
-        flowState = walletQuoteToFlowState(state, quote)
+        void ensureWalletSendOrderConfirmed(walletQuoteMeta, businessId).catch(() => {})
       }
 
       persistSendFlowState(flowState)
-
-      if (isBalanceSource) {
-        router.push("/send/confirm")
-        return
-      }
-
       router.push("/send/confirm")
     } finally {
       if (continueSpinnerTimerRef.current) {

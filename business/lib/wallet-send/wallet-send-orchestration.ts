@@ -204,7 +204,13 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
         chain: "solana",
         destinationAddress: session.destination_address,
         amount: session.receive_amount,
-        settlementPollTimeoutMs: 120_000,
+        // 0 = return "pending" right after broadcast submit, like every other
+        // payout rail (fiat legs all pass 0). The old 120_000 blocked the
+        // user's Send button on on-chain Solana confirmation for up to two
+        // minutes. Settlement lands via the Turnkey webhook + reconcile cron,
+        // which also capture the deferred fee leg; the receipt's realtime
+        // patch + non-terminal poll surface the flip to "settled".
+        settlementPollTimeoutMs: 0,
         walletSend: walletSendCtx,
       })
 

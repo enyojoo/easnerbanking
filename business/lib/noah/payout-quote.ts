@@ -151,18 +151,22 @@ async function buildYellowcardBalancePayoutQuoteFromRow(input: {
   sendBudget?: number
   paymentPurpose?: string
 }) {
-  const { buildYcPayoutQuote } = await import("@/lib/yellowcard/payout-quote")
-  const { data: userRow } = await input.admin
-    .from("users")
-    .select(
-      "residence_country,kyc_id_type,kyc_id_number,ng_local_id_type,ng_local_id_number,full_name,phone,email,date_of_birth,kyc_address_street,kyc_address_city,kyc_address_country",
-    )
-    .eq("id", input.userId)
-    .maybeSingle()
-  const { getWalletOwnerId } = await import("@/lib/wallet/resolve-wallet-owner")
-  const walletOwnerId = await getWalletOwnerId(input.admin, "individual", input.userId)
-  const { data: walletRow } = walletOwnerId
-    ? await input.admin
+  // Quote hot path: the user row and the wallet-owner→wallet chain are
+  // independent — run them concurrently instead of three serial awaits.
+  const [{ buildYcPayoutQuote }, { data: userRow }, walletRow] = await Promise.all([
+    import("@/lib/yellowcard/payout-quote"),
+    input.admin
+      .from("users")
+      .select(
+        "residence_country,kyc_id_type,kyc_id_number,ng_local_id_type,ng_local_id_number,full_name,phone,email,date_of_birth,kyc_address_street,kyc_address_city,kyc_address_country",
+      )
+      .eq("id", input.userId)
+      .maybeSingle(),
+    (async () => {
+      const { getWalletOwnerId } = await import("@/lib/wallet/resolve-wallet-owner")
+      const walletOwnerId = await getWalletOwnerId(input.admin, "individual", input.userId)
+      if (!walletOwnerId) return null
+      const { data } = await input.admin
         .from("wallet_accounts")
         .select("address")
         .eq("wallet_owner_id", walletOwnerId)
@@ -170,7 +174,9 @@ async function buildYellowcardBalancePayoutQuoteFromRow(input: {
         .eq("asset", "USDC")
         .eq("status", "active")
         .maybeSingle()
-    : { data: null }
+      return data
+    })(),
+  ])
   const turnkeyAddr = String(walletRow?.address ?? "").trim()
   if (!turnkeyAddr) {
     throw new Error("User Solana wallet is required for Yellowcard payout refund routing.")

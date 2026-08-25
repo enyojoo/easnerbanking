@@ -20,7 +20,13 @@ export const WORKSPACE_NAV_HREFS = [
   "/settings",
 ] as const
 
-const SECONDARY_NAV_HREFS = ["/checkout", "/links", "/terminal"] as const
+const SECONDARY_NAV_HREFS = [
+  "/checkout",
+  "/links",
+  "/terminal",
+  "/send/confirm",
+  "/send/momo-setup",
+] as const
 
 let warmInflight: Promise<void> | null = null
 

@@ -1,5 +1,12 @@
 import { getGridBaseUrl, getGridClientId, getGridClientSecret, isGridConfigured } from "./config"
 
+/**
+ * A hung provider socket must never hang the Send UI: without a signal, a
+ * dead connection rides to the platform function limit. 20s is far above any
+ * legitimate call on these APIs. (docs/speed-ux-plan.md money-flow pass)
+ */
+const GRID_HTTP_TIMEOUT_MS = 20_000
+
 export class GridHttpError extends Error {
   constructor(
     message: string,
@@ -61,6 +68,7 @@ export async function gridFetch<T>(opts: GridFetchOptions): Promise<T> {
     method: opts.method,
     headers,
     ...(formData ? { body: formData } : jsonBody ? { body: jsonBody } : {}),
+    signal: AbortSignal.timeout(GRID_HTTP_TIMEOUT_MS),
   })
 
   const text = await res.text()

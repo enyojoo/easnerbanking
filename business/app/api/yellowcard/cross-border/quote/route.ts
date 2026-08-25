@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server"
+import { NextResponse, after } from "next/server"
 import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
@@ -45,7 +45,10 @@ export async function POST(request: Request) {
       ? await resolveBusinessOrgOwnerUserId(admin, noahCtx.businessId).catch(() => null)
       : null
   const kycUserId = orgOwnerId ?? user.id
-  void expireStaleYcPayInTransfers(admin, { userId: kycUserId }).catch(() => {})
+  // Maintenance job AFTER the response: this route is the interactive quote
+  // the amount screen waits on; the expiry sweep (select + update + per-row
+  // ledger writes) must not compete with it inside the request.
+  after(() => expireStaleYcPayInTransfers(admin, { userId: kycUserId }).catch(() => {}))
 
   const body = (await request.json().catch(() => null)) as {
     recipientId?: string

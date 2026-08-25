@@ -29,25 +29,25 @@ export async function validatePayoutQuoteAmountLimits(input: {
   const countryCode = resolveRecipientPayoutCountry(input.gateRow)
   const currencyCode = String(input.gateRow.currency || "").trim().toUpperCase()
 
-  const providerRouting =
+  // Independent reads — parallel instead of serial on the quote hot path.
+  const [providerRouting, { data: corridor }] = await Promise.all([
     countryCode && currencyCode
-      ? await loadCorridorRouting(input.admin, {
+      ? loadCorridorRouting(input.admin, {
           countryCode,
           currencyCode,
           rail,
         })
-      : []
-
-  const { data: corridor } =
+      : Promise.resolve([] as Awaited<ReturnType<typeof loadCorridorRouting>>),
     countryCode && currencyCode
-      ? await input.admin
+      ? input.admin
           .from("payout_corridors")
           .select("fields_schema,provider_routing")
           .eq("country_code", countryCode)
           .eq("currency_code", currencyCode)
           .eq("rail", rail)
           .maybeSingle()
-      : { data: null }
+      : Promise.resolve({ data: null }),
+  ])
 
   const routing = providerRouting.length
     ? providerRouting

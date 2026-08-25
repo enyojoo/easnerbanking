@@ -60,7 +60,18 @@ export async function hydrateSendDestinationsFromStorage(): Promise<SendDestinat
   }
 }
 
+let inflightRefresh: Promise<SendDestinationsResponse | null> | null = null
+
+/** Deduped: concurrent callers (focus effects, corridor gates) share one GET. */
 export async function refreshSendDestinations(): Promise<SendDestinationsResponse | null> {
+  if (inflightRefresh) return inflightRefresh
+  inflightRefresh = doRefreshSendDestinations().finally(() => {
+    inflightRefresh = null
+  })
+  return inflightRefresh
+}
+
+async function doRefreshSendDestinations(): Promise<SendDestinationsResponse | null> {
   try {
     const headers: Record<string, string> = {}
     if (memory.etag) headers['If-None-Match'] = memory.etag

@@ -406,23 +406,30 @@ export default function CreateInvoicePage() {
       const saved = isEditMode ? await updateInvoice(invoice.id, invoice) : await addInvoice(invoice)
       if (!saved) return
 
-      const res = await fetchWithSession("/api/invoices/send-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invoiceId: saved.id }),
-      })
-      const data = (await res.json().catch(() => ({}))) as { error?: string }
-      if (!res.ok) throw new Error(data.error || INVOICE_TOAST_COPY.emailFailed)
-
-      await updateInvoice(saved.id, {
-        status: "sent",
-        statusHistory: [
-          ...(saved.statusHistory ?? []),
-          { status: "sent", timestamp: new Date().toISOString() },
-        ],
-      })
-      toast.success(INVOICE_TOAST_COPY.sentTo(saved.customerEmail))
+      // Navigate as soon as the invoice exists; email + "sent" status continue in the
+      // background (the mutations patch the query caches, and sonner toasts are global
+      // so success/failure still surfaces after navigation).
       router.push(withReturnTo(`/invoices/${saved.id}`, backHref))
+      void (async () => {
+        const res = await fetchWithSession("/api/invoices/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ invoiceId: saved.id }),
+        })
+        const data = (await res.json().catch(() => ({}))) as { error?: string }
+        if (!res.ok) throw new Error(data.error || INVOICE_TOAST_COPY.emailFailed)
+
+        await updateInvoice(saved.id, {
+          status: "sent",
+          statusHistory: [
+            ...(saved.statusHistory ?? []),
+            { status: "sent", timestamp: new Date().toISOString() },
+          ],
+        })
+        toast.success(INVOICE_TOAST_COPY.sentTo(saved.customerEmail))
+      })().catch((e) => {
+        toast.error(e instanceof Error ? e.message : INVOICE_TOAST_COPY.issueFailed)
+      })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : INVOICE_TOAST_COPY.issueFailed)
     } finally {

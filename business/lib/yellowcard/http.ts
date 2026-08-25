@@ -11,6 +11,9 @@ import {
 } from "./config"
 import { logYcTiming } from "./timing"
 
+/** Hung-socket guard — see noah/http.ts for rationale. */
+const YC_HTTP_TIMEOUT_MS = 20_000
+
 export class YellowcardHttpError extends Error {
   constructor(
     message: string,
@@ -88,6 +91,7 @@ async function requestYellowcardHttp(input: {
 
     const res = await fetch(`${relayUrl}/forward`, {
       method: "POST",
+      signal: AbortSignal.timeout(YC_HTTP_TIMEOUT_MS),
       headers: {
         Authorization: `Bearer ${relaySecret}`,
         Accept: "application/json",
@@ -134,6 +138,7 @@ async function requestYellowcardHttp(input: {
     method: input.method,
     headers: input.headers,
     ...(input.body ? { body: input.body } : {}),
+    signal: AbortSignal.timeout(YC_HTTP_TIMEOUT_MS),
   })
 
   return {

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { after } from "next/server"
 
 export type NoahRateRow = {
   from_currency: string
@@ -111,16 +112,22 @@ export function triggerNoahRatesBackgroundRefresh(
 ): void {
   if (areNoahRatesFresh(currentRates, maxAgeMs)) return
   if (backgroundSyncInFlight) return
-  backgroundSyncInFlight = (async () => {
-    try {
-      const { syncNoahRatesSafe } = await import("@/lib/fx/noah-rate-sync")
-      await syncNoahRatesSafe()
-    } catch {
-      // Best-effort background refresh only.
-    } finally {
-      backgroundSyncInFlight = null
-    }
-  })()
+  // Deferred via after(): the sync is a full provider rate pull + DB writes.
+  // Launching it inline inside an interactive quote request made it compete
+  // with the request and risked being killed mid-write at response end.
+  backgroundSyncInFlight = new Promise<void>((resolve) => {
+    after(async () => {
+      try {
+        const { syncNoahRatesSafe } = await import("@/lib/fx/noah-rate-sync")
+        await syncNoahRatesSafe()
+      } catch {
+        // Best-effort background refresh only.
+      } finally {
+        backgroundSyncInFlight = null
+        resolve()
+      }
+    })
+  })
 }
 
 export async function ensureNoahRatesFresh(admin: SupabaseClient): Promise<NoahRateRow[]> {

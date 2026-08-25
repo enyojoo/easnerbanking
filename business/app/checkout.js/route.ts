@@ -70,19 +70,22 @@ export async function GET() {
       return loadSdk().then(function (sdk) {
         var mountEmail = String(opts.customerEmail || "").trim();
         var mountName = String(opts.customerName || "").trim();
-        var elementsOptions = {
-          appearance: opts.appearance || ${JSON.stringify(defaultAppearance)},
+        var initOptions = {
+          fetchClientSecret: function () {
+            return Promise.resolve(opts.clientSecret);
+          },
+          elementsOptions: {
+            appearance: opts.appearance || ${JSON.stringify(defaultAppearance)},
+          },
         };
-        if (mountName) {
-          elementsOptions.defaultValues = { billingDetails: { name: mountName } };
+        // Prefill via initCheckout – createPaymentElement rejects options.defaultValues.
+        if (mountName || mountEmail) {
+          initOptions.defaultValues = {};
+          if (mountEmail) initOptions.defaultValues.email = mountEmail;
+          if (mountName) initOptions.defaultValues.billingAddress = { name: mountName };
         }
         return sdk
-          .initCheckout({
-            fetchClientSecret: function () {
-              return Promise.resolve(opts.clientSecret);
-            },
-            elementsOptions: Object.keys(elementsOptions).length ? elementsOptions : undefined,
-          })
+          .initCheckout(initOptions)
           .then(function (checkout) {
             var session = typeof checkout.session === "function" ? checkout.session() : {};
             var sessionEmail = String(
@@ -144,7 +147,6 @@ export async function GET() {
                 billingDetails: { name: "always", email: "never" },
                 card: { billingDetails: { name: "always", email: "never" } },
               },
-              defaultValues: mountName ? { billingDetails: { name: mountName } } : undefined,
             });
             payment.mount(mountPoint);
 

@@ -104,8 +104,10 @@ import {
   ensureSendPayoutQuoteLocked,
   isCompletePayoutQuote,
   isStashedPayoutQuoteFresh,
+  isStashedPayoutQuotePreviewFresh,
   peekLastPayoutQuoteError,
   peekSendPayoutQuote,
+  peekSendPayoutQuotePreview,
   clearSendPayoutQuote,
   payoutRequestedReceiveAmount,
   payoutDisplayAmountsFromQuote,
@@ -114,8 +116,10 @@ import {
   ensureSendWalletQuoteStashed,
   ensureSendWalletOrderConfirmed,
   isStashedWalletQuoteFresh,
+  isStashedWalletQuotePreviewFresh,
   peekLastWalletQuoteError,
   peekSendWalletQuote,
+  peekSendWalletQuotePreview,
   clearSendWalletQuote,
 } from '../../lib/sendFlowWalletQuote'
 import {
@@ -124,14 +128,17 @@ import {
 } from '../../lib/sendFlowFundBalanceQuote'
 import {
   clearCrossBorderQuote,
+  isStashedCrossBorderQuoteFresh,
   isUsableCrossBorderQuotePreview,
+  peekCrossBorderQuote,
   prefetchCrossBorderQuotePipeline,
   peekLastCrossBorderQuoteError,
   warmCrossBorderQuotePipeline,
 } from '../../lib/sendFlowCrossBorderQuote'
-import { getPayoutCorridorCache, isRecipientPayoutCorridorActive, refreshPayoutCorridors } from '../../lib/payoutCorridors'
+import { getPayoutCorridorCache, isRecipientPayoutCorridorActive } from '../../lib/payoutCorridors'
 import {
   getCachedSendDestinations,
+  getSendDestinationsMemory,
   refreshSendDestinations,
 } from '../../lib/sendDestinations'
 import type { SendDestinationsResponse } from '@easner/shared'
@@ -562,13 +569,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
   useFocusEffect(
     React.useCallback(() => {
-      void getCachedSendDestinations().then((c) => {
-        if (c) setSendDestinations(c)
-      })
-      void refreshSendDestinations().then((c) => {
-        if (c) setSendDestinations(c)
-      })
-      void refreshPayoutCorridors().then(() => {
+      const applyCorridorGate = () => {
         const params = route.params as { recipient?: Recipient } | undefined
         const r = params?.recipient || recipient
         if (r) {
@@ -576,6 +577,24 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         } else {
           setPayoutCorridorActive(true)
         }
+      }
+      // Seed synchronously from the in-process catalog so the CTA is never
+      // network-gated when a cached catalog exists.
+      const memoryCatalog = getSendDestinationsMemory()
+      if (memoryCatalog) {
+        setSendDestinations(memoryCatalog)
+        applyCorridorGate()
+      }
+      void getCachedSendDestinations().then((c) => {
+        if (c) {
+          setSendDestinations(c)
+          applyCorridorGate()
+        }
+      })
+      // Single deduped refresh (refreshPayoutCorridors is the same function).
+      void refreshSendDestinations().then((c) => {
+        if (c) setSendDestinations(c)
+        applyCorridorGate()
       })
     }, [route.params, recipient]),
   )
@@ -1365,6 +1384,12 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         draftRecipientPersist &&
         !isEasetagRecipient
       ) {
+        // Pending set synchronously before the await – guards double-tap while
+        // the draft recipient POST resolves (spinner only after the 175ms grace).
+        setIsContinuePending(true)
+        if (!continueSpinnerTimerRef.current) {
+          continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
+        }
         activeRecipient = await resolveDraftRecipient(userProfile.id, recipient, draftRecipientPersist)
         setRecipient(activeRecipient)
         setDraftRecipientPersist(undefined)
@@ -1492,68 +1517,105 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       const quoteAlreadyWarm =
         needsQuoteAwait &&
         (isWalletRecipient
-          ? isStashedWalletQuoteFresh(quoteStashMeta)
-          : isStashedPayoutQuoteFresh(quoteStashMeta))
+          ? isStashedWalletQuoteFresh(quoteStashMeta) ||
+            isStashedWalletQuotePreviewFresh(quoteStashMeta)
+          : isStashedPayoutQuoteFresh(quoteStashMeta) ||
+            isStashedPayoutQuotePreviewFresh(quoteStashMeta))
 
       if (needsQuoteAwait && !quoteAlreadyWarm) {
         setIsContinuePending(true)
-        continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
+        if (!continueSpinnerTimerRef.current) {
+          continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
+        }
       }
 
-      const stashedWalletQuote =
+      let stashedWalletQuote: WalletSendQuote | null = null
+      if (
         selectedPaymentMethod === 'balance' &&
         isWalletRecipient &&
         receiveAmountValue > 0
-          ? await ensureSendWalletOrderConfirmed(
-              () =>
-                noahService.createWalletSendQuote({
-                  recipientId: activeRecipient.id,
-                  sourceBalanceCurrency: selectedBalanceCurrency,
-                  amountEntryMode: 'receive',
-                  receiveAmount: receiveAmountValue,
-                }),
-              (formSessionId) => noahService.confirmWalletSendOrder({ formSessionId }),
-              quoteStashMeta,
-            )
-          : isStashedWalletQuoteFresh(quoteStashMeta)
-            ? peekSendWalletQuote()
-            : null
+      ) {
+        const fetchWalletQuote = () =>
+          noahService.createWalletSendQuote({
+            recipientId: activeRecipient.id,
+            sourceBalanceCurrency: selectedBalanceCurrency,
+            amountEntryMode: 'receive',
+            receiveAmount: receiveAmountValue,
+          })
+        const fetchWalletConfirm = (formSessionId: string) =>
+          noahService.confirmWalletSendOrder({ formSessionId })
+        if (isStashedWalletQuoteFresh(quoteStashMeta)) {
+          stashedWalletQuote = peekSendWalletQuote()
+        } else if (isStashedWalletQuotePreviewFresh(quoteStashMeta)) {
+          // Navigate-then-resolve: fire the confirm in the background and go.
+          // The review re-locks on mount and joins this deduped in-flight
+          // confirm (same meta key) – never a second provider order.
+          stashedWalletQuote = peekSendWalletQuotePreview()
+          void ensureSendWalletOrderConfirmed(
+            fetchWalletQuote,
+            fetchWalletConfirm,
+            quoteStashMeta,
+          ).catch(() => {})
+        } else {
+          stashedWalletQuote = await ensureSendWalletOrderConfirmed(
+            fetchWalletQuote,
+            fetchWalletConfirm,
+            quoteStashMeta,
+          )
+        }
+      } else if (isStashedWalletQuoteFresh(quoteStashMeta)) {
+        stashedWalletQuote = peekSendWalletQuote()
+      }
 
       let stashedQuote: Awaited<ReturnType<typeof ensureSendPayoutQuoteLocked>> = null
+      let payoutQuoteIsPreview = false
       if (
         selectedPaymentMethod === 'balance' &&
         !isEasetagRecipient &&
         !isWalletRecipient &&
         receiveAmountValue > 0
       ) {
+        const fetchPayoutQuote = () =>
+          noahService.createPayoutQuote({
+            recipientId: activeRecipient.id,
+            receiveAmount: receiveAmountValue,
+            sourceBalanceCurrency: selectedBalanceCurrency,
+            amountEntryMode,
+            ...(amountEntryMode === 'send' && navAmounts.sendAmount > 0
+              ? { sendAmount: navAmounts.sendAmount }
+              : {}),
+            ...(note.trim() ? { note: note.trim() } : {}),
+            ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+          })
+        const fetchPayoutConfirm = () =>
+          noahService.confirmPayoutOrder({
+            recipientId: activeRecipient.id,
+            receiveAmount: receiveAmountValue,
+            sourceBalanceCurrency: selectedBalanceCurrency,
+            amountEntryMode,
+            ...(amountEntryMode === 'send' && navAmounts.sendAmount > 0
+              ? { sendAmount: navAmounts.sendAmount }
+              : {}),
+            ...(note.trim() ? { note: note.trim() } : {}),
+            ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+          })
         if (isStashedPayoutQuoteFresh(quoteStashMeta)) {
           stashedQuote = peekSendPayoutQuote()
+        } else if (isStashedPayoutQuotePreviewFresh(quoteStashMeta)) {
+          // Navigate-then-resolve: lock fires in the background; the review's
+          // mount lock joins the same deduped in-flight confirm (same meta key)
+          // – a single /api/payouts/confirm, a single provider lock.
+          stashedQuote = peekSendPayoutQuotePreview()
+          payoutQuoteIsPreview = true
+          void ensureSendPayoutQuoteLocked(
+            fetchPayoutQuote,
+            fetchPayoutConfirm,
+            quoteStashMeta,
+          ).catch(() => {})
         } else {
           stashedQuote = await ensureSendPayoutQuoteLocked(
-            () =>
-              noahService.createPayoutQuote({
-                recipientId: activeRecipient.id,
-                receiveAmount: receiveAmountValue,
-                sourceBalanceCurrency: selectedBalanceCurrency,
-                amountEntryMode,
-                ...(amountEntryMode === 'send' && navAmounts.sendAmount > 0
-                  ? { sendAmount: navAmounts.sendAmount }
-                  : {}),
-                ...(note.trim() ? { note: note.trim() } : {}),
-                ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
-              }),
-            () =>
-              noahService.confirmPayoutOrder({
-                recipientId: activeRecipient.id,
-                receiveAmount: receiveAmountValue,
-                sourceBalanceCurrency: selectedBalanceCurrency,
-                amountEntryMode,
-                ...(amountEntryMode === 'send' && navAmounts.sendAmount > 0
-                  ? { sendAmount: navAmounts.sendAmount }
-                  : {}),
-                ...(note.trim() ? { note: note.trim() } : {}),
-                ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
-              }),
+            fetchPayoutQuote,
+            fetchPayoutConfirm,
             quoteStashMeta,
           )
         }
@@ -1564,6 +1626,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         !isEasetagRecipient &&
         !isWalletRecipient &&
         receiveAmountValue > 0 &&
+        !payoutQuoteIsPreview &&
         !isCompletePayoutQuote(stashedQuote)
       ) {
         showError(peekLastPayoutQuoteError() || 'Could not load payout quote. Try again.')
@@ -1672,12 +1735,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             return
           }
           // Preview (+ background leg2) only – POST /receive happens on review Pay.
-          setIsContinuePending(true)
-          setIsContinueLoading(true)
-          if (continueSpinnerTimerRef.current) {
-            clearTimeout(continueSpinnerTimerRef.current)
-            continueSpinnerTimerRef.current = null
-          }
           const crossBorderMeta = {
             recipientId: activeRecipient.id,
             payInCurrency: selectedOtherCurrency,
@@ -1686,10 +1743,23 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             receiveAmount: receiveAmountValue,
             crossBorderProvider: ycFlow.crossBorderProvider,
           }
-          const previewQuote = await warmCrossBorderQuotePipeline(crossBorderMeta)
-          if (!previewQuote || !isUsableCrossBorderQuotePreview(previewQuote)) {
-            showError(peekLastCrossBorderQuoteError() || 'Could not load transfer quote')
-            return
+          let previewQuote = isStashedCrossBorderQuoteFresh(crossBorderMeta)
+            ? peekCrossBorderQuote()
+            : null
+          if (previewQuote && isUsableCrossBorderQuotePreview(previewQuote)) {
+            // Navigate-then-resolve: remaining pipeline (leg2 lock) continues in
+            // the background – deduped by meta key in sendFlowCrossBorderQuote.
+            void warmCrossBorderQuotePipeline(crossBorderMeta).catch(() => {})
+          } else {
+            setIsContinuePending(true)
+            if (!continueSpinnerTimerRef.current) {
+              continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
+            }
+            previewQuote = await warmCrossBorderQuotePipeline(crossBorderMeta)
+            if (!previewQuote || !isUsableCrossBorderQuotePreview(previewQuote)) {
+              showError(peekLastCrossBorderQuoteError() || 'Could not load transfer quote')
+              return
+            }
           }
           navigation.navigate('SendConfirm' as never, {
             recipient: activeRecipient,

@@ -79,13 +79,17 @@ export async function confirmPayoutOrder(
   }
 
   if (providerId === "yellowcard") {
-    const walletOwnerId = await getWalletOwnerId(
-      admin,
-      input.businessId ? "business" : "individual",
-      input.businessId ?? kycUserId,
-    )
-    const { data: walletRow } = walletOwnerId
-      ? await admin
+    // Confirm hot path (behind the review transition): the wallet chain and
+    // the KYC user row are independent — parallel, not three serial awaits.
+    const [walletRow, { data: userRow }] = await Promise.all([
+      (async () => {
+        const walletOwnerId = await getWalletOwnerId(
+          admin,
+          input.businessId ? "business" : "individual",
+          input.businessId ?? kycUserId,
+        )
+        if (!walletOwnerId) return null
+        const { data } = await admin
           .from("wallet_accounts")
           .select("address")
           .eq("wallet_owner_id", walletOwnerId)
@@ -93,19 +97,20 @@ export async function confirmPayoutOrder(
           .eq("asset", "USDC")
           .eq("status", "active")
           .maybeSingle()
-      : { data: null }
+        return data
+      })(),
+      admin
+        .from("users")
+        .select(
+          "residence_country,kyc_id_type,kyc_id_number,ng_local_id_type,ng_local_id_number,full_name,phone,email,date_of_birth,kyc_address_street,kyc_address_city,kyc_address_country",
+        )
+        .eq("id", kycUserId)
+        .maybeSingle(),
+    ])
     const turnkeyAddr = String(walletRow?.address ?? "").trim()
     if (!turnkeyAddr) {
       throw new Error("User Solana wallet is required for Yellowcard payout refund routing.")
     }
-
-    const { data: userRow } = await admin
-      .from("users")
-      .select(
-        "residence_country,kyc_id_type,kyc_id_number,ng_local_id_type,ng_local_id_number,full_name,phone,email,date_of_birth,kyc_address_street,kyc_address_city,kyc_address_country",
-      )
-      .eq("id", kycUserId)
-      .maybeSingle()
 
     return confirmYcBalancePayoutOrder({
       admin,

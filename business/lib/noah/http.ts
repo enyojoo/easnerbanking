@@ -2,6 +2,13 @@ import { createNoahSignatureJwt } from "./signing"
 import { getNoahApiKey, getNoahBaseUrl, getNoahSigningPrivateKey } from "./config"
 import { assertNoahEs384SigningPrivateKeyPem } from "./normalize-signing-key"
 
+/**
+ * A hung provider socket must never hang the Send UI: without a signal, a
+ * dead connection rides to the platform function limit. 20s is far above any
+ * legitimate call on these APIs. (docs/speed-ux-plan.md money-flow pass)
+ */
+const NOAH_HTTP_TIMEOUT_MS = 20_000
+
 /** Thrown by `noahFetch` on non-OK responses; use `status` for reliable 404 detection (Noah `Detail` text varies). */
 export class NoahHttpError extends Error {
   constructor(
@@ -119,6 +126,7 @@ export async function noahFetch<T>(opts: NoahFetchOptions): Promise<T> {
     method: opts.method,
     headers,
     body: body !== undefined ? new Uint8Array(body) : undefined,
+    signal: AbortSignal.timeout(NOAH_HTTP_TIMEOUT_MS),
   })
 
   const text = await res.text()

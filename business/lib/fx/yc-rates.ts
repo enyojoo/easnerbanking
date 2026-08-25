@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { isYcStoredRatePair } from "@easner/rate-sync"
+import { after } from "next/server"
 
 export type YcRateRow = {
   from_currency: string
@@ -145,15 +146,21 @@ export function triggerYcRatesBackgroundRefresh(
 ): void {
   if (areYcRatesFresh(currentRates, maxAgeMs)) return
   if (backgroundSyncInFlight) return
-  backgroundSyncInFlight = (async () => {
-    try {
-      const { syncYcRatesSafe } = await import("@/lib/fx/yc-rate-sync")
-      await syncYcRatesSafe()
-    } catch {
-      // Best-effort
-    } finally {
-      backgroundSyncInFlight = null
-    }
-  })()
+  // Deferred via after(): the sync is a full provider rate pull + DB writes.
+  // Launching it inline inside an interactive quote request made it compete
+  // with the request and risked being killed mid-write at response end.
+  backgroundSyncInFlight = new Promise<void>((resolve) => {
+    after(async () => {
+      try {
+        const { syncYcRatesSafe } = await import("@/lib/fx/yc-rate-sync")
+        await syncYcRatesSafe()
+      } catch {
+        // Best-effort
+      } finally {
+        backgroundSyncInFlight = null
+        resolve()
+      }
+    })
+  })
   void admin
 }

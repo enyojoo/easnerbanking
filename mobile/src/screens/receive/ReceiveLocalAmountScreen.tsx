@@ -65,6 +65,9 @@ import {
   ensureFundBalanceQuoteStashed,
   ensurePayInNetworksCached,
   isCompleteFundBalanceQuote,
+  isStashedFundBalanceQuoteFresh,
+  isUsableFundBalanceQuotePreview,
+  peekFundBalanceQuote,
   peekLastFundBalanceQuoteError,
 } from '../../lib/sendFlowFundBalanceQuote'
 import { warmYcLocalDepositCaches, ensureYcLocalDepositCachesReady } from '../../lib/warmYcLocalDepositCaches'
@@ -432,6 +435,27 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
         usdCredit: displayPreview.usdCredit,
         localPayIn: displayPreview.localPayIn,
         customerRate: ycFlow.customerRate ?? 0,
+      } as never)
+      return
+    }
+
+    // Navigate-then-resolve: with a fresh preview stashed, fire the confirm in the
+    // background and go – the review locks on mount and joins the same in-flight
+    // confirm (deduped by meta key in sendFlowFundBalanceQuote).
+    const stashedPreview = isStashedFundBalanceQuoteFresh(fundBalanceQuoteMeta)
+      ? peekFundBalanceQuote()
+      : null
+    if (stashedPreview && isUsableFundBalanceQuotePreview(stashedPreview)) {
+      void ensureFundBalanceOrderConfirmed(fundBalanceQuoteMeta).catch(() => {})
+      navigation.navigate('ReceiveLocalReview' as never, {
+        localPayInCurrency,
+        residenceCountry,
+        payInRail,
+        amountEntryMode,
+        enteredAmount,
+        usdCredit: stashedPreview.usdCredit,
+        localPayIn: stashedPreview.localPayIn,
+        customerRate: stashedPreview.customerRate,
       } as never)
       return
     }

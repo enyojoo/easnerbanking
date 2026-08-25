@@ -3,6 +3,7 @@ import { resolveGridBalancePayoutCustomerRate } from "@easner/shared"
 import { listGridExchangeRates, findGridExchangeRate } from "@/lib/grid/discoveries"
 import { gridCurrencyCode, gridExchangeRateMid } from "@/lib/grid/types"
 import { getGridPayoutMarginBps } from "@/lib/grid/config"
+import { after } from "next/server"
 
 export type GridRateRow = {
   from_currency: string
@@ -187,16 +188,22 @@ export function triggerGridRatesBackgroundRefresh(
 ): void {
   if (areGridRatesFresh(currentRates, maxAgeMs)) return
   if (backgroundSyncInFlight) return
-  backgroundSyncInFlight = (async () => {
-    try {
-      const { syncGridRatesSafe } = await import("@/lib/fx/grid-rate-sync")
-      await syncGridRatesSafe()
-    } catch {
-      // Best-effort
-    } finally {
-      backgroundSyncInFlight = null
-    }
-  })()
+  // Deferred via after(): the sync is a full provider rate pull + DB writes.
+  // Launching it inline inside an interactive quote request made it compete
+  // with the request and risked being killed mid-write at response end.
+  backgroundSyncInFlight = new Promise<void>((resolve) => {
+    after(async () => {
+      try {
+        const { syncGridRatesSafe } = await import("@/lib/fx/grid-rate-sync")
+        await syncGridRatesSafe()
+      } catch {
+        // Best-effort
+      } finally {
+        backgroundSyncInFlight = null
+        resolve()
+      }
+    })
+  })
   void admin
 }
 

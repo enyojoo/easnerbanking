@@ -21,7 +21,10 @@ import {
 import {
   crossBorderQuoteToFlowState,
   ensureCrossBorderOrderConfirmed,
-  isCompleteCrossBorderQuote,
+  ensureCrossBorderQuoteStashed,
+  isStashedCrossBorderQuoteFresh,
+  isUsableCrossBorderQuotePreview,
+  peekCrossBorderQuote,
   prefetchCrossBorderQuotePipeline,
   peekLastCrossBorderQuoteError,
 } from "@/lib/yc-cross-border-quote-cache"
@@ -180,13 +183,19 @@ export default function SendMomoSetupPage() {
     setContinueError(null)
     setIsContinueLoading(true)
     try {
-      const lockedQuote = await ensureCrossBorderOrderConfirmed(crossBorderMeta)
-      if (!lockedQuote || !isCompleteCrossBorderQuote(lockedQuote)) {
+      // Review renders from the PREVIEW; the lock chain (leg2 + leg1 confirm) runs in
+      // the background. Review's YcPayInReviewSection owns the confirm before Pay, and
+      // the module stash + inflight dedupe prevent a duplicate provider order.
+      const previewQuote = isStashedCrossBorderQuoteFresh(crossBorderMeta)
+        ? peekCrossBorderQuote()
+        : await ensureCrossBorderQuoteStashed(crossBorderMeta)
+      if (!previewQuote || !isUsableCrossBorderQuotePreview(previewQuote)) {
         setContinueError(
           peekLastCrossBorderQuoteError() || "Could not lock transfer details",
         )
         return
       }
+      void ensureCrossBorderOrderConfirmed(crossBorderMeta).catch(() => {})
       const next: SendFlowState = {
         ...state,
         ycMomoSetup: {
@@ -194,14 +203,14 @@ export default function SendMomoSetupPage() {
           networkId: momoNetworkId,
           sourceNetworkName: selectedNetwork?.name,
         },
-        sendAmount: lockedQuote.localPayIn,
+        sendAmount: previewQuote.localPayIn,
         sendCurrency: payInCurrency,
-        totalAmount: lockedQuote.localPayIn,
+        totalAmount: previewQuote.localPayIn,
         transactionId:
-          lockedQuote.easnerTransactionId ||
-          lockedQuote.transactionId ||
+          previewQuote.easnerTransactionId ||
+          previewQuote.transactionId ||
           state.transactionId,
-        ycCrossBorder: crossBorderQuoteToFlowState(lockedQuote, crossBorderMeta),
+        ycCrossBorder: crossBorderQuoteToFlowState(previewQuote, crossBorderMeta),
       }
       persistSendFlowState(next)
       router.push("/send/confirm")
