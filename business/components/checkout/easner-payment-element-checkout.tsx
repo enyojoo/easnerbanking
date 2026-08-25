@@ -343,7 +343,6 @@ export function EasnerPaymentElementCheckout({
   const elementsAppearance = useMemo(() => easnerStripeElementsAppearance(), [])
   const stripePromise = useMemo(() => getStripeJs(), [])
   const prefillName = String(knownName ?? "").trim()
-  const prefillEmail = String(knownEmail ?? "").trim()
 
   return (
     <CheckoutElementsProvider
@@ -351,15 +350,15 @@ export function EasnerPaymentElementCheckout({
       options={{
         clientSecret,
         elementsOptions: { appearance: elementsAppearance },
-        // Checkout Sessions Elements: defaultValues live on init, not PaymentElement.
-        ...(prefillName || prefillEmail
+        // Prefill name only. Do NOT pass defaultValues.email when the Session was
+        // created with customer_email (invoices) – Stripe rejects email updates and
+        // Payment Element fails to mount.
+        ...(prefillName
           ? {
               defaultValues: {
-                ...(prefillEmail ? { email: prefillEmail } : {}),
-                // Name-only is valid at runtime; StripeCheckoutContact types address as required.
-                ...(prefillName
-                  ? { billingAddress: { name: prefillName } as { name: string } & { address: never } }
-                  : {}),
+                billingAddress: {
+                  name: prefillName,
+                } as { name: string } & { address: never },
               },
             }
           : {}),

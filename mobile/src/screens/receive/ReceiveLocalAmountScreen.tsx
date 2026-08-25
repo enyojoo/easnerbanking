@@ -85,7 +85,7 @@ type RouteParams = {
   payInRail: YcPayInRail
   bankAvailable?: boolean
   momoAvailable?: boolean
-  ngMissingType?: NgLocalIdType | null
+  ngMissingTypes?: NgLocalIdType[]
 }
 
 export default function ReceiveLocalAmountScreen({ navigation, route }: NavigationProps) {
@@ -107,7 +107,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
   const payInRail = params.payInRail ?? 'bank_transfer'
   const bankAvailable = params.bankAvailable ?? false
   const momoAvailable = params.momoAvailable ?? false
-  const ngMissingType = params.ngMissingType ?? null
+  const ngMissingTypes = params.ngMissingTypes ?? []
 
   const handleBack = useCallback(() => navigateStackBack(navigation), [navigation])
   useStackHardwareBack(handleBack)
@@ -484,12 +484,12 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     }
   }
 
-  if (ngMissingType) {
+  if (ngMissingTypes.length > 0) {
     return (
       <ScreenWrapper>
         <View style={styles.blocked}>
           <ReceiveFlowHeader title="Add money" onBack={handleBack} />
-          <NgLocalVerificationNotice missingType={ngMissingType} onSaved={() => navigation.goBack()} />
+          <NgLocalVerificationNotice missingTypes={ngMissingTypes} onSaved={() => navigation.goBack()} />
         </View>
       </ScreenWrapper>
     )

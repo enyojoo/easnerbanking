@@ -1026,13 +1026,17 @@ export type {
   VerifiedIdentityPayload,
 } from "./verified-identity"
 export {
+  NG_LOCAL_ID_PAIR,
   NG_LOCAL_VERIFICATION_COPY,
   buildNgYcIdPair,
+  encodeNgLocalIdPair,
+  isNgLocalIdPairType,
   isValidNgLocalIdNumber,
   mapNoahKycIdTypeToNgLocal,
   ngLocalVerificationComplete,
   ngSupplementInlinePrompt,
   normalizeNgLocalIdType,
+  parseNgLocalIdPair,
   resolveNgLocalVerification,
   showNgSupplementPrompt,
   ycLocalRailsOfferedForNg,

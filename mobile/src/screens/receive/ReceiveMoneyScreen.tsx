@@ -49,7 +49,8 @@ import {
   resolveWarmYcLocalDepositCorridor,
   ensureYcLocalDepositCachesReady,
   prefetchNgLocalVerification,
-  readCachedNgLocalMissingType,
+  clearNgLocalVerificationCache,
+  readCachedNgLocalMissingTypes,
   resolveReceiveRailsForDisplay,
 } from '../../lib/warmYcLocalDepositCaches'
 import { useStackHardwareBack } from '../../hooks/useStackHardwareBack'
@@ -68,7 +69,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const relayDepositQuery = useConsumerRelayDepositAddresses(currency === 'USD')
 
   const [activeTab, setActiveTab] = useState<TabType>('cash')
-  const [ngMissingType, setNgMissingType] = useState<NgLocalIdType | null>(null)
+  const [ngMissingTypes, setNgMissingTypes] = useState<NgLocalIdType[]>([])
   const expressDeviceWallets = useMemo(
     () => ({
       applePay: Platform.OS === 'ios' || Platform.OS === 'web',
@@ -252,7 +253,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
   const bankAvailable = displayRails?.rails.bank_transfer.available ?? false
   const momoAvailable = displayRails?.rails.mobile_money.available ?? false
-  const localDepositBlocked = Boolean(localPayInCurrency === 'NGN' && ngMissingType)
+  const localDepositBlocked = Boolean(localPayInCurrency === 'NGN' && ngMissingTypes.length > 0)
 
   const navigateToBankDetails = () => {
     haptics.medium()
@@ -272,23 +273,23 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
       payInRail,
       bankAvailable,
       momoAvailable,
-      ngMissingType,
+      ngMissingTypes,
     } as never)
   }
 
   useEffect(() => {
     if (localPayInCurrency !== 'NGN' || !verificationComplete || currency !== 'USD' || !residenceCountry) {
-      setNgMissingType(null)
+      setNgMissingTypes([])
       return
     }
-    const cachedMissing = readCachedNgLocalMissingType(residenceCountry)
+    const cachedMissing = readCachedNgLocalMissingTypes(residenceCountry)
     if (cachedMissing !== undefined) {
-      setNgMissingType(cachedMissing)
+      setNgMissingTypes(cachedMissing)
     }
     let cancelled = false
     void (async () => {
-      const missingType = await prefetchNgLocalVerification(residenceCountry)
-      if (!cancelled) setNgMissingType(missingType)
+      const missingTypes = await prefetchNgLocalVerification(residenceCountry)
+      if (!cancelled) setNgMissingTypes(missingTypes)
     })()
     return () => {
       cancelled = true
@@ -670,11 +671,12 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                 renderDepositVerificationNotice('cash')
               ) : (
               <View style={{ gap: spacing[4] }}>
-                {localPayInCurrency === 'NGN' && ngMissingType ? (
+                {localPayInCurrency === 'NGN' && ngMissingTypes.length > 0 ? (
                   <NgLocalVerificationNotice
-                    missingType={ngMissingType}
+                    missingTypes={ngMissingTypes}
                     onSaved={() => {
-                      setNgMissingType(null)
+                      setNgMissingTypes([])
+                      if (residenceCountry) clearNgLocalVerificationCache(residenceCountry)
                       void refreshUserProfile?.()
                     }}
                   />

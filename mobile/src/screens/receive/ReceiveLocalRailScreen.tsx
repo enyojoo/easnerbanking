@@ -10,7 +10,7 @@ type RouteParams = {
   localPayInCurrency?: string
   residenceCountry?: string
   payInRail?: YcPayInRail
-  ngMissingType?: NgLocalIdType | null
+  ngMissingTypes?: NgLocalIdType[]
 }
 
 /** Deprecated rail picker – redirects to Receive Cash hub or amount entry when deep-linked. */
@@ -24,7 +24,7 @@ export default function ReceiveLocalRailScreen({ navigation, route }: Navigation
         localPayInCurrency,
         residenceCountry,
         payInRail,
-        ngMissingType: params.ngMissingType ?? null,
+        ngMissingTypes: params.ngMissingTypes ?? [],
       } as never)
       return
     }

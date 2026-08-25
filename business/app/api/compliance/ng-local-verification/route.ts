@@ -1,13 +1,22 @@
 import { NextResponse } from "next/server"
-import { isValidNgLocalIdNumber, normalizeNgLocalIdType } from "@easner/shared"
+import {
+  encodeNgLocalIdPair,
+  isValidNgLocalIdNumber,
+  NG_LOCAL_ID_PAIR,
+  normalizeNgLocalIdType,
+} from "@easner/shared"
 import { resolveIsOrgOwnerForUser, resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 
 export const runtime = "nodejs"
 
 type Body = {
+  /** Single missing ID (one-field form). */
   ngLocalIdType?: string
   ngLocalIdNumber?: string
+  /** Both IDs when neither is on file. */
+  nin?: string
+  bvn?: string
 }
 
 /**
@@ -27,13 +36,32 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
 
-  const idType = normalizeNgLocalIdType(body.ngLocalIdType)
-  const idNumber = String(body.ngLocalIdNumber ?? "").trim()
-  if (!idType) {
-    return NextResponse.json({ error: "ngLocalIdType must be NIN or BVN" }, { status: 400 })
-  }
-  if (!isValidNgLocalIdNumber(idNumber)) {
-    return NextResponse.json({ error: "ID number must be 11 digits" }, { status: 400 })
+  const pairSubmit = body.nin !== undefined || body.bvn !== undefined
+  let idType: string
+  let idNumber: string
+
+  if (pairSubmit) {
+    const nin = String(body.nin ?? "").trim()
+    const bvn = String(body.bvn ?? "").trim()
+    if (!nin || !bvn) {
+      return NextResponse.json({ error: "Provide both NIN and BVN" }, { status: 400 })
+    }
+    if (!isValidNgLocalIdNumber(nin) || !isValidNgLocalIdNumber(bvn)) {
+      return NextResponse.json({ error: "NIN and BVN must each be 11 digits" }, { status: 400 })
+    }
+    idType = NG_LOCAL_ID_PAIR
+    idNumber = encodeNgLocalIdPair(nin, bvn)
+  } else {
+    const singleType = normalizeNgLocalIdType(body.ngLocalIdType)
+    const singleNumber = String(body.ngLocalIdNumber ?? "").trim()
+    if (!singleType) {
+      return NextResponse.json({ error: "ngLocalIdType must be NIN or BVN" }, { status: 400 })
+    }
+    if (!isValidNgLocalIdNumber(singleNumber)) {
+      return NextResponse.json({ error: "ID number must be 11 digits" }, { status: 400 })
+    }
+    idType = singleType
+    idNumber = singleNumber
   }
 
   const admin = createSupabaseAdmin()

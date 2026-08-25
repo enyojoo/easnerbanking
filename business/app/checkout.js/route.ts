@@ -78,11 +78,12 @@ export async function GET() {
             appearance: opts.appearance || ${JSON.stringify(defaultAppearance)},
           },
         };
-        // Prefill via initCheckout – createPaymentElement rejects options.defaultValues.
-        if (mountName || mountEmail) {
-          initOptions.defaultValues = {};
-          if (mountEmail) initOptions.defaultValues.email = mountEmail;
-          if (mountName) initOptions.defaultValues.billingAddress = { name: mountName };
+        // Prefill name only. Never set defaultValues.email – Sessions created with
+        // customer_email reject email updates and Payment Element won't mount.
+        if (mountName) {
+          initOptions.defaultValues = {
+            billingAddress: { name: mountName },
+          };
         }
         return sdk
           .initCheckout(initOptions)

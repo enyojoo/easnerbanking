@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest"
 import {
   buildNgYcIdPair,
+  encodeNgLocalIdPair,
   isValidNgLocalIdNumber,
   mapNoahKycIdTypeToNgLocal,
+  NG_LOCAL_ID_PAIR,
   ngLocalVerificationComplete,
+  ngSupplementInlinePrompt,
+  parseNgLocalIdPair,
   resolveNgLocalVerification,
   showNgSupplementPrompt,
   ycLocalRailsOfferedForNg,
@@ -14,6 +18,11 @@ describe("mapNoahKycIdTypeToNgLocal", () => {
     expect(mapNoahKycIdTypeToNgLocal("TaxID")).toBe("BVN")
     expect(mapNoahKycIdTypeToNgLocal("NationalID")).toBe("NIN")
     expect(mapNoahKycIdTypeToNgLocal("NationalIDCard")).toBe("NIN")
+  })
+
+  it("maps Grid owner Tax ID labels to BVN", () => {
+    expect(mapNoahKycIdTypeToNgLocal("Tax ID")).toBe("BVN")
+    expect(mapNoahKycIdTypeToNgLocal("NON_US_TAX_ID")).toBe("BVN")
   })
 })
 
@@ -26,6 +35,14 @@ describe("resolveNgLocalVerification", () => {
     expect(s.hasBvn).toBe(true)
     expect(s.hasNin).toBe(false)
     expect(s.missingType).toBe("NIN")
+    expect(s.missingTypes).toEqual(["NIN"])
+    expect(s.complete).toBe(false)
+  })
+
+  it("needs both when Noah has neither", () => {
+    const s = resolveNgLocalVerification({})
+    expect(s.missingTypes).toEqual(["NIN", "BVN"])
+    expect(s.missingType).toBe("NIN")
     expect(s.complete).toBe(false)
   })
 
@@ -37,7 +54,7 @@ describe("resolveNgLocalVerification", () => {
       ngLocalIdNumber: "10987654321",
     })
     expect(s.complete).toBe(true)
-    expect(ngLocalVerificationComplete(s as never)).toBe(false) // wrong shape – use profile
+    expect(s.missingTypes).toEqual([])
     expect(
       ngLocalVerificationComplete({
         kycIdType: "NationalID",
@@ -46,6 +63,17 @@ describe("resolveNgLocalVerification", () => {
         ngLocalIdNumber: "10987654321",
       }),
     ).toBe(true)
+  })
+
+  it("completes from PAIR when both were collected together", () => {
+    const s = resolveNgLocalVerification({
+      ngLocalIdType: NG_LOCAL_ID_PAIR,
+      ngLocalIdNumber: encodeNgLocalIdPair("12345678901", "10987654321"),
+    })
+    expect(s.complete).toBe(true)
+    expect(s.hasNin).toBe(true)
+    expect(s.hasBvn).toBe(true)
+    expect(s.missingTypes).toEqual([])
   })
 
   it("rejects non-11-digit numbers", () => {
@@ -61,6 +89,23 @@ describe("resolveNgLocalVerification", () => {
   })
 })
 
+describe("parseNgLocalIdPair", () => {
+  it("round-trips encode/parse", () => {
+    const encoded = encodeNgLocalIdPair("12345678901", "10987654321")
+    expect(parseNgLocalIdPair(encoded)).toEqual({
+      nin: "12345678901",
+      bvn: "10987654321",
+    })
+  })
+})
+
+describe("ngSupplementInlinePrompt", () => {
+  it("uses both copy when both missing", () => {
+    expect(ngSupplementInlinePrompt(["NIN", "BVN"])).toContain("NIN and BVN")
+    expect(ngSupplementInlinePrompt("BVN")).toContain("BVN")
+  })
+})
+
 describe("buildNgYcIdPair", () => {
   it("puts Noah ID as primary", () => {
     const pair = buildNgYcIdPair({
@@ -73,6 +118,19 @@ describe("buildNgYcIdPair", () => {
       idType: "BVN",
       idNumber: "12345678901",
       additionalIdType: "NIN",
+      additionalIdNumber: "10987654321",
+    })
+  })
+
+  it("builds pair from PAIR supplement alone", () => {
+    const pair = buildNgYcIdPair({
+      ngLocalIdType: NG_LOCAL_ID_PAIR,
+      ngLocalIdNumber: encodeNgLocalIdPair("12345678901", "10987654321"),
+    })
+    expect(pair).toEqual({
+      idType: "NIN",
+      idNumber: "12345678901",
+      additionalIdType: "BVN",
       additionalIdNumber: "10987654321",
     })
   })

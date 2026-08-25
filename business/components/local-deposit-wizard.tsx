@@ -99,7 +99,7 @@ function fundBalanceApiBase(provider: "yellowcard" | "grid" | "noah"): string {
 
 type Props = {
   residenceCountry: string
-  ngMissingType: NgLocalIdType | null
+  ngMissingTypes: NgLocalIdType[]
   onNgSaved: () => void
   copiedField: string | null
   onCopy: (text: string, field: string) => void
@@ -110,7 +110,7 @@ type Props = {
 
 export function LocalDepositWizard({
   residenceCountry,
-  ngMissingType,
+  ngMissingTypes,
   onNgSaved,
   copiedField,
   onCopy,
@@ -596,9 +596,9 @@ export function LocalDepositWizard({
     }
   }, [step, isMomo, residenceCountry])
 
-  if (ngMissingType) {
+  if (ngMissingTypes.length > 0) {
     return (
-      <NgLocalVerificationNotice missingType={ngMissingType} onSaved={onNgSaved} />
+      <NgLocalVerificationNotice missingTypes={ngMissingTypes} onSaved={onNgSaved} />
     )
   }
 

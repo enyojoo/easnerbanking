@@ -325,7 +325,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
   const showStablecoinTab = hasStablecoin
 
   const [residenceCountry, setResidenceCountry] = useState<string | null>(null)
-  const [ngMissingType, setNgMissingType] = useState<NgLocalIdType | null>(null)
+  const [ngMissingTypes, setNgMissingTypes] = useState<NgLocalIdType[]>([])
   const [dialogOpen, setDialogOpen] = useState(false)
   const [cashView, setCashView] = useState<CashView>("list")
   const [localRail, setLocalRail] = useState<LocalRail | null>(null)
@@ -472,7 +472,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
           ngLocalIdType: data.ngLocalIdType,
           ngLocalIdNumber: data.ngLocalIdNumber,
         })
-        setNgMissingType(state.missingType)
+        setNgMissingTypes(state.missingTypes)
       } catch {
         // fall back to business countryCode below
       }
@@ -604,7 +604,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
 
   const bankAvailable = displayRails?.rails.bank_transfer.available ?? false
   const momoAvailable = displayRails?.rails.mobile_money.available ?? false
-  const localDepositBlocked = Boolean(localPayInCurrency === "NGN" && ngMissingType)
+  const localDepositBlocked = Boolean(localPayInCurrency === "NGN" && ngMissingTypes.length > 0)
   const countryName = effectiveResidence ? resolveReceiveCountryName(effectiveResidence) : ""
   const localDepositSubtitle = localPayInCurrency
     ? receiveLocalDepositSubtitle(localPayInCurrency)
@@ -829,10 +829,10 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
 
                 {cashView === "list" ? (
                   <div className="space-y-4">
-                    {localPayInCurrency === "NGN" && ngMissingType ? (
+                    {localPayInCurrency === "NGN" && ngMissingTypes.length > 0 ? (
                       <NgLocalVerificationNotice
-                        missingType={ngMissingType}
-                        onSaved={() => setNgMissingType(null)}
+                        missingTypes={ngMissingTypes}
+                        onSaved={() => setNgMissingTypes([])}
                       />
                     ) : null}
 
@@ -943,7 +943,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                 {cashView === "local" && localPayInCurrency && (localCountry || effectiveResidence) && localRail ? (
                   <LocalDepositWizard
                     residenceCountry={localCountry || effectiveResidence!}
-                    ngMissingType={localPayInCurrency === "NGN" ? ngMissingType : null}
+                    ngMissingTypes={localPayInCurrency === "NGN" ? ngMissingTypes : []}
                     onNgSaved={() => setNgMissingType(null)}
                     copiedField={copiedField}
                     onCopy={onCopy}
