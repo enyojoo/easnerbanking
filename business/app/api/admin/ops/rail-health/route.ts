@@ -18,6 +18,7 @@ import {
   countGlobalPayoutsFailedWithoutReversal,
   listGlobalPayoutsFailedWithoutReversal,
 } from "@/lib/noah/global-payout-ledger"
+import { auditTurnkeyProvisioningGaps } from "@/lib/wallet/audit-turnkey-provisioning-gaps"
 
 export const runtime = "nodejs"
 
@@ -78,10 +79,12 @@ export async function GET(request: Request) {
   const turnkeyWebhookUrl = getTurnkeyWebhookFeatureUrl()
   const turnkeyWebhookUrlError = validateWebhookUrl(turnkeyWebhookUrl)
 
-  const [globalPayoutsFailedWithoutReversal, globalPayoutStuckSample] = await Promise.all([
-    countGlobalPayoutsFailedWithoutReversal(admin),
-    listGlobalPayoutsFailedWithoutReversal(admin, { limit: 5 }),
-  ])
+  const [globalPayoutsFailedWithoutReversal, globalPayoutStuckSample, turnkeyProvisioningGaps] =
+    await Promise.all([
+      countGlobalPayoutsFailedWithoutReversal(admin),
+      listGlobalPayoutsFailedWithoutReversal(admin, { limit: 5 }),
+      auditTurnkeyProvisioningGaps(admin).catch(() => null),
+    ])
 
   let depositSplitJobsPending: number | null = null
   let depositSplitJobsStuck: number | null = null
@@ -131,6 +134,19 @@ export async function GET(request: Request) {
       dead_letter: jobsDead,
       awaiting_sub_org: jobsAwaitingSubOrg,
     },
+    turnkey_provisioning_gaps: turnkeyProvisioningGaps
+      ? {
+          parent_policy_ok: turnkeyProvisioningGaps.parentProvisioningPolicy.ok,
+          parent_policy_reason: turnkeyProvisioningGaps.parentProvisioningPolicy.ok
+            ? null
+            : turnkeyProvisioningGaps.parentProvisioningPolicy.reason,
+          approved_business_without_sub_org:
+            turnkeyProvisioningGaps.summary.businessApprovedWithoutSubOrg,
+          approved_individual_without_sub_org:
+            turnkeyProvisioningGaps.summary.individualApprovedWithoutSubOrg,
+          sample: turnkeyProvisioningGaps.approvedWithoutSubOrg.slice(0, 5),
+        }
+      : null,
     payment_intents: {
       awaiting_fiat: intentsAwaitingFiat,
       awaiting_crypto_deposit: intentsAwaitingCrypto,

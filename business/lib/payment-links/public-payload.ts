@@ -80,7 +80,11 @@ export async function buildPublicPaymentLinkPayload(
     onlinePaymentsEnabled = masterEnabled && connect.ready
     if (onlinePaymentsEnabled) {
       const { feeMode } = await resolveCheckoutFeeMode(admin, businessId)
-      const amounts = computeCheckoutAmounts({ listedAmountCents: link.amountCents, feeMode })
+      const amounts = computeCheckoutAmounts({
+        listedAmountCents: link.amountCents,
+        feeMode,
+        currency: link.currency,
+      })
       customerAmountCents = amounts.customerAmountCents
       surchargeCents = amounts.surchargeCents
     }

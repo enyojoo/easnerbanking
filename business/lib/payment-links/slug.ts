@@ -12,7 +12,7 @@ export function normalizePaymentLinkSlug(raw: string): string {
 }
 
 /** `thanks` and `plink_…` are taken by the pay host itself. */
-const RESERVED_SLUGS = new Set(["thanks", "api", "checkout", "invoice", "pay", "static"])
+const RESERVED_SLUGS = new Set(["thanks", "api", "checkout", "invoice", "pay", "static", "manage"])
 
 export function validatePaymentLinkSlug(slug: string): { valid: boolean; error?: string } {
   if (!slug) return { valid: false, error: "Add a link name" }

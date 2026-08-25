@@ -4,6 +4,7 @@ import type { NoahCustomerScope } from "./customer-id"
 import type { NoahAccountContext } from "./resolve-account-context"
 import { provisionNoahArtifactsForCustomer } from "./provisioning"
 import { trySyncTurnkeyDepositVaultsIfNeeded } from "@/lib/wallet/sync-deposit-vaults"
+import { ensureTurnkeySubOrgForEasnerOwner } from "@/lib/wallet/ensure-turnkey-sub-org"
 import { scheduleTurnkeyWalletsAfterKycApproved } from "@/lib/wallet/turnkey-provisioning"
 
 function buildAccountContext(opts: {
@@ -40,6 +41,27 @@ export async function provisionNoahAfterVerificationApproved(opts: {
     if (ownerId) subjectUserId = ownerId
   }
 
+  const { data: userRow } = await admin
+    .from("users")
+    .select("email,full_name")
+    .eq("id", subjectUserId)
+    .maybeSingle()
+  const userEmail = String(userRow?.email ?? "").trim() || null
+  const displayName = String(userRow?.full_name ?? "").trim() || null
+
+  const subOrg = await ensureTurnkeySubOrgForEasnerOwner({
+    admin,
+    scope: scope === "business" ? "business" : "individual",
+    subjectUserId,
+    subjectBusinessId,
+    noahCustomerId,
+    userEmail,
+    displayName,
+  })
+  if (!subOrg.ok) {
+    console.warn("[provisionNoahAfterVerificationApproved] Turnkey sub-org:", subOrg.reason)
+  }
+
   await scheduleTurnkeyWalletsAfterKycApproved({
     scope,
     subjectUserId,
@@ -56,7 +78,13 @@ export async function provisionNoahAfterVerificationApproved(opts: {
   await trySyncTurnkeyDepositVaultsIfNeeded(admin, accountCtx)
 
   if (scope === "business" || subjectBusinessId) {
-    return { skipped: true, reason: "business_uses_grid_not_noah" }
+    return {
+      skipped: true,
+      reason: "business_uses_grid_not_noah",
+      turnkeySubOrgReady: subOrg.ok,
+      turnkeySubOrgError: subOrg.ok ? null : subOrg.reason,
+      turnkeySubOrganizationId: subOrg.ok ? subOrg.subOrganizationId : null,
+    }
   }
 
   const provisioned = await provisionNoahArtifactsForCustomer({
@@ -67,5 +95,10 @@ export async function provisionNoahAfterVerificationApproved(opts: {
     admin,
   })
 
-  return provisioned as Record<string, unknown>
+  return {
+    ...(provisioned as Record<string, unknown>),
+    turnkeySubOrgReady: subOrg.ok,
+    turnkeySubOrgError: subOrg.ok ? null : subOrg.reason,
+    turnkeySubOrganizationId: subOrg.ok ? subOrg.subOrganizationId : null,
+  }
 }

@@ -22,6 +22,7 @@ import {
 } from "./webhook-event-id"
 import type { GridQuote, GridWebhookEvent } from "./types"
 import { reconcileGridVaBankDepositCreditForSolanaTx } from "./grid-bank-deposit-credit"
+import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 
 export const GRID_VA_TURNKEY_SWEEP_MODE = "va_turnkey_sweep" as const
 
@@ -525,11 +526,12 @@ export async function settleGridVaTurnkeySweepForSolanaTx(
   if (!row) return
   const amount = Number(row.quoted_pay_in ?? row.metadata.inbound_amount ?? 0)
   const inboundId = String(row.metadata.inbound_grid_transaction_id ?? "").trim()
+  const solanaTxHash = String(input.solanaTxHash ?? "").trim()
   await patchSweep(admin, row.id, {
     status: "settled",
     metadata: {
       ...row.metadata,
-      grid_on_chain_tx_hash: input.solanaTxHash,
+      grid_on_chain_tx_hash: solanaTxHash,
       sweep_error: null,
     },
   })
@@ -538,9 +540,121 @@ export async function settleGridVaTurnkeySweepForSolanaTx(
     businessId: row.business_id,
     ledgerTransactionId: row.transaction_id,
     inboundGridTransactionId: inboundId,
-    solanaTxHash: input.solanaTxHash,
+    solanaTxHash,
     amount,
   })
+  if (solanaTxHash) {
+    await suppressTurnkeyGridVaChainMirrorRow(admin, {
+      txHash: solanaTxHash,
+      userId: row.user_id,
+      businessId: row.business_id,
+    }).catch(() => {})
+  }
+}
+
+/**
+ * Match a Grid VA Turnkey sweep to an on-chain signature.
+ * Turnkey balance webhooks often report micro-USDC legs; link by sweep FIFO, not amount.
+ */
+export async function findGridVaTurnkeySweepForSolanaTx(
+  admin: SupabaseClient,
+  input: {
+    txHash: string
+    businessId: string | null
+    userId: string
+  },
+): Promise<{ transferId: string } | null> {
+  const txHash = String(input.txHash ?? "").trim()
+  const businessId = String(input.businessId ?? "").trim()
+  if (!txHash || !businessId) return null
+
+  const { data: linked } = await admin
+    .from("grid_transfers")
+    .select("id")
+    .eq("mode", GRID_VA_TURNKEY_SWEEP_MODE)
+    .eq("business_id", businessId)
+    .filter("metadata->>grid_on_chain_tx_hash", "eq", txHash)
+    .maybeSingle()
+  if (linked?.id) return { transferId: String(linked.id) }
+
+  const { data: rows } = await admin
+    .from("grid_transfers")
+    .select("id,metadata,status,updated_at")
+    .eq("mode", GRID_VA_TURNKEY_SWEEP_MODE)
+    .eq("business_id", businessId)
+    .in("status", ["settled", "processing", "pending"])
+    .order("updated_at", { ascending: true })
+    .limit(24)
+
+  for (const row of rows ?? []) {
+    const meta = asMeta(row.metadata)
+    if (String(meta.grid_on_chain_tx_hash ?? "").trim()) continue
+    return { transferId: String(row.id) }
+  }
+
+  return null
+}
+
+/** Hide duplicate Turnkey balance-webhook rows once Grid VA sweep is linked on-chain. */
+export async function suppressTurnkeyGridVaChainMirrorRow(
+  admin: SupabaseClient,
+  input: {
+    txHash: string
+    userId: string
+    businessId: string | null
+  },
+): Promise<{ suppressed: number; reversedBalance: number }> {
+  const txHash = String(input.txHash ?? "").trim()
+  if (!txHash) return { suppressed: 0, reversedBalance: 0 }
+
+  let q = admin
+    .from("transactions")
+    .select("id,metadata,amount,currency")
+    .eq("provider", "turnkey")
+    .eq("direction", "in")
+    .eq("tx_hash", txHash)
+  if (input.businessId) q = q.eq("business_id", input.businessId)
+  else q = q.eq("user_id", input.userId).is("business_id", null)
+
+  const { data: rows } = await q.limit(8)
+  let suppressed = 0
+  let reversedBalance = 0
+
+  for (const row of rows ?? []) {
+    const meta = (row.metadata as Record<string, unknown> | undefined) ?? {}
+    if (meta.grid_va_turnkey_chain_mirror === true) continue
+    const source = String(meta.source ?? "").trim()
+    if (source !== "turnkey_balance_webhook" && source !== "turnkey_chain_sync") continue
+
+    const reportingAmount = Number(meta.reporting_wallet_amount ?? row.amount ?? 0)
+    if (meta.balance_delta_applied === true && reportingAmount > 0) {
+      const currency = String(row.currency ?? "USD").toUpperCase()
+      await applyWalletBalanceDelta(admin, {
+        businessId: input.businessId,
+        userId: input.businessId ? null : input.userId,
+        currency,
+        delta: -reportingAmount,
+      }).catch(() => {})
+      reversedBalance += reportingAmount
+    }
+
+    await admin
+      .from("transactions")
+      .update({
+        hidden_from_feed: true,
+        metadata: {
+          ...meta,
+          grid_va_turnkey_chain_mirror: true,
+          suppress_in_feed: true,
+          balance_delta_applied: false,
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", row.id)
+    suppressed += 1
+  }
+
+  return { suppressed, reversedBalance }
 }
 
 export async function findPendingGridVaTurnkeySweepForInboundAmount(
@@ -560,7 +674,7 @@ export async function findPendingGridVaTurnkeySweepForInboundAmount(
     .select("id,quoted_pay_in,metadata,status")
     .eq("mode", GRID_VA_TURNKEY_SWEEP_MODE)
     .eq("business_id", input.businessId)
-    .in("status", ["pending", "processing"])
+    .in("status", ["pending", "processing", "settled"])
     .order("created_at", { ascending: false })
     .limit(12)
 

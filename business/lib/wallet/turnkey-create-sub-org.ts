@@ -10,6 +10,7 @@ import {
   isTurnkeyDaConfigured,
 } from "@/lib/turnkey/config"
 import { markSubOrgDaReadyInCache } from "@/lib/turnkey/da-readiness"
+import { ensureParentSubOrgProvisioningPolicy } from "@/lib/turnkey/ensure-parent-provisioning-policy"
 import { provisionCustodialDaForOrganization } from "@/lib/turnkey/provision-custodial-da"
 
 export type CreateEasnerTurnkeySubOrganizationResult = {
@@ -40,6 +41,16 @@ export async function createEasnerTurnkeySubOrganization(input: {
   const serverPub = getTurnkeyApiPublicKey()
   if (!serverPub) {
     throw new Error("TURNKEY_API_PUBLIC_KEY is required to register the provisioner in each sub-org")
+  }
+
+  const parentPolicy = await ensureParentSubOrgProvisioningPolicy()
+  if (!parentPolicy.ok) {
+    console.warn("[createEasnerTurnkeySubOrganization] parent provisioning policy:", parentPolicy.reason)
+  } else if (parentPolicy.pendingActivityId) {
+    console.warn(
+      "[createEasnerTurnkeySubOrganization] parent provisioning policy pending approval:",
+      parentPolicy.pendingActivityId,
+    )
   }
 
   const res = await client.createSubOrganization({

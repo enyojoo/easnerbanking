@@ -103,6 +103,19 @@ async function runSyncFromNoah(request: Request) {
       kycStatus: kyc,
       rejectionReasons,
       provisioned,
+      turnkeySubOrgReady:
+        provisioned?.turnkeySubOrgReady === true ||
+        Boolean(
+          String(
+            provisioned?.turnkeySubOrganizationId ??
+              provisioned?.turnkeySubOrgId ??
+              "",
+          ).trim(),
+        ),
+      turnkeySubOrgError:
+        typeof provisioned?.turnkeySubOrgError === "string"
+          ? provisioned.turnkeySubOrgError
+          : null,
       needsFiatAccounts: needsFiatAccountsAfter,
       fiatAccountsProvisionAttempted: kyc === "approved",
       ...(needsFiatAccountsAfter && kyc === "approved"

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { extractRelaySolanaUnsignedTx, parseRelayFromAmountRaw, relayQuote } from "@/lib/relay/quote"
+import { parseRelayFromAmountRaw, relayQuote, resolveRelaySolanaUnsignedTxHexForTurnkey } from "@/lib/relay/quote"
 import { getTurnkeySolanaBroadcastCaip2, isTurnkeySolSponsorshipEnabled } from "@/lib/turnkey/config"
 import { resolveTurnkeySendClient } from "@/lib/turnkey/resolve-send-client"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
@@ -81,7 +81,16 @@ export async function executeBalanceConvert(input: {
   if (!resolved.ok) return { ok: false, error: resolved.error }
   if (!resolved.client.solSendTransaction) return { ok: false, error: "turnkey_not_configured" }
 
-  const unsigned = extractRelaySolanaUnsignedTx(quote)
+  let unsigned: string
+  try {
+    unsigned = await resolveRelaySolanaUnsignedTxHexForTurnkey({
+      quote,
+      feePayer: fromAddress,
+    })
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "relay_missing_solana_transaction" }
+  }
+
   await resolved.client.solSendTransaction({
     type: "ACTIVITY_TYPE_SIGN_AND_BROADCAST_TRANSACTION",
     organizationId: input.subOrganizationId,

@@ -47,6 +47,26 @@ export async function findGridVaBankDepositChainSettlementForSuppression(
     return { linkedTransactionId: String(payInRow.id) }
   }
 
+  let sweepQuery = admin
+    .from("grid_transfers")
+    .select("transaction_id,metadata")
+    .eq("mode", "va_turnkey_sweep")
+    .filter("metadata->>grid_on_chain_tx_hash", "eq", txHash)
+  if (input.businessId) sweepQuery = sweepQuery.eq("business_id", input.businessId)
+  else sweepQuery = sweepQuery.eq("user_id", input.userId).is("business_id", null)
+  const { data: sweepRow } = await sweepQuery.maybeSingle()
+  const sweepLedgerId = String(sweepRow?.transaction_id ?? "").trim()
+  if (sweepLedgerId) {
+    const { data: sweepLedger } = await admin
+      .from("transactions")
+      .select(select)
+      .eq("id", sweepLedgerId)
+      .maybeSingle()
+    if (sweepLedger?.id && isGridVaBankDepositMetadata(sweepLedger.metadata)) {
+      return { linkedTransactionId: String(sweepLedger.id) }
+    }
+  }
+
   return null
 }
 

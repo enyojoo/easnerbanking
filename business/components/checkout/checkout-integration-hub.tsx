@@ -36,6 +36,7 @@ import {
 } from "@/hooks/use-checkout-settings"
 import { CheckoutTestPaymentsDialog } from "@/components/checkout/checkout-test-payments-dialog"
 import { fetchWithSession } from "@/lib/fetch-with-session"
+import type { WebhookDelivery } from "@/lib/checkout/hub-types"
 import { COLLECTIONS_COPY } from "@/lib/copy/business-ui-copy"
 import {
   CHECKOUT_PHASES,
@@ -56,6 +57,7 @@ const STEP_COPY: Record<CheckoutStepId, { title: string; blurb: string }> = {
   website: { title: COLLECTIONS_COPY.stepWebsiteTitle, blurb: COLLECTIONS_COPY.stepWebsiteBlurb },
   urls: { title: COLLECTIONS_COPY.stepUrlsTitle, blurb: COLLECTIONS_COPY.stepUrlsBlurb },
   keys: { title: COLLECTIONS_COPY.stepKeysTitle, blurb: COLLECTIONS_COPY.stepKeysBlurb },
+  branding: { title: COLLECTIONS_COPY.stepBrandingTitle, blurb: COLLECTIONS_COPY.stepBrandingBlurb },
   snippet: { title: COLLECTIONS_COPY.stepSnippetTitle, blurb: COLLECTIONS_COPY.stepSnippetBlurb },
   session: { title: COLLECTIONS_COPY.stepSessionTitle, blurb: COLLECTIONS_COPY.stepSessionBlurb },
   webhook: { title: COLLECTIONS_COPY.stepWebhookTitle, blurb: COLLECTIONS_COPY.stepWebhookBlurb },
@@ -200,6 +202,8 @@ function StepBody({ step, data, site, onSaved, onSiteCreated }: SiteStepProps & 
       return <StepUrls data={data} site={site} onSaved={onSaved} onSiteCreated={onSiteCreated} />
     case "keys":
       return <StepKeys data={data} onSaved={onSaved} />
+    case "branding":
+      return <StepBranding data={data} onSaved={onSaved} />
     case "snippet":
       return <StepSnippet data={data} onSaved={onSaved} />
     case "session":
@@ -549,30 +553,181 @@ function StepKeys({ data, onSaved }: HubDataProps) {
   )
 }
 
+function StepBranding({ data, onSaved }: HubDataProps) {
+  const saved = data.settings.branding ?? { brandColor: null, buttonRadius: "pill" as const }
+  const [color, setColor] = useState(saved.brandColor ?? "")
+  const [radius, setRadius] = useState<"pill" | "rounded">(saved.buttonRadius)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setColor(saved.brandColor ?? "")
+    setRadius(saved.buttonRadius)
+  }, [saved.brandColor, saved.buttonRadius])
+
+  const previewColor = /^#[0-9a-fA-F]{6}$/.test(color) ? color : "#0080cc"
+  const dirty = (color.trim() || null) !== (saved.brandColor ?? null) || radius !== saved.buttonRadius
+
+  const save = async () => {
+    if (color.trim() && !/^#[0-9a-fA-F]{6}$/.test(color.trim())) {
+      toast.error("Enter the brand color as a hex value, like #0080cc")
+      return
+    }
+    setSaving(true)
+    try {
+      const result = await saveCheckoutSettings({
+        appearance: { brand_color: color.trim() || null, button_radius: radius },
+      })
+      if (!result.ok) {
+        toast.error(result.error || "Could not save")
+        return
+      }
+      toast.success("Saved. Every checkout on your site now uses it.")
+      onSaved()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <StepHeading title={STEP_COPY.branding.title} blurb={STEP_COPY.branding.blurb} />
+      <div className="flex flex-col gap-5 rounded-xl border p-4 sm:p-5">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="checkout-brand-color">Brand color</Label>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                aria-label="Pick brand color"
+                value={previewColor}
+                onChange={(e) => setColor(e.target.value)}
+                className="h-10 w-12 shrink-0 cursor-pointer rounded-md border bg-transparent p-1"
+              />
+              <Input
+                id="checkout-brand-color"
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                placeholder="#0080cc"
+                className="font-mono text-xs"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Leave empty to keep the Easner default.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label>Corner style</Label>
+            <div className="flex gap-2">
+              {(["pill", "rounded"] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setRadius(option)}
+                  className={cn(
+                    "border px-4 py-2 text-sm transition-colors",
+                    option === "pill" ? "rounded-full" : "rounded-lg",
+                    radius === option
+                      ? "border-primary bg-primary/5 font-medium"
+                      : "text-muted-foreground hover:bg-muted/60",
+                  )}
+                >
+                  {option === "pill" ? "Pill" : "Rounded"}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+          <div
+            aria-hidden
+            className="flex h-11 min-w-40 items-center justify-center px-6 text-sm font-semibold text-white"
+            style={{
+              background: previewColor,
+              borderRadius: radius === "pill" ? "9999px" : "10px",
+            }}
+          >
+            Pay $49.00
+          </div>
+          <Button type="button" size="sm" disabled={saving || !dirty} onClick={() => void save()}>
+            {saving ? (
+              <>
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden />
+                Saving…
+              </>
+            ) : (
+              "Save branding"
+            )}
+          </Button>
+        </div>
+      </div>
+    </>
+  )
+}
+
 function StepSnippet({ data }: HubDataProps) {
   const publishableKey =
     data.keys.find((key) => key.mode === "test")?.publishable_key ?? "easner_pk_test_…"
+  const [variant, setVariant] = useState<"inline" | "overlay">("inline")
+
+  const inlineSnippet = `<script src="https://js.easner.com/checkout.js"></script>
+<div id="easner-checkout"></div>
+<script>
+  // clientSecret comes from POST /v1/checkout/sessions (next step).
+  EasnerCheckout.mount("#easner-checkout", {
+    publishableKey: "${publishableKey}",
+    clientSecret: window.EASNER_CLIENT_SECRET,
+    onSuccess: function () {
+      // Payment confirmed – shown in place. Route the customer on.
+    },
+  });
+</script>`
+
+  const overlaySnippet = `<script src="https://js.easner.com/checkout.js"></script>
+<script>
+  // One call from any button – opens checkout over your page.
+  function payNow() {
+    EasnerCheckout.open({
+      publishableKey: "${publishableKey}",
+      clientSecret: window.EASNER_CLIENT_SECRET,
+      onSuccess: function () { window.location.href = "/thanks"; },
+    });
+  }
+</script>
+<button onclick="payNow()">Buy now</button>`
 
   return (
     <>
       <StepHeading title={STEP_COPY.snippet.title} blurb={STEP_COPY.snippet.blurb} />
+      <div className="flex gap-2">
+        {(
+          [
+            ["inline", "In your page"],
+            ["overlay", "Overlay"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setVariant(id)}
+            className={cn(
+              "rounded-full border px-3.5 py-1.5 text-xs",
+              variant === id ? "border-primary bg-primary/5 font-medium" : "text-muted-foreground",
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       <CheckoutCodeBlock
-        label="On your checkout page"
-        code={`<script src="https://js.easner.com/checkout.js"></script>
-<div id="easner-checkout"></div>
-<script>
-  // Logged-in apps: pass customerEmail and customerName from POST /v1/checkout/sessions
-  // so the form does not ask for them again.
-  EasnerCheckout.mount("#easner-checkout", {
-    publishableKey: "${publishableKey}",
-    clientSecret: window.EASNER_CLIENT_SECRET,
-  });
-</script>`}
+        label={variant === "inline" ? "On your checkout page" : "Anywhere on your site"}
+        code={variant === "inline" ? inlineSnippet : overlaySnippet}
       />
       <StepLearnMore>
         <p>
-          The client secret comes from the next step and is never hardcoded. You can pass an
-          appearance object to match your colours and fonts.
+          The client secret comes from the next step and is never hardcoded. Apple Pay and Google
+          Pay appear automatically when the customer&apos;s device supports them, and the form uses
+          the branding you set above. Logged-in apps can pass customerEmail and customerName so the
+          form does not ask again. Omit onSuccess to send customers to your Success URL instead.
         </p>
       </StepLearnMore>
     </>
@@ -591,10 +746,10 @@ function StepSession({ site }: { site: CheckoutSite | null }) {
         code={`curl https://api.easner.com/v1/checkout/sessions \\
   -H "Authorization: Bearer easner_sk_test_…" \\
   -H "Content-Type: application/json" \\
+  -H "Idempotency-Key: order-1042" \\
   -d '{
     "mode": "payment",
-    "amount": 4900,
-    "currency": "usd",
+    "currency": "USD",
     "line_items": [{ "name": "Pro plan", "amount": 4900 }],
     "customer_email": "buyer@example.com",
     "customer_name": "Buyer Name",
@@ -604,10 +759,12 @@ function StepSession({ site }: { site: CheckoutSite | null }) {
       />
       <StepLearnMore>
         <p>
-          The response contains a client_secret – pass it to the snippet. Optional customer_email
-          and customer_name come back on the session so logged-in apps can hide the email field
-          and prefill name on card. For a recurring charge use mode &quot;subscription&quot; with
-          interval &quot;month&quot; or &quot;year&quot;.
+          The response contains a client_secret – pass it to the snippet. Retrying with the same
+          Idempotency-Key returns the first session instead of opening a duplicate. Optional
+          customer_email and customer_name come back on the session so logged-in apps can hide
+          the email field and prefill name on card. For a recurring charge use mode
+          &quot;subscription&quot; with interval &quot;month&quot; or &quot;year&quot;. Full details
+          are in Developers &rarr; API reference.
         </p>
       </StepLearnMore>
     </>
@@ -774,6 +931,8 @@ function StepWebhook({ data, onSaved }: HubDataProps) {
         ) : null}
       </div>
 
+      {savedUrl ? <WebhookDeliveriesPanel /> : null}
+
       <div className="space-y-2">
         <p className="text-sm font-medium text-foreground">Events you can listen for</p>
         <ul className="space-y-2">
@@ -810,6 +969,100 @@ function StepWebhook({ data, onSaved }: HubDataProps) {
         </AlertDialogContent>
       </AlertDialog>
     </>
+  )
+}
+
+function WebhookDeliveriesPanel() {
+  const [deliveries, setDeliveries] = useState<WebhookDelivery[] | null>(null)
+  const [redelivering, setRedelivering] = useState<string | null>(null)
+
+  const load = async () => {
+    try {
+      const res = await fetchWithSession("/api/checkout/webhook-deliveries")
+      const body = (await res.json().catch(() => ({}))) as { deliveries?: WebhookDelivery[] }
+      setDeliveries(Array.isArray(body.deliveries) ? body.deliveries : [])
+    } catch {
+      setDeliveries([])
+    }
+  }
+
+  useEffect(() => {
+    void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const redeliver = async (id: string) => {
+    setRedelivering(id)
+    try {
+      const res = await fetchWithSession(`/api/checkout/webhook-deliveries/${id}/redeliver`, {
+        method: "POST",
+      })
+      const body = (await res.json().catch(() => ({}))) as { error?: string; status?: number }
+      if (!res.ok) {
+        toast.error(body.error || "Delivery failed")
+      } else {
+        toast.success(`Delivered – your endpoint replied ${body.status ?? 200}.`)
+      }
+      await load()
+    } finally {
+      setRedelivering(null)
+    }
+  }
+
+  const rows = deliveries ?? []
+  if (deliveries !== null && rows.length === 0) return null
+
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border p-4 sm:p-5">
+      <div className="min-w-0 space-y-1">
+        <p className="text-sm font-medium text-foreground">Recent deliveries</p>
+        <p className="text-xs text-muted-foreground">
+          Failed events retry automatically for up to a day. Resend one any time.
+        </p>
+      </div>
+      <ul className="divide-y">
+        {rows.slice(0, 8).map((delivery) => (
+          <li key={delivery.id} className="flex items-center justify-between gap-3 py-2.5">
+            <div className="min-w-0">
+              <p className="truncate text-sm">
+                <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{delivery.event}</code>
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {delivery.status === "delivered"
+                  ? `Delivered${delivery.response_status ? ` · ${delivery.response_status}` : ""}`
+                  : delivery.status === "pending"
+                    ? `Retrying · attempt ${delivery.attempts}`
+                    : `Failed${delivery.last_error ? ` · ${delivery.last_error}` : ""}`}
+                {" · "}
+                {new Date(delivery.created_at).toLocaleString()}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <span
+                className={cn(
+                  "inline-block h-2 w-2 rounded-full",
+                  delivery.status === "delivered"
+                    ? "bg-primary"
+                    : delivery.status === "pending"
+                      ? "bg-amber-500"
+                      : "bg-destructive",
+                )}
+                aria-hidden
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={redelivering !== null}
+                onClick={() => void redeliver(delivery.id)}
+              >
+                {redelivering === delivery.id ? "Sending…" : "Resend"}
+              </Button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 

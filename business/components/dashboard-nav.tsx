@@ -115,7 +115,9 @@ export function DashboardNav() {
       icon: Inbox,
       type: "group" as const,
       items: [
+        { href: "/payments", label: "Payments", icon: Inbox },
         { href: "/invoices", label: "Invoices", icon: ReceiptText },
+        { href: "/products", label: "Products", icon: Package },
         { href: "/checkout", label: "Checkout", icon: Code },
         { href: "/links", label: "Links", icon: Link2 },
         { href: "/terminal", label: "Terminal", icon: SmartphoneNfc },

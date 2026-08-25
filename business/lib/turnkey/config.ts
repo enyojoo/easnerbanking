@@ -97,6 +97,11 @@ export function getTurnkeyParentDaUserIdFromEnv(): string {
   return (process.env.TURNKEY_PARENT_DA_USER_ID || "").trim()
 }
 
+/** Optional: parent org user id for the server provisioning API key (createSubOrganization). */
+export function getTurnkeyServerRootUserIdFromEnv(): string {
+  return (process.env.TURNKEY_SERVER_ROOT_USER_ID || "").trim()
+}
+
 /** Display name for the non-root DA user in each Turnkey org. */
 export const TURNKEY_CUSTODIAL_DA_USER_NAME = "easner-da"
 

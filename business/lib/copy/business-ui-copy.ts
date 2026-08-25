@@ -160,6 +160,8 @@ export const COLLECTIONS_COPY = {
   stepSnippetBlurb: "Your page stays yours. Easner supplies the fields.",
   stepSessionTitle: "Create a session",
   stepSessionBlurb: "Your server sets the amount so the browser cannot change it.",
+  stepBrandingTitle: "Match your brand",
+  stepBrandingBlurb: "Set your color once here – every checkout on your site follows it.",
   stepWebhookTitle: "Webhook",
   stepWebhookBlurb: "Fulfil orders from signed events, not the browser.",
   stepTestTitle: "Test on your website",
@@ -429,9 +431,9 @@ export const BANNER_COPY = {
   verification:
     "Complete verification to unlock payments and accounts.",
   verificationInProgress:
-    "Verification is in progress. This usually completes within 1–3 days.",
+    "Verification is in progress. This usually completes within 1–3 business days.",
   verificationInReview:
-    "Verification is in progress. This usually completes within 1–3 days.",
+    "Verification is in progress. This usually completes within 1–3 business days.",
   verificationActionNeeded:
     "Verification needs your attention. Review the status in settings.",
   invoiceProfileTitle: "Finish your business profile to create invoices.",
@@ -606,7 +608,7 @@ export const GRID_KYB_WIZARD_COPY = {
   readinessInReview: "In review",
   readinessApproved: "Approved",
   waitingTitle: "Verification is in review",
-  waitingBody: "We’re checking the information you submitted. This usually completes within 1–3 days.",
+  waitingBody: "We’re checking the information you submitted. This usually completes within 1–3 business days.",
 } as const
 
 export const VERIFICATION_SECTION_COPY = {

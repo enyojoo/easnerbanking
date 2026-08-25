@@ -1,5 +1,10 @@
 import { relayQuoteV2 } from "./client"
 import { relayQuoteFeeParams } from "./config"
+import {
+  compileRelaySolanaStepTxHexForTurnkey,
+  extractPreSerializedRelaySolanaTxHex,
+  type RelaySolanaStepData,
+} from "./compile-solana-step-tx"
 import type { RelayQuoteV2Request, RelayQuoteV2Response, RelayTradeType } from "./types"
 import type { WalletSendTokenRef } from "./token-map"
 
@@ -68,29 +73,39 @@ export function parseRelayToAmountHuman(quote: RelayQuoteV2Response, destDecimal
   throw new Error("relay_quote_missing_to_amount")
 }
 
-/** Extract Solana unsigned transaction (base64) from quote steps. */
-export function extractRelaySolanaUnsignedTx(quote: RelayQuoteV2Response): string {
+function relaySolanaStepDataFromQuote(quote: RelayQuoteV2Response): RelaySolanaStepData | null {
   for (const step of quote.steps ?? []) {
     for (const item of step.items ?? []) {
       const data = item.data
       if (!data || typeof data !== "object") continue
-      const direct = String(
-        (data as { data?: string }).data ??
-          (data as { transaction?: string }).transaction ??
-          (data as { unsignedTransaction?: string }).unsignedTransaction ??
-          "",
-      ).trim()
-      if (direct) return direct
-      const instructions = (data as { instructions?: unknown[] }).instructions
-      if (Array.isArray(instructions) && instructions.length > 0) {
-        const serialized = String(
-          (data as { serializedTransaction?: string }).serializedTransaction ?? "",
-        ).trim()
-        if (serialized) return serialized
-      }
+      return data as RelaySolanaStepData
     }
   }
+  return null
+}
+
+/** Extract pre-serialized Solana tx from quote steps (legacy Relay wire/base64/hex). */
+export function extractRelaySolanaUnsignedTx(quote: RelayQuoteV2Response): string {
+  const stepData = relaySolanaStepDataFromQuote(quote)
+  if (!stepData) throw new Error("relay_missing_solana_transaction")
+  const preSerialized = extractPreSerializedRelaySolanaTxHex(stepData)
+  if (preSerialized) return preSerialized
   throw new Error("relay_missing_solana_transaction")
+}
+
+/** Build Turnkey-ready hex wire bytes from Relay quote (supports instruction + LUT steps). */
+export async function resolveRelaySolanaUnsignedTxHexForTurnkey(input: {
+  quote: RelayQuoteV2Response
+  feePayer: string
+  recentBlockhash?: string
+}): Promise<string> {
+  const stepData = relaySolanaStepDataFromQuote(input.quote)
+  if (!stepData) throw new Error("relay_missing_solana_transaction")
+  return compileRelaySolanaStepTxHexForTurnkey({
+    stepData,
+    feePayer: input.feePayer,
+    recentBlockhash: input.recentBlockhash,
+  })
 }
 
 /** Open deposit address from quote (Tron inbound provision). */

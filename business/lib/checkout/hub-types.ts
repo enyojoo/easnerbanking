@@ -22,6 +22,7 @@ export type CheckoutHubSettings = {
   webhookSecretLast4: string | null
   liveModeEnabled: boolean
   testPaymentCompletedAt: string | null
+  branding: { brandColor: string | null; buttonRadius: "pill" | "rounded" }
 }
 
 export type CheckoutApiKey = {
@@ -48,4 +49,24 @@ export type CheckoutHubPayload = {
   readiness: { ready: boolean; reason: string | null }
   keys: CheckoutApiKey[]
   webhookEvents: Record<MerchantWebhookEvent, string>
+  /** Evidence the merchant actually integrated – drives truthful setup progress. */
+  integration: {
+    /** First session created through the merchant API (test or live). */
+    sessionCreatedAt: string | null
+    /** Most recent successful delivery to their webhook endpoint (test counts). */
+    webhookDeliveredAt: string | null
+  }
+}
+
+export type WebhookDelivery = {
+  id: string
+  event: string
+  status: "pending" | "delivered" | "failed"
+  attempts: number
+  last_attempt_at: string | null
+  next_retry_at: string | null
+  response_status: number | null
+  last_error: string | null
+  delivered_at: string | null
+  created_at: string
 }

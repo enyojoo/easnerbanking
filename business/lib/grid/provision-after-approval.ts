@@ -6,6 +6,7 @@ import { gridFetchAllPages } from "./http"
 import { normalizeGridCustomerId } from "./quote-request"
 import { registerTurnkeyUsdcExternalAccount } from "./turnkey-external-account"
 import { resolveBusinessCountryIso2 } from "./business-profile-shell"
+import { ensureTurnkeySubOrgForEasnerOwner } from "@/lib/wallet/ensure-turnkey-sub-org"
 import { trySyncTurnkeyDepositVaultsIfNeeded } from "@/lib/wallet/sync-deposit-vaults"
 import { scheduleTurnkeyWalletsAfterKycApproved } from "@/lib/wallet/turnkey-provisioning"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
@@ -148,6 +149,36 @@ export async function provisionGridAfterBusinessKybApproved(input: {
   const ownerId = await resolveBusinessOrgOwnerUserId(input.admin, input.businessId)
   if (ownerId) subjectUserId = ownerId
 
+  const { data: biz } = await input.admin
+    .from("businesses")
+    .select("name,support_email")
+    .eq("id", input.businessId)
+    .maybeSingle()
+  const { data: ownerUser } = await input.admin
+    .from("users")
+    .select("email,full_name")
+    .eq("id", subjectUserId)
+    .maybeSingle()
+
+  const userEmail =
+    String(biz?.support_email ?? "").trim() ||
+    String(ownerUser?.email ?? "").trim() ||
+    null
+  const displayName = String(biz?.name ?? ownerUser?.full_name ?? "").trim() || null
+
+  const subOrg = await ensureTurnkeySubOrgForEasnerOwner({
+    admin: input.admin,
+    scope: "business",
+    subjectUserId,
+    subjectBusinessId: input.businessId,
+    noahCustomerId: "",
+    userEmail,
+    displayName,
+  })
+  if (!subOrg.ok) {
+    console.warn("[provisionGridAfterBusinessKybApproved] Turnkey sub-org:", subOrg.reason)
+  }
+
   await scheduleTurnkeyWalletsAfterKycApproved({
     scope: "business",
     subjectUserId,
@@ -173,6 +204,11 @@ export async function provisionGridAfterBusinessKybApproved(input: {
 
   return {
     turnkey: true,
+    turnkeySubOrgReady: subOrg.ok,
+    turnkeySubOrgId: subOrg.ok ? subOrg.subOrganizationId : null,
+    turnkeySubOrganizationId: subOrg.ok ? subOrg.subOrganizationId : null,
+    turnkeySubOrgCreated: subOrg.ok ? subOrg.created : false,
+    turnkeySubOrgError: subOrg.ok ? null : subOrg.reason,
     gridExternalAccountId: receiveRails.gridExternalAccountId,
     gridVirtualAccountsPersisted: receiveRails.gridVirtualAccountsPersisted,
     gridVirtualAccountsPending: receiveRails.gridVirtualAccountsPending,

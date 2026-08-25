@@ -1,117 +1,67 @@
-"use client"
-
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Code, Terminal, Key, ExternalLink, FileText, History } from "lucide-react"
 import Link from "next/link"
-import { DEVELOPER_TOOL_COPY } from "@/lib/copy/business-ui-copy"
+import { ArrowUpRight, BookOpen, Code, KeyRound, Webhook } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
 
-const developerTools = [
+const docs = [
   {
-    title: "API Reference",
-    description: DEVELOPER_TOOL_COPY.apiReference,
-    icon: Code,
-    href: "/developers/api-reference",
-    external: true
+    title: "Checkout quickstart",
+    description: "Take your first payment with the embedded checkout in about 10 minutes.",
+    icon: BookOpen,
+    href: "/developers/checkout",
   },
   {
-    title: "SDKs",
-    description: DEVELOPER_TOOL_COPY.sdks,
-    icon: Terminal,
-    href: "/developers/sdks",
-    external: true
+    title: "API reference",
+    description: "Create and read checkout sessions: fields, responses, errors, idempotency.",
+    icon: Code,
+    href: "/developers/checkout/api",
   },
   {
     title: "Webhooks",
-    description: DEVELOPER_TOOL_COPY.webhooks,
-    icon: Code,
-    href: "/developers/webhooks"
+    description: "Receive signed events for payments and subscriptions, with automatic retries.",
+    icon: Webhook,
+    href: "/developers/checkout/webhooks",
   },
   {
-    title: "Events",
-    description: DEVELOPER_TOOL_COPY.events,
-    icon: History,
-    href: "/developers/events"
+    title: "API keys & settings",
+    description: "Add your website, create and rotate keys, and configure webhooks on the Checkout page.",
+    icon: KeyRound,
+    href: "/checkout",
   },
-  {
-    title: "Logs",
-    description: DEVELOPER_TOOL_COPY.logs,
-    icon: FileText,
-    href: "/developers/logs"
-  },
-  {
-    title: "API Keys",
-    description: DEVELOPER_TOOL_COPY.apiKeys,
-    icon: Key,
-    href: "/developers/api-keys"
-  }
 ]
 
 export default function DevelopersOverviewPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold text-foreground">Developer Tools</h1>
-        <p className="text-muted-foreground mt-2">Build and integrate with Easner Business Banking&apos;s APIs and services</p>
+        <h1 className="text-3xl font-semibold text-foreground">Developers</h1>
+        <p className="text-muted-foreground mt-2">
+          Everything you need to accept payments on your website with Easner Checkout.
+        </p>
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-muted rounded-xl flex items-center justify-center ring-1 ring-inset ring-border/60">
-                <Key className="h-5 w-5 text-foreground" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Active API Keys</p>
-                <p className="text-2xl font-semibold">3</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center ring-1 ring-inset ring-primary/15">
-                <Code className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Webhooks</p>
-                <p className="text-2xl font-semibold">2</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Developer Tools Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {developerTools.map((tool) => {
-          const IconComponent = tool.icon
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        {docs.map((doc) => {
+          const IconComponent = doc.icon
           return (
-            <Link key={tool.title} href={tool.href}>
-              <Card className="hover:shadow-md transition-shadow cursor-pointer group">
+            <Link key={doc.title} href={doc.href}>
+              <Card className="group h-full cursor-pointer transition-shadow hover:shadow-md">
                 <CardContent className="p-6">
                   <div className="flex items-start gap-4">
-                    <div className="flex-shrink-0">
-                      <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center">
-                        <IconComponent className="h-6 w-6 text-muted-foreground" />
-                      </div>
+                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-muted ring-1 ring-inset ring-border/60">
+                      <IconComponent className="h-6 w-6 text-muted-foreground" aria-hidden />
                     </div>
-                    
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                          {tool.title}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="font-semibold text-foreground transition-colors group-hover:text-primary">
+                          {doc.title}
                         </h3>
-                        {tool.external && (
-                          <ExternalLink className="h-4 w-4 text-muted-foreground" />
-                        )}
+                        <ArrowUpRight
+                          className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                          aria-hidden
+                        />
                       </div>
-                      <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-                        {tool.description}
+                      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                        {doc.description}
                       </p>
                     </div>
                   </div>

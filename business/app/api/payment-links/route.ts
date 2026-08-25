@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createAutopayoutConfig } from "@/lib/autopayout/create-autopayout-config"
+import { parseCheckoutCurrency, SUPPORTED_CHECKOUT_CURRENCIES } from "@/lib/checkout/currencies"
 import { buildPaymentLinkUrl } from "@/lib/payment-links/public-url"
 import { normalizePaymentLinkSlug, validatePaymentLinkSlug } from "@/lib/payment-links/slug"
 import {
@@ -145,7 +146,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Amount must be greater than zero" }, { status: 400 })
   }
 
-  const currency = String(body?.currency ?? "USD").trim().toUpperCase() || "USD"
+  const currency = parseCheckoutCurrency(body?.currency ?? "USD")
+  if (!currency) {
+    return NextResponse.json(
+      { error: `Currency must be one of ${SUPPORTED_CHECKOUT_CURRENCIES.join(", ")}` },
+      { status: 400 },
+    )
+  }
   const description = String(body?.description ?? "").trim().slice(0, 500) || null
   const trialDaysRaw = Number(body?.trial_days ?? 0)
   const trialDays =

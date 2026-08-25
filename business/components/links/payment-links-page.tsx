@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useCallback, useMemo, useState } from "react"
-import { Archive, ArchiveRestore, Copy, Link2, MoreHorizontal, Plus, Share2 } from "lucide-react"
+import { Archive, ArchiveRestore, Copy, Link2, MoreHorizontal, Plus, Receipt, Share2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
 import { CreatePaymentLinkDialog } from "@/components/links/create-payment-link-dialog"
+import { PaymentLinkPaymentsDialog } from "@/components/links/payment-link-payments-dialog"
 import { PaymentLinkShareSheet } from "@/components/links/payment-link-share-sheet"
 import { CollectionsPageHeader } from "@/components/collections/collections-page-header"
 import { CollectionsReadinessBanner } from "@/components/collections/collections-readiness-banner"
@@ -39,6 +40,7 @@ export function PaymentLinksPage({ initialCreateRail }: { initialCreateRail?: Pa
   const { links, easetag, loading, refetch } = usePaymentLinks({ includeArchived: true })
   const [createOpen, setCreateOpen] = useState(Boolean(initialCreateRail))
   const [shareLink, setShareLink] = useState<PaymentLinkListRow | null>(null)
+  const [paymentsLink, setPaymentsLink] = useState<PaymentLinkListRow | null>(null)
 
   const copyUrl = useCallback(async (url: string) => {
     try {
@@ -218,8 +220,14 @@ export function PaymentLinksPage({ initialCreateRail }: { initialCreateRail?: Pa
                         <td className="p-4 align-middle text-sm tabular-nums">
                           {formatCurrency(row.amountCents / 100, row.currency)}
                         </td>
-                        <td className="p-4 align-middle text-sm text-muted-foreground">
-                          {row.paymentCount}
+                        <td
+                          className="p-4 align-middle text-sm text-muted-foreground"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setPaymentsLink(row)
+                          }}
+                        >
+                          <span className="underline-offset-2 hover:underline">{row.paymentCount}</span>
                           {collected ? (
                             <span className="block truncate text-xs tabular-nums">{collected}</span>
                           ) : null}
@@ -242,6 +250,10 @@ export function PaymentLinksPage({ initialCreateRail }: { initialCreateRail?: Pa
                               <DropdownMenuItem onClick={() => void copyUrl(row.url)}>
                                 <Copy className="mr-2 h-4 w-4" />
                                 {COLLECTIONS_COPY.copyLink}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setPaymentsLink(row)}>
+                                <Receipt className="mr-2 h-4 w-4" />
+                                Payments
                               </DropdownMenuItem>
                               {row.archivedAt ? (
                                 <DropdownMenuItem onClick={() => void setArchived(row.id, false)}>
@@ -278,6 +290,13 @@ export function PaymentLinksPage({ initialCreateRail }: { initialCreateRail?: Pa
         onCreated={(link) => {
           void refetch()
           setShareLink(link)
+        }}
+      />
+
+      <PaymentLinkPaymentsDialog
+        link={paymentsLink}
+        onOpenChange={(open) => {
+          if (!open) setPaymentsLink(null)
         }}
       />
 

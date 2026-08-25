@@ -30,9 +30,13 @@ export type NoahSyncStatusData = {
   kycStatus: string
   rejectionReasons?: unknown[]
   needsFiatAccounts?: boolean
+  turnkeySubOrgReady?: boolean
+  turnkeySubOrgError?: string | null
   provisioned?: {
     usdAccountCreated?: boolean
     eurAccountCreated?: boolean
+    turnkeySubOrgReady?: boolean
+    turnkeySubOrgError?: string | null
   }
   hint?: string
 }

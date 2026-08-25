@@ -83,7 +83,9 @@ vi.mock("@/lib/grid/grid-bank-deposit-credit", () => ({
 }))
 vi.mock("@/lib/grid/va-turnkey-sweep", () => ({
   findPendingGridVaTurnkeySweepForInboundAmount: mocks.findPendingGridSweep,
+  findGridVaTurnkeySweepForSolanaTx: vi.fn().mockResolvedValue(null),
   settleGridVaTurnkeySweepForSolanaTx: mocks.settleGridSweep,
+  suppressTurnkeyGridVaChainMirrorRow: vi.fn().mockResolvedValue({ suppressed: 0, reversedBalance: 0 }),
 }))
 vi.mock("@/lib/grid/payout-refund-sweep", () => ({
   findPendingGridPayoutRefundSweepForInboundAmount: mocks.findPendingGridRefundSweep,
@@ -95,6 +97,7 @@ vi.mock("@/lib/turnkey/ledger-inbound-exists", () => ({
 
 import { applyTurnkeyInboundLedgerEvent } from "@/lib/turnkey/apply-turnkey-inbound-ledger"
 import { turnkeyInboundLedgerRowExists } from "@/lib/turnkey/ledger-inbound-exists"
+import { findGridVaTurnkeySweepForSolanaTx } from "@/lib/grid/va-turnkey-sweep"
 import { findYcFundBalanceChainSettlementForSuppression } from "@/lib/yellowcard/yc-ledger"
 import { tryCompleteYcFundBalanceFromUserVaultInbound } from "@/lib/yellowcard/execute-yc-fund-balance-split"
 
@@ -265,6 +268,29 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     expect(mocks.settleGridSweep).toHaveBeenCalledWith(admin, {
       transferId: "sweep-1",
       solanaTxHash: "hash-grid-sweep",
+    })
+    expect(mocks.upsertLedger).not.toHaveBeenCalled()
+  })
+
+  it("suppresses settled Grid VA sweep by tx hash when webhook amount is dust", async () => {
+    vi.mocked(findGridVaTurnkeySweepForSolanaTx).mockResolvedValueOnce({ transferId: "sweep-settled" })
+    const admin = { from: vi.fn() }
+
+    const result = await applyTurnkeyInboundLedgerEvent(admin as never, {
+      ...baseInput,
+      businessId: "biz-1",
+      amount: 0.0001,
+      txHash: "hash-grid-dust",
+    })
+    expect(result.kind).toBe("suppressed_noah")
+    expect(findGridVaTurnkeySweepForSolanaTx).toHaveBeenCalledWith(admin, {
+      txHash: "hash-grid-dust",
+      businessId: "biz-1",
+      userId: "user-1",
+    })
+    expect(mocks.settleGridSweep).toHaveBeenCalledWith(admin, {
+      transferId: "sweep-settled",
+      solanaTxHash: "hash-grid-dust",
     })
     expect(mocks.upsertLedger).not.toHaveBeenCalled()
   })

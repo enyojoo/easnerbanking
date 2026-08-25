@@ -6,6 +6,7 @@ export type CheckoutStepId =
   | "website"
   | "urls"
   | "keys"
+  | "branding"
   | "snippet"
   | "session"
   | "webhook"
@@ -17,10 +18,15 @@ export const CHECKOUT_PHASES: Array<{
   steps: CheckoutStepId[]
 }> = [
   { id: "connect_site", steps: ["website", "urls"] },
-  { id: "integrate", steps: ["keys", "snippet", "session"] },
+  { id: "integrate", steps: ["keys", "branding", "snippet", "session"] },
   { id: "verify", steps: ["webhook", "test", "live"] },
 ]
 
+/**
+ * Steps complete on evidence, not intent: `session` when a session was actually
+ * created through the merchant API, `snippet`/`test` when a test payment ran end
+ * to end, `webhook` when a signed event was actually accepted by the endpoint.
+ */
 export function completedCheckoutSteps(
   data: CheckoutHubPayload | null,
   site?: CheckoutSite | null,
@@ -37,12 +43,27 @@ export function completedCheckoutSteps(
       : (data.sites ?? []).some((item) => item.successUrl) || Boolean(data.settings.defaultSuccessUrl)
   if (websiteDone) done.add("website")
   if (urlsDone) done.add("urls")
-  if (data.keys.length > 0) {
-    done.add("keys")
-    done.add("snippet")
-    done.add("session")
+  if (data.keys.length > 0) done.add("keys")
+  // Branding is optional – it never blocks setup.
+  done.add("branding")
+
+  // Older cached payloads have no integration evidence – fall back to the legacy
+  // "keys exist" heuristic rather than un-completing a merchant's setup.
+  const integration = data.integration
+  const sessionEvidence = integration ? Boolean(integration.sessionCreatedAt) : data.keys.length > 0
+  const paymentEvidence =
+    Boolean(data.settings.testPaymentCompletedAt) || data.settings.liveModeEnabled
+  if (sessionEvidence) done.add("session")
+  if (sessionEvidence || paymentEvidence) {
+    if (integration ? Boolean(integration.sessionCreatedAt) || paymentEvidence : true) {
+      done.add("snippet")
+    }
   }
-  if (data.settings.webhookUrl && data.settings.webhookSecretLast4) done.add("webhook")
+  if (paymentEvidence) done.add("test")
+
+  const webhookConfigured = Boolean(data.settings.webhookUrl && data.settings.webhookSecretLast4)
+  const webhookEvidence = integration ? Boolean(integration.webhookDeliveredAt) : true
+  if (webhookConfigured && webhookEvidence) done.add("webhook")
   if (data.settings.liveModeEnabled) done.add("live")
   return done
 }
@@ -52,7 +73,7 @@ export function phaseComplete(
   done: Set<CheckoutStepId>,
 ): boolean {
   if (phase.id === "integrate") {
-    return done.has("keys")
+    return done.has("keys") && done.has("session")
   }
   if (phase.id === "verify") {
     return done.has("webhook")

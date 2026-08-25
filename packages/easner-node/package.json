@@ -1,0 +1,25 @@
+{
+  "name": "@easner/node",
+  "version": "0.1.0",
+  "description": "Server-side SDK for the Easner Checkout API: create checkout sessions and verify webhook signatures.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "require": "./src/index.ts"
+    }
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "easner",
+    "payments",
+    "checkout",
+    "webhooks"
+  ]
+}

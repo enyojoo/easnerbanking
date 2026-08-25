@@ -39,6 +39,7 @@ vi.mock("@/lib/business/org-owner", () => ({
 
 import {
   executeGridVaTurnkeySweep,
+  findGridVaTurnkeySweepForSolanaTx,
   parseGridInternalAccountId,
   startGridVaTurnkeySweepForKnownInbound,
 } from "./va-turnkey-sweep"
@@ -175,6 +176,32 @@ describe("startGridVaTurnkeySweepForKnownInbound", () => {
         path: "/quotes/Quote%3A1/execute",
       }),
     )
+  })
+})
+
+describe("findGridVaTurnkeySweepForSolanaTx", () => {
+  it("returns the oldest settled sweep still missing an on-chain hash", async () => {
+    const admin = chainAdmin({
+      limitRows: [
+        {
+          id: "sweep-1",
+          status: "settled",
+          metadata: { inbound_grid_transaction_id: "Transaction:in-1" },
+        },
+        {
+          id: "sweep-2",
+          status: "settled",
+          metadata: { grid_on_chain_tx_hash: "already-linked" },
+        },
+      ],
+    })
+
+    const result = await findGridVaTurnkeySweepForSolanaTx(admin, {
+      txHash: "hash-new",
+      businessId: "biz-1",
+      userId: "user-1",
+    })
+    expect(result).toEqual({ transferId: "sweep-1" })
   })
 })
 

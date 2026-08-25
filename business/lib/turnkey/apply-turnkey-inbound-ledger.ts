@@ -22,6 +22,7 @@ import {
 import { reconcileGridVaBankDepositCreditForSolanaTx } from "@/lib/grid/grid-bank-deposit-credit"
 import {
   findPendingGridVaTurnkeySweepForInboundAmount,
+  findGridVaTurnkeySweepForSolanaTx,
   settleGridVaTurnkeySweepForSolanaTx,
 } from "@/lib/grid/va-turnkey-sweep"
 import {
@@ -144,6 +145,21 @@ export async function applyTurnkeyInboundLedgerEvent(
           businessId,
         }).catch(() => {})
         return { kind: "suppressed_noah" }
+      }
+
+      if (businessId) {
+        const sweepByTx = await findGridVaTurnkeySweepForSolanaTx(admin, {
+          txHash,
+          businessId,
+          userId,
+        })
+        if (sweepByTx) {
+          await settleGridVaTurnkeySweepForSolanaTx(admin, {
+            transferId: sweepByTx.transferId,
+            solanaTxHash: txHash,
+          }).catch(() => {})
+          return { kind: "suppressed_noah" }
+        }
       }
 
       const gridSuppressed = await findGridVaBankDepositChainSettlementForSuppression(admin, {

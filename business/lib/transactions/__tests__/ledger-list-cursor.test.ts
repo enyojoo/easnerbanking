@@ -41,6 +41,7 @@ describe("resolveHiddenFromFeed", () => {
     expect(resolveHiddenFromFeed({ noah_bank_onramp_chain_mirror: true })).toBe(true)
     expect(resolveHiddenFromFeed({ yc_fund_balance_chain_mirror: true })).toBe(true)
     expect(resolveHiddenFromFeed({ global_payout_refund_mirror: true })).toBe(true)
+    expect(resolveHiddenFromFeed({ grid_va_turnkey_chain_mirror: true })).toBe(true)
     expect(resolveHiddenFromFeed({ sender_name: "Acme" })).toBe(false)
   })
 })

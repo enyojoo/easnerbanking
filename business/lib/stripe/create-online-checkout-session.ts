@@ -12,6 +12,7 @@ import {
   getStripePublishableKey,
   isOnlineCheckoutEnabled,
   isStripeInvoicePaymentsEnabled,
+  isStripeTaxEnabled,
 } from "./config"
 
 export type { OnlineCheckoutSource }
@@ -26,6 +27,11 @@ export type CreateOnlineCheckoutSessionInput = {
   /** Shown on the payment sheet – never includes provider names. */
   productName: string
   productDescription?: string | null
+  /**
+   * Itemized cart for one-time payments (the embed API). Unit amounts × quantities
+   * must sum to `listedAmountCents`; a buyer surcharge becomes its own line item.
+   */
+  lineItems?: { name: string; amountCents: number; quantity: number; description?: string | null }[]
   customerEmail?: string | null
   customerName?: string | null
   statementSuffix?: string | null
@@ -127,7 +133,7 @@ export async function createOnlineCheckoutSession(
   const connectedAccountId = connect.stripeAccountId
 
   const { feeMode } = await resolveCheckoutFeeMode(admin, input.businessId)
-  const amounts = computeCheckoutAmounts({ listedAmountCents, feeMode })
+  const amounts = computeCheckoutAmounts({ listedAmountCents, feeMode, currency })
 
   const settlementId = randomUUID()
   const livemode = input.livemode !== false
@@ -200,29 +206,76 @@ export async function createOnlineCheckoutSession(
     invoiceId: input.invoiceId,
     invoiceNumber: input.invoiceNumber,
     paymentLinkId: input.paymentLinkId,
+    // Caller metadata first – the platform keys after it always win.
     extra: {
-      easner_livemode: livemode ? "true" : "false",
       ...(input.metadata ?? {}),
+      easner_livemode: livemode ? "true" : "false",
       ...(customerName ? { easner_customer_name: customerName } : {}),
     },
   })
 
-  const lineItem: Stripe.Checkout.SessionCreateParams.LineItem =
+  const itemized = input.mode === "payment" ? input.lineItems ?? [] : []
+  if (itemized.length > 0) {
+    const itemizedTotal = itemized.reduce(
+      (sum, item) => sum + Math.round(item.amountCents) * Math.round(item.quantity),
+      0,
+    )
+    if (itemizedTotal !== listedAmountCents) {
+      await admin.from(table).update({ status: "failed" }).eq("id", sessionRow.id)
+      return {
+        ok: false,
+        status: 400,
+        error: "line_items total does not match amount",
+      }
+    }
+  }
+
+  const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] =
     input.mode === "subscription"
-      ? { quantity: 1, price: String(input.stripePriceId) }
-      : {
-          quantity: 1,
-          price_data: {
-            currency,
-            unit_amount: amounts.customerAmountCents,
-            product_data: {
-              name: input.productName,
-              ...(input.productDescription?.trim()
-                ? { description: input.productDescription.trim() }
-                : {}),
+      ? [{ quantity: 1, price: String(input.stripePriceId) }]
+      : itemized.length > 0
+        ? [
+            ...itemized.map((item) => ({
+              quantity: Math.round(item.quantity),
+              price_data: {
+                currency,
+                unit_amount: Math.round(item.amountCents),
+                product_data: {
+                  name: item.name,
+                  ...(item.description?.trim() ? { description: item.description.trim() } : {}),
+                },
+              },
+            })),
+            // Buyer-surcharge fee mode: the customer total exceeds the listed total,
+            // so the difference is shown as its own line instead of inflating items.
+            ...(amounts.surchargeCents > 0
+              ? [
+                  {
+                    quantity: 1,
+                    price_data: {
+                      currency,
+                      unit_amount: amounts.surchargeCents,
+                      product_data: { name: "Processing fee" },
+                    },
+                  },
+                ]
+              : []),
+          ]
+        : [
+            {
+              quantity: 1,
+              price_data: {
+                currency,
+                unit_amount: amounts.customerAmountCents,
+                product_data: {
+                  name: input.productName,
+                  ...(input.productDescription?.trim()
+                    ? { description: input.productDescription.trim() }
+                    : {}),
+                },
+              },
             },
-          },
-        }
+          ]
 
   try {
     const session = await getStripe().checkout.sessions.create(
@@ -230,8 +283,13 @@ export async function createOnlineCheckoutSession(
         ui_mode: "elements",
         mode: input.mode,
         customer_email: input.customerEmail?.trim() || undefined,
-        billing_address_collection: "auto",
-        line_items: [lineItem],
+        // Stripe Tax needs a full billing address to place the buyer.
+        billing_address_collection:
+          isStripeTaxEnabled() && input.mode === "payment" ? "required" : "auto",
+        ...(isStripeTaxEnabled() && input.mode === "payment"
+          ? { automatic_tax: { enabled: true } }
+          : {}),
+        line_items: lineItems,
         metadata,
         return_url: input.returnUrl,
         ...(input.mode === "subscription"

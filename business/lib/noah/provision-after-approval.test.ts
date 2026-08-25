@@ -5,6 +5,7 @@ const {
   trySyncTurnkeyDepositVaultsIfNeeded,
   provisionNoahArtifactsForCustomer,
   resolveBusinessOrgOwnerUserId,
+  ensureTurnkeySubOrgForEasnerOwner,
 } = vi.hoisted(() => ({
   scheduleTurnkeyWalletsAfterKycApproved: vi.fn().mockResolvedValue(undefined),
   trySyncTurnkeyDepositVaultsIfNeeded: vi.fn().mockResolvedValue(undefined),
@@ -13,6 +14,11 @@ const {
     eurAccountCreated: true,
   }),
   resolveBusinessOrgOwnerUserId: vi.fn().mockResolvedValue(null),
+  ensureTurnkeySubOrgForEasnerOwner: vi.fn().mockResolvedValue({
+    ok: true,
+    subOrganizationId: "sub-org-1",
+    created: false,
+  }),
 }))
 
 vi.mock("@/lib/wallet/turnkey-provisioning", () => ({
@@ -31,10 +37,25 @@ vi.mock("@/lib/business/org-owner", () => ({
   resolveBusinessOrgOwnerUserId,
 }))
 
+vi.mock("@/lib/wallet/ensure-turnkey-sub-org", () => ({
+  ensureTurnkeySubOrgForEasnerOwner,
+}))
+
 import { provisionNoahAfterVerificationApproved } from "./provision-after-approval"
 
 describe("provisionNoahAfterVerificationApproved", () => {
-  const admin = {} as import("@supabase/supabase-js").SupabaseClient
+  const admin = {
+    from: vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { email: "user@example.com", full_name: "User One" },
+            error: null,
+          }),
+        }),
+      }),
+    }),
+  } as unknown as import("@supabase/supabase-js").SupabaseClient
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -50,11 +71,23 @@ describe("provisionNoahAfterVerificationApproved", () => {
       subjectBusinessId: null,
     })
 
+    expect(ensureTurnkeySubOrgForEasnerOwner.mock.invocationCallOrder[0]).toBeLessThan(
+      scheduleTurnkeyWalletsAfterKycApproved.mock.invocationCallOrder[0]!,
+    )
     expect(scheduleTurnkeyWalletsAfterKycApproved.mock.invocationCallOrder[0]).toBeLessThan(
       trySyncTurnkeyDepositVaultsIfNeeded.mock.invocationCallOrder[0]!,
     )
     expect(trySyncTurnkeyDepositVaultsIfNeeded.mock.invocationCallOrder[0]).toBeLessThan(
       provisionNoahArtifactsForCustomer.mock.invocationCallOrder[0]!,
+    )
+
+    expect(ensureTurnkeySubOrgForEasnerOwner).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope: "individual",
+        subjectUserId: "user-1",
+        subjectBusinessId: null,
+        noahCustomerId: "eind_test",
+      }),
     )
 
     expect(scheduleTurnkeyWalletsAfterKycApproved).toHaveBeenCalledWith({
@@ -102,6 +135,12 @@ describe("provisionNoahAfterVerificationApproved", () => {
       }),
     )
     expect(provisionNoahArtifactsForCustomer).not.toHaveBeenCalled()
-    expect(result).toEqual({ skipped: true, reason: "business_uses_grid_not_noah" })
+    expect(result).toEqual({
+      skipped: true,
+      reason: "business_uses_grid_not_noah",
+      turnkeySubOrgReady: true,
+      turnkeySubOrgError: null,
+      turnkeySubOrganizationId: "sub-org-1",
+    })
   })
 })

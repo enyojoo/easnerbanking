@@ -2,8 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { relayGetRequestV3 } from "@/lib/relay/client"
 import {
   extractRelayRequestId,
-  extractRelaySolanaUnsignedTx,
   parseRelayFromAmountRaw,
+  resolveRelaySolanaUnsignedTxHexForTurnkey,
 } from "@/lib/relay/quote"
 import {
   extractRelayOutTxHashesV3,
@@ -116,9 +116,15 @@ export async function executeRelayWalletSend(input: {
 
   let unsigned: string
   try {
-    unsigned = extractRelaySolanaUnsignedTx(quote)
-  } catch {
-    return { ok: false, error: "relay_missing_solana_transaction" }
+    unsigned = await resolveRelaySolanaUnsignedTxHexForTurnkey({
+      quote,
+      feePayer: fromAddress,
+    })
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "relay_missing_solana_transaction",
+    }
   }
 
   const sponsor = isTurnkeySolSponsorshipEnabled()
