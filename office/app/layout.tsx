@@ -6,6 +6,7 @@ import { OfficeQueryProvider } from "@/components/providers"
 import { ProtectedRouteWrapper } from "@/components/auth/protected-route-wrapper"
 import { ThemeProvider } from "@/components/theme-provider"
 import { DesktopMinViewportGate } from "@/components/layout/desktop-min-viewport-gate"
+import { OfficeShellGate } from "@/components/layout/office-shell-gate"
 import "./globals.css"
 
 export const metadata: Metadata = {
@@ -33,7 +34,9 @@ export default function RootLayout({
           <OfficeQueryProvider>
             <ThemeProvider>
               <DesktopMinViewportGate product="office">
-                <ProtectedRouteWrapper>{children}</ProtectedRouteWrapper>
+                <ProtectedRouteWrapper>
+                  <OfficeShellGate>{children}</OfficeShellGate>
+                </ProtectedRouteWrapper>
               </DesktopMinViewportGate>
             </ThemeProvider>
           </OfficeQueryProvider>

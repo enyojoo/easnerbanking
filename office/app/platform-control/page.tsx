@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useState } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
-import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   PlatformConfigPanel,
@@ -54,7 +53,7 @@ function PlatformControlHubBody() {
   }
 
   return (
-    <OfficeDashboardLayout>
+    <>
       <div className="p-6 space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Platform control</h1>
@@ -71,39 +70,39 @@ function PlatformControlHubBody() {
             <TabsTrigger value="crypto">Crypto</TabsTrigger>
             <TabsTrigger value="webhooks">Webhook inbox</TabsTrigger>
           </TabsList>
-          <TabsContent value="platform" forceMount className={TAB_CONTENT_CLASS}>
+          <TabsContent value="platform" className={TAB_CONTENT_CLASS}>
             <PlatformConfigPanel />
           </TabsContent>
-          <TabsContent value="noah-rates" forceMount className={TAB_CONTENT_CLASS}>
+          <TabsContent value="noah-rates" className={TAB_CONTENT_CLASS}>
             <NoahRatesPanel />
           </TabsContent>
-          <TabsContent value="yc-rates" forceMount className={TAB_CONTENT_CLASS}>
+          <TabsContent value="yc-rates" className={TAB_CONTENT_CLASS}>
             <YcRatesPanel />
           </TabsContent>
-          <TabsContent value="grid-rates" forceMount className={TAB_CONTENT_CLASS}>
+          <TabsContent value="grid-rates" className={TAB_CONTENT_CLASS}>
             <GridRatesPanel />
           </TabsContent>
-          <TabsContent value="crypto-rates" forceMount className={TAB_CONTENT_CLASS}>
+          <TabsContent value="crypto-rates" className={TAB_CONTENT_CLASS}>
             <CryptoRatesPanel />
           </TabsContent>
-          <TabsContent value="fiat" forceMount className={TAB_CONTENT_CLASS}>
+          <TabsContent value="fiat" className={TAB_CONTENT_CLASS}>
             <FiatPanel />
           </TabsContent>
-          <TabsContent value="crypto" forceMount className={TAB_CONTENT_CLASS}>
+          <TabsContent value="crypto" className={TAB_CONTENT_CLASS}>
             <CryptoPanel />
           </TabsContent>
-          <TabsContent value="webhooks" forceMount className={TAB_CONTENT_CLASS}>
+          <TabsContent value="webhooks" className={TAB_CONTENT_CLASS}>
             <WebhookInboxPanel />
           </TabsContent>
         </Tabs>
       </div>
-    </OfficeDashboardLayout>
+    </>
   )
 }
 
 export default function PlatformControlPage() {
   return (
-    <Suspense fallback={<OfficeDashboardLayout><OfficePageSkeleton cards={0} /></OfficeDashboardLayout>}>
+    <Suspense fallback={<><OfficePageSkeleton cards={0} /></>}>
       <PlatformControlHubBody />
     </Suspense>
   )

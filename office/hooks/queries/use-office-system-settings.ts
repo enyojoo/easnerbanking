@@ -36,6 +36,12 @@ export function useOfficeSystemSettings() {
     queryKey: officeKeys.systemSettings(),
     enabled,
     ...officeReferenceQueryDefaults,
+    // Two admins can edit system settings concurrently; a 60s poll (paused
+    // while the tab is backgrounded via refetchIntervalInBackground: false
+    // from the shared defaults) keeps their views converging. Long term the
+    // better fix is a Supabase realtime subscription on `system_settings`
+    // feeding the query cache instead of polling.
+    refetchInterval: 60_000,
     queryFn: fetchOfficeSystemSettings,
   })
 }

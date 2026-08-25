@@ -1,6 +1,5 @@
 "use client"
 
-import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Users,
@@ -95,7 +94,7 @@ export default function AdminDashboardPage() {
   const kpis = overview?.kpis
 
   return (
-    <OfficeDashboardLayout>
+    <>
       <div className="p-6 space-y-6">
         <div className="flex min-h-8 items-center justify-between gap-4">
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
@@ -287,6 +286,6 @@ export default function AdminDashboardPage() {
         </div>
 
       </div>
-    </OfficeDashboardLayout>
+    </>
   )
 }

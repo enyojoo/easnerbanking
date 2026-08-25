@@ -36,7 +36,7 @@ const nextConfig = {
   },
   reactStrictMode: true,
   experimental: {
-    optimizePackageImports: ['lucide-react'],
+    optimizePackageImports: ['lucide-react', '@easner/shared'],
   },
   turbopack: {
     root: resolve(__dirname, ".."),

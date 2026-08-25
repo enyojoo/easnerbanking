@@ -1,31 +1,15 @@
 "use client"
 
-import { usePathname } from "next/navigation"
 import { useRouteProtection } from "@/hooks/use-route-protection"
 
-const PROTECTED_PATHS = [
-  "/dashboard",
-  "/users",
-  "/transactions",
-  "/businesses",
-  "/customers",
-  "/invoices",
-  "/terminal",
-  "/platform-control",
-]
-
-function isProtectedPath(pathname: string | null): boolean {
-  if (!pathname) return false
-  return PROTECTED_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))
-}
-
+/**
+ * Root auth guard: redirects unauthenticated / non-admin visitors to the
+ * login page (the redirect lives in useRouteProtection). It renders children
+ * directly — the previous per-path branching was dead code (both branches
+ * returned children) and its usePathname() call re-rendered the app root on
+ * every navigation for nothing.
+ */
 export function ProtectedRouteWrapper({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname()
   useRouteProtection({ requireAuth: true, adminOnly: true, redirectTo: "/auth/login" })
-
-  if (!isProtectedPath(pathname)) {
-    return <>{children}</>
-  }
-
   return <>{children}</>
 }

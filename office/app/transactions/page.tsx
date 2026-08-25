@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
+import { useDebouncedValue } from "@/hooks/use-debounced-value"
+import { formatOfficeDate as formatDate, formatOfficeTimestamp as formatTimestamp } from "@/lib/format-office-date"
 import { OfficeTransactionDetailPanel } from "@/components/transactions/office-transaction-detail-panel"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -10,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -166,7 +167,10 @@ export default function AdminTransactionsPage() {
 
   const transactionsQuery = useOfficeTransactionsList(serverFilters)
 
-  const transactions = transactionsQuery.data?.pages.flatMap((page) => page.transactions) ?? []
+  const transactions = useMemo(
+    () => transactionsQuery.data?.pages.flatMap((page) => page.transactions) ?? [],
+    [transactionsQuery.data],
+  )
   const summary = transactionsQuery.data?.pages[0]?.summary
   const hasNextPage = transactionsQuery.hasNextPage
   const transactionsLoading = useQueryInitialLoading(transactionsQuery.isPending, transactionsQuery.data, transactions)
@@ -177,32 +181,41 @@ export default function AdminTransactionsPage() {
         ? String(transactionsQuery.error)
         : null
 
-  const filteredTransactions = transactions.filter((transaction) => {
-    const matchesSearch =
-      searchTerm === "" ||
-      transaction.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      String(transaction.label || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      String(transaction.who || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      String(transaction.provider_transaction_id || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      String(transaction.easner_transaction_id || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      String(transaction.user?.email || "").toLowerCase().includes(searchTerm.toLowerCase())
+  // Filter on the debounced term so typing stays at frame rate.
+  const deferredSearchTerm = useDebouncedValue(searchTerm, 250)
+  const filteredTransactions = useMemo(() => {
+    const needle = deferredSearchTerm.toLowerCase()
+    return transactions.filter((transaction) => {
+      const matchesSearch =
+        needle === "" ||
+        transaction.id.toLowerCase().includes(needle) ||
+        String(transaction.label || "").toLowerCase().includes(needle) ||
+        String(transaction.who || "").toLowerCase().includes(needle) ||
+        String(transaction.provider_transaction_id || "").toLowerCase().includes(needle) ||
+        String(transaction.easner_transaction_id || "").toLowerCase().includes(needle) ||
+        String(transaction.user?.email || "").toLowerCase().includes(needle)
 
-    const matchesDirection =
-      directionFilter === "all" || (transaction.direction || "out") === directionFilter
-    const matchesCurrency =
-      currencyFilter === "all" ||
-      String(transaction.displayCurrency || transaction.currency || "").toUpperCase() === currencyFilter
+      const matchesDirection =
+        directionFilter === "all" || (transaction.direction || "out") === directionFilter
+      const matchesCurrency =
+        currencyFilter === "all" ||
+        String(transaction.displayCurrency || transaction.currency || "").toUpperCase() === currencyFilter
 
-    return matchesSearch && matchesDirection && matchesCurrency
-  })
+      return matchesSearch && matchesDirection && matchesCurrency
+    })
+  }, [transactions, deferredSearchTerm, directionFilter, currencyFilter])
 
-  const currencyOptions = Array.from(
-    new Set(
-      transactions
-        .map((t) => String(t.displayCurrency || t.currency || "").toUpperCase())
-        .filter((code) => code.length > 0),
-    ),
-  ).sort()
+  const currencyOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          transactions
+            .map((t) => String(t.displayCurrency || t.currency || "").toUpperCase())
+            .filter((code) => code.length > 0),
+        ),
+      ).sort(),
+    [transactions],
+  )
 
   const hasActiveFilters =
     searchTerm ||
@@ -212,26 +225,6 @@ export default function AdminTransactionsPage() {
     providerFilter !== "all" ||
     ycModeFilter !== "all" ||
     railFilter !== "all"
-
-  const formatTimestamp = (dateString: string) => {
-    const date = new Date(dateString)
-    const month = date.toLocaleString("en-US", { month: "short" })
-    const day = date.getDate().toString().padStart(2, "0")
-    const year = date.getFullYear()
-    const hours = date.getHours()
-    const minutes = date.getMinutes().toString().padStart(2, "0")
-    const ampm = hours >= 12 ? "PM" : "AM"
-    const displayHours = hours % 12 || 12
-    return `${month} ${day}, ${year} • ${displayHours}:${minutes} ${ampm}`
-  }
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    const month = date.toLocaleString("en-US", { month: "short" })
-    const day = date.getDate().toString().padStart(2, "0")
-    const year = date.getFullYear()
-    return `${month} ${day}, ${year}`
-  }
 
   const handleExport = () => {
     const csvContent = [
@@ -276,6 +269,7 @@ export default function AdminTransactionsPage() {
     a.href = url
     a.download = "transactions.csv"
     a.click()
+    window.URL.revokeObjectURL(url)
   }
 
   const clearFilters = () => {
@@ -289,15 +283,19 @@ export default function AdminTransactionsPage() {
   }
 
   return (
-    <OfficeDashboardLayout>
+    <>
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Transaction Management</h1>
           </div>
-          <Button onClick={handleExport} variant="outline">
+          <Button
+            onClick={handleExport}
+            variant="outline"
+            title="Exports the currently loaded rows after active filters – load more pages to include older transactions"
+          >
             <Download className="h-4 w-4 mr-2" />
-            Export Data
+            Export loaded
           </Button>
         </div>
         <div className="-mt-4 flex min-h-4 justify-end">
@@ -577,23 +575,9 @@ export default function AdminTransactionsPage() {
                             <TransactionStatusBadge ledgerStatus={transaction.status} />
                           </TableCell>
                           <TableCell>
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button variant="outline" size="sm" onClick={() => setSelectedTransaction(transaction)}>
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
-                                <DialogHeader>
-                                  <DialogTitle>Transaction Details</DialogTitle>
-                                </DialogHeader>
-                                {selectedTransaction ? (
-                                  <div className="overflow-y-auto flex-1 pr-2 -mr-2">
-                                    <OfficeTransactionDetailPanel transaction={selectedTransaction} />
-                                  </div>
-                                ) : null}
-                              </DialogContent>
-                            </Dialog>
+                            <Button variant="outline" size="sm" onClick={() => setSelectedTransaction(transaction)}>
+                              <Eye className="h-4 w-4" />
+                            </Button>
                           </TableCell>
                         </TableRow>
                     ))}
@@ -619,7 +603,26 @@ export default function AdminTransactionsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* One controlled dialog for the whole table (was one Dialog per row). */}
+        <Dialog
+          open={Boolean(selectedTransaction)}
+          onOpenChange={(open) => {
+            if (!open) setSelectedTransaction(null)
+          }}
+        >
+          <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle>Transaction Details</DialogTitle>
+            </DialogHeader>
+            {selectedTransaction ? (
+              <div className="overflow-y-auto flex-1 pr-2 -mr-2">
+                <OfficeTransactionDetailPanel transaction={selectedTransaction} />
+              </div>
+            ) : null}
+          </DialogContent>
+        </Dialog>
       </div>
-    </OfficeDashboardLayout>
+    </>
   )
 }

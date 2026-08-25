@@ -127,17 +127,18 @@ export function OfficeDashboardLayout({ children }: OfficeDashboardLayoutProps) 
             const Icon = item.icon
             const active = isNavItemActive(pathname, item.href)
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setSidebarOpen(false)}
-                aria-current={active ? "page" : undefined}
-              >
-                <Button variant="ghost" className={singleButtonClass(active)}>
+              /* Button asChild renders the Link itself with button styling –
+                 avoids invalid <a><button> nesting. */
+              <Button key={item.href} asChild variant="ghost" className={singleButtonClass(active)}>
+                <Link
+                  href={item.href}
+                  onClick={() => setSidebarOpen(false)}
+                  aria-current={active ? "page" : undefined}
+                >
                   <Icon className="h-[18px] w-[18px] shrink-0 stroke-[1.5]" />
                   <span className="truncate">{item.name}</span>
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             )
           })}
 
@@ -165,17 +166,16 @@ export function OfficeDashboardLayout({ children }: OfficeDashboardLayoutProps) 
                       const ChildIcon = child.icon
                       const active = isNavItemActive(pathname, child.href)
                       return (
-                        <Link
-                          key={child.href}
-                          href={child.href}
-                          onClick={() => setSidebarOpen(false)}
-                          aria-current={active ? "page" : undefined}
-                        >
-                          <Button variant="ghost" className={singleButtonClass(active)}>
+                        <Button key={child.href} asChild variant="ghost" className={singleButtonClass(active)}>
+                          <Link
+                            href={child.href}
+                            onClick={() => setSidebarOpen(false)}
+                            aria-current={active ? "page" : undefined}
+                          >
                             <ChildIcon className="h-[18px] w-[18px] shrink-0 stroke-[1.5]" />
                             <span className="truncate">{child.name}</span>
-                          </Button>
-                        </Link>
+                          </Link>
+                        </Button>
                       )
                     })}
                   </div>
@@ -184,16 +184,20 @@ export function OfficeDashboardLayout({ children }: OfficeDashboardLayoutProps) 
             )
           })}
 
-          <Link
-            href={officeNavPlatformLink.href}
-            onClick={() => setSidebarOpen(false)}
-            aria-current={isNavItemActive(pathname, officeNavPlatformLink.href) ? "page" : undefined}
+          <Button
+            asChild
+            variant="ghost"
+            className={singleButtonClass(isNavItemActive(pathname, officeNavPlatformLink.href))}
           >
-            <Button variant="ghost" className={singleButtonClass(isNavItemActive(pathname, officeNavPlatformLink.href))}>
+            <Link
+              href={officeNavPlatformLink.href}
+              onClick={() => setSidebarOpen(false)}
+              aria-current={isNavItemActive(pathname, officeNavPlatformLink.href) ? "page" : undefined}
+            >
               <PlatformNavIcon className="h-[18px] w-[18px] shrink-0 stroke-[1.5]" />
               <span className="truncate">{officeNavPlatformLink.name}</span>
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </nav>
 
         <div className="mt-auto border-t border-sidebar-border px-3 py-4">

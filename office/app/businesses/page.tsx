@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -159,7 +158,7 @@ function BusinessesPageInner() {
   }
 
   return (
-    <OfficeDashboardLayout>
+    <>
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -448,7 +447,7 @@ function BusinessesPageInner() {
           )}
         </DialogContent>
       </Dialog>
-    </OfficeDashboardLayout>
+    </>
   )
 }
 

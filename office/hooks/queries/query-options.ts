@@ -44,15 +44,21 @@ export const officeReferenceQueryDefaults = {
   meta: { webPersist: "none" as const, freshness: "reference" as const },
 }
 
-/** Admin rate catalogs – cron-synced; always fetch fresh, never persist to disk. */
+/**
+ * Admin rate catalogs – cron-synced server-side every ~5 minutes, so a 60s
+ * client staleTime plus a 5-minute poll tracks the source of truth without
+ * refetching on every mount/navigation. The poll pauses while the tab is
+ * backgrounded (`refetchIntervalInBackground: false`); the react-query mount
+ * default still refetches stale data when a rates page is revisited.
+ */
 export const officeRatesQueryDefaults = {
-  staleTime: 0,
+  staleTime: 60_000,
   gcTime: OFFICE_REFERENCE_GC_MS,
   placeholderData: keepPreviousData,
   retry: 1,
   refetchOnWindowFocus: false,
   refetchOnReconnect: true,
-  refetchOnMount: true,
+  refetchInterval: 5 * 60_000,
   refetchIntervalInBackground: false,
   meta: { webPersist: "none" as const, freshness: "reference" as const },
 }

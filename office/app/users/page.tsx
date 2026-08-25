@@ -2,14 +2,15 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { useQueryClient } from "@tanstack/react-query"
+import { useDebouncedValue } from "@/hooks/use-debounced-value"
+import { formatOfficeDate as formatDate, formatOfficeTimestamp as formatTimestamp } from "@/lib/format-office-date"
 import Link from "next/link"
-import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -122,10 +123,22 @@ function transactionStatusBadgeVariant(
   }
 }
 
+/**
+ * Rows rendered before "Load more" (O2.4). The directory API
+ * (business/app/api/admin/office/users – owned by the business workspace)
+ * still returns the whole directory in one response, so pagination here is a
+ * render cap: filtering/search always covers every loaded row, we just keep
+ * the initial DOM small. Row virtualization was deliberately skipped – the
+ * semantic <Table> layout drives column sizing, and absolute-positioned
+ * virtual rows would break that alignment.
+ */
+const USERS_RENDER_PAGE_SIZE = 100
+
 export default function AdminUsersPage() {
   const queryClient = useQueryClient()
   const { authLoading } = useOfficeAdminEnabled()
   const [searchTerm, setSearchTerm] = useState("")
+  const [visibleCount, setVisibleCount] = useState(USERS_RENDER_PAGE_SIZE)
   const [roleFilter, setRoleFilter] = useState<"all" | "individual" | "business">("all")
   const [verificationFilter, setVerificationFilter] = useState("all")
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null)
@@ -173,45 +186,29 @@ export default function AdminUsersPage() {
     return tx.impactFormatted || tx.balanceFormatted || ""
   }
 
-  const formatTimestamp = (dateString: string) => {
-    const date = new Date(dateString)
-    const month = date.toLocaleString("en-US", { month: "short" })
-    const day = date.getDate().toString().padStart(2, "0")
-    const year = date.getFullYear()
-    const hours = date.getHours()
-    const minutes = date.getMinutes().toString().padStart(2, "0")
-    const ampm = hours >= 12 ? "PM" : "AM"
-    const displayHours = hours % 12 || 12
-    // Format: "Nov 07, 2025 • 7:29 PM"
-    return `${month} ${day}, ${year} • ${displayHours}:${minutes} ${ampm}`
-  }
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    const month = date.toLocaleString("en-US", { month: "short" })
-    const day = date.getDate().toString().padStart(2, "0")
-    const year = date.getFullYear()
-    // Format: "Nov 07, 2025"
-    return `${month} ${day}, ${year}`
-  }
-
-  const usersWithStats = useMemo(() => directoryUsers, [directoryUsers])
+  const usersWithStats = directoryUsers
 
   useEffect(() => {
     if (typeof window === "undefined") return
     const id = new URLSearchParams(window.location.search).get("highlight")
     if (!id || usersWithStats.length === 0) return
-    const found = usersWithStats.find((u: UserData) => u.id === id)
+    const foundIndex = usersWithStats.findIndex((u: UserData) => u.id === id)
+    const found = foundIndex >= 0 ? usersWithStats[foundIndex] : undefined
     if (found) {
       setSelectedUser(found)
+      // Make sure the highlighted row is inside the rendered slice.
+      setVisibleCount((count) => Math.max(count, foundIndex + 1))
       requestAnimationFrame(() => {
         document.querySelector(`[data-user-row="${id}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" })
       })
     }
   }, [usersWithStats])
 
-  const filteredUsers = usersWithStats.filter((user: UserData) => {
-    const q = searchTerm.toLowerCase()
+  // Filter on the debounced term so typing stays at frame rate.
+  const deferredSearchTerm = useDebouncedValue(searchTerm, 250)
+  const filteredUsers = useMemo(() => {
+    const q = deferredSearchTerm.toLowerCase()
+    return usersWithStats.filter((user: UserData) => {
     const name = (user.full_name || "").toLowerCase()
     const em = (user.email || "").toLowerCase()
     const matchesSearch = !q || name.includes(q) || em.includes(q) || user.id.toLowerCase().includes(q)
@@ -235,7 +232,19 @@ export default function AdminUsersPage() {
     }
 
     return matchesSearch && matchesRole && matchesVerification
-  })
+    })
+  }, [usersWithStats, deferredSearchTerm, roleFilter, verificationFilter])
+
+  // Reset the render cap whenever the visible result set changes shape.
+  useEffect(() => {
+    setVisibleCount(USERS_RENDER_PAGE_SIZE)
+  }, [deferredSearchTerm, roleFilter, verificationFilter])
+
+  const visibleUsers = useMemo(
+    () => (filteredUsers.length > visibleCount ? filteredUsers.slice(0, visibleCount) : filteredUsers),
+    [filteredUsers, visibleCount],
+  )
+  const hasMoreToRender = filteredUsers.length > visibleUsers.length
 
   function accountTypeLabel(user: UserData): "Consumer" | "Business" | null {
     const role = String(user.role || "").toLowerCase()
@@ -306,6 +315,7 @@ export default function AdminUsersPage() {
     a.href = url
     a.download = "users.csv"
     a.click()
+    window.URL.revokeObjectURL(url)
   }
 
   const handleUserSelect = (user: UserData) => {
@@ -364,24 +374,27 @@ export default function AdminUsersPage() {
     }
   }
 
-  const registrationStats = {
-    totalUsers: directoryUsers.length,
-    verifiedUsers: directoryUsers.filter((u) => resolveOverviewVerificationStatus(u) === "approved").length,
-    newThisWeek: directoryUsers.filter(
-      (u) => new Date(u.created_at).getTime() > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).getTime(),
-    ).length,
-  }
+  const registrationStats = useMemo(
+    () => ({
+      totalUsers: directoryUsers.length,
+      verifiedUsers: directoryUsers.filter((u) => resolveOverviewVerificationStatus(u) === "approved").length,
+      newThisWeek: directoryUsers.filter(
+        (u) => new Date(u.created_at).getTime() > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).getTime(),
+      ).length,
+    }),
+    [directoryUsers],
+  )
 
   if (authLoading || (dirLoading && directoryUsers.length === 0 && !dirError)) {
     return (
-      <OfficeDashboardLayout>
+      <>
         <OfficePageSkeleton cards={2} />
-      </OfficeDashboardLayout>
+      </>
     )
   }
 
   return (
-    <OfficeDashboardLayout>
+    <>
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -389,9 +402,13 @@ export default function AdminUsersPage() {
           </div>
           <div className="flex gap-2">
             <OfficeBackgroundRefresh isFetching={directoryQuery.isFetching && !dirLoading} />
-            <Button onClick={handleExport} variant="outline">
+            <Button
+              onClick={handleExport}
+              variant="outline"
+              title="Exports the currently loaded rows after active filters"
+            >
               <Download className="h-4 w-4 mr-2" />
-              Export Users
+              Export loaded
             </Button>
           </div>
         </div>
@@ -492,7 +509,7 @@ export default function AdminUsersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredUsers.map((user: UserData) => (
+                {visibleUsers.map((user: UserData) => (
                   <TableRow key={user.id} data-user-row={user.id}>
                     <TableCell className="text-left font-medium">{userDisplayName(user)}</TableCell>
                     <TableCell className="text-sm text-muted-foreground max-w-[220px] truncate" title={user.email || ""}>
@@ -504,19 +521,56 @@ export default function AdminUsersPage() {
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-2">
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onPointerEnter={() => prefetchUserDetails(user.id)}
-                              onFocus={() => prefetchUserDetails(user.id)}
-                              onClick={() => handleUserSelect(user)}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="flex max-h-[min(88vh,920px)] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onPointerEnter={() => prefetchUserDetails(user.id)}
+                          onFocus={() => prefetchUserDetails(user.id)}
+                          onClick={() => handleUserSelect(user)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+
+            {filteredUsers.length === 0 && (
+              <div className="text-center py-8 text-gray-500">No users found matching your criteria.</div>
+            )}
+
+            {hasMoreToRender ? (
+              <div className="flex items-center justify-center gap-3 pt-4">
+                <span className="text-sm text-muted-foreground">
+                  Showing {visibleUsers.length} of {filteredUsers.length}
+                </span>
+                <Button
+                  variant="outline"
+                  onClick={() => setVisibleCount((count) => count + USERS_RENDER_PAGE_SIZE)}
+                >
+                  Load more
+                </Button>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        {/*
+          ONE controlled dialog for the whole table (house pattern from
+          app/businesses/page.tsx). A Dialog per row eagerly rebuilt N
+          identical ~290-line detail trees on every render — with 500 users
+          that was tens of thousands of element allocations per search
+          keystroke.
+        */}
+        <Dialog
+          open={Boolean(selectedUser)}
+          onOpenChange={(open) => {
+            if (!open) setSelectedUser(null)
+          }}
+        >
+          <DialogContent className="flex max-h-[min(88vh,920px)] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl">
                             <DialogHeader className="shrink-0 space-y-0 border-b px-6 py-4 pr-12 text-left">
                               <DialogTitle>User – {selectedUser ? userDisplayName(selectedUser) : ""}</DialogTitle>
                             </DialogHeader>
@@ -769,27 +823,13 @@ export default function AdminUsersPage() {
                                                     </Badge>
                                                   </TableCell>
                                                   <TableCell>
-                                                    <Dialog>
-                                                      <DialogTrigger asChild>
-                                                        <Button
-                                                          variant="outline"
-                                                          size="sm"
-                                                          onClick={() => setSelectedUserTransaction(transaction)}
-                                                        >
-                                                          <Eye className="h-4 w-4" />
-                                                        </Button>
-                                                      </DialogTrigger>
-                                                      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
-                                                        <DialogHeader>
-                                                          <DialogTitle>Transaction Details</DialogTitle>
-                                                        </DialogHeader>
-                                                        {selectedUserTransaction ? (
-                                                          <div className="overflow-y-auto flex-1 pr-2 -mr-2">
-                                                            <OfficeTransactionDetailPanel transaction={selectedUserTransaction} />
-                                                          </div>
-                                                        ) : null}
-                                                      </DialogContent>
-                                                    </Dialog>
+                                                    <Button
+                                                      variant="outline"
+                                                      size="sm"
+                                                      onClick={() => setSelectedUserTransaction(transaction)}
+                                                    >
+                                                      <Eye className="h-4 w-4" />
+                                                    </Button>
                                                   </TableCell>
                                                 </TableRow>
                                               )
@@ -810,20 +850,27 @@ export default function AdminUsersPage() {
                                 </div>
                               )
                             })()}
-                          </DialogContent>
-                        </Dialog>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          </DialogContent>
+        </Dialog>
 
-            {filteredUsers.length === 0 && (
-              <div className="text-center py-8 text-gray-500">No users found matching your criteria.</div>
-            )}
-          </CardContent>
-        </Card>
+        {/* One controlled dialog for the user-transaction rows (was one per row). */}
+        <Dialog
+          open={Boolean(selectedUserTransaction)}
+          onOpenChange={(open) => {
+            if (!open) setSelectedUserTransaction(null)
+          }}
+        >
+          <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle>Transaction Details</DialogTitle>
+            </DialogHeader>
+            {selectedUserTransaction ? (
+              <div className="overflow-y-auto flex-1 pr-2 -mr-2">
+                <OfficeTransactionDetailPanel transaction={selectedUserTransaction} />
+              </div>
+            ) : null}
+          </DialogContent>
+        </Dialog>
 
         <AlertDialog open={mfaResetConfirmOpen} onOpenChange={setMfaResetConfirmOpen}>
           <AlertDialogContent>
@@ -855,6 +902,6 @@ export default function AdminUsersPage() {
           </AlertDialogContent>
         </AlertDialog>
       </div>
-    </OfficeDashboardLayout>
+    </>
   )
 }

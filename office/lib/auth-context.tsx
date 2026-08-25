@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState } from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
 import type { Session, User } from "@supabase/supabase-js"
 import { supabase } from "./supabase"
 import { clearBrowserQueryClient } from "@/lib/query/query-client"
@@ -78,17 +78,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  const signOut = async () => {
-    clearAllOfficeBrowserState(user?.id ?? null)
+  const userIdRef = useRef<string | null>(null)
+  userIdRef.current = user?.id ?? null
+
+  const signOut = useCallback(async () => {
+    clearAllOfficeBrowserState(userIdRef.current)
     clearBrowserQueryClient()
     await supabase.auth.signOut()
     setUser(null)
     setIsAdmin(false)
-  }
+  }, [])
 
-  return (
-    <AuthContext.Provider value={{ user, isAdmin, loading, signOut }}>
-      {children}
-    </AuthContext.Provider>
-  )
+  // Identity-stable value: every useAuth() consumer re-renders when this
+  // changes, and this provider sits above the whole app.
+  const value = useMemo(() => ({ user, isAdmin, loading, signOut }), [user, isAdmin, loading, signOut])
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

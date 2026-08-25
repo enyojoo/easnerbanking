@@ -1,6 +1,5 @@
 "use client"
 
-import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -29,7 +28,7 @@ export default function CustomersPage() {
   const loading = useQueryInitialLoading(customersQuery.isPending, customersQuery.data, rows)
 
   return (
-    <OfficeDashboardLayout>
+    <>
       <div className="p-6 space-y-4">
         <div className="flex min-h-8 items-center justify-between gap-4">
           <h1 className="text-2xl font-bold">B2B customers</h1>
@@ -82,6 +81,6 @@ export default function CustomersPage() {
           </CardContent>
         </Card>
       </div>
-    </OfficeDashboardLayout>
+    </>
   )
 }
