@@ -1,9 +1,11 @@
 "use client"
 
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
 import { qk } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
+import { prefetchDynamicRouteFull } from "@/lib/query/prefetch-dynamic-route"
 import { useScope } from "@/lib/query/scope"
 import type { PayrollPerson, PayrollRun } from "@/lib/payroll/types"
 
@@ -21,9 +23,13 @@ export function PayrollDetailLink({
   children: React.ReactNode
 }) {
   const queryClient = useQueryClient()
+  const router = useRouter()
   const { scope } = useScope()
 
   const prefetch = () => {
+    // Dynamic route: a FULL router prefetch caches the RSC payload so the
+    // click doesn't pay a server round trip (auto-kind cached nothing here).
+    prefetchDynamicRouteFull(router, href)
     if (!scope) return
     if (kind === "person") {
       void queryClient.prefetchQuery({

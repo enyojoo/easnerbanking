@@ -49,26 +49,46 @@ async function refreshAccessToken(): Promise<string | null> {
   }
 }
 
+/**
+ * Direct-first API calls: routing every request through /api/proxy added a
+ * FULL extra serverless invocation (browser → office function → business
+ * API) to every admin data fetch. The business app already serves CORS for
+ * the office origin (proxy.ts applies it to /api/* with Authorization
+ * allowed), so the browser can talk to it directly and halve the latency.
+ * If a direct attempt fails at the network/CORS layer, we permanently fall
+ * back to the proxy for the session — a missing allowlist entry degrades to
+ * the old path instead of breaking.
+ */
+let directApiBlocked = false
+
+function isNetworkOrCorsFailure(error: unknown): boolean {
+  return error instanceof TypeError
+}
+
 export async function officeFetch(
   path: string,
   options: RequestInit = {}
 ): Promise<Response> {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`
   const isAbsolute = normalizedPath.startsWith("http://") || normalizedPath.startsWith("https://")
-  const useProxy = !isAbsolute && normalizedPath.startsWith("/api/")
-  const url = isAbsolute
-    ? normalizedPath
-    : useProxy
-      ? `/api/proxy${normalizedPath}`
-      : `${API_URL}${normalizedPath}`
+  const isApiPath = !isAbsolute && normalizedPath.startsWith("/api/")
+  const hasDirectOrigin = Boolean(process.env.NEXT_PUBLIC_API_URL)
+  const proxyUrl = `/api/proxy${normalizedPath}`
+  const directUrl = `${API_URL}${normalizedPath}`
+  const preferDirect = isApiPath && hasDirectOrigin && !directApiBlocked
+
+  const resolveUrl = () =>
+    isAbsolute ? normalizedPath : isApiPath ? (directApiBlocked || !hasDirectOrigin ? proxyUrl : directUrl) : directUrl
+
   const headers = new Headers(options.headers || {})
 
   if (!headers.has("Content-Type") && options.body && typeof options.body === "string") {
     headers.set("Content-Type", "application/json")
   }
 
-  const isSameOrigin = typeof window !== "undefined" && url.startsWith(window.location.origin)
   const doFetch = (token: string | null): Promise<Response> => {
+    const url = resolveUrl()
+    const isSameOrigin = typeof window !== "undefined" && url.startsWith(window.location.origin)
     if (token) {
       headers.set("Authorization", `Bearer ${token}`)
     } else {
@@ -82,7 +102,20 @@ export async function officeFetch(
   }
 
   const token = await getAccessToken()
-  const response = await doFetch(token)
+
+  let response: Response
+  try {
+    response = await doFetch(token)
+  } catch (error) {
+    if (preferDirect && isNetworkOrCorsFailure(error)) {
+      // Direct path unreachable (CORS not allowlisted / network policy):
+      // degrade to the proxy for the rest of the session and retry.
+      directApiBlocked = true
+      response = await doFetch(token)
+    } else {
+      throw error
+    }
+  }
 
   // The cached token can outlive server-side revocation; refresh once and
   // retry once on an authenticated 401.

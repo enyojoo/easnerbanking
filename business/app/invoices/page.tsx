@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { prefetchDynamicRouteFull } from "@/lib/query/prefetch-dynamic-route"
 import { useQueryClient } from "@tanstack/react-query"
 import { formatDate, formatCurrency } from "@/lib/utils"
 import { useScope } from "@/lib/query/scope"
@@ -598,10 +599,10 @@ export default function InvoicesPage() {
                       className="hover:bg-muted/50 cursor-pointer"
                       onMouseEnter={() => {
                         prefetchInvoiceDetail(invoice.id)
-                        // Prefetch the route this row actually opens — it used to
-                        // prefetch the public preview route, so every click was a
-                        // cold navigation.
-                        void router.prefetch(`/invoices/${invoice.id}`)
+                        // FULL prefetch: the detail route is dynamic, and the
+                        // default (auto) kind caches nothing without a loading
+                        // boundary — the click would still pay a server RTT.
+                        prefetchDynamicRouteFull(router, `/invoices/${invoice.id}`)
                       }}
                       onClick={() => router.push(withReturnTo(`/invoices/${invoice.id}`, listHere))}
                     >

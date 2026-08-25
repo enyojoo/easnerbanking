@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { prefetchDynamicRouteFull } from "@/lib/query/prefetch-dynamic-route"
 import { Globe, Pencil, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { CollectionsPageHeader } from "@/components/collections/collections-page-header"
@@ -184,7 +185,7 @@ export function CheckoutSitesPage() {
                     <tr
                       key={site.id}
                       className="cursor-pointer border-b last:border-0 hover:bg-muted/40"
-                      onMouseEnter={() => void router.prefetch(`/checkout/${site.id}`)}
+                      onMouseEnter={() => prefetchDynamicRouteFull(router, `/checkout/${site.id}`)}
                       onClick={() => router.push(`/checkout/${site.id}`)}
                     >
                       <td className="truncate p-4 font-mono text-xs">{site.origin}</td>
