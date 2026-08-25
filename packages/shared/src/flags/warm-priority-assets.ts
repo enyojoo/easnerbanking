@@ -33,4 +33,26 @@ export const WARM_PRIORITY_CURRENCIES = [
   "XAF",
   "USDC",
   "USDT",
+  "EURC",
+  "BTC",
+  "SOL",
+  "PYUSD",
+] as const
+
+/**
+ * Chain logos rendered by the wallet-send corridor pickers (Noah network
+ * ids). Remote (trustwallet CDN) — without warming, all 10 popped in on
+ * first open of the network selector.
+ */
+export const WARM_PRIORITY_NETWORKS = [
+  "Base",
+  "Bitcoin",
+  "BSC",
+  "Celo",
+  "Ethereum",
+  "FlowEvm",
+  "Gnosis",
+  "PolygonPos",
+  "Solana",
+  "Tron",
 ] as const

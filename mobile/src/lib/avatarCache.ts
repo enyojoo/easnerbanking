@@ -3,8 +3,25 @@ import { prefetchImageUri, prefetchImageUris, warmImageCache } from './imageCach
 const AVATAR_CACHE_TTL_DAYS = 30
 const AVATAR_CACHE_TTL_MS = AVATAR_CACHE_TTL_DAYS * 24 * 60 * 60 * 1000
 
-function avatarCacheBucket(nowMs: number = Date.now()): string {
-  return String(Math.floor(nowMs / AVATAR_CACHE_TTL_MS))
+/** Cheap stable string hash for per-URL bucket staggering. */
+function stableHash(input: string): number {
+  let hash = 0
+  for (let i = 0; i < input.length; i += 1) {
+    hash = (hash * 31 + input.charCodeAt(i)) | 0
+  }
+  return Math.abs(hash)
+}
+
+/**
+ * Per-URL staggered bucket: a single global `floor(now / 30d)` bucket meant
+ * EVERY un-busted avatar in the product changed version on the same day —
+ * disk cache and warm index missed app-wide at each 30-day boundary. The
+ * hash offset spreads expiries across the whole window while keeping each
+ * URL's version stable for ~30 days.
+ */
+function avatarCacheBucket(url: string, nowMs: number = Date.now()): string {
+  const offset = stableHash(url) % AVATAR_CACHE_TTL_MS
+  return String(Math.floor((nowMs + offset) / AVATAR_CACHE_TTL_MS))
 }
 
 function applyAvatarVersionParam(url: string, version: string): string {
@@ -26,7 +43,7 @@ export function normalizeAvatarUrl(value: unknown): string | null {
   // Keep avatar URLs stable for 30 days (cache bucket) unless a specific
   // version already exists (e.g. freshly uploaded photo with explicit bust key).
   if (/([?&])av=/.test(trimmed)) return trimmed
-  return applyAvatarVersionParam(trimmed, avatarCacheBucket())
+  return applyAvatarVersionParam(trimmed, avatarCacheBucket(trimmed))
 }
 
 /** Normalized avatar URI for expo-image / prefetch. */

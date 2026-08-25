@@ -1,14 +1,25 @@
 import { Image } from "expo-image"
-import { getTokenIconUrl } from "../crypto-icons"
-import { WARM_PRIORITY_CURRENCIES } from "./warm-priority-assets"
+import { getNetworkIconUrl, getTokenIconUrl } from "../crypto-icons"
+import { WARM_PRIORITY_CURRENCIES, WARM_PRIORITY_NETWORKS } from "./warm-priority-assets"
 
-/** Warm expo-image cache for remote token logos (call once on app start). */
+function prefetchRemote(url: string | undefined): void {
+  if (!url) return
+  void Image.prefetch(url, { cachePolicy: "memory-disk" }).catch(() => undefined)
+}
+
+/**
+ * Warm expo-image cache for remote token + network logos (call once on app
+ * start). Flags themselves are bundled `require()` assets on native — always
+ * instant, nothing to warm. Before the network list was added, boot warming
+ * covered exactly 2 URLs (USDC + USDT) while the wallet-send corridor picker
+ * rendered up to 10 unwarmed chain logos from the trustwallet CDN.
+ */
 export function warmBundledFlagCache(): void {
   for (const currency of WARM_PRIORITY_CURRENCIES) {
-    const tokenUrl = getTokenIconUrl(currency)
-    if (tokenUrl) {
-      void Image.prefetch(tokenUrl, { cachePolicy: "memory-disk" }).catch(() => undefined)
-    }
+    prefetchRemote(getTokenIconUrl(currency))
+  }
+  for (const network of WARM_PRIORITY_NETWORKS) {
+    prefetchRemote(getNetworkIconUrl(network))
   }
 }
 
@@ -16,8 +27,5 @@ export function warmBundledFlagCache(): void {
 export function warmNativeCurrencyAssets(currency: string): void {
   const code = String(currency || "").trim().toUpperCase()
   if (!code) return
-  const tokenUrl = getTokenIconUrl(code)
-  if (tokenUrl) {
-    void Image.prefetch(tokenUrl, { cachePolicy: "memory-disk" }).catch(() => undefined)
-  }
+  prefetchRemote(getTokenIconUrl(code))
 }
