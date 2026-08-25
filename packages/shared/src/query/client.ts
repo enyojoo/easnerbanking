@@ -68,6 +68,19 @@ export function isClientError(err: unknown): boolean {
   return typeof status === "number" && status >= 400 && status < 500
 }
 
+/**
+ * Cache-first mount policy that still honors invalidations.
+ *
+ * A plain `refetchOnMount: false` short-circuits BEFORE TanStack consults
+ * `isStale`, so a query invalidated while its screen was unmounted (realtime
+ * bridge and mutations invalidate with `refetchType: "active"`) is silently
+ * served stale on remount, forever. This keeps the cache-first behavior for
+ * ordinary remounts but always refetches queries carrying an invalidation.
+ */
+export const refetchOnMountWhenInvalidated = (query: {
+  state: { isInvalidated: boolean }
+}): "always" | false => (query.state.isInvalidated ? "always" : false)
+
 export function createBaseQueryClient(overrides?: QueryClientConfig): QueryClient {
   return new QueryClient({
     ...overrides,
@@ -78,7 +91,7 @@ export function createBaseQueryClient(overrides?: QueryClientConfig): QueryClien
         gcTime: 10 * 60_000,
         refetchOnWindowFocus: "always",
         refetchOnReconnect: "always",
-        refetchOnMount: false,
+        refetchOnMount: refetchOnMountWhenInvalidated,
         retry: (count, err) => {
           if (isAuthError(err)) return false
           if (isClientError(err)) return false

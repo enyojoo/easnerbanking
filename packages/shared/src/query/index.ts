@@ -11,7 +11,7 @@ export type {
 export { scopeKey, scopeId, scopesEqual } from "./scope"
 export type { Scope, BusinessScope, PersonalScope, ScopeKey } from "./scope"
 
-export { createBaseQueryClient, isAuthError, isClientError } from "./client"
+export { createBaseQueryClient, isAuthError, isClientError, refetchOnMountWhenInvalidated } from "./client"
 export type { AuthErrorLike } from "./client"
 
 export { UX } from "./ux-rules"

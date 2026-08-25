@@ -22,7 +22,7 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query"
 import { qk } from "./keys"
 import { patchRowInPages, prependIntoFirstPage } from "./infinite-cache"
 import { markRecentMoneyActivity } from "./polling-fallback"
-import { scopeId, type Scope } from "./scope"
+import { scopeId, scopeKey, type Scope } from "./scope"
 import {
   displayEasnerTransactionIdForList,
   mapLedgerStatusForUserFeed,
@@ -315,6 +315,22 @@ function scheduleTransactionRowPatch(
   batcher.schedule(key, () => {
     markRecentMoneyActivity()
 
+    /**
+     * Detail views must hear about the update too. The row carries several id
+     * forms (db uuid, ETID, ledger id) and each app's detail payload shape
+     * differs, so instead of guessing the key/shape, refetch whichever detail
+     * query is ACTIVE (i.e. on screen — at most one or two). Without this, a
+     * user watching a pending payout on the detail page never saw it settle:
+     * the successful list patches below used to return before any
+     * invalidation could reach the detail cache.
+     */
+    const refreshActiveDetail = () => {
+      qc.invalidateQueries({
+        queryKey: [...key, "detail"],
+        refetchType: "active",
+      })
+    }
+
     let mapped: unknown | null = null
     if (mapTransactionInsert) {
       try {
@@ -327,11 +343,19 @@ function scheduleTransactionRowPatch(
     // Full remap: replace the existing cache row with the freshly mapped version.
     if (mapped != null) {
       const mappedId = idFn(mapped)
-      if (mappedId && patchRowInPages(qc, key, mappedId, () => mapped, idFn)) return
+      if (mappedId && patchRowInPages(qc, key, mappedId, () => mapped, idFn)) {
+        refreshActiveDetail()
+        return
+      }
     }
 
-    if (tryPartialTransactionPatch(qc, key, row, mapped, idFn)) return
+    if (tryPartialTransactionPatch(qc, key, row, mapped, idFn)) {
+      refreshActiveDetail()
+      return
+    }
 
+    // Root invalidation is a prefix of the detail keys, so this final
+    // fallback already covers active detail queries.
     qc.invalidateQueries({ queryKey: key, refetchType: "active" })
   })
 }
@@ -415,6 +439,21 @@ export function attachRealtime({
   const health: RealtimeHealth = { subscribed: false, lastEventAt: null, lastError: null }
   const emit = () => onHealth?.({ ...health })
 
+  /**
+   * Event-path health emits are throttled: at volume, an unthrottled emit per
+   * postgres event re-renders every `useRealtimeHealth` consumer per event.
+   * Status changes still emit immediately via `emit()`.
+   */
+  const HEALTH_EMIT_THROTTLE_MS = 5_000
+  let lastHealthEmitAt = 0
+  const markEvent = () => {
+    health.lastEventAt = Date.now()
+    if (health.lastEventAt - lastHealthEmitAt >= HEALTH_EMIT_THROTTLE_MS) {
+      lastHealthEmitAt = health.lastEventAt
+      emit()
+    }
+  }
+
   const channel = supabase
     .channel(channelName, { config: { broadcast: { self: false } } })
 
@@ -423,10 +462,12 @@ export function attachRealtime({
     "postgres_changes",
     { event: "*", schema: "public", table: "wallet_balances", filter: scopeFilter },
     (p) => {
-      health.lastEventAt = Date.now()
-      emit()
+      markEvent()
       const row = (p.new ?? p.old) as VersionedRecord & { wallet_id?: string; id?: string }
-      const walletId = row.wallet_id ?? row.id
+      // Only patch the per-wallet key when the row actually carries a wallet
+      // id. `wallet_balances.id` is that table's own PK — falling back to it
+      // wrote cache entries under keys no consumer ever reads.
+      const walletId = row.wallet_id
       const key = walletId ? qk.wallets.balance(scope, walletId) : null
       batcher.schedule(key ?? qk.wallets.list(scope), () => {
         if (key) {
@@ -494,8 +535,7 @@ export function attachRealtime({
       filter: txFilter,
     },
     (p) => {
-      health.lastEventAt = Date.now()
-      emit()
+      markEvent()
       const row = (p.new ?? {}) as Record<string, unknown>
       scheduleTransactionInsert(qc, scope, batcher, row, mapTransactionInsert, idFn)
     },
@@ -510,8 +550,7 @@ export function attachRealtime({
       filter: txFilter,
     },
     (p) => {
-      health.lastEventAt = Date.now()
-      emit()
+      markEvent()
       const row = (p.new ?? {}) as Record<string, unknown>
       scheduleTransactionRowPatch(qc, scope, batcher, row, mapTransactionInsert, idFn)
     },
@@ -527,6 +566,10 @@ export function attachRealtime({
       markRecentMoneyActivity()
       qc.invalidateQueries({ queryKey: qk.wallets.incoming(scope), refetchType: "active" })
       qc.invalidateQueries({ queryKey: qk.collections.paymentLinks.root(scope), refetchType: "active" })
+      // The same Stripe webhooks that write settlements also flip
+      // `public.invoices` (sent → paid); without this, an open invoice list
+      // only learned about it from a 60s poll and the detail page never did.
+      qc.invalidateQueries({ queryKey: qk.invoices.root(scope), refetchType: "active" })
     }
     for (const table of [
       "checkout_stripe_settlements",
@@ -537,27 +580,60 @@ export function attachRealtime({
         "postgres_changes",
         { event: "*", schema: "public", table, filter: scopeFilter },
         () => {
-          health.lastEventAt = Date.now()
-          emit()
+          markEvent()
           batcher.schedule(qk.wallets.incoming(scope), refreshIncomingAndLinks)
         },
       )
     }
+
+    // --- invoices (status changes from webhooks + the daily past-due cron) ---
+    channel.on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "invoices", filter: scopeFilter },
+      () => {
+        markEvent()
+        batcher.schedule(qk.invoices.root(scope), () => {
+          qc.invalidateQueries({ queryKey: qk.invoices.root(scope), refetchType: "active" })
+        })
+      },
+    )
+
+    // --- payroll runs (crons execute/reconcile server-side) ------------------
+    channel.on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "payroll_runs", filter: scopeFilter },
+      () => {
+        markEvent()
+        batcher.schedule(qk.payroll.runs.root(scope), () => {
+          markRecentMoneyActivity()
+          qc.invalidateQueries({ queryKey: qk.payroll.runs.root(scope), refetchType: "active" })
+          qc.invalidateQueries({ queryKey: qk.payroll.overview(scope), refetchType: "active" })
+        })
+      },
+    )
   }
 
   // --- cards -----------------------------------------------------------------
+  // `event: "*"`: an UPDATE-only subscription meant newly issued or
+  // terminated cards never appeared/disappeared without a manual refresh.
   channel.on(
     "postgres_changes",
-    { event: "UPDATE", schema: "public", table: "cards", filter: scopeFilter },
+    { event: "*", schema: "public", table: "cards", filter: scopeFilter },
     (p) => {
-      health.lastEventAt = Date.now()
-      emit()
-      const row = p.new as VersionedRecord & { id?: string }
-      if (!row.id) return
-      const key = qk.cards.detail(scope, row.id)
-      batcher.schedule(key, () => {
-        qc.setQueryData(key, (prev: VersionedRecord | undefined) => pickNewer(prev, row))
-        qc.invalidateQueries({ queryKey: qk.cards.list(scope), refetchType: "inactive" })
+      markEvent()
+      if (p.eventType === "UPDATE") {
+        const row = p.new as VersionedRecord & { id?: string }
+        if (!row.id) return
+        const key = qk.cards.detail(scope, row.id)
+        batcher.schedule(key, () => {
+          qc.setQueryData(key, (prev: VersionedRecord | undefined) => pickNewer(prev, row))
+          qc.invalidateQueries({ queryKey: qk.cards.list(scope), refetchType: "inactive" })
+        })
+        return
+      }
+      // INSERT / DELETE: membership changed — refetch the visible list.
+      batcher.schedule(qk.cards.list(scope), () => {
+        qc.invalidateQueries({ queryKey: qk.cards.list(scope), refetchType: "active" })
       })
     },
   )
@@ -577,8 +653,7 @@ export function attachRealtime({
       (p) => {
         const row = (p.new ?? {}) as Record<string, unknown>
         if (!identityFieldsChanged(p.old as Record<string, unknown> | undefined, row)) return
-        health.lastEventAt = Date.now()
-        emit()
+        markEvent()
         scheduleIdentityRefresh(qc, scope, batcher, "businesses", row, onIdentityChange)
       },
     )
@@ -592,8 +667,7 @@ export function attachRealtime({
       },
       (p) => {
         const row = ((p.new ?? p.old) ?? {}) as Record<string, unknown>
-        health.lastEventAt = Date.now()
-        emit()
+        markEvent()
         scheduleIdentityRefresh(qc, scope, batcher, "business_kyb_applications", row, onIdentityChange)
       },
     )
@@ -607,8 +681,7 @@ export function attachRealtime({
       },
       (p) => {
         const row = ((p.new ?? p.old) ?? {}) as Record<string, unknown>
-        health.lastEventAt = Date.now()
-        emit()
+        markEvent()
         scheduleIdentityRefresh(qc, scope, batcher, "business_stripe_connect_accounts", row, onIdentityChange)
       },
     )
@@ -622,8 +695,7 @@ export function attachRealtime({
       },
       (p) => {
         const row = ((p.new ?? p.old) ?? {}) as Record<string, unknown>
-        health.lastEventAt = Date.now()
-        emit()
+        markEvent()
         scheduleIdentityRefresh(qc, scope, batcher, "business_checkout_settings", row, onIdentityChange)
       },
     )
@@ -639,8 +711,7 @@ export function attachRealtime({
       (p) => {
         const row = (p.new ?? {}) as Record<string, unknown>
         if (!identityFieldsChanged(p.old as Record<string, unknown> | undefined, row)) return
-        health.lastEventAt = Date.now()
-        emit()
+        markEvent()
         scheduleIdentityRefresh(qc, scope, batcher, "users", row, onIdentityChange)
       },
     )
@@ -657,8 +728,7 @@ export function attachRealtime({
         filter: `user_id=eq.${scope.userId}`,
       },
       () => {
-        health.lastEventAt = Date.now()
-        emit()
+        markEvent()
         const key = qk.notifications.root(scope.userId)
         batcher.schedule(key, () => {
           qc.invalidateQueries({ queryKey: key, refetchType: "active" })
@@ -676,8 +746,7 @@ export function attachRealtime({
         filter: `user_id=eq.${scope.userId}`,
       },
       () => {
-        health.lastEventAt = Date.now()
-        emit()
+        markEvent()
         const key = qk.settings.communication(scope.userId)
         batcher.schedule(key, () => {
           qc.invalidateQueries({ queryKey: key })
@@ -686,13 +755,43 @@ export function attachRealtime({
     )
   }
 
+  let hadSubscribed = false
   channel.subscribe((status, err) => {
+    const wasSubscribed = health.subscribed
     health.subscribed = status === "SUBSCRIBED"
-    if (err) health.lastError = err
+    if (health.subscribed) {
+      // A transient CHANNEL_ERROR must not pin the session in degraded
+      // polling mode forever: clear the sticky error on recovery.
+      health.lastError = null
+      if (hadSubscribed && !wasSubscribed) {
+        /**
+         * Catch-up after a gap: Supabase Realtime has no event replay, so
+         * everything emitted while the socket was down is lost permanently.
+         * With focus/reconnect revalidation disabled app-wide, this refetch
+         * is the only path back to correctness for on-screen data.
+         */
+        qc.invalidateQueries({ queryKey: scopeKey(scope), refetchType: "active" })
+        if (scope.kind === "personal") {
+          qc.invalidateQueries({ queryKey: qk.notifications.root(scope.userId), refetchType: "active" })
+        }
+      }
+      hadSubscribed = true
+    } else if (err) {
+      health.lastError = err
+    }
     emit()
   })
 
+  /**
+   * Liveness heartbeat: `isChannelHealthy` compares `Date.now()` against
+   * `lastEventAt`, but health only reaches consumers on an emit. Without a
+   * timer, a silently-dead-but-SUBSCRIBED channel is never re-evaluated and
+   * the polling fallback never engages.
+   */
+  const heartbeat = setInterval(emit, 30_000)
+
   return () => {
+    clearInterval(heartbeat)
     batcher.flush()
     try {
       channel.unsubscribe()
