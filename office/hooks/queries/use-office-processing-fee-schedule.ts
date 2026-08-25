@@ -10,6 +10,25 @@ import { officeKeys } from "@/lib/query/keys"
 import { officeReferenceQueryDefaults } from "./query-options"
 import { useOfficeAdminEnabled } from "./use-office-admin-enabled"
 
+/** Pure fetcher shared by the hook and the boot-time primer. */
+export function fetchOfficeProcessingFeeSchedule(
+  scope: ProcessingFeeScheduleScope,
+): Promise<ProcessingFeeScheduleRow[]> {
+  return processingFeeScheduleApi.list(scope)
+}
+
+/**
+ * Options for a concrete (non-null) scope, consumed by both
+ * `useOfficeProcessingFeeSchedule` and `primeOfficeNav`.
+ */
+export function officeProcessingFeeScheduleQueryOptions(scope: ProcessingFeeScheduleScope) {
+  return {
+    queryKey: officeKeys.processingFeeSchedule(scope),
+    queryFn: () => fetchOfficeProcessingFeeSchedule(scope),
+    ...officeReferenceQueryDefaults,
+  }
+}
+
 export function useOfficeProcessingFeeSchedule(scope: ProcessingFeeScheduleScope | null) {
   const { enabled } = useOfficeAdminEnabled()
 
@@ -17,6 +36,6 @@ export function useOfficeProcessingFeeSchedule(scope: ProcessingFeeScheduleScope
     queryKey: officeKeys.processingFeeSchedule(scope ?? "none"),
     enabled: enabled && scope != null,
     ...officeReferenceQueryDefaults,
-    queryFn: (): Promise<ProcessingFeeScheduleRow[]> => processingFeeScheduleApi.list(scope!),
+    queryFn: () => fetchOfficeProcessingFeeSchedule(scope!),
   })
 }

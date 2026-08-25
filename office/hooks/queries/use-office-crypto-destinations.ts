@@ -6,13 +6,25 @@ import { officeKeys } from "@/lib/query/keys"
 import { officeReferenceQueryDefaults } from "./query-options"
 import { useOfficeAdminEnabled } from "./use-office-admin-enabled"
 
+/** Pure fetcher shared by the hook and the boot-time primer. */
+export function fetchOfficeCryptoDestinations(): Promise<CryptoDestinationAdminRow[]> {
+  return cryptoDestinationsApi.list()
+}
+
+/** Options consumed by both `useOfficeCryptoDestinations` and `primeOfficeNav`. */
+export function officeCryptoDestinationsQueryOptions() {
+  return {
+    queryKey: officeKeys.cryptoDestinations(),
+    queryFn: fetchOfficeCryptoDestinations,
+    ...officeReferenceQueryDefaults,
+  }
+}
+
 export function useOfficeCryptoDestinations() {
   const { enabled } = useOfficeAdminEnabled()
 
   return useQuery({
-    queryKey: officeKeys.cryptoDestinations(),
+    ...officeCryptoDestinationsQueryOptions(),
     enabled,
-    ...officeReferenceQueryDefaults,
-    queryFn: (): Promise<CryptoDestinationAdminRow[]> => cryptoDestinationsApi.list(),
   })
 }

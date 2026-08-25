@@ -3,6 +3,7 @@
 import type React from "react"
 import { usePathname } from "next/navigation"
 import { OfficeDashboardLayout } from "@/components/layout/office-dashboard-layout"
+import { PrimeOfficeNavBridge } from "@/components/prime-office-nav-bridge"
 
 /**
  * Mounts the admin shell ONCE, from the root layout, for every admin route.
@@ -22,5 +23,10 @@ export function OfficeShellGate({ children }: { children: React.ReactNode }) {
     return <>{children}</>
   }
 
-  return <OfficeDashboardLayout>{children}</OfficeDashboardLayout>
+  return (
+    <OfficeDashboardLayout>
+      <PrimeOfficeNavBridge />
+      {children}
+    </OfficeDashboardLayout>
+  )
 }

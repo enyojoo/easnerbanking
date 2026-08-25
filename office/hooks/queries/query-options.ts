@@ -17,9 +17,9 @@ export const officeOperationalQueryDefaults = {
   refetchOnWindowFocus: false,
   refetchOnReconnect: true,
   refetchIntervalInBackground: false,
-  // Office records can include KYC and financial operations data. Keep them
-  // memory-only while still retaining them across client-side navigation.
-  meta: { webPersist: "none" as const, freshness: "operational" as const },
+  // Persisted (business-app pattern): reloads paint from the on-device
+  // cache instantly and freshen silently. Per-user key, cleared on sign-out.
+  meta: { webPersist: "reduced" as const, freshness: "operational" as const },
 }
 
 export const officeAnalyticsQueryDefaults = {
@@ -30,7 +30,7 @@ export const officeAnalyticsQueryDefaults = {
   refetchOnWindowFocus: false,
   refetchOnReconnect: true,
   refetchIntervalInBackground: false,
-  meta: { webPersist: "none" as const, freshness: "analytics" as const },
+  meta: { webPersist: "reduced" as const, freshness: "analytics" as const },
 }
 
 export const officeReferenceQueryDefaults = {
@@ -41,7 +41,7 @@ export const officeReferenceQueryDefaults = {
   refetchOnWindowFocus: false,
   refetchOnReconnect: true,
   refetchIntervalInBackground: false,
-  meta: { webPersist: "none" as const, freshness: "reference" as const },
+  meta: { webPersist: "reduced" as const, freshness: "reference" as const },
 }
 
 /**
@@ -60,5 +60,5 @@ export const officeRatesQueryDefaults = {
   refetchOnReconnect: true,
   refetchInterval: 5 * 60_000,
   refetchIntervalInBackground: false,
-  meta: { webPersist: "none" as const, freshness: "reference" as const },
+  meta: { webPersist: "reduced" as const, freshness: "reference" as const },
 }

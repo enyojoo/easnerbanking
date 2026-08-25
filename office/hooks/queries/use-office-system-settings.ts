@@ -18,7 +18,8 @@ export type OfficeSystemSetting = {
   updated_at: string
 }
 
-async function fetchOfficeSystemSettings(): Promise<OfficeSystemSetting[]> {
+/** Pure fetcher shared by the hook and the boot-time primer. */
+export async function fetchOfficeSystemSettings(): Promise<OfficeSystemSetting[]> {
   const { data, error } = await supabase
     .from("system_settings")
     .select("*")
@@ -29,12 +30,10 @@ async function fetchOfficeSystemSettings(): Promise<OfficeSystemSetting[]> {
   return (data ?? []) as OfficeSystemSetting[]
 }
 
-export function useOfficeSystemSettings() {
-  const { enabled } = useOfficeAdminEnabled()
-
-  return useQuery({
+/** Options consumed by both `useOfficeSystemSettings` and `primeOfficeNav`. */
+export function officeSystemSettingsQueryOptions() {
+  return {
     queryKey: officeKeys.systemSettings(),
-    enabled,
     ...officeReferenceQueryDefaults,
     // Two admins can edit system settings concurrently; a 60s poll (paused
     // while the tab is backgrounded via refetchIntervalInBackground: false
@@ -43,5 +42,14 @@ export function useOfficeSystemSettings() {
     // feeding the query cache instead of polling.
     refetchInterval: 60_000,
     queryFn: fetchOfficeSystemSettings,
+  }
+}
+
+export function useOfficeSystemSettings() {
+  const { enabled } = useOfficeAdminEnabled()
+
+  return useQuery({
+    ...officeSystemSettingsQueryOptions(),
+    enabled,
   })
 }

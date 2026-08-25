@@ -1,6 +1,6 @@
 {
   "name": "office",
-  "description": "Easner Office admin dashboard (Next.js) – manages mobile and business banking",
+  "description": "Easner Office admin dashboard (Next.js) \u2013 manages mobile and business banking",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -28,6 +28,7 @@
     "@supabase/supabase-js": "latest",
     "@tanstack/react-query": "^5.99.1",
     "@tanstack/react-query-devtools": "^5.99.1",
+    "@tanstack/react-query-persist-client": "^5.99.1",
     "@tanstack/react-virtual": "^3.13.24",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

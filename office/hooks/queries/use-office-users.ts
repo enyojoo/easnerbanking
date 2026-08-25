@@ -48,58 +48,71 @@ export type OfficeUserRow = {
  * page keeps the DOM small with a client-side render cap ("Load more").
  * The ~35-field row normalization below runs inside the queryFn, so it
  * executes once per fetch – not per render.
+ *
+ * `fetchOfficeUsersDirectory` is the single source of truth for that
+ * normalization; the hook and the boot-time primer both consume it via
+ * `officeUsersQueryOptions`.
  */
+export async function fetchOfficeUsersDirectory(): Promise<OfficeUserRow[]> {
+  const r = await officeFetch("/api/admin/office/users")
+  const d = (await r.json()) as { users?: unknown[]; error?: string }
+  if (!r.ok || d.error) {
+    throw new Error(typeof d.error === "string" ? d.error : "Failed to load users")
+  }
+  const rows = d.users ?? []
+  return (rows as Record<string, unknown>[]).map((row) => {
+    const id = String(row.id)
+    const noahKycStatus = String(row.noah_kyc_status || "not_started")
+    return {
+      ...row,
+      id,
+      email: (row.email as string | null) ?? null,
+      full_name: (row.full_name as string | null) ?? null,
+      phone: (row.phone as string | null) ?? null,
+      date_of_birth: (row.date_of_birth as string | null) ?? null,
+      avatar_url: (row.avatar_url as string | null) ?? null,
+      role: String(row.role || "individual"),
+      easner_business_id: (row.easner_business_id as string | null) ?? null,
+      created_at: String(row.created_at),
+      updated_at: String(row.updated_at),
+      noah_customer_id: row.noah_customer_id as string | null | undefined,
+      noah_kyc_status: row.noah_kyc_status as string | null | undefined,
+      noah_kyc_rejection_reasons: row.noah_kyc_rejection_reasons,
+      kyc_id_type: row.kyc_id_type as string | null | undefined,
+      kyc_verified_at: row.kyc_verified_at as string | null | undefined,
+      noah_usd_virtual_account_id: row.noah_usd_virtual_account_id as string | null | undefined,
+      noah_eur_virtual_account_id: row.noah_eur_virtual_account_id as string | null | undefined,
+      noah_gbp_virtual_account_id: row.noah_gbp_virtual_account_id as string | null | undefined,
+      noah_kyb_customer_id: row.noah_kyb_customer_id as string | null | undefined,
+      grid_customer_id: row.grid_customer_id as string | null | undefined,
+      verification_status: row.verification_status as string | null | undefined,
+      linkedBusinessName: (row.linkedBusinessName as string | null | undefined) ?? null,
+      enabled_extra_account_currencies: row.enabled_extra_account_currencies as string[] | undefined,
+      email_confirmed_at: row.email_confirmed_at as string | null | undefined,
+      communicationPreferences: row.communicationPreferences as CommunicationPreferences | undefined,
+      hasExpoPushToken: Boolean(row.hasExpoPushToken),
+      totalTransactions: 0,
+      totalVolume: 0,
+      verificationStatus: noahKycStatus === "approved" ? "verified" : "pending",
+      noahKycStatus,
+    } as OfficeUserRow
+  })
+}
+
+/** Options consumed by both `useOfficeUsersDirectory` and `primeOfficeNav`. */
+export function officeUsersQueryOptions() {
+  return {
+    queryKey: officeKeys.users(),
+    queryFn: fetchOfficeUsersDirectory,
+    ...officeOperationalQueryDefaults,
+  }
+}
+
 export function useOfficeUsersDirectory() {
   const { enabled } = useOfficeAdminEnabled()
 
   return useQuery({
-    queryKey: officeKeys.users(),
+    ...officeUsersQueryOptions(),
     enabled,
-    ...officeOperationalQueryDefaults,
-    queryFn: async (): Promise<OfficeUserRow[]> => {
-      const r = await officeFetch("/api/admin/office/users")
-      const d = (await r.json()) as { users?: unknown[]; error?: string }
-      if (!r.ok || d.error) {
-        throw new Error(typeof d.error === "string" ? d.error : "Failed to load users")
-      }
-      const rows = d.users ?? []
-      return (rows as Record<string, unknown>[]).map((row) => {
-        const id = String(row.id)
-        const noahKycStatus = String(row.noah_kyc_status || "not_started")
-        return {
-          ...row,
-          id,
-          email: (row.email as string | null) ?? null,
-          full_name: (row.full_name as string | null) ?? null,
-          phone: (row.phone as string | null) ?? null,
-          date_of_birth: (row.date_of_birth as string | null) ?? null,
-          avatar_url: (row.avatar_url as string | null) ?? null,
-          role: String(row.role || "individual"),
-          easner_business_id: (row.easner_business_id as string | null) ?? null,
-          created_at: String(row.created_at),
-          updated_at: String(row.updated_at),
-          noah_customer_id: row.noah_customer_id as string | null | undefined,
-          noah_kyc_status: row.noah_kyc_status as string | null | undefined,
-          noah_kyc_rejection_reasons: row.noah_kyc_rejection_reasons,
-          kyc_id_type: row.kyc_id_type as string | null | undefined,
-          kyc_verified_at: row.kyc_verified_at as string | null | undefined,
-          noah_usd_virtual_account_id: row.noah_usd_virtual_account_id as string | null | undefined,
-          noah_eur_virtual_account_id: row.noah_eur_virtual_account_id as string | null | undefined,
-          noah_gbp_virtual_account_id: row.noah_gbp_virtual_account_id as string | null | undefined,
-          noah_kyb_customer_id: row.noah_kyb_customer_id as string | null | undefined,
-          grid_customer_id: row.grid_customer_id as string | null | undefined,
-          verification_status: row.verification_status as string | null | undefined,
-          linkedBusinessName: (row.linkedBusinessName as string | null | undefined) ?? null,
-          enabled_extra_account_currencies: row.enabled_extra_account_currencies as string[] | undefined,
-          email_confirmed_at: row.email_confirmed_at as string | null | undefined,
-          communicationPreferences: row.communicationPreferences as CommunicationPreferences | undefined,
-          hasExpoPushToken: Boolean(row.hasExpoPushToken),
-          totalTransactions: 0,
-          totalVolume: 0,
-          verificationStatus: noahKycStatus === "approved" ? "verified" : "pending",
-          noahKycStatus,
-        } as OfficeUserRow
-      })
-    },
   })
 }

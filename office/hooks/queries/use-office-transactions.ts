@@ -27,43 +27,61 @@ function buildTransactionsUrl(filters: OfficeTransactionFilters, cursor?: string
   return `/api/admin/office/transactions?${params.toString()}`
 }
 
+/** Pure page fetcher shared by the hook and the boot-time primer. */
+export async function fetchOfficeTransactionsPage(
+  filters: OfficeTransactionFilters,
+  cursor: string | null,
+): Promise<OfficeTransactionsPage> {
+  const r = await officeFetch(buildTransactionsUrl(filters, cursor))
+  const body = (await r.json()) as {
+    transactions?: OfficeTransaction[]
+    summary?: OfficeTransactionsSummary
+    nextCursor?: string | null
+    error?: string
+  }
+  if (!r.ok || body.error) {
+    throw new Error(typeof body.error === "string" ? body.error : r.statusText || "Failed to load transactions")
+  }
+  const transactions = (body.transactions ?? []).map((t) => ({
+    ...t,
+    id: String(t.id || ""),
+    status: String(t.status || "pending"),
+    created_at: String(t.created_at || ""),
+  }))
+  const summary = body.summary ?? {
+    volumeBalance: {
+      USD: { moneyIn: 0, moneyOut: 0, total: 0 },
+      EUR: { moneyIn: 0, moneyOut: 0, total: 0 },
+    },
+    transactionCount: transactions.length,
+  }
+  return { transactions, summary, nextCursor: body.nextCursor ?? null }
+}
+
+/**
+ * Infinite-query options consumed by `useOfficeTransactionsList` and (for the
+ * default no-filter variant) `queryClient.prefetchInfiniteQuery` in
+ * `primeOfficeNav`.
+ */
+export function officeTransactionsInfiniteOptions(filters: OfficeTransactionFilters = {}) {
+  return {
+    queryKey: officeKeys.transactions(filters),
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }: { pageParam: string | null }) =>
+      fetchOfficeTransactionsPage(filters, pageParam),
+    getNextPageParam: (lastPage: OfficeTransactionsPage) => lastPage.nextCursor ?? undefined,
+    ...officeOperationalQueryDefaults,
+  }
+}
+
 export function useOfficeTransactionsList(filters: OfficeTransactionFilters = {}) {
   const { enabled } = useOfficeAdminEnabled()
   const realtimeHealth = useOfficeRealtimeHealth()
   const tabVisible = useDocumentVisibility()
 
   return useInfiniteQuery({
-    queryKey: officeKeys.transactions(filters),
+    ...officeTransactionsInfiniteOptions(filters),
     enabled,
-    initialPageParam: null as string | null,
-    queryFn: async ({ pageParam }): Promise<OfficeTransactionsPage> => {
-      const r = await officeFetch(buildTransactionsUrl(filters, pageParam))
-      const body = (await r.json()) as {
-        transactions?: OfficeTransaction[]
-        summary?: OfficeTransactionsSummary
-        nextCursor?: string | null
-        error?: string
-      }
-      if (!r.ok || body.error) {
-        throw new Error(typeof body.error === "string" ? body.error : r.statusText || "Failed to load transactions")
-      }
-      const transactions = (body.transactions ?? []).map((t) => ({
-        ...t,
-        id: String(t.id || ""),
-        status: String(t.status || "pending"),
-        created_at: String(t.created_at || ""),
-      }))
-      const summary = body.summary ?? {
-        volumeBalance: {
-          USD: { moneyIn: 0, moneyOut: 0, total: 0 },
-          EUR: { moneyIn: 0, moneyOut: 0, total: 0 },
-        },
-        transactionCount: transactions.length,
-      }
-      return { transactions, summary, nextCursor: body.nextCursor ?? null }
-    },
-    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-    ...officeOperationalQueryDefaults,
     refetchInterval: tabVisible ? pollingIntervalFor("operational", realtimeHealth) : false,
   })
 }

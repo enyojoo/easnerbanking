@@ -6,13 +6,25 @@ import { officeKeys } from "@/lib/query/keys"
 import { officeRatesQueryDefaults } from "./query-options"
 import { useOfficeAdminEnabled } from "./use-office-admin-enabled"
 
+/** Pure fetcher shared by the hook and the boot-time primer. */
+export function fetchOfficeCryptoRates(): Promise<CryptoRateAdminRow[]> {
+  return cryptoRatesApi.list()
+}
+
+/** Options consumed by both `useOfficeCryptoRates` and `primeOfficeNav`. */
+export function officeCryptoRatesQueryOptions() {
+  return {
+    queryKey: officeKeys.cryptoRates(),
+    queryFn: fetchOfficeCryptoRates,
+    ...officeRatesQueryDefaults,
+  }
+}
+
 export function useOfficeCryptoRates() {
   const { enabled } = useOfficeAdminEnabled()
 
   return useQuery({
-    queryKey: officeKeys.cryptoRates(),
+    ...officeCryptoRatesQueryOptions(),
     enabled,
-    ...officeRatesQueryDefaults,
-    queryFn: (): Promise<CryptoRateAdminRow[]> => cryptoRatesApi.list(),
   })
 }

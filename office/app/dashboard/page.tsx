@@ -20,7 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { formatMoneyDisplay } from "@easner/shared"
 import type { OfficeVolumeBalance } from "@/lib/types/office-overview"
 import { useOfficeOverview, useQueryInitialLoading } from "@/hooks/queries"
-import { OfficeBackgroundRefresh, OfficeQueryError } from "@/components/data/office-data-status"
+import { OfficeQueryError } from "@/components/data/office-data-status"
 
 const OVERVIEW_PRESET = "7d" as const
 
@@ -98,7 +98,6 @@ export default function AdminDashboardPage() {
       <div className="p-6 space-y-6">
         <div className="flex min-h-8 items-center justify-between gap-4">
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <OfficeBackgroundRefresh isFetching={isFetching && !loading} />
         </div>
 
         <OfficeQueryError

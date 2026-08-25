@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { Session, User } from "@supabase/supabase-js"
 import { supabase } from "./supabase"
 import { clearBrowserQueryClient } from "@/lib/query/query-client"
-import { clearAllOfficeBrowserState } from "@/lib/query/web-persist"
+import { clearAllOfficeBrowserState, probeStoredOfficeUserId } from "@/lib/query/web-persist"
 
 /** Office admin access is DB-backed (public.admin_users), not JWT metadata. */
 async function resolveOfficeAdmin(session: Session | null): Promise<boolean> {
@@ -17,6 +17,41 @@ async function resolveOfficeAdmin(session: Session | null): Promise<boolean> {
     .maybeSingle()
   if (error || !data) return false
   return data.status === "active"
+}
+
+/**
+ * Last-verified-admin cache: the DB check above is a network round trip that
+ * used to gate EVERY page paint behind a skeleton on every reload. A user we
+ * verified as admin recently paints immediately; the check still runs in the
+ * background and demotes (→ sign-out path in consumers) if revoked. Every
+ * data request is independently authorized server-side regardless.
+ */
+const ADMIN_OK_KEY_PREFIX = "easner_office_admin_ok_v1_"
+const ADMIN_OK_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+
+function readCachedAdminOk(userId: string | null): boolean {
+  if (!userId || typeof window === "undefined") return false
+  try {
+    const raw = window.localStorage.getItem(`${ADMIN_OK_KEY_PREFIX}${userId}`)
+    if (!raw) return false
+    const at = Number.parseInt(raw, 10)
+    return Number.isFinite(at) && Date.now() - at < ADMIN_OK_MAX_AGE_MS
+  } catch {
+    return false
+  }
+}
+
+function writeCachedAdminOk(userId: string, ok: boolean): void {
+  if (typeof window === "undefined") return
+  try {
+    if (ok) {
+      window.localStorage.setItem(`${ADMIN_OK_KEY_PREFIX}${userId}`, String(Date.now()))
+    } else {
+      window.localStorage.removeItem(`${ADMIN_OK_KEY_PREFIX}${userId}`)
+    }
+  } catch {
+    // ignore
+  }
 }
 
 interface AuthContextType {
@@ -43,14 +78,16 @@ export const useAuth = () => {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [isAdmin, setIsAdmin] = useState(false)
+  // Fast boot: a recently-verified admin with a stored session paints the
+  // shell + cached data immediately instead of a skeleton on every reload.
+  const [bootAdminOk] = useState<boolean>(() => readCachedAdminOk(probeStoredOfficeUserId()))
+  const [loading, setLoading] = useState(!bootAdminOk)
+  const [isAdmin, setIsAdmin] = useState(bootAdminOk)
 
   useEffect(() => {
     let cancelled = false
 
     const syncSession = async (session: Session | null) => {
-      setLoading(true)
       const u = session?.user ?? null
       setUser(u)
       if (!u) {
@@ -58,8 +95,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!cancelled) setLoading(false)
         return
       }
+      // Recently-verified admins keep painting while the DB check runs in
+      // the background; unknown users wait (loading stays true from boot).
+      const cachedOk = readCachedAdminOk(u.id)
+      if (cachedOk && !cancelled) {
+        setIsAdmin(true)
+        setLoading(false)
+      }
       const admin = await resolveOfficeAdmin(session)
       if (cancelled) return
+      writeCachedAdminOk(u.id, admin)
       setIsAdmin(admin)
       setLoading(false)
     }
@@ -82,6 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   userIdRef.current = user?.id ?? null
 
   const signOut = useCallback(async () => {
+    if (userIdRef.current) writeCachedAdminOk(userIdRef.current, false)
     clearAllOfficeBrowserState(userIdRef.current)
     clearBrowserQueryClient()
     await supabase.auth.signOut()

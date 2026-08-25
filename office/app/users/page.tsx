@@ -56,7 +56,7 @@ import {
   VERIFICATION_STATUS_COPY,
   verificationStatusLabel,
 } from "@easner/shared"
-import { OfficeBackgroundRefresh, OfficeQueryError } from "@/components/data/office-data-status"
+import { OfficeQueryError } from "@/components/data/office-data-status"
 import { OfficePageSkeleton } from "@/components/data/office-page-skeleton"
 import { ProcessingFeeOverrideSection } from "@/components/platform-control/processing-fee-override-section"
 
@@ -401,7 +401,6 @@ export default function AdminUsersPage() {
             <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
           </div>
           <div className="flex gap-2">
-            <OfficeBackgroundRefresh isFetching={directoryQuery.isFetching && !dirLoading} />
             <Button
               onClick={handleExport}
               variant="outline"

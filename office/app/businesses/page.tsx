@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { Eye, Building2, Search } from "lucide-react"
 import { useOfficeBusinesses, useQueryInitialLoading } from "@/hooks/queries"
 import { businessTypeDisplayText } from "@/lib/business-type-label"
-import { OfficeBackgroundRefresh, OfficeQueryError } from "@/components/data/office-data-status"
+import { OfficeQueryError } from "@/components/data/office-data-status"
 import { ProcessingFeeOverrideSection } from "@/components/platform-control/processing-fee-override-section"
 import { CheckoutFeeOverrideSection } from "@/components/platform-control/checkout-fee-override-section"
 import { VERIFICATION_STATUS_COPY, verificationStatusLabel } from "@easner/shared"
@@ -164,7 +164,6 @@ function BusinessesPageInner() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Business directory</h1>
           </div>
-          <OfficeBackgroundRefresh isFetching={businessesQuery.isFetching && !loading} />
         </div>
 
         <OfficeQueryError

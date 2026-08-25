@@ -33,7 +33,7 @@ import {
 import { officeKeys } from "@/lib/query/keys"
 import { useOfficeTransactionsList, useQueryInitialLoading } from "@/hooks/queries"
 import type { OfficeTransaction, OfficeTransactionsSummary } from "@/lib/types/office-transaction"
-import { OfficeBackgroundRefresh, OfficeQueryError } from "@/components/data/office-data-status"
+import { OfficeQueryError } from "@/components/data/office-data-status"
 
 const STATUS_FILTER_LABELS: Record<string, string> = {
   completed: "Completed",
@@ -297,11 +297,6 @@ export default function AdminTransactionsPage() {
             <Download className="h-4 w-4 mr-2" />
             Export loaded
           </Button>
-        </div>
-        <div className="-mt-4 flex min-h-4 justify-end">
-          <OfficeBackgroundRefresh
-            isFetching={transactionsQuery.isFetching && !transactionsLoading}
-          />
         </div>
         <OfficeQueryError
           message={transactionsError}
