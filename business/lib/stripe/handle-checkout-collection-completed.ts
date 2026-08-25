@@ -4,7 +4,6 @@ import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { dispatchMerchantWebhook } from "@/lib/checkout/merchant-webhooks"
 import { deliverCheckoutPayerReceiptEmail } from "@/lib/checkout/deliver-checkout-payer-receipt-email"
-import { upsertCollectionCustomer } from "@/lib/checkout/upsert-collection-customer"
 import type { StripePaymentMethodDisplay } from "@/lib/stripe/parse-payment-method-display"
 import { getStripe } from "./client"
 import { resolveFeeAndTransfer } from "./resolve-charge-settlement"
@@ -24,8 +23,6 @@ type Input = {
   customerName: string | null
   sessionPaymentMethodTypes: string[] | null
   paymentLinkId: string | null
-  /** Stripe Tax amount collected on the session, when tax is enabled. */
-  taxCents?: number | null
 }
 
 function headlineFor(source: CheckoutCollectionSource, linkLabel: string | null): string {
@@ -305,33 +302,13 @@ export async function handleCheckoutCollectionCompleted(
       .maybeSingle()
     linkLabel = typeof link?.label === "string" ? link.label : null
     if (!isStripeTest) {
-      // Atomic: payment_count also locks the link amount, so concurrent
-      // completions must not lose increments to a read-then-write race.
-      let incrementError: unknown = null
-      try {
-        const rpcCapable = admin as { rpc?: SupabaseClient["rpc"] }
-        if (typeof rpcCapable.rpc === "function") {
-          const { error } = await rpcCapable.rpc.call(admin, "increment_payment_link_payment_count", {
-            p_link_id: paymentLinkId,
-            p_paid_at: paidAt,
-          })
-          incrementError = error
-        } else {
-          incrementError = new Error("rpc unavailable")
-        }
-      } catch (e) {
-        incrementError = e
-      }
-      if (incrementError) {
-        // Migration not applied yet – keep the legacy best-effort update.
-        await admin
-          .from("payment_links")
-          .update({
-            payment_count: Number(link?.payment_count ?? 0) + 1,
-            updated_at: paidAt,
-          })
-          .eq("id", paymentLinkId)
-      }
+      await admin
+        .from("payment_links")
+        .update({
+          payment_count: Number(link?.payment_count ?? 0) + 1,
+          updated_at: paidAt,
+        })
+        .eq("id", paymentLinkId)
     }
   }
 
@@ -402,55 +379,30 @@ export async function handleCheckoutCollectionCompleted(
     baseCurrency: currency === "EUR" ? "EUR" : "USD",
   })
 
-  // One revenue view per buyer: link this payment to a customer record.
-  const { customerId } = await upsertCollectionCustomer(admin, {
-    businessId: input.businessId,
-    email: customerEmail,
-    name: customerName,
-    currency,
-  })
-  if (customerId && sessionRow?.id) {
-    await admin
-      .from("online_checkout_sessions")
-      .update({ customer_id: customerId })
-      .eq("id", sessionRow.id)
-      .then(() => undefined, () => undefined)
-  }
-
-  const settlementPayload: Record<string, unknown> = {
-    id: input.settlementId,
-    business_id: input.businessId,
-    checkout_session_id: sessionRow?.id ? String(sessionRow.id) : null,
-    payment_link_id: paymentLinkId,
-    source: input.source,
-    stripe_payment_intent_id: input.paymentIntentId,
-    stripe_charge_id: chargeId,
-    stripe_connected_account_id: connectedAccountId,
-    stripe_transfer_id: transferId,
-    stripe_subscription_id: input.subscriptionId,
-    gross_cents: grossCents,
-    fee_cents: merchantFeeCents,
-    net_cents: netCents,
-    currency,
-    phase: "payment_received",
-    ledger_transaction_id: ledger.transactionId,
-    stripe_event_ids: [event.id],
-    created_at: paidAt,
-    updated_at: paidAt,
-  }
-  if (customerId) settlementPayload.customer_id = customerId
-  if (typeof input.taxCents === "number" && input.taxCents > 0) {
-    settlementPayload.tax_cents = input.taxCents
-  }
-  const { error: settlementError } = await admin
-    .from("checkout_stripe_settlements")
-    .upsert(settlementPayload, { onConflict: "id" })
-  if (settlementError && (customerId || settlementPayload.tax_cents !== undefined)) {
-    // Phase 2 columns not provisioned yet – the settlement itself must land.
-    delete settlementPayload.customer_id
-    delete settlementPayload.tax_cents
-    await admin.from("checkout_stripe_settlements").upsert(settlementPayload, { onConflict: "id" })
-  }
+  await admin.from("checkout_stripe_settlements").upsert(
+    {
+      id: input.settlementId,
+      business_id: input.businessId,
+      checkout_session_id: sessionRow?.id ? String(sessionRow.id) : null,
+      payment_link_id: paymentLinkId,
+      source: input.source,
+      stripe_payment_intent_id: input.paymentIntentId,
+      stripe_charge_id: chargeId,
+      stripe_connected_account_id: connectedAccountId,
+      stripe_transfer_id: transferId,
+      stripe_subscription_id: input.subscriptionId,
+      gross_cents: grossCents,
+      fee_cents: merchantFeeCents,
+      net_cents: netCents,
+      currency,
+      phase: "payment_received",
+      ledger_transaction_id: ledger.transactionId,
+      stripe_event_ids: [event.id],
+      created_at: paidAt,
+      updated_at: paidAt,
+    },
+    { onConflict: "id" },
+  )
 
   await dispatchMerchantWebhook(admin, webhookPayload)
 

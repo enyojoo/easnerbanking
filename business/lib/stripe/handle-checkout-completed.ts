@@ -117,7 +117,6 @@ export async function handleStripeCheckoutCompleted(
   let customerName: string | null = null
   let sessionPaymentMethodTypes: string[] | null = null
   let subscriptionId: string | null = null
-  let taxCents: number | null = null
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session
@@ -143,9 +142,6 @@ export async function handleStripeCheckoutCompleted(
       typeof session.subscription === "string"
         ? session.subscription
         : session.subscription?.id ?? null
-    if (typeof session.total_details?.amount_tax === "number" && session.total_details.amount_tax > 0) {
-      taxCents = Math.round(session.total_details.amount_tax)
-    }
   } else if (event.type === "payment_intent.succeeded") {
     const pi = event.data.object as Stripe.PaymentIntent
     paymentIntentId = pi.id
@@ -178,7 +174,6 @@ export async function handleStripeCheckoutCompleted(
       customerName,
       sessionPaymentMethodTypes,
       paymentLinkId: parsed.paymentLinkId,
-      taxCents,
     })
   }
 

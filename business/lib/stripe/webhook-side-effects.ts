@@ -7,7 +7,6 @@ import { handleStripePayoutPaid } from "./handle-payout-paid"
 import { handleSubscriptionLifecycleEvent } from "./handle-subscription-lifecycle"
 import { applyCheckoutStripeRefund } from "./apply-checkout-stripe-refund"
 import { applyInvoiceStripeRefundSideEffects } from "./apply-invoice-stripe-refund"
-import { recordCheckoutDispute } from "./record-checkout-dispute"
 
 async function appendSettlementEvent(
   admin: SupabaseClient,
@@ -147,22 +146,13 @@ export async function applyStripeWebhookSideEffects(
       await handleStripePayoutPaid(admin, event)
       return
     }
-    case "charge.dispute.created":
-    case "charge.dispute.updated":
-    case "charge.dispute.closed": {
+    case "charge.dispute.created": {
       const dispute = event.data.object as Stripe.Dispute
       const chargeId =
         typeof dispute.charge === "string" ? dispute.charge : dispute.charge?.id
       if (!chargeId) return
       const settlement = await findSettlementByCharge(admin, chargeId)
-      await recordCheckoutDispute(admin, {
-        event,
-        dispute,
-        chargeId,
-        businessId: settlement?.businessId ?? null,
-        settlement: settlement ? { table: settlement.table, id: settlement.id } : null,
-      })
-      if (!settlement || event.type !== "charge.dispute.created") return
+      if (!settlement) return
       // Keep the phase – ops handles clawback – but record the event on the settlement.
       await appendSettlementEvent(admin, settlement, event.id)
       // Tag invoice metadata for ops visibility
@@ -204,17 +194,6 @@ export async function applyStripeWebhookSideEffects(
           : null
       const refundId = refundFromList || `charge_refunded:${charge.id}`
       const refundedAt = new Date((event.created || 0) * 1000).toISOString()
-      // The charge carries easner_checkout_source – dispatch directly when present.
-      const chargeSource = String(charge.metadata?.easner_checkout_source ?? "").trim()
-      if (chargeSource === "payment_link" || chargeSource === "embed") {
-        await applyCheckoutStripeRefund(admin, {
-          chargeId: charge.id,
-          refundId,
-          refundedAt,
-          stripeEventId: event.id,
-        })
-        return
-      }
       const result = await applyInvoiceStripeRefundSideEffects(admin, {
         chargeId: charge.id,
         refundId,

@@ -38,17 +38,6 @@ export function getStripePlatformFeeBps(): number {
   return 0
 }
 
-/**
- * Stripe Tax on one-time Collections charges (platform = merchant of record, so
- * tax is calculated and owed by the platform). Requires Stripe Tax activated on
- * the platform Dashboard with an origin address – hence opt-in:
- * CHECKOUT_STRIPE_TAX_ENABLED=true
- */
-export function isStripeTaxEnabled(): boolean {
-  const flag = process.env.CHECKOUT_STRIPE_TAX_ENABLED?.trim().toLowerCase()
-  return flag === "true" || flag === "1" || flag === "on"
-}
-
 export type StripePayoutMode = "scheduled" | "manual"
 
 /** Connected-account payout schedule (built-in: daily / scheduled). */

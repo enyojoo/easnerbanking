@@ -174,33 +174,3 @@ Recurring links (Stripe Billing on the platform account):
   the subscription id so dunning can be handled on their side.
 
 Reference: `connect-recommend-plan.md` for the product spec and fee math.
-
-## Phase 0 hardening (Aug 2026)
-
-- **Merchant webhooks are durable.** Every outbound event is recorded in
-  `merchant_webhook_deliveries` (migration `20260825130000_collections_phase0.sql`), attempted
-  in-line, and retried by the cron `/api/internal/checkout/retry-webhooks` (every 5 minutes) on a
-  1m/5m/30m/2h/6h/24h backoff before being marked failed. Merchants see recent deliveries and can
-  resend from `/checkout` → Webhook.
-- **`payment_count` increments atomically** via the `increment_payment_link_payment_count`
-  Postgres function (same migration); the handler falls back to the legacy update until the
-  migration is applied.
-- **Reserved metadata is protected.** Merchant metadata on `POST /v1/checkout/sessions` may not
-  use the `easner_` prefix (refused with `metadata_key_reserved`), and
-  `buildCheckoutSessionMetadata` writes routing keys last so nothing can overwrite them.
-- **Idempotency:** the sessions API honors an `Idempotency-Key` header – replays return the
-  original session instead of opening duplicates.
-- **Payment-link sessions are created on hydration**, not during SSR, so crawler traffic on
-  public pay URLs no longer opens Stripe sessions.
-- **Processing estimate is configurable per currency** without a deploy:
-  `CHECKOUT_PROCESSING_FEE_SCHEDULE='{"EUR":{"percent":2.5,"fixedCents":25}}'` (default stays
-  2.9% + 30¢ for all currencies).
-- **The publishable key is enforced.** The embed SDK exchanges `easner_pk_*` for config at
-  `/api/v1/checkout/embed-config`; unknown/revoked keys and unregistered domains are refused, and
-  the dashboard-configured branding (`business_checkout_settings.appearance`) is applied to every
-  mount.
-- **Routing:** `api.easner.com/v1/*` rewrites to `/api/v1/*` in the proxy, and `js.easner.com`
-  serves only `/checkout.js` (alias `/v1/checkout.js`); point both DNS entries at this app.
-- **SDK:** the embed script is generated from `lib/checkout-sdk/build-sdk-script.ts`
-  (versioned `EasnerCheckout.version`, wallets via Express Checkout, overlay mode
-  `EasnerCheckout.open`, `unmount()`), with tests. Server SDK for merchants: `packages/easner-node`.

@@ -73,33 +73,3 @@ describe("checkout session metadata", () => {
     expect(parseCheckoutSessionMetadata(metadata).settlementId).toBe(BASE.settlementId)
   })
 })
-
-describe("reserved metadata protection", () => {
-  it("never lets extra overwrite routing keys", () => {
-    const metadata = buildCheckoutSessionMetadata({
-      ...BASE,
-      source: "embed",
-      extra: {
-        easner_business_id: "spoofed",
-        easner_checkout_source: "invoice",
-        easner_settlement_id: "spoofed",
-        easner_invoice_id: "spoofed",
-        order_id: "1234",
-      },
-    })
-    expect(metadata.easner_business_id).toBe(BASE.businessId)
-    expect(metadata.easner_checkout_source).toBe("embed")
-    expect(metadata.easner_settlement_id).toBe(BASE.settlementId)
-    expect(metadata.easner_invoice_id).toBeUndefined()
-    expect(metadata.order_id).toBe("1234")
-  })
-
-  it("keeps easner_livemode from the session creator", () => {
-    const metadata = buildCheckoutSessionMetadata({
-      ...BASE,
-      source: "embed",
-      extra: { easner_livemode: "false" },
-    })
-    expect(metadata.easner_livemode).toBe("false")
-  })
-})

@@ -52,25 +52,18 @@ export async function handleSubscriptionLifecycleEvent(
     }
 
     if (event.type === "invoice.payment_failed") {
-      const failureData = {
-        subscription_id: subscriptionId,
-        amount_cents: Math.round(Number(invoice.amount_due ?? 0)),
-        currency: String(invoice.currency || "usd").toUpperCase(),
-        reason: "A recurring payment could not be collected.",
-        ...(metadata.easner_payment_link_id
-          ? { payment_link_id: String(metadata.easner_payment_link_id) }
-          : {}),
-      }
       await dispatchMerchantWebhook(admin, {
         businessId,
         event: "checkout.failed",
-        data: failureData,
-      })
-      // Distinct dunning signal: the subscription needs a working payment method.
-      await dispatchMerchantWebhook(admin, {
-        businessId,
-        event: "subscription.past_due",
-        data: failureData,
+        data: {
+          subscription_id: subscriptionId,
+          amount_cents: Math.round(Number(invoice.amount_due ?? 0)),
+          currency: String(invoice.currency || "usd").toUpperCase(),
+          reason: "A recurring payment could not be collected.",
+          ...(metadata.easner_payment_link_id
+            ? { payment_link_id: String(metadata.easner_payment_link_id) }
+            : {}),
+        },
       })
       return { handled: true }
     }

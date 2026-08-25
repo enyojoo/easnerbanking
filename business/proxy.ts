@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-import { maybeRedirectApiHostToBusiness, maybeRewriteApiHostV1 } from "@/lib/api-subdomain-redirect"
-import { maybeHandleSdkHost } from "@/lib/sdk-host-routing"
+import { maybeRedirectApiHostToBusiness } from "@/lib/api-subdomain-redirect"
 import { applyCorsHeaders, corsPreflightResponse, getCorsAllowedOrigins } from "@/lib/cors"
 import {
   maybeRedirectCustomerHostRootToBusiness,
@@ -18,14 +17,6 @@ function getClientIp(request: NextRequest): string {
 
 export function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
-
-  /** `js.*` domain serves only the checkout SDK. */
-  const sdkHostResponse = maybeHandleSdkHost(request)
-  if (sdkHostResponse) return sdkHostResponse
-
-  /** `api.easner.com/v1/*` is the documented merchant API base → internal `/api/v1/*`. */
-  const apiV1Rewrite = maybeRewriteApiHostV1(request)
-  if (apiV1Rewrite) return apiV1Rewrite
 
   /** `api.*` domain: only `/api/*` is meant for clients; send browsers to the business web origin. */
   const apiHostRedirect = maybeRedirectApiHostToBusiness(request)

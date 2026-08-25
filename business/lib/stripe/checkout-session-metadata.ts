@@ -27,23 +27,6 @@ function parseSource(raw: unknown): OnlineCheckoutSource {
   return value === "payment_link" || value === "embed" ? value : "invoice"
 }
 
-/**
- * Keys webhook routing and settlement depend on. Merchant-supplied metadata can
- * never set or overwrite these – `buildCheckoutSessionMetadata` writes them last.
- */
-export const RESERVED_CHECKOUT_METADATA_KEYS = [
-  "easner_settlement_id",
-  "easner_business_id",
-  "easner_checkout_source",
-  "easner_stripe_connected_account_id",
-  "easner_fee_mode",
-  "easner_listed_amount_cents",
-  "easner_invoice_id",
-  "easner_invoice_number",
-  "easner_payment_link_id",
-  "easner_livemode",
-] as const
-
 export function buildCheckoutSessionMetadata(input: {
   source: OnlineCheckoutSource
   settlementId: string
@@ -56,13 +39,7 @@ export function buildCheckoutSessionMetadata(input: {
   paymentLinkId?: string | null
   extra?: Record<string, string>
 }): Record<string, string> {
-  const extra: Record<string, string> = { ...(input.extra ?? {}) }
-  for (const key of RESERVED_CHECKOUT_METADATA_KEYS) {
-    if (key === "easner_livemode") continue // set via extra by the session creator itself
-    delete extra[key]
-  }
   return {
-    ...extra,
     easner_settlement_id: input.settlementId,
     easner_business_id: input.businessId,
     easner_checkout_source: input.source,
@@ -72,6 +49,7 @@ export function buildCheckoutSessionMetadata(input: {
     ...(input.invoiceId ? { easner_invoice_id: input.invoiceId } : {}),
     ...(input.invoiceNumber ? { easner_invoice_number: input.invoiceNumber } : {}),
     ...(input.paymentLinkId ? { easner_payment_link_id: input.paymentLinkId } : {}),
+    ...(input.extra ?? {}),
   }
 }
 

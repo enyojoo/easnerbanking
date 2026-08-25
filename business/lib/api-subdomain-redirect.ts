@@ -89,23 +89,6 @@ export function getBusinessWebOriginForApiHostRedirect(): string {
 }
 
 /**
- * `https://api.easner.com/v1/…` is the documented merchant API base; the routes
- * live at `/api/v1/…` in this app. Rewrite (not redirect – POST bodies must
- * survive) `/v1/*` on the API host onto the internal path.
- */
-export function maybeRewriteApiHostV1(request: NextRequest): NextResponse | null {
-  const pathname = request.nextUrl.pathname
-  if (pathname !== "/v1" && !pathname.startsWith("/v1/")) return null
-
-  const host = getRequestHostname(request)
-  if (!host || !isApiOnlyHostname(host)) return null
-
-  const url = request.nextUrl.clone()
-  url.pathname = `/api${pathname}`
-  return NextResponse.rewrite(url)
-}
-
-/**
  * If the request hits the API-only host with a path that is not an API route (and not Next internals),
  * send users to the business web app on the same path (so deep links can be preserved when useful).
  */

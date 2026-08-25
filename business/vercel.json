@@ -84,10 +84,6 @@
       "schedule": "0 7 * * *"
     },
     {
-      "path": "/api/internal/checkout/retry-webhooks",
-      "schedule": "*/5 * * * *"
-    },
-    {
       "path": "/api/internal/payroll/generate-drafts",
       "schedule": "0 * * * *"
     },

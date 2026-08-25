@@ -6,7 +6,6 @@ import {
   generateWebhookSigningSecret,
 } from "@/lib/checkout/secrets"
 import { mapCheckoutSite } from "@/lib/checkout/map-checkout-site"
-import { parseBrandColor, parseCheckoutBranding } from "@/lib/checkout/embed-appearance"
 import { normalizeOrigin, normalizeReturnUrl } from "@/lib/checkout/normalize-checkout-url"
 import { BUSINESS_SELECTABLE_FEE_MODES, resolveCheckoutFeeMode } from "@/lib/stripe/checkout-fee-mode"
 import { parseCheckoutFeeMode } from "@/lib/stripe/checkout-fee-mode"
@@ -27,15 +26,7 @@ export async function GET(request: Request) {
   if (!ctx.ok) return ctx.response
 
   const admin = createSupabaseAdmin()
-  const [
-    { data: settings },
-    feeMode,
-    onlinePayments,
-    { data: keys },
-    { data: siteRows },
-    { data: firstEmbedSession },
-    deliveredResult,
-  ] = await Promise.all([
+  const [{ data: settings }, feeMode, onlinePayments, { data: keys }, { data: siteRows }] = await Promise.all([
     admin.from("business_checkout_settings").select(SETTINGS_COLUMNS).eq("business_id", ctx.businessId).maybeSingle(),
     resolveCheckoutFeeMode(admin, ctx.businessId),
     resolveOnlinePaymentsEnabled(admin, ctx.businessId),
@@ -50,25 +41,7 @@ export async function GET(request: Request) {
       .select("id, origin, success_url, cancel_url, created_at, updated_at")
       .eq("business_id", ctx.businessId)
       .order("created_at", { ascending: true }),
-    admin
-      .from("online_checkout_sessions")
-      .select("created_at")
-      .eq("business_id", ctx.businessId)
-      .eq("source", "embed")
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle(),
-    admin
-      .from("merchant_webhook_deliveries")
-      .select("delivered_at")
-      .eq("business_id", ctx.businessId)
-      .eq("status", "delivered")
-      .order("delivered_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
   ])
-  // Deliveries table may not be provisioned yet – treat errors as "no evidence".
-  const lastDelivered = deliveredResult.error ? null : deliveredResult.data
 
   const connect =
     isOnlineCheckoutEnabled() && onlinePayments.enabled
@@ -93,7 +66,6 @@ export async function GET(request: Request) {
       liveModeEnabled: Boolean(settings?.live_mode_enabled),
       testPaymentCompletedAt: settings?.test_payment_completed_at ?? null,
       onlinePaymentsEnabled: onlinePayments.enabled,
-      branding: parseCheckoutBranding(settings?.appearance),
     },
     readiness: {
       ready: connect.ready,
@@ -102,10 +74,6 @@ export async function GET(request: Request) {
     keys: keys ?? [],
     sites: (siteRows ?? []).map((row) => mapCheckoutSite(row as Parameters<typeof mapCheckoutSite>[0])),
     webhookEvents: MERCHANT_WEBHOOK_EVENT_DESCRIPTIONS,
-    integration: {
-      sessionCreatedAt: firstEmbedSession?.created_at ?? null,
-      webhookDeliveredAt: lastDelivered?.delivered_at ?? null,
-    },
   })
 }
 
@@ -126,7 +94,6 @@ export async function PATCH(request: Request) {
     rotate_webhook_secret?: boolean
     live_mode_enabled?: boolean
     test_payment_completed?: boolean
-    appearance?: { brand_color?: string | null; button_radius?: string } | null
   } | null
 
   const admin = createSupabaseAdmin()
@@ -216,26 +183,6 @@ export async function PATCH(request: Request) {
 
   if (body?.test_payment_completed) {
     patch.test_payment_completed_at = new Date().toISOString()
-  }
-
-  if (body?.appearance !== undefined) {
-    if (body.appearance === null) {
-      patch.appearance = null
-    } else {
-      const rawColor = body.appearance.brand_color
-      const brandColor = rawColor === null || rawColor === undefined ? null : parseBrandColor(rawColor)
-      if (rawColor && !brandColor) {
-        return NextResponse.json(
-          { error: "Enter the brand color as a hex value, like #0080cc" },
-          { status: 400 },
-        )
-      }
-      const radius = String(body.appearance.button_radius ?? "pill")
-      patch.appearance = {
-        brandColor,
-        buttonRadius: radius === "rounded" ? "rounded" : "pill",
-      }
-    }
   }
 
   if (body?.live_mode_enabled !== undefined) {

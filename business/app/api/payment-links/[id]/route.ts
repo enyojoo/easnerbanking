@@ -64,7 +64,7 @@ export async function PATCH(request: Request, context: Ctx) {
   const admin = createSupabaseAdmin()
   const { data: existing, error: exErr } = await admin
     .from("payment_links")
-    .select("id, payment_count, mode, slug, archived_at")
+    .select("id, payment_count, mode")
     .eq("id", linkId)
     .eq("business_id", ctx.businessId)
     .maybeSingle()
@@ -129,24 +129,6 @@ export async function PATCH(request: Request, context: Ctx) {
   }
 
   if (body && typeof body.archived === "boolean") {
-    // Slug uniqueness only spans open links, so reopening must re-check it –
-    // another link may have claimed the address while this one was closed.
-    if (!body.archived && existing.archived_at) {
-      const { data: clash } = await admin
-        .from("payment_links")
-        .select("id")
-        .eq("business_id", ctx.businessId)
-        .eq("slug", String(existing.slug ?? ""))
-        .is("archived_at", null)
-        .neq("id", linkId)
-        .maybeSingle()
-      if (clash) {
-        return NextResponse.json(
-          { error: "Another open link already uses this address. Create a new link instead." },
-          { status: 409 },
-        )
-      }
-    }
     patch.archived_at = body.archived ? new Date().toISOString() : null
     if (body.archived && existing.mode === "subscription") {
       await cancelSubscriptionsForLink(admin, linkId)
