@@ -161,6 +161,14 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
     if (pendingCta === "complete") return
     setPendingCta("complete")
     setError(null)
+    const previousPacket = packet
+    // Show the in-review success screen immediately; Grid sync continues in the background.
+    setPacket((prev) => ({
+      ...prev,
+      status: "in_review",
+      errors: [],
+      errorPointers: [],
+    }))
     try {
       await saveCompany()
       const res = await fetchWithSession("/api/grid/kyb/complete", { method: "POST" })
@@ -172,11 +180,15 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
       }
       if (!res.ok) throw new Error(json.error || "Could not submit verification")
 
-      // Complete already persisted status/errors – one packet refresh is enough.
-      // Do not poll: successful Grid submits stay "submitted" and the old 5×1.5s
-      // wait made the CTA feel stuck for 7+ seconds.
-      const next = await load()
-      if (json.status || json.errors || json.errorPointers) {
+      const pointers = json.errorPointers ?? []
+      const needsAttention =
+        pointers.length > 0 ||
+        json.status === "resolve_errors" ||
+        json.status === "hold" ||
+        json.status === "rejected"
+
+      if (needsAttention) {
+        const next = await load()
         setPacket((prev) => ({
           ...prev,
           ...next,
@@ -184,13 +196,21 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
           errors: json.errors ?? next.errors,
           errorPointers: json.errorPointers ?? next.errorPointers,
         }))
-      }
-      const pointers = json.errorPointers ?? next.errorPointers ?? []
-      if (pointers.length) {
         hydratedSectionRef.current = true
         setSection(firstGridKybErrorSection(json.errors ?? next.errors, next.documents))
+        return
       }
+
+      // Happy path: keep the waiting screen. Treat Grid "submitted"/IN_PROGRESS as in review.
+      setPacket((prev) => ({
+        ...prev,
+        status: "in_review",
+        errors: [],
+        errorPointers: [],
+      }))
+      void load().catch(() => undefined)
     } catch (err) {
+      setPacket(previousPacket)
       setError(err instanceof Error ? err.message : "Could not submit verification")
     } finally {
       setPendingCta(null)
@@ -305,11 +325,6 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
         <div className="mx-auto max-w-2xl">
           {error ? <p className="mb-4 text-sm text-destructive">{error}</p> : null}
-          {status === "submitted" && pointers.length === 0 ? (
-            <p className="mb-4 text-sm text-muted-foreground">
-              We’re checking your documents now. If the ID file is unclear, you’ll be able to replace it here.
-            </p>
-          ) : null}
           {section === "company" ? (
             <GridKybCompanyStep
               company={company}

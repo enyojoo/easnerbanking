@@ -24,6 +24,7 @@ export type KybApplicationRow = {
   last_errors: GridKybVerificationError[]
   submitted_at: string | null
   last_synced_at: string | null
+  updated_at: string | null
 }
 
 export type KybPersonRow = {
@@ -47,6 +48,7 @@ export type KybPersonRow = {
   identifier: string
   countryOfIssuance: string
   gridBeneficialOwnerId: string | null
+  updatedAt: string | null
 }
 
 export type KybDocumentRow = {
@@ -63,6 +65,7 @@ export type KybDocumentRow = {
   byteSize: number | null
   side: string | null
   gridDocumentId: string | null
+  updatedAt: string | null
 }
 
 function asCompany(value: unknown): GridKybCompanyDraft {
@@ -107,6 +110,7 @@ export async function ensureKybApplication(
       last_errors: asErrors(existing.last_errors),
       submitted_at: existing.submitted_at ? String(existing.submitted_at) : null,
       last_synced_at: existing.last_synced_at ? String(existing.last_synced_at) : null,
+      updated_at: existing.updated_at ? String(existing.updated_at) : null,
     }
   }
 
@@ -132,6 +136,7 @@ export async function ensureKybApplication(
     last_errors: [],
     submitted_at: null,
     last_synced_at: null,
+    updated_at: created.updated_at ? String(created.updated_at) : null,
   }
 }
 
@@ -160,6 +165,7 @@ export function mapKybPersonRow(row: Record<string, unknown>, includeIdentifier:
     identifier: includeIdentifier ? decryptKybPii(String(row.identifier_ciphertext ?? "")) : "",
     countryOfIssuance: String(row.country_of_issuance ?? ""),
     gridBeneficialOwnerId: row.grid_beneficial_owner_id ? String(row.grid_beneficial_owner_id) : null,
+    updatedAt: row.updated_at ? String(row.updated_at) : null,
   }
 }
 
@@ -178,6 +184,7 @@ export function mapKybDocumentRow(row: Record<string, unknown>, includeNumber: b
     byteSize: row.byte_size == null ? null : Number(row.byte_size),
     side: row.side ? String(row.side) : null,
     gridDocumentId: row.grid_document_id ? String(row.grid_document_id) : null,
+    updatedAt: row.updated_at ? String(row.updated_at) : null,
   }
 }
 
