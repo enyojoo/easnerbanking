@@ -55,7 +55,10 @@ export function useCachedData<T>({
       const parsed = JSON.parse(raw) as { data?: T; timestamp?: number }
       const ts = typeof parsed?.timestamp === "number" ? parsed.timestamp : 0
       if (parsed?.data != null && Date.now() - ts <= persistMaxAgeMs) {
-        return parsed.data
+        // Keep the timestamp: seeding initialData without initialDataUpdatedAt
+        // stamps the snapshot as fetched-just-now, so staleTime/sweeps can
+        // never see it as stale and it would render as authoritative forever.
+        return { data: parsed.data, timestamp: ts }
       }
     } catch {
       // Ignore localStorage read errors.
@@ -64,7 +67,7 @@ export function useCachedData<T>({
   }, [persistKey, persistMaxAgeMs])
 
   const {
-    data = persistedInitial ?? initialData,
+    data = persistedInitial?.data ?? initialData,
     isPending,
     isFetching,
     refetch: queryRefetch,
@@ -84,7 +87,8 @@ export function useCachedData<T>({
     },
     staleTime: ttlMs,
     gcTime: Math.max(ttlMs * 2, 30_000),
-    initialData: persistedInitial,
+    initialData: persistedInitial?.data,
+    initialDataUpdatedAt: persistedInitial?.timestamp,
     refetchInterval,
     refetchOnWindowFocus,
     refetchOnMount,
@@ -94,7 +98,7 @@ export function useCachedData<T>({
   const setData = useCallback(
     (next: SetStateAction<T>) => {
       queryClient.setQueryData<T>(queryKey, (prev) => {
-        const base = (prev ?? persistedInitial ?? initialData) as T
+        const base = (prev ?? persistedInitial?.data ?? initialData) as T
         const resolved = typeof next === "function" ? (next as (value: T) => T)(base) : next
         if (persistKey && typeof window !== "undefined") {
           try {

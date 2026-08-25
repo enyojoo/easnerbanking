@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server"
+import { NextResponse, after } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireAuth } from "@/app/api/noah/_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
@@ -89,30 +89,33 @@ export async function GET(request: Request) {
 
   const result = await getTurnkeyDisplayBalancesUsdEur(admin, acc.ctx)
 
-  // Persist DB snapshot when Turnkey returns an authoritative read.
-  // This enables realtime dashboards to update without hammering Turnkey.
+  // Persist DB snapshot when Turnkey returns an authoritative read — AFTER
+  // the response, so the reader doesn't pay for the two upserts. Realtime
+  // dashboards still update from the resulting wallet_balances events.
   if (result.source === "turnkey") {
-    try {
-      await Promise.all([
-        upsertWalletBalanceSnapshot(admin, {
-          businessId,
-          userId,
-          currency: "USD",
-          availableBalance: Number(result.USD) || 0,
-        }),
-        upsertWalletBalanceSnapshot(admin, {
-          businessId,
-          userId,
-          currency: "EUR",
-          availableBalance: Number(result.EUR) || 0,
-        }),
-      ])
-    } catch (e) {
-      // Don't fail the endpoint if balance snapshot persistence isn't available yet,
-      // but log it so we can detect schema/policy issues in production.
-      const msg = e instanceof Error ? e.message : String(e)
-      console.warn("[on-chain-balances] failed to persist wallet_balances snapshot:", msg)
-    }
+    after(async () => {
+      try {
+        await Promise.all([
+          upsertWalletBalanceSnapshot(admin, {
+            businessId,
+            userId,
+            currency: "USD",
+            availableBalance: Number(result.USD) || 0,
+          }),
+          upsertWalletBalanceSnapshot(admin, {
+            businessId,
+            userId,
+            currency: "EUR",
+            availableBalance: Number(result.EUR) || 0,
+          }),
+        ])
+      } catch (e) {
+        // Don't fail if balance snapshot persistence isn't available yet,
+        // but log it so we can detect schema/policy issues in production.
+        const msg = e instanceof Error ? e.message : String(e)
+        console.warn("[on-chain-balances] failed to persist wallet_balances snapshot:", msg)
+      }
+    })
   }
 
   return NextResponse.json({

@@ -21,9 +21,14 @@ export interface CashflowPoint {
 
 /**
  * Treasury summary card on the dashboard. 60s staleTime because the
- * aggregate changes slowly relative to individual balance ticks. The
- * realtime bridge marks this stale when any `wallet_balances` row
- * changes, so the card stays in sync without polling.
+ * aggregate changes slowly relative to individual balance ticks.
+ *
+ * NOTE: this hook currently has NO realtime coverage — the bridge does NOT
+ * invalidate treasury keys on `wallet_balances` events (an earlier version
+ * of this comment claimed it did). It also has no call sites today. Before
+ * using it on a live surface, add treasury invalidation to the
+ * `wallet_balances` handler in packages/shared/src/query/realtime.ts or give
+ * it a polling band.
  */
 export function useTreasurySummary() {
   const { scope } = useScope()

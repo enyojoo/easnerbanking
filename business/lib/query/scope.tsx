@@ -3,7 +3,7 @@
 import * as React from "react"
 import type { BusinessScope } from "@easner/shared"
 import { useAuth } from "@/lib/auth-context"
-import { fetchWithSession } from "@/lib/fetch-with-session"
+import { fetchBusinessProfileEnvelope } from "@/lib/business-profile-fetch"
 import {
   EMPTY_STORED_SUPABASE_SESSION_PROBE,
   readBusinessStartupSnapshot,
@@ -39,10 +39,18 @@ export function BusinessScopeProvider({ children }: { children: React.ReactNode 
   const bootUserId = bootProbe.likelyAuthenticated ? bootProbe.userId : null
   const scopeUserId = user?.id ?? sessionUserId ?? bootUserId
   const [override, setOverride] = React.useState<BusinessScope | null>(null)
-  /** Always tagged with the user it belongs to so a switch cannot reuse the prior org id. */
+  /**
+   * Always tagged with the user it belongs to so a switch cannot reuse the
+   * prior org id. `resolved` is the flip-guard: scope stays `null` until the
+   * business id is known (from the persisted seed, or the profile fetch on a
+   * true first boot). Without it, an unseeded boot keyed every query by USER
+   * id, then re-keyed them all by BUSINESS id when the profile resolved —
+   * refetching the entire workspace twice and orphaning the first cache.
+   */
   const [businessIdState, setBusinessIdState] = React.useState<{
     userId: string
     businessId: string | null
+    resolved: boolean
   } | null>(null)
 
   React.useLayoutEffect(() => {
@@ -68,10 +76,10 @@ export function BusinessScopeProvider({ children }: { children: React.ReactNode 
     return null
   }, [scopeUserId])
 
-  const businessId =
-    scopeUserId && businessIdState?.userId === scopeUserId
-      ? (businessIdState.businessId ?? seededOrgId)
-      : seededOrgId
+  const stateForUser =
+    scopeUserId && businessIdState?.userId === scopeUserId ? businessIdState : null
+  const businessId = stateForUser ? (stateForUser.businessId ?? seededOrgId) : seededOrgId
+  const scopeResolved = Boolean(stateForUser?.resolved ?? seededOrgId)
 
   // Resolve org id for the signed-in user only. Reset immediately on user change so
   // the previous account's businessId never scopes wallets/queries for the next login.
@@ -82,22 +90,33 @@ export function BusinessScopeProvider({ children }: { children: React.ReactNode 
       return
     }
 
-    let seeded: string | null = seededOrgId
-    setBusinessIdState({ userId: scopeUserId, businessId: seeded })
+    const seeded: string | null = seededOrgId
+    // A persisted seed resolves immediately (fast cache-first boot); an
+    // unseeded first boot stays unresolved until the profile answers.
+    setBusinessIdState({ userId: scopeUserId, businessId: seeded, resolved: Boolean(seeded) })
     setOverride(null)
 
     if (!user?.id) return
 
     let cancelled = false
+    const resolveFallback = () => {
+      // Profile unavailable: unblock with the seed (or user-id scope) rather
+      // than deadlocking the workspace.
+      if (!cancelled) {
+        setBusinessIdState({ userId: scopeUserId, businessId: seeded, resolved: true })
+      }
+    }
     void (async () => {
       try {
-        const res = await fetchWithSession("/api/business/profile")
-        if (!res.ok) return
-        const json = (await res.json().catch(() => null)) as { profile?: { businessId?: string | null } } | null
-        const id = json?.profile?.businessId ? String(json.profile.businessId) : null
-        if (!cancelled) setBusinessIdState({ userId: scopeUserId, businessId: id })
+        const json = await fetchBusinessProfileEnvelope()
+        if (!json) {
+          resolveFallback()
+          return
+        }
+        const id = json.profile?.businessId ? String(json.profile.businessId) : null
+        if (!cancelled) setBusinessIdState({ userId: scopeUserId, businessId: id, resolved: true })
       } catch {
-        // ignore; fall back to scopeUserId scope
+        resolveFallback()
       }
     })()
     return () => {
@@ -107,9 +126,10 @@ export function BusinessScopeProvider({ children }: { children: React.ReactNode 
 
   const derived = React.useMemo<BusinessScope | null>(() => {
     if (!scopeUserId) return null
+    if (!scopeResolved) return null
     const org = businessId ?? scopeUserId
     return { kind: "business", orgId: org, entityId: org }
-  }, [businessId, scopeUserId])
+  }, [businessId, scopeResolved, scopeUserId])
 
   const value = React.useMemo<BusinessScopeContextValue>(() => {
     const scope =

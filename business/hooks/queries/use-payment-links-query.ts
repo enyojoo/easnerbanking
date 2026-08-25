@@ -46,7 +46,8 @@ export function usePaymentLinksQuery(options?: { includeArchived?: boolean }) {
     enabled: Boolean(scope),
     staleTime: STALE_MS,
     gcTime: 30 * 60_000,
-    refetchOnMount: "always",
+    // Cache-first: `payment_links` realtime + gated polling + focus keep this
+    // fresh; the forced mount refetch predated that coverage.
     refetchOnWindowFocus: true,
     refetchInterval: tabVisible ? pollingIntervalFor("operational", realtimeHealth) : false,
     refetchIntervalInBackground: false,

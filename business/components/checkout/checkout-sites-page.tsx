@@ -184,6 +184,7 @@ export function CheckoutSitesPage() {
                     <tr
                       key={site.id}
                       className="cursor-pointer border-b last:border-0 hover:bg-muted/40"
+                      onMouseEnter={() => void router.prefetch(`/checkout/${site.id}`)}
                       onClick={() => router.push(`/checkout/${site.id}`)}
                     >
                       <td className="truncate p-4 font-mono text-xs">{site.origin}</td>

@@ -1,6 +1,6 @@
 "use client"
 
-import { BUSINESS_APP_SESSION_COOKIE } from "@/lib/app-session"
+import { BUSINESS_APP_SESSION_COOKIE } from "@/lib/app-session-constants"
 import { clearLegacySupabaseAuthCookiesOnce } from "@/lib/supabase/clear-legacy-auth-cookies"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 

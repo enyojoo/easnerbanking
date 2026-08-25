@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { CalendarIcon } from "lucide-react"
-import { format } from "date-fns"
+import { formatMonthDay } from "@/lib/format-date-light"
 import { cn } from "@/lib/utils"
 
 export type TimePeriod = "all" | "7d" | "30d" | "90d" | "1y" | "custom"
@@ -34,7 +34,7 @@ export function DateRangeFilter({
 
   const getPeriodLabel = () => {
     if (timePeriod === "custom" && customDateRange.from && customDateRange.to) {
-      return `${format(customDateRange.from, "MMM d")} - ${format(customDateRange.to, "MMM d")}`
+      return `${formatMonthDay(customDateRange.from)} - ${formatMonthDay(customDateRange.to)}`
     }
     const labels: Record<TimePeriod, string> = { 
       all: "All time", 

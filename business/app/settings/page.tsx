@@ -1,17 +1,56 @@
 "use client"
 
 import { Suspense, useCallback, useEffect, useState } from "react"
+import dynamic from "next/dynamic"
 import { useSearchParams } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { SettingsPersonalTab } from "@/components/settings/settings-personal-tab"
-import { SettingsBusinessTab } from "@/components/settings/settings-business-tab"
-import { SettingsVerificationTab } from "@/components/settings/settings-verification-tab"
-import { SettingsTeamTab } from "@/components/settings/settings-team-tab"
-import { SettingsCommunicationTab } from "@/components/settings/settings-communication-tab"
-import { SettingsRecipientsTab } from "@/components/settings/settings-recipients-tab"
-import { SettingsCustomersTab } from "@/components/settings/settings-customers-tab"
-import { SettingsInvoicingTab } from "@/components/settings/settings-invoicing-tab"
-import { SettingsPaymentsTab } from "@/components/settings/settings-payments-tab"
+
+/**
+ * Only ONE tab renders at a time (Radix mounts active content only), but
+ * static imports shipped the union of all nine tabs' code — including the
+ * Stripe Connect SDK and the KYB wizard — on every /settings visit
+ * (~150 KB gzip). Each tab is its own chunk; inactive ones preload at idle
+ * so switching stays instant.
+ */
+const TAB_MODULE_LOADERS = [
+  () => import("@/components/settings/settings-personal-tab"),
+  () => import("@/components/settings/settings-business-tab"),
+  () => import("@/components/settings/settings-verification-tab"),
+  () => import("@/components/settings/settings-team-tab"),
+  () => import("@/components/settings/settings-communication-tab"),
+  () => import("@/components/settings/settings-recipients-tab"),
+  () => import("@/components/settings/settings-customers-tab"),
+  () => import("@/components/settings/settings-invoicing-tab"),
+  () => import("@/components/settings/settings-payments-tab"),
+] as const
+
+const SettingsPersonalTab = dynamic(() =>
+  import("@/components/settings/settings-personal-tab").then((m) => m.SettingsPersonalTab),
+)
+const SettingsBusinessTab = dynamic(() =>
+  import("@/components/settings/settings-business-tab").then((m) => m.SettingsBusinessTab),
+)
+const SettingsVerificationTab = dynamic(() =>
+  import("@/components/settings/settings-verification-tab").then((m) => m.SettingsVerificationTab),
+)
+const SettingsTeamTab = dynamic(() =>
+  import("@/components/settings/settings-team-tab").then((m) => m.SettingsTeamTab),
+)
+const SettingsCommunicationTab = dynamic(() =>
+  import("@/components/settings/settings-communication-tab").then((m) => m.SettingsCommunicationTab),
+)
+const SettingsRecipientsTab = dynamic(() =>
+  import("@/components/settings/settings-recipients-tab").then((m) => m.SettingsRecipientsTab),
+)
+const SettingsCustomersTab = dynamic(() =>
+  import("@/components/settings/settings-customers-tab").then((m) => m.SettingsCustomersTab),
+)
+const SettingsInvoicingTab = dynamic(() =>
+  import("@/components/settings/settings-invoicing-tab").then((m) => m.SettingsInvoicingTab),
+)
+const SettingsPaymentsTab = dynamic(() =>
+  import("@/components/settings/settings-payments-tab").then((m) => m.SettingsPaymentsTab),
+)
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { primeConnectStatus } from "@/lib/stripe/connect-status-cache"
 import {
@@ -87,6 +126,25 @@ function SettingsContent() {
 
   usePrimeKybPacket(Boolean(businessId && canManageBusinessVerification))
   usePrimeExpressOnrampStatus(true)
+
+  // Warm the inactive tab chunks at idle so switching tabs never waits on a
+  // network chunk load.
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const w = window as Window & {
+      requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number
+      cancelIdleCallback?: (id: number) => void
+    }
+    const warm = () => {
+      for (const load of TAB_MODULE_LOADERS) void load().catch(() => {})
+    }
+    if (typeof w.requestIdleCallback === "function") {
+      const id = w.requestIdleCallback(warm, { timeout: 3_000 })
+      return () => w.cancelIdleCallback?.(id)
+    }
+    const id = window.setTimeout(warm, 1_000)
+    return () => window.clearTimeout(id)
+  }, [])
 
   useEffect(() => {
     primeConnectStatus(businessId)

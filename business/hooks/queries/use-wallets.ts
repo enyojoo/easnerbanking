@@ -1,19 +1,18 @@
 "use client"
 
-import { useEffect, useMemo } from "react"
+import { useEffect } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { pollingIntervalFor, qk, scopeKey } from "@easner/shared"
+import { pollingIntervalFor, qk } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
 import { useDocumentVisibility } from "@/lib/query/use-document-visibility"
 import { useScope } from "@/lib/query/scope"
 import { useRealtimeHealth } from "@/lib/query/realtime-health-context"
 import {
-  readWalletListInitialData,
+  readWalletListSnapshot,
   walletBalancesQueryOptions,
+  writeWalletListSnapshot,
   type WalletBalancesData,
 } from "@/lib/query/workspace-prefetch"
-
-const WALLET_LIST_CACHE_KEY_PREFIX = "easner_business_wallets_list_v1_"
 
 export type OnChainBalances = WalletBalancesData["balances"]
 export type DepositAddresses = WalletBalancesData["deposits"]
@@ -35,10 +34,6 @@ export function useWalletBalances() {
   const qc = useQueryClient()
   const realtimeHealth = useRealtimeHealth()
   const tabVisible = useDocumentVisibility()
-  const storageKey = useMemo(
-    () => (scope ? `${WALLET_LIST_CACHE_KEY_PREFIX}${scopeKey(scope)}` : null),
-    [scope],
-  )
 
   const baseOptions = scope ? walletBalancesQueryOptions(scope, qc) : null
   const query = useQuery({
@@ -49,20 +44,17 @@ export function useWalletBalances() {
       },
     }),
     enabled: Boolean(scope),
-    initialData: scope ? () => readWalletListInitialData(scope) : undefined,
+    initialData: scope ? () => readWalletListSnapshot(scope)?.data : undefined,
+    initialDataUpdatedAt: scope ? () => readWalletListSnapshot(scope)?.savedAt : undefined,
     refetchInterval: tabVisible ? pollingIntervalFor("critical", realtimeHealth) : false,
     refetchIntervalInBackground: false,
   })
 
   useEffect(() => {
-    if (!storageKey || !query.data || typeof window === "undefined") return
-    try {
-      if (query.data.balances?.source === "none") return
-      window.localStorage.setItem(storageKey, JSON.stringify(query.data))
-    } catch {
-      // Ignore storage quota/write errors.
-    }
-  }, [query.data, storageKey])
+    if (!scope || !query.data) return
+    if (query.data.balances?.source === "none") return
+    writeWalletListSnapshot(scope, query.data)
+  }, [query.data, scope])
 
   return query
 }

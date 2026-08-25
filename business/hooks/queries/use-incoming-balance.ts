@@ -27,7 +27,8 @@ export function useIncomingBalances() {
       gcTime: 10 * 60_000,
     }),
     enabled: Boolean(scope),
-    refetchOnMount: "always",
+    // Cache-first: realtime (settlement tables) + gated polling + focus keep
+    // this fresh; a forced network hit on every mount defeated instant paint.
     refetchOnWindowFocus: true,
     refetchInterval: tabVisible ? pollingIntervalFor("operational", realtimeHealth) : false,
     refetchIntervalInBackground: false,

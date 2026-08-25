@@ -96,15 +96,34 @@ export function useSendDestinations() {
   }
 }
 
-export async function prefetchSendDestinations(): Promise<void> {
-  try {
-    const r = await fetchSendDestinations(memory.etag)
-    if (r.body && r.etag) {
-      memory.body = r.body
-      memory.etag = r.etag
-      writeSession(r.body)
-    }
-  } catch {
-    // ignore prefetch errors
+/**
+ * Nav-hover and boot both call this; without dedup + a freshness window,
+ * hovering "Send" repeatedly fired a round trip per hover (even a 304 is a
+ * full network RTT) competing with the actual navigation.
+ */
+const PREFETCH_FRESH_MS = 60_000
+let prefetchInflight: Promise<void> | null = null
+let lastPrefetchedAt = 0
+
+export function prefetchSendDestinations(): Promise<void> {
+  if (prefetchInflight) return prefetchInflight
+  if (memory.body && Date.now() - lastPrefetchedAt < PREFETCH_FRESH_MS) {
+    return Promise.resolve()
   }
+  prefetchInflight = (async () => {
+    try {
+      const r = await fetchSendDestinations(memory.etag)
+      if (r.body && r.etag) {
+        memory.body = r.body
+        memory.etag = r.etag
+        writeSession(r.body)
+      }
+      lastPrefetchedAt = Date.now()
+    } catch {
+      // ignore prefetch errors
+    }
+  })().finally(() => {
+    prefetchInflight = null
+  })
+  return prefetchInflight
 }

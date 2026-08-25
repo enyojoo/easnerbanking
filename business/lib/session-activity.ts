@@ -11,27 +11,64 @@ const LS_KEY = "easner_business_last_activity_ms"
 /** Heartbeat while idle lock is suspended (must be well under APP_IDLE_TIMEOUT). */
 const SUSPEND_HEARTBEAT_MS = 30_000
 
+/**
+ * Activity is tracked in memory and flushed to localStorage at most every
+ * ~10s (plus on hide/pagehide). `localStorage.setItem` is a synchronous,
+ * main-thread, cross-tab-locking write — the old per-event write meant one
+ * click paid for 3 writes (pointerdown + mousedown + focusin) BEFORE the
+ * app's handler ran, and scrolling paid one per frame. The idle timeout is
+ * minutes, so a ≤10s-stale cross-tab timestamp is indistinguishable.
+ */
+const FLUSH_INTERVAL_MS = 10_000
+
 let suspendCount = 0
 let heartbeatId: ReturnType<typeof setInterval> | null = null
+let lastActivityMs = 0
+let lastFlushedMs = 0
+let flushListenersInstalled = false
+
+function flushActivityToStorage(): void {
+  if (typeof window === "undefined") return
+  if (lastActivityMs <= lastFlushedMs) return
+  try {
+    localStorage.setItem(LS_KEY, String(lastActivityMs))
+    lastFlushedMs = lastActivityMs
+  } catch {
+    // ignore
+  }
+}
+
+function ensureFlushListeners(): void {
+  if (flushListenersInstalled || typeof window === "undefined") return
+  flushListenersInstalled = true
+  window.addEventListener("pagehide", flushActivityToStorage)
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushActivityToStorage()
+  })
+}
 
 export function getLastActivityTimestamp(): number {
   if (typeof window === "undefined") return Date.now()
+  let stored = 0
   try {
     const raw = localStorage.getItem(LS_KEY)
-    if (raw == null) return Date.now()
-    const n = parseInt(raw, 10)
-    return Number.isFinite(n) ? n : Date.now()
+    if (raw != null) {
+      const n = parseInt(raw, 10)
+      if (Number.isFinite(n)) stored = n
+    }
   } catch {
-    return Date.now()
+    // ignore
   }
+  const best = Math.max(lastActivityMs, stored)
+  return best > 0 ? best : Date.now()
 }
 
 export function resetSessionActivity(): void {
   if (typeof window === "undefined") return
-  try {
-    localStorage.setItem(LS_KEY, String(Date.now()))
-  } catch {
-    // ignore
+  lastActivityMs = Date.now()
+  ensureFlushListeners()
+  if (lastActivityMs - lastFlushedMs >= FLUSH_INTERVAL_MS) {
+    flushActivityToStorage()
   }
 }
 

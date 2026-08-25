@@ -42,15 +42,17 @@ export function AppSurfaceLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const { user, isLoading, canBootstrapWorkspace } = useAuth()
   const [clientReady, setClientReady] = useState(false)
+  const [storedSessionLikelyValid, setStoredSessionLikelyValid] = useState(false)
 
   const isShellRoute = Boolean(pathname && isDashboardShellPath(pathname))
 
   useLayoutEffect(() => {
+    // Probe once: it JSON-parses the full Supabase session blob and walks it
+    // recursively — doing that in the render body ran on every navigation and
+    // every auth-context tick. Auth state changes flow through `useAuth()`.
+    setStoredSessionLikelyValid(probeStoredSupabaseSession().likelyAuthenticated)
     setClientReady(true)
   }, [])
-
-  const storedSessionLikelyValid =
-    clientReady && probeStoredSupabaseSession().likelyAuthenticated
 
   // First paint must match SSR (empty shell). Reading localStorage before
   // `clientReady` is the React #418 hydration mismatch on /dashboard.

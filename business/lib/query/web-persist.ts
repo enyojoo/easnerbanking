@@ -275,15 +275,50 @@ export function clearAllBusinessBrowserState(userId?: string | null): void {
 }
 
 export function createBusinessQueryPersister(userId: string | null): Persister {
+  /**
+   * Writes are coalesced (~3s) and deferred to idle time: `JSON.stringify` of
+   * the whole tagged cache plus a synchronous localStorage write used to run
+   * up to once per second, triggered by the very prefetches that hovering the
+   * nav fires — main-thread work landing right as the user clicks. A pagehide
+   * flush keeps the last state from being lost on tab close.
+   */
+  const PERSIST_THROTTLE_MS = 3_000
+  let pendingClient: PersistedClient | null = null
+  let flushTimer: number | null = null
+
+  const writeNow = () => {
+    if (typeof window === "undefined" || !userId) return
+    const toWrite = pendingClient
+    pendingClient = null
+    if (!toWrite) return
+    try {
+      window.localStorage.setItem(businessWebQueryCacheKey(userId), JSON.stringify(toWrite))
+    } catch {
+      // If persistence fails, drop the older cache and move on.
+      clearPersistedBusinessQueryCache(userId)
+    }
+  }
+
+  if (typeof window !== "undefined" && userId) {
+    window.addEventListener("pagehide", writeNow)
+  }
+
   return {
     persistClient: async (client: PersistedClient) => {
       if (typeof window === "undefined" || !userId) return
-      try {
-        window.localStorage.setItem(businessWebQueryCacheKey(userId), JSON.stringify(client))
-      } catch {
-        // If persistence fails, drop the older cache and move on.
-        clearPersistedBusinessQueryCache(userId)
-      }
+      pendingClient = client
+      if (flushTimer != null) return
+      flushTimer = window.setTimeout(() => {
+        flushTimer = null
+        const w = window as Window & {
+          requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number
+        }
+        if (typeof w.requestIdleCallback === "function") {
+          w.requestIdleCallback(() => writeNow(), { timeout: 2_000 })
+        } else {
+          writeNow()
+        }
+      }, PERSIST_THROTTLE_MS)
     },
     restoreClient: async () => {
       if (typeof window === "undefined" || !userId) return undefined

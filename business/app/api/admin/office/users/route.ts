@@ -3,19 +3,68 @@ import { parseCommunicationPreferences } from "@easner/shared"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireOfficeAdmin } from "@/lib/api/admin-auth"
 
+type UsersCursor = { createdAt: string; id: string }
+
+function encodeUsersCursor(cursor: UsersCursor): string {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url")
+}
+
+function decodeUsersCursor(raw: string | null): UsersCursor | null {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as UsersCursor
+    if (typeof parsed?.createdAt === "string" && typeof parsed?.id === "string") return parsed
+  } catch {
+    // fall through
+  }
+  return null
+}
+
 /**
  * Office user directory: full `public.users` rows with service role (bypasses RLS).
  * Merges `email_confirmed_at` from auth for the same users.
+ *
+ * Optional pagination (docs/speed-ux-plan.md, O2.4): pass `limit` (≤500) and
+ * the `nextCursor` from a prior response. Without `limit`, the full directory
+ * is returned unchanged (backward compatible with the current office client).
  */
 export async function GET(request: Request) {
   const auth = await requireOfficeAdmin(request)
   if (!auth.ok) return auth.response
 
+  const url = new URL(request.url)
+  const limitRaw = Number.parseInt(url.searchParams.get("limit") || "", 10)
+  const limit = Number.isFinite(limitRaw) ? Math.min(500, Math.max(1, limitRaw)) : null
+  const cursor = limit ? decodeUsersCursor(url.searchParams.get("cursor")) : null
+
   const admin = createSupabaseAdmin()
-  const { data: rows, error } = await admin.from("users").select("*").order("created_at", { ascending: false })
+  let usersQuery = admin
+    .from("users")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+  if (limit) {
+    if (cursor) {
+      usersQuery = usersQuery.or(
+        `created_at.lt."${cursor.createdAt}",and(created_at.eq."${cursor.createdAt}",id.lt."${cursor.id}")`,
+      )
+    }
+    usersQuery = usersQuery.limit(limit + 1)
+  }
+  const { data: fetchedRows, error } = await usersQuery
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  let rows = fetchedRows
+  let nextCursor: string | null = null
+  if (limit && rows && rows.length > limit) {
+    rows = rows.slice(0, limit)
+    const last = rows[rows.length - 1] as { created_at?: string | null; id: string }
+    if (last?.created_at) {
+      nextCursor = encodeUsersCursor({ createdAt: String(last.created_at), id: String(last.id) })
+    }
   }
 
   const authById = new Map<string, string | undefined>()
@@ -99,5 +148,5 @@ export async function GET(request: Request) {
     }
   })
 
-  return NextResponse.json({ users })
+  return NextResponse.json({ users, ...(limit ? { nextCursor } : {}) })
 }

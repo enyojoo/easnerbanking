@@ -211,11 +211,6 @@ async function getBusinessProfileResponse(request: Request) {
     }
   }
 
-  if (orgId) {
-    org = (await fetchBusinessProfile(admin, orgId)) as typeof org
-  }
-
-  const onboardingComplete = Boolean(org && org.business_type && org.base_currency && org.description)
   const generatedOrgName = (() => {
     const first = firstNameFromFullName(ownerName)
     if (first) return possessiveBusinessOrgName(first)
@@ -228,27 +223,58 @@ async function getBusinessProfileResponse(request: Request) {
   let noahKybCustomerId: string | null = null
   let canManageBusinessVerification = true
   let orgKyb: Record<string, unknown> | null = null
+  let invoiceReplyEmail: string | null = null
+  let invoiceReplyEmailSource: "support" | "owner" | "sender" | null = null
+  let invoiceSettings: BusinessInvoiceSettings = parseBusinessInvoiceSettings(null)
+  let onlinePaymentsEnabled = true
 
   if (orgId) {
-    const orgOwnerUserId = await resolveOrgOwnerUserId(admin, orgId, user.id)
+    /**
+     * These lookups are independent given orgId — this request gates the
+     * entire workspace boot (33 client consumers + scope resolution), and the
+     * old serial chain paid ~10 round trips one after another.
+     */
+    const [orgData, orgOwnerUserId, orgKybResult, replyResult, onlineResult] = await Promise.all([
+      fetchBusinessProfile(admin, orgId),
+      resolveOrgOwnerUserId(admin, orgId, user.id),
+      admin
+        .from("businesses")
+        .select(
+          "verification_status,verification_provider,verification_rejection_reasons,grid_customer_id,kyb_verified_at",
+        )
+        .eq("id", orgId)
+        .maybeSingle(),
+      resolveInvoiceReplyEmailWithSource(admin, orgId, user.id).catch((error) => {
+        console.warn("[GET /api/business/profile] invoice reply resolve failed (non-fatal):", error)
+        return null
+      }),
+      resolveOnlinePaymentsEnabled(admin, orgId).catch((error) => {
+        console.warn("[GET /api/business/profile] online payments resolve failed (non-fatal):", error)
+        return null
+      }),
+    ])
+
+    org = orgData as typeof org
     canManageBusinessVerification = await resolveCanManageBusinessVerification(admin, orgId, user.id, orgOwnerUserId)
 
-    const { data: orgKybRow } = await admin
-      .from("businesses")
-      .select(
-        "verification_status,verification_provider,verification_rejection_reasons,grid_customer_id,kyb_verified_at",
-      )
-      .eq("id", orgId)
-      .maybeSingle()
-
-    orgKyb = (orgKybRow as Record<string, unknown> | null) ?? null
+    orgKyb = (orgKybResult.data as Record<string, unknown> | null) ?? null
 
     const kybFields = orgKyb as Parameters<typeof businessTier1Status>[0]
     tier1VerificationStatus = businessTier1Status(kybFields)
     noahKybCustomerId = businessHostedKybCustomerId(kybFields)
     tier1RejectionReasons = businessTier1RejectionReasons(kybFields)
     tier1Complete = isBusinessTier1Complete(kybFields)
+
+    if (replyResult) {
+      invoiceReplyEmail = replyResult.email
+      invoiceReplyEmailSource = replyResult.source
+    }
+    if (onlineResult) {
+      onlinePaymentsEnabled = onlineResult.enabled
+    }
   }
+
+  const onboardingComplete = Boolean(org && org.business_type && org.base_currency && org.description)
 
   const profileLocked =
     orgId && orgKyb
@@ -257,33 +283,8 @@ async function getBusinessProfileResponse(request: Request) {
         ? isBusinessProfileLockedFromKybFields(org as Record<string, unknown>)
         : false
 
-  let invoiceReplyEmail: string | null = null
-  let invoiceReplyEmailSource: "support" | "owner" | "sender" | null = null
-  let invoiceSettings: BusinessInvoiceSettings = parseBusinessInvoiceSettings(null)
-  if (orgId) {
-    try {
-      const reply = await resolveInvoiceReplyEmailWithSource(admin, orgId, user.id)
-      if (reply) {
-        invoiceReplyEmail = reply.email
-        invoiceReplyEmailSource = reply.source
-      }
-    } catch (error) {
-      console.warn("[GET /api/business/profile] invoice reply resolve failed (non-fatal):", error)
-    }
-  }
-
   if (org?.invoice_settings != null) {
     invoiceSettings = parseBusinessInvoiceSettings(org.invoice_settings)
-  }
-
-  let onlinePaymentsEnabled = true
-  if (orgId) {
-    try {
-      const online = await resolveOnlinePaymentsEnabled(admin, orgId)
-      onlinePaymentsEnabled = online.enabled
-    } catch (error) {
-      console.warn("[GET /api/business/profile] online payments resolve failed (non-fatal):", error)
-    }
   }
 
   const tier1RejectionDisplay = getVerificationRejectionDisplay(tier1RejectionReasons)

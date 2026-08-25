@@ -41,8 +41,12 @@ export function proxy(request: NextRequest) {
 
   const response = NextResponse.next()
 
-  // Set business owner IP when they visit invoicing or customer settings
-  if (pathname.startsWith("/invoices") || pathname.startsWith("/settings")) {
+  // Set business owner IP when they visit invoicing or customer settings.
+  // Document requests only: a Set-Cookie on RSC/prefetch responses makes them
+  // uncacheable, which defeats router prefetching for these routes.
+  const isRscRequest =
+    request.headers.get("rsc") === "1" || request.headers.get("next-router-prefetch") === "1"
+  if (!isRscRequest && (pathname.startsWith("/invoices") || pathname.startsWith("/settings"))) {
     const ip = getClientIp(request)
     response.cookies.set("easner_business_owner_ip", ip, {
       path: "/",

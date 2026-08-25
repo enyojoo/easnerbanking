@@ -598,7 +598,10 @@ export default function InvoicesPage() {
                       className="hover:bg-muted/50 cursor-pointer"
                       onMouseEnter={() => {
                         prefetchInvoiceDetail(invoice.id)
-                        void router.prefetch(invoicePreviewPath(invoice.id))
+                        // Prefetch the route this row actually opens — it used to
+                        // prefetch the public preview route, so every click was a
+                        // cold navigation.
+                        void router.prefetch(`/invoices/${invoice.id}`)
                       }}
                       onClick={() => router.push(withReturnTo(`/invoices/${invoice.id}`, listHere))}
                     >

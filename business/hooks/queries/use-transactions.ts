@@ -120,7 +120,9 @@ export function getTransactionDetailPrefetchOptions(scope: Scope, txId: string) 
     queryFn: () => fetchBusinessTransactionDetail(txId),
     staleTime: 60_000,
     gcTime: 30 * 60_000,
-    refetchOnMount: "always",
+    // Cache-first: the realtime bridge refreshes the active detail on ledger
+    // updates and `useTransactionDetail` polls while non-terminal — a forced
+    // refetch on every open defeated the hover-prefetch instant paint.
     meta: { safePersist: true, webPersist: "reduced", freshness: "operational" as const },
   }
 }
@@ -174,6 +176,18 @@ export function useTransactionsList(filters: TxFilters = {}) {
  * Single transaction detail – same cache/TTL/persistence band as list (`webPersist: reduced`).
  * Seeds from any cached transactions list row via `placeholderData` for instant navigation.
  */
+/** Statuses that can never change again — no reason to keep polling them. */
+const TERMINAL_TRANSACTION_STATUSES = new Set([
+  "completed",
+  "settled",
+  "failed",
+  "cancelled",
+  "canceled",
+  "refunded",
+  "reversed",
+  "expired",
+])
+
 export function useTransactionDetail(txId: string | null) {
   const { scope } = useScope()
   const queryClient = useQueryClient()
@@ -190,6 +204,18 @@ export function useTransactionDetail(txId: string | null) {
       meta: { safePersist: false, webPersist: "none" as const, freshness: "operational" as const },
     }),
     enabled: Boolean(opts),
+    // Belt-and-braces for the exact moment a user stares at a pending payout:
+    // realtime patches the detail via the bridge, but if the channel is quiet
+    // or the update maps oddly, a short poll keeps the status honest. Stops
+    // as soon as the transaction reaches a terminal state.
+    refetchInterval: (query) => {
+      const status = String(
+        (query.state.data as { status?: string } | undefined)?.status ?? "",
+      ).toLowerCase()
+      if (!status || TERMINAL_TRANSACTION_STATUSES.has(status)) return false
+      return 7_000
+    },
+    refetchIntervalInBackground: false,
     placeholderData: (previousData) => {
       if (previousData && txId && transactionIdsMatchLookup(txId, previousData.id)) {
         return previousData

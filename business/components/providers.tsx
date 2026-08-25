@@ -48,11 +48,15 @@ import {
 export function Providers({ children }: { children: React.ReactNode }) {
   const queryClient = getBrowserQueryClient()
   const { user } = useAuth()
-  const [restoredSessionUserId, setRestoredSessionUserId] = React.useState<string | null>(null)
-  React.useLayoutEffect(() => {
+  // Seeded synchronously: PersistQueryClientProvider restores exactly once, on the
+  // first commit, reading the persister it sees then. A layout-effect seed arrives
+  // after that one-shot restore, so the cache would persist but never restore.
+  // The probe is SSR-safe (empty on the server) and feeds only the persister, never
+  // rendered markup, so it cannot cause a hydration mismatch.
+  const [restoredSessionUserId] = React.useState<string | null>(() => {
     const probe = probeStoredSupabaseSession()
-    setRestoredSessionUserId(probe.likelyAuthenticated ? probe.userId : null)
-  }, [])
+    return probe.likelyAuthenticated ? probe.userId : null
+  })
   const persistedUserId = user?.id ?? restoredSessionUserId
   const persister = React.useMemo(
     () => createBusinessQueryPersister(persistedUserId),
@@ -159,6 +163,34 @@ function PersistedBusinessLifecycleBridge() {
   React.useEffect(() => {
     if (typeof window === "undefined") return
 
+    /**
+     * Returning to a backgrounded tab is a realtime coverage gap: any events
+     * missed while hidden are gone (no replay), and focus/reconnect refetch
+     * are globally off. Sweep stale money queries as soon as the tab is
+     * visible again, but only after a real absence (>30s) so quick tab
+     * flicks stay free.
+     */
+    let hiddenAt: number | null = null
+    const VISIBILITY_SWEEP_MIN_HIDDEN_MS = 30_000
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAt = Date.now()
+        return
+      }
+      const awayMs = hiddenAt ? Date.now() - hiddenAt : 0
+      hiddenAt = null
+      if (awayMs < VISIBILITY_SWEEP_MIN_HIDDEN_MS) return
+      void (async () => {
+        try {
+          await ensureBusinessAppSession()
+          await refetchStaleReducedQueries(queryClient)
+        } catch {
+          // Background freshness sweep is best-effort.
+        }
+      })()
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange)
+
     const onPageShow = (event: PageTransitionEvent) => {
       if (!event.persisted) return
 
@@ -177,7 +209,10 @@ function PersistedBusinessLifecycleBridge() {
     }
 
     window.addEventListener("pageshow", onPageShow)
-    return () => window.removeEventListener("pageshow", onPageShow)
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange)
+      window.removeEventListener("pageshow", onPageShow)
+    }
   }, [queryClient, user?.id])
 
   return null

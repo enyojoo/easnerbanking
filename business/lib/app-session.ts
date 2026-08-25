@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken"
 import type { User } from "@supabase/supabase-js"
 
-export const BUSINESS_APP_SESSION_COOKIE = "easner_business_session"
+export { BUSINESS_APP_SESSION_COOKIE } from "@/lib/app-session-constants"
 const BUSINESS_APP_SESSION_TTL_SECONDS = 60 * 60
 
 type BusinessAppSessionClaims = {

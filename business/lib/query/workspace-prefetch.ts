@@ -35,7 +35,21 @@ function getWalletListStorageKey(scope: Scope): string {
   return `${WALLET_LIST_CACHE_KEY_PREFIX}${scopeKey(scope)}`
 }
 
-export function readWalletListInitialData(scope: Scope): WalletBalancesData | undefined {
+/**
+ * Snapshots must carry their age: seeding `initialData` without
+ * `initialDataUpdatedAt` stamps the data as fetched-just-now, which defeats
+ * staleTime, prefetch staleness checks, and the stale-query sweeps — an
+ * arbitrarily old balance would render as authoritative and never revalidate.
+ * Snapshots past the ceiling (and legacy ones without `savedAt`) are discarded.
+ */
+const WALLET_SNAPSHOT_MAX_AGE_MS = 15 * 60 * 1000
+
+export type WalletListSnapshot = {
+  data: WalletBalancesData
+  savedAt: number
+}
+
+export function readWalletListSnapshot(scope: Scope): WalletListSnapshot | undefined {
   if (typeof window === "undefined") return undefined
   const storageKey = getWalletListStorageKey(scope)
   try {
@@ -45,6 +59,7 @@ export function readWalletListInitialData(scope: Scope): WalletBalancesData | un
       balances?: OnChainBalances
       available?: AvailableCurrencies
       deposits?: DepositAddresses
+      savedAt?: number
     }
     if (!parsed?.balances) return undefined
     if (
@@ -54,13 +69,31 @@ export function readWalletListInitialData(scope: Scope): WalletBalancesData | un
     ) {
       return undefined
     }
+    if (typeof parsed.savedAt !== "number" || Date.now() - parsed.savedAt > WALLET_SNAPSHOT_MAX_AGE_MS) {
+      return undefined
+    }
     return {
-      balances: parsed.balances ?? {},
-      available: parsed.available ?? {},
-      deposits: parsed.deposits ?? {},
+      data: {
+        balances: parsed.balances ?? {},
+        available: parsed.available ?? {},
+        deposits: parsed.deposits ?? {},
+      },
+      savedAt: parsed.savedAt,
     }
   } catch {
     return undefined
+  }
+}
+
+export function writeWalletListSnapshot(scope: Scope, data: WalletBalancesData): void {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(
+      getWalletListStorageKey(scope),
+      JSON.stringify({ ...data, savedAt: Date.now() }),
+    )
+  } catch {
+    // Ignore storage quota/write errors.
   }
 }
 
@@ -110,7 +143,8 @@ export function walletBalancesQueryOptions(scope: Scope, queryClient: QueryClien
     staleTime: 60_000,
     gcTime: 10 * 60_000,
     meta: { safePersist: false, webPersist: "reduced", freshness: "critical" as const },
-    initialData: () => readWalletListInitialData(scope),
+    initialData: () => readWalletListSnapshot(scope)?.data,
+    initialDataUpdatedAt: () => readWalletListSnapshot(scope)?.savedAt,
   }
 }
 
@@ -236,12 +270,28 @@ export async function prefetchAllNavWorkspaceData(
   queryClient: QueryClient,
   scope: Scope,
 ): Promise<void> {
+  // Critical (current-surface) data first; the rest is deferred to idle time
+  // so the warm-up burst doesn't land exactly when the user starts clicking.
+  await Promise.allSettled([
+    prefetchWorkspaceCriticalData(queryClient, scope),
+    queryClient.prefetchQuery(fxRatesPrefetchOptions()),
+  ])
+
+  await new Promise<void>((resolve) => {
+    const w = typeof window === "undefined" ? null : (window as Window & {
+      requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number
+    })
+    if (w && typeof w.requestIdleCallback === "function") {
+      w.requestIdleCallback(() => resolve(), { timeout: 3_000 })
+    } else {
+      setTimeout(resolve, 500)
+    }
+  })
+
   const { payrollOverviewQueryOptions, payrollPeopleQueryOptions } = await import(
     "@/hooks/queries/use-payroll"
   )
   await Promise.allSettled([
-    prefetchWorkspaceCriticalData(queryClient, scope),
-    queryClient.prefetchQuery(fxRatesPrefetchOptions()),
     prefetchInvoicesWorkspaceData(queryClient, scope),
     prefetchCardsWorkspaceData(queryClient, scope),
     queryClient.prefetchQuery(payrollOverviewQueryOptions(scope)),
@@ -323,7 +373,16 @@ export async function prefetchRouteWorkspaceData(
 export function refetchStaleReducedQueries(queryClient: QueryClient): Promise<void> {
   return queryClient.refetchQueries({
     predicate: (query) => {
-      if (query.meta?.webPersist !== "reduced") return false
+      // Money surfaces are in scope whether or not they persist to disk:
+      // gating on `webPersist === "reduced"` alone excluded transaction/
+      // invoice detail, payroll runs, and every `webPersist: "none"` query,
+      // so returning to a backgrounded tab left them stale indefinitely.
+      const freshness = query.meta?.freshness
+      const inScope =
+        query.meta?.webPersist === "reduced" ||
+        freshness === "critical" ||
+        freshness === "operational"
+      if (!inScope) return false
       const staleTime = (query.options.staleTime as number | undefined) ?? 30_000
       if (!query.state.dataUpdatedAt) return true
       return Date.now() - query.state.dataUpdatedAt > staleTime

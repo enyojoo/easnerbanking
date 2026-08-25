@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { qk } from "@easner/shared"
 import { useBusinessProfile } from "@/lib/use-business-profile"
@@ -77,7 +77,10 @@ export function useBusinessSync(): void {
     setFiatProvisionResolved(false)
   }, [businessId])
 
-  const profileSlice = { tier1Complete }
+  // Memoized on the primitive: an inline object literal here changed identity
+  // every render, which recreated `runSync` and tore down / rebuilt its
+  // effect, interval, and visibility listener on every workspace render.
+  const profileSlice = useMemo(() => ({ tier1Complete }), [tier1Complete])
 
   const shouldSync =
     !isLoading &&

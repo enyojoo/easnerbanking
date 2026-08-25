@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
+import { usePathname } from "next/navigation"
 import { scheduleAfterIdle } from "@/lib/schedule-after-idle"
 import { getPostHog } from "@/lib/posthog"
 
@@ -38,6 +39,53 @@ export function WebVitalsReporter() {
       })
     }, 3000)
   }, [])
+
+  return <RouteTransitionReporter />
+}
+
+/**
+ * Instant-standard metric (docs/speed-ux-plan.md, Phase B0): time from the
+ * click on an internal link to the destination route's content committing
+ * (double-rAF after the pathname change ≈ first painted frame). Target:
+ * < 100ms warm. Reported as `route_transition` so regressions show up in
+ * PostHog rather than in user complaints.
+ */
+function RouteTransitionReporter() {
+  const pathname = usePathname()
+  const clickAtRef = useRef<number | null>(null)
+  const lastPathnameRef = useRef(pathname)
+
+  useEffect(() => {
+    const onClickCapture = (event: MouseEvent) => {
+      const target = event.target as Element | null
+      const anchor = target?.closest?.('a[href^="/"]')
+      if (anchor) clickAtRef.current = performance.now()
+    }
+    window.addEventListener("click", onClickCapture, { capture: true, passive: true })
+    return () => window.removeEventListener("click", onClickCapture, { capture: true })
+  }, [])
+
+  useEffect(() => {
+    if (pathname === lastPathnameRef.current) return
+    const from = lastPathnameRef.current
+    lastPathnameRef.current = pathname
+    const clickAt = clickAtRef.current
+    clickAtRef.current = null
+    if (clickAt == null || !pathname) return
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const duration = performance.now() - clickAt
+        // Ignore stale clicks (e.g. dialog interactions long before a nav).
+        if (duration > 30_000) return
+        getPostHog().capture("route_transition", {
+          duration_ms: Math.round(duration),
+          from_path: from,
+          to_path: pathname,
+          platform: "business_web",
+        })
+      })
+    })
+  }, [pathname])
 
   return null
 }

@@ -23,9 +23,13 @@ export interface ApprovalRow {
 /**
  * Approval queue for the active scope.
  *
- * 20s staleTime with a 60s background fallback – realtime events on
- * `approvals` narrow-invalidate this queue so the count badge and
- * inline list stay truthful without hammering the server.
+ * NOTE: there is NO realtime coverage for approvals — the shared bridge
+ * deliberately does not subscribe (`realtime.ts`: the table is absent from
+ * some schemas), and the gated polling below is disabled whenever the
+ * channel reports healthy, so this effectively never revalidates on its own
+ * (an earlier version of this comment claimed realtime narrow-invalidation
+ * that does not exist). No call sites today; before using it live, land the
+ * `approvals` table + subscription or ungate the poll.
  */
 export function useApprovalsQueue(status: ApprovalStatus = "open") {
   const { scope } = useScope()

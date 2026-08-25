@@ -196,7 +196,14 @@ export function usePayrollRuns() {
     select: (d) => d.runs ?? [],
     staleTime: 5 * 60_000,
     gcTime: 60 * 60_000,
-    meta: { safePersist: false, webPersist: "none", freshness: "operational" },
+    // While any run is executing (crons drive it server-side), poll the list
+    // so status changes land without waiting for realtime/`payroll_runs`.
+    refetchInterval: (q) => {
+      const runs = (q.state.data as { runs?: PayrollRun[] } | undefined)?.runs ?? []
+      return runs.some((run) => run.status === "executing") ? 5_000 : false
+    },
+    refetchIntervalInBackground: false,
+    meta: { safePersist: true, webPersist: "reduced", freshness: "operational" },
   })
 }
 
@@ -218,7 +225,10 @@ export function usePayrollRunDetail(runId: string | null) {
     staleTime: 60_000,
     gcTime: 60 * 60_000,
     refetchInterval: (q) => {
-      const run = q.state.data
+      // `state.data` is the raw {run} envelope — `select` does not apply to
+      // it, so reading `.status` off the envelope meant this executing-poll
+      // never engaged.
+      const run = (q.state.data as { run?: PayrollRun } | undefined)?.run
       const job = run?.metadata?.executionJob as { status?: string } | undefined
       return run?.status === "executing" ||
         ["queued", "processing", "retry"].includes(String(job?.status || ""))

@@ -108,12 +108,33 @@ export function usePayoutCorridors(rail: PayoutRail | "all") {
 }
 
 /** Fire-and-forget prefetch for bank + mobile lists (e.g. after login). */
-export async function prefetchPayoutCorridors(): Promise<void> {
+/** Deduped + freshness-windowed — see prefetchSendDestinations for why. */
+const CORRIDORS_PREFETCH_FRESH_MS = 60_000
+let corridorsPrefetchInflight: Promise<void> | null = null
+let corridorsLastPrefetchedAt = 0
+
+export function prefetchPayoutCorridors(): Promise<void> {
+  if (corridorsPrefetchInflight) return corridorsPrefetchInflight
+  if (
+    memory.bank_transfer &&
+    memory.mobile_money &&
+    Date.now() - corridorsLastPrefetchedAt < CORRIDORS_PREFETCH_FRESH_MS
+  ) {
+    return Promise.resolve()
+  }
+  corridorsPrefetchInflight = prefetchPayoutCorridorsNow().finally(() => {
+    corridorsPrefetchInflight = null
+  })
+  return corridorsPrefetchInflight
+}
+
+async function prefetchPayoutCorridorsNow(): Promise<void> {
   try {
     const [bank, mobile] = await Promise.all([
       fetchCorridors("bank_transfer", memory.bank_transfer?.etag),
       fetchCorridors("mobile_money", memory.mobile_money?.etag),
     ])
+    corridorsLastPrefetchedAt = Date.now()
     if (bank.body && bank.etag) {
       memory.bank_transfer = { etag: bank.etag, body: bank.body }
       writeSessionRail("bank_transfer", bank.body)

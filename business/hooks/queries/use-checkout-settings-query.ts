@@ -14,7 +14,7 @@ export function checkoutSettingsQueryOptions(scope: Scope) {
     queryFn: () => apiFetch<CheckoutHubPayload>("/api/checkout/settings"),
     staleTime: STALE_MS,
     gcTime: 30 * 60_000,
-    refetchOnMount: "always" as const,
+    // Cache-first: `business_checkout_settings` realtime invalidates on change.
     meta: { safePersist: true, webPersist: "reduced" as const, freshness: "critical" as const },
   }
 }
@@ -29,7 +29,7 @@ export function useCheckoutSettingsQuery() {
     enabled: Boolean(scope),
     staleTime: STALE_MS,
     gcTime: 30 * 60_000,
-    refetchOnMount: "always",
+    // Cache-first: `business_checkout_settings` realtime invalidates on change.
     meta: { safePersist: true, webPersist: "reduced", freshness: "critical" },
   })
 }

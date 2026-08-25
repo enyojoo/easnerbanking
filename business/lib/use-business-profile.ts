@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo } from "react"
 import { fetchWithSession } from "@/lib/fetch-with-session"
+import { fetchBusinessProfileEnvelope } from "@/lib/business-profile-fetch"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { useAuth } from "@/lib/auth-context"
 import { countries } from "@/lib/countries"
@@ -225,21 +226,21 @@ export function useBusinessProfile() {
         ? "always"
         : true,
     fetcher: async () => {
-      const res = await fetchWithSession("/api/business/profile")
-      if (!res.ok) throw new Error("Failed to load profile")
-      const json = (await res.json()) as { profile?: BusinessProfile }
-      if (!json.profile) throw new Error("Missing profile")
-      return json.profile
+      // Single-flight: scope resolution and this fetcher used to race the
+      // same endpoint at boot — the request the whole workspace gates on.
+      const json = await fetchBusinessProfileEnvelope()
+      const profile = json?.profile as BusinessProfile | null | undefined
+      if (!profile) throw new Error("Failed to load profile")
+      return profile
     },
   })
 
   const refreshProfile = useCallback(async () => {
     if (!user?.id) return
-    const res = await fetchWithSession("/api/business/profile")
-    if (!res.ok) return
-    const json = (await res.json()) as { profile?: BusinessProfile }
-    if (!json.profile) return
-    setData(json.profile)
+    const json = await fetchBusinessProfileEnvelope()
+    const profile = json?.profile as BusinessProfile | null | undefined
+    if (!profile) return
+    setData(profile)
   }, [setData, user?.id])
 
   useEffect(() => {

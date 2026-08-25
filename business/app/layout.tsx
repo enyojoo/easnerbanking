@@ -14,8 +14,6 @@ import { PwaInstallProvider } from "@/components/pwa/pwa-install-provider"
 import { BusinessViewportGate } from "@/components/layout/business-viewport-gate"
 import { AppSurfaceLayout } from "@/components/app-surface-layout"
 import { getBusinessAppPublicOrigin } from "@/lib/business-app-public-url"
-import { pickPublicHostname } from "@/lib/customer-hosts"
-import { headers } from "next/headers"
 import "./globals.css"
 import { BRAND } from "@easner/shared"
 
@@ -67,14 +65,18 @@ export const viewport: Viewport = {
   themeColor: "#F6F3EB",
 }
 
-export default async function RootLayout({
+/**
+ * NO dynamic APIs here (`headers()`, `cookies()`): reading them in the ROOT
+ * layout opts every route into dynamic rendering, which disables router
+ * prefetch app-wide and makes every navigation block on a server round trip.
+ * Surface/hostname detection is client-side (`useClientHostname`) — a CI
+ * check asserts the workspace shells stay statically prerendered.
+ */
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const headerList = await headers()
-  const hostname = pickPublicHostname(headerList.get("x-forwarded-host"), headerList.get("host"))
-
   return (
     <html lang="en" className="light" suppressHydrationWarning>
       <body
@@ -87,8 +89,8 @@ export default async function RootLayout({
             <ClientAuthProvider>
               <PwaStandaloneRoot />
               <PwaInstallProvider>
-                <SurfaceProviders hostname={hostname}>
-                  <BusinessViewportGate hostname={hostname}>
+                <SurfaceProviders>
+                  <BusinessViewportGate>
                     <AppSurfaceLayout>{children}</AppSurfaceLayout>
                   </BusinessViewportGate>
                 </SurfaceProviders>

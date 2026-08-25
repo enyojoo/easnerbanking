@@ -32,7 +32,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
-import { format } from "date-fns"
+import { formatLongDate } from "@/lib/format-date-light"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { formatCurrency } from "@/lib/utils"
@@ -723,7 +723,7 @@ export default function CreateInvoicePage() {
                         className="w-full justify-start text-left font-normal"
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {formData.dueDate ? format(new Date(formData.dueDate), "PPP") : "Pick a date"}
+                        {formData.dueDate ? formatLongDate(new Date(formData.dueDate)) : "Pick a date"}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">

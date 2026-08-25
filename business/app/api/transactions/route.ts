@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server"
+import { NextResponse, after } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import type { TransactionWithSource } from "@/lib/transactions"
 import { resolveLedgerListScope } from "@/lib/transactions-ledger-scope"
@@ -43,8 +43,12 @@ export async function GET(request: Request) {
   const cursor = decodeLedgerListCursor(url.searchParams.get("cursor"))
 
   const admin = createSupabaseAdmin()
-  // Sync expired YC pay-ins so list/status updates without revisiting amount screen.
-  await expireStaleYcPayInTransfers(admin, { userId: user.id, limit: 25 }).catch(() => {})
+  // Expire stale YC pay-ins AFTER responding: this maintenance job (a select,
+  // an update, and up to 25 serial ledger writes) used to be awaited in front
+  // of the hottest read in the app. The reconcile cron covers it every 10min,
+  // realtime pushes the resulting status changes, and `after()` still runs it
+  // per-request for immediacy without the reader paying for it.
+  after(() => expireStaleYcPayInTransfers(admin, { userId: user.id, limit: 25 }).catch(() => {}))
 
   let query = admin
     .from("transactions")

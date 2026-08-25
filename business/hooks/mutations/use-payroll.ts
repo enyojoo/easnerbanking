@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { qk } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
+import { refetchBusinessMoneyQueries } from "@/lib/query/refresh-after-money-move"
 import { useScope } from "@/lib/query/scope"
 import type {
   CreatePayrollPersonCommand,
@@ -422,6 +423,8 @@ export function useApprovePayrollRun(runId: string) {
         qc.invalidateQueries({ queryKey: qk.approvals.root(scope) })
       }
       invalidatePayroll(qc, scope)
+      // "Pay now" approval kicks off execution — arm the money refresh.
+      void refetchBusinessMoneyQueries(qc, scope)
     },
   })
 }
@@ -593,6 +596,9 @@ export function useExecutePayrollRun(runId: string) {
     },
     onSuccess: () => {
       invalidatePayroll(qc, scope)
+      // Executing a run debits balances and writes ledger rows — the balance
+      // card and transactions list must not wait for a poll to find out.
+      void refetchBusinessMoneyQueries(qc, scope)
     },
   })
 }
@@ -620,6 +626,8 @@ export function useRetryPayrollRun(runId: string) {
         qc.invalidateQueries({ queryKey: qk.payroll.runs.list(scope) })
       }
       invalidatePayroll(qc, scope)
+      // Retries move money — refresh balances + ledger too.
+      void refetchBusinessMoneyQueries(qc, scope)
     },
   })
 }

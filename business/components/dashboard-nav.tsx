@@ -30,7 +30,7 @@ import { normalizeBusinessLogoUrl, warmBusinessLogoUrl } from "@/lib/image-cache
 import { isNavPathActive } from "@/lib/navigation/is-nav-path-active"
 import { useScope } from "@/lib/query/scope"
 import { prefetchRouteWorkspaceData } from "@/lib/query/workspace-prefetch"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 
@@ -144,6 +144,24 @@ export function DashboardNav() {
     }
   }
 
+  // Sweeping the pointer down the sidebar must not fire a prefetch per item —
+  // wait ~100ms of dwell, and cancel on leave (same pattern as
+  // lib/query/use-hover-prefetch.ts).
+  const prefetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cancelScheduledPrefetch = () => {
+    if (prefetchTimerRef.current) {
+      clearTimeout(prefetchTimerRef.current)
+      prefetchTimerRef.current = null
+    }
+  }
+  const schedulePrefetch = (href: string) => {
+    cancelScheduledPrefetch()
+    prefetchTimerRef.current = setTimeout(() => {
+      prefetchTimerRef.current = null
+      prefetchHref(href)
+    }, 100)
+  }
+
   return (
     <div className="fixed left-0 top-0 h-screen w-64 border-r border-sidebar-border bg-sidebar text-sidebar-foreground flex flex-col">
       <div className="flex h-16 min-h-16 items-center gap-3 border-b border-sidebar-border px-5">
@@ -185,8 +203,9 @@ export function DashboardNav() {
               <Link
                 key={item.href}
                 href={item.href || "#"}
-                onMouseEnter={() => prefetchHref(item.href)}
-                onFocus={() => prefetchHref(item.href)}
+                onMouseEnter={() => schedulePrefetch(item.href)}
+                onMouseLeave={cancelScheduledPrefetch}
+                onFocus={() => schedulePrefetch(item.href)}
                 aria-current={isActive ? "page" : undefined}
               >
                 <div
@@ -235,8 +254,9 @@ export function DashboardNav() {
                         <Link
                           key={child.href}
                           href={child.href}
-                          onMouseEnter={() => prefetchHref(child.href)}
-                          onFocus={() => prefetchHref(child.href)}
+                          onMouseEnter={() => schedulePrefetch(child.href)}
+                          onMouseLeave={cancelScheduledPrefetch}
+                          onFocus={() => schedulePrefetch(child.href)}
                           aria-current={isActive ? "page" : undefined}
                         >
                           <div

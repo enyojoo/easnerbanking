@@ -58,6 +58,11 @@ export function useAddCustomer() {
         ...rows.filter((c) => c.id !== created.id && c.id !== customer.id),
       ])
     },
+    onSettled: () => {
+      // Server-side reconciliation: optimistic patches alone never converge
+      // with edits made by other team members/devices (no realtime table).
+      if (scope) void qc.invalidateQueries({ queryKey: qk.customers.root(scope) })
+    },
   })
 }
 
@@ -100,6 +105,11 @@ export function useUpdateCustomer() {
         rows.map((c) => (c.id === id ? updated : c)),
       )
     },
+    onSettled: () => {
+      // Server-side reconciliation: optimistic patches alone never converge
+      // with edits made by other team members/devices (no realtime table).
+      if (scope) void qc.invalidateQueries({ queryKey: qk.customers.root(scope) })
+    },
   })
 }
 
@@ -122,6 +132,11 @@ export function useDeleteCustomer() {
     },
     onError: (_err, _id, ctx) => {
       if (scope && ctx?.prev) qc.setQueryData(qk.customers.list(scope), ctx.prev)
+    },
+    onSettled: () => {
+      // Server-side reconciliation: optimistic patches alone never converge
+      // with edits made by other team members/devices (no realtime table).
+      if (scope) void qc.invalidateQueries({ queryKey: qk.customers.root(scope) })
     },
   })
 }

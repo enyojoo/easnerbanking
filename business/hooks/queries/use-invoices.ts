@@ -2,14 +2,14 @@
 
 import { useEffect } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { qk, type QueryFilters } from "@easner/shared"
+import { pollingIntervalFor, qk, type QueryFilters } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
+import { useRealtimeHealth } from "@/lib/query/realtime-health-context"
 import { useScope } from "@/lib/query/scope"
 import { useDocumentVisibility } from "@/lib/query/use-document-visibility"
 import type { Invoice } from "@/lib/b2b/types"
 import {
   INVOICES_DETAIL_STALE_MS,
-  INVOICES_LIST_POLL_MS,
   INVOICES_LIST_STALE_MS,
   syncInvoiceToListCaches,
 } from "@/lib/invoices/invoice-query-cache"
@@ -18,12 +18,16 @@ import {
  * B2B invoices for the active scope.
  *
  * Status is operational data (Stripe webhooks, cron past-due, email sends).
- * Mutations patch the cache optimistically; detail fetches sync back to list
- * rows; polling + refetch-on-mount keep cross-page navigation fresh.
+ * The realtime bridge now subscribes `public.invoices` and invalidates on
+ * settlements, so freshness is push-first with health-gated polling as the
+ * fallback (the old ungated 60s poll + refetch-on-mount predate that push
+ * path). Invalidations are honored on remount by the shared
+ * `refetchOnMountWhenInvalidated` default.
  */
 export function useInvoicesList(filters: QueryFilters = {}) {
   const { scope } = useScope()
   const tabVisible = useDocumentVisibility()
+  const realtimeHealth = useRealtimeHealth()
   return useQuery({
     queryKey: scope ? qk.invoices.list(scope, filters) : ["invoices", "disabled"],
     enabled: Boolean(scope),
@@ -31,8 +35,7 @@ export function useInvoicesList(filters: QueryFilters = {}) {
       apiFetch<{ invoices: Invoice[] }>("/api/business/b2b/invoices", { query: filters }),
     staleTime: INVOICES_LIST_STALE_MS,
     gcTime: 30 * 60_000,
-    refetchOnMount: true,
-    refetchInterval: tabVisible ? INVOICES_LIST_POLL_MS : false,
+    refetchInterval: tabVisible ? pollingIntervalFor("operational", realtimeHealth) : false,
     refetchIntervalInBackground: false,
     select: (d) => d.invoices ?? [],
     meta: { safePersist: true, webPersist: "reduced", freshness: "operational" },
@@ -51,7 +54,6 @@ export function useInvoiceDetail(invoiceId: string | null) {
     queryFn: () => apiFetch<Invoice>(`/api/business/b2b/invoices/${invoiceId}`),
     staleTime: INVOICES_DETAIL_STALE_MS,
     gcTime: 30 * 60_000,
-    refetchOnMount: true,
     // Prefer the live list row so status changes on /invoices show instantly on detail open.
     placeholderData: (previousData) => {
       if (previousData?.id === invoiceId) return previousData

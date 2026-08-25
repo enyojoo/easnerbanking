@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import type { User } from "@supabase/supabase-js"
 import { clearBusinessAppSessionCookie } from "@/lib/app-session-client"
 import { ensureBusinessAppSession } from "@/lib/app-session-client"
@@ -469,8 +469,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut()
   }
 
-  const ctxValue = {
-    user,
+  /**
+   * The context value must be identity-stable: ~40 `useAuth()` consumers
+   * re-render on every value change, and this provider renders on every auth
+   * tick. Handlers are exposed through stable wrappers over a ref so the
+   * memoized value only changes when actual auth state changes.
+   */
+  const handlersRef = useRef({
     login,
     signup,
     verifySignupOtp,
@@ -478,34 +483,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signInWithGoogle,
     signInWithApple,
     logout,
-    resetSessionActivity,
-    isLoading,
-    sessionUserId,
-    canBootstrapWorkspace,
-  }
+  })
+  useEffect(() => {
+    handlersRef.current = {
+      login,
+      signup,
+      verifySignupOtp,
+      resendSignupOtp,
+      signInWithGoogle,
+      signInWithApple,
+      logout,
+    }
+  })
+  const stableHandlers = useMemo(
+    () => ({
+      login: (email: string, password: string) => handlersRef.current.login(email, password),
+      signup: (email: string, password: string, name: string) =>
+        handlersRef.current.signup(email, password, name),
+      verifySignupOtp: (email: string, otp: string) => handlersRef.current.verifySignupOtp(email, otp),
+      resendSignupOtp: (email: string) => handlersRef.current.resendSignupOtp(email),
+      signInWithGoogle: () => handlersRef.current.signInWithGoogle(),
+      signInWithApple: () => handlersRef.current.signInWithApple(),
+      logout: () => handlersRef.current.logout(),
+    }),
+    [],
+  )
 
-  // Don't render until mounted to prevent hydration mismatch
+  // Pre-mount renders (hydration safety) expose a logged-out value without
+  // creating a second inline object shape.
+  const ctxValue = useMemo<AuthContextType>(
+    () => ({
+      user: mounted ? user : null,
+      ...stableHandlers,
+      resetSessionActivity,
+      isLoading: mounted ? isLoading : true,
+      sessionUserId: mounted ? sessionUserId : canBootstrapWorkspace ? storedProbe.userId : null,
+      canBootstrapWorkspace,
+    }),
+    [mounted, user, isLoading, sessionUserId, canBootstrapWorkspace, storedProbe.userId, stableHandlers],
+  )
+
   if (!mounted) {
-    return (
-      <AuthContext.Provider
-        value={{
-          user: null,
-          login,
-          signup,
-          verifySignupOtp,
-          resendSignupOtp,
-          signInWithGoogle,
-          signInWithApple,
-          logout,
-          resetSessionActivity,
-          isLoading: true,
-          sessionUserId: canBootstrapWorkspace ? storedProbe.userId : null,
-          canBootstrapWorkspace,
-        }}
-      >
-        {children}
-      </AuthContext.Provider>
-    )
+    return <AuthContext.Provider value={ctxValue}>{children}</AuthContext.Provider>
   }
 
   return (

@@ -3,13 +3,32 @@ import { cookies } from "next/headers"
 import { createClient, type User } from "@supabase/supabase-js"
 import { BUSINESS_APP_SESSION_COOKIE, getBusinessAppSessionUser } from "@/lib/app-session"
 
-export function createSupabaseAdmin() {
+/**
+ * NOTE: typed via call-site inference (not `ReturnType<typeof createClient>`,
+ * which instantiates the generic params as `unknown` and collapses every
+ * `.from(...)` row to `never`).
+ */
+function createSupabaseAdminUncached() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) {
     throw new Error("NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for Noah API routes")
   }
   return createClient(url, key)
+}
+
+let adminClient: ReturnType<typeof createSupabaseAdminUncached> | null = null
+
+/**
+ * Memoized service-role client. The client is stateless (no per-request auth
+ * — it always sends the service key), and several routes constructed it 3–4
+ * times per request; each construction builds the full sub-client graph.
+ */
+export function createSupabaseAdmin() {
+  if (!adminClient) {
+    adminClient = createSupabaseAdminUncached()
+  }
+  return adminClient
 }
 
 /** Bearer-only (e.g. cross-origin clients that do not send Easner session cookies). */

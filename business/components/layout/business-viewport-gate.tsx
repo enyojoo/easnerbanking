@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation"
 import { DesktopMinViewportGate } from "@/components/layout/desktop-min-viewport-gate"
 import { parseSettingsVerificationFlow } from "@/lib/compliance/cutover-comms"
 import { isPublicSurfacePath } from "@/lib/surface-paths"
+import { useClientHostname } from "@/lib/use-client-hostname"
 
 function bypassesDesktopViewportGate(pathname: string, flow: string | null, hostname?: string | null) {
   if (isPublicSurfacePath(pathname, hostname)) return true
@@ -19,32 +20,20 @@ function bypassesDesktopViewportGate(pathname: string, flow: string | null, host
   return false
 }
 
-function BusinessViewportGateInner({
-  children,
-  hostname,
-}: {
-  children: ReactNode
-  hostname?: string | null
-}) {
+function BusinessViewportGateInner({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? ""
   const searchParams = useSearchParams()
   const flow = searchParams.get("flow")
-  const host = hostname ?? null
+  const host = useClientHostname()
   if (bypassesDesktopViewportGate(pathname, flow, host)) {
     return <>{children}</>
   }
   return <DesktopMinViewportGate product="business">{children}</DesktopMinViewportGate>
 }
 
-export function BusinessViewportGate({
-  children,
-  hostname,
-}: {
-  children: ReactNode
-  hostname?: string | null
-}) {
+export function BusinessViewportGate({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? ""
-  const host = hostname ?? null
+  const host = useClientHostname()
   if (isPublicSurfacePath(pathname, host)) {
     return <>{children}</>
   }
@@ -52,7 +41,7 @@ export function BusinessViewportGate({
   // (`<Suspense fallback={null}>` → React #418 on /dashboard).
   return (
     <Suspense fallback={<DesktopMinViewportGate product="business">{children}</DesktopMinViewportGate>}>
-      <BusinessViewportGateInner hostname={hostname}>{children}</BusinessViewportGateInner>
+      <BusinessViewportGateInner>{children}</BusinessViewportGateInner>
     </Suspense>
   )
 }

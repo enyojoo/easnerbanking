@@ -42,6 +42,35 @@ const nextConfig = {
     ],
   },
   transpilePackages: ["@easner/server", "@easner/shared", "@sumsub/websdk"],
+  /**
+   * Dev runs Turbopack (`next dev --turbo`) but production builds with
+   * webpack, and the `webpack:` alias block below is silently ignored by
+   * Turbopack — so dev and prod resolved these modules differently and local
+   * perf work didn't reflect production. Mirror the load-bearing aliases.
+   * (@noble/hashes subpath aliases are a webpack-only workaround for the npm
+   * override hoist; Turbopack resolves them via package `exports`.)
+   */
+  turbopack: {
+    root: resolve(__dirname, ".."),
+    resolveAlias: {
+      "@easner/shared": "../packages/shared/src/index.ts",
+      "@easner/shared/verified-identity": "../packages/shared/src/verified-identity.ts",
+      "@easner/server": "../packages/server/lib/index.ts",
+      "lib-address": "../node_modules/lib-address/dist/entry-browser.mjs",
+    },
+  },
+  experimental: {
+    // The @easner/shared barrel fronts ~26k lines behind 193 exports; without
+    // this, importing one helper pulls the whole graph into the bundle.
+    optimizePackageImports: ["@easner/shared", "date-fns"],
+    // Router-cache lifetimes: prefetched static shells stay usable for the
+    // session; without this, dynamic payloads are discarded instantly and
+    // every navigation re-pays a server round trip.
+    staleTimes: {
+      static: 1800,
+      dynamic: 30,
+    },
+  },
   webpack: (config) => {
     config.resolve.alias = {
       ...(config.resolve.alias || {}),

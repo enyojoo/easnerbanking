@@ -12,10 +12,10 @@ export function useCustomersList() {
     queryKey: scope ? qk.customers.list(scope) : ["customers", "disabled"],
     enabled: Boolean(scope),
     queryFn: () => apiFetch<{ customers: Customer[] }>("/api/business/customers"),
-    staleTime: 60 * 60_000,
+    // 5 min, not 60: customers have no realtime table, so staleTime is the
+    // only path for a second device/team member's edits to converge.
+    staleTime: 5 * 60_000,
     gcTime: 60 * 60_000,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
     select: (d) => d.customers ?? [],
     meta: { safePersist: true, webPersist: "reduced", freshness: "operational" },
   })

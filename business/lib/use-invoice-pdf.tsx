@@ -1,56 +1,14 @@
 "use client"
 
-import { pdf } from "@react-pdf/renderer"
-import { InvoicePDFDocument } from "@/components/invoice-pdf-document"
-import type { Invoice } from "@/lib/b2b/types"
-import { PDF_LOGO_DATA_URL } from "@/lib/pdf-logo-base64"
-import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
-import { fetchIssuerLogoDataUrl } from "@/lib/invoices/issuer-logo-data-url"
-import type { InvoicePdfPaymentSection } from "@/lib/invoices/invoice-payment-copy"
+/**
+ * Lazy facade: the implementation statically imports @react-pdf/renderer
+ * (~407 KB gzip incl. a base64-inlined WASM binary), which used to ship in
+ * the bundle of every page that merely SHOWS a "Download PDF" button. The
+ * renderer now loads on first click.
+ */
+type Impl = typeof import("./use-invoice-pdf-impl")
 
-async function getLogoDataUrl(): Promise<string> {
-  if (typeof window === "undefined") return PDF_LOGO_DATA_URL
-  try {
-    const res = await fetch("/Easner%20Business.png")
-    if (!res.ok) return PDF_LOGO_DATA_URL
-    const blob = await res.blob()
-    return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result as string)
-      reader.onerror = reject
-      reader.readAsDataURL(blob)
-    })
-  } catch {
-    return PDF_LOGO_DATA_URL
-  }
-}
-
-export async function downloadInvoicePdf(
-  invoice: Invoice,
-  issuer?: InvoicePdfIssuer,
-  paymentSection?: InvoicePdfPaymentSection,
-): Promise<void> {
-  const [logoUrl, issuerLogoSrc] = await Promise.all([
-    getLogoDataUrl(),
-    fetchIssuerLogoDataUrl(issuer?.logoUrl),
-  ])
-
-  const blob = await pdf(
-    <InvoicePDFDocument
-      invoice={invoice}
-      paymentSection={paymentSection}
-      issuer={issuer}
-      logoUrl={logoUrl}
-      issuerLogoSrc={issuerLogoSrc}
-    />,
-  ).toBlob()
-
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement("a")
-  a.href = url
-  a.download = `Invoice-${invoice.invoiceNumber}.pdf`
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+export const downloadInvoicePdf: Impl["downloadInvoicePdf"] = async (...args) => {
+  const mod = await import("./use-invoice-pdf-impl")
+  return mod.downloadInvoicePdf(...args)
 }
