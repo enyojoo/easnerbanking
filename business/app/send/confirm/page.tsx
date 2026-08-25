@@ -62,9 +62,11 @@ import {
   ensurePayoutOrderConfirmed,
   isCompletePayoutQuoteLocked,
   isStashedPayoutQuoteFresh,
+  isStashedPayoutQuotePreviewFresh,
   payoutQuoteToFlowState,
   peekLastPayoutQuoteError,
   peekPayoutQuote,
+  peekPayoutQuotePreview,
   type PayoutQuoteStashMeta,
 } from "@/lib/payout-quote-cache"
 import {
@@ -450,6 +452,22 @@ export default function SendConfirmPage() {
           sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
           return
         }
+      }
+    }
+
+    /**
+     * Instant review: the PREVIEW quote (fetched while the user typed the
+     * amount) carries the same fee/rate economics as the lock — render the
+     * full breakdown from it immediately so the review never shows a loading
+     * state. The lock below (already in flight from Continue; the call joins
+     * it) refines the numbers silently and flips `quoteReady` for the CTA.
+     */
+    if (!state.payoutQuote && isStashedPayoutQuotePreviewFresh(meta)) {
+      const preview = peekPayoutQuotePreview()
+      if (preview) {
+        const seeded = payoutQuoteToFlowState(state, preview)
+        setState(seeded)
+        sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(seeded))
       }
     }
 
@@ -1237,13 +1255,9 @@ export default function SendConfirmPage() {
             : `Quote valid for ${quoteCountdown.label}`}
         </div>
       ) : null}
-      {!easenetSend &&
-      !isYcCrossBorder &&
-      !quoteReady &&
-      (payoutQuoteLoading || walletQuoteLoading) &&
-      !quoteCountdown.expired ? (
-        <p className="text-xs text-muted-foreground">Updating quote…</p>
-      ) : null}
+      {/* No "Updating quote…" affordance: the review renders full economics
+          from the preview quote and the background lock refines silently —
+          per the Instant Standard, money reviews never show loading. */}
 
       {authorizeError ? (
         <p className="text-sm text-red-600" role="alert">
@@ -1271,11 +1285,6 @@ export default function SendConfirmPage() {
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Sending…
-            </>
-          ) : !easenetSend && !quoteReady && (payoutQuoteLoading || walletQuoteLoading) ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Updating quote…
             </>
           ) : (
             SEND_REVIEW_CONFIRM_CTA

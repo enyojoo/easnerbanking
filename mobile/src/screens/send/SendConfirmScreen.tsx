@@ -1092,13 +1092,15 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
             end={{ x: 1, y: 0 }}
             style={styles.ctaGradient}
           >
+            {/* No spinner while the background lock lands: the review shows
+                full preview economics and the lock (already in flight from
+                Continue) flips quoteReady before the user finishes reading —
+                money reviews never show loading (Instant Standard). */}
             {sendingAfterPin ? (
               <View style={styles.ctaSendingRow}>
                 <ActivityIndicator color="#fff" size="small" />
                 <Text style={styles.ctaText}>Sending…</Text>
               </View>
-            ) : !easetagUi && quoteLoading && !quoteReady ? (
-              <ActivityIndicator color="#fff" size="small" />
             ) : (
               <Text style={styles.ctaText}>{SEND_REVIEW_CONFIRM_CTA}</Text>
             )}
