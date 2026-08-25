@@ -1119,8 +1119,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       amountEntryMode: 'receive' as const,
       entryAmount: receiveAmount,
       receiveCurrency,
+      sourceBalanceCurrency: selectedBalanceCurrency,
     }),
-    [recipient?.id, receiveAmount, receiveCurrency],
+    [recipient?.id, receiveAmount, receiveCurrency, selectedBalanceCurrency],
   )
 
   const walletQuoteFresh = isStashedWalletQuoteFresh(walletQuoteStashMeta)
@@ -1213,6 +1214,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       amountEntryMode,
       entryAmount: amountEntryMode === 'send' ? sendingAmount : receiveAmount,
       receiveCurrency,
+      sourceBalanceCurrency: selectedBalanceCurrency,
     }
     void ensureSendPayoutQuoteStashed(
       () =>
@@ -1464,6 +1466,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             ? navAmounts.sendAmount
             : receiveAmountValue,
         receiveCurrency,
+        sourceBalanceCurrency: selectedBalanceCurrency,
       }
 
       if (

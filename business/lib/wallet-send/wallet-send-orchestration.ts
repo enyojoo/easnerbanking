@@ -204,13 +204,20 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
         chain: "solana",
         destinationAddress: session.destination_address,
         amount: session.receive_amount,
-        // 0 = return "pending" right after broadcast submit, like every other
-        // payout rail (fiat legs all pass 0). The old 120_000 blocked the
-        // user's Send button on on-chain Solana confirmation for up to two
-        // minutes. Settlement lands via the Turnkey webhook + reconcile cron,
-        // which also capture the deferred fee leg; the receipt's realtime
-        // patch + non-terminal poll surface the flip to "settled".
-        settlementPollTimeoutMs: 0,
+        /**
+         * DELIBERATELY BLOCKING (reviewed and reverted from an attempted 0):
+         * with 0 this returns "pending" unconditionally, which (a) makes the
+         * chain-failure guard below dead code so a failed on-chain send would
+         * still debit the balance with no reversal path, (b) skips inline fee
+         * capture, and (c) writes a ledger row WITHOUT `turnkey_sub_org_id`
+         * (only the skipped non-wallet-send branch persists it), which every
+         * reconcile path keys on — the row would stay pending forever and the
+         * margin would never be swept. Making this async requires: persisting
+         * subOrgId in this row's metadata, reconcile-driven fee capture, and
+         * an automatic failed-send balance reversal. Until then, correctness
+         * beats the 2-minute worst-case wait.
+         */
+        settlementPollTimeoutMs: 120_000,
         walletSend: walletSendCtx,
       })
 

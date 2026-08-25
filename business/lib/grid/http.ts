@@ -27,6 +27,12 @@ export type GridFetchOptions = {
   formData?: FormData
   headers?: Record<string, string>
   idempotencyKey?: string
+  /**
+   * Override the 20s default for calls that legitimately run long: KYB
+   * multipart document uploads and cron-side pagination sweeps. Interactive
+   * quote/confirm paths must keep the default.
+   */
+  timeoutMs?: number
 }
 
 function buildBasicAuthHeader(): string {
@@ -68,7 +74,7 @@ export async function gridFetch<T>(opts: GridFetchOptions): Promise<T> {
     method: opts.method,
     headers,
     ...(formData ? { body: formData } : jsonBody ? { body: jsonBody } : {}),
-    signal: AbortSignal.timeout(GRID_HTTP_TIMEOUT_MS),
+    signal: AbortSignal.timeout(opts.timeoutMs ?? GRID_HTTP_TIMEOUT_MS),
   })
 
   const text = await res.text()
@@ -130,6 +136,8 @@ export async function gridFetchAllPages<T>(input: {
   mapPage: (payload: { data?: T[]; cursor?: string | null }) => T[]
   /** Cap pages so a sticky cursor cannot hang quote/confirm for tens of seconds. */
   maxPages?: number
+  /** Per-page timeout override (cron sweeps); the 20s default applies per page, not to the whole sweep. */
+  timeoutMs?: number
 }): Promise<T[]> {
   const out: T[] = []
   let cursor: string | undefined
@@ -149,6 +157,7 @@ export async function gridFetchAllPages<T>(input: {
     }>({
       method: "GET",
       path,
+      ...(input.timeoutMs ? { timeoutMs: input.timeoutMs } : {}),
     })
     const rows = input.mapPage(page)
     out.push(...rows)

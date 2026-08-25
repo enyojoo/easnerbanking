@@ -25,7 +25,9 @@ async function relayFetch<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: { ...relayHeaders(), ...(init?.headers as Record<string, string> | undefined) },
     cache: "no-store",
-    signal: AbortSignal.timeout(RELAY_HTTP_TIMEOUT_MS),
+    // This sits after `...init`, so a bare timeout here would silently
+    // override a caller-supplied signal; honor the caller's when given.
+    signal: init?.signal ?? AbortSignal.timeout(RELAY_HTTP_TIMEOUT_MS),
   })
   if (!res.ok) {
     const body = await res.text().catch(() => "")

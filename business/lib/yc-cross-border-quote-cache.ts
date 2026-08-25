@@ -329,8 +329,12 @@ export async function ensureCrossBorderQuoteStashed(
       return null
     })
     .finally(() => {
-      inflightQuote = null
-      inflightQuoteKey = ""
+      // Clear only OUR registration: a stale (superseded-key) settle must
+      // not deregister a newer in-flight lock (duplicate provider lock).
+      if (inflightQuoteKey === key) {
+        inflightQuote = null
+        inflightQuoteKey = ""
+      }
     })
 
   return inflightQuote
@@ -375,8 +379,12 @@ export async function ensureCrossBorderLeg2Locked(
       return null
     })
     .finally(() => {
-      inflightLeg2Lock = null
-      inflightLeg2LockKey = ""
+      // Clear only OUR registration: a stale (superseded-key) settle must
+      // not deregister a newer in-flight lock (duplicate provider lock).
+      if (inflightLeg2LockKey === key) {
+        inflightLeg2Lock = null
+        inflightLeg2LockKey = ""
+      }
     })
 
   return inflightLeg2Lock
@@ -430,8 +438,12 @@ export async function ensureCrossBorderOrderConfirmed(
       return null
     })
     .finally(() => {
-      inflightConfirm = null
-      inflightConfirmKey = ""
+      // Clear only OUR registration: a stale (superseded-key) settle must
+      // not deregister a newer in-flight lock (duplicate provider lock).
+      if (inflightConfirmKey === key) {
+        inflightConfirm = null
+        inflightConfirmKey = ""
+      }
     })
 
   return inflightConfirm

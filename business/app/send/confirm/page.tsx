@@ -144,9 +144,7 @@ export default function SendConfirmPage() {
   const [isAuthorizing, setIsAuthorizing] = useState(false)
   const [authorizeError, setAuthorizeError] = useState<string | null>(null)
   const [payoutQuoteError, setPayoutQuoteError] = useState<string | null>(null)
-  const [payoutQuoteLoading, setPayoutQuoteLoading] = useState(false)
   const [walletQuoteError, setWalletQuoteError] = useState<string | null>(null)
-  const [walletQuoteLoading, setWalletQuoteLoading] = useState(false)
   const [ycQuoteError, setYcQuoteError] = useState<string | null>(null)
   const [ycQuoteLoading, setYcQuoteLoading] = useState(false)
   const displayIdFallbackRef = useRef<string | null>(null)
@@ -373,7 +371,24 @@ export default function SendConfirmPage() {
         (peekCrossBorderQuote()?.provider === "grid" ? "grid" : undefined) ??
         "yellowcard",
     }
-  }, [state])
+    // Depend on the primitive inputs, not `state`: the seeding effect below
+    // setStates, and a `[state]` dep gave this memo a new identity every
+    // render, re-running that effect forever when the preview-derived
+    // ycCrossBorder has no transferId to satisfy its bail-out (review finding).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    state?.paymentMethod,
+    state?.otherCurrency,
+    state?.otherPaymentMethod,
+    state?.amount,
+    state?.requestedReceiveAmount,
+    state?.recipient.id,
+    state?.crossBorderProvider,
+    state?.ycMomoSetup?.sourcePhone,
+    state?.ycMomoSetup?.networkId,
+    state?.ycMomoSetup?.sourceNetworkName,
+    state?.ycCrossBorder?.requestedReceiveAmount,
+  ])
 
   /**
    * Cross-border review shows preview rates immediately. POST /receive (full lock)
@@ -393,6 +408,18 @@ export default function SendConfirmPage() {
       const stashed = peekCrossBorderQuote()
       if (stashed && isUsableCrossBorderQuotePreview(stashed)) {
         const yc = crossBorderQuoteToFlowState(stashed, crossBorderMeta)
+        // Structural bail-out: preview quotes carry no transferId, so the
+        // guard above can't stop a reseed — don't setState when the seeded
+        // economics are already in state (breaks any residual render loop).
+        const alreadySeeded =
+          state.ycCrossBorder &&
+          state.ycCrossBorder.localPayIn === yc.localPayIn &&
+          state.ycCrossBorder.customerRate === yc.customerRate &&
+          state.sendAmount === yc.localPayIn
+        if (alreadySeeded) {
+          prefetchCrossBorderQuotePipeline(crossBorderMeta)
+          return
+        }
         const next: SendFlowState = {
           ...state,
           sendAmount: yc.localPayIn,
@@ -465,29 +492,36 @@ export default function SendConfirmPage() {
     if (!state.payoutQuote && isStashedPayoutQuotePreviewFresh(meta)) {
       const preview = peekPayoutQuotePreview()
       if (preview) {
-        const seeded = payoutQuoteToFlowState(state, preview)
+        /**
+         * Keep the ORIGINAL entry amounts: payoutQuoteToFlowState overwrites
+         * `sendAmount` with the quote's customerPrincipal, and this effect's
+         * lock meta derives `entryAmount` from `state.sendAmount` — letting
+         * the seed change it drifted the stash key and cascaded duplicate
+         * provider locks in send-entry mode (review finding). No storage
+         * write either: the seed is derivable, only locked results persist.
+         */
+        const seeded = {
+          ...payoutQuoteToFlowState(state, preview),
+          sendAmount: state.sendAmount,
+          requestedReceiveAmount: state.requestedReceiveAmount,
+          amount: state.amount,
+        }
         setState(seeded)
-        sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(seeded))
       }
     }
 
     let cancelled = false
     setPayoutQuoteError(null)
-    setPayoutQuoteLoading(true)
     void (async () => {
-      try {
-        const quote = await ensurePayoutOrderConfirmed(meta, businessId)
-        if (cancelled) return
-        if (!isCompletePayoutQuoteLocked(quote)) {
-          setPayoutQuoteError(peekLastPayoutQuoteError() || "Could not lock payout order")
-          return
-        }
-        const next = payoutQuoteToFlowState(state, quote)
-        setState(next)
-        sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
-      } finally {
-        if (!cancelled) setPayoutQuoteLoading(false)
+      const quote = await ensurePayoutOrderConfirmed(meta, businessId)
+      if (cancelled) return
+      if (!isCompletePayoutQuoteLocked(quote)) {
+        setPayoutQuoteError(peekLastPayoutQuoteError() || "Could not lock payout order")
+        return
       }
+      const next = payoutQuoteToFlowState(state, quote)
+      setState(next)
+      sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
     })()
     return () => {
       cancelled = true
@@ -532,21 +566,16 @@ export default function SendConfirmPage() {
 
     let cancelled = false
     setWalletQuoteError(null)
-    setWalletQuoteLoading(true)
     void (async () => {
-      try {
-        const quote = await ensureWalletSendOrderConfirmed(meta, businessId)
-        if (cancelled) return
-        if (!quote?.formSessionId) {
-          setWalletQuoteError(peekLastWalletQuoteError() || "Could not lock wallet send order")
-          return
-        }
-        const next = walletQuoteToFlowState(state, quote)
-        setState(next)
-        sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
-      } finally {
-        if (!cancelled) setWalletQuoteLoading(false)
+      const quote = await ensureWalletSendOrderConfirmed(meta, businessId)
+      if (cancelled) return
+      if (!quote?.formSessionId) {
+        setWalletQuoteError(peekLastWalletQuoteError() || "Could not lock wallet send order")
+        return
       }
+      const next = walletQuoteToFlowState(state, quote)
+      setState(next)
+      sessionStorage.setItem(SEND_FLOW_STATE_KEY_LOCAL, JSON.stringify(next))
     })()
     return () => {
       cancelled = true

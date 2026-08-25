@@ -138,6 +138,7 @@ describe('sendFlowPayoutQuote stash', () => {
       amountEntryMode: 'receive',
       entryAmount: 1000,
       receiveCurrency: 'NGN',
+      sourceBalanceCurrency: 'USD',
     })
 
     expect(
@@ -146,6 +147,7 @@ describe('sendFlowPayoutQuote stash', () => {
         amountEntryMode: 'receive',
         entryAmount: 1000,
         receiveCurrency: 'NGN',
+        sourceBalanceCurrency: 'USD',
       }),
     ).toBe(true)
 
@@ -155,6 +157,7 @@ describe('sendFlowPayoutQuote stash', () => {
         amountEntryMode: 'receive',
         entryAmount: 1000,
         receiveCurrency: 'NGN',
+        sourceBalanceCurrency: 'USD',
       }),
     ).toBe(false)
   })
@@ -255,6 +258,7 @@ describe('sendFlowPayoutQuote stash', () => {
       amountEntryMode: 'receive' as const,
       entryAmount: 1000,
       receiveCurrency: 'NGN',
+      sourceBalanceCurrency: 'USD',
     }
     stashSendPayoutQuotePreview(
       sampleQuote({

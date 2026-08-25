@@ -82,15 +82,16 @@ export async function buildYcPayoutQuote(input: {
       : ("bank_transfer" as const)
 
   /**
-   * These lookups are independent — this function sits directly behind the
-   * send flow's quote preview, and the old fully-serial chain cost up to ~3
-   * external Yellowcard round trips one after another on a cold instance
-   * (channels resolved TWICE, then networks, then fee-config, each awaited
-   * in sequence). One parallel wave; user-facing validation order preserved
-   * below. `sendChannel` covers the old `resolveYcSendChannelId` call, which
-   * was just `findYcSendChannel().id`.
+   * Two waves instead of one: channel + corridor gate the whole quote, so
+   * they run (in parallel) first and throw their OWN errors before anything
+   * else — a single 5-way Promise.all let an unrelated fee-config failure
+   * mask "no send channel for this corridor" nondeterministically, and paid
+   * for rate/fee provider calls on corridors that were never quotable
+   * (review finding; matches the staged sibling below). `sendChannel` covers
+   * the old `resolveYcSendChannelId` call, which was just
+   * `findYcSendChannel().id`.
    */
-  const [sendChannel, corridorRowResult, rates, ycFeeConfig, processingFeeBps] = await Promise.all([
+  const [sendChannel, corridorRowResult] = await Promise.all([
     findYcSendChannel({
       countryCode,
       currencyCode: receiveCurrency,
@@ -103,19 +104,6 @@ export async function buildYcPayoutQuote(input: {
       .eq("currency_code", receiveCurrency)
       .eq("rail", rail)
       .maybeSingle(),
-    listYcRates(admin, { destinations: [receiveCurrency], status: "active" }),
-    fetchYcSendServiceFeeConfig({
-      country: countryCode,
-      currency: receiveCurrency,
-      channelType: rail === "mobile_money" ? "momo" : "bank",
-      directSettlement: true,
-    }),
-    quoteFiatProcessingFeeBps(
-      admin,
-      { countryCode, currencyCode: receiveCurrency, rail },
-      "pay_out",
-      { userId: input.userId },
-    ),
   ])
 
   const channelId =
@@ -145,6 +133,24 @@ export async function buildYcPayoutQuote(input: {
   if (!ycRecipientCheck.ok) {
     throw new Error(ycRecipientCheck.message)
   }
+
+  // Corridor is quotable — now the independent rate/fee lookups in one wave.
+  const [rates, ycFeeConfig, processingFeeBps] = await Promise.all([
+    listYcRates(admin, { destinations: [receiveCurrency], status: "active" }),
+    fetchYcSendServiceFeeConfig({
+      country: countryCode,
+      currency: receiveCurrency,
+      channelType: rail === "mobile_money" ? "momo" : "bank",
+      directSettlement: true,
+    }),
+    quoteFiatProcessingFeeBps(
+      admin,
+      { countryCode, currencyCode: receiveCurrency, rail },
+      "pay_out",
+      { userId: input.userId },
+    ),
+  ])
+
   const payoutRate = findYcBalancePayoutRate(rates, receiveCurrency)
   const customerRate = payoutRate?.rate ?? 0
   if (!customerRate || customerRate <= 0) {

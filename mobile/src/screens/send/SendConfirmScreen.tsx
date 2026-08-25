@@ -243,8 +243,16 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       amountEntryMode,
       entryAmount: amountEntryMode === 'send' ? amountScreenSendAmount : receiveAmountValue,
       receiveCurrency,
+      sourceBalanceCurrency: selectedBalanceCurrency,
     }),
-    [recipient?.id, amountEntryMode, amountScreenSendAmount, receiveAmountValue, receiveCurrency],
+    [
+      recipient?.id,
+      amountEntryMode,
+      amountScreenSendAmount,
+      receiveAmountValue,
+      receiveCurrency,
+      selectedBalanceCurrency,
+    ],
   )
 
   const [quotedReceiveAmount, setQuotedReceiveAmount] = useState(() => {
@@ -257,6 +265,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           ? (params.amountScreenSendAmount ?? params.calculatedSendingAmount ?? 0)
           : (params.receiveAmountValue ?? 0),
       receiveCurrency: params.receiveCurrency ?? params.recipient?.currency ?? '',
+      sourceBalanceCurrency: selectedBalanceCurrency,
     }
     if (stashed && isStashedPayoutQuoteFresh(meta)) {
       return payoutCustomerFacingReceiveAmount(stashed)
@@ -274,6 +283,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           ? (params.amountScreenSendAmount ?? params.calculatedSendingAmount ?? 0)
           : (params.receiveAmountValue ?? 0),
       receiveCurrency: params.receiveCurrency ?? params.recipient?.currency ?? '',
+      sourceBalanceCurrency: selectedBalanceCurrency,
     }
     if (isWalletRecipient && walletStashed && isStashedWalletQuoteFresh(walletMeta)) {
       const display = walletDisplayAmountsFromQuote(walletStashed)
@@ -302,6 +312,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           ? (params.amountScreenSendAmount ?? params.calculatedSendingAmount ?? 0)
           : (params.receiveAmountValue ?? 0),
       receiveCurrency: params.receiveCurrency ?? params.recipient?.currency ?? '',
+      sourceBalanceCurrency: selectedBalanceCurrency,
     }
     const useStashed = stashed && isStashedPayoutQuoteFresh(meta) && isCompletePayoutQuote(stashed)
     if (useStashed) {
@@ -377,7 +388,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     payoutSession,
     walletSession,
     quoteDisplay,
-    quoteLoading,
     quoteError,
   } = pricing
 

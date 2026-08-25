@@ -20,7 +20,6 @@ import {
 } from "@/lib/yc-local-deposit-cache"
 import {
   crossBorderQuoteToFlowState,
-  ensureCrossBorderOrderConfirmed,
   ensureCrossBorderQuoteStashed,
   isStashedCrossBorderQuoteFresh,
   isUsableCrossBorderQuotePreview,
@@ -183,9 +182,15 @@ export default function SendMomoSetupPage() {
     setContinueError(null)
     setIsContinueLoading(true)
     try {
-      // Review renders from the PREVIEW; the lock chain (leg2 + leg1 confirm) runs in
-      // the background. Review's YcPayInReviewSection owns the confirm before Pay, and
-      // the module stash + inflight dedupe prevent a duplicate provider order.
+      /**
+       * Review renders from the PREVIEW. Continue must NOT fire the confirm
+       * chain: `ensureCrossBorderOrderConfirmed` creates a REAL Yellowcard
+       * pay-in order, so firing it here orphaned a provider-side transfer
+       * every time the user backed out or edited the amount (review
+       * finding). The review's YcPayInReviewSection owns the confirm at Pay.
+       * The preview also never carries a transaction id — fabricating one
+       * from it just showed the user a reference that exists nowhere.
+       */
       const previewQuote = isStashedCrossBorderQuoteFresh(crossBorderMeta)
         ? peekCrossBorderQuote()
         : await ensureCrossBorderQuoteStashed(crossBorderMeta)
@@ -195,7 +200,6 @@ export default function SendMomoSetupPage() {
         )
         return
       }
-      void ensureCrossBorderOrderConfirmed(crossBorderMeta).catch(() => {})
       const next: SendFlowState = {
         ...state,
         ycMomoSetup: {
@@ -206,10 +210,7 @@ export default function SendMomoSetupPage() {
         sendAmount: previewQuote.localPayIn,
         sendCurrency: payInCurrency,
         totalAmount: previewQuote.localPayIn,
-        transactionId:
-          previewQuote.easnerTransactionId ||
-          previewQuote.transactionId ||
-          state.transactionId,
+        transactionId: state.transactionId,
         ycCrossBorder: crossBorderQuoteToFlowState(previewQuote, crossBorderMeta),
       }
       persistSendFlowState(next)

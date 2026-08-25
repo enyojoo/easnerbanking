@@ -137,7 +137,16 @@ export function areYcRatesFresh(rates: YcRateRow[], maxAgeMs: number): boolean {
   return newestMs > 0 && Date.now() - newestMs <= maxAgeMs
 }
 
-let backgroundSyncInFlight: Promise<void> | null = null
+/**
+ * Time-based re-entry guard, NOT a promise latch. Review finding: the prior
+ * promise flag was only cleared inside the deferred `after()` callback — a
+ * callback dropped on instance freeze (or `after()` throwing outside a
+ * request scope) latched it forever, permanently disabling background rate
+ * refresh for that warm instance while quotes silently served stale FX.
+ * A timestamp self-heals after 60s no matter what happened to the work.
+ */
+let backgroundSyncStartedAt = 0
+const BACKGROUND_SYNC_GUARD_MS = 60_000
 
 export function triggerYcRatesBackgroundRefresh(
   admin: SupabaseClient,
@@ -145,22 +154,25 @@ export function triggerYcRatesBackgroundRefresh(
   maxAgeMs = getYcRatesRefreshTtlMs(),
 ): void {
   if (areYcRatesFresh(currentRates, maxAgeMs)) return
-  if (backgroundSyncInFlight) return
-  // Deferred via after(): the sync is a full provider rate pull + DB writes.
-  // Launching it inline inside an interactive quote request made it compete
-  // with the request and risked being killed mid-write at response end.
-  backgroundSyncInFlight = new Promise<void>((resolve) => {
-    after(async () => {
-      try {
-        const { syncYcRatesSafe } = await import("@/lib/fx/yc-rate-sync")
-        await syncYcRatesSafe()
-      } catch {
-        // Best-effort
-      } finally {
-        backgroundSyncInFlight = null
-        resolve()
-      }
-    })
-  })
+  if (Date.now() - backgroundSyncStartedAt < BACKGROUND_SYNC_GUARD_MS) return
+  backgroundSyncStartedAt = Date.now()
+  const run = async () => {
+    try {
+      const { syncYcRatesSafe } = await import("@/lib/fx/yc-rate-sync")
+      await syncYcRatesSafe()
+    } catch {
+      // Best-effort background refresh only.
+    } finally {
+      backgroundSyncStartedAt = 0
+    }
+  }
+  try {
+    // Deferred past the response so the sync never competes with the
+    // interactive request it was triggered from.
+    after(run)
+  } catch {
+    // No request scope (scripts, tests, workers): run detached instead.
+    void run()
+  }
   void admin
 }

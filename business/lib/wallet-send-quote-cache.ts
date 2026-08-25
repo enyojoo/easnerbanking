@@ -115,8 +115,12 @@ export async function ensureWalletSendQuoteStashed(
       return null
     }
   })().finally(() => {
-    inflightQuote = null
-    inflightQuoteKey = ""
+    // Clear only OUR registration: a stale (superseded-key) settle must
+    // not deregister a newer in-flight lock (duplicate provider lock).
+    if (inflightQuoteKey === key) {
+      inflightQuote = null
+      inflightQuoteKey = ""
+    }
   })
 
   return inflightQuote
@@ -166,8 +170,12 @@ export async function ensureWalletSendOrderConfirmed(
       return null
     }
   })().finally(() => {
-    inflightConfirm = null
-    inflightConfirmKey = ""
+    // Clear only OUR registration: a stale (superseded-key) settle must
+    // not deregister a newer in-flight lock (duplicate provider lock).
+    if (inflightConfirmKey === key) {
+      inflightConfirm = null
+      inflightConfirmKey = ""
+    }
   })
 
   return inflightConfirm

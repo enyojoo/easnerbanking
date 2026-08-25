@@ -86,11 +86,17 @@ import {
 } from "@/lib/yc-cross-border-quote-cache"
 import {
   ensureWalletSendOrderConfirmed,
+  peekLastWalletQuoteError,
+  walletQuoteToFlowState,
   type WalletQuoteStashMeta,
 } from "@/lib/wallet-send-quote-cache"
 import {
   ensurePayoutOrderConfirmed,
   ensurePayoutQuoteStashed,
+  isCompletePayoutQuoteLocked,
+  isStashedPayoutQuotePreviewFresh,
+  payoutQuoteToFlowState,
+  peekLastPayoutQuoteError,
   type PayoutQuoteStashMeta,
 } from "@/lib/payout-quote-cache"
 import { coerceBeneficiaryEasenetDisplay, type RecipientUpsertInput } from "@/lib/recipients-store"
@@ -1395,6 +1401,13 @@ export default function SendPage() {
     try {
       const activeRecipient = await ensureRecipientPersisted()
       if (!activeRecipient) return
+      // A still-draft recipient cannot be quoted or locked, and the review
+      // page skips its resolve effects for drafts without a persist payload —
+      // navigating would strand the user on a dead review (review finding).
+      if (isDraftRecipientId(activeRecipient.id) && !draftRecipientPersistRef.current) {
+        setAmountFieldError("Could not save this recipient. Try again.")
+        return
+      }
       if (isEasetagRecipient && paymentMethod === "otherCurrency") {
         setAmountFieldError("Easetag sends are only supported from your balance.")
         return
@@ -1548,10 +1561,10 @@ export default function SendPage() {
             sendAmount: previewQuote.localPayIn,
             sendCurrency: otherCurrency,
             totalAmount: previewQuote.localPayIn,
-            transactionId:
-              previewQuote.easnerTransactionId ||
-              previewQuote.transactionId ||
-              state.transactionId,
+            // Preview quotes never carry a transaction id — the transfer is
+            // created at Pay. Fabricating one here showed a reference that
+            // exists nowhere (review finding, mirrors momo-setup).
+            transactionId: state.transactionId,
             crossBorderProvider: tlcFlow.crossBorderProvider,
             ycCrossBorder: crossBorderQuoteToFlowState(previewQuote, crossBorderMeta),
           }
@@ -1567,13 +1580,34 @@ export default function SendPage() {
         return
       }
 
-      // Fire-and-forget: navigate now, the review page's own mount call joins the same
-      // module stash + inflight promise (no duplicate provider lock) and shows
-      // "Updating quote…" with a disabled CTA until the lock resolves.
+      /**
+       * Navigate-then-resolve, gated on a warm PREVIEW (review findings):
+       * - Payout: with a fresh preview stashed, the review seeds full
+       *   economics from it and its mount call JOINS the lock we fire here
+       *   (same stash key + inflight promise → one provider lock). Without a
+       *   preview (fast typist, prefetch failed) we AWAIT the lock so quote
+       *   errors surface here and the review never renders data-less.
+       * - Wallet: business has no wallet preview stash, so navigating early
+       *   rendered a zeroed fee breakdown at rate 1.00 — always await.
+       */
       if (needsPayoutQuoteBeforeConfirm && payoutQuoteMeta) {
-        void ensurePayoutOrderConfirmed(payoutQuoteMeta, businessId).catch(() => {})
+        if (isStashedPayoutQuotePreviewFresh(payoutQuoteMeta)) {
+          void ensurePayoutOrderConfirmed(payoutQuoteMeta, businessId).catch(() => {})
+        } else {
+          const quote = await ensurePayoutOrderConfirmed(payoutQuoteMeta, businessId)
+          if (!isCompletePayoutQuoteLocked(quote)) {
+            setAmountFieldError(peekLastPayoutQuoteError() || "Could not lock payout order. Try again.")
+            return
+          }
+          flowState = payoutQuoteToFlowState(flowState, quote)
+        }
       } else if (needsWalletQuoteBeforeConfirm && walletQuoteMeta) {
-        void ensureWalletSendOrderConfirmed(walletQuoteMeta, businessId).catch(() => {})
+        const walletQuote = await ensureWalletSendOrderConfirmed(walletQuoteMeta, businessId)
+        if (!walletQuote) {
+          setAmountFieldError(peekLastWalletQuoteError() || "Could not lock wallet send. Try again.")
+          return
+        }
+        flowState = walletQuoteToFlowState(flowState, walletQuote)
       }
 
       persistSendFlowState(flowState)

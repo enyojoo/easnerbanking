@@ -164,8 +164,12 @@ export async function ensurePayoutQuoteStashed(
       return null
     }
   })().finally(() => {
-    inflightQuote = null
-    inflightQuoteKey = ""
+    // Clear only OUR registration: a stale (superseded-key) settle must
+    // not deregister a newer in-flight lock (duplicate provider lock).
+    if (inflightQuoteKey === key) {
+      inflightQuote = null
+      inflightQuoteKey = ""
+    }
   })
 
   return inflightQuote
@@ -233,8 +237,12 @@ export async function ensurePayoutOrderConfirmed(
       return null
     }
   })().finally(() => {
-    inflightConfirm = null
-    inflightConfirmKey = ""
+    // Clear only OUR registration: a stale (superseded-key) settle must
+    // not deregister a newer in-flight lock (duplicate provider lock).
+    if (inflightConfirmKey === key) {
+      inflightConfirm = null
+      inflightConfirmKey = ""
+    }
   })
 
   return inflightConfirm
@@ -248,6 +256,15 @@ export async function ensureGridLivePayoutQuote(
   const id = String(lockId || "").trim()
   if (!id) return null
   if (inflightGridPrepare && inflightGridPrepareKey === id) return inflightGridPrepare
+
+  /**
+   * Capture the meta THIS prepare belongs to. Stashing under whatever
+   * `stashedMeta` holds at resolve time let a slow prepare for an old amount
+   * land under a newer meta — making a quote locked at the OLD amount look
+   * fresh for the NEW one, and the review could authorize wrong economics
+   * (review finding). If the meta was superseded meanwhile, drop the result.
+   */
+  const metaAtCall = stashedMeta
 
   inflightGridPrepareKey = id
   inflightGridPrepare = (async () => {
@@ -264,16 +281,20 @@ export async function ensureGridLivePayoutQuote(
         quote?: PayoutQuoteResult
       }
       if (!res.ok || !data.ok || !data.quote) return null
-      if (stashedMeta) {
-        stashPayoutQuote({ ...data.quote, lockId: data.quote.lockId || id }, stashedMeta)
+      if (metaAtCall && stashedMeta === metaAtCall) {
+        stashPayoutQuote({ ...data.quote, lockId: data.quote.lockId || id }, metaAtCall)
       }
       return data.quote
     } catch {
       return null
     }
   })().finally(() => {
-    inflightGridPrepare = null
-    inflightGridPrepareKey = ""
+    // Clear only OUR registration: a stale (superseded-key) settle must
+    // not deregister a newer in-flight lock (duplicate provider lock).
+    if (inflightGridPrepareKey === id) {
+      inflightGridPrepare = null
+      inflightGridPrepareKey = ""
+    }
   })
 
   return inflightGridPrepare

@@ -5,7 +5,16 @@ export type SendWalletQuoteStashMeta = {
   amountEntryMode: 'send' | 'receive'
   entryAmount: number
   receiveCurrency: string
+  /** The quote body sends this; a stash keyed without it survives a balance switch. */
+  sourceBalanceCurrency: string
 }
+
+/**
+ * A preview that expires mid-navigation makes Continue seed a review the
+ * confirm step then rejects. Treat previews as stale this long before their
+ * actual expiry so Continue re-quotes instead.
+ */
+const PREVIEW_EXPIRY_MARGIN_MS = 20_000
 
 let stashed: WalletSendQuote | null = null
 let stashedMeta: SendWalletQuoteStashMeta | null = null
@@ -51,6 +60,11 @@ function metaMatches(a: SendWalletQuoteStashMeta, b: SendWalletQuoteStashMeta): 
   if (a.receiveCurrency.trim().toUpperCase() !== b.receiveCurrency.trim().toUpperCase()) {
     return false
   }
+  if (
+    a.sourceBalanceCurrency.trim().toUpperCase() !== b.sourceBalanceCurrency.trim().toUpperCase()
+  ) {
+    return false
+  }
   return entryAmountsMatch(a.entryAmount, b.entryAmount)
 }
 
@@ -64,7 +78,9 @@ export function isStashedWalletQuoteFresh(input: SendWalletQuoteStashMeta): bool
 /** Fresh un-confirmed preview from the typing prefetch – lets Continue navigate-then-resolve. */
 export function isStashedWalletQuotePreviewFresh(input: SendWalletQuoteStashMeta): boolean {
   if (!previewStashed?.expiresAt || !previewStashed.formSessionId || !previewStashedMeta) return false
-  if (new Date(previewStashed.expiresAt).getTime() <= Date.now()) return false
+  if (new Date(previewStashed.expiresAt).getTime() <= Date.now() + PREVIEW_EXPIRY_MARGIN_MS) {
+    return false
+  }
   return metaMatches(previewStashedMeta, input)
 }
 
@@ -75,7 +91,13 @@ let inflightConfirmKey = ''
 let lastWalletQuoteError: string | null = null
 
 function quoteMetaKey(meta: SendWalletQuoteStashMeta): string {
-  return [meta.recipientId, meta.amountEntryMode, meta.entryAmount, meta.receiveCurrency].join('|')
+  return [
+    meta.recipientId,
+    meta.amountEntryMode,
+    meta.entryAmount,
+    meta.receiveCurrency,
+    meta.sourceBalanceCurrency,
+  ].join('|')
 }
 
 export function peekLastWalletQuoteError(): string | null {
@@ -105,8 +127,12 @@ export async function ensureSendWalletQuoteStashed(
       return null
     })
     .finally(() => {
-      inflightQuote = null
-      inflightQuoteKey = ''
+      // Clear only OUR registration: a stale (superseded-key) settle must
+      // not deregister a newer in-flight lock (duplicate provider lock).
+      if (inflightQuoteKey === key) {
+        inflightQuote = null
+        inflightQuoteKey = ''
+      }
     })
 
   return inflightQuote
@@ -140,8 +166,12 @@ export async function ensureSendWalletOrderConfirmed(
       return null
     }
   })().finally(() => {
-    inflightConfirm = null
-    inflightConfirmKey = ''
+    // Clear only OUR registration: a stale (superseded-key) settle must
+    // not deregister a newer in-flight lock (duplicate provider lock).
+    if (inflightConfirmKey === key) {
+      inflightConfirm = null
+      inflightConfirmKey = ''
+    }
   })
 
   return inflightConfirm

@@ -86,6 +86,12 @@ export type SendPayoutQuoteStashMeta = {
   /** Send-side principal when mode=send; receive fiat when mode=receive. */
   entryAmount: number
   receiveCurrency: string
+  /** The quote body sends this; a stash keyed without it survives a balance switch. */
+  sourceBalanceCurrency: string
+}
+
+function sourceBalanceCurrenciesMatch(a: SendPayoutQuoteStashMeta, b: SendPayoutQuoteStashMeta): boolean {
+  return a.sourceBalanceCurrency.trim().toUpperCase() === b.sourceBalanceCurrency.trim().toUpperCase()
 }
 
 let stashed: PayoutQuote | null = null
@@ -184,6 +190,7 @@ export function isStashedPayoutQuotePreviewFresh(input: SendPayoutQuoteStashMeta
   ) {
     return false
   }
+  if (!sourceBalanceCurrenciesMatch(previewStashedMeta, input)) return false
   if (input.amountEntryMode === 'send') {
     return sendEntryAmountsMatch(previewStashedMeta.entryAmount, input.entryAmount)
   }
@@ -218,6 +225,7 @@ export function isStashedPayoutQuoteFresh(input: SendPayoutQuoteStashMeta): bool
   if (stashedMeta.receiveCurrency.trim().toUpperCase() !== input.receiveCurrency.trim().toUpperCase()) {
     return false
   }
+  if (!sourceBalanceCurrenciesMatch(stashedMeta, input)) return false
   if (input.amountEntryMode === 'send') {
     return sendEntryAmountsMatch(stashedMeta.entryAmount, input.entryAmount)
   }
@@ -239,6 +247,7 @@ function quoteMetaKey(meta: SendPayoutQuoteStashMeta): string {
     meta.amountEntryMode,
     meta.entryAmount,
     meta.receiveCurrency,
+    meta.sourceBalanceCurrency,
   ].join('|')
 }
 
@@ -272,8 +281,12 @@ export async function ensureSendPayoutQuoteStashed(
       return null
     })
     .finally(() => {
-      inflightQuote = null
-      inflightQuoteKey = ''
+      // Clear only OUR registration: a stale (superseded-key) settle must
+      // not deregister a newer in-flight lock (duplicate provider lock).
+      if (inflightQuoteKey === key) {
+        inflightQuote = null
+        inflightQuoteKey = ''
+      }
     })
 
   return inflightQuote
@@ -325,8 +338,12 @@ export async function ensureSendPayoutOrderConfirmed(
       return null
     })
     .finally(() => {
-      inflightConfirm = null
-      inflightConfirmKey = ''
+      // Clear only OUR registration: a stale (superseded-key) settle must
+      // not deregister a newer in-flight lock (duplicate provider lock).
+      if (inflightConfirmKey === key) {
+        inflightConfirm = null
+        inflightConfirmKey = ''
+      }
     })
 
   return inflightConfirm

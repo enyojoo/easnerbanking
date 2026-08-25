@@ -126,6 +126,9 @@ export async function uploadGridKybDocument(input: {
     method: "POST",
     path: "/documents",
     formData: form,
+    // Multipart document uploads can legitimately exceed the interactive 20s
+    // hung-socket guard on slow uplinks; KYB is not a latency-critical path.
+    timeoutMs: 120_000,
   })
   return String(uploaded.id)
 }
