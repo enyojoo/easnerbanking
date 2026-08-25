@@ -91,10 +91,19 @@ export const TRANSACTION_DETAIL_STALE_MS = CacheTTL.TRANSACTION_DETAIL
 export const TRANSACTION_DETAIL_GC_MS = CacheTTL.TRANSACTION_DETAIL
 
 /**
- * When prefetching from list rows / press-in, always hit the network in the
- * background even if the 7d display cache is still fresh.
+ * When prefetching for an imminent navigation (press-in, post-send, push tap),
+ * always hit the network in the background even if the 7d display cache is
+ * still fresh.
  */
 export const TRANSACTION_DETAIL_BACKGROUND_REFETCH_MS = 0
+
+/**
+ * Bulk list warming reuses anything fetched in the last minute. The warming
+ * effects re-run on every transactions-array identity change (each poll or
+ * realtime tick), so a 0 staleTime here meant dozens of forced detail
+ * requests per tick — a network storm that competed with user interactions.
+ */
+export const TRANSACTION_DETAIL_BULK_WARM_STALE_MS = 60_000
 
 export type TransactionDetailResponse = { transaction?: MobileTransactionRow }
 
@@ -192,6 +201,7 @@ export function prefetchTransactionDetail(
   qc: QueryClient,
   scope: Scope,
   txId: string,
+  options?: { staleTimeMs?: number },
 ): Promise<void> {
   const id = txId.trim()
   if (!id || id.startsWith("optimistic_")) return Promise.resolve()
@@ -199,7 +209,7 @@ export function prefetchTransactionDetail(
   return qc
     .prefetchQuery({
       ...transactionDetailQueryOptions(scope, txId),
-      staleTime: TRANSACTION_DETAIL_BACKGROUND_REFETCH_MS,
+      staleTime: options?.staleTimeMs ?? TRANSACTION_DETAIL_BACKGROUND_REFETCH_MS,
     })
     .then(() => undefined)
 }
@@ -225,7 +235,9 @@ export function prefetchRecentTransactionDetailsInBackground(
   for (const row of rows.slice(0, limit)) {
     const txId = transactionDetailLookupId(row)
     if (!txId) continue
-    void prefetchTransactionDetail(qc, scope, txId)
+    void prefetchTransactionDetail(qc, scope, txId, {
+      staleTimeMs: TRANSACTION_DETAIL_BULK_WARM_STALE_MS,
+    })
   }
 }
 

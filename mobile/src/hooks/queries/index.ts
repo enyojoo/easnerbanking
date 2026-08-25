@@ -36,4 +36,5 @@ export {
 export { useFxPairs, useFxQuote } from './use-fx'
 export type { FxPair } from './use-fx'
 export { useNotificationsQuery, useUnreadNotificationsQuery } from './use-notifications'
+export { useKycSubmissions, kycSubmissionsKey, KYC_SUBMISSIONS_STALE_MS } from './use-kyc-submissions'
 export type { NotificationRow } from './use-notifications'

@@ -1,21 +1,22 @@
 import React from 'react'
-import { PostHogProvider as PostHogSDKProvider } from 'posthog-react-native'
-import { getPostHog } from '../lib/posthog'
+import { schedulePostHogBootInit } from '../lib/posthog'
 
 interface PostHogProviderProps {
   children: React.ReactNode
 }
 
+/**
+ * Boot shim for PostHog. Nothing in the app consumes the posthog-react-native
+ * React context (`usePostHog` etc.) — all analytics go through `getPostHog()`
+ * — so wrapping the tree in the SDK provider only forced eager client
+ * construction (session-replay remote-config fetch + storage loads) on the
+ * boot critical path. Client creation is deferred until boot interactions
+ * settle; any earlier analytics call creates it on demand.
+ */
 export function PostHogProvider({ children }: PostHogProviderProps) {
-  const client = getPostHog()
+  React.useEffect(() => {
+    schedulePostHogBootInit()
+  }, [])
 
-  if (!client) {
-    return <>{children}</>
-  }
-
-  return (
-    <PostHogSDKProvider client={client} autocapture={false} debug={__DEV__}>
-      {children}
-    </PostHogSDKProvider>
-  )
+  return <>{children}</>
 }

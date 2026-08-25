@@ -33,6 +33,7 @@ import { prefetchIntercomModule, prepareIntercomMessenger } from '../lib/interco
 import { avatarImageUri, warmAvatarCacheAsync } from '../lib/avatarCache'
 import { useConsumerKycNoahSync } from '../hooks/useConsumerKycNoahSync'
 import { haptics } from '../lib/haptics'
+import { markTabSwitchEnd, markTabSwitchStart } from '../lib/coldStartMetrics'
 import { useResponsiveLayout } from '../contexts/ResponsiveLayoutContext'
 import { ResponsiveAppShell } from '../components/layout/ResponsiveAppShell'
 import { MobileAppLockShell } from '../components/MobileAppLockShell'
@@ -152,13 +153,21 @@ function MainTabs() {
 
   return (
     <Tab.Navigator
-      screenListeners={{
+      screenListeners={({ route }) => ({
         tabPress: () => {
           haptics.select()
+          // M0: measure tabPress → next screen focus as `mobile_tab_switch`.
+          markTabSwitchStart()
         },
-      }}
+        focus: () => {
+          markTabSwitchEnd(route.name)
+        },
+      })}
       screenOptions={{
         headerShown: false,
+        // Blurred tabs stay mounted (instant switch-back) but stop re-rendering
+        // on context/query ticks while hidden.
+        freezeOnBlur: true,
         tabBarStyle: hideTabBarOnWebShell
           ? { display: 'none', height: 0 }
           : {
@@ -291,6 +300,9 @@ function MainStack() {
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
+          // Screens beneath the top of the stack stop re-rendering on
+          // context/query ticks; they resume when refocused.
+          freezeOnBlur: true,
         }}
         screenListeners={webStackScreenListeners}
       >
@@ -447,18 +459,6 @@ function PinGateSetupStack() {
         component={PinSetupScreen}
         options={staticScreenTransitionOptions('PinSetupGate')}
         initialParams={{ mandatory: true }}
-      />
-    </Stack.Navigator>
-  )
-}
-
-function PinGateEntryStack() {
-  return (
-    <Stack.Navigator screenOptions={FLOW_STACK_SCREEN_OPTIONS} screenListeners={webStackScreenListeners}>
-      <Stack.Screen
-        name="PinEntryGate"
-        component={PinEntryScreen}
-        options={staticScreenTransitionOptions('PinEntryGate')}
       />
     </Stack.Navigator>
   )
@@ -639,19 +639,23 @@ export default function AppNavigator() {
     let cancelled = false
     void (async () => {
       await applyColdStartPinLockIfNeeded(user.id)
-      const setup = await isPinSetup(user.id)
+      // These are independent storage reads: run them concurrently instead of
+      // serially — this gate blocks the first real screen behind a spinner.
+      const [setup, idle, lockedFlag] = await Promise.all([
+        isPinSetup(user.id),
+        evaluateIdleLock(user.id),
+        isAppLocked(user.id),
+      ])
       if (cancelled) return
       if (!setup) {
         setPinGate('setup')
         return
       }
-      const idle = await evaluateIdleLock(user.id)
-      if (cancelled) return
       if (idle === 'signed_out') {
         await signOutRef.current()
         return
       }
-      const locked = idle === 'locked' || (await isAppLocked(user.id))
+      const locked = idle === 'locked' || lockedFlag
       setPinGate(locked ? 'pin' : 'main')
     })()
     return () => {
@@ -719,46 +723,12 @@ export default function AppNavigator() {
     }
   }, [onboardingCompleted])
 
-  // Poll for onboarding completion when showing onboarding screen
-  // This ensures we detect when user completes onboarding
-  useEffect(() => {
-    if (onboardingCompleted === false) {
-      // While onboarding is not completed, poll AsyncStorage to detect when it's completed
-      const interval = setInterval(async () => {
-        try {
-          const onboardingValue = await AsyncStorage.getItem(ONBOARDING_COMPLETED_KEY)
-          if (onboardingValue === 'true') {
-            setOnboardingCompleted(true)
-          }
-        } catch (error) {
-          console.error('Error polling onboarding status:', error)
-        }
-      }, 500) // Check every 500ms
-
-      return () => clearInterval(interval)
-    }
-  }, [onboardingCompleted])
-
-  // Poll for onboarding reset when showing auth screen (user clicked back button)
-  // This ensures we detect when user resets onboarding from auth screen
-  useEffect(() => {
-    if (onboardingCompleted === true && !user) {
-      // While showing auth screen and onboarding is completed, poll to detect if it was reset
-      const interval = setInterval(async () => {
-        try {
-          const onboardingValue = await AsyncStorage.getItem(ONBOARDING_COMPLETED_KEY)
-          if (onboardingValue !== 'true') {
-            // Onboarding was reset, update state to show onboarding again
-            setOnboardingCompleted(false)
-          }
-        } catch (error) {
-          console.error('Error polling onboarding status from auth:', error)
-        }
-      }, 500) // Check every 500ms
-
-      return () => clearInterval(interval)
-    }
-  }, [onboardingCompleted, user])
+  // NOTE: the 500ms AsyncStorage polling loops that used to watch
+  // ONBOARDING_COMPLETED_KEY are gone — every writer of that key
+  // (OnboardingScreen completion, AuthScreen back-button reset) already calls
+  // `global.triggerOnboardingCheck()` right after writing, and the AppState
+  // handler above re-checks on foreground. Polling storage at 2Hz forever on
+  // the auth/onboarding screens was pure overhead.
 
   // Expose function to trigger onboarding re-check (for AuthScreen back button)
   useEffect(() => {
@@ -882,25 +852,21 @@ export default function AppNavigator() {
     return <PinGateSetupStack key="pin-gate-setup" />
   }
 
-  if (Platform.OS === 'web' && (pinGate === 'main' || pinGate === 'pin')) {
+  /**
+   * Lock/unlock (M2.4): on both web and native, the main navigator stays
+   * mounted and the PIN entry renders as a full-screen overlay above it while
+   * locked. Swapping to a separate PinGateEntryStack (the old native path)
+   * remounted the entire tab navigator on every unlock, losing all navigation
+   * and screen state. First-time PIN *setup* keeps the stack swap above —
+   * the main app should not mount behind a mandatory setup gate.
+   */
+  if (user && (pinGate === 'main' || pinGate === 'pin')) {
     return (
       <MobileAppLockShell locked={pinGate === 'pin'}>
-        <ResponsiveAppShell>
+        <ResponsiveAppShell key="main-app-shell">
           <MainStack />
         </ResponsiveAppShell>
       </MobileAppLockShell>
-    )
-  }
-
-  if (user && pinGate === 'pin') {
-    return <PinGateEntryStack key="pin-gate-entry" />
-  }
-
-  if (user && pinGate === 'main') {
-    return (
-      <ResponsiveAppShell key="main-app-shell">
-        <MainStack />
-      </ResponsiveAppShell>
     )
   }
 

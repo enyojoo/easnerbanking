@@ -186,13 +186,31 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+export type ResolveMfaMode = 'post-sign-in' | 'cold-start'
+
 /**
  * Same strategy as business web: after `signInWithPassword`, AAL can be briefly wrong. Avoid treating
  * MFA as "not required" on the first read so we don't skip `MfaVerifyScreen` until a second attempt.
+ *
+ * `mode: 'cold-start'` skips the retry loop and the network `listFactors()`
+ * tail: a persisted session has no post-sign-in propagation race, and
+ * `getAuthenticatorAssuranceLevel()` is a purely local read (getSession + JWT
+ * decode) whose result cannot change between attempts. The loop used to run
+ * to exhaustion here — 12 × 50ms of pure delay plus a network round trip,
+ * twice per app launch — for every user without TOTP.
  */
 export async function resolvePostSignInMfaRequirement(
   client: SupabaseClient,
+  options?: { mode?: ResolveMfaMode },
 ): Promise<{ needsOtp: boolean; error: Error | null }> {
+  if (options?.mode === 'cold-start') {
+    const { data: aal, error } = await client.auth.mfa.getAuthenticatorAssuranceLevel()
+    if (error) {
+      return { needsOtp: false, error: new Error(error.message) }
+    }
+    return { needsOtp: isMfaStepRequired(aal), error: null }
+  }
+
   for (let i = 0; i < POST_SIGN_IN_AAL_ATTEMPTS; i++) {
     const { data: aal, error } = await client.auth.mfa.getAuthenticatorAssuranceLevel()
     if (error) {
@@ -242,7 +260,7 @@ export async function clearIncompleteMfaSessionOnColdStart(
     } = await client.auth.getSession()
     if (!session?.user) return false
 
-    const { needsOtp, error } = await resolvePostSignInMfaRequirement(client)
+    const { needsOtp, error } = await resolvePostSignInMfaRequirement(client, { mode: 'cold-start' })
     if (error || !needsOtp) return false
 
     await client.auth.signOut({ scope: 'local' })

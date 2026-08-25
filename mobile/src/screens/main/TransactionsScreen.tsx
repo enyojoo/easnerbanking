@@ -32,7 +32,7 @@ import { NavigationProps, Transaction } from '../../types'
 import { analytics } from '../../lib/analytics'
 import { useBalance } from '../../contexts/BalanceContext'
 import { useFocusRefreshAll } from '../../hooks/useFocusRefresh'
-import { useQueryClient } from '@tanstack/react-query'
+import { useIsRestoring, useQueryClient } from '@tanstack/react-query'
 import { useScope } from '../../query/scope'
 import { apiFetch } from '../../query/api-client'
 import { ACCOUNT_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
@@ -410,7 +410,10 @@ function TransactionsContent({ navigation }: NavigationProps) {
     const pages = txQuery.data?.pages ?? []
     return pages.flatMap((p) => (p.transactions ?? []) as CombinedTransaction[])
   }, [txQuery.data])
-  const loading = txQuery.isPending && transactions.length === 0
+  // Not "loading" while the persisted cache is restoring from disk — that
+  // takes milliseconds and flashing a skeleton over it reads as a slow app.
+  const isRestoringCache = useIsRestoring()
+  const loading = !isRestoringCache && txQuery.isPending && transactions.length === 0
 
   useEffect(() => {
     if (!scope || transactions.length === 0) return

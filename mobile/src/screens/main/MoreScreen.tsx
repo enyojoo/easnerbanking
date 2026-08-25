@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from 'react-native'
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native'
 import Constants from 'expo-constants'
 import { haptics } from '../../lib/haptics'
 import type { LucideIcon } from 'lucide-react-native'
@@ -22,9 +22,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { useAuth } from '../../contexts/AuthContext'
-import { NavigationProps, KYCSubmission } from '../../types'
-import { kycService } from '../../lib/kycService'
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { NavigationProps } from '../../types'
 import { colors, textStyles, borderRadius, spacing, fontFamily, userAvatarStyles } from '../../theme'
 import { useThemeColors } from '../../contexts/ThemePaletteContext'
 import { ripple } from '../../lib/androidRipple'
@@ -53,10 +51,10 @@ import {
 import { isGlobalBankingVerified } from '../../lib/compliance'
 import { VERIFICATION_STATUS_COPY } from '@easner/shared'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
-import { apiFetch } from '../../query/api-client'
 import { useScope } from '../../query/scope'
 import { useQueryClient } from '@tanstack/react-query'
-import { prefetchPayrollConnections } from '../../features/payroll/queries'
+import { prefetchPayrollConnections, usePayrollConnectionsSummary } from '../../features/payroll/queries'
+import { useKycSubmissions } from '../../hooks/queries/use-kyc-submissions'
 import {
   loadPayrollActivityVisible,
   markPayrollActivityVisible,
@@ -112,13 +110,21 @@ function MoreContent({ navigation }: NavigationProps) {
     },
     [navigation],
   )
-  const [kycSubmissions, setKycSubmissions] = useState<KYCSubmission[]>([])
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [mfaStatusLine, setMfaStatusLine] = useState('')
   /** False until MFA status is read from cache or `listFactors` – avoids showing the MFA banner while loading or on errors. */
   const [mfaStatusResolved, setMfaStatusResolved] = useState(false)
-  const [pendingPayrollCount, setPendingPayrollCount] = useState(0)
+  /**
+   * M3.4a: KYC submissions via TanStack (was: useState + hand-rolled 5-min
+   * AsyncStorage cache). The submissions data has no consumer in this screen
+   * today (the old state was written but never read); the query keeps the
+   * cache warm for verification flows without the bespoke storage layer.
+   */
+  useKycSubmissions()
+  /** M3.4a: payroll badge summary via TanStack (was: apiFetch into state on every focus). */
+  const payrollSummaryQuery = usePayrollConnectionsSummary()
+  const pendingPayrollCount = Number(payrollSummaryQuery.data?.pendingCount ?? 0)
   const [payrollActivityVisible, setPayrollActivityVisible] = useState(() =>
     Boolean(user?.id && peekPayrollActivityVisible(user.id)),
   )
@@ -138,7 +144,6 @@ function MoreContent({ navigation }: NavigationProps) {
     let active = true
     const userId = user?.id
 
-    setPendingPayrollCount(0)
     if (!userId) {
       setPayrollActivityVisible(false)
       return () => {
@@ -224,8 +229,6 @@ function MoreContent({ navigation }: NavigationProps) {
   useFocusEffect(
     useCallback(() => {
       if (!user?.id) return
-      let active = true
-      const userId = user.id
       const mem = peekMfaVerified(user.id)
       if (mem === true) {
         setMfaStatusLine('On')
@@ -242,78 +245,20 @@ function MoreContent({ navigation }: NavigationProps) {
         }
       }
       void refreshMfaStatus()
-      void apiFetch<{ pendingCount?: number; hasActivity?: boolean }>('/api/payroll/connections?summary=true')
-        .then((result) => {
-          if (!active) return
-          setPendingPayrollCount(Number(result.pendingCount ?? 0))
-          if (result.hasActivity === true) {
-            setPayrollActivityVisible(true)
-            void markPayrollActivityVisible(userId)
-            // Warm the full connections list so More → Payroll opens from cache
-            // instead of a long skeleton (same pattern as Recipients/Transactions).
-            void prefetchPayrollConnections(queryClient, userId)
-          }
-        })
-        .catch(() => undefined)
-
-      return () => {
-        active = false
-      }
-    }, [user?.id, refreshUserProfile, refreshMfaStatus, queryClient]),
+    }, [user?.id, refreshUserProfile, refreshMfaStatus]),
   )
 
-  // Refresh KYC submissions when screen comes into focus
+  // React to the payroll summary query (M3.4a): when activity exists, persist
+  // the visibility flag and warm the full connections list so More → Payroll
+  // opens from cache instead of a long skeleton.
+  const payrollHasActivity = payrollSummaryQuery.data?.hasActivity === true
   useEffect(() => {
-    if (Platform.OS === 'web' || !userProfile?.id) return
-
-    const fetchSubmissions = async () => {
-      try {
-        const submissions = await kycService.getByUserId(userProfile.id)
-        setKycSubmissions(submissions || [])
-
-        const CACHE_KEY = `easner_kyc_submissions_${userProfile.id}`
-        await AsyncStorage.setItem(
-          CACHE_KEY,
-          JSON.stringify({
-            value: submissions || [],
-            timestamp: Date.now(),
-          }),
-        )
-      } catch (error) {
-        console.error('Error fetching submissions:', error)
-      }
-    }
-
-    const loadKycSubmissions = async () => {
-      try {
-        const CACHE_KEY = `easner_kyc_submissions_${userProfile.id}`
-        const cached = await AsyncStorage.getItem(CACHE_KEY)
-
-        if (cached) {
-          const { value, timestamp } = JSON.parse(cached)
-          if (Date.now() - timestamp < 5 * 60 * 1000) {
-            setKycSubmissions(value || [])
-            // Always fetch fresh data in background
-            fetchSubmissions()
-            return
-          }
-        }
-
-        await fetchSubmissions()
-      } catch (error) {
-        console.error('Error loading KYC submissions:', error)
-      }
-    }
-
-    loadKycSubmissions()
-
-    // Set up focus listener to refresh when screen comes into focus
-    const unsubscribe = navigation.addListener('focus', () => {
-      fetchSubmissions()
-    })
-
-    return unsubscribe
-  }, [userProfile?.id, navigation])
+    const userId = user?.id
+    if (!userId || !payrollHasActivity) return
+    setPayrollActivityVisible(true)
+    void markPayrollActivityVisible(userId)
+    void prefetchPayrollConnections(queryClient, userId)
+  }, [payrollHasActivity, user?.id, queryClient])
 
   const getVerificationStatus = (): 'approved' | 'in_review' | 'take_action' => {
     const noahStatus =

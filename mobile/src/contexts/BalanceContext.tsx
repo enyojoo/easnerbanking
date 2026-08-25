@@ -178,10 +178,12 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
         await qc.refetchQueries({ queryKey: qk.wallets.root(scope), type: 'active' })
         return
       }
-      if (!query.isStale) return
-      await query.refetch()
+      // Equivalent of the old `query.isStale && query.refetch()`, but via the
+      // client so this callback doesn't depend on the per-render `query`
+      // object identity (which cascaded a new context value every render).
+      await qc.refetchQueries({ queryKey: qk.wallets.list(scope), type: 'active', stale: true })
     },
-    [qc, scope, query],
+    [qc, scope],
   )
 
   const updateBalanceOptimistically = useCallback<BalanceContextType['updateBalanceOptimistically']>(

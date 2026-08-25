@@ -1,4 +1,4 @@
-import { createBaseQueryClient } from '@easner/shared'
+import { createBaseQueryClient, refetchOnMountWhenInvalidated } from '@easner/shared'
 import type { QueryClient } from '@tanstack/react-query'
 
 /**
@@ -26,7 +26,9 @@ export function getMobileQueryClient(): QueryClient {
           // realtime + explicit pull-to-refresh drive the rest.
           refetchOnWindowFocus: false,
           refetchOnReconnect: false,
-          refetchOnMount: false,
+          // Cache-first, but a query invalidated while its screen was
+          // unmounted must refetch on remount or the invalidation is lost.
+          refetchOnMount: refetchOnMountWhenInvalidated,
         },
       },
     })

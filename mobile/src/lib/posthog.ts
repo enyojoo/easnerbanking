@@ -1,4 +1,4 @@
-import { Platform } from 'react-native'
+import { InteractionManager, Platform } from 'react-native'
 import PostHog, { type PostHogOptions } from 'posthog-react-native'
 
 const posthogKey = process.env.EXPO_PUBLIC_POSTHOG_KEY
@@ -32,11 +32,37 @@ function createPostHogClient(): PostHog | null {
   return posthog
 }
 
-// Eager init so session replay can fetch remote config before the first screen renders.
-export const posthogClient = createPostHogClient()
+/**
+ * Lazy init: constructing the client kicks off storage loads and a session-
+ * replay remote-config fetch. Doing that eagerly at module scope (the old
+ * `import './src/lib/posthog'` side effect in index.ts) put network + JS work
+ * on the bundle-eval critical path, before React even started. The client is
+ * created on first analytics use, or after boot interactions settle —
+ * whichever comes first. Lifecycle events ("Application Opened") are emitted
+ * at client init, so nothing is lost by the short deferral.
+ */
+export function getPostHog(): PostHog | null {
+  return createPostHogClient()
+}
 
-export function getPostHog() {
-  return posthogClient
+let bootInitScheduled = false
+
+/** Create the client once boot interactions settle (no-op if already created). */
+export function schedulePostHogBootInit(): void {
+  if (bootInitScheduled || posthog) return
+  bootInitScheduled = true
+  if (Platform.OS === 'web') {
+    const w = globalThis as { requestIdleCallback?: (cb: () => void) => number }
+    if (typeof w.requestIdleCallback === 'function') {
+      w.requestIdleCallback(() => void createPostHogClient())
+    } else {
+      setTimeout(() => void createPostHogClient(), 1_500)
+    }
+    return
+  }
+  InteractionManager.runAfterInteractions(() => {
+    createPostHogClient()
+  })
 }
 
 export { posthog }

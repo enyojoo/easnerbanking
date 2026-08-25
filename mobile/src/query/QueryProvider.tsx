@@ -1,14 +1,16 @@
 import React from 'react'
 import { AppState, AppStateStatus, Platform } from 'react-native'
-import { focusManager, useIsRestoring } from '@tanstack/react-query'
+import { focusManager, onlineManager, useIsRestoring } from '@tanstack/react-query'
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import { qk, type PersonalScope } from '@easner/shared'
 import { getMobileQueryClient } from './client'
 import {
   clearPersistedQueryCache,
   createMobileQueryPersister,
+  getRestoredQueryCacheOwnerId,
   MOBILE_APP_BUILD_ID,
   MOBILE_QUERY_MAX_AGE_MS,
+  setPersistedQueryCacheOwner,
   shouldPersistMobileQuery,
 } from './persister'
 import { PersonalScopeProvider, useScope } from './scope'
@@ -31,7 +33,7 @@ import {
  * Root Query provider for the mobile app. Owns:
  *   - one QueryClient for the lifetime of the JS bundle
  *   - AsyncStorage persistence (filtered to `meta.safePersist` queries)
- *   - AppState / NetInfo hooks for proper focus + online signals on RN
+ *   - AppState (native) / visibility (web) hooks for the focus signal
  *   - scope context for typed query keys
  *   - Supabase Realtime subscription for the active scope
  */
@@ -39,14 +41,47 @@ import {
 focusManager.setEventListener((handleFocus) => {
   if (Platform.OS === 'web') {
     if (typeof document === 'undefined') return () => {}
-    handleFocus(true)
-    return () => {}
+    // Real visibility tracking — the old branch latched focus to `true`
+    // forever, which made every per-hook `refetchOnWindowFocus: true` inert
+    // on the web target.
+    const onVisibility = () => handleFocus(document.visibilityState === 'visible')
+    onVisibility()
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('focus', onVisibility)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('focus', onVisibility)
+    }
   }
   const sub = AppState.addEventListener('change', (status: AppStateStatus) => {
     handleFocus(status === 'active')
   })
   return () => sub.remove()
 })
+
+/**
+ * Online signal (M3.2): with `networkMode: 'online'` and RN's absent
+ * `window.online` events, onlineManager was permanently `true` — queries
+ * fired into a dead network on airplane mode, and nothing resumed when
+ * connectivity returned. With NetInfo wired, TanStack pauses in-flight work
+ * offline and auto-resumes it online; the realtime resubscribe catch-up
+ * sweep handles data freshness for the gap. Guarded `require`: a dev client
+ * built before @react-native-community/netinfo was added must not crash —
+ * it just keeps the old always-online behavior until the next native build.
+ */
+if (Platform.OS !== 'web') {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const NetInfo = require('@react-native-community/netinfo').default
+    onlineManager.setEventListener((setOnline) =>
+      NetInfo.addEventListener((state: { isConnected: boolean | null }) => {
+        setOnline(state.isConnected !== false)
+      }),
+    )
+  } catch {
+    // Native module not present in this binary yet.
+  }
+}
 
 const qc = getMobileQueryClient()
 const mobilePersister = createMobileQueryPersister()
@@ -58,6 +93,8 @@ function AuthGatedCacheReset({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     const prev = lastUserIdRef.current
     const next = user?.id ?? null
+    // Keep the persister stamping payloads with the current owner (M3.5).
+    setPersistedQueryCacheOwner(next)
     if (prev && !next) {
       qc.cancelQueries()
       qc.clear()
@@ -66,6 +103,20 @@ function AuthGatedCacheReset({ children }: { children: React.ReactNode }) {
       qc.cancelQueries()
       qc.clear()
       void clearPersistedQueryCache()
+    } else if (next) {
+      // M3.5 boot-order case: the disk cache restored *before* auth resolved.
+      // If the restored payload was owned by a different user, drop it —
+      // otherwise user A's cached data could render under user B for the
+      // first few hundred ms on a shared device. `null` owner (legacy or
+      // pre-auth persist) is "unknown" and is left alone, matching the old
+      // behavior. The persister also refuses mismatched payloads when auth
+      // resolves first (see persister.ts deserialize).
+      const restoredOwner = getRestoredQueryCacheOwnerId()
+      if (typeof restoredOwner === 'string' && restoredOwner !== next) {
+        qc.cancelQueries()
+        qc.clear()
+        void clearPersistedQueryCache()
+      }
     }
     lastUserIdRef.current = next
   }, [user?.id])

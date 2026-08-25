@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react'
 import { Platform } from 'react-native'
 import * as Linking from 'expo-linking'
 import {
@@ -1433,12 +1433,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     await signOut()
   }, [signOut])
 
-  const value = {
-    user,
-    userProfile,
-    loading,
-    mfaPending,
-    mfaGateResolved,
+  /**
+   * Identity-stable context value: 41 `useAuth()` consumers (including every
+   * mounted tab screen) re-render whenever this changes, and this provider
+   * sits above the entire tree. Handlers are exposed through stable wrappers
+   * over a ref so the memoized value only changes when auth STATE changes.
+   */
+  const handlersRef = useRef({
     signIn,
     signInWithGoogle,
     signInWithApple,
@@ -1450,7 +1451,55 @@ export function AuthProvider({ children }: AuthProviderProps) {
     signOut,
     refreshUserProfile,
     applyPersonalSettingsFromServer,
-  }
+  })
+  useEffect(() => {
+    handlersRef.current = {
+      signIn,
+      signInWithGoogle,
+      signInWithApple,
+      resendSignupOtp,
+      verifySignupOtp,
+      verifyMfa,
+      cancelMfaSignIn,
+      signUp,
+      signOut,
+      refreshUserProfile,
+      applyPersonalSettingsFromServer,
+    }
+  })
+  const stableHandlers = useMemo(
+    () => ({
+      signIn: (email: string, password: string, rememberMe?: boolean) =>
+        handlersRef.current.signIn(email, password, rememberMe),
+      signInWithGoogle: () => handlersRef.current.signInWithGoogle(),
+      signInWithApple: () => handlersRef.current.signInWithApple(),
+      resendSignupOtp: (email: string) => handlersRef.current.resendSignupOtp(email),
+      verifySignupOtp: (email: string, otp: string) => handlersRef.current.verifySignupOtp(email, otp),
+      verifyMfa: (code: string) => handlersRef.current.verifyMfa(code),
+      cancelMfaSignIn: () => handlersRef.current.cancelMfaSignIn(),
+      signUp: (email: string, password: string, name: string, residenceCountry?: string) =>
+        handlersRef.current.signUp(email, password, name, residenceCountry),
+      signOut: (options?: { preserveOnboarding?: boolean }) => handlersRef.current.signOut(options),
+      refreshUserProfile: () => handlersRef.current.refreshUserProfile(),
+      applyPersonalSettingsFromServer: (
+        personal: PersonalSettingsPayload,
+        options?: { easetag?: string },
+      ) => handlersRef.current.applyPersonalSettingsFromServer(personal, options),
+    }),
+    [],
+  )
+
+  const value = useMemo<AuthContextType>(
+    () => ({
+      user,
+      userProfile,
+      loading,
+      mfaPending,
+      mfaGateResolved,
+      ...stableHandlers,
+    }),
+    [user, userProfile, loading, mfaPending, mfaGateResolved, stableHandlers],
+  )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

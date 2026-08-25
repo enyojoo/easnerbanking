@@ -29,8 +29,13 @@ export async function warmOperationalRecipientCaches(
   scope: PersonalScope,
   opts?: WarmOperationalRecipientCachesOpts,
 ): Promise<void> {
+  // `refetchType: 'active'` (M3.4b): mark everything stale, but only refetch
+  // queries with mounted observers. The old `'all'` forced network refetches of
+  // every unmounted beneficiaries query on each scope-ready/resume/push warm;
+  // unmounted ones now refetch naturally when their screen next mounts (the
+  // explicit list prefetch below still keeps the primary list warm).
   await qc
-    .invalidateQueries({ queryKey: qk.beneficiaries.root(scope), refetchType: 'all' })
+    .invalidateQueries({ queryKey: qk.beneficiaries.root(scope), refetchType: 'active' })
     .catch(() => undefined)
 
   await prefetchRecipientsList(qc, scope).catch(() => undefined)
