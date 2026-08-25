@@ -313,14 +313,14 @@ describe("gridKybApplicationStatusFromVerification", () => {
     ).toBe("in_review")
   })
 
-  it("treats Grid review job states as submitted and still editable", () => {
+  it("treats Grid review job states as in_review and not editable", () => {
     expect(
       gridKybApplicationStatusFromVerification({ verificationStatus: "IN_PROGRESS" }),
-    ).toBe("submitted")
+    ).toBe("in_review")
     expect(
       gridKybApplicationStatusFromVerification({ verificationStatus: "READY_FOR_VERIFICATION" }),
-    ).toBe("submitted")
-    expect(gridKybApplicationIsEditable("submitted")).toBe(true)
+    ).toBe("in_review")
+    expect(gridKybApplicationIsEditable("submitted")).toBe(false)
     expect(gridKybApplicationIsEditable("in_review")).toBe(false)
   })
 })

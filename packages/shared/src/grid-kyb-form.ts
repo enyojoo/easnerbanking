@@ -1098,7 +1098,7 @@ export function gridKybWizardReadiness(input: {
   const status = input.status ?? "draft"
   if (status === "approved") return "approved"
   if (input.remainingPointers > 0) return "needs_attention"
-  if (status === "in_review") return "in_review"
+  if (status === "in_review" || status === "submitted") return "in_review"
   const ready =
     Boolean(input.company.legalName.trim()) &&
     input.peopleCount > 0 &&
@@ -1126,9 +1126,13 @@ export function gridKybApplicationStatusFromVerification(input: {
   if (local === "rejected" || verification === "REJECTED") return "rejected"
   if (local === "hold") return "hold"
   if (verification === "RESOLVE_ERRORS") return "resolve_errors"
-  if (verification === "PENDING_MANUAL_REVIEW") return "in_review"
-  if (verification === "IN_PROGRESS" || verification === "READY_FOR_VERIFICATION") {
-    return "submitted"
+  // Grid review / job states: show the waiting screen (not editable resubmit).
+  if (
+    verification === "PENDING_MANUAL_REVIEW" ||
+    verification === "IN_PROGRESS" ||
+    verification === "READY_FOR_VERIFICATION"
+  ) {
+    return "in_review"
   }
   if (local === "pending") return "in_review"
   if (local === "in_progress") return "submitted"
@@ -1142,7 +1146,6 @@ export function gridKybApplicationIsEditable(status: string | null | undefined):
     s === "resolve_errors" ||
     s === "rejected" ||
     s === "hold" ||
-    s === "submitted" ||
     s === ""
   )
 }
