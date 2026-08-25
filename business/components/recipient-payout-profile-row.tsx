@@ -4,6 +4,7 @@ import type { ReactNode } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { CountryFlag } from "@/components/flags"
 import { getTokenIconUrl } from "@/lib/crypto-icons"
+import { normalizeProfileImageUrl } from "@/lib/image-cache"
 import {
   isWalletBeneficiary,
   resolvePayoutCountryCode,
@@ -76,7 +77,12 @@ export function RecipientPayoutProfileRow({
       <div className="relative mr-1 shrink-0">
         {avatarUrl ? (
           <Avatar className="h-10 w-10 border border-border">
-            <AvatarImage src={avatarUrl} alt="" />
+            {/*
+              Normalized (versioned) URL: the bare URL is a DIFFERENT string
+              from the one the warm bootstrap and the recipient list use, so
+              the same photo was fetched twice and always popped in here.
+            */}
+            <AvatarImage src={normalizeProfileImageUrl(avatarUrl) ?? avatarUrl} alt="" />
             <AvatarFallback>{recipientInitials(fullName)}</AvatarFallback>
           </Avatar>
         ) : isWallet && tokenIconUrl ? (

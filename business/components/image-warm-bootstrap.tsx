@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
-import { warmWebFlagCache } from "@easner/shared"
+import { warmAllWebFlagAssets, warmWebFlagCache } from "@easner/shared"
 import { useAuth } from "@/lib/auth-context"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { usePersonalProfileAvatar } from "@/lib/use-personal-profile-avatar"
@@ -14,7 +14,10 @@ export function ImageWarmBootstrap() {
   const { avatarUrl } = usePersonalProfileAvatar()
 
   useEffect(() => {
+    // Priority flags/tokens immediately, the full 204-flag set at idle — so
+    // country pickers (send recipient form, signup, KYB) arrive complete.
     warmWebFlagCache()
+    warmAllWebFlagAssets()
   }, [])
 
   useEffect(() => {

@@ -203,7 +203,7 @@ export type { CountryFlagProps, CurrencyFlagProps } from "./components/CountryFl
 export { StableImage } from "./components/StableImage"
 export type { StableImageProps } from "./components/StableImage"
 export { isImageWarm, markImageWarm, warmImageUrl, warmImageUrls } from "./image/image-warm-cache.web"
-export { warmWebFlagCache, warmWebCurrencyFlag } from "./flags/warm-flags.web"
+export { warmWebFlagCache, warmAllWebFlagAssets, warmWebCurrencyFlag } from "./flags/warm-flags.web"
 export { currencyToCountryCode, getCountryCodeForCurrency, normalizeCode } from "./flags/currency-mapping"
 export { getCurrencyCatalog, currencyDisplayName } from "./currencies/catalog"
 export type { CurrencyCatalogEntry } from "./currencies/catalog"

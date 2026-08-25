@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useRef, useState, type ImgHTMLAttributes } from "react"
-import { cn } from "../utils/cn"
 import { isImageWarm, markImageWarm, warmImageUrl } from "../image/image-warm-cache.web"
 
 export type StableImageProps = ImgHTMLAttributes<HTMLImageElement> & {
@@ -9,6 +8,22 @@ export type StableImageProps = ImgHTMLAttributes<HTMLImageElement> & {
   retainPrevious?: boolean
 }
 
+/**
+ * <img> that trusts the browser.
+ *
+ * An earlier version rendered every image at `opacity-0` until a JS-side
+ * warm-set said the URL had loaded — which meant even images sitting in the
+ * HTTP disk cache (flags are `immutable, max-age=1y`) stayed invisible until
+ * a JS round trip, and every surface popped in raggedly on each new tab.
+ * The gate also spawned a SECOND `new Image()` for a src already in the DOM.
+ *
+ * Now the image renders immediately: cached assets paint in the same frame,
+ * cold assets appear exactly when the browser has them (native behavior, no
+ * added delay). The JS warm-set is only used for `retainPrevious` swaps —
+ * when `src` changes on a mounted avatar/logo, the previous image stays
+ * visible until the replacement has actually loaded, so there is no blank
+ * gap — and to skip redundant warming elsewhere.
+ */
 export function StableImage({
   src,
   className,
@@ -18,9 +33,8 @@ export function StableImage({
   ...props
 }: StableImageProps) {
   const trimmed = typeof src === "string" ? src.trim() : ""
-  const previousSrcRef = useRef("")
+  const previousSrcRef = useRef(trimmed)
   const [displaySrc, setDisplaySrc] = useState(trimmed)
-  const [visible, setVisible] = useState(() => trimmed.length > 0 && isImageWarm(trimmed))
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
@@ -28,36 +42,31 @@ export function StableImage({
     if (!trimmed) {
       previousSrcRef.current = ""
       setDisplaySrc("")
-      setVisible(false)
       return
     }
 
-    if (isImageWarm(trimmed)) {
-      previousSrcRef.current = trimmed
-      setDisplaySrc(trimmed)
-      setVisible(true)
-      return
+    const previous = previousSrcRef.current
+    if (
+      retainPrevious &&
+      previous &&
+      previous !== trimmed &&
+      !isImageWarm(trimmed)
+    ) {
+      // Src swap on a mounted image: keep showing the old one, warm the new
+      // one off-DOM, swap when it can paint instantly.
+      let cancelled = false
+      warmImageUrl(trimmed, () => {
+        if (cancelled) return
+        previousSrcRef.current = trimmed
+        setDisplaySrc(trimmed)
+      })
+      return () => {
+        cancelled = true
+      }
     }
 
-    let cancelled = false
-    warmImageUrl(trimmed, () => {
-      if (cancelled) return
-      previousSrcRef.current = trimmed
-      setDisplaySrc(trimmed)
-      setVisible(true)
-    })
-
-    if (retainPrevious && previousSrcRef.current && previousSrcRef.current !== trimmed) {
-      setDisplaySrc(previousSrcRef.current)
-      setVisible(true)
-    } else {
-      setDisplaySrc(trimmed)
-      setVisible(false)
-    }
-
-    return () => {
-      cancelled = true
-    }
+    previousSrcRef.current = trimmed
+    setDisplaySrc(trimmed)
   }, [trimmed, retainPrevious])
 
   if (!displaySrc || failed) return null
@@ -67,13 +76,11 @@ export function StableImage({
     <img
       {...props}
       src={displaySrc}
-      className={cn(className, !visible && "opacity-0")}
-      decoding="async"
+      className={className}
       draggable={props.draggable ?? false}
       onLoad={(event) => {
         markImageWarm(displaySrc)
         previousSrcRef.current = displaySrc
-        setVisible(true)
         onLoad?.(event)
       }}
       onError={(event) => {
