@@ -239,6 +239,7 @@ function disableAllPayInReceiveFlags(metadata: Record<string, unknown>, corridor
   applyPayInReceiveFlags(metadata, corridor, "noah", false)
   applyPayInReceiveFlags(metadata, corridor, "yellowcard", false)
   applyPayInReceiveFlags(metadata, corridor, "grid", false)
+  delete metadata.pay_in_provider
 }
 
 function applyPayoutChoiceToCorridor(

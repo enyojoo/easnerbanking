@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { currencyDisplayName, countryDisplayName } from "@easner/shared"
 import { listYellowcardChannels } from "@/lib/yellowcard/channels"
 import { isExcludedPayoutCorridorCountry, isExcludedPayoutCorridorTarget } from "@/lib/payout-corridors-exclusions"
+import { mergeYcCapabilityMetadataForSync } from "@/lib/fx/corridor-office-ops-guard"
 import { upsertPayoutCorridor } from "@/lib/payout-corridors-upsert"
 
 export type YcCorridorTarget = {
@@ -72,19 +73,6 @@ function ycRouting() {
   return [{ provider: "yellowcard", priority: 1, settlement_asset: "USDC" }]
 }
 
-function mergeYcCapabilityMetadata(
-  existing: unknown,
-  target: YcCorridorTarget,
-): Record<string, unknown> {
-  const meta =
-    existing && typeof existing === "object" && !Array.isArray(existing)
-      ? { ...(existing as Record<string, unknown>) }
-      : {}
-  if (target.ycSend) meta.yc_send = true
-  if (target.ycReceive) meta.yc_receive = true
-  return meta
-}
-
 export async function syncYcPayoutCorridors(admin: SupabaseClient): Promise<YcCorridorSyncResult> {
   const channels = await listYellowcardChannels()
   const targets = collectYcCorridorTargets(channels)
@@ -115,7 +103,7 @@ export async function syncYcPayoutCorridors(admin: SupabaseClient): Promise<YcCo
     const existing = existingByKey.get(key)
     const currencyName = currencyDisplayName(target.currencyCode)
     const countryName = existing?.country_name?.trim() || countryDisplayNameFromCode(target.countryCode)
-    const metadata = mergeYcCapabilityMetadata(existing?.metadata, target)
+    const metadata = mergeYcCapabilityMetadataForSync(existing?.metadata, target)
 
     if (!existing) {
       const result = await upsertPayoutCorridor(admin, {

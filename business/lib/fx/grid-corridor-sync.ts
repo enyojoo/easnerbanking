@@ -17,6 +17,10 @@ import {
   syncCorridorLiveFlagsWithEnabled,
 } from "@/lib/fx/orphan-payout-corridor-cleanup"
 import { isExcludedPayoutCorridorCountry, isExcludedPayoutCorridorTarget } from "@/lib/payout-corridors-exclusions"
+import {
+  gridCapabilityMetadataChanged,
+  mergeGridCapabilityMetadataForSync,
+} from "@/lib/fx/corridor-office-ops-guard"
 import { upsertPayoutCorridor } from "@/lib/payout-corridors-upsert"
 
 const BRIDGE_CURRENCIES = new Set(["USD", "USDC", "USDT"])
@@ -149,28 +153,6 @@ function gridOnlyRouting() {
   return [{ provider: "grid", priority: 1, settlement_asset: "USDC" }]
 }
 
-function routingHasGrid(providerRouting: unknown): boolean {
-  if (!Array.isArray(providerRouting)) return false
-  return providerRouting.some(
-    (entry) =>
-      entry &&
-      typeof entry === "object" &&
-      String((entry as { provider?: string }).provider ?? "")
-        .trim()
-        .toLowerCase() === "grid",
-  )
-}
-
-function mergeGridCapabilityMetadata(existing: unknown): Record<string, unknown> {
-  const meta =
-    existing && typeof existing === "object" && !Array.isArray(existing)
-      ? { ...(existing as Record<string, unknown>) }
-      : {}
-  meta.grid_send = true
-  meta.grid_receive = true
-  return meta
-}
-
 /** Insert missing payout_corridors rows for Grid discoveries/rates and mark Grid capability on existing rows. */
 export async function syncGridPayoutCorridors(
   admin: SupabaseClient,
@@ -222,37 +204,29 @@ export async function syncGridPayoutCorridors(
         currency_name: currencyName,
         enabled: false,
         provider_routing: gridOnlyRouting(),
-        metadata: mergeGridCapabilityMetadata(null),
+        metadata: mergeGridCapabilityMetadataForSync(null),
       })
       if (result.ok) inserted++
       else skipped++
       continue
     }
 
-    const metadata = mergeGridCapabilityMetadata(existing.metadata)
+    const metadata = mergeGridCapabilityMetadataForSync(existing.metadata)
+    const priorMeta = (existing.metadata ?? {}) as Record<string, unknown>
+    const metadataChanged =
+      gridCapabilityMetadataChanged(priorMeta, metadata) || !existing.country_name?.trim()
+
+    if (!metadataChanged) {
+      skipped++
+      continue
+    }
+
     const updates: Record<string, unknown> = {
       metadata,
       updated_at: new Date().toISOString(),
     }
     if (!existing.country_name?.trim()) {
       updates.country_name = countryName
-    }
-    if (!routingHasGrid(existing.provider_routing)) {
-      const routing = Array.isArray(existing.provider_routing) ? [...existing.provider_routing] : []
-      routing.push({ provider: "grid", priority: routing.length + 1, settlement_asset: "USDC" })
-      updates.provider_routing = routing
-    }
-
-    const priorMeta = (existing.metadata ?? {}) as Record<string, unknown>
-    const metadataChanged =
-      priorMeta.grid_send !== true ||
-      priorMeta.grid_receive !== true ||
-      !existing.country_name?.trim()
-    const routingChanged = updates.provider_routing !== undefined
-
-    if (!metadataChanged && !routingChanged) {
-      skipped++
-      continue
     }
 
     const { error: upErr } = await admin

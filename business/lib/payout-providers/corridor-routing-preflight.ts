@@ -78,18 +78,20 @@ export function preflightCorridorRoutingPatch(input: {
       ? input.providerRouting
       : input.existing?.provider_routing,
   )
-  const metadata = {
-    ...((input.existing?.metadata as Record<string, unknown> | null | undefined) ?? {}),
-    ...((input.metadata as Record<string, unknown> | null | undefined) ?? {}),
-  }
+  // PATCH replaces metadata wholesale – do not merge with existing or deleted keys reappear.
+  const metadata =
+    input.metadata !== undefined
+      ? ((input.metadata as Record<string, unknown> | null) ?? {})
+      : ((input.existing?.metadata as Record<string, unknown> | null | undefined) ?? {})
   const fieldsSchema =
     input.fieldsSchema !== undefined ? input.fieldsSchema : input.existing?.fields_schema
+  const routingPatch = input.providerRouting !== undefined
 
   const issues: CorridorRoutingPreflightIssue[] = []
 
   // Empty routing = payout disabled – allowed.
   if (routing.length === 0) {
-    if (input.metadata !== undefined || input.providerRouting !== undefined) {
+    if (routingPatch) {
       const payIn = String(metadata.pay_in_provider ?? "").trim().toLowerCase()
       if (payIn === "yellowcard" && metadata.yc_receive_enabled !== true && metadata.yc_receive === true) {
         issues.push({
@@ -110,29 +112,32 @@ export function preflightCorridorRoutingPatch(input: {
     return issues
   }
 
-  if (primary === "yellowcard" && metadata.yc_send_enabled === false) {
-    issues.push({
-      code: "SEND_FLAG_DISABLED",
-      message: "Yellowcard is primary payout but yc_send_enabled is false.",
-    })
-  }
-  if (primary === "grid" && metadata.grid_send_enabled === false) {
-    issues.push({
-      code: "SEND_FLAG_DISABLED",
-      message: "Grid is primary payout but grid_send_enabled is false.",
-    })
-  }
-  if (primary === "noah" && metadata.noah_send_enabled === false) {
-    issues.push({
-      code: "SEND_FLAG_DISABLED",
-      message: "Noah is primary payout but noah_send_enabled is false.",
-    })
+  // Only enforce routing ↔ send-flag alignment when Office is actively changing routing.
+  if (routingPatch) {
+    if (primary === "yellowcard" && metadata.yc_send_enabled === false) {
+      issues.push({
+        code: "SEND_FLAG_DISABLED",
+        message: "Yellowcard is primary payout but yc_send_enabled is false.",
+      })
+    }
+    if (primary === "grid" && metadata.grid_send_enabled === false) {
+      issues.push({
+        code: "SEND_FLAG_DISABLED",
+        message: "Grid is primary payout but grid_send_enabled is false.",
+      })
+    }
+    if (primary === "noah" && metadata.noah_send_enabled === false) {
+      issues.push({
+        code: "SEND_FLAG_DISABLED",
+        message: "Noah is primary payout but noah_send_enabled is false.",
+      })
+    }
   }
 
   if (!schemaReadyForProvider(fieldsSchema, primary)) {
     // Only block when Office is actively setting payout routing – metadata-only
     // patches should not trap corridors that still need a Sync.
-    if (input.providerRouting !== undefined) {
+    if (routingPatch) {
       issues.push({
         code: "SCHEMA_PENDING",
         message: `fields_schema for ${primary} is missing or pending. Run Sync corridors before enabling this provider.`,
@@ -140,24 +145,26 @@ export function preflightCorridorRoutingPatch(input: {
     }
   }
 
-  const payIn = String(metadata.pay_in_provider ?? "").trim().toLowerCase()
-  if (payIn === "yellowcard" && metadata.yc_receive_enabled === false) {
-    issues.push({
-      code: "RECEIVE_FLAG_DISABLED",
-      message: "pay_in_provider is yellowcard but yc_receive_enabled is false.",
-    })
-  }
-  if (payIn === "grid" && metadata.grid_receive_enabled === false) {
-    issues.push({
-      code: "RECEIVE_FLAG_DISABLED",
-      message: "pay_in_provider is grid but grid_receive_enabled is false.",
-    })
-  }
-  if (payIn === "noah" && metadata.noah_receive_enabled === false) {
-    issues.push({
-      code: "RECEIVE_FLAG_DISABLED",
-      message: "pay_in_provider is noah but noah_receive_enabled is false.",
-    })
+  if (routingPatch) {
+    const payIn = String(metadata.pay_in_provider ?? "").trim().toLowerCase()
+    if (payIn === "yellowcard" && metadata.yc_receive_enabled === false) {
+      issues.push({
+        code: "RECEIVE_FLAG_DISABLED",
+        message: "pay_in_provider is yellowcard but yc_receive_enabled is false.",
+      })
+    }
+    if (payIn === "grid" && metadata.grid_receive_enabled === false) {
+      issues.push({
+        code: "RECEIVE_FLAG_DISABLED",
+        message: "pay_in_provider is grid but grid_receive_enabled is false.",
+      })
+    }
+    if (payIn === "noah" && metadata.noah_receive_enabled === false) {
+      issues.push({
+        code: "RECEIVE_FLAG_DISABLED",
+        message: "pay_in_provider is noah but noah_receive_enabled is false.",
+      })
+    }
   }
 
   return issues

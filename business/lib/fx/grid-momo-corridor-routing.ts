@@ -6,6 +6,7 @@ import {
   isGridMomoOnlyCorridor,
   listGridMomoOnlyCorridorPairs,
 } from "@easner/shared"
+import { corridorHasConfiguredGridOps } from "@/lib/fx/corridor-office-ops-guard"
 import { upsertPayoutCorridor } from "@/lib/payout-corridors-upsert"
 
 type CorridorRow = {
@@ -55,13 +56,7 @@ function gridWasPrimaryRouting(raw: unknown): boolean {
 }
 
 function bankRowHasGridOps(meta: Record<string, unknown>): boolean {
-  return (
-    meta.grid_send === true ||
-    meta.grid_receive === true ||
-    meta.grid_send_enabled === true ||
-    meta.grid_receive_enabled === true ||
-    String(meta.cross_border_provider ?? "").trim().toLowerCase() === "grid"
-  )
+  return corridorHasConfiguredGridOps(meta)
 }
 
 function applyGridOpsFromBankToMobile(
@@ -69,8 +64,6 @@ function applyGridOpsFromBankToMobile(
   mobileMeta: Record<string, unknown>,
 ): Record<string, unknown> {
   const out = { ...mobileMeta }
-  if (bankMeta.grid_send === true) out.grid_send = true
-  if (bankMeta.grid_receive === true) out.grid_receive = true
   if (bankMeta.grid_send_enabled === true) out.grid_send_enabled = true
   if (bankMeta.grid_receive_enabled === true) out.grid_receive_enabled = true
   if (String(bankMeta.cross_border_provider ?? "").trim().toLowerCase() === "grid") {
@@ -80,10 +73,8 @@ function applyGridOpsFromBankToMobile(
   return out
 }
 
-function stripGridOps(meta: Record<string, unknown>): Record<string, unknown> {
+function stripConfiguredGridOfficeOps(meta: Record<string, unknown>): Record<string, unknown> {
   const out = { ...meta }
-  delete out.grid_send
-  delete out.grid_receive
   delete out.grid_send_enabled
   delete out.grid_receive_enabled
   if (String(out.cross_border_provider ?? "").trim().toLowerCase() === "grid") {
@@ -91,6 +82,50 @@ function stripGridOps(meta: Record<string, unknown>): Record<string, unknown> {
     delete out.cross_border_provider
   }
   return out
+}
+
+function stripGridOps(meta: Record<string, unknown>): Record<string, unknown> {
+  const out = stripConfiguredGridOfficeOps(meta)
+  delete out.grid_send
+  delete out.grid_receive
+  return out
+}
+
+function rowHasOrphanGridRouting(row: CorridorRow): boolean {
+  const hasGridRouting = parseRouting(row.provider_routing).some(
+    (e) => String(e.provider ?? "").trim().toLowerCase() === "grid",
+  )
+  if (!hasGridRouting) return false
+  return !corridorHasConfiguredGridOps(rowMetadata(row))
+}
+
+async function clearStaleGridOfficeOpsOnRow(
+  admin: SupabaseClient,
+  row: CorridorRow,
+): Promise<boolean> {
+  const meta = rowMetadata(row)
+  const strippedMeta = stripConfiguredGridOfficeOps(meta)
+  const strippedRouting = routingWithoutGrid(row.provider_routing)
+  const routingChanged = parseRouting(row.provider_routing).length !== strippedRouting.length
+  const metaChanged = JSON.stringify(strippedMeta) !== JSON.stringify(meta)
+  if (!routingChanged && !metaChanged) return false
+
+  const stillLive = isCustomerFacingFiatCorridorLive({
+    enabled: row.enabled,
+    provider_routing: strippedRouting,
+    metadata: strippedMeta,
+  })
+
+  const { error: upErr } = await admin
+    .from("payout_corridors")
+    .update({
+      metadata: strippedMeta,
+      provider_routing: strippedRouting,
+      enabled: stillLive,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", row.id)
+  return !upErr
 }
 
 function stripGridFieldsSchema(fieldsSchema: Record<string, unknown> | null): Record<string, unknown> | null {
@@ -146,6 +181,10 @@ export async function realignGridMomoCorridorRouting(
     const bankMeta = bank ? rowMetadata(bank) : {}
 
     if (!bank || !bankRowHasGridOps(bankMeta)) {
+      let changed = false
+      if (bank && rowHasOrphanGridRouting(bank)) {
+        if (await clearStaleGridOfficeOpsOnRow(admin, bank)) changed = true
+      }
       if (!mobile) {
         const countryName = countryDisplayName(pair.countryCode) || pair.countryCode
         const result = await upsertPayoutCorridor(admin, {
@@ -161,10 +200,12 @@ export async function realignGridMomoCorridorRouting(
           skipped++
           continue
         }
-        realigned++
-      } else {
-        skipped++
+        changed = true
+      } else if (rowHasOrphanGridRouting(mobile)) {
+        if (await clearStaleGridOfficeOpsOnRow(admin, mobile)) changed = true
       }
+      if (changed) realigned++
+      else skipped++
       continue
     }
 
