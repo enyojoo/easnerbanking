@@ -156,19 +156,21 @@ export function SendRecipientPicker({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="w-full space-y-2">
       <Label className="text-muted-foreground">{label}</Label>
       <button
         type="button"
         onClick={() => setIsPickerOpen(true)}
-        className="flex w-full items-center justify-between rounded-lg border border-input bg-background px-4 py-3 text-left transition-colors hover:bg-muted/50 focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-ring"
+        className="flex h-[72px] w-full min-w-0 items-center justify-between gap-3 rounded-xl border-2 border-input bg-background px-6 text-left transition-colors hover:bg-muted/50 focus:outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
       >
-        {selected ? (
-          <SendSelectedRecipientSummary beneficiary={selected} />
-        ) : (
-          <span className="text-muted-foreground">Select recipient</span>
-        )}
-        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          {selected ? (
+            <SendSelectedRecipientSummary beneficiary={selected} />
+          ) : (
+            <span className="text-muted-foreground">Select recipient</span>
+          )}
+        </div>
+        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
       </button>
 
       <Dialog

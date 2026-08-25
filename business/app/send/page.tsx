@@ -1623,7 +1623,7 @@ export default function SendPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="mx-auto w-full max-w-2xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Send money</h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -1753,7 +1753,7 @@ export default function SendPage() {
           <button
             type="button"
             onClick={() => setSourceSheetOpen(true)}
-            className="flex w-full items-center justify-between rounded-lg border border-input bg-background px-4 py-3 text-left transition-colors hover:bg-muted/50 focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-ring"
+            className="flex h-[72px] w-full items-center justify-between rounded-xl border-2 border-input bg-background px-6 text-left transition-colors hover:bg-muted/50 focus:outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
           >
             <div className="flex items-center gap-2">
               <span className="flex items-center">
