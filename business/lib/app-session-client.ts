@@ -37,37 +37,43 @@ export async function ensureBusinessAppSession(force = false): Promise<boolean> 
   }
 
   appSessionPromise = (async () => {
-    const supabase = createSupabaseBrowser()
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
+    try {
+      const supabase = createSupabaseBrowser()
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
 
-    const accessToken = session?.access_token
-    if (!accessToken) {
-      clearBusinessAppSessionCookie()
-      return false
+      const accessToken = session?.access_token
+      if (!accessToken) {
+        clearBusinessAppSessionCookie()
+        return false
+      }
+
+      const res = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accessToken }),
+        credentials: "omit",
+      })
+
+      if (!res.ok) {
+        clearBusinessAppSessionCookie()
+        return hasUsableBusinessAppSessionCookie()
+      }
+
+      const json = (await res.json()) as { token?: string; expiresIn?: number }
+      if (!json.token || !json.expiresIn) {
+        clearBusinessAppSessionCookie()
+        return hasUsableBusinessAppSessionCookie()
+      }
+
+      setBusinessAppSessionCookie(json.token, json.expiresIn)
+      return true
+    } catch {
+      // Session mint can fail on a tab wake / dev-server blip; keep using an
+      // existing short-lived cookie instead of failing every `/api/*` call.
+      return hasUsableBusinessAppSessionCookie()
     }
-
-    const res = await fetch("/api/auth/session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ accessToken }),
-      credentials: "omit",
-    })
-
-    if (!res.ok) {
-      clearBusinessAppSessionCookie()
-      return false
-    }
-
-    const json = (await res.json()) as { token?: string; expiresIn?: number }
-    if (!json.token || !json.expiresIn) {
-      clearBusinessAppSessionCookie()
-      return false
-    }
-
-    setBusinessAppSessionCookie(json.token, json.expiresIn)
-    return true
   })().finally(() => {
     appSessionPromise = null
   })

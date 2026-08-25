@@ -12,6 +12,7 @@ import {
   canDisplayProvisionedFinancialData,
   canPerformNoahMoneyMovement,
 } from "@/lib/compliance-display"
+import { formatUserFacingFetchError, isFatalQueryFailure } from "@/lib/query/fetch-errors"
 
 type VaJson = {
   hasAccount?: boolean
@@ -183,16 +184,13 @@ export function useBusinessAccountRows() {
     () => virtualAccountsQuery.data ?? {},
     [virtualAccountsQuery.data],
   )
+  // Background refresh failures keep cached balances — only surface errors with no data.
   const loadError =
-    walletQuery.error instanceof Error
-      ? walletQuery.error.message
-      : virtualAccountsQuery.error instanceof Error
-        ? virtualAccountsQuery.error.message
-        : walletQuery.error
-          ? String(walletQuery.error)
-          : virtualAccountsQuery.error
-            ? String(virtualAccountsQuery.error)
-            : null
+    isFatalQueryFailure(walletQuery)
+      ? formatUserFacingFetchError(walletQuery.error, "Couldn’t load account balances")
+      : isFatalQueryFailure(virtualAccountsQuery)
+        ? formatUserFacingFetchError(virtualAccountsQuery.error, "Couldn’t load account details")
+        : null
 
   const accountRows: Account[] = useMemo(() => {
     // Mirror mobile Receive: always show USD/EUR cards. When KYB is incomplete, Deposit

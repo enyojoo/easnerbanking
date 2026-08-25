@@ -6,6 +6,7 @@ import type { TransactionWithSource } from "@/lib/transactions"
 import { useTransactionsList } from "@/hooks/queries/use-transactions"
 import { useScope } from "@/lib/query/scope"
 import { useIsPostUnlockResumeActive } from "@/lib/post-unlock-resume-context"
+import { formatUserFacingFetchError, isFatalQueryFailure } from "@/lib/query/fetch-errors"
 
 /**
  * Compat shim over `useTransactionsList`.
@@ -39,7 +40,10 @@ export function useTransactionsCached() {
   return {
     data: flattened,
     loading,
-    error: query.error instanceof Error ? query.error.message : null,
+    // Background refresh failures keep cached pages — only surface errors with no data.
+    error: isFatalQueryFailure(query)
+      ? formatUserFacingFetchError(query.error, "Couldn’t load transactions")
+      : null,
     refetch: () => query.refetch(),
     isRefetching: query.isFetching,
     fetchNextPage: query.fetchNextPage,

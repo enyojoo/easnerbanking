@@ -3,14 +3,18 @@
 import type React from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
+import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { TransactionDetailsPanel } from "@/components/transaction-details-panel"
-import { useTransactionDetail } from "@/hooks/queries/use-transactions"
+import { findCachedTransactionForDetail, useTransactionDetail } from "@/hooks/queries/use-transactions"
 import { useQueryFirstLoad } from "@/lib/query/loading-state"
+import { formatUserFacingFetchError, isFatalQueryFailure } from "@/lib/query/fetch-errors"
+import { useScope } from "@/lib/query/scope"
 import {
   normalizeEasnerTransactionIdForLookup,
   resolveTransactionDetailReturnPath,
 } from "@/lib/easner-transaction-id"
+
 import { ArrowLeft, Loader2 } from "lucide-react"
 
 /**
@@ -30,14 +34,21 @@ export function TransactionDetailView({ rawId }: { rawId: string }) {
   const idForQuery = lookupId.trim() || null
   const router = useRouter()
   const searchParams = useSearchParams()
+  const queryClient = useQueryClient()
+  const { scope } = useScope()
   const returnPath = resolveTransactionDetailReturnPath(searchParams.get("returnTo"))
   const handleBack = () => {
     if (returnPath) router.replace(returnPath)
     else router.back()
   }
   const detailQuery = useTransactionDetail(idForQuery)
-  const { data, isError, error } = detailQuery
+  const { data, error, refetch } = detailQuery
+  const cachedFallback =
+    idForQuery ? findCachedTransactionForDetail(queryClient, idForQuery, scope) : undefined
+  // Prefer live query data; fall back to list/detail cache on refresh blips — no soft error UI.
+  const resolvedTransaction = data ?? cachedFallback ?? null
   const firstLoad = useQueryFirstLoad(detailQuery)
+  const fatalError = isFatalQueryFailure(detailQuery) && !resolvedTransaction
 
   if (!decoded || !idForQuery) {
     return (
@@ -56,7 +67,7 @@ export function TransactionDetailView({ rawId }: { rawId: string }) {
     )
   }
 
-  const showLoading = firstLoad && !isError
+  const showLoading = firstLoad && !fatalError
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -73,13 +84,18 @@ export function TransactionDetailView({ rawId }: { rawId: string }) {
         <div className="flex justify-center py-16">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-label="Loading" />
         </div>
-      : isError ?
-        <p className="text-sm text-destructive">
-          {error instanceof Error ? error.message : "Could not load transaction"}
-        </p>
+      : fatalError ?
+        <div className="space-y-3">
+          <p className="text-sm text-destructive">
+            {formatUserFacingFetchError(error, "Could not load transaction")}
+          </p>
+          <Button type="button" variant="outline" size="sm" onClick={() => void refetch()}>
+            Try again
+          </Button>
+        </div>
       : (
         <TransactionDetailsPanel
-          transaction={(data ?? null) as React.ComponentProps<typeof TransactionDetailsPanel>["transaction"]}
+          transaction={resolvedTransaction as React.ComponentProps<typeof TransactionDetailsPanel>["transaction"]}
           omitTrackStatus
         />
       )}

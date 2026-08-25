@@ -37,8 +37,12 @@ import {
 import { resolveReportingAmountForFeed } from "@easner/shared"
 
 export function DashboardPageClient() {
-  const { data: rows, loading: listLoading, error: transactionsError, refetch: refetchTransactions } =
-    useTransactionsCached()
+  const {
+    data: rows,
+    loading: listLoading,
+    error: transactionsError,
+    refetch: refetchTransactions,
+  } = useTransactionsCached()
   const {
     balances,
     baseCurrency,
@@ -134,9 +138,16 @@ export function DashboardPageClient() {
         (hasAuthoritativeBalances ? computedPrimaryBalanceText : zeroPrimaryBalanceText))
     : MASK
 
+  // Soft refresh failures keep cached balances/activity. Full-page error only when
+  // there is nothing usable to render (no activity rows and no balance to show).
   const loadError = transactionsError || accountsError
+  const hasUsableCachedDashboard =
+    rows.length > 0 ||
+    hasAuthoritativeBalances ||
+    Boolean(lastStableBalanceText) ||
+    listLoading
 
-  if (loadError) {
+  if (loadError && !hasUsableCachedDashboard) {
     return (
       <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4 p-6 text-center">
         <p className="text-sm text-destructive">{loadError}</p>

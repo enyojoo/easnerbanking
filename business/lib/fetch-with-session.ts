@@ -1,7 +1,26 @@
 "use client"
 
 import { ensureBusinessAppSession } from "@/lib/app-session-client"
+import { isTransientNetworkError } from "@/lib/query/fetch-errors"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function fetchWithNetworkRetry(doFetch: () => Promise<Response>): Promise<Response> {
+  let lastErr: unknown
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await doFetch()
+    } catch (err) {
+      lastErr = err
+      if (!isTransientNetworkError(err) || attempt >= 2) break
+      await sleep(Math.min(250 * 2 ** attempt, 1_500))
+    }
+  }
+  throw lastErr
+}
 
 /**
  * Authenticated same-origin `/api/*` calls for the business app:
@@ -12,6 +31,7 @@ import { createSupabaseBrowser } from "@/lib/supabase/browser"
  * `fetch` with default credentials, not this helper.
  *
  * On **401**, refresh the session once and retry.
+ * On transient network errors, retry a few times before surfacing failure.
  */
 export async function fetchWithSession(
   input: RequestInfo | URL,
@@ -20,7 +40,7 @@ export async function fetchWithSession(
   const supabase = createSupabaseBrowser()
   await ensureBusinessAppSession()
 
-  const doFetch = () => fetch(input, { ...init, credentials: "same-origin" })
+  const doFetch = () => fetchWithNetworkRetry(() => fetch(input, { ...init, credentials: "same-origin" }))
 
   let res = await doFetch()
 
