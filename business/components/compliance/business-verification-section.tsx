@@ -13,6 +13,12 @@ import { useBusinessProfile } from "@/lib/use-business-profile"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { BUSINESS_VERIFICATION_PRODUCTS } from "@/lib/compliance-tier-ladder-copy"
 import { cn } from "@/lib/utils"
 import { KybRequiredDocumentsNotice } from "@/components/compliance/kyb-required-documents-notice"
@@ -494,9 +500,20 @@ export function BusinessVerificationSection({
                     {!expressReady ? (
                       <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
                         {!tier1Complete ? (
-                          <Button size="sm" disabled>
-                            {EXPRESS_DEPOSITS_COPY.setupCta}
-                          </Button>
+                          <TooltipProvider delayDuration={200}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex">
+                                  <Button size="sm" disabled>
+                                    {EXPRESS_DEPOSITS_COPY.setupCta}
+                                  </Button>
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {EXPRESS_DEPOSITS_COPY.globalBankingRequired}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         ) : !canManageBusinessVerification ? (
                           <p className="text-xs text-muted-foreground">{EXPRESS_DEPOSITS_COPY.ownerOnly}</p>
                         ) : (
