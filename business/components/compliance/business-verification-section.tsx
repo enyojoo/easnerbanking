@@ -500,26 +500,30 @@ export function BusinessVerificationSection({
                     {!expressReady ? (
                       <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
                         {!tier1Complete ? (
-                          <TooltipProvider delayDuration={200}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="inline-flex">
-                                  <Button size="sm" disabled>
-                                    {EXPRESS_DEPOSITS_COPY.setupCta}
-                                  </Button>
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                {EXPRESS_DEPOSITS_COPY.globalBankingRequired}
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                          <div className="flex flex-wrap gap-2">
+                            <TooltipProvider delayDuration={200}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex">
+                                    <Button type="button" size="sm" disabled>
+                                      {EXPRESS_DEPOSITS_COPY.setupCta}
+                                    </Button>
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {EXPRESS_DEPOSITS_COPY.globalBankingRequired}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
                         ) : !canManageBusinessVerification ? (
                           <p className="text-xs text-muted-foreground">{EXPRESS_DEPOSITS_COPY.ownerOnly}</p>
                         ) : (
-                          <Button size="sm" onClick={openExpressSetup}>
-                            {expressSetupCta}
-                          </Button>
+                          <div className="flex flex-wrap gap-2">
+                            <Button type="button" size="sm" onClick={openExpressSetup}>
+                              {expressSetupCta}
+                            </Button>
+                          </div>
                         )}
                       </CardContent>
                     ) : null}
