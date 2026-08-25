@@ -2,8 +2,12 @@
 
 import type React from "react"
 import { useAuth } from "@/lib/auth-context"
-import { usePathname, useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { usePathname, useRouter, useSelectedLayoutSegments } from "next/navigation"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import {
+  parseTransactionDetailPathname,
+  TransactionDetailView,
+} from "@/components/transactions/transaction-detail-view"
 import { useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
 import { MessageCircle } from "lucide-react"
@@ -68,6 +72,35 @@ export function DashboardShell({ children }: DashboardShellProps) {
   const pathname = usePathname() ?? ""
   const onSettingsPage = pathname === "/settings" || pathname.startsWith("/settings/")
   const queryClient = useQueryClient()
+
+  /**
+   * Client-detail overlay: transaction rows navigate with shallow
+   * `history.pushState` (see TransactionDetailPrefetchLink), which updates
+   * `usePathname()` WITHOUT a server round trip and without changing the
+   * rendered route below. When the pathname says "transaction detail" but
+   * the router segments say we're still on another page, the shell renders
+   * the detail view itself and hides (not unmounts) the underlying page —
+   * so opening is a same-frame swap and going back restores the list with
+   * its scroll and state intact. Real navigations to /transactions/[etid]
+   * (deep links, refresh) render the actual route; the overlay stays off.
+   */
+  const segments = useSelectedLayoutSegments()
+  const detailFromPathname = parseTransactionDetailPathname(pathname)
+  const routeIsRealDetail = segments[0] === "transactions" && segments.length > 1
+  const clientDetailId = routeIsRealDetail ? null : detailFromPathname
+  const mainRef = useRef<HTMLElement | null>(null)
+  const savedScrollTopRef = useRef(0)
+
+  useLayoutEffect(() => {
+    const main = mainRef.current
+    if (!main) return
+    if (clientDetailId) {
+      savedScrollTopRef.current = main.scrollTop
+      main.scrollTop = 0
+    } else {
+      main.scrollTop = savedScrollTopRef.current
+    }
+  }, [clientDetailId])
   const { scope } = useScope()
   const {
     name: businessName,
@@ -180,6 +213,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
             clip so browser fullscreen / PWA resize is not blocked.
           */}
           <main
+            ref={mainRef}
             style={
               {
                 "--dashboard-sticky-top": showTier1Banner ? "6.5rem" : "4rem",
@@ -187,7 +221,9 @@ export function DashboardShell({ children }: DashboardShellProps) {
             }
             className="mx-auto min-h-0 w-full max-w-[1440px] flex-1 overflow-y-auto overscroll-contain px-8 pb-10 pt-6"
           >
-            {children}
+            {/* Hidden, not unmounted: the page keeps its state for instant back. */}
+            <div className={clientDetailId ? "hidden" : undefined}>{children}</div>
+            {clientDetailId ? <TransactionDetailView rawId={clientDetailId} /> : null}
           </main>
         </div>
       </div>

@@ -1,51 +1,27 @@
 "use client"
 
 import { Suspense, useCallback, useEffect, useState } from "react"
-import dynamic from "next/dynamic"
 import { useSearchParams } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 /**
- * Only ONE tab renders at a time (Radix mounts active content only), but
- * static imports shipped the union of all nine tabs' code — including the
- * Stripe Connect SDK and the KYB wizard — on every /settings visit
- * (~150 KB gzip). Each tab is its own chunk. Per the Instant Standard the
- * split must be INVISIBLE: the default tab is static (instant landing),
- * chunks warm at workspace idle and on trigger hover, and a tab switch
- * waits for its chunk (see handleTabChange) so content never flashes empty.
+ * All nine tabs are STATIC imports, deliberately. They live in the /settings
+ * route chunk (per-route code splitting), which the workspace warm-up
+ * router-prefetches in the background at boot — so the bytes never block a
+ * click, and every tab mounts synchronously. An earlier next/dynamic split
+ * saved bytes but flashed empty content on first open of each tab (React's
+ * lazy resolution is never synchronous on first render), which violates the
+ * Instant Standard: code-splitting must be invisible or not done at all.
  */
-import {
-  isSettingsTabLoaded,
-  loadSettingsTab,
-  warmSettingsTabModules,
-  type SettingsTabValue,
-} from "./tab-loaders"
 import { SettingsPersonalTab } from "@/components/settings/settings-personal-tab"
-
-const SettingsBusinessTab = dynamic(() =>
-  import("@/components/settings/settings-business-tab").then((m) => m.SettingsBusinessTab),
-)
-const SettingsVerificationTab = dynamic(() =>
-  import("@/components/settings/settings-verification-tab").then((m) => m.SettingsVerificationTab),
-)
-const SettingsTeamTab = dynamic(() =>
-  import("@/components/settings/settings-team-tab").then((m) => m.SettingsTeamTab),
-)
-const SettingsCommunicationTab = dynamic(() =>
-  import("@/components/settings/settings-communication-tab").then((m) => m.SettingsCommunicationTab),
-)
-const SettingsRecipientsTab = dynamic(() =>
-  import("@/components/settings/settings-recipients-tab").then((m) => m.SettingsRecipientsTab),
-)
-const SettingsCustomersTab = dynamic(() =>
-  import("@/components/settings/settings-customers-tab").then((m) => m.SettingsCustomersTab),
-)
-const SettingsInvoicingTab = dynamic(() =>
-  import("@/components/settings/settings-invoicing-tab").then((m) => m.SettingsInvoicingTab),
-)
-const SettingsPaymentsTab = dynamic(() =>
-  import("@/components/settings/settings-payments-tab").then((m) => m.SettingsPaymentsTab),
-)
+import { SettingsBusinessTab } from "@/components/settings/settings-business-tab"
+import { SettingsVerificationTab } from "@/components/settings/settings-verification-tab"
+import { SettingsTeamTab } from "@/components/settings/settings-team-tab"
+import { SettingsCommunicationTab } from "@/components/settings/settings-communication-tab"
+import { SettingsRecipientsTab } from "@/components/settings/settings-recipients-tab"
+import { SettingsCustomersTab } from "@/components/settings/settings-customers-tab"
+import { SettingsInvoicingTab } from "@/components/settings/settings-invoicing-tab"
+import { SettingsPaymentsTab } from "@/components/settings/settings-payments-tab"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { primeConnectStatus } from "@/lib/stripe/connect-status-cache"
 import {
@@ -122,14 +98,6 @@ function SettingsContent() {
   usePrimeKybPacket(Boolean(businessId && canManageBusinessVerification))
   usePrimeExpressOnrampStatus(true)
 
-  // Warm every tab chunk the moment the page mounts (the deep-linked tab
-  // first, then the rest). The workspace idle warm usually already cached
-  // them before the user got here.
-  useEffect(() => {
-    void loadSettingsTab(validTab as SettingsTabValue)
-    warmSettingsTabModules()
-  }, [validTab])
-
   useEffect(() => {
     primeConnectStatus(businessId)
   }, [businessId])
@@ -146,45 +114,27 @@ function SettingsContent() {
   const handleTabChange = (value: string) => {
     if (!TABS.includes(value as TabValue)) return
     if (value === activeTab) return
-
-    const applySwitch = () => {
-      setActiveTab(value as TabValue)
-      const next = new URLSearchParams(searchParams.toString())
-      next.set("tab", value)
-      if (value !== "customers") {
-        next.delete("customer")
-      }
-      if (value !== "verification") {
-        next.delete("flow")
-        setVerificationFlow(null)
-      }
-      if (typeof window !== "undefined") {
-        window.history.replaceState(null, "", `/settings?${next.toString()}`)
-      }
-      if (value === "verification") {
-        primeBusinessVerificationFlow({
-          businessId,
-          canManageBusinessVerification,
-          tier1Complete,
-          tier1CanResubmit,
-        })
-      }
+    setActiveTab(value as TabValue)
+    const next = new URLSearchParams(searchParams.toString())
+    next.set("tab", value)
+    if (value !== "customers") {
+      next.delete("customer")
     }
-
-    // Instant Standard: never flash an empty pane. If the tab's chunk isn't
-    // cached yet (rare — chunks warm at workspace idle, page mount, and
-    // trigger hover), keep showing the current tab for the few ms the load
-    // takes and switch when it's ready.
-    if (value === "personal" || isSettingsTabLoaded(value as SettingsTabValue)) {
-      applySwitch()
-      return
+    if (value !== "verification") {
+      next.delete("flow")
+      setVerificationFlow(null)
     }
-    void loadSettingsTab(value as SettingsTabValue).then(applySwitch)
-  }
-
-  /** Hover warm so a click can always switch synchronously. */
-  const warmTab = (value: SettingsTabValue) => {
-    void loadSettingsTab(value)
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", `/settings?${next.toString()}`)
+    }
+    if (value === "verification") {
+      primeBusinessVerificationFlow({
+        businessId,
+        canManageBusinessVerification,
+        tier1Complete,
+        tier1CanResubmit,
+      })
+    }
   }
 
   return (
@@ -204,14 +154,14 @@ function SettingsContent() {
         {!verificationChromeHidden ? (
           <TabsList className="w-full shrink-0 justify-start flex-wrap h-auto gap-1 p-1">
             <TabsTrigger value="personal">Personal</TabsTrigger>
-            <TabsTrigger value="business" onPointerEnter={() => warmTab("business")}>Business</TabsTrigger>
-            <TabsTrigger value="verification" onPointerEnter={() => warmTab("verification")}>Verification</TabsTrigger>
-            <TabsTrigger value="payments" onPointerEnter={() => warmTab("payments")}>Payments</TabsTrigger>
-            <TabsTrigger value="team" onPointerEnter={() => warmTab("team")}>Team</TabsTrigger>
-            <TabsTrigger value="recipients" onPointerEnter={() => warmTab("recipients")}>Recipients</TabsTrigger>
-            <TabsTrigger value="customers" onPointerEnter={() => warmTab("customers")}>Customers</TabsTrigger>
-            <TabsTrigger value="communication" onPointerEnter={() => warmTab("communication")}>Communication</TabsTrigger>
-            <TabsTrigger value="invoice" onPointerEnter={() => warmTab("invoice")}>Invoice</TabsTrigger>
+            <TabsTrigger value="business">Business</TabsTrigger>
+            <TabsTrigger value="verification">Verification</TabsTrigger>
+            <TabsTrigger value="payments">Payments</TabsTrigger>
+            <TabsTrigger value="team">Team</TabsTrigger>
+            <TabsTrigger value="recipients">Recipients</TabsTrigger>
+            <TabsTrigger value="customers">Customers</TabsTrigger>
+            <TabsTrigger value="communication">Communication</TabsTrigger>
+            <TabsTrigger value="invoice">Invoice</TabsTrigger>
           </TabsList>
         ) : null}
 

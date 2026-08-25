@@ -69,9 +69,6 @@ export function primeWorkspaceNav(options: {
     void import("@/lib/address/register-lib-address-countries").then((m) =>
       m.ensureBusinessOperationalAddressCountriesRegistered(),
     )
-    // Settings tab chunks are code-split; warm them here so opening /settings
-    // and switching tabs is always a synchronous, flicker-free swap.
-    void import("@/app/settings/tab-loaders").then((m) => m.warmSettingsTabModules())
 
     if (scope) {
       await prefetchAllNavWorkspaceData(queryClient, scope)
