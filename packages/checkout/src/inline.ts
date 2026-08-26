@@ -19,6 +19,32 @@ const METHODS_HINT = "Pay with card, bank debit, or other methods available."
 const EMAIL_REQUIRED = "Enter your email to continue"
 /** Hide Stripe’s test-mode sandbox assistant on merchant sites. */
 const STRIPE_DEVELOPER_TOOLS = { assistant: { enabled: false } } as const
+const FIT_STYLE_ID = "easner-checkout-fit"
+
+const FIT_BOX: Partial<CSSStyleDeclaration> = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: "0",
+  boxSizing: "border-box",
+}
+
+function ensureFitStyles() {
+  if (document.getElementById(FIT_STYLE_ID)) return
+  const style = document.createElement("style")
+  style.id = FIT_STYLE_ID
+  style.textContent = `
+    [data-easner-checkout] {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+    }
+    [data-easner-checkout] iframe {
+      max-width: 100%;
+    }
+  `
+  document.head.appendChild(style)
+}
 
 function stripeCache(): Record<string, Promise<StripeLike>> {
   window.__easnerStripeByKey ??= {}
@@ -101,7 +127,7 @@ function renderSkeleton(host: HTMLElement) {
   const wrap = document.createElement("div")
   wrap.setAttribute("aria-busy", "true")
   wrap.setAttribute("aria-label", "Loading payment methods")
-  applyBaseStyles(wrap, { display: "flex", flexDirection: "column", gap: "12px" })
+  applyBaseStyles(wrap, { display: "flex", flexDirection: "column", gap: "12px", ...FIT_BOX })
   for (const height of ["44px", "44px", "48px", "48px", "44px"]) {
     const bar = document.createElement("div")
     applyBaseStyles(bar, {
@@ -122,6 +148,10 @@ export async function mountInline(
   const el = resolveElement(target)
   if (!el) throw new Error("Easner Checkout: mount target not found")
   if (!options.clientSecret) throw new Error("Easner Checkout: clientSecret is required")
+
+  ensureFitStyles()
+  el.setAttribute("data-easner-checkout", "")
+  applyBaseStyles(el, FIT_BOX)
 
   const validatedKey = await assertPublishableKey(options.publishableKey, runtime.validateUrl)
   renderSkeleton(el as HTMLElement)
@@ -147,7 +177,13 @@ export async function mountInline(
 
   const root = document.createElement("form")
   root.setAttribute("novalidate", "novalidate")
-  applyBaseStyles(root, { display: "flex", flexDirection: "column", gap: "12px", margin: "0" })
+  applyBaseStyles(root, {
+    ...FIT_BOX,
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
+    margin: "0",
+  })
 
   const hint = document.createElement("p")
   hint.textContent = METHODS_HINT
@@ -175,6 +211,7 @@ export async function mountInline(
   })
 
   const expressHost = document.createElement("div")
+  applyBaseStyles(expressHost, { ...FIT_BOX, overflow: "hidden" })
   const divider = document.createElement("p")
   divider.textContent = "Or pay with"
   applyBaseStyles(divider, {
@@ -185,6 +222,7 @@ export async function mountInline(
     display: "none",
   })
   const paymentHost = document.createElement("div")
+  applyBaseStyles(paymentHost, { ...FIT_BOX, overflow: "hidden" })
   const message = document.createElement("p")
   message.setAttribute("role", "alert")
   applyBaseStyles(message, { display: "none", margin: "0", fontSize: "14px", color: "#7a2e2e" })
@@ -194,6 +232,8 @@ export async function mountInline(
   const total = session?.total?.total?.amount || "Pay"
   button.textContent = String(total).startsWith("Pay") ? String(total) : `Pay ${total}`
   applyBaseStyles(button, {
+    width: "100%",
+    boxSizing: "border-box",
     height: "44px",
     border: "0",
     borderRadius: "9999px",
