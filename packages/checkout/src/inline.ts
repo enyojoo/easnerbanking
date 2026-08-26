@@ -1,5 +1,5 @@
 import { EASNER_ELEMENTS_APPEARANCE } from "./appearance"
-import { mountExpressCheckout } from "./express-checkout"
+import { isNarrowCheckoutViewport, mountExpressCheckout } from "./express-checkout"
 import { createPoweredByEasner } from "./powered-by"
 import type { CheckoutSessionLike, EasnerCheckoutMountOptions, MountedCheckout, StripeLike } from "./types"
 import { isPublishableKey, isTestPublishableKey, isValidEmail, resolveElement } from "./validation"
@@ -26,6 +26,7 @@ const FIT_BOX: Partial<CSSStyleDeclaration> = {
   maxWidth: "100%",
   minWidth: "0",
   boxSizing: "border-box",
+  overflowX: "clip",
 }
 
 function ensureFitStyles() {
@@ -38,9 +39,13 @@ function ensureFitStyles() {
       max-width: 100%;
       min-width: 0;
       box-sizing: border-box;
+      overflow-x: clip;
     }
     [data-easner-checkout] iframe {
-      max-width: 100%;
+      display: block;
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
     }
   `
   document.head.appendChild(style)
@@ -211,7 +216,7 @@ export async function mountInline(
   })
 
   const expressHost = document.createElement("div")
-  applyBaseStyles(expressHost, { ...FIT_BOX, overflow: "hidden" })
+  applyBaseStyles(expressHost, FIT_BOX)
   const divider = document.createElement("p")
   divider.textContent = "Or pay with"
   applyBaseStyles(divider, {
@@ -222,7 +227,7 @@ export async function mountInline(
     display: "none",
   })
   const paymentHost = document.createElement("div")
-  applyBaseStyles(paymentHost, { ...FIT_BOX, overflow: "hidden" })
+  applyBaseStyles(paymentHost, FIT_BOX)
   const message = document.createElement("p")
   message.setAttribute("role", "alert")
   applyBaseStyles(message, { display: "none", margin: "0", fontSize: "14px", color: "#7a2e2e" })
@@ -261,7 +266,11 @@ export async function mountInline(
   )
 
   const payment = checkout.createPaymentElement({
-    layout: { type: "accordion", radios: "always", spacedAccordionItems: true },
+    layout: {
+      type: "accordion",
+      radios: isNarrowCheckoutViewport() ? "never" : "always",
+      spacedAccordionItems: true,
+    },
     fields: {
       billingDetails: { name: "always", email: "never" },
       card: { billingDetails: { name: "always", email: "never" } },

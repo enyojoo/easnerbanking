@@ -136,6 +136,10 @@ function CheckoutSurface({
   const [success, setSuccess] = useState(false)
   const [hasWallets, setHasWallets] = useState(false)
   const [email, setEmail] = useState(() => String(knownEmail ?? "").trim())
+  const narrow = useMemo(
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 480px)").matches,
+    [],
+  )
 
   const ready = checkoutState.type === "success"
   const resolvedEmail = email.trim()
@@ -271,6 +275,12 @@ function CheckoutSurface({
         aria-hidden={!ready}
       >
         <ExpressCheckoutElement
+          options={{
+            layout: {
+              maxColumns: narrow ? 1 : 2,
+              overflow: "never",
+            },
+          }}
           onReady={(event) => {
             setHasWallets(hasReadyExpressMethods(event.availablePaymentMethods))
           }}
@@ -287,7 +297,7 @@ function CheckoutSurface({
             layout: {
               type: "accordion",
               // Omit defaultCollapsed – Checkout Elements' payment.update() rejects it.
-              radios: "always",
+              radios: narrow ? "never" : "always",
               spacedAccordionItems: true,
             },
             // Prefill name via CheckoutElementsProvider defaultValues – createPaymentElement
