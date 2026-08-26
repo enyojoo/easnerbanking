@@ -177,6 +177,14 @@ const nextConfig = {
           source: "/crypto-onramp/:path*",
           destination: "https://js.stripe.com/crypto-onramp/:path*",
         },
+        {
+          source: "/v1/checkout.js",
+          destination: "/checkout.js",
+        },
+        {
+          source: "/v1/:path*",
+          destination: "/api/v1/:path*",
+        },
         ...apiHosts.map((host) => ({
           source: "/v1/:path*",
           has: [{ type: "host", value: host }],

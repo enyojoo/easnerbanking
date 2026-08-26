@@ -5,13 +5,14 @@ import { getStripePublishableKey } from "@/lib/stripe/config"
 const PLATFORM_KEY_PLACEHOLDER = "__EASNER_STRIPE_PK__"
 const VALIDATE_URL_PLACEHOLDER = "__EASNER_VALIDATE_URL__"
 
-function checkoutApiOrigin(): string {
-  const raw =
-    process.env.NEXT_PUBLIC_EASNER_API_HOST?.trim() ||
-    process.env.EASNER_API_HOST?.trim() ||
-    "api.easner.com"
-  const host = raw.replace(/^https?:\/\//, "").split("/")[0]
-  return `https://${host}`
+/** Same host that served this script — `/api/v1` works; `api.easner.com/v1` currently does not. */
+function checkoutValidateUrl(request: Request): string {
+  const forwarded = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim()
+  const hostHeader = request.headers.get("host")
+  const url = new URL(request.url)
+  const host = (forwarded || hostHeader || url.host).replace(/:\d+$/, "")
+  const proto = request.headers.get("x-forwarded-proto") || url.protocol.replace(":", "") || "https"
+  return `${proto}://${host}/api/v1/checkout/publishable-keys/validate`
 }
 
 function loadSdkBundle(): string {
@@ -30,9 +31,9 @@ function loadSdkBundle(): string {
  * The browser SDK is bundled from `@easner/checkout`; this route only injects
  * the platform Stripe publishable key and the key-validation URL.
  */
-export async function GET() {
+export async function GET(request: Request) {
   const platformKey = getStripePublishableKey()
-  const validateUrl = `${checkoutApiOrigin()}/v1/checkout/publishable-keys/validate`
+  const validateUrl = checkoutValidateUrl(request)
   const bundle = loadSdkBundle()
     .replaceAll(PLATFORM_KEY_PLACEHOLDER, platformKey)
     .replaceAll(VALIDATE_URL_PLACEHOLDER, validateUrl)

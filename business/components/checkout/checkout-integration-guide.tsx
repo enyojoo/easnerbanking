@@ -1,8 +1,6 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { toast } from "sonner"
-import { Button } from "@/components/ui/button"
 import {
   Sheet,
   SheetContent,
@@ -12,7 +10,6 @@ import {
 } from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CheckoutCodeBlock } from "@/components/checkout/checkout-code-block"
-import { openTestCheckout } from "@/components/checkout/open-test-checkout"
 import {
   CHECKOUT_EVENT_CATALOG,
   CHECKOUT_RECIPES,
@@ -34,14 +31,12 @@ export function CheckoutGuideSheet({
   onOpenChange,
   data,
   site,
-  onSaved,
   focus,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   data: CheckoutHubPayload
   site: CheckoutSite | null
-  onSaved: () => void
   focus: "guide" | CheckoutSiteSetupStep
 }) {
   return (
@@ -55,7 +50,7 @@ export function CheckoutGuideSheet({
         </SheetHeader>
         <div className="px-4 pb-8">
           {focus === "guide" ? (
-            <CheckoutIntegrationGuide data={data} onSaved={onSaved} />
+            <CheckoutIntegrationGuide data={data} />
           ) : (
             <CheckoutStepCode data={data} site={site} step={focus} />
           )}
@@ -134,15 +129,8 @@ function CheckoutStepCode({
   )
 }
 
-export function CheckoutIntegrationGuide({
-  data,
-  onSaved,
-}: {
-  data: CheckoutHubPayload
-  onSaved: () => void
-}) {
+export function CheckoutIntegrationGuide({ data }: { data: CheckoutHubPayload }) {
   const [recipeId, setRecipeId] = useState<CheckoutRecipeId>("one_time")
-  const [trying, setTrying] = useState(false)
   const publishableKey =
     data.keys.find((key) => key.mode === "test")?.publishable_key ?? "easner_pk_test_…"
   const recipe = CHECKOUT_RECIPES.find((item) => item.id === recipeId) ?? CHECKOUT_RECIPES[0]
@@ -156,20 +144,6 @@ export function CheckoutIntegrationGuide({
     }),
     [publishableKey, recipe],
   )
-
-  const tryTest = async () => {
-    setTrying(true)
-    try {
-      await openTestCheckout({
-        fallbackPublishableKey: publishableKey,
-        onSuccess: onSaved,
-      })
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not open checkout")
-    } finally {
-      setTrying(false)
-    }
-  }
 
   return (
     <div className="flex flex-col gap-10">
@@ -189,17 +163,12 @@ export function CheckoutIntegrationGuide({
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-base font-semibold text-foreground">2. Quick test</h2>
+        <h2 className="text-base font-semibold text-foreground">2. Test on your website</h2>
         <p className="text-sm text-muted-foreground">
-          Create a $49.00 test session and pay in this page. Use card 4242 4242 4242 4242. Nothing is
-          charged. You can also open the local HTML kit at{" "}
-          <code>/checkout-test/test-checkout.html</code>.
+          Wire the recipe below into your site, then pay with card 4242 4242 4242 4242. Nothing is
+          charged. That payment — on your origin — and a webhook 200 unlock live. Send test on the
+          webhook step only checks that your endpoint is reachable.
         </p>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" disabled={trying || !data.keys.length} onClick={() => void tryTest()}>
-            {trying ? COLLECTIONS_COPY.tryingTestCheckout : COLLECTIONS_COPY.tryTestCheckout}
-          </Button>
-        </div>
         <CheckoutCodeBlock
           label="curl one-liner"
           code={`curl https://api.easner.com/v1/checkout/sessions -H "Authorization: Bearer $EASNER_SECRET_KEY" -H "Content-Type: application/json" -d '{"mode":"payment","amount":4900,"currency":"usd","success_url":"https://yoursite.com/thanks"}'`}

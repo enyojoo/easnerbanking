@@ -42,15 +42,19 @@ describe("checkout edge routing", () => {
     expect(isCheckoutJsPath("/v1/other.js")).toBe(false)
   })
 
-  it("rewrites api.easner.com/v1 onto /api/v1", () => {
+  it("rewrites /v1 onto /api/v1 on any host", () => {
     expect(rewrittenPath("api.easner.com", "/v1/checkout/sessions")).toBe(
       "/api/v1/checkout/sessions",
+    )
+    expect(rewrittenPath("business.easner.com", "/v1/checkout/publishable-keys/validate")).toBe(
+      "/api/v1/checkout/publishable-keys/validate",
     )
     expect(maybeRedirectApiHostToBusiness(request("api.easner.com", "/v1/checkout/sessions"))).toBeNull()
   })
 
-  it("rewrites js.easner.com versioned scripts onto /checkout.js", () => {
+  it("rewrites versioned scripts onto /checkout.js on any host", () => {
     expect(rewrittenPath("js.easner.com", "/v1/checkout.js")).toBe("/checkout.js")
+    expect(rewrittenPath("business.easner.com", "/v1/checkout.js")).toBe("/checkout.js")
     expect(rewrittenPath("js.easner.com", "/v1.0.0/checkout.js")).toBe("/checkout.js")
     expect(rewrittenPath("js.easner.com", "/checkout.js")).toBeNull()
   })

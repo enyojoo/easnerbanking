@@ -104,23 +104,25 @@ export function isJsCheckoutHostname(hostname: string): boolean {
   return getJsCheckoutHostnames().includes(hostname.toLowerCase())
 }
 
-/** `api.easner.com/v1/*` → `/api/v1/*` so copy-paste snippets hit the real route. */
+/**
+ * `/v1/*` → `/api/v1/*` on every host. Azure Front Door / Vercel often present a
+ * deployment Host while `x-forwarded-host` is api.easner.com, so a host-gated
+ * rewrite falls through to `[...slug]` and returns HTML (no CORS).
+ * Checkout.js paths stay on the embed rewrite.
+ */
 export function maybeRewriteApiV1ToAppApi(request: NextRequest): NextResponse | null {
   const pathname = request.nextUrl.pathname
   if (!isPublicCheckoutApiPath(pathname)) return null
-  const host = getRequestHostname(request)
-  if (!host || !isApiOnlyHostname(host)) return null
+  if (isCheckoutJsPath(pathname)) return null
   const url = request.nextUrl.clone()
   url.pathname = `/api${pathname === "/v1" ? "/v1" : pathname}`
   return NextResponse.rewrite(url)
 }
 
-/** `js.easner.com/v1/checkout.js` (and pinned semver paths) → `/checkout.js`. */
+/** `/v1/checkout.js` (and pinned semver paths) → `/checkout.js` on every host. */
 export function maybeRewriteJsCheckoutScript(request: NextRequest): NextResponse | null {
   const pathname = request.nextUrl.pathname
   if (!isCheckoutJsPath(pathname)) return null
-  const host = getRequestHostname(request)
-  if (!host || !isJsCheckoutHostname(host)) return null
   if (pathname === "/checkout.js") return null
   const url = request.nextUrl.clone()
   url.pathname = "/checkout.js"

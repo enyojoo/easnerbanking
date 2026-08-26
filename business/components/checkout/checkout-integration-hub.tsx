@@ -123,9 +123,14 @@ export function CheckoutIntegrationHub({
     <div className="flex flex-col gap-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
-        <Badge variant={pageReady ? (data.settings.liveModeEnabled ? "emerald" : "slate") : "amber"}>
-          {statusLabel}
-        </Badge>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={() => setGuideOpen(true)}>
+            {COLLECTIONS_COPY.addToWebsite}
+          </Button>
+          <Badge variant={pageReady ? (data.settings.liveModeEnabled ? "emerald" : "slate") : "amber"}>
+            {statusLabel}
+          </Badge>
+        </div>
       </div>
 
       {pageReady && site && !editingReadyStep ? (
@@ -133,8 +138,6 @@ export function CheckoutIntegrationHub({
           data={data}
           site={site}
           onEditStep={setFocusStep}
-          onOpenGuide={() => setGuideOpen(true)}
-          onSaved={() => void refetch()}
           liveSwitch={<StepLive data={data} onSaved={() => void refetch()} />}
         />
       ) : (
@@ -162,7 +165,6 @@ export function CheckoutIntegrationHub({
         }}
         data={data}
         site={site}
-        onSaved={() => void refetch()}
         focus={sheetFocus ?? "guide"}
       />
     </div>
@@ -877,9 +879,9 @@ function StepLive({ data, onSaved }: HubDataProps) {
           <p className="text-sm font-medium text-foreground">Live payments</p>
           <p className="text-xs text-muted-foreground">
             {gateReady
-              ? "Connect is ready, a test payment succeeded, and a webhook returned 200."
+              ? "Connect is ready, a test payment on your website succeeded, and a webhook returned 200."
               : data.readiness.ready
-                ? "Complete a test payment and a successful webhook delivery first."
+                ? "Pay on your website with test keys, and confirm a webhook returns 200, before going live."
                 : "Complete verification first."}
           </p>
         </div>

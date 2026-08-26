@@ -22,13 +22,13 @@ function getClientIp(request: NextRequest): string {
 export function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
-  /** `api.easner.com/v1/*` is the public Checkout API; rewrite onto `/api/v1/*`. */
-  const apiV1Rewrite = maybeRewriteApiV1ToAppApi(request)
-  if (apiV1Rewrite) return apiV1Rewrite
-
-  /** `js.easner.com/v1/checkout.js` (and pinned semver paths) serve the embed. */
+  /** Versioned embed first so `/v1/checkout.js` is not treated as an API path. */
   const jsCheckoutRewrite = maybeRewriteJsCheckoutScript(request)
   if (jsCheckoutRewrite) return jsCheckoutRewrite
+
+  /** `/v1/*` is the public Checkout API; rewrite onto `/api/v1/*`. */
+  const apiV1Rewrite = maybeRewriteApiV1ToAppApi(request)
+  if (apiV1Rewrite) return apiV1Rewrite
 
   /** `api.*` domain: only `/api/*` (and `/v1/*`) is meant for clients; send browsers to the business web origin. */
   const apiHostRedirect = maybeRedirectApiHostToBusiness(request)

@@ -1,12 +1,10 @@
 "use client"
 
-import { useState, type ReactNode } from "react"
-import { toast } from "sonner"
+import { type ReactNode } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CheckoutWebhookDeliveries } from "@/components/checkout/checkout-webhook-deliveries"
-import { openTestCheckout } from "@/components/checkout/open-test-checkout"
 import type { CheckoutSiteSetupStep } from "@/lib/checkout/checkout-phases"
 import type { CheckoutHubPayload, CheckoutSite } from "@/lib/checkout/hub-types"
 import { COLLECTIONS_COPY } from "@/lib/copy/business-ui-copy"
@@ -15,40 +13,20 @@ export function CheckoutDashboardPanel({
   data,
   site,
   onEditStep,
-  onOpenGuide,
-  onSaved,
   liveSwitch,
 }: {
   data: CheckoutHubPayload
   site: CheckoutSite
   onEditStep: (step: CheckoutSiteSetupStep) => void
-  onOpenGuide: () => void
-  onSaved: () => void
   liveSwitch: ReactNode
 }) {
-  const [trying, setTrying] = useState(false)
   const testKey = data.keys.find((key) => key.mode === "test")
   const liveKey = data.keys.find((key) => key.mode === "live")
   const activeKey = liveKey ?? testKey
-  const publishable = activeKey?.publishable_key ?? "easner_pk_test_…"
   const webhookOn = Boolean(data.settings.webhookUrl && data.settings.webhookSecretLast4)
   const lastDelivery = data.settings.lastWebhookDeliveredAt
     ? `Delivered ${new Date(data.settings.lastWebhookDeliveredAt).toLocaleString()}`
     : COLLECTIONS_COPY.webhookNoDeliveries
-
-  const tryTest = async () => {
-    setTrying(true)
-    try {
-      await openTestCheckout({
-        fallbackPublishableKey: publishable,
-        onSuccess: onSaved,
-      })
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not open checkout")
-    } finally {
-      setTrying(false)
-    }
-  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -94,19 +72,7 @@ export function CheckoutDashboardPanel({
         />
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant="primary"
-          disabled={trying || !data.keys.length}
-          onClick={() => void tryTest()}
-        >
-          {trying ? COLLECTIONS_COPY.tryingTestCheckout : COLLECTIONS_COPY.tryTestCheckout}
-        </Button>
-        <Button type="button" variant="secondary" onClick={onOpenGuide}>
-          {COLLECTIONS_COPY.addToWebsite}
-        </Button>
-      </div>
+      <p className="text-sm text-muted-foreground">{COLLECTIONS_COPY.testOnYourWebsite}</p>
 
       <CheckoutWebhookDeliveries live />
       {liveSwitch}
