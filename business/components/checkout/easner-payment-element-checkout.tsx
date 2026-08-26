@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
+import { PoweredByEasner } from "@/components/brand/powered-by-easner"
 import { Check, Loader2 } from "lucide-react"
 import { cn, formatCurrency } from "@/lib/utils"
 import { easnerStripeElementsAppearance } from "@/lib/stripe/elements-appearance"
@@ -322,6 +323,7 @@ function CheckoutSurface({
                 `Pay ${formatCurrency(amount, currency)}`
               )}
             </Button>
+            <PoweredByEasner className="border-t border-border pt-4" />
           </>
         ) : null}
       </div>

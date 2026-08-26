@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { BRAND } from "@/components/brand/brand-constants"
+import { PoweredByEasner } from "@/components/brand/powered-by-easner"
 
 /**
  * Chrome for pay.easner.com. Payer-only: no dashboard nav, no sign-in, no operator
@@ -13,26 +13,7 @@ export function CustomerPayShell({ children }: { children: ReactNode }) {
       </main>
 
       <footer className="mt-auto border-t border-border/60 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-center sm:px-6">
-        <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-          <span>Powered by</span>
-          <a
-            href="https://www.easner.com/business"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center"
-          >
-            <img
-              src={BRAND.logoBusinessLight}
-              alt="Easner Business"
-              className="h-5 w-auto object-contain dark:hidden sm:h-6"
-            />
-            <img
-              src={BRAND.logoBusinessDark}
-              alt="Easner Business"
-              className="hidden h-5 w-auto object-contain dark:block sm:h-6"
-            />
-          </a>
-        </div>
+        <PoweredByEasner />
       </footer>
     </div>
   )

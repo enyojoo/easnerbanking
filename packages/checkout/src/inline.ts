@@ -1,5 +1,6 @@
 import { EASNER_ELEMENTS_APPEARANCE } from "./appearance"
 import { mountExpressCheckout } from "./express-checkout"
+import { createPoweredByEasner } from "./powered-by"
 import type { CheckoutSessionLike, EasnerCheckoutMountOptions, MountedCheckout, StripeLike } from "./types"
 import { isPublishableKey, isTestPublishableKey, isValidEmail, resolveElement } from "./validation"
 
@@ -209,7 +210,7 @@ export async function mountInline(
   root.appendChild(paymentHost)
   root.appendChild(message)
   root.appendChild(button)
-  el.replaceChildren(root)
+  el.replaceChildren(root, createPoweredByEasner())
 
   const express = mountExpressCheckout(checkout, expressHost, divider, (walletEmail) =>
     confirmCheckout(checkout, options, knownEmail || walletEmail || emailInput.value, button, message),

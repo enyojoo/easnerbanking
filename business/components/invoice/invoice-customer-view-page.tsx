@@ -19,7 +19,7 @@ import { downloadInvoiceReceiptPdf } from "@/lib/use-invoice-receipt-pdf"
 import { getPaymentRecordDisplay } from "@/lib/deposits"
 import { StripePaymentMethodRow } from "@/components/stripe-payment-method-row"
 import { shouldShowStripePaymentMethod } from "@/lib/stripe/payment-method-display"
-import { BRAND } from "@/components/brand/brand-constants"
+import { PoweredByEasner } from "@/components/brand/powered-by-easner"
 import { useFxRates } from "@/hooks/queries"
 import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
 import type { InvoicePayInPayload } from "@/lib/invoices/resolve-pay-in-for-business"
@@ -742,21 +742,7 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
               )
             })()}
 
-          <div className="flex items-center justify-center gap-1.5 mt-8 pt-6 pb-0 border-t text-xs text-muted-foreground">
-            <span>Powered by</span>
-            <a
-              href="https://www.easner.com/business"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center"
-            >
-              <img
-                src={BRAND.logoBusiness}
-                alt="Easner Business"
-                className="h-5 sm:h-6 w-auto object-contain"
-              />
-            </a>
-          </div>
+          <PoweredByEasner className="mt-8 border-t pt-6 pb-0" />
         </CardContent>
       </Card>
     </div>
