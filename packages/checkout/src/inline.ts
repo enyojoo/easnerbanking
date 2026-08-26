@@ -132,7 +132,6 @@ export async function mountInline(
     fetchClientSecret: () => Promise.resolve(options.clientSecret),
     elementsOptions: {
       appearance: EASNER_ELEMENTS_APPEARANCE,
-      developerTools: STRIPE_DEVELOPER_TOOLS,
     },
   }
   if (mountName) {

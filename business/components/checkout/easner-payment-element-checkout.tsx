@@ -20,7 +20,7 @@ import { PoweredByEasner } from "@/components/brand/powered-by-easner"
 import { Check, Loader2 } from "lucide-react"
 import { cn, formatCurrency } from "@/lib/utils"
 import { easnerStripeElementsAppearance } from "@/lib/stripe/elements-appearance"
-import { getStripeJs, STRIPE_DEVELOPER_TOOLS } from "@/lib/stripe/load-stripe-js"
+import { getStripeJs } from "@/lib/stripe/load-stripe-js"
 import { paymentElementBillingFields } from "@/lib/stripe/payment-element-billing-fields"
 import { onlinePaymentTabHint } from "@/lib/invoices/invoice-payment-copy"
 import { COLLECTIONS_COPY } from "@/lib/copy/business-ui-copy"
@@ -353,7 +353,6 @@ export function EasnerPaymentElementCheckout({
         clientSecret,
         elementsOptions: {
           appearance: elementsAppearance,
-          developerTools: STRIPE_DEVELOPER_TOOLS,
         },
         // Prefill name only. Do NOT pass defaultValues.email when the Session was
         // created with customer_email (invoices) – Stripe rejects email updates and
