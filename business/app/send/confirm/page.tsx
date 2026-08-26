@@ -1186,7 +1186,7 @@ export default function SendConfirmPage() {
             <SendSelectedRecipientSummary
               beneficiary={state.recipient}
               alignEnd
-              className="min-w-0 flex-1"
+              className="min-w-0 max-w-[70%] shrink-0"
             />
           }
           copiedField={copiedKey}
@@ -1245,7 +1245,7 @@ export default function SendConfirmPage() {
             <SendSelectedRecipientSummary
               beneficiary={state.recipient}
               alignEnd
-              className="min-w-0 flex-1"
+              className="min-w-0 max-w-[70%] shrink-0"
             />
           }
           sourceAccountCurrency={
