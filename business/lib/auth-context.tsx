@@ -75,7 +75,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
-  const [storedProbe, setStoredProbe] = useState(EMPTY_STORED_SUPABASE_SESSION_PROBE)
+  const [storedProbe, setStoredProbe] = useState(() =>
+    typeof window !== "undefined" ? probeStoredSupabaseSession() : EMPTY_STORED_SUPABASE_SESSION_PROBE,
+  )
   const canBootstrapWorkspace = storedProbe.likelyAuthenticated
   const sessionUserId = user?.id ?? (canBootstrapWorkspace ? storedProbe.userId : null)
   const bootstrapFullName = useMemo(() => {

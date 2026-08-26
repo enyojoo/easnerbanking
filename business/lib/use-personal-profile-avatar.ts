@@ -10,10 +10,12 @@ import { personalSettingsStore } from "@/lib/personal-settings-store"
  * Uses `useSyncExternalStore` so the URL from `personalSettingsStore` (localStorage hydrate) is
  * available on the first client paint after `hydrateSync`, instead of one frame of null from
  * `useState` + `useEffect`.
+ *
+ * `userIdOverride` lets PIN unlock render the avatar before Auth finishes hydrating `user`.
  */
-export function usePersonalProfileAvatar() {
+export function usePersonalProfileAvatar(userIdOverride?: string | null) {
   const { user } = useAuth()
-  const userId = user?.id
+  const userId = userIdOverride || user?.id
 
   const avatarUrl = useSyncExternalStore(
     (onStoreChange) => {

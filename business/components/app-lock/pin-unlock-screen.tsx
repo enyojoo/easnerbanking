@@ -47,7 +47,7 @@ export function PinUnlockScreen({
   const [lockTick, setLockTick] = useState(0)
   const lock = useMemo(() => getLockoutState(user.id), [user.id, lockTick])
   const lastAttemptRef = useRef<string>("")
-  const { avatarUrl } = usePersonalProfileAvatar()
+  const { avatarUrl } = usePersonalProfileAvatar(user.id)
 
   useEffect(() => {
     const id = window.setInterval(() => setLockTick((t) => t + 1), 1000)
