@@ -5,6 +5,10 @@ import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { dispatchMerchantWebhook } from "@/lib/checkout/merchant-webhooks"
 import { checkoutCompletedWebhookData } from "@/lib/checkout/merchant-webhook-payload"
 import { deliverCheckoutPayerReceiptEmail } from "@/lib/checkout/deliver-checkout-payer-receipt-email"
+import {
+  trackServerCheckoutCompleted,
+  trackServerEmbedPayerPaymentSucceeded,
+} from "@/lib/server-analytics"
 import type { StripePaymentMethodDisplay } from "@/lib/stripe/parse-payment-method-display"
 import { getStripe } from "./client"
 import { resolveFeeAndTransfer } from "./resolve-charge-settlement"
@@ -352,6 +356,26 @@ export async function handleCheckoutCollectionCompleted(
         .eq("business_id", input.businessId)
     }
     await dispatchMerchantWebhook(admin, webhookPayload)
+    trackServerCheckoutCompleted({
+      channel: input.source,
+      businessId: input.businessId,
+      settlementId: input.settlementId,
+      currency,
+      amountCents: grossCents,
+      paymentLinkId,
+      livemode: false,
+      stripeEventId: event.id,
+    })
+    trackServerEmbedPayerPaymentSucceeded({
+      channel: input.source,
+      businessId: input.businessId,
+      settlementId: input.settlementId,
+      currency,
+      amountCents: grossCents,
+      paymentLinkId,
+      livemode: false,
+      stripeEventId: event.id,
+    })
     return { handled: true }
   }
 
@@ -437,6 +461,27 @@ export async function handleCheckoutCollectionCompleted(
     description: receiptDescription(input.source, linkLabel),
     paidAt,
     paymentMethod,
+  })
+
+  trackServerCheckoutCompleted({
+    channel: input.source,
+    businessId: input.businessId,
+    settlementId: input.settlementId,
+    currency,
+    amountCents: grossCents,
+    paymentLinkId,
+    livemode: !isStripeTest,
+    stripeEventId: event.id,
+  })
+  trackServerEmbedPayerPaymentSucceeded({
+    channel: input.source,
+    businessId: input.businessId,
+    settlementId: input.settlementId,
+    currency,
+    amountCents: grossCents,
+    paymentLinkId,
+    livemode: !isStripeTest,
+    stripeEventId: event.id,
   })
 
   return { handled: true }

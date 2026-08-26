@@ -17,6 +17,7 @@ import {
   isStripeInvoicePaymentsEnabled,
   isStripeTestPaymentsConfigured,
 } from "./config"
+import { trackServerCheckoutStarted } from "@/lib/server-analytics"
 
 export type { OnlineCheckoutSource }
 
@@ -337,6 +338,17 @@ export async function createOnlineCheckoutSession(
     if (input.source === "invoice") {
       await patchLegacyInvoiceSession(admin, settlementId, stripePatch)
     }
+
+    trackServerCheckoutStarted({
+      channel: input.source,
+      businessId: input.businessId,
+      settlementId,
+      currency: currency.toUpperCase(),
+      amountCents: amounts.customerAmountCents,
+      paymentLinkId: input.paymentLinkId,
+      invoiceId: input.invoiceId,
+      livemode,
+    })
 
     return {
       ok: true,

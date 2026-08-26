@@ -24,7 +24,6 @@ import { useFxRates } from "@/hooks/queries"
 import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
 import type { InvoicePayInPayload } from "@/lib/invoices/resolve-pay-in-for-business"
 import { analytics } from "@/lib/analytics"
-import { ANALYTICS_SURFACE } from "@easner/shared"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { INVOICE_CUSTOMER_VIEW_COPY } from "@/lib/copy/business-ui-copy"
 import { InvoiceCustomerPageSkeleton } from "@/components/invoice/invoice-customer-page-skeleton"
@@ -294,10 +293,6 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
     const approx = invoice.total * rate.rate
     return { localeCur, approx }
   }, [invoice, fxRates])
-
-  useEffect(() => {
-    analytics.registerSuperProperties({ surface: ANALYTICS_SURFACE.payer })
-  }, [])
 
   useEffect(() => {
     if (mode !== "public" || !invoice?.id) return

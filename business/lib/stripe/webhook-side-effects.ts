@@ -7,6 +7,7 @@ import { handleStripePayoutPaid } from "./handle-payout-paid"
 import { handleSubscriptionLifecycleEvent } from "./handle-subscription-lifecycle"
 import { applyCheckoutStripeRefund } from "./apply-checkout-stripe-refund"
 import { applyInvoiceStripeRefundSideEffects } from "./apply-invoice-stripe-refund"
+import { trackServerEmbedPayerPaymentFailed } from "@/lib/server-analytics"
 
 async function appendSettlementEvent(
   admin: SupabaseClient,
@@ -114,6 +115,7 @@ export async function applyStripeWebhookSideEffects(
       const pi = event.data.object as Stripe.PaymentIntent
       const source = String(pi.metadata?.easner_checkout_source ?? "").trim()
       const businessId = String(pi.metadata?.easner_business_id ?? "").trim()
+      const settlementId = String(pi.metadata?.easner_settlement_id ?? "").trim()
       if ((source !== "payment_link" && source !== "embed") || !businessId) return
       await dispatchMerchantWebhook(admin, {
         businessId,
@@ -127,6 +129,21 @@ export async function applyStripeWebhookSideEffects(
             : {}),
         },
       })
+      if (settlementId && source === "embed") {
+        trackServerEmbedPayerPaymentFailed({
+          channel: "embed",
+          businessId,
+          settlementId,
+          currency: String(pi.currency || "usd").toUpperCase(),
+          amountCents: pi.amount,
+          paymentLinkId: pi.metadata?.easner_payment_link_id
+            ? String(pi.metadata.easner_payment_link_id)
+            : null,
+          reason: pi.last_payment_error?.message ?? null,
+          livemode: event.livemode !== false,
+          stripeEventId: event.id,
+        })
+      }
       return
     }
     case "invoice.paid":

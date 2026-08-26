@@ -22,9 +22,29 @@ function withDefaults(properties?: Props): Props {
   }
 }
 
+function payerHost(): string | undefined {
+  if (typeof window === "undefined") return undefined
+  return window.location.hostname
+}
+
+function withPayerDefaults(properties?: Props): Props {
+  return {
+    platform: ANALYTICS_PLATFORM.payerWeb,
+    environment: process.env.NODE_ENV,
+    surface: ANALYTICS_SURFACE.payer,
+    host: payerHost(),
+    ...properties,
+  }
+}
+
 function capture(event: string, properties?: Props) {
   const posthog = getPostHog()
   posthog.capture(event, withDefaults(properties))
+}
+
+function capturePayer(event: string, properties?: Props) {
+  const posthog = getPostHog()
+  posthog.capture(event, withPayerDefaults(properties))
 }
 
 export const analytics = {
@@ -41,6 +61,10 @@ export const analytics = {
 
   registerSuperProperties: (properties: Props) => {
     getPostHog().register(withDefaults(properties))
+  },
+
+  registerPayerWebContext: (properties?: Props) => {
+    getPostHog().register(withPayerDefaults(properties))
   },
 
   reset: () => {
@@ -136,24 +160,27 @@ export const analytics = {
   },
 
   trackPayerInvoiceViewed: (properties?: Props) => {
-    capture(ANALYTICS_EVENTS.payerInvoiceViewed, withDefaults({ surface: ANALYTICS_SURFACE.payer, ...properties }))
+    capturePayer(ANALYTICS_EVENTS.payerInvoiceViewed, properties)
   },
 
   trackPayerCheckoutStarted: (properties?: Props) => {
-    capture(ANALYTICS_EVENTS.payerCheckoutStarted, withDefaults({ surface: ANALYTICS_SURFACE.payer, ...properties }))
+    capturePayer(ANALYTICS_EVENTS.payerCheckoutStarted, properties)
   },
 
   trackPayerPaymentSucceeded: (properties?: Props) => {
-    capture(ANALYTICS_EVENTS.payerPaymentSucceeded, withDefaults({ surface: ANALYTICS_SURFACE.payer, ...properties }))
+    capturePayer(ANALYTICS_EVENTS.payerPaymentSucceeded, properties)
   },
 
   trackPayerPaymentFailed: (properties?: Props) => {
-    capture(ANALYTICS_EVENTS.payerPaymentFailed, withDefaults({ surface: ANALYTICS_SURFACE.payer, ...properties })
-    )
+    capturePayer(ANALYTICS_EVENTS.payerPaymentFailed, properties)
+  },
+
+  trackPayerStablecoinPaid: (properties?: Props) => {
+    capturePayer(ANALYTICS_EVENTS.payerStablecoinPaid, properties)
   },
 
   trackPayerLinkViewed: (properties?: Props) => {
-    capture(ANALYTICS_EVENTS.payerLinkViewed, withDefaults({ surface: ANALYTICS_SURFACE.payer, ...properties }))
+    capturePayer(ANALYTICS_EVENTS.payerLinkViewed, properties)
   },
 
   trackPayrollRunCreated: (properties?: Props) => {

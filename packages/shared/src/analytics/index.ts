@@ -15,6 +15,11 @@ export {
   type SendMethod,
 } from "./properties"
 export {
+  checkoutAnalyticsProperties,
+  checkoutChannelFromSource,
+  type CheckoutChannel,
+} from "./checkout"
+export {
   buildEasnerBusinessMarketingUrl,
   cleanBrowserAttributionUrl,
   EASNER_BUSINESS_MARKETING_BASE,

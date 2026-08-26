@@ -3,6 +3,8 @@
 import { useEffect, useRef } from "react"
 import type { ReactNode } from "react"
 import { usePathname } from "next/navigation"
+import { ANALYTICS_PLATFORM } from "@easner/shared"
+import { isCustomerAppHostname } from "@/lib/customer-hosts"
 import { getPostHog } from "@/lib/posthog"
 import { pageviewProperties } from "@/lib/posthog-attribution"
 
@@ -33,9 +35,12 @@ function PageviewTracker() {
       return
     }
     const posthog = getPostHog()
+    const platform = isCustomerAppHostname(window.location.hostname)
+      ? ANALYTICS_PLATFORM.payerWeb
+      : ANALYTICS_PLATFORM.businessWeb
     posthog.capture("$pageview", {
       ...pageviewProperties(window.location.href, document.referrer),
-      platform: "business_web",
+      platform,
       environment: process.env.NODE_ENV,
     })
   }, [pathname])

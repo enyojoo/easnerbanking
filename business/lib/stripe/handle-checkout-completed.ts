@@ -14,6 +14,10 @@ import {
 } from "./checkout-session-metadata"
 import { handleCheckoutCollectionCompleted } from "./handle-checkout-collection-completed"
 import { paymentMethodIsComplete, resolveFeeAndTransfer } from "./resolve-charge-settlement"
+import {
+  trackServerCheckoutCompleted,
+  trackServerInvoicePaid,
+} from "@/lib/server-analytics"
 
 function asCents(n: unknown): number {
   const v = typeof n === "number" ? n : Number(n)
@@ -430,6 +434,26 @@ export async function handleStripeCheckoutCompleted(
       ledgerTransactionId: ledger.transactionId,
     })
   }
+
+  trackServerCheckoutCompleted({
+    channel: "invoice",
+    businessId,
+    settlementId,
+    currency,
+    amountCents: grossCents,
+    invoiceId,
+    livemode: event.livemode !== false,
+    stripeEventId: event.id,
+  })
+  trackServerInvoicePaid({
+    businessId,
+    settlementId,
+    invoiceId,
+    currency,
+    amountCents: grossCents,
+    livemode: event.livemode !== false,
+    stripeEventId: event.id,
+  })
 
   return { handled: true }
 }

@@ -1281,6 +1281,8 @@ export {
   ANALYTICS_SURFACE,
   amountBucket,
   buildEasnerBusinessMarketingUrl,
+  checkoutAnalyticsProperties,
+  checkoutChannelFromSource,
   cleanBrowserAttributionUrl,
   consumerPlatformFromOs,
   corridor,
@@ -1300,6 +1302,7 @@ export {
   type AnalyticsEventName,
   type AnalyticsPlatform,
   type AnalyticsSurface,
+  type CheckoutChannel,
   type EasnerBusinessMarketingCampaign,
   type SendMethod,
 } from "./analytics"

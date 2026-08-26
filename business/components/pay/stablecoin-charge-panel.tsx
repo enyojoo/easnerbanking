@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { QRCodeSVG } from "qrcode.react"
 import { Button } from "@/components/ui/button"
 import { fetchWithSession } from "@/lib/fetch-with-session"
+import { analytics } from "@/lib/analytics"
 import { toast } from "sonner"
 import { CheckCircle2, Copy, ExternalLink, XCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -76,15 +77,24 @@ type Props = {
   variant: "counter" | "customer"
   /** Amount heading label – invoices and links describe the charge differently. */
   amountLabel?: string
+  /** Payer analytics path slug (pay.easner.com payment links). */
+  analyticsPath?: string
 }
 
-export function StablecoinChargePanel({ sessionId, variant, amountLabel = "Amount due" }: Props) {
+export function StablecoinChargePanel({
+  sessionId,
+  variant,
+  amountLabel = "Amount due",
+  analyticsPath,
+}: Props) {
   const router = useRouter()
   const qrSize = useChargeQrSize()
 
   const [session, setSession] = useState<StablecoinChargeSession | null>(null)
   const [loading, setLoading] = useState(true)
   const [nowTick, setNowTick] = useState(() => Date.now())
+  const trackedCheckoutStarted = useRef(false)
+  const trackedTerminal = useRef<string | null>(null)
 
   useEffect(() => {
     const t = window.setInterval(() => setNowTick(Date.now()), 1000)
@@ -139,6 +149,36 @@ export function StablecoinChargePanel({ sessionId, variant, amountLabel = "Amoun
       if (intervalId) clearInterval(intervalId)
     }
   }, [sessionId, variant])
+
+  useEffect(() => {
+    if (variant !== "customer" || !session) return
+
+    const base = {
+      path: analyticsPath,
+      rail: "stablecoin",
+      session_id: sessionId,
+      currency: session.fiat_currency,
+      crypto_currency: session.crypto_currency,
+      network: session.network,
+    }
+
+    if (!trackedCheckoutStarted.current && session.destination_address) {
+      trackedCheckoutStarted.current = true
+      analytics.trackPayerCheckoutStarted(base)
+    }
+
+    const terminalKey = `${session.status}:${sessionId}`
+    if (trackedTerminal.current === terminalKey) return
+
+    if (session.status === "payout_complete") {
+      trackedTerminal.current = terminalKey
+      analytics.trackPayerStablecoinPaid(base)
+      analytics.trackPayerPaymentSucceeded(base)
+    } else if (session.status === "failed" || session.status === "expired") {
+      trackedTerminal.current = terminalKey
+      analytics.trackPayerPaymentFailed({ ...base, error: session.status })
+    }
+  }, [analyticsPath, session, sessionId, variant])
 
   const dest = session?.destination_address?.trim() || ""
   const label = session ? STATUS_LABEL[session.status] || session.status : ""

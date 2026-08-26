@@ -1,10 +1,9 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { QRCodeSVG } from "qrcode.react"
 import { toast } from "sonner"
 import { analytics } from "@/lib/analytics"
-import { ANALYTICS_SURFACE } from "@easner/shared"
 import { Copy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CustomerPayHeader } from "@/components/pay/customer-pay-shell"
@@ -104,7 +103,13 @@ export function PaymentLinkPayPanel({
   }
 
   if (resolution.kind === "stablecoin_session") {
-    return <StablecoinChargePanel sessionId={resolution.sessionId} variant="customer" />
+    return (
+      <StablecoinChargePanel
+        sessionId={resolution.sessionId}
+        variant="customer"
+        analyticsPath={path}
+      />
+    )
   }
 
   return (
@@ -138,7 +143,6 @@ function PaymentLinkSurface({
   const customerAmount = formatCurrency(payload.customerAmountCents / 100, link.currency)
 
   useEffect(() => {
-    analytics.registerSuperProperties({ surface: ANALYTICS_SURFACE.payer })
     analytics.trackPayerLinkViewed({ path, rail: link.rail })
   }, [link.rail, path])
 
@@ -218,7 +222,7 @@ function PaymentLinkSurface({
       </div>
 
       {link.rail === "stablecoin" ? (
-        <StablecoinDepositPanel payload={payload} />
+        <StablecoinDepositPanel payload={payload} path={path} />
       ) : paid ? (
         <PaymentReceivedNotice
           message={
@@ -274,9 +278,29 @@ function PaymentLinkSurface({
   )
 }
 
-function StablecoinDepositPanel({ payload }: { payload: PublicPaymentLinkPayload }) {
+function StablecoinDepositPanel({
+  payload,
+  path,
+}: {
+  payload: PublicPaymentLinkPayload
+  path: string
+}) {
   const deposit = payload.stablecoin
   const address = deposit?.depositAddress?.trim() || ""
+  const tracked = useRef(false)
+
+  useEffect(() => {
+    if (!address || tracked.current) return
+    tracked.current = true
+    analytics.trackPayerCheckoutStarted({
+      path,
+      rail: "stablecoin",
+      mode: "deposit_address",
+      currency: payload.link.currency,
+      crypto_currency: deposit?.cryptoCurrency,
+      network: deposit?.network,
+    })
+  }, [address, deposit?.cryptoCurrency, deposit?.network, path, payload.link.currency])
 
   if (!address) {
     return (

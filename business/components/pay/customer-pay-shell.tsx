@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 import { PoweredByEasner } from "@/components/brand/powered-by-easner"
+import { PayerAnalyticsBootstrap } from "@/components/payer-analytics-bootstrap"
 
 /**
  * Chrome for pay.easner.com. Payer-only: no dashboard nav, no sign-in, no operator
@@ -8,6 +9,7 @@ import { PoweredByEasner } from "@/components/brand/powered-by-easner"
 export function CustomerPayShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-[100dvh] flex-col bg-background">
+      <PayerAnalyticsBootstrap />
       <main className="flex flex-1 flex-col items-center px-4 py-6 sm:px-6 sm:py-10">
         <div className="flex w-full max-w-md flex-1 flex-col sm:max-w-lg">{children}</div>
       </main>
