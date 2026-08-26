@@ -52,7 +52,7 @@ export function TransactionDetailView({ rawId }: { rawId: string }) {
 
   if (!decoded || !idForQuery) {
     return (
-      <div className="mx-auto max-w-2xl space-y-6">
+      <div className="mx-auto w-full max-w-2xl space-y-6">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" type="button" onClick={handleBack} aria-label="Back">
             <ArrowLeft className="h-5 w-5" />
@@ -70,7 +70,7 @@ export function TransactionDetailView({ rawId }: { rawId: string }) {
   const showLoading = firstLoad && !fatalError
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto w-full max-w-2xl space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" type="button" onClick={handleBack} aria-label="Back">
           <ArrowLeft className="h-5 w-5" />

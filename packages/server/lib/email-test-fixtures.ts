@@ -69,7 +69,7 @@ export const txReversedFixture: TransactionEmailData = {
     { label: "Total debited", value: "-$25.00" },
     { label: "Recipient amount", value: "$25.00" },
     { label: "Recipient", value: "@jordan" },
-    { label: "Transfer method", value: "Easetag (wallet-to-wallet)" },
+    { label: "Transfer method", value: "Easetag" },
   ],
 }
 

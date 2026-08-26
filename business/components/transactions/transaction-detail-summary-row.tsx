@@ -24,11 +24,13 @@ export function TransactionDetailSummaryRow({
     <div className={transactionDetailRowClassName}>
       <span className="shrink-0 text-muted-foreground">{label}</span>
       {children ?? (
-        <span className={cn("text-right font-normal text-foreground", valueClassName)}>{value}</span>
+        <span className={cn("min-w-0 flex-1 text-right font-normal text-foreground", valueClassName)}>
+          {value}
+        </span>
       )}
     </div>
   )
 }
 
 export const transactionDetailRowClassName =
-  "flex items-center justify-between gap-4 border-b border-border py-2 text-sm"
+  "flex items-center justify-between gap-6 border-b border-border py-3 text-sm"

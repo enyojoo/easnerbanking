@@ -222,7 +222,7 @@ export default function SendMomoSetupPage() {
 
   if (!state) {
     return (
-      <div className="mx-auto max-w-2xl animate-pulse space-y-4">
+      <div className="mx-auto w-full max-w-2xl animate-pulse space-y-4">
         <div className="h-8 w-48 rounded bg-muted" />
         <div className="h-32 rounded bg-muted" />
       </div>
@@ -230,7 +230,7 @@ export default function SendMomoSetupPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto w-full max-w-2xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Mobile money</h1>
         <p className="text-sm text-muted-foreground mt-1">

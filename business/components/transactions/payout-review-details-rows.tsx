@@ -228,7 +228,7 @@ export function PayoutReviewDetailsRows({
           {recipientNode ? (
             recipientNode
           ) : recipientSnapshot ? (
-            <div className="min-w-0 max-w-[70%] shrink-0 text-right">
+            <div className="min-w-0 flex-1 text-right">
               <p className="font-normal">{recipientSnapshot.full_name}</p>
               {recipientSubtitle(recipientSnapshot, receiveNetwork) ? (
                 <p className="text-sm text-muted-foreground">
@@ -237,7 +237,7 @@ export function PayoutReviewDetailsRows({
               ) : null}
             </div>
           ) : recipientDisplayName || counterpartyAddress ? (
-            <div className="min-w-0 max-w-[70%] shrink-0 text-right">
+            <div className="min-w-0 flex-1 text-right">
               {recipientDisplayName ? <p className="font-normal">{recipientDisplayName}</p> : null}
               {walletRecipientFallbackSubtitle({
                 bankName: "Wallet",
@@ -281,7 +281,7 @@ export function PayoutReviewDetailsRows({
           <TransactionDetailSummaryRow
             label={REVIEW_ROW_LABELS.note}
             value={sendNote}
-            valueClassName="max-w-[70%] text-sm"
+            valueClassName="min-w-0 flex-1 text-sm"
           />
         ) : null}
       </CardContent>

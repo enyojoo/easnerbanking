@@ -926,7 +926,7 @@ export default function SendConfirmPage() {
 
   if (!state) {
     return (
-      <div className="mx-auto max-w-2xl space-y-6">
+      <div className="mx-auto w-full max-w-2xl space-y-6">
         <div className="animate-pulse space-y-4">
           <div className="h-8 w-48 rounded bg-muted" />
           <div className="h-32 rounded bg-muted" />
@@ -1051,8 +1051,8 @@ export default function SendConfirmPage() {
   )
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div className="flex items-start gap-3">
+    <div className="mx-auto w-full max-w-2xl space-y-6">
+      <div className="flex items-center gap-3">
         <Button variant="outline" size="icon" className="h-11 w-11 shrink-0" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
@@ -1186,7 +1186,7 @@ export default function SendConfirmPage() {
             <SendSelectedRecipientSummary
               beneficiary={state.recipient}
               alignEnd
-              className="min-w-0 max-w-[70%] shrink-0"
+              className="min-w-0 flex-1"
             />
           }
           copiedField={copiedKey}
@@ -1245,7 +1245,7 @@ export default function SendConfirmPage() {
             <SendSelectedRecipientSummary
               beneficiary={state.recipient}
               alignEnd
-              className="min-w-0 max-w-[70%] shrink-0"
+              className="min-w-0 flex-1"
             />
           }
           sourceAccountCurrency={
@@ -1304,12 +1304,12 @@ export default function SendConfirmPage() {
       )}
 
       {!isYcCrossBorder ? (
-      <div className="flex gap-3">
-        <Button variant="outline" size="lg" className="h-11" onClick={() => router.back()}>
+      <div className="flex w-full gap-3">
+        <Button variant="outline" size="lg" className="h-12 shrink-0 px-6" onClick={() => router.back()}>
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
-        <Button size="lg" className="h-11 flex-1" onClick={onAuthorizeClick} disabled={authorizeDisabled}>
+        <Button size="lg" className="h-12 min-w-0 flex-1" onClick={onAuthorizeClick} disabled={authorizeDisabled}>
           {isAuthorizing ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />

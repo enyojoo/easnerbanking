@@ -21,7 +21,7 @@ export function isMobileMoneyPayoutCorridor(input: PayoutTransferMethodInput): b
 
 /** Corridor label for global payout review, push title, and detail rows. */
 export function getGlobalPayoutTransferMethod(input: PayoutTransferMethodInput): string {
-  if (String(input.payeeEasetag || "").trim()) return "Easetag (wallet-to-wallet)"
+  if (String(input.payeeEasetag || "").trim()) return "Easetag"
   if (isMobileMoneyPayoutCorridor(input)) return "Local transfer"
 
   const currency = String(input.currency || "").toUpperCase()
@@ -43,6 +43,7 @@ export function normalizeTransferMethodLabel(raw: string | null | undefined): st
   const lower = s.toLowerCase()
   if (lower === "bank transfer") return "Local transfer"
   if (lower === "mobile money" || lower === "mobile money transfer") return "Local transfer"
+  if (lower === "easetag (wallet-to-wallet)") return "Easetag"
   return s
 }
 
@@ -62,6 +63,7 @@ export function resolvePayoutNotificationActivityLabel(
 
 export function getGlobalPayoutProcessingTime(method: string): string {
   switch (method) {
+    case "Easetag":
     case "Easetag (wallet-to-wallet)":
       return "Usually instant"
     case "ACH":

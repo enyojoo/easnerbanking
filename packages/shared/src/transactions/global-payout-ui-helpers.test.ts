@@ -46,6 +46,10 @@ describe("formatTransactionDetailHeroTitle", () => {
 })
 
 describe("getGlobalPayoutTransferMethod", () => {
+  it("uses Easetag for payee easetag sends", () => {
+    expect(getGlobalPayoutTransferMethod({ payeeEasetag: "enyo" })).toBe("Easetag")
+  })
+
   it("uses Local transfer for NG bank corridor", () => {
     expect(
       getGlobalPayoutTransferMethod({
