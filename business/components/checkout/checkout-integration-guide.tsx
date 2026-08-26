@@ -3,10 +3,16 @@
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CheckoutCodeBlock } from "@/components/checkout/checkout-code-block"
-import { CheckoutWebhookDeliveries } from "@/components/checkout/checkout-webhook-deliveries"
-import { fetchWithSession } from "@/lib/fetch-with-session"
+import { openTestCheckout } from "@/components/checkout/open-test-checkout"
 import {
   CHECKOUT_EVENT_CATALOG,
   CHECKOUT_RECIPES,
@@ -19,30 +25,113 @@ import {
   recipeWebhookHandler,
   type CheckoutRecipeId,
 } from "@/lib/checkout/checkout-recipes"
-import type { CheckoutHubPayload } from "@/lib/checkout/hub-types"
+import type { CheckoutSiteSetupStep } from "@/lib/checkout/checkout-phases"
+import type { CheckoutHubPayload, CheckoutSite } from "@/lib/checkout/hub-types"
+import { COLLECTIONS_COPY } from "@/lib/copy/business-ui-copy"
 
-declare global {
-  interface Window {
-    EasnerCheckout?: {
-      openOverlay: (options: {
-        publishableKey: string
-        clientSecret: string
-        onSuccess?: () => void
-      }) => Promise<unknown>
-    }
-  }
+export function CheckoutGuideSheet({
+  open,
+  onOpenChange,
+  data,
+  site,
+  onSaved,
+  focus,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  data: CheckoutHubPayload
+  site: CheckoutSite | null
+  onSaved: () => void
+  focus: "guide" | CheckoutSiteSetupStep
+}) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl">
+        <SheetHeader>
+          <SheetTitle>
+            {focus === "guide" ? COLLECTIONS_COPY.guideTitle : COLLECTIONS_COPY.stepCodeTitle}
+          </SheetTitle>
+          <SheetDescription>{COLLECTIONS_COPY.guideBlurb}</SheetDescription>
+        </SheetHeader>
+        <div className="px-4 pb-8">
+          {focus === "guide" ? (
+            <CheckoutIntegrationGuide data={data} onSaved={onSaved} />
+          ) : (
+            <CheckoutStepCode data={data} site={site} step={focus} />
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  )
 }
 
-async function loadCheckoutJs(): Promise<void> {
-  if (window.EasnerCheckout?.openOverlay) return
-  await new Promise<void>((resolve, reject) => {
-    const script = document.createElement("script")
-    script.src = "/checkout.js"
-    script.async = true
-    script.onload = () => resolve()
-    script.onerror = () => reject(new Error("Could not load Easner Checkout"))
-    document.head.appendChild(script)
-  })
+function CheckoutStepCode({
+  data,
+  site,
+  step,
+}: {
+  data: CheckoutHubPayload
+  site: CheckoutSite | null
+  step: CheckoutSiteSetupStep
+}) {
+  const publishableKey =
+    data.keys.find((key) => key.mode === "test")?.publishable_key ?? "easner_pk_test_…"
+  const successUrl =
+    site?.successUrl || "https://shop.yoursite.com/thanks?session_id={CHECKOUT_SESSION_ID}"
+  const cancelUrl = site?.cancelUrl || "https://shop.yoursite.com/cart"
+
+  if (step === "website") {
+    return (
+      <div className="flex flex-col gap-4">
+        <p className="text-sm text-muted-foreground">
+          Checkout.js only loads on origins you register. Sessions must use a success URL on the same
+          site.
+        </p>
+        <CheckoutCodeBlock
+          label="Allowed origin"
+          code={site?.origin || "https://shop.yoursite.com"}
+        />
+      </div>
+    )
+  }
+
+  if (step === "urls") {
+    return (
+      <div className="flex flex-col gap-4">
+        <p className="text-sm text-muted-foreground">
+          Your server sends these when it creates a session. Easner replaces {"{CHECKOUT_SESSION_ID}"}{" "}
+          on success.
+        </p>
+        <CheckoutCodeBlock
+          label="POST /v1/checkout/sessions URLs"
+          code={JSON.stringify({ success_url: successUrl, cancel_url: cancelUrl }, null, 2)}
+        />
+      </div>
+    )
+  }
+
+  if (step === "keys") {
+    return (
+      <div className="flex flex-col gap-4">
+        <p className="text-sm text-muted-foreground">
+          Publishable key in the browser. Secret key only on your server. The page never sees the
+          amount.
+        </p>
+        <CheckoutCodeBlock label="Browser" code={recipeBrowserHtml(publishableKey)} />
+        <CheckoutCodeBlock label="Server (Node)" code={recipeServerNode(CHECKOUT_RECIPES[0])} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-muted-foreground">
+        Fulfil on checkout.completed. Verify the easner-signature header — not X-Easner-Signature.
+      </p>
+      <CheckoutCodeBlock label="verifyWebhook()" code={recipeVerifyWebhook()} />
+      <CheckoutCodeBlock label="Handler" code={recipeWebhookHandler()} />
+    </div>
+  )
 }
 
 export function CheckoutIntegrationGuide({
@@ -71,28 +160,9 @@ export function CheckoutIntegrationGuide({
   const tryTest = async () => {
     setTrying(true)
     try {
-      const res = await fetchWithSession("/api/checkout/try-test", { method: "POST" })
-      const body = (await res.json().catch(() => ({}))) as {
-        client_secret?: string
-        publishable_key?: string
-        error?: string
-      }
-      if (!res.ok || !body.client_secret) {
-        toast.error(body.error || "Could not start a test checkout")
-        return
-      }
-      await loadCheckoutJs()
-      if (!window.EasnerCheckout?.openOverlay) {
-        toast.error("Checkout script did not load")
-        return
-      }
-      await window.EasnerCheckout.openOverlay({
-        publishableKey: body.publishable_key || publishableKey,
-        clientSecret: body.client_secret,
-        onSuccess: () => {
-          toast.success("Test payment received.")
-          onSaved()
-        },
+      await openTestCheckout({
+        fallbackPublishableKey: publishableKey,
+        onSuccess: onSaved,
       })
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not open checkout")
@@ -102,10 +172,10 @@ export function CheckoutIntegrationGuide({
   }
 
   return (
-    <div className="space-y-10">
-      <section className="space-y-3">
+    <div className="flex flex-col gap-10">
+      <section className="flex flex-col gap-3">
         <h2 className="text-base font-semibold text-foreground">1. Before you start</h2>
-        <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+        <ul className="list-disc pl-5 text-sm text-muted-foreground">
           <li>Finish Connect so live charges can settle to your Easner balance.</li>
           <li>Add your website origin and a success URL.</li>
           <li>Create test keys. Keep the secret key on your server.</li>
@@ -118,15 +188,16 @@ export function CheckoutIntegrationGuide({
         </p>
       </section>
 
-      <section className="space-y-3">
+      <section className="flex flex-col gap-3">
         <h2 className="text-base font-semibold text-foreground">2. Quick test</h2>
         <p className="text-sm text-muted-foreground">
           Create a $49.00 test session and pay in this page. Use card 4242 4242 4242 4242. Nothing is
-          charged. You can also open the local HTML kit at <code>/checkout-test/test-checkout.html</code>.
+          charged. You can also open the local HTML kit at{" "}
+          <code>/checkout-test/test-checkout.html</code>.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button type="button" disabled={trying || !data.keys.length} onClick={() => void tryTest()}>
-            {trying ? "Opening…" : "Try test checkout"}
+            {trying ? COLLECTIONS_COPY.tryingTestCheckout : COLLECTIONS_COPY.tryTestCheckout}
           </Button>
         </div>
         <CheckoutCodeBlock
@@ -135,9 +206,9 @@ export function CheckoutIntegrationGuide({
         />
       </section>
 
-      <section className="space-y-4">
+      <section className="flex flex-col gap-4">
         <h2 className="text-base font-semibold text-foreground">3. Integrate on your website</h2>
-        <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+        <ol className="list-decimal pl-5 text-sm text-muted-foreground">
           <li>POST /v1/checkout/sessions from your server with the secret key.</li>
           <li>Return only client_secret to the page.</li>
           <li>Load js.easner.com/v1/checkout.js.</li>
@@ -152,7 +223,7 @@ export function CheckoutIntegrationGuide({
               </TabsTrigger>
             ))}
           </TabsList>
-          <TabsContent value={recipe.id} className="space-y-4 pt-4">
+          <TabsContent value={recipe.id} className="flex flex-col gap-4 pt-4">
             <p className="text-sm text-muted-foreground">{recipe.blurb}</p>
             <CheckoutCodeBlock label="Server (Node)" code={snippets.node} />
             <CheckoutCodeBlock label="Server (curl)" code={snippets.curl} />
@@ -163,16 +234,17 @@ export function CheckoutIntegrationGuide({
         </Tabs>
       </section>
 
-      <section className="space-y-3">
+      <section className="flex flex-col gap-3">
         <h2 className="text-base font-semibold text-foreground">4. AI integration prompts</h2>
         <p className="text-sm text-muted-foreground">
-          Paste into Cursor or another coding agent. Derived from the recipe above — not a separate source of truth.
+          Paste into Cursor or another coding agent. Derived from the recipe above — not a separate
+          source of truth.
         </p>
         <CheckoutCodeBlock label={`${recipe.title} prompt`} code={recipeAiPrompt(recipe)} />
         <CheckoutCodeBlock label="Debug prompt" code={recipeDebugPrompt()} />
       </section>
 
-      <section className="space-y-3">
+      <section className="flex flex-col gap-3">
         <h2 className="text-base font-semibold text-foreground">5. Troubleshooting</h2>
         <div className="overflow-x-auto text-sm">
           <table className="w-full min-w-[480px] border-collapse text-left">
@@ -208,7 +280,7 @@ export function CheckoutIntegrationGuide({
         </div>
       </section>
 
-      <section className="space-y-3">
+      <section className="flex flex-col gap-3">
         <h2 className="text-base font-semibold text-foreground">Event catalog</h2>
         {CHECKOUT_EVENT_CATALOG.map((item) => (
           <CheckoutCodeBlock
@@ -217,7 +289,6 @@ export function CheckoutIntegrationGuide({
             code={JSON.stringify(item.example, null, 2)}
           />
         ))}
-        <CheckoutWebhookDeliveries live />
       </section>
     </div>
   )

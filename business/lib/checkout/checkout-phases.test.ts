@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest"
 import {
   CHECKOUT_PHASES,
   checkoutSetupComplete,
+  checkoutSitePageReady,
   completedCheckoutSteps,
   firstIncompletePhase,
+  firstIncompleteSiteSetupStep,
   phaseComplete,
 } from "./checkout-phases"
 import type { CheckoutHubPayload } from "@/lib/checkout/hub-types"
@@ -109,5 +111,34 @@ describe("checkout phases", () => {
     expect(done.has("urls")).toBe(false)
     expect(completedCheckoutSteps(data).has("website")).toBe(true)
     expect(completedCheckoutSteps(data, data.sites[0]).has("urls")).toBe(true)
+  })
+
+  it("treats the site page as ready once origin, success URL, keys, and webhook exist", () => {
+    const data = payload({
+      ready: true,
+      webhookUrl: "https://a.com/hooks",
+      webhookSecretLast4: "wxyz",
+    })
+    data.keys = [
+      {
+        id: "1",
+        mode: "test",
+        publishable_key: "easner_pk_test_x",
+        secret_key_last4: "abcd",
+        created_at: "",
+        last_used_at: null,
+      },
+    ]
+    const site = {
+      id: "site_a",
+      origin: "https://a.com",
+      successUrl: "https://a.com/ok",
+      cancelUrl: null,
+      createdAt: "",
+      updatedAt: "",
+    }
+    expect(checkoutSitePageReady(data, site)).toBe(true)
+    expect(checkoutSitePageReady(data, { ...site, successUrl: null })).toBe(false)
+    expect(firstIncompleteSiteSetupStep(payload({}), null)).toBe("website")
   })
 })

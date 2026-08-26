@@ -75,3 +75,25 @@ export function checkoutSetupComplete(data: CheckoutHubPayload | null): boolean 
   const verify = CHECKOUT_PHASES.find((phase) => phase.id === "verify")
   return Boolean(integrate && verify && phaseComplete(integrate, done) && phaseComplete(verify, done))
 }
+
+export const CHECKOUT_SITE_SETUP_STEPS = ["website", "urls", "keys", "webhook"] as const
+export type CheckoutSiteSetupStep = (typeof CHECKOUT_SITE_SETUP_STEPS)[number]
+
+export function checkoutSitePageReady(
+  data: CheckoutHubPayload | null,
+  site?: CheckoutSite | null,
+): boolean {
+  if (!data || !site?.origin || !site.successUrl) return false
+  return (
+    data.keys.length > 0 &&
+    Boolean(data.settings.webhookUrl && data.settings.webhookSecretLast4)
+  )
+}
+
+export function firstIncompleteSiteSetupStep(
+  data: CheckoutHubPayload | null,
+  site?: CheckoutSite | null,
+): CheckoutSiteSetupStep {
+  const done = completedCheckoutSteps(data, site)
+  return CHECKOUT_SITE_SETUP_STEPS.find((step) => !done.has(step)) ?? "webhook"
+}

@@ -1,143 +1,147 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import Link from "next/link"
+import { useState, type ReactNode } from "react"
+import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { CheckoutCodeBlock } from "@/components/checkout/checkout-code-block"
-import type { CheckoutHubPayload } from "@/lib/checkout/hub-types"
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { CheckoutWebhookDeliveries } from "@/components/checkout/checkout-webhook-deliveries"
+import { openTestCheckout } from "@/components/checkout/open-test-checkout"
+import type { CheckoutSiteSetupStep } from "@/lib/checkout/checkout-phases"
+import type { CheckoutHubPayload, CheckoutSite } from "@/lib/checkout/hub-types"
 import { COLLECTIONS_COPY } from "@/lib/copy/business-ui-copy"
 
 export function CheckoutDashboardPanel({
   data,
-  onEdit,
+  site,
+  onEditStep,
+  onOpenGuide,
+  onSaved,
+  liveSwitch,
 }: {
   data: CheckoutHubPayload
-  onEdit: () => void
+  site: CheckoutSite
+  onEditStep: (step: CheckoutSiteSetupStep) => void
+  onOpenGuide: () => void
+  onSaved: () => void
+  liveSwitch: ReactNode
 }) {
-  const [framework, setFramework] = useState("html")
+  const [trying, setTrying] = useState(false)
   const testKey = data.keys.find((key) => key.mode === "test")
   const liveKey = data.keys.find((key) => key.mode === "live")
-  const publishable = liveKey?.publishable_key ?? testKey?.publishable_key ?? "easner_pk_test_…"
+  const activeKey = liveKey ?? testKey
+  const publishable = activeKey?.publishable_key ?? "easner_pk_test_…"
   const webhookOn = Boolean(data.settings.webhookUrl && data.settings.webhookSecretLast4)
+  const lastDelivery = data.settings.lastWebhookDeliveredAt
+    ? `Delivered ${new Date(data.settings.lastWebhookDeliveredAt).toLocaleString()}`
+    : COLLECTIONS_COPY.webhookNoDeliveries
 
-  const snippets = useMemo(
-    () => ({
-      html: `<script src="https://js.easner.com/v1/checkout.js"></script>
-<div id="easner-checkout"></div>
-<script>
-  EasnerCheckout.mount("#easner-checkout", {
-    publishableKey: "${publishable}",
-    clientSecret: window.EASNER_CLIENT_SECRET,
-  });
-</script>`,
-      next: `import Script from "next/script";
-
-export function Pay() {
-  return (
-    <>
-      <Script src="https://js.easner.com/v1/checkout.js" />
-      <div id="easner-checkout" />
-    </>
-  );
-}`,
-      node: `const res = await fetch("https://api.easner.com/v1/checkout/sessions", {
-  method: "POST",
-  headers: {
-    Authorization: \`Bearer \${process.env.EASNER_SECRET_KEY}\`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    mode: "payment",
-    amount: 4900,
-    currency: "usd",
-    success_url: "https://yoursite.com/thanks",
-    cancel_url: "https://yoursite.com/cart",
-  }),
-});`,
-    }),
-    [publishable],
-  )
+  const tryTest = async () => {
+    setTrying(true)
+    try {
+      await openTestCheckout({
+        fallbackPublishableKey: publishable,
+        onSuccess: onSaved,
+      })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not open checkout")
+    } finally {
+      setTrying(false)
+    }
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <StatusCard
+          title={COLLECTIONS_COPY.originLabel}
+          hint={site.origin}
+          onEdit={() => onEditStep("website")}
+        />
+        <StatusCard
+          title={COLLECTIONS_COPY.returnUrlsLabel}
+          hint={[
+            site.successUrl ? COLLECTIONS_COPY.successUrlSaved : null,
+            site.cancelUrl ? COLLECTIONS_COPY.cancelUrlSaved : COLLECTIONS_COPY.noCancelUrl,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+          onEdit={() => onEditStep("urls")}
+        />
+        <StatusCard
+          title={COLLECTIONS_COPY.keysLabel}
+          hint={
+            activeKey
+              ? `${activeKey.mode} · last used ${
+                  activeKey.last_used_at
+                    ? new Date(activeKey.last_used_at).toLocaleString()
+                    : COLLECTIONS_COPY.lastUsedNever
+                }`
+              : "None yet"
+          }
+          onEdit={() => onEditStep("keys")}
+        />
+        <StatusCard
+          title={COLLECTIONS_COPY.webhookLabel}
+          hint={data.settings.webhookUrl ?? lastDelivery}
+          badge={
+            <Badge variant={webhookOn ? "emerald" : "slate"}>
+              {webhookOn ? COLLECTIONS_COPY.statusWebhookOn : COLLECTIONS_COPY.statusWebhookOff}
+            </Badge>
+          }
+          extra={webhookOn ? lastDelivery : null}
+          onEdit={() => onEditStep("webhook")}
+        />
+      </div>
+
       <div className="flex flex-wrap gap-2">
-        <Button type="button" onClick={onEdit}>
-          {COLLECTIONS_COPY.editIntegration}
+        <Button
+          type="button"
+          variant="primary"
+          disabled={trying || !data.keys.length}
+          onClick={() => void tryTest()}
+        >
+          {trying ? COLLECTIONS_COPY.tryingTestCheckout : COLLECTIONS_COPY.tryTestCheckout}
         </Button>
-        <Button type="button" variant="outline" asChild>
-          <Link href="/transactions">{COLLECTIONS_COPY.viewTransactions}</Link>
+        <Button type="button" variant="secondary" onClick={onOpenGuide}>
+          {COLLECTIONS_COPY.addToWebsite}
         </Button>
       </div>
 
-      <div className="space-y-5 rounded-xl border p-5 sm:p-6">
-        <p className="text-sm font-medium text-foreground">{COLLECTIONS_COPY.dashboardTitle}</p>
-        <dl className="grid gap-5 text-sm sm:grid-cols-2">
-          <div>
-            <dt className="text-muted-foreground">Publishable key</dt>
-            <dd className="mt-1">
-              {testKey || liveKey ? (
-                <CheckoutCodeBlock code={publishable} />
-              ) : (
-                <span className="text-muted-foreground">None yet</span>
-              )}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Websites</dt>
-            <dd className="mt-1 font-mono text-xs">
-              {data.settings.allowedOrigins.length
-                ? data.settings.allowedOrigins.join(", ")
-                : "None yet"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Secret key</dt>
-            <dd className="mt-1 text-xs text-muted-foreground">
-              {(liveKey ?? testKey)
-                ? `Ending ${(liveKey ?? testKey)?.secret_key_last4} – rotate in setup to reveal a new one.`
-                : "None yet"}
-              {(liveKey ?? testKey)?.last_used_at ? (
-                <span>
-                  {" "}
-                  Last used {new Date(String((liveKey ?? testKey)?.last_used_at)).toLocaleString()}.
-                </span>
-              ) : null}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Webhook</dt>
-            <dd className="mt-1 space-y-1">
-              <Badge variant={webhookOn ? "default" : "secondary"}>
-                {webhookOn ? COLLECTIONS_COPY.statusWebhookOn : COLLECTIONS_COPY.statusWebhookOff}
-              </Badge>
-              {data.settings.webhookUrl ? (
-                <p className="break-all font-mono text-xs text-muted-foreground">
-                  {data.settings.webhookUrl}
-                </p>
-              ) : null}
-            </dd>
-          </div>
-        </dl>
-      </div>
-
-      <Tabs value={framework} onValueChange={setFramework}>
-        <TabsList>
-          <TabsTrigger value="html">HTML</TabsTrigger>
-          <TabsTrigger value="next">Next.js</TabsTrigger>
-          <TabsTrigger value="node">Node</TabsTrigger>
-        </TabsList>
-        <TabsContent value="html" className="mt-3">
-          <CheckoutCodeBlock code={snippets.html} />
-        </TabsContent>
-        <TabsContent value="next" className="mt-3">
-          <CheckoutCodeBlock code={snippets.next} />
-        </TabsContent>
-        <TabsContent value="node" className="mt-3">
-          <CheckoutCodeBlock code={snippets.node} />
-        </TabsContent>
-      </Tabs>
+      <CheckoutWebhookDeliveries live />
+      {liveSwitch}
     </div>
+  )
+}
+
+function StatusCard({
+  title,
+  hint,
+  badge,
+  extra,
+  onEdit,
+}: {
+  title: string
+  hint: string
+  badge?: ReactNode
+  extra?: string | null
+  onEdit: () => void
+}) {
+  return (
+    <Card elevation="flat" padding="sm">
+      <CardHeader className="px-5">
+        <CardTitle>{title}</CardTitle>
+        <CardAction>
+          <Button type="button" variant="ghost" size="sm" onClick={onEdit}>
+            {COLLECTIONS_COPY.editWebsite}
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2 px-5">
+        {badge}
+        <p className="break-all font-mono text-xs text-muted-foreground">{hint}</p>
+        {extra ? <p className="text-xs text-muted-foreground">{extra}</p> : null}
+      </CardContent>
+    </Card>
   )
 }

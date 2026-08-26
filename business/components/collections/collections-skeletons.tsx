@@ -20,21 +20,21 @@ export function PaymentLinksListSkeleton() {
 
 export function CheckoutHubSkeleton() {
   return (
-    <div
-      className="grid gap-8 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)]"
-      aria-busy="true"
-      aria-label="Loading checkout setup"
-    >
-      <div className="hidden space-y-2 lg:block">
-        <Skeleton className="h-4 w-24" />
-        {Array.from({ length: 3 }).map((_, index) => (
-          <Skeleton key={index} className="h-12 w-full" />
+    <div className="flex flex-col gap-8" aria-busy="true" aria-label="Loading checkout setup">
+      <div className="flex items-center justify-between gap-3">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-6 w-24 rounded-full" />
+      </div>
+      <div className="flex gap-2">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <Skeleton key={index} className="h-8 w-28 rounded-full" />
         ))}
       </div>
-      <div className="space-y-6 rounded-lg border p-6 sm:p-8">
+      <div className="flex flex-col gap-6 rounded-3xl border p-6 sm:p-8">
         <Skeleton className="h-5 w-40" />
         <Skeleton className="h-4 w-3/4" />
-        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-9 w-36" />
       </div>
     </div>
   )

@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useMemo, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Check, Circle, Edit, Loader2, Plus, X } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -20,10 +21,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import {
-  CheckoutCodeBlock,
-  RevealOnceValue,
-} from "@/components/checkout/checkout-code-block"
+import { CheckoutCodeBlock, RevealOnceValue } from "@/components/checkout/checkout-code-block"
+import { CheckoutDashboardPanel } from "@/components/checkout/checkout-dashboard-panel"
+import { CheckoutGuideSheet } from "@/components/checkout/checkout-integration-guide"
 import { CheckoutHubSkeleton } from "@/components/collections/collections-skeletons"
 import {
   createCheckoutSite,
@@ -34,34 +34,22 @@ import {
   type CheckoutHubPayload,
   type CheckoutSite,
 } from "@/hooks/use-checkout-settings"
-import { CheckoutIntegrationGuide } from "@/components/checkout/checkout-integration-guide"
-import { CheckoutTestPaymentsDialog } from "@/components/checkout/checkout-test-payments-dialog"
-import { CheckoutWebhookDeliveries } from "@/components/checkout/checkout-webhook-deliveries"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { COLLECTIONS_COPY } from "@/lib/copy/business-ui-copy"
 import {
-  CHECKOUT_PHASES,
+  CHECKOUT_SITE_SETUP_STEPS,
+  checkoutSitePageReady,
   completedCheckoutSteps,
-  phaseComplete,
-  type CheckoutPhaseId,
-  type CheckoutStepId,
+  firstIncompleteSiteSetupStep,
+  type CheckoutSiteSetupStep,
 } from "@/lib/checkout/checkout-phases"
 import { cn } from "@/lib/utils"
 
-const PHASE_COPY: Record<CheckoutPhaseId, { title: string }> = {
-  connect_site: { title: COLLECTIONS_COPY.phaseConnect },
-  integrate: { title: COLLECTIONS_COPY.phaseIntegrate },
-  verify: { title: COLLECTIONS_COPY.phaseGoLive },
-}
-
-const STEP_COPY: Record<CheckoutStepId, { title: string; blurb: string }> = {
+const STEP_COPY: Record<CheckoutSiteSetupStep | "live", { title: string; blurb: string }> = {
   website: { title: COLLECTIONS_COPY.stepWebsiteTitle, blurb: COLLECTIONS_COPY.stepWebsiteBlurb },
   urls: { title: COLLECTIONS_COPY.stepUrlsTitle, blurb: COLLECTIONS_COPY.stepUrlsBlurb },
   keys: { title: COLLECTIONS_COPY.stepKeysTitle, blurb: COLLECTIONS_COPY.stepKeysBlurb },
-  snippet: { title: COLLECTIONS_COPY.stepSnippetTitle, blurb: COLLECTIONS_COPY.stepSnippetBlurb },
-  session: { title: COLLECTIONS_COPY.stepSessionTitle, blurb: COLLECTIONS_COPY.stepSessionBlurb },
   webhook: { title: COLLECTIONS_COPY.stepWebhookTitle, blurb: COLLECTIONS_COPY.stepWebhookBlurb },
-  test: { title: COLLECTIONS_COPY.stepTestTitle, blurb: COLLECTIONS_COPY.stepTestBlurb },
   live: { title: COLLECTIONS_COPY.stepLiveTitle, blurb: COLLECTIONS_COPY.stepLiveBlurb },
 }
 
@@ -74,10 +62,20 @@ export function CheckoutIntegrationHub({
 }) {
   const router = useRouter()
   const { data, loading, error, refetch } = useCheckoutSettings()
-  const [phase, setPhase] = useState<CheckoutPhaseId>("connect_site")
+  const [pinnedStep, setPinnedStep] = useState<CheckoutSiteSetupStep | null>(null)
+  const [focusStep, setFocusStep] = useState<CheckoutSiteSetupStep | null>(null)
+  const [guideOpen, setGuideOpen] = useState(false)
+  const [codeStep, setCodeStep] = useState<CheckoutSiteSetupStep | null>(null)
 
   const site = (data?.sites ?? []).find((item) => item.id === siteId) ?? null
   const completed = useMemo(() => completedCheckoutSteps(data, site), [data, site])
+  const incomplete = firstIncompleteSiteSetupStep(data, site)
+  const pageReady = flow === "edit" && checkoutSitePageReady(data, site)
+  const currentStep = resolveSetupStep(pinnedStep, incomplete)
+
+  useEffect(() => {
+    if (pageReady) setPinnedStep(null)
+  }, [pageReady])
 
   if (loading) {
     return <CheckoutHubSkeleton />
@@ -86,7 +84,7 @@ export function CheckoutIntegrationHub({
   if (error || !data) {
     return (
       <Card>
-        <CardContent className="space-y-3 p-6 text-sm">
+        <CardContent className="flex flex-col gap-3 p-6 text-sm">
           <p className="text-destructive">{COLLECTIONS_COPY.loadError}</p>
           <Button type="button" variant="outline" size="sm" onClick={() => void refetch()}>
             {COLLECTIONS_COPY.retry}
@@ -99,7 +97,7 @@ export function CheckoutIntegrationHub({
   if (flow === "edit" && Array.isArray(data.sites) && !site) {
     return (
       <Card>
-        <CardContent className="space-y-3 p-6 text-sm">
+        <CardContent className="flex flex-col gap-3 p-6 text-sm">
           <p>{COLLECTIONS_COPY.siteNotFound}</p>
           <Button type="button" variant="outline" size="sm" asChild>
             <Link href="/checkout">{COLLECTIONS_COPY.siteNotFoundCta}</Link>
@@ -109,83 +107,174 @@ export function CheckoutIntegrationHub({
     )
   }
 
-  const ready = data.readiness.ready
-  const doneCount = CHECKOUT_PHASES.filter((item) => phaseComplete(item, completed)).length
+  const title =
+    flow === "create"
+      ? COLLECTIONS_COPY.setupCreateTitle
+      : checkoutSiteHost(site?.origin) || COLLECTIONS_COPY.setupEditTitle
+  const statusLabel = pageReady
+    ? data.settings.liveModeEnabled
+      ? COLLECTIONS_COPY.statusLive
+      : COLLECTIONS_COPY.statusTest
+    : COLLECTIONS_COPY.settingUp
+  const editingReadyStep = pageReady ? focusStep : null
+  const sheetFocus = guideOpen ? "guide" : codeStep
 
   return (
     <div className="flex flex-col gap-8">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {COLLECTIONS_COPY.setupProgress} · {doneCount} {COLLECTIONS_COPY.of} {CHECKOUT_PHASES.length}
-      </p>
-      <div className="flex gap-2 overflow-x-auto pb-1 lg:hidden">
-        {CHECKOUT_PHASES.map((item, index) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setPhase(item.id)}
-            className={cn(
-              "shrink-0 rounded-full border px-3.5 py-1.5 text-xs",
-              phase === item.id ? "border-primary bg-primary/5 font-medium" : "text-muted-foreground",
-            )}
-          >
-            {index + 1}. {PHASE_COPY[item.id].title}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
+        <Badge variant={pageReady ? (data.settings.liveModeEnabled ? "emerald" : "slate") : "amber"}>
+          {statusLabel}
+        </Badge>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)] lg:items-start">
-        <ul className="hidden lg:flex lg:flex-col lg:gap-2">
-          {CHECKOUT_PHASES.map((item, index) => {
-            const isDone = phaseComplete(item, completed)
-            return (
-              <li key={item.id}>
+      {pageReady && site && !editingReadyStep ? (
+        <CheckoutDashboardPanel
+          data={data}
+          site={site}
+          onEditStep={setFocusStep}
+          onOpenGuide={() => setGuideOpen(true)}
+          onSaved={() => void refetch()}
+          liveSwitch={<StepLive data={data} onSaved={() => void refetch()} />}
+        />
+      ) : (
+        <CheckoutSetupWizard
+          data={data}
+          site={site}
+          completed={completed}
+          currentStep={editingReadyStep ?? currentStep}
+          showStepper={!editingReadyStep}
+          onSelectStep={editingReadyStep ? setFocusStep : setPinnedStep}
+          onNeedCode={setCodeStep}
+          onSaved={() => void refetch()}
+          onSiteCreated={(id) => router.replace(`/checkout/${id}`)}
+          onDoneEditing={editingReadyStep ? () => setFocusStep(null) : undefined}
+        />
+      )}
+
+      <CheckoutGuideSheet
+        open={Boolean(sheetFocus)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setGuideOpen(false)
+            setCodeStep(null)
+          }
+        }}
+        data={data}
+        site={site}
+        onSaved={() => void refetch()}
+        focus={sheetFocus ?? "guide"}
+      />
+    </div>
+  )
+}
+
+function resolveSetupStep(
+  pinned: CheckoutSiteSetupStep | null,
+  incomplete: CheckoutSiteSetupStep,
+): CheckoutSiteSetupStep {
+  if (!pinned) return incomplete
+  const pinnedIndex = CHECKOUT_SITE_SETUP_STEPS.indexOf(pinned)
+  const incompleteIndex = CHECKOUT_SITE_SETUP_STEPS.indexOf(incomplete)
+  return pinnedIndex <= incompleteIndex ? pinned : incomplete
+}
+
+function checkoutSiteHost(origin: string | null | undefined): string {
+  if (!origin) return ""
+  try {
+    return new URL(origin).host
+  } catch {
+    return origin.replace(/^https?:\/\//, "")
+  }
+}
+
+function CheckoutSetupWizard({
+  data,
+  site,
+  completed,
+  currentStep,
+  showStepper,
+  onSelectStep,
+  onNeedCode,
+  onSaved,
+  onSiteCreated,
+  onDoneEditing,
+}: {
+  data: CheckoutHubPayload
+  site: CheckoutSite | null
+  completed: ReturnType<typeof completedCheckoutSteps>
+  currentStep: CheckoutSiteSetupStep
+  showStepper: boolean
+  onSelectStep: (step: CheckoutSiteSetupStep) => void
+  onNeedCode: (step: CheckoutSiteSetupStep) => void
+  onSaved: () => void
+  onSiteCreated: (id: string) => void
+  onDoneEditing?: () => void
+}) {
+  const stepIndex = CHECKOUT_SITE_SETUP_STEPS.indexOf(currentStep)
+  const nextStep = CHECKOUT_SITE_SETUP_STEPS[stepIndex + 1]
+  const currentDone = completed.has(currentStep)
+
+  return (
+    <div className="flex flex-col gap-6">
+      {showStepper ? (
+        <div className="flex flex-col gap-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {COLLECTIONS_COPY.setupProgress} · {stepIndex + 1} {COLLECTIONS_COPY.of}{" "}
+            {CHECKOUT_SITE_SETUP_STEPS.length} · {STEP_COPY[currentStep].title}
+          </p>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {CHECKOUT_SITE_SETUP_STEPS.map((step, index) => {
+              const isDone = completed.has(step)
+              const isCurrent = step === currentStep
+              return (
                 <button
+                  key={step}
                   type="button"
-                  onClick={() => setPhase(item.id)}
+                  onClick={() => onSelectStep(step)}
                   className={cn(
-                    "flex w-full items-start gap-3 rounded-lg px-3 py-3 text-left text-sm transition-colors",
-                    phase === item.id ? "bg-muted font-medium" : "hover:bg-muted/60",
+                    "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs",
+                    isCurrent ? "border-primary bg-primary/5 font-medium" : "text-muted-foreground",
                   )}
                 >
                   {isDone ? (
-                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+                    <Check className="size-3.5 text-primary" aria-hidden />
                   ) : (
-                    <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                    <Circle className="size-3.5" aria-hidden />
                   )}
-                  <span className="leading-snug">
-                    {index + 1}. {PHASE_COPY[item.id].title}
-                  </span>
+                  {index + 1}. {STEP_COPY[step].title}
                 </button>
-              </li>
-            )
-          })}
-        </ul>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
 
-        <Card>
-          <CardContent className="flex flex-col gap-10 p-6 sm:p-8">
-            {CHECKOUT_PHASES.find((item) => item.id === phase)?.steps.map((step, index) => (
-              <section
-                key={step}
-                className={cn(
-                  "flex flex-col gap-5",
-                  index > 0 && "border-t pt-10",
-                  !ready && (step === "keys" || step === "live") && "opacity-70",
-                )}
-              >
-                <StepBody
-                  step={step}
-                  data={data}
-                  site={site}
-                  onSaved={refetch}
-                  onSiteCreated={(id) => router.replace(`/checkout/${id}`)}
-                />
-              </section>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-
-      <CheckoutIntegrationGuide data={data} onSaved={() => void refetch()} />
+      <Card>
+        <CardContent className="flex flex-col gap-6 p-6 sm:p-8">
+          <StepBody
+            step={currentStep}
+            data={data}
+            site={site}
+            onSaved={onSaved}
+            onSiteCreated={onSiteCreated}
+          />
+          <div className="flex flex-wrap gap-2">
+            {onDoneEditing ? (
+              <Button type="button" onClick={onDoneEditing}>
+                {COLLECTIONS_COPY.doneEditing}
+              </Button>
+            ) : nextStep ? (
+              <Button type="button" disabled={!currentDone} onClick={() => onSelectStep(nextStep)}>
+                {COLLECTIONS_COPY.next} · {STEP_COPY[nextStep].title}
+              </Button>
+            ) : null}
+            <Button type="button" variant="ghost" onClick={() => onNeedCode(currentStep)}>
+              {COLLECTIONS_COPY.needTheCode}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
@@ -196,7 +285,13 @@ type SiteStepProps = HubDataProps & {
   onSiteCreated: (id: string) => void
 }
 
-function StepBody({ step, data, site, onSaved, onSiteCreated }: SiteStepProps & { step: CheckoutStepId }) {
+function StepBody({
+  step,
+  data,
+  site,
+  onSaved,
+  onSiteCreated,
+}: SiteStepProps & { step: CheckoutSiteSetupStep }) {
   switch (step) {
     case "website":
       return <StepWebsite data={data} site={site} onSaved={onSaved} onSiteCreated={onSiteCreated} />
@@ -204,34 +299,17 @@ function StepBody({ step, data, site, onSaved, onSiteCreated }: SiteStepProps & 
       return <StepUrls data={data} site={site} onSaved={onSaved} onSiteCreated={onSiteCreated} />
     case "keys":
       return <StepKeys data={data} onSaved={onSaved} />
-    case "snippet":
-      return <StepSnippet data={data} onSaved={onSaved} />
-    case "session":
-      return <StepSession site={site} />
     case "webhook":
       return <StepWebhook data={data} onSaved={onSaved} />
-    case "test":
-      return <StepTest />
-    case "live":
-      return <StepLive data={data} onSaved={onSaved} />
   }
 }
 
 function StepHeading({ title, blurb }: { title: string; blurb: string }) {
   return (
-    <div className="space-y-1.5">
+    <div className="flex flex-col gap-1.5">
       <h2 className="text-lg font-semibold leading-snug text-foreground">{title}</h2>
       <p className="text-sm leading-relaxed text-muted-foreground">{blurb}</p>
     </div>
-  )
-}
-
-function StepLearnMore({ children }: { children: ReactNode }) {
-  return (
-    <details className="text-sm text-muted-foreground">
-      <summary className="cursor-pointer select-none">{COLLECTIONS_COPY.learnMore}</summary>
-      <div className="mt-2 space-y-2">{children}</div>
-    </details>
   )
 }
 
@@ -255,11 +333,7 @@ function FieldEditControls({
   if (!hasSaved) {
     return (
       <Button type="button" size="sm" disabled={saving || saveDisabled} onClick={onSave}>
-        {saving ? (
-          <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden />
-        ) : (
-          <Plus className="mr-1 h-4 w-4" aria-hidden />
-        )}
+        {saving ? <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden /> : <Plus data-icon="inline-start" aria-hidden />}
         Add
       </Button>
     )
@@ -268,15 +342,11 @@ function FieldEditControls({
     return (
       <div className="flex items-center gap-2">
         <Button type="button" variant="outline" size="sm" disabled={saving} onClick={onCancel}>
-          <X className="mr-1 h-4 w-4" aria-hidden />
+          <X data-icon="inline-start" aria-hidden />
           Cancel
         </Button>
         <Button type="button" size="sm" disabled={saving || saveDisabled} onClick={onSave}>
-          {saving ? (
-            <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden />
-          ) : (
-            <Check className="mr-1 h-4 w-4" aria-hidden />
-          )}
+          {saving ? <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden /> : <Check data-icon="inline-start" aria-hidden />}
           Save
         </Button>
       </div>
@@ -284,7 +354,7 @@ function FieldEditControls({
   }
   return (
     <Button type="button" variant="outline" size="sm" onClick={onEdit}>
-      <Edit className="mr-1 h-4 w-4" aria-hidden />
+      <Edit data-icon="inline-start" aria-hidden />
       Edit
     </Button>
   )
@@ -331,7 +401,7 @@ function StepWebsite({ site, onSaved, onSiteCreated }: SiteStepProps) {
   return (
     <>
       <StepHeading title={STEP_COPY.website.title} blurb={STEP_COPY.website.blurb} />
-      <div className="space-y-3">
+      <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Label htmlFor="checkout-origin" className="mb-0">
             Website
@@ -413,8 +483,8 @@ function StepUrls({ site, onSaved }: SiteStepProps) {
       {!site ? (
         <p className="text-sm text-muted-foreground">Save the website first, then add return URLs.</p>
       ) : null}
-      <div className="space-y-5">
-        <div className="space-y-3">
+      <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Label htmlFor="checkout-success" className="mb-0">
               Success URL
@@ -444,7 +514,7 @@ function StepUrls({ site, onSaved }: SiteStepProps) {
             Easner replaces {"{CHECKOUT_SESSION_ID}"} so your page can look up the order.
           </p>
         </div>
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Label htmlFor="checkout-cancel" className="mb-0">
               Cancel URL
@@ -590,71 +660,6 @@ function StepKeys({ data, onSaved }: HubDataProps) {
   )
 }
 
-function StepSnippet({ data }: HubDataProps) {
-  const publishableKey =
-    data.keys.find((key) => key.mode === "test")?.publishable_key ?? "easner_pk_test_…"
-
-  return (
-    <>
-      <StepHeading title={STEP_COPY.snippet.title} blurb={STEP_COPY.snippet.blurb} />
-      <CheckoutCodeBlock
-        label="On your checkout page"
-        code={`<script src="https://js.easner.com/v1/checkout.js"></script>
-<div id="easner-checkout"></div>
-<script>
-  // Logged-in apps: pass customerEmail and customerName from POST /v1/checkout/sessions
-  // so the form does not ask for them again.
-  EasnerCheckout.mount("#easner-checkout", {
-    publishableKey: "${publishableKey}",
-    clientSecret: window.EASNER_CLIENT_SECRET,
-  });
-</script>`}
-      />
-      <StepLearnMore>
-        <p>
-          The client secret comes from the next step and is never hardcoded. Amount and secret keys
-          stay on your server. Checkout uses Easner branding.
-        </p>
-      </StepLearnMore>
-    </>
-  )
-}
-
-function StepSession({ site }: { site: CheckoutSite | null }) {
-  const successUrl =
-    site?.successUrl || "https://shop.yoursite.com/thanks?session_id={CHECKOUT_SESSION_ID}"
-  const cancelUrl = site?.cancelUrl || "https://shop.yoursite.com/cart"
-  return (
-    <>
-      <StepHeading title={STEP_COPY.session.title} blurb={STEP_COPY.session.blurb} />
-      <CheckoutCodeBlock
-        label="POST /v1/checkout/sessions"
-        code={`curl https://api.easner.com/v1/checkout/sessions \\
-  -H "Authorization: Bearer easner_sk_test_…" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "mode": "payment",
-    "amount": 4900,
-    "currency": "usd",
-    "line_items": [{ "name": "Pro plan", "amount": 4900 }],
-    "customer_email": "buyer@example.com",
-    "customer_name": "Buyer Name",
-    "success_url": "${successUrl}",
-    "cancel_url": "${cancelUrl}"
-  }'`}
-      />
-      <StepLearnMore>
-        <p>
-          The response contains a client_secret – pass it to the snippet. Optional customer_email
-          and customer_name come back on the session so logged-in apps can hide the email field
-          and prefill name on card. For a recurring charge use mode &quot;subscription&quot; with
-          interval &quot;month&quot; or &quot;year&quot;.
-        </p>
-      </StepLearnMore>
-    </>
-  )
-}
-
 function StepWebhook({ data, onSaved }: HubDataProps) {
   const savedUrl = data.settings.webhookUrl ?? ""
   const [editing, setEditing] = useState(!savedUrl)
@@ -726,7 +731,7 @@ function StepWebhook({ data, onSaved }: HubDataProps) {
     <>
       <StepHeading title={STEP_COPY.webhook.title} blurb={STEP_COPY.webhook.blurb} />
 
-      <div className="space-y-3">
+      <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Label htmlFor="checkout-webhook" className="mb-0">
             Endpoint URL
@@ -759,11 +764,11 @@ function StepWebhook({ data, onSaved }: HubDataProps) {
 
       <div className="flex flex-col gap-3 rounded-xl border p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 space-y-1">
+          <div className="flex min-w-0 flex-col gap-1">
             <p className="text-sm font-medium text-foreground">Signing secret</p>
             <p className="text-xs text-muted-foreground">
               {data.settings.webhookSecretLast4
-                ? `Ending ${data.settings.webhookSecretLast4}. Use it to verify the Easner-Signature header.`
+                ? `Ending ${data.settings.webhookSecretLast4}. Use it to verify the easner-signature header.`
                 : "Create a secret before you verify events on your server."}
             </p>
           </div>
@@ -793,7 +798,7 @@ function StepWebhook({ data, onSaved }: HubDataProps) {
 
       <div className="flex flex-col gap-3 rounded-xl border p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 space-y-1">
+          <div className="flex min-w-0 flex-col gap-1">
             <p className="text-sm font-medium text-foreground">Test delivery</p>
             <p className="text-xs text-muted-foreground">
               Sends a signed event to the saved endpoint. Does not charge a card.
@@ -813,20 +818,6 @@ function StepWebhook({ data, onSaved }: HubDataProps) {
         {!savedUrl ? (
           <p className="text-xs text-muted-foreground">Save an endpoint before sending a test.</p>
         ) : null}
-      </div>
-
-      <CheckoutWebhookDeliveries live />
-
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-foreground">Events you can listen for</p>
-        <ul className="space-y-2">
-          {Object.entries(data.webhookEvents).map(([event, description]) => (
-            <li key={event} className="text-sm">
-              <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{event}</code>{" "}
-              <span className="text-muted-foreground">{description}</span>
-            </li>
-          ))}
-        </ul>
       </div>
 
       <AlertDialog open={rotateOpen} onOpenChange={setRotateOpen}>
@@ -852,33 +843,6 @@ function StepWebhook({ data, onSaved }: HubDataProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
-  )
-}
-
-function StepTest() {
-  const [testPaymentsOpen, setTestPaymentsOpen] = useState(false)
-
-  return (
-    <>
-      <StepHeading title={STEP_COPY.test.title} blurb={STEP_COPY.test.blurb} />
-      <p className="text-sm text-muted-foreground">
-        Use Try test checkout in the guide below, or pay on a connected site with card{" "}
-        <code className="rounded bg-muted px-1.5 py-0.5 text-xs">4242 4242 4242 4242</code>. Local HTML
-        kit: <code className="rounded bg-muted px-1.5 py-0.5 text-xs">/checkout-test/test-checkout.html</code>.
-      </p>
-      <p className="text-sm text-muted-foreground">
-        A successful test shows on{" "}
-        <button
-          type="button"
-          className="underline underline-offset-2"
-          onClick={() => setTestPaymentsOpen(true)}
-        >
-          Transactions
-        </button>
-        . Use Test delivery in Webhook if you only need to confirm the endpoint.
-      </p>
-      <CheckoutTestPaymentsDialog open={testPaymentsOpen} onOpenChange={setTestPaymentsOpen} />
     </>
   )
 }
@@ -934,4 +898,3 @@ function StepLive({ data, onSaved }: HubDataProps) {
     </>
   )
 }
-
