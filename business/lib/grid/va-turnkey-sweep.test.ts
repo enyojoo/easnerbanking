@@ -33,6 +33,15 @@ vi.mock("./grid-bank-deposit-credit", () => ({
   reconcileGridVaBankDepositCreditForSolanaTx: (...args: unknown[]) => reconcile(...args),
 }))
 
+vi.mock("./external-account", () => ({
+  gridMinorUnits: (amount: number, decimals: number) => Math.round(amount * 10 ** decimals),
+  gridMajorUnits: (minor: number, decimals: number) => minor / 10 ** decimals,
+}))
+
+vi.mock("@/lib/wallet/wallet-balances-db", () => ({
+  applyWalletBalanceDelta: vi.fn(),
+}))
+
 vi.mock("@/lib/business/org-owner", () => ({
   resolveBusinessOrgOwnerUserId: vi.fn().mockResolvedValue("owner-1"),
 }))
@@ -202,6 +211,61 @@ describe("findGridVaTurnkeySweepForSolanaTx", () => {
       userId: "user-1",
     })
     expect(result).toEqual({ transferId: "sweep-1" })
+  })
+
+  it("matches a settled sweep by amount when Grid already stored a different hash", async () => {
+    const admin = chainAdmin({
+      limitRows: [
+        {
+          id: "sweep-hashed",
+          status: "settled",
+          quoted_pay_in: 188640,
+          updated_at: new Date().toISOString(),
+          metadata: {
+            inbound_grid_transaction_id: "Transaction:in-1",
+            grid_on_chain_tx_hash: "grid-reported-hash",
+            inbound_amount: 188640,
+          },
+        },
+      ],
+    })
+
+    const result = await findGridVaTurnkeySweepForSolanaTx(admin, {
+      txHash: "turnkey-wallet-hash",
+      businessId: "biz-1",
+      userId: "user-1",
+      amount: 188640,
+    })
+    expect(result).toEqual({ transferId: "sweep-hashed" })
+  })
+
+  it("matches dust inbound to the most recent hashed sweep", async () => {
+    const admin = chainAdmin({
+      limitRows: [
+        {
+          id: "sweep-old",
+          status: "settled",
+          quoted_pay_in: 5,
+          updated_at: new Date(Date.now() - 60_000).toISOString(),
+          metadata: { grid_on_chain_tx_hash: "grid-old" },
+        },
+        {
+          id: "sweep-recent",
+          status: "settled",
+          quoted_pay_in: 188640,
+          updated_at: new Date().toISOString(),
+          metadata: { grid_on_chain_tx_hash: "grid-recent" },
+        },
+      ],
+    })
+
+    const result = await findGridVaTurnkeySweepForSolanaTx(admin, {
+      txHash: "turnkey-dust-hash",
+      businessId: "biz-1",
+      userId: "user-1",
+      amount: 0.001,
+    })
+    expect(result).toEqual({ transferId: "sweep-recent" })
   })
 })
 

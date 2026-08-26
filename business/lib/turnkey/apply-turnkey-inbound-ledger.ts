@@ -19,6 +19,7 @@ import {
   findGridVaBankDepositChainSettlementForSuppression,
   findPendingGridVaBankDepositForInboundAmount,
 } from "@/lib/grid/grid-bank-deposit-chain-suppression"
+import { isGridVaTurnkeyDustAmount } from "@/lib/grid/grid-va-turnkey-dust"
 import { reconcileGridVaBankDepositCreditForSolanaTx } from "@/lib/grid/grid-bank-deposit-credit"
 import {
   findPendingGridVaTurnkeySweepForInboundAmount,
@@ -91,6 +92,7 @@ async function settleMatchingGridVaTurnkeySweep(
   await settleGridVaTurnkeySweepForSolanaTx(admin, {
     transferId: pendingSweep.transferId,
     solanaTxHash: input.txHash,
+    inboundAmount: input.amount,
   }).catch(() => {})
 }
 
@@ -152,11 +154,13 @@ export async function applyTurnkeyInboundLedgerEvent(
           txHash,
           businessId,
           userId,
+          amount: input.amount,
         })
         if (sweepByTx) {
           await settleGridVaTurnkeySweepForSolanaTx(admin, {
             transferId: sweepByTx.transferId,
             solanaTxHash: txHash,
+            inboundAmount: input.amount,
           }).catch(() => {})
           return { kind: "suppressed_noah" }
         }
@@ -305,6 +309,7 @@ export async function applyTurnkeyInboundLedgerEvent(
       businessId,
       amount: input.amount,
       currency: input.currency,
+      txHash,
     })
     if (pendingGridVa) {
       if (txHash) {
@@ -345,9 +350,14 @@ export async function applyTurnkeyInboundLedgerEvent(
         await settleGridVaTurnkeySweepForSolanaTx(admin, {
           transferId: pendingSweep.transferId,
           solanaTxHash: txHash,
+          inboundAmount: input.amount,
         }).catch(() => {})
       }
       return { kind: "suppressed_noah" }
+    }
+
+    if (isGridVaTurnkeyDustAmount(input.amount) || input.amount <= 0) {
+      return { kind: "skipped" }
     }
   }
 

@@ -22,7 +22,10 @@ import {
 } from "./webhook-event-id"
 import type { GridQuote, GridWebhookEvent } from "./types"
 import { reconcileGridVaBankDepositCreditForSolanaTx } from "./grid-bank-deposit-credit"
-import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
+import { GRID_VA_TURNKEY_DUST_MAX_USD, isGridVaTurnkeyDustAmount } from "./grid-va-turnkey-dust"
+import { suppressTurnkeyGridVaChainMirrorRow } from "./grid-va-turnkey-mirror"
+
+export { suppressTurnkeyGridVaChainMirrorRow }
 
 export const GRID_VA_TURNKEY_SWEEP_MODE = "va_turnkey_sweep" as const
 
@@ -520,6 +523,7 @@ export async function settleGridVaTurnkeySweepForSolanaTx(
   input: {
     transferId: string
     solanaTxHash: string
+    inboundAmount?: number
   },
 ): Promise<void> {
   const row = await loadSweepById(admin, input.transferId)
@@ -527,22 +531,32 @@ export async function settleGridVaTurnkeySweepForSolanaTx(
   const amount = Number(row.quoted_pay_in ?? row.metadata.inbound_amount ?? 0)
   const inboundId = String(row.metadata.inbound_grid_transaction_id ?? "").trim()
   const solanaTxHash = String(input.solanaTxHash ?? "").trim()
+  const isDust = input.inboundAmount != null && isGridVaTurnkeyDustAmount(input.inboundAmount)
+  const priorGridHash = String(row.metadata.grid_on_chain_tx_hash ?? "").trim()
+
   await patchSweep(admin, row.id, {
     status: "settled",
     metadata: {
       ...row.metadata,
-      grid_on_chain_tx_hash: solanaTxHash,
       sweep_error: null,
+      ...(isDust
+        ? { turnkey_dust_tx_hash: solanaTxHash }
+        : {
+            turnkey_on_chain_tx_hash: solanaTxHash,
+            grid_on_chain_tx_hash: priorGridHash || solanaTxHash,
+          }),
     },
   })
-  await attachHashToLedger(admin, {
-    userId: row.user_id,
-    businessId: row.business_id,
-    ledgerTransactionId: row.transaction_id,
-    inboundGridTransactionId: inboundId,
-    solanaTxHash,
-    amount,
-  })
+  if (!isDust) {
+    await attachHashToLedger(admin, {
+      userId: row.user_id,
+      businessId: row.business_id,
+      ledgerTransactionId: row.transaction_id,
+      inboundGridTransactionId: inboundId,
+      solanaTxHash,
+      amount,
+    })
+  }
   if (solanaTxHash) {
     await suppressTurnkeyGridVaChainMirrorRow(admin, {
       txHash: solanaTxHash,
@@ -554,7 +568,8 @@ export async function settleGridVaTurnkeySweepForSolanaTx(
 
 /**
  * Match a Grid VA Turnkey sweep to an on-chain signature.
- * Turnkey balance webhooks often report micro-USDC legs; link by sweep FIFO, not amount.
+ * Grid's outgoing webhook often records a different hash than the Turnkey wallet credit.
+ * Dust legs are linked FIFO to a recent sweep without overwriting the principal hash.
  */
 export async function findGridVaTurnkeySweepForSolanaTx(
   admin: SupabaseClient,
@@ -562,99 +577,78 @@ export async function findGridVaTurnkeySweepForSolanaTx(
     txHash: string
     businessId: string | null
     userId: string
+    amount?: number
   },
 ): Promise<{ transferId: string } | null> {
   const txHash = String(input.txHash ?? "").trim()
   const businessId = String(input.businessId ?? "").trim()
   if (!txHash || !businessId) return null
 
-  const { data: linked } = await admin
-    .from("grid_transfers")
-    .select("id")
-    .eq("mode", GRID_VA_TURNKEY_SWEEP_MODE)
-    .eq("business_id", businessId)
-    .filter("metadata->>grid_on_chain_tx_hash", "eq", txHash)
-    .maybeSingle()
-  if (linked?.id) return { transferId: String(linked.id) }
+  for (const metaKey of ["grid_on_chain_tx_hash", "turnkey_on_chain_tx_hash", "turnkey_dust_tx_hash"] as const) {
+    const { data: linked } = await admin
+      .from("grid_transfers")
+      .select("id")
+      .eq("mode", GRID_VA_TURNKEY_SWEEP_MODE)
+      .eq("business_id", businessId)
+      .filter(`metadata->>${metaKey}`, "eq", txHash)
+      .maybeSingle()
+    if (linked?.id) return { transferId: String(linked.id) }
+  }
 
   const { data: rows } = await admin
     .from("grid_transfers")
-    .select("id,metadata,status,updated_at")
+    .select("id,metadata,status,updated_at,quoted_pay_in,created_at")
     .eq("mode", GRID_VA_TURNKEY_SWEEP_MODE)
     .eq("business_id", businessId)
     .in("status", ["settled", "processing", "pending"])
     .order("updated_at", { ascending: true })
     .limit(24)
 
+  const inboundAmount = Number(input.amount)
+  const dust = Number.isFinite(inboundAmount) && isGridVaTurnkeyDustAmount(inboundAmount)
+  const dustCutoffMs = Date.now() - 2 * 60 * 60 * 1000
+  const hasPrincipalAmount = Number.isFinite(inboundAmount) && inboundAmount >= GRID_VA_TURNKEY_DUST_MAX_USD
+
   for (const row of rows ?? []) {
     const meta = asMeta(row.metadata)
-    if (String(meta.grid_on_chain_tx_hash ?? "").trim()) continue
-    return { transferId: String(row.id) }
+    const gridHash = String(meta.grid_on_chain_tx_hash ?? "").trim()
+    const turnkeyHash = String(meta.turnkey_on_chain_tx_hash ?? "").trim()
+    const dustHash = String(meta.turnkey_dust_tx_hash ?? "").trim()
+    if (gridHash === txHash || turnkeyHash === txHash || dustHash === txHash) {
+      return { transferId: String(row.id) }
+    }
+  }
+
+  if (hasPrincipalAmount) {
+    for (const row of rows ?? []) {
+      const meta = asMeta(row.metadata)
+      if (String(meta.turnkey_on_chain_tx_hash ?? "").trim()) continue
+      const quoted = Number(row.quoted_pay_in ?? meta.inbound_amount ?? 0)
+      if (!amountsRoughlyEqual(quoted, inboundAmount)) continue
+      return { transferId: String(row.id) }
+    }
+  }
+
+  if (!dust) {
+    for (const row of rows ?? []) {
+      const meta = asMeta(row.metadata)
+      if (String(meta.grid_on_chain_tx_hash ?? "").trim()) continue
+      if (String(meta.turnkey_on_chain_tx_hash ?? "").trim()) continue
+      return { transferId: String(row.id) }
+    }
+  }
+
+  if (dust) {
+    for (const row of [...(rows ?? [])].reverse()) {
+      const meta = asMeta(row.metadata)
+      if (String(meta.turnkey_dust_tx_hash ?? "").trim()) continue
+      const updatedAt = Date.parse(String(row.updated_at ?? row.created_at ?? ""))
+      if (Number.isFinite(updatedAt) && updatedAt < dustCutoffMs) continue
+      return { transferId: String(row.id) }
+    }
   }
 
   return null
-}
-
-/** Hide duplicate Turnkey balance-webhook rows once Grid VA sweep is linked on-chain. */
-export async function suppressTurnkeyGridVaChainMirrorRow(
-  admin: SupabaseClient,
-  input: {
-    txHash: string
-    userId: string
-    businessId: string | null
-  },
-): Promise<{ suppressed: number; reversedBalance: number }> {
-  const txHash = String(input.txHash ?? "").trim()
-  if (!txHash) return { suppressed: 0, reversedBalance: 0 }
-
-  let q = admin
-    .from("transactions")
-    .select("id,metadata,amount,currency")
-    .eq("provider", "turnkey")
-    .eq("direction", "in")
-    .eq("tx_hash", txHash)
-  if (input.businessId) q = q.eq("business_id", input.businessId)
-  else q = q.eq("user_id", input.userId).is("business_id", null)
-
-  const { data: rows } = await q.limit(8)
-  let suppressed = 0
-  let reversedBalance = 0
-
-  for (const row of rows ?? []) {
-    const meta = (row.metadata as Record<string, unknown> | undefined) ?? {}
-    if (meta.grid_va_turnkey_chain_mirror === true) continue
-    const source = String(meta.source ?? "").trim()
-    if (source !== "turnkey_balance_webhook" && source !== "turnkey_chain_sync") continue
-
-    const reportingAmount = Number(meta.reporting_wallet_amount ?? row.amount ?? 0)
-    if (meta.balance_delta_applied === true && reportingAmount > 0) {
-      const currency = String(row.currency ?? "USD").toUpperCase()
-      await applyWalletBalanceDelta(admin, {
-        businessId: input.businessId,
-        userId: input.businessId ? null : input.userId,
-        currency,
-        delta: -reportingAmount,
-      }).catch(() => {})
-      reversedBalance += reportingAmount
-    }
-
-    await admin
-      .from("transactions")
-      .update({
-        hidden_from_feed: true,
-        metadata: {
-          ...meta,
-          grid_va_turnkey_chain_mirror: true,
-          suppress_in_feed: true,
-          balance_delta_applied: false,
-        },
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", row.id)
-    suppressed += 1
-  }
-
-  return { suppressed, reversedBalance }
 }
 
 export async function findPendingGridVaTurnkeySweepForInboundAmount(
@@ -667,7 +661,7 @@ export async function findPendingGridVaTurnkeySweepForInboundAmount(
   },
 ): Promise<{ transferId: string } | null> {
   if (String(input.currency || "USD").toUpperCase() !== "USD") return null
-  if (!(input.amount > 0) || !input.businessId) return null
+  if (!(input.amount > 0) || isGridVaTurnkeyDustAmount(input.amount) || !input.businessId) return null
 
   const { data: rows } = await admin
     .from("grid_transfers")
@@ -680,7 +674,7 @@ export async function findPendingGridVaTurnkeySweepForInboundAmount(
 
   for (const row of rows ?? []) {
     const meta = asMeta(row.metadata)
-    if (String(meta.grid_on_chain_tx_hash ?? "").trim()) continue
+    if (String(meta.turnkey_on_chain_tx_hash ?? "").trim()) continue
     const quoted = Number(row.quoted_pay_in ?? meta.inbound_amount ?? 0)
     if (!amountsRoughlyEqual(quoted, input.amount)) continue
     return { transferId: String(row.id) }

@@ -78,6 +78,10 @@ vi.mock("@/lib/grid/grid-bank-deposit-chain-suppression", () => ({
   findGridVaBankDepositChainSettlementForSuppression: mocks.findGridVa,
   findPendingGridVaBankDepositForInboundAmount: mocks.findPendingGridVa,
 }))
+vi.mock("@/lib/grid/grid-va-turnkey-dust", () => ({
+  GRID_VA_TURNKEY_DUST_MAX_USD: 0.01,
+  isGridVaTurnkeyDustAmount: (amount: number) => Number.isFinite(amount) && amount > 0 && amount < 0.01,
+}))
 vi.mock("@/lib/grid/grid-bank-deposit-credit", () => ({
   reconcileGridVaBankDepositCreditForSolanaTx: mocks.reconcileGridVa,
 }))
@@ -268,6 +272,7 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     expect(mocks.settleGridSweep).toHaveBeenCalledWith(admin, {
       transferId: "sweep-1",
       solanaTxHash: "hash-grid-sweep",
+      inboundAmount: 10,
     })
     expect(mocks.upsertLedger).not.toHaveBeenCalled()
   })
@@ -287,12 +292,28 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
       txHash: "hash-grid-dust",
       businessId: "biz-1",
       userId: "user-1",
+      amount: 0.0001,
     })
     expect(mocks.settleGridSweep).toHaveBeenCalledWith(admin, {
       transferId: "sweep-settled",
       solanaTxHash: "hash-grid-dust",
+      inboundAmount: 0.0001,
     })
     expect(mocks.upsertLedger).not.toHaveBeenCalled()
+  })
+
+  it("skips sub-cent inbound when no Grid VA sweep matches", async () => {
+    const admin = { from: vi.fn() }
+
+    const result = await applyTurnkeyInboundLedgerEvent(admin as never, {
+      ...baseInput,
+      businessId: "biz-1",
+      amount: 0.001,
+      txHash: "hash-zero-row",
+    })
+    expect(result.kind).toBe("skipped")
+    expect(mocks.upsertLedger).not.toHaveBeenCalled()
+    expect(mocks.applyDelta).not.toHaveBeenCalled()
   })
 
   it("settles the Grid VA sweep when a pending bank deposit matches first", async () => {
@@ -318,6 +339,7 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     expect(mocks.settleGridSweep).toHaveBeenCalledWith(admin, {
       transferId: "sweep-2",
       solanaTxHash: "hash-grid-payin",
+      inboundAmount: 10,
     })
     expect(mocks.upsertLedger).not.toHaveBeenCalled()
   })

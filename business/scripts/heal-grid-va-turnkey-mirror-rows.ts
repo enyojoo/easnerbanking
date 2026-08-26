@@ -1,5 +1,5 @@
 /**
- * Link Grid VA Turnkey sweeps to on-chain hashes, hide duplicate Turnkey webhook rows.
+ * Hide duplicate Turnkey webhook rows that mirror Grid VA bank deposits.
  *
  * Usage:
  *   cd business
@@ -7,12 +7,13 @@
  *   BUSINESS_ID=53798479-3d39-428a-bd22-0b48fc3792a2 node ...  # optional scope
  */
 import { createClient } from "@supabase/supabase-js"
-import {
-  findGridVaTurnkeySweepForSolanaTx,
-  settleGridVaTurnkeySweepForSolanaTx,
-  suppressTurnkeyGridVaChainMirrorRow,
-  GRID_VA_TURNKEY_SWEEP_MODE,
-} from "@/lib/grid/va-turnkey-sweep"
+import { isGridVaTurnkeyDustAmount } from "@/lib/grid/grid-va-turnkey-dust"
+import { suppressTurnkeyGridVaChainMirrorRow } from "@/lib/grid/grid-va-turnkey-mirror"
+
+function amountsRoughlyEqual(a: number, b: number): boolean {
+  if (!(a > 0) || !(b > 0)) return false
+  return Math.abs(a - b) <= Math.max(0.02, a * 0.001)
+}
 
 async function main() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -21,10 +22,12 @@ async function main() {
   const admin = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
 
   const businessId = process.env.BUSINESS_ID?.trim() || null
+  const sinceIso = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
+  const dustCutoff = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
 
   let mirrorQuery = admin
     .from("transactions")
-    .select("id,tx_hash,user_id,business_id,metadata,amount")
+    .select("id,tx_hash,user_id,business_id,metadata,amount,currency")
     .eq("provider", "turnkey")
     .eq("direction", "in")
     .contains("metadata", { source: "turnkey_balance_webhook" })
@@ -32,65 +35,70 @@ async function main() {
   if (businessId) mirrorQuery = mirrorQuery.eq("business_id", businessId)
 
   const { data: mirrorRows } = await mirrorQuery.order("created_at", { ascending: true })
-  const txHashes = [...new Set((mirrorRows ?? []).map((r) => String(r.tx_hash ?? "").trim()).filter(Boolean))]
-
   const linked: Record<string, unknown>[] = []
-  for (const txHash of txHashes) {
-    const sample = (mirrorRows ?? []).find((r) => String(r.tx_hash ?? "").trim() === txHash)
-    if (!sample) continue
-    const sweep = await findGridVaTurnkeySweepForSolanaTx(admin, {
-      txHash,
-      businessId: sample.business_id ? String(sample.business_id) : null,
-      userId: String(sample.user_id ?? ""),
-    })
-    if (!sweep) {
-      linked.push({ txHash, linked: false, reason: "no_sweep_match" })
+
+  for (const sample of mirrorRows ?? []) {
+    const txHash = String(sample.tx_hash ?? "").trim()
+    if (!txHash) continue
+    const amount = Number(
+      (sample.metadata as Record<string, unknown> | undefined)?.reporting_wallet_amount ??
+        sample.amount ??
+        0,
+    )
+    const userId = String(sample.user_id ?? "")
+    const bizId = sample.business_id ? String(sample.business_id) : null
+    const currency = String(sample.currency ?? "USD").toUpperCase()
+
+    let matched = false
+    let matchedDepositId: string | undefined
+
+    if (isGridVaTurnkeyDustAmount(amount) && bizId) {
+      const { data: recentSweep } = await admin
+        .from("grid_transfers")
+        .select("id")
+        .eq("mode", "va_turnkey_sweep")
+        .eq("business_id", bizId)
+        .in("status", ["settled", "processing", "pending"])
+        .gte("updated_at", dustCutoff)
+        .limit(1)
+        .maybeSingle()
+      matched = Boolean(recentSweep?.id)
+    } else if (amount > 0) {
+      let q = admin
+        .from("transactions")
+        .select("id,amount,metadata,currency")
+        .eq("provider", "grid")
+        .eq("direction", "in")
+        .eq("status", "settled")
+        .filter("metadata->>grid_va_inbound", "eq", "true")
+        .gte("created_at", sinceIso)
+      q = bizId ? q.eq("business_id", bizId) : q.eq("user_id", userId).is("business_id", null)
+      const { data: deposits } = await q.order("created_at", { ascending: false }).limit(24)
+      const hit = (deposits ?? []).find((row) => {
+        const meta = (row.metadata as Record<string, unknown> | undefined) ?? {}
+        const ledger = String(meta.wallet_ledger_currency ?? row.currency ?? "USD").toUpperCase()
+        if (ledger !== currency) return false
+        const depositAmount = Number(meta.settled_stablecoin_amount ?? row.amount ?? 0)
+        return amountsRoughlyEqual(depositAmount, amount)
+      })
+      matched = Boolean(hit)
+      matchedDepositId = hit ? String(hit.id) : undefined
+    }
+
+    if (!matched) {
+      linked.push({ txHash, amount, linked: false, reason: "no_grid_va_match" })
       continue
     }
-    await settleGridVaTurnkeySweepForSolanaTx(admin, {
-      transferId: sweep.transferId,
-      solanaTxHash: txHash,
-    })
+
     const suppressed = await suppressTurnkeyGridVaChainMirrorRow(admin, {
       txHash,
-      userId: String(sample.user_id ?? ""),
-      businessId: sample.business_id ? String(sample.business_id) : null,
+      userId,
+      businessId: bizId,
     })
-    linked.push({ txHash, transferId: sweep.transferId, ...suppressed })
+    linked.push({ txHash, amount, matchedDepositId, ...suppressed })
   }
 
-  let sweepQuery = admin
-    .from("grid_transfers")
-    .select("id,quoted_pay_in,status,transaction_id,metadata")
-    .eq("mode", GRID_VA_TURNKEY_SWEEP_MODE)
-  if (businessId) sweepQuery = sweepQuery.eq("business_id", businessId)
-  const { data: sweeps } = await sweepQuery.order("created_at", { ascending: true })
-
-  let gridQuery = admin
-    .from("transactions")
-    .select("id,amount,tx_hash,metadata")
-    .eq("provider", "grid")
-    .eq("direction", "in")
-    .filter("metadata->>grid_va_inbound", "eq", "true")
-  if (businessId) gridQuery = gridQuery.eq("business_id", businessId)
-  const { data: gridRows } = await gridQuery.order("created_at", { ascending: true })
-
-  console.log(
-    JSON.stringify(
-      {
-        linked,
-        sweeps,
-        gridRows: (gridRows ?? []).map((r) => ({
-          id: r.id,
-          amount: r.amount,
-          tx_hash: r.tx_hash,
-          grid_on_chain_tx_hash: (r.metadata as Record<string, unknown> | undefined)?.grid_on_chain_tx_hash ?? null,
-        })),
-      },
-      null,
-      2,
-    ),
-  )
+  console.log(JSON.stringify({ linked }, null, 2))
 }
 
 main().catch((e) => {

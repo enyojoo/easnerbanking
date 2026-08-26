@@ -1,8 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { isGridVaBankDepositMetadata } from "./grid-bank-deposit-credit"
+import { isGridVaTurnkeyDustAmount } from "./grid-va-turnkey-dust"
 
 export type GridVaBankDepositChainSuppression = {
   linkedTransactionId: string
+}
+
+export { GRID_VA_TURNKEY_DUST_MAX_USD, isGridVaTurnkeyDustAmount } from "./grid-va-turnkey-dust"
+
+function amountsRoughlyEqual(a: number, b: number): boolean {
+  if (!(a > 0) || !(b > 0)) return false
+  return Math.abs(a - b) <= Math.max(0.02, a * 0.001)
 }
 
 function applyLedgerScope<T extends { eq: (col: string, val: string) => T; is: (col: string, val: null) => T }>(
@@ -35,28 +43,31 @@ export async function findGridVaBankDepositChainSettlementForSuppression(
     }
   }
 
-  let byMeta = admin
-    .from("transactions")
-    .select(select)
-    .eq("provider", "grid")
-    .eq("direction", "in")
-    .filter("metadata->>grid_on_chain_tx_hash", "eq", txHash)
-  byMeta = applyLedgerScope(byMeta, input)
-  const { data: payInRow } = await byMeta.maybeSingle()
-  if (payInRow?.id && isGridVaBankDepositMetadata(payInRow.metadata)) {
-    return { linkedTransactionId: String(payInRow.id) }
+  for (const metaKey of ["grid_on_chain_tx_hash", "turnkey_on_chain_tx_hash"] as const) {
+    let byMeta = admin
+      .from("transactions")
+      .select(select)
+      .eq("provider", "grid")
+      .eq("direction", "in")
+      .filter(`metadata->>${metaKey}`, "eq", txHash)
+    byMeta = applyLedgerScope(byMeta, input)
+    const { data: payInRow } = await byMeta.maybeSingle()
+    if (payInRow?.id && isGridVaBankDepositMetadata(payInRow.metadata)) {
+      return { linkedTransactionId: String(payInRow.id) }
+    }
   }
 
-  let sweepQuery = admin
-    .from("grid_transfers")
-    .select("transaction_id,metadata")
-    .eq("mode", "va_turnkey_sweep")
-    .filter("metadata->>grid_on_chain_tx_hash", "eq", txHash)
-  if (input.businessId) sweepQuery = sweepQuery.eq("business_id", input.businessId)
-  else sweepQuery = sweepQuery.eq("user_id", input.userId).is("business_id", null)
-  const { data: sweepRow } = await sweepQuery.maybeSingle()
-  const sweepLedgerId = String(sweepRow?.transaction_id ?? "").trim()
-  if (sweepLedgerId) {
+  for (const metaKey of ["grid_on_chain_tx_hash", "turnkey_on_chain_tx_hash", "turnkey_dust_tx_hash"] as const) {
+    let sweepQuery = admin
+      .from("grid_transfers")
+      .select("transaction_id,metadata")
+      .eq("mode", "va_turnkey_sweep")
+      .filter(`metadata->>${metaKey}`, "eq", txHash)
+    if (input.businessId) sweepQuery = sweepQuery.eq("business_id", input.businessId)
+    else sweepQuery = sweepQuery.eq("user_id", input.userId).is("business_id", null)
+    const { data: sweepRow } = await sweepQuery.maybeSingle()
+    const sweepLedgerId = String(sweepRow?.transaction_id ?? "").trim()
+    if (!sweepLedgerId) continue
     const { data: sweepLedger } = await admin
       .from("transactions")
       .select(select)
@@ -77,10 +88,16 @@ export async function findPendingGridVaBankDepositForInboundAmount(
     businessId: string | null
     amount: number
     currency: string
+    txHash?: string | null
+    withinHours?: number
   },
 ): Promise<{ transactionId: string; gridTransactionId: string } | null> {
   const currency = String(input.currency || "USD").trim().toUpperCase()
-  if (!(input.amount > 0)) return null
+  if (!(input.amount > 0) || isGridVaTurnkeyDustAmount(input.amount)) return null
+
+  const incomingHash = String(input.txHash ?? "").trim()
+  const hours = input.withinHours ?? 48
+  const sinceIso = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString()
 
   let q = admin
     .from("transactions")
@@ -88,22 +105,26 @@ export async function findPendingGridVaBankDepositForInboundAmount(
     .eq("provider", "grid")
     .eq("direction", "in")
     .eq("status", "settled")
-    .is("tx_hash", null)
     .filter("metadata->>flow", "eq", "bank_onramp")
     .filter("metadata->>grid_va_inbound", "eq", "true")
+    .gte("created_at", sinceIso)
   q = applyLedgerScope(q, input)
-  const { data: rows } = await q.order("created_at", { ascending: false }).limit(12)
+  const { data: rows } = await q.order("created_at", { ascending: false }).limit(24)
 
   for (const row of rows ?? []) {
     const meta = (row.metadata as Record<string, unknown> | undefined) ?? {}
-    const onChain =
+    const ledgerHash =
       String(row.tx_hash ?? "").trim() ||
       (typeof meta.grid_on_chain_tx_hash === "string" ? meta.grid_on_chain_tx_hash.trim() : "")
-    if (onChain) continue
+    const turnkeyHash =
+      typeof meta.turnkey_on_chain_tx_hash === "string" ? meta.turnkey_on_chain_tx_hash.trim() : ""
+    if (incomingHash && (ledgerHash === incomingHash || turnkeyHash === incomingHash)) continue
+    // Already linked to a different Turnkey wallet signature.
+    if (turnkeyHash && incomingHash && turnkeyHash !== incomingHash) continue
     const ledger = String(meta.wallet_ledger_currency ?? row.currency ?? "USD").toUpperCase()
     if (ledger !== currency) continue
-    const amount = Number(row.amount ?? 0)
-    if (Math.abs(amount - input.amount) >= 0.02) continue
+    const amount = Number(meta.settled_stablecoin_amount ?? row.amount ?? 0)
+    if (!amountsRoughlyEqual(amount, input.amount)) continue
     return {
       transactionId: String(row.id),
       gridTransactionId: String(

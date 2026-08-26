@@ -5,6 +5,13 @@ vi.mock("server-only", () => ({}))
 vi.mock("@/lib/notifications/bank-deposit-settled-notify", () => ({
   notifyGridBankDepositPayInSettledPush: vi.fn(),
 }))
+vi.mock("./grid-bank-deposit-credit", () => ({
+  isGridVaBankDepositMetadata: (metadata: unknown) => {
+    if (!metadata || typeof metadata !== "object") return false
+    const meta = metadata as Record<string, unknown>
+    return meta.flow === "bank_onramp" && meta.payout_provider === "grid" && meta.grid_va_inbound === true
+  },
+}))
 
 import { findGridVaBankDepositChainSettlementForSuppression } from "./grid-bank-deposit-chain-suppression"
 
@@ -94,6 +101,7 @@ describe("findPendingGridVaBankDepositForInboundAmount", () => {
       api.eq = vi.fn(chain)
       api.is = vi.fn(chain)
       api.filter = vi.fn(chain)
+      api.gte = vi.fn(chain)
       api.order = vi.fn(chain)
       api.limit = vi.fn(async () => ({ data: rows }))
       return api
@@ -106,5 +114,64 @@ describe("findPendingGridVaBankDepositForInboundAmount", () => {
       transactionId: "tx-credited",
       gridTransactionId: "Transaction:in-1",
     })
+  })
+
+  it("matches a credited VA deposit even after Grid stored a different on-chain hash", async () => {
+    const { findPendingGridVaBankDepositForInboundAmount } = await import("./grid-bank-deposit-chain-suppression")
+    const rows = [
+      {
+        id: "tx-hashed",
+        amount: 188640,
+        currency: "USD",
+        provider_transaction_id: "Transaction:in-wire",
+        tx_hash: "grid-reported-hash",
+        metadata: {
+          flow: "bank_onramp",
+          payout_provider: "grid",
+          grid_va_inbound: true,
+          wallet_balance_credit_key: "grid_va_inbound:Transaction:in-wire",
+          wallet_ledger_currency: "USD",
+          settled_stablecoin_amount: 188640,
+          grid_on_chain_tx_hash: "grid-reported-hash",
+        },
+      },
+    ]
+    const from = vi.fn(() => {
+      const api: Record<string, unknown> = {}
+      const chain = () => api
+      api.select = vi.fn(chain)
+      api.eq = vi.fn(chain)
+      api.is = vi.fn(chain)
+      api.filter = vi.fn(chain)
+      api.gte = vi.fn(chain)
+      api.order = vi.fn(chain)
+      api.limit = vi.fn(async () => ({ data: rows }))
+      return api
+    })
+    const found = await findPendingGridVaBankDepositForInboundAmount(
+      { from } as unknown as SupabaseClient,
+      {
+        userId: "user-1",
+        businessId: "biz-1",
+        amount: 188640,
+        currency: "USD",
+        txHash: "turnkey-wallet-hash",
+      },
+    )
+    expect(found).toEqual({
+      transactionId: "tx-hashed",
+      gridTransactionId: "Transaction:in-wire",
+    })
+  })
+
+  it("does not amount-match Grid VA dust inbound", async () => {
+    const { findPendingGridVaBankDepositForInboundAmount } = await import("./grid-bank-deposit-chain-suppression")
+    const from = vi.fn()
+    const found = await findPendingGridVaBankDepositForInboundAmount(
+      { from } as unknown as SupabaseClient,
+      { userId: "user-1", businessId: "biz-1", amount: 0.001, currency: "USD" },
+    )
+    expect(found).toBeNull()
+    expect(from).not.toHaveBeenCalled()
   })
 })
