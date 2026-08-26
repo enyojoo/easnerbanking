@@ -5,6 +5,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const nobleHashesRoot = resolve(__dirname, "../node_modules/@noble/hashes")
 const nobleHashesSubpath = (name) => resolve(nobleHashesRoot, `${name}.js`)
+const nobleCurvesRoot = resolve(__dirname, "../node_modules/@noble/curves")
+const nobleCurvesSubpath = (name) => resolve(nobleCurvesRoot, `${name}.js`)
+const nobleCiphersRoot = resolve(__dirname, "../node_modules/@noble/ciphers")
+const nobleCiphersSubpath = (name) => resolve(nobleCiphersRoot, `${name}.js`)
 
 function hostnameFromOrigin(raw, fallback) {
   const value = typeof raw === "string" ? raw.trim() : ""
@@ -83,6 +87,7 @@ const nextConfig = {
       "@easner/server": resolve(__dirname, "../packages/server/lib/index.ts"),
       "@radix-ui/react-slot": resolve(__dirname, "../node_modules/@radix-ui/react-slot"),
       // npm overrides hoist @noble/hashes to the workspace root; webpack needs explicit subpaths.
+      // Same for curves/ciphers (Turnkey + Solana) once they are hoisted next to hashes.
       "@noble/hashes": nobleHashesRoot,
       "@noble/hashes/utils": nobleHashesSubpath("utils"),
       "@noble/hashes/utils.js": nobleHashesSubpath("utils"),
@@ -94,6 +99,26 @@ const nextConfig = {
       "@noble/hashes/sha3.js": nobleHashesSubpath("sha3"),
       "@noble/hashes/hmac": nobleHashesSubpath("hmac"),
       "@noble/hashes/hmac.js": nobleHashesSubpath("hmac"),
+      "@noble/curves": nobleCurvesRoot,
+      "@noble/curves/ed25519": nobleCurvesSubpath("ed25519"),
+      "@noble/curves/ed25519.js": nobleCurvesSubpath("ed25519"),
+      "@noble/curves/secp256k1": nobleCurvesSubpath("secp256k1"),
+      "@noble/curves/secp256k1.js": nobleCurvesSubpath("secp256k1"),
+      "@noble/curves/p256": nobleCurvesSubpath("p256"),
+      "@noble/curves/p256.js": nobleCurvesSubpath("p256"),
+      "@noble/curves/nist": nobleCurvesSubpath("nist"),
+      "@noble/curves/nist.js": nobleCurvesSubpath("nist"),
+      "@noble/curves/utils": nobleCurvesSubpath("utils"),
+      "@noble/curves/utils.js": nobleCurvesSubpath("utils"),
+      "@noble/ciphers": nobleCiphersRoot,
+      "@noble/ciphers/aes": nobleCiphersSubpath("aes"),
+      "@noble/ciphers/aes.js": nobleCiphersSubpath("aes"),
+      "@noble/ciphers/utils": nobleCiphersSubpath("utils"),
+      "@noble/ciphers/utils.js": nobleCiphersSubpath("utils"),
+      "@noble/ciphers/chacha": nobleCiphersSubpath("chacha"),
+      "@noble/ciphers/chacha.js": nobleCiphersSubpath("chacha"),
+      "@noble/ciphers/crypto": nobleCiphersSubpath("crypto"),
+      "@noble/ciphers/crypto.js": nobleCiphersSubpath("crypto"),
       // Exact match only – a prefix alias breaks `lib-address/countries/*.json` lazy imports.
       "lib-address$": resolve(__dirname, "../node_modules/lib-address/dist/entry-browser.mjs"),
     }
@@ -129,7 +154,12 @@ const nextConfig = {
       },
     ],
   },
-  serverExternalPackages: ["@react-pdf/renderer"],
+  serverExternalPackages: [
+    "@react-pdf/renderer",
+    "@noble/ciphers",
+    "@noble/curves",
+    "@noble/hashes",
+  ],
   async rewrites() {
     const payHosts = [...new Set(["pay.easner.com", hostnameFromOrigin(process.env.NEXT_PUBLIC_PAY_APP_URL, "pay.easner.com")])]
       .filter((host) => host === "pay.easner.com" || host.startsWith("pay."))
