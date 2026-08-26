@@ -14,6 +14,7 @@ import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { colors, spacing, textStyles, surfaceFrameStyle } from '../../theme'
 import { ReceiveFlowHeader } from '../../components/receive/ReceiveFlowHeader'
+import { analytics } from '../../lib/analytics'
 import { ExpressDepositsReviewSection } from '../../components/receive/ExpressDepositsReviewSection'
 import { useStackHardwareBack } from '../../hooks/useStackHardwareBack'
 import { navigateStackBack } from '../../navigation/stackBackNavigation'
@@ -127,6 +128,7 @@ export default function ExpressDepositAmountScreen({ navigation, route }: Naviga
       return
     }
     setStep('review')
+    analytics.trackExpressDepositStarted({ method, currency: sourceCurrency })
   }
 
   const ensureFreshPricing = async (): Promise<ExpressDepositsPricingBreakdown> => {
@@ -214,6 +216,7 @@ export default function ExpressDepositAmountScreen({ navigation, route }: Naviga
         throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
       }
       if (transactionId) {
+        analytics.trackExpressDepositCompleted({ method, currency: freshPricing.sourceCurrency })
         navigateToTransactionDetailAfterPayIn(navigation, transactionId, 'ReceiveFlow')
         return
       }

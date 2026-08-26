@@ -55,6 +55,7 @@ import {
 } from '../../lib/warmYcLocalDepositCaches'
 import { useStackHardwareBack } from '../../hooks/useStackHardwareBack'
 import { navigateStackBack } from '../../navigation/stackBackNavigation'
+import { analytics } from '../../lib/analytics'
 
 type TabType = 'cash' | 'stablecoin'
 
@@ -69,6 +70,11 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const relayDepositQuery = useConsumerRelayDepositAddresses(currency === 'USD')
 
   const [activeTab, setActiveTab] = useState<TabType>('cash')
+  useFocusEffect(
+    useCallback(() => {
+      analytics.trackReceiveViewed({ currency })
+    }, [currency]),
+  )
   const [ngMissingTypes, setNgMissingTypes] = useState<NgLocalIdType[]>([])
   const expressDeviceWallets = useMemo(
     () => ({

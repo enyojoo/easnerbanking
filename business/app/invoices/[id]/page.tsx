@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -110,6 +110,7 @@ import {
   previewLinkHint,
 } from "@/lib/invoices/invoice-status"
 import { invoiceActionBtnClass } from "@/lib/invoices/invoice-action-button-classes"
+import { analytics } from "@/lib/analytics"
 const STATUS_ACTIVITY_DESCRIPTIONS: Record<string, string> = {
   sent: INVOICE_ACTIVITY_COPY.sent,
   paid: INVOICE_ACTIVITY_COPY.paid,
@@ -250,8 +251,18 @@ export default function InvoiceDetailPage() {
   const deleteInvoiceMut = useDeleteInvoice()
   const { data: ledgerRows } = useTransactionsCached()
   const invoice = invoiceDetailQuery.data
+  const prevInvoiceStatusRef = useRef<string | null>(null)
   /** Avoid full-page spinner when list cache seeds detail via `placeholderData`. */
   const invoicesLoading = invoiceDetailQuery.isPending && !invoice
+
+  useEffect(() => {
+    if (!invoice?.id) return
+    const prev = prevInvoiceStatusRef.current
+    if (prev && prev !== "paid" && invoice.status === "paid") {
+      analytics.trackInvoicePaid({ invoiceId: invoice.id, currency: invoice.currency })
+    }
+    prevInvoiceStatusRef.current = invoice.status
+  }, [invoice?.id, invoice?.status, invoice?.currency])
 
   const updateInvoice = (id: string, updates: Partial<Invoice>) => {
     void updateInvoiceMut.mutate({ id, updates })

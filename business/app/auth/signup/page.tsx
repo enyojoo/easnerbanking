@@ -34,6 +34,7 @@ import {
   stashSignupOtpEmail,
 } from "@/lib/auth/signup-otp-email-storage"
 import { mapOtpVerifyErrorMessage } from "@easner/shared"
+import { analytics } from "@/lib/analytics"
 
 const TERMS_URL = "https://www.easner.com/terms?from=register"
 
@@ -57,6 +58,10 @@ export default function SignupPage() {
   const router = useRouter()
   const { isTeamInvite, invitePreview, inviteEmail } = useTeamInviteContext()
   const teamInviteEmailLocked = isTeamInvite && Boolean(inviteEmail)
+
+  useEffect(() => {
+    analytics.trackSignupPageViewed()
+  }, [])
 
   useEffect(() => {
     if (step !== "otp" || resendCooldown <= 0) return

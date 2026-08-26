@@ -12,6 +12,11 @@ import { removePin } from "@/lib/login-pin"
 import { resetSessionActivity } from "@/lib/session-activity"
 import { IdleSessionBridge } from "@/components/idle-session-bridge"
 import { analytics } from "@/lib/analytics"
+import {
+  isFreshAuthUser,
+  pathnameAfterAuthCallback,
+  personPropertiesFromUser,
+} from "@/lib/posthog-attribution"
 import { ensureBusinessWebSurface } from "@/lib/auth/validate-surface-client"
 import { clearBrowserQueryClient } from "@/lib/query/query-client"
 import { clearAllBusinessBrowserState } from "@/lib/query/web-persist"
@@ -115,7 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (qsError || fragError) {
         const message = (qsErrorDesc || fragErrorDesc || qsError || fragError || "Authentication error").toString()
-        window.history.replaceState({}, "", url.pathname)
+        window.history.replaceState({}, "", pathnameAfterAuthCallback(url))
         window.location.replace(`/auth/login?message=${encodeURIComponent(message)}`)
         return
       }
@@ -123,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code)
         if (error) throw error
-        window.history.replaceState({}, "", url.pathname)
+        window.history.replaceState({}, "", pathnameAfterAuthCallback(url))
         return
       }
 
@@ -132,11 +137,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error) throw error
         // Preserve `type=recovery` so reset-password flow still works.
         if (type === "recovery") {
-          window.history.replaceState({}, "", url.pathname)
+          window.history.replaceState({}, "", pathnameAfterAuthCallback(url))
           window.location.replace("/auth/reset-password")
           return
         }
-        window.history.replaceState({}, "", url.pathname)
+        window.history.replaceState({}, "", pathnameAfterAuthCallback(url))
         return
       }
 
@@ -145,7 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (accessToken && refreshToken) {
         const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
         if (error) throw error
-        window.history.replaceState({}, "", url.pathname)
+        window.history.replaceState({}, "", pathnameAfterAuthCallback(url))
       }
     }
 
@@ -180,10 +185,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         resetSessionActivity()
       }
       if (event === "SIGNED_IN" && session?.user) {
+        analytics.identify(session.user.id, personPropertiesFromUser(session.user))
         const oauthProvider = (session.user.identities ?? []).find(
           (i) => i.provider === "google" || i.provider === "apple",
         )?.provider
         if (oauthProvider === "google" || oauthProvider === "apple") {
+          if (isFreshAuthUser(session.user.created_at)) {
+            analytics.trackSignUp(oauthProvider, { userId: session.user.id })
+          }
           analytics.trackSignIn(oauthProvider, { userId: session.user.id })
         }
       }
@@ -272,10 +281,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const bootJson = (await bootRes.json().catch(() => ({}))) as {
           joinedViaInvite?: boolean
           turnkeySubOrgReady?: boolean
+          businessId?: string | null
           error?: string
           code?: string
         }
         if (bootRes.ok) {
+          if (bootJson.businessId) {
+            analytics.group(bootJson.businessId, {
+              country: countryCode,
+            })
+            analytics.trackOnboardingBootstrapCompleted({ businessId: bootJson.businessId })
+          }
           if (bootJson.joinedViaInvite) {
             clearPendingTeamInvite()
           }
@@ -344,7 +360,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
     if (error) throw error
     if (data.user?.id) {
-      analytics.identify(data.user.id, { email: data.user.email || email.trim() })
+      analytics.identify(
+        data.user.id,
+        personPropertiesFromUser(data.user, { email: data.user.email || email.trim() }),
+      )
     }
     await ensureBusinessWebSurface(supabase)
     await ensureBusinessAppSession(true)
@@ -366,10 +385,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(SIGNUP_EXISTING_ACCOUNT_SAME_SURFACE)
     }
     if (data.user?.id) {
-      analytics.identify(data.user.id, {
-        email: data.user.email || email.trim(),
-        name: name.trim(),
-      })
+      analytics.identify(
+        data.user.id,
+        personPropertiesFromUser(data.user, {
+          email: data.user.email || email.trim(),
+          name: name.trim(),
+        }),
+      )
       analytics.trackSignUp("email", {
         userId: data.user.id,
         needsEmailConfirmation: !data.session,
@@ -405,6 +427,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const boot = await runBusinessBootstrapClient({ fullName: verifiedFullName })
     if (!boot.ok) {
       console.warn("signup bootstrap after OTP verify:", boot.error ?? boot.code)
+    } else if (boot.businessId) {
+      analytics.group(boot.businessId)
+      analytics.trackOnboardingBootstrapCompleted({ businessId: boot.businessId })
     }
   }
 
@@ -444,6 +469,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (fullName) {
         await supabase.auth.updateUser({ data: { name: fullName, full_name: fullName } })
+        const { data: updated } = await supabase.auth.getUser()
+        if (updated.user?.id) {
+          analytics.identify(
+            updated.user.id,
+            personPropertiesFromUser(updated.user, { name: fullName }),
+          )
+        }
       }
 
       await ensureBusinessWebSurface(supabase)

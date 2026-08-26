@@ -10,7 +10,6 @@ import { ArrowLeft, HelpCircle } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { getApiBaseUrl } from '../../lib/apiClient'
 import { NavigationProps } from '../../types'
-import { analytics } from '../../lib/analytics'
 import { colors, surfaceChromeCircleStyle, textStyles, spacing } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
@@ -31,11 +30,6 @@ export default function ForgotPasswordScreen({ navigation }: NavigationProps) {
   const [resendCooldown, setResendCooldown] = useState(0)
   const insets = useSafeAreaInsets()
   const { showInfo } = useToast()
-
-  // Track screen view
-  useEffect(() => {
-    analytics.trackScreenView('ForgotPassword')
-  }, [])
 
   const handleBack = async () => {
     haptics.tap()

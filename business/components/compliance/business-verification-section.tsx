@@ -45,6 +45,7 @@ import { loadExpressOnramp, prefetchExpressOnramp } from "@/lib/stripe/load-cryp
 import { useBusinessExpressOnrampStatus } from "@/hooks/queries/use-express-onramp-status-query"
 import { useSuspendIdleLock } from "@/hooks/use-suspend-idle-lock"
 import { GridKybWizard } from "@/components/compliance/grid-kyb-wizard"
+import { analytics } from "@/lib/analytics"
 import { useKybPacket } from "@/lib/grid/kyb-packet-query"
 
 function tier1StatusIsInReview(status: string | null | undefined): boolean {
@@ -109,6 +110,7 @@ export function BusinessVerificationSection({
     : EXPRESS_DEPOSITS_COPY.setupCta
 
   const openExpressSetup = useCallback(() => {
+    analytics.trackKybStarted({ provider: "express_deposits" })
     const peeked = peekBusinessExpressOnrampStatus()
     if (peeked?.publishableKey) {
       void loadExpressOnramp(peeked.publishableKey).catch(() => undefined)
@@ -179,6 +181,7 @@ export function BusinessVerificationSection({
   const openHostedVerification = useCallback(async () => {
     setError(null)
     setInfo(null)
+    analytics.trackKybStarted({ provider: "hosted" })
     if (!businessId) {
       setInfo("Your organization is still being set up. Refresh and try again in a moment.")
       return

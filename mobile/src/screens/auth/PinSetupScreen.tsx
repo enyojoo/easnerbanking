@@ -28,6 +28,7 @@ import { PinKeypad } from '../../components/pin'
 import { EasnerAlertSheet } from '../../components/premium'
 import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
+import { analytics } from '../../lib/analytics'
 import { AuthFlowContainer } from '../../components/layout/AuthFlowContainer'
 
 export default function PinSetupScreen({ navigation, route }: NavigationProps) {
@@ -127,6 +128,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
 
       emitAppLocked('unlocked')
 
+      analytics.trackPinSetupCompleted({ mandatory: isMandatory })
       haptics.success()
 
       // Optional flow: opened from main stack (e.g. More) – gate is already "main"

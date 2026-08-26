@@ -53,6 +53,7 @@ import {
   getPayrollRunActions,
   type PayrollRunAction,
 } from "@/lib/payroll/run-actions"
+import { analytics } from "@/lib/analytics"
 
 export default function PayrollRunDetailPage() {
   const params = useParams<{ id: string }>()
@@ -164,6 +165,7 @@ export default function PayrollRunDetailPage() {
     if (!(await confirmWithPin.requestConfirm())) return
     try {
       await executeRun.mutateAsync()
+      analytics.trackPayrollRunExecuted({ runId })
       toast.success("Payroll queued for sending")
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Execute failed")
@@ -175,6 +177,7 @@ export default function PayrollRunDetailPage() {
     try {
       await approveRun.mutateAsync({ mode: "pay_now" })
       await executeRun.mutateAsync()
+      analytics.trackPayrollRunExecuted({ runId })
       toast.success("Payroll approved and queued")
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Payroll could not be sent")

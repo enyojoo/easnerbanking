@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef, type MutableRefObject } from "react"
 import { useRouter } from "next/navigation"
+import { analytics } from "@/lib/analytics"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -216,6 +217,13 @@ export default function SendPage() {
       setRecipient(next)
       setDraftRecipientPersist(options?.draftRecipientPersist)
       walletQuoteCacheRef.current = null
+      if (next?.id) {
+        analytics.trackRecipientSelected({
+          recipientId: next.id,
+          recipientType: next.recipient_type,
+          country: next.country_code,
+        })
+      }
     },
     [],
   )
@@ -1569,12 +1577,22 @@ export default function SendPage() {
             ycCrossBorder: crossBorderQuoteToFlowState(previewQuote, crossBorderMeta),
           }
           persistSendFlowState(flowState)
+          analytics.trackSendStarted({
+            sendCurrency,
+            receiveCurrency,
+            method: isEasetagRecipient ? "easetag" : isWalletRecipient ? "wallet" : "bank",
+          })
           router.push("/send/confirm")
           return
         }
         persistSendFlowState({
           ...flowState,
           crossBorderProvider: tlcFlow.crossBorderProvider,
+        })
+        analytics.trackSendStarted({
+          sendCurrency,
+          receiveCurrency,
+          method: "bank",
         })
         router.push("/send/confirm")
         return
@@ -1611,6 +1629,11 @@ export default function SendPage() {
       }
 
       persistSendFlowState(flowState)
+      analytics.trackSendStarted({
+        sendCurrency,
+        receiveCurrency,
+        method: isEasetagRecipient ? "easetag" : isWalletRecipient ? "wallet" : "bank",
+      })
       router.push("/send/confirm")
     } finally {
       if (continueSpinnerTimerRef.current) {

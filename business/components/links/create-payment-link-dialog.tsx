@@ -24,6 +24,7 @@ import {
 import { TerminalPayoutSetupPanel } from "@/components/terminal/terminal-payout-setup-panel"
 import { AutopayoutPayerWalletPanel } from "@/components/autopayout/autopayout-payer-wallet-panel"
 import { fetchWithSession } from "@/lib/fetch-with-session"
+import { analytics } from "@/lib/analytics"
 import { normalizePaymentLinkSlug } from "@/lib/payment-links/slug"
 import type { PaymentLinkRail } from "@/lib/payment-links/types"
 import type { PaymentLinkListRow } from "@/hooks/use-payment-links"
@@ -132,6 +133,7 @@ export function CreatePaymentLinkDialog({
         return
       }
       toast.success("Link created.")
+      analytics.trackPaymentLinkCreated({ linkId: body.link.id, rail: body.link.rail, currency: body.link.currency })
       onCreated(body.link)
       reset()
       onOpenChange(false)

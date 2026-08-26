@@ -8,6 +8,7 @@ import {
   StyleSheet,
 } from "@react-pdf/renderer"
 import type { Invoice } from "@/lib/b2b/types"
+import { buildEasnerBusinessMarketingUrl } from "@easner/shared"
 import { businessInfo as defaultBusinessInfo } from "@/lib/business-info"
 import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
 import {
@@ -474,7 +475,7 @@ export function InvoicePDFDocument({
         {/* Footer: Powered by Easner Business */}
         <View style={styles.footer} fixed>
           <Text style={styles.footerText}>Powered by</Text>
-          <Link src="https://www.easner.com/business">
+          <Link src={buildEasnerBusinessMarketingUrl({ campaign: "invoice_pdf" })}>
             <Image style={styles.footerLogo} src={logoUrl} />
           </Link>
         </View>

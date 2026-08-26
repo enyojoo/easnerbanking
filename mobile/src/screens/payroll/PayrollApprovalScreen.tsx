@@ -3,6 +3,7 @@ import { View } from 'react-native'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { readPayrollApprovalToken, storePayrollApprovalToken } from '../../lib/payrollApprovalTokenStore'
+import { analytics } from '../../lib/analytics'
 
 /**
  * Compatibility route for older navigation calls and the canonical /payroll
@@ -20,6 +21,13 @@ export default function PayrollApprovalScreen({ navigation, route }: NavigationP
     const connectionId = typeof route.params?.connectionId === 'string' ? route.params.connectionId : ''
 
     void (async () => {
+      if (token || invitationId || connectionId) {
+        analytics.trackPayrollDeepLinkOpened({
+          hasToken: Boolean(token),
+          hasInvitation: Boolean(invitationId),
+          hasConnection: Boolean(connectionId),
+        })
+      }
       if (token) {
         await storePayrollApprovalToken(token)
         navigation.setParams?.({ token: undefined })

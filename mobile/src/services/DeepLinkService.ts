@@ -8,6 +8,7 @@ import {
   parseDeepLinkFromUrl,
   stashPendingDeepLinkFromUrl,
 } from '../lib/pendingDeepLinkNavigation'
+import { analytics } from '../lib/analytics'
 
 export interface DeepLinkData {
   screen: string
@@ -65,6 +66,7 @@ export class DeepLinkService {
 
   /** Stash intent and navigate when MainStack is ready. */
   async consumeUrl(url: string): Promise<void> {
+    analytics.trackDeepLinkOpened({ url })
     await stashPendingDeepLinkFromUrl(url)
     flushPendingDeepLinkNavigation(
       (global as any).rootNavigationRef?.current as NavigationContainerRef<unknown> | null,

@@ -1275,3 +1275,31 @@ export {
 } from "./yc-payout-limits"
 export { useYcPayoutMinEnforcement } from "./hooks/use-yc-payout-min-enforcement"
 /** Mobile-only: import from `@easner/shared/warm-flags` (uses expo-image; not for Next.js). */
+export {
+  ANALYTICS_EVENTS,
+  ANALYTICS_PLATFORM,
+  ANALYTICS_SURFACE,
+  amountBucket,
+  buildEasnerBusinessMarketingUrl,
+  cleanBrowserAttributionUrl,
+  consumerPlatformFromOs,
+  corridor,
+  EASNER_BUSINESS_MARKETING_BASE,
+  invoiceProperties,
+  isAttributionQueryParam,
+  isFreshAuthUser,
+  kybProperties,
+  pageviewProperties,
+  pathnameAfterAuthCallback,
+  pathnameWithAttributionParams,
+  personPropertiesFromUser,
+  referringDomain,
+  sendFunnelProperties,
+  shouldIdentifyCrossDomainId,
+  stripAttributionParamsFromUrl,
+  type AnalyticsEventName,
+  type AnalyticsPlatform,
+  type AnalyticsSurface,
+  type EasnerBusinessMarketingCampaign,
+  type SendMethod,
+} from "./analytics"

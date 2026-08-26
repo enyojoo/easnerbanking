@@ -1,10 +1,11 @@
 "use client"
 
-import { useCallback, useEffect, useMemo } from "react"
+import { useCallback, useEffect, useMemo, useRef } from "react"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { fetchBusinessProfileEnvelope } from "@/lib/business-profile-fetch"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { useAuth } from "@/lib/auth-context"
+import { analytics } from "@/lib/analytics"
 import { countries } from "@/lib/countries"
 import { CACHE_KEYS, dataCache } from "@/lib/cache"
 import { useCachedData } from "@/lib/use-cached-data"
@@ -200,6 +201,7 @@ export function applyHostedKycStatusToProfile(kycStatus: string | undefined) {
 
 export function useBusinessProfile() {
   const { user, sessionUserId } = useAuth()
+  const groupedBusinessIdRef = useRef<string | null>(null)
   const profileUserId = sessionUserId
   const PROFILE_CACHE_TTL_MS = 60 * 60 * 1000
   const PROFILE_PERSIST_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
@@ -315,6 +317,31 @@ export function useBusinessProfile() {
       (profileData.businessId != null || profileData.name.trim().length > 0),
   )
   const hasData = hasCachedProfile || hasLoadedProfile
+
+  useEffect(() => {
+    const businessId = profileData.businessId
+    if (!businessId || groupedBusinessIdRef.current === businessId) return
+    groupedBusinessIdRef.current = businessId
+    analytics.group(businessId, {
+      name: profileData.name,
+      country: profileData.countryCode ?? profileData.country,
+      kyb_status: profileData.tier1VerificationStatus,
+    })
+    analytics.identify(user?.id ?? sessionUserId ?? "", {
+      role: profileData.role,
+      kyb_status: profileData.tier1VerificationStatus,
+      country: profileData.countryCode ?? profileData.country,
+    })
+  }, [
+    profileData.businessId,
+    profileData.name,
+    profileData.country,
+    profileData.countryCode,
+    profileData.role,
+    profileData.tier1VerificationStatus,
+    sessionUserId,
+    user?.id,
+  ])
 
   return {
     ...profile,

@@ -17,6 +17,7 @@ export type CheckoutJsRuntime = {
 const STRIPE_SDK_URL = "https://js.stripe.com/basil/stripe.js"
 const METHODS_HINT = "Pay with card, bank debit, or other methods available."
 const EMAIL_REQUIRED = "Enter your email to continue"
+const PROCESSING_LABEL = "Processing…"
 /** Hide Stripe’s test-mode sandbox assistant on merchant sites. */
 const STRIPE_DEVELOPER_TOOLS = { assistant: { enabled: false } } as const
 const FIT_STYLE_ID = "easner-checkout-fit"
@@ -46,6 +47,17 @@ function ensureFitStyles() {
       width: 100% !important;
       max-width: 100% !important;
       min-width: 0 !important;
+    }
+    [data-easner-pay-spin] {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.35);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: easner-pay-spin 0.7s linear infinite;
+    }
+    @keyframes easner-pay-spin {
+      to { transform: rotate(360deg); }
     }
   `
   document.head.appendChild(style)
@@ -125,6 +137,29 @@ async function assertPublishableKey(
 
 function applyBaseStyles(el: HTMLElement, extra?: Partial<CSSStyleDeclaration>) {
   Object.assign(el.style, extra)
+}
+
+function payButtonLabel(amount: string | undefined): string {
+  const total = amount || "Pay"
+  return String(total).startsWith("Pay") ? String(total) : `Pay ${total}`
+}
+
+function setPayButtonBusy(button: HTMLButtonElement, busy: boolean, idleLabel: string) {
+  button.disabled = busy
+  button.setAttribute("aria-busy", busy ? "true" : "false")
+  button.style.cursor = busy ? "wait" : "pointer"
+  button.style.opacity = busy ? "0.92" : "1"
+  if (!busy) {
+    button.textContent = idleLabel
+    return
+  }
+  button.replaceChildren()
+  const spin = document.createElement("span")
+  spin.setAttribute("data-easner-pay-spin", "")
+  spin.setAttribute("aria-hidden", "true")
+  const label = document.createElement("span")
+  label.textContent = PROCESSING_LABEL
+  button.append(spin, label)
 }
 
 function renderSkeleton(host: HTMLElement) {
@@ -234,8 +269,8 @@ export async function mountInline(
 
   const button = document.createElement("button")
   button.type = "submit"
-  const total = session?.total?.total?.amount || "Pay"
-  button.textContent = String(total).startsWith("Pay") ? String(total) : `Pay ${total}`
+  const idleLabel = payButtonLabel(session?.total?.total?.amount)
+  button.textContent = idleLabel
   applyBaseStyles(button, {
     width: "100%",
     boxSizing: "border-box",
@@ -247,6 +282,10 @@ export async function mountInline(
     fontSize: "16px",
     fontWeight: "500",
     cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
   })
 
   root.appendChild(hint)
@@ -262,7 +301,7 @@ export async function mountInline(
   el.replaceChildren(root, createPoweredByEasner())
 
   const express = mountExpressCheckout(checkout, expressHost, divider, (walletEmail) =>
-    confirmCheckout(checkout, options, knownEmail || walletEmail || emailInput.value, button, message),
+    confirmCheckout(checkout, options, knownEmail || walletEmail || emailInput.value, button, message, idleLabel),
   )
 
   const payment = checkout.createPaymentElement({
@@ -286,7 +325,7 @@ export async function mountInline(
       message.style.display = "block"
       return
     }
-    void confirmCheckout(checkout, options, email, button, message)
+    void confirmCheckout(checkout, options, email, button, message, idleLabel)
   }
   root.addEventListener("submit", onSubmit)
 
@@ -306,13 +345,15 @@ async function confirmCheckout(
   email: string,
   button: HTMLButtonElement,
   message: HTMLElement,
+  idleLabel: string,
 ): Promise<void> {
+  if (button.getAttribute("aria-busy") === "true") return
   if (!isValidEmail(email)) {
     message.textContent = EMAIL_REQUIRED
     message.style.display = "block"
     throw new Error(EMAIL_REQUIRED)
   }
-  button.disabled = true
+  setPayButtonBusy(button, true, idleLabel)
   message.style.display = "none"
   const sessionEmail = String(
     (typeof checkout.session === "function" && checkout.session()?.email) || checkout.email || "",
@@ -330,7 +371,7 @@ async function confirmCheckout(
     }
     options.onSuccess?.(result)
   } catch (error) {
-    button.disabled = false
+    setPayButtonBusy(button, false, idleLabel)
     const err = error instanceof Error ? error : new Error("Payment failed")
     message.textContent = err.message
     message.style.display = "block"

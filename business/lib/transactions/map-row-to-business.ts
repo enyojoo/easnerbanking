@@ -33,6 +33,7 @@ import {
   isYcPayInFlowMetadata,
   resolveYcPayInPaymentDetails,
   isYcPayInAwaitingAttestation,
+  walletSendUserFacingDisplayCurrency,
 } from "@easner/shared"
 import { isNoahBankOnrampFiatPayIn } from "@/lib/noah/bank-onramp-tx"
 import { resolveBankDepositPayInDetail } from "@/lib/transactions/resolve-bank-deposit-pay-in"
@@ -199,7 +200,11 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
   const walletSendDisplay = walletSendPayoutReview
     ? {
         displayAmount: walletSendPayoutReview.receive_amount,
-        displayCurrency: walletSendPayoutReview.receive_currency,
+        displayCurrency: walletSendUserFacingDisplayCurrency({
+          receiveCurrency: walletSendPayoutReview.receive_currency,
+          sendCurrency: walletSendPayoutReview.send_currency,
+          executionModel: walletSendPayoutReview.execution_model,
+        }),
         ledgerAmount: walletSendPayoutReview.total_debited,
         ledgerCurrency: walletSendPayoutReview.send_currency,
         displayDescription: walletSendTitle,

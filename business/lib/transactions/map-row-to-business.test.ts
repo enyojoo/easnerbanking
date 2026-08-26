@@ -107,6 +107,18 @@ vi.mock("@easner/shared", () => ({
   },
   isRelayTronDepositMetadata: () => false,
   resolveRelayTronDepositListDisplay: () => null,
+  walletSendUserFacingDisplayCurrency: (input: {
+    receiveCurrency: string
+    sendCurrency: string
+    executionModel?: string | null
+  }) => {
+    const receive = String(input.receiveCurrency || "").trim().toUpperCase()
+    const send = String(input.sendCurrency || "USD").trim().toUpperCase()
+    const model = String(input.executionModel ?? "").trim().toLowerCase()
+    if (receive === "USDC" && (send === "USD" || model === "direct_turnkey")) return "USD"
+    if (receive === "EURC" && (send === "EUR" || model === "direct_turnkey")) return "EUR"
+    return receive || send || "USD"
+  },
   normalizeBalanceMoveReviewSnapshot: () => null,
   toEasnerTransactionPrimaryLabel: (input: {
     metadata?: Record<string, unknown> | null
@@ -280,7 +292,7 @@ describe("mapRowToBusinessTransaction", () => {
     })
 
     expect(item.amount).toBe(1)
-    expect(item.displayCurrency).toBe("USDC")
+    expect(item.displayCurrency).toBe("USD")
     expect(item.description).toBe("External Wallet")
     expect(item.payoutReview?.transfer_method).toBe("USDC on SOL")
   })

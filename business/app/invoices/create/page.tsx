@@ -53,6 +53,7 @@ import { assessInvoiceBusinessReadinessFromProfile } from "@/lib/invoices/invoic
 import { useBusinessOperationalAddressReady } from "@/hooks/use-business-operational-address-ready"
 import { InvoiceBusinessSetupBanner } from "@/components/invoice-business-setup-banner"
 import { fetchWithSession } from "@/lib/fetch-with-session"
+import { analytics } from "@/lib/analytics"
 import { toast } from "sonner"
 import {
   INVOICE_ACTION_COPY,
@@ -389,10 +390,14 @@ export default function CreateInvoicePage() {
       const invoice = createInvoiceFromForm("draft")
       if (isEditMode) {
         await updateInvoice(invoice.id, invoice)
+        analytics.trackInvoiceDraftSaved({ invoiceId: invoice.id, currency: invoice.currency, amount: invoice.total })
         router.push(withReturnTo(`/invoices/${invoice.id}`, backHref))
       } else {
         const created = await addInvoice(invoice)
-        if (created) router.push(withReturnTo(`/invoices/${created.id}`, backHref))
+        if (created) {
+          analytics.trackInvoiceDraftSaved({ invoiceId: created.id, currency: created.currency, amount: created.total })
+          router.push(withReturnTo(`/invoices/${created.id}`, backHref))
+        }
       }
     } finally {
       setInvoiceAction(null)
@@ -405,8 +410,10 @@ export default function CreateInvoicePage() {
       const invoice = createInvoiceFromForm("unpaid")
       const saved = isEditMode ? await updateInvoice(invoice.id, invoice) : await addInvoice(invoice)
       if (!saved) return
+      analytics.trackInvoiceIssued({ invoiceId: saved.id, currency: saved.currency, amount: saved.total })
+      analytics.trackInvoiceSent({ invoiceId: saved.id, currency: saved.currency, amount: saved.total })
 
-      // Navigate as soon as the invoice exists; email + "sent" status continue in the
+      // Navigate as soon as the invoice exists
       // background (the mutations patch the query caches, and sonner toasts are global
       // so success/failure still surfaces after navigation).
       router.push(withReturnTo(`/invoices/${saved.id}`, backHref))

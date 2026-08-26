@@ -26,6 +26,10 @@ import { consumeSignupBlockedMessage } from "@/lib/auth/signup-blocked-message"
 import { AUTH_COPY } from "@/lib/copy/business-ui-copy"
 import { analytics } from "@/lib/analytics"
 
+function trackLoginFailure(method: string, message: string) {
+  analytics.trackSignInFailed(method, { error: message })
+}
+
 type Step = "password" | "mfa"
 
 export default function LoginPage() {
@@ -111,6 +115,7 @@ export default function LoginPage() {
         setError(message)
       } else {
         setError("Invalid credentials")
+        trackLoginFailure("email", message)
       }
     } finally {
       setPasswordSigningIn(false)
@@ -178,6 +183,7 @@ export default function LoginPage() {
       await signInWithGoogle()
     } catch {
       setError("Unable to continue with Google. Please try again.")
+      trackLoginFailure("google", "Unable to continue with Google")
     } finally {
       setOauthSigningIn(false)
     }
@@ -216,6 +222,7 @@ export default function LoginPage() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unable to continue with Apple. Please try again."
       setError(msg)
+      trackLoginFailure("apple", msg)
     } finally {
       setOauthSigningIn(false)
     }

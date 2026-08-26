@@ -10,6 +10,7 @@ import {
 } from "@/components/checkout/easner-payment-element-checkout"
 import type { PublicInvoiceStripeCheckout } from "@/lib/invoices/json-public-invoice-from-row"
 import type { Invoice } from "@/lib/b2b/types"
+import { analytics } from "@/lib/analytics"
 
 type Props = {
   invoice: Invoice
@@ -48,6 +49,7 @@ export function InvoiceStripeCheckout({
       setClientSecret(initialCheckout.clientSecret)
       setLoading(false)
       setLoadError(null)
+      analytics.trackPayerCheckoutStarted({ invoiceId: invoice.id, currency: invoice.currency })
       return
     }
 
@@ -70,6 +72,7 @@ export function InvoiceStripeCheckout({
           throw new Error(json.error || "Failed to start checkout")
         }
         setClientSecret(json.clientSecret)
+        analytics.trackPayerCheckoutStarted({ invoiceId: invoice.id, currency: invoice.currency })
       } catch (e) {
         if (!cancelled) {
           setLoadError(e instanceof Error ? e.message : "Failed to start checkout")
@@ -146,6 +149,9 @@ export function InvoiceStripeCheckout({
       knownEmail={invoice.customerEmail || null}
       knownName={invoice.customerName || null}
       onPaid={handlePaid}
+      onPaymentFailed={(message) =>
+        analytics.trackPayerPaymentFailed({ invoiceId: invoice.id, currency: invoice.currency, error: message })
+      }
     />
   )
 }

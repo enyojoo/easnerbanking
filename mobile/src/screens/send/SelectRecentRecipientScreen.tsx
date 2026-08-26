@@ -118,6 +118,7 @@ import { useSendDestinations } from '../../hooks/useSendDestinations'
 import { useFocusRefresh } from '../../hooks/useFocusRefresh'
 import { useFocusEffect } from '@react-navigation/native'
 import { haptics } from '../../lib/haptics'
+import { analytics } from '../../lib/analytics'
 import { exitSendFlowFromHub } from '../../navigation/stackBackNavigation'
 
 const getInitials = (name: string): string => {
@@ -441,6 +442,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
 
   const handleSelectRecipient = async (recipient: Recipient) => {
     haptics.tap()
+    analytics.trackRecipientSelected({ recipientId: recipient.id, country: recipient.country_code })
     prefetchSendRatesForRecipient(qc, recipient)
     // Use navigate (not push) so re-entering amount after "Change recipient" does not stack duplicate
     // SendAmount screens ? back should be hub once, then dashboard.

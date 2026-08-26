@@ -8,6 +8,7 @@ import {
   recipientIdentityFromWritePayload,
 } from '@easner/shared'
 import { supabase } from './supabase'
+import { analytics } from './analytics'
 import { enrichEasenetRecipientFromCache, primeAndAttachEasenetSnapshot } from './enrichEasenetRecipient'
 import { isEasenetRecipientRecord, resolveRecipientEasetagForUi } from './easenetRecipientUi'
 import { buildRecipientInsertPayload, applyCadRoutingToRecipientMetadata } from './recipientPersistPayload'
@@ -249,11 +250,13 @@ export const recipientService = {
         .single()
       if (error) throw error
       if (data) {
-        return enrichEasenetAfterMutate(data as Recipient, {
+        const result = enrichEasenetAfterMutate(data as Recipient, {
           fullName: recipientData.fullName,
           payeeAvatarUrl: recipientData.payeeAvatarUrl,
           payeeAccountKind: recipientData.payeeAccountKind,
         })
+        analytics.trackRecipientAdded({ recipientId: result.id, country: resolvedCountryCode })
+        return result
       }
     } catch (e) {
       if (!isMissingTableError(e)) throw e
@@ -267,6 +270,7 @@ export const recipientService = {
     })
     list.unshift(enriched)
     await saveLocalRecipients(userId, list)
+    analytics.trackRecipientAdded({ recipientId: enriched.id, country: resolvedCountryCode })
     return enriched
   },
 

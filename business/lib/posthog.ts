@@ -1,78 +1,86 @@
 "use client"
 
-import type { PostHog } from "posthog-js"
+import posthog from "posthog-js"
+import { cleanBrowserAttributionUrl, shouldIdentifyCrossDomainId } from "@/lib/posthog-attribution"
 
 /**
- * posthog-js is ~67 KB gzip; a static import here lands it in the root-layout
- * bundle of every page. The module is loaded with a dynamic import inside
- * `initPostHog()` instead, and `getPostHog()` hands out a stub that queues
- * calls until the real client is ready — call sites are unchanged.
+ * Eager client init for first-touch attribution (UTM, referrer, `__ph_id`).
+ * Loaded from `instrumentation-client.ts` before hydration — do not defer
+ * behind useEffect, idle callbacks, or dynamic import().
  */
 
 type AnalyticsClient = {
   capture: (event: string, properties?: Record<string, unknown>) => void
   identify: (userId: string, properties?: Record<string, unknown>) => void
   reset: () => void
+  group: (groupType: string, groupKey: string, properties?: Record<string, unknown>) => void
+  register: (properties: Record<string, unknown>) => void
 }
 
-const MAX_QUEUED_CALLS = 100
+const noopClient: AnalyticsClient = {
+  capture: () => {},
+  identify: () => {},
+  reset: () => {},
+  group: () => {},
+  register: () => {},
+}
 
-let client: PostHog | null = null
 let initStarted = false
 let disabled = false
-let queue: Array<(posthog: PostHog) => void> = []
-
-function enqueue(call: (posthog: PostHog) => void) {
-  if (client) {
-    call(client)
-    return
-  }
-  if (disabled || queue.length >= MAX_QUEUED_CALLS) return
-  queue.push(call)
-}
-
-const lazyClient: AnalyticsClient = {
-  capture: (event, properties) => enqueue((posthog) => posthog.capture(event, properties)),
-  identify: (userId, properties) => enqueue((posthog) => posthog.identify(userId, properties)),
-  reset: () => enqueue((posthog) => posthog.reset()),
-}
 
 export function initPostHog(): AnalyticsClient {
-  if (initStarted || typeof window === "undefined") return lazyClient
-  initStarted = true
+  if (typeof window === "undefined") return noopClient
+  if (disabled) return noopClient
+  if (initStarted) return posthog
 
   const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY
-  const posthogHost = process.env.NEXT_PUBLIC_POSTHOG_HOST
-
-  if (!posthogKey || !posthogHost) {
+  if (!posthogKey) {
     disabled = true
-    queue = []
     if (process.env.NODE_ENV !== "production") {
-      console.warn("PostHog not initialized: missing NEXT_PUBLIC_POSTHOG_KEY or NEXT_PUBLIC_POSTHOG_HOST")
+      console.warn("PostHog not initialized: missing NEXT_PUBLIC_POSTHOG_KEY")
     }
-    return lazyClient
+    return noopClient
   }
 
-  void import("posthog-js")
-    .then(({ default: posthog }) => {
-      posthog.init(posthogKey, {
-        api_host: posthogHost,
-        capture_pageview: false,
-        capture_pageleave: true,
-        cross_subdomain_cookie: false,
-        secure_cookie: true,
-      })
-      client = posthog
-      for (const call of queue.splice(0)) call(posthog)
-    })
-    .catch(() => {
-      disabled = true
-      queue = []
-    })
+  initStarted = true
+  const apiHost = process.env.NEXT_PUBLIC_POSTHOG_HOST || DEFAULT_API_HOST
 
-  return lazyClient
+  posthog.init(posthogKey, {
+    api_host: apiHost,
+    capture_pageview: true,
+    capture_pageleave: true,
+    persistence: "localStorage+cookie",
+    cross_subdomain_cookie: true,
+    secure_cookie: true,
+    session_recording: {
+      maskAllInputs: true,
+      maskTextSelector: "[data-ph-mask], input, textarea",
+    },
+    loaded: (ph) => {
+      const params = new URLSearchParams(window.location.search)
+      const crossDomainId = params.get("__ph_id")
+      if (shouldIdentifyCrossDomainId(crossDomainId, ph.get_property("$user_id"))) {
+        ph.identify(crossDomainId!)
+      }
+      cleanBrowserAttributionUrl()
+    },
+  })
+
+  posthog.register({
+    platform: "business_web",
+    environment: process.env.NODE_ENV,
+  })
+
+  return posthog
 }
 
 export function getPostHog(): AnalyticsClient {
-  return client ?? lazyClient
+  if (typeof window === "undefined" || disabled) return noopClient
+  if (!initStarted) initPostHog()
+  if (disabled) return noopClient
+  return posthog
+}
+
+if (typeof window !== "undefined") {
+  initPostHog()
 }

@@ -104,6 +104,15 @@ export function isJsCheckoutHostname(hostname: string): boolean {
   return getJsCheckoutHostnames().includes(hostname.toLowerCase())
 }
 
+/** Prefer js.* when proxies list several hosts (same pattern as API / customer hosts). */
+export function getJsRequestHostname(request: NextRequest): string {
+  const candidates = collectHostnameCandidates(request)
+  const jsSet = new Set(getJsCheckoutHostnames().map((h) => h.toLowerCase()))
+  const jsMatch = candidates.find((h) => jsSet.has(h.toLowerCase()))
+  if (jsMatch) return jsMatch
+  return candidates[0] ?? ""
+}
+
 /**
  * `/v1/*` → `/api/v1/*` on every host. Azure Front Door / Vercel often present a
  * deployment Host while `x-forwarded-host` is api.easner.com, so a host-gated
@@ -162,6 +171,34 @@ export function maybeRedirectApiHostToBusiness(request: NextRequest): NextRespon
   try {
     const businessHost = new URL(origin).hostname.toLowerCase()
     if (businessHost === host) {
+      origin = `https://${DEFAULT_BUSINESS_HOST}`
+    }
+  } catch {
+    origin = `https://${DEFAULT_BUSINESS_HOST}`
+  }
+
+  const target = `${origin}${pathname}${request.nextUrl.search}`
+  const res = NextResponse.redirect(target, 307)
+  res.headers.set("Cache-Control", "private, no-store")
+  return res
+}
+
+/**
+ * If the request hits the Checkout embed host with a path that is not the embed script (and not Next internals),
+ * send browsers to the business web app — same as api.easner.com for non-API paths.
+ */
+export function maybeRedirectJsHostToBusiness(request: NextRequest): NextResponse | null {
+  const pathname = request.nextUrl.pathname
+  if (isCheckoutJsPath(pathname)) return null
+  if (pathname.startsWith("/_next")) return null
+
+  const host = getJsRequestHostname(request)
+  if (!host || !isJsCheckoutHostname(host)) return null
+
+  let origin = getBusinessWebOriginForApiHostRedirect().replace(/\/$/, "")
+  try {
+    const businessHost = new URL(origin).hostname.toLowerCase()
+    if (businessHost === host.toLowerCase()) {
       origin = `https://${DEFAULT_BUSINESS_HOST}`
     }
   } catch {

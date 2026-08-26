@@ -30,6 +30,7 @@ import {
   getPayrollRunActions,
   type PayrollRunAction,
 } from "@/lib/payroll/run-actions"
+import { analytics } from "@/lib/analytics"
 
 type RunFilter = "all" | "draft" | "awaiting" | "scheduled" | "completed" | "attention"
 const RUN_FILTERS = ["all", "draft", "awaiting", "scheduled", "completed", "attention"] as const
@@ -83,6 +84,7 @@ export default function PayrollRunsPage() {
     setSubmittingRunIds((current) => new Set(current).add(runId))
     try {
       await submitRunMutation.mutateAsync(runId)
+      analytics.trackPayrollRunSubmitted({ runId })
       toast.success("Submitted for approval")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Payroll could not be submitted")

@@ -24,6 +24,7 @@ import {
 import { CheckoutCodeBlock, RevealOnceValue } from "@/components/checkout/checkout-code-block"
 import { CheckoutDashboardPanel } from "@/components/checkout/checkout-dashboard-panel"
 import { CheckoutGuideSheet } from "@/components/checkout/checkout-integration-guide"
+import { analytics } from "@/lib/analytics"
 import { CheckoutHubSkeleton } from "@/components/collections/collections-skeletons"
 import {
   createCheckoutSite,
@@ -866,6 +867,7 @@ function StepLive({ data, onSaved }: HubDataProps) {
         return
       }
       toast.success(next ? "Live payments on." : "Live payments off.")
+      if (next) analytics.trackCheckoutSiteLiveEnabled()
       onSaved()
     } finally {
       setSaving(false)

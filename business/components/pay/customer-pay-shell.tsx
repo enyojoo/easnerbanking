@@ -13,7 +13,7 @@ export function CustomerPayShell({ children }: { children: ReactNode }) {
       </main>
 
       <footer className="mt-auto border-t border-border/60 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-center sm:px-6">
-        <PoweredByEasner />
+        <PoweredByEasner campaign="payer_payment_link" />
       </footer>
     </div>
   )

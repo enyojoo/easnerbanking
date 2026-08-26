@@ -9,8 +9,9 @@ Checkout snippets in the integration hub point at dedicated hosts. This app serv
 | `https://js.easner.com/checkout.js` | Latest embed (`/checkout.js`) |
 | `https://js.easner.com/v1/checkout.js` | Latest v1 (same asset) |
 | `https://js.easner.com/v1.0.0/checkout.js` | Pinned semver path (same asset until the SDK is versioned independently) |
+| Any other path | 307 to `business.easner.com` |
 
-Implemented in `proxy.ts` (`maybeRewriteJsCheckoutScript`) and `next.config.mjs` `beforeFiles` rewrites.
+Implemented in `proxy.ts` (`maybeRewriteJsCheckoutScript`, `maybeRedirectJsHostToBusiness`) and `next.config.mjs` `beforeFiles` rewrites.
 
 Hosts: `js.easner.com` plus `EASNER_JS_HOST` / `NEXT_PUBLIC_EASNER_JS_HOST` / `EASNER_JS_HOSTS`.
 

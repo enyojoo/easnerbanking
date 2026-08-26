@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils"
 import type { KybDocumentPacket, KybPacket, KybPersonPacket } from "@/lib/grid/kyb-packet-types"
 import { fetchKybPacket, KYB_PACKET_QUERY_KEY } from "@/lib/grid/kyb-packet-query"
 import { fetchWithSession } from "@/lib/fetch-with-session"
+import { analytics } from "@/lib/analytics"
 import { useQueryClient } from "@tanstack/react-query"
 import { qk } from "@easner/shared"
 import { useMaybeScope } from "@/lib/query/scope"
@@ -142,6 +143,7 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
   async function goNext() {
     if (pendingCta === "next") return
     if (section === "people") {
+      analytics.trackKybStepCompleted({ step: "company" })
       setSection("documents")
       return
     }
@@ -149,6 +151,7 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
     setError(null)
     try {
       await saveCompany()
+      analytics.trackKybStepCompleted({ step: "people" })
       setSection("people")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save company details")
@@ -171,6 +174,7 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
         errorPointers?: KybPacket["errorPointers"]
       }
       if (!res.ok) throw new Error(json.error || "Could not submit verification")
+      analytics.trackKybSubmitted({ provider: "grid" })
 
       // Keep the Complete spinner until Grid sync finishes, then show waiting or fix-ups.
       const next = await load()

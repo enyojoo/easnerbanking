@@ -70,6 +70,7 @@ import {
 import { useScope } from '../../query/scope'
 import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
+import { analytics } from '../../lib/analytics'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { KycRequiredDocumentsNotice } from '../../components/compliance/KycRequiredDocumentsNotice'
 import { ResidenceCountryField } from '../../components/compliance/ResidenceCountryField'
@@ -120,6 +121,11 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   const syncIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Ref to prevent multiple simultaneous syncs
   const syncingRef = useRef(false)
+  const prevKycStatusRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    analytics.trackKycStarted()
+  }, [])
 
   // KYC open state (hosted link opens via in-app browser – same as Legal)
   const [loadingKyc, setLoadingKyc] = useState(false)
@@ -452,6 +458,13 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     .toLowerCase()
   const noahKycInReview = kycStatusLower === 'under_review' || kycStatusLower === 'in_review'
   const noahKycRejected = kycStatusLower === 'rejected'
+  useEffect(() => {
+    const prev = prevKycStatusRef.current
+    if (prev && prev !== 'approved' && (kycStatusLower === 'approved' || noahKycApproved)) {
+      analytics.trackKycCompleted({ status: kycStatusLower || 'approved' })
+    }
+    prevKycStatusRef.current = kycStatusLower || (noahKycApproved ? 'approved' : null)
+  }, [kycStatusLower, noahKycApproved])
   const rejectionReasons =
     userProfile?.noah_kyc_rejection_reasons ?? userProfile?.profile?.noah_kyc_rejection_reasons
   const rejectionDisplay = noahKycRejected ? getNoahRejectionDisplay(rejectionReasons) : null

@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { PinChallengeDialog } from "@/components/app-lock/pin-challenge-dialog"
 import { useAuth } from "@/lib/auth-context"
+import { analytics } from "@/lib/analytics"
 import { hasPin, isLoginPinModuleAvailable } from "@/lib/login-pin"
 import {
   formatWalletSendTransferMethod,
@@ -597,6 +598,16 @@ export default function SendConfirmPage() {
 
   const finishSend = (transactionId: string) => {
     if (!state) return
+    analytics.trackSendCompleted({
+      transactionId,
+      sendCurrency: state.sendCurrency,
+      receiveCurrency: state.receiveCurrency,
+      method: isEasenetRecipient(state.recipient)
+        ? "easetag"
+        : isWalletRecipient(state.recipient)
+          ? "wallet"
+          : "bank",
+    })
     sessionStorage.removeItem(SEND_FLOW_STATE_KEY_LOCAL)
     router.push(transactionWebDetailPath(transactionId))
     void refetchBusinessMoneyQueries(qc, scope)
@@ -605,6 +616,10 @@ export default function SendConfirmPage() {
   const handleAuthorizeSuccess = async () => {
     if (!state) return
     setAuthorizeError(null)
+    analytics.trackSendSubmitted({
+      sendCurrency: state.sendCurrency,
+      receiveCurrency: state.receiveCurrency,
+    })
 
     let flowRecipient = state.recipient
     if (isDraftRecipientId(flowRecipient.id) && state.draftRecipientPersist) {
@@ -675,7 +690,13 @@ export default function SendConfirmPage() {
         requestBusinessAccountsRefresh()
         await finishSend(id)
       } catch (e) {
-        setAuthorizeError(e instanceof Error ? e.message : "Transfer failed")
+        const msg = e instanceof Error ? e.message : "Transfer failed"
+        analytics.trackSendFailed({
+          error: msg,
+          sendCurrency: state.sendCurrency,
+          receiveCurrency: state.receiveCurrency,
+        })
+        setAuthorizeError(msg)
       } finally {
         setIsAuthorizing(false)
       }
@@ -751,7 +772,13 @@ export default function SendConfirmPage() {
         requestBusinessAccountsRefresh()
         await finishSend(transactionId)
       } catch (e) {
-        setAuthorizeError(e instanceof Error ? e.message : "Wallet send failed")
+        const msg = e instanceof Error ? e.message : "Wallet send failed"
+        analytics.trackSendFailed({
+          error: msg,
+          sendCurrency: state.sendCurrency,
+          receiveCurrency: state.receiveCurrency,
+        })
+        setAuthorizeError(msg)
       } finally {
         setIsAuthorizing(false)
       }
@@ -905,7 +932,13 @@ export default function SendConfirmPage() {
       requestBusinessAccountsRefresh()
       await finishSend(transactionId)
     } catch (e) {
-      setAuthorizeError(e instanceof Error ? e.message : "Transfer failed")
+      const msg = e instanceof Error ? e.message : "Transfer failed"
+      analytics.trackSendFailed({
+        error: msg,
+        sendCurrency: state.sendCurrency,
+        receiveCurrency: state.receiveCurrency,
+      })
+      setAuthorizeError(msg)
     } finally {
       setIsAuthorizing(false)
     }

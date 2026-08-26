@@ -21,7 +21,6 @@ import { AuthFlowContainer } from '../../components/layout/AuthFlowContainer'
 import { useExternalLink } from '../../hooks/useExternalLink'
 import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps } from '../../types'
-import { analytics } from '../../lib/analytics'
 import { colors, spacing, surfaceChromeCircleStyle } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
@@ -147,10 +146,6 @@ export default function AuthScreen({ navigation }: NavigationProps) {
       setSignupResendCooldown(60)
     })
   }, [])
-
-  useEffect(() => {
-    analytics.trackScreenView(mode === 'login' ? 'Login' : 'Register')
-  }, [mode])
 
   useEffect(() => {
     void consumeSignupBlockedMessage().then((blocked) => {

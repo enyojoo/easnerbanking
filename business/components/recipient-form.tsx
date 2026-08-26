@@ -52,6 +52,7 @@ import { resolveInferredWalletAssetNetwork } from "@easner/shared"
 import { inferWalletAddressFromApi } from "@/lib/wallet-send/infer-wallet-address-client"
 import { CorridorRecipientExtraFields } from "@/components/recipients/yc-recipient-extra-fields"
 import { toast } from "sonner"
+import { analytics } from "@/lib/analytics"
 
 const RECIPIENT_TYPE_TABS = [
   { id: "bank" as const, label: "Bank Account" },
@@ -707,6 +708,13 @@ export function RecipientForm({
         }
         const beneficiary =
           isEdit && recipient?.id ? await updateRecipient(recipient.id, payload) : await createRecipient(payload)
+        if (!isEdit) {
+          analytics.trackRecipientAdded({
+            recipientId: beneficiary.id,
+            country: beneficiary.country_code,
+            method: formData.recipientType,
+          })
+        }
         onSuccessWithData?.(beneficiary)
         onSuccess()
       } catch (err) {
@@ -784,6 +792,9 @@ export function RecipientForm({
       }
       const beneficiary =
         isEdit && recipient?.id ? await updateRecipient(recipient.id, payload) : await createRecipient(payload)
+      if (!isEdit) {
+        analytics.trackRecipientAdded({ recipientId: beneficiary.id, country: payload.country })
+      }
       onSuccessWithData?.(beneficiary)
       onSuccess()
     } catch (err) {

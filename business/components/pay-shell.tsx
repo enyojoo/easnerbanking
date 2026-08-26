@@ -56,7 +56,7 @@ export function PayShell({ children }: { children: React.ReactNode }) {
           <footer className="mt-auto border-t border-border/60 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-center sm:px-6">
             <div className="flex flex-col items-center gap-3">
               {/* Matches invoice PDF + invoice view link */}
-              <PoweredByEasner />
+              <PoweredByEasner campaign="payer_payment_link" />
               {user ? (
                 <Button
                   type="button"

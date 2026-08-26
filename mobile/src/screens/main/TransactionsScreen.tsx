@@ -29,7 +29,6 @@ import EmptyState from '../../components/EmptyState'
 import { FilterChip, SectionCard } from '../../components/ui'
 import { useCurrenciesCatalog, useReportingFxRates, useTransactionsList, prefetchRecentTransactionDetailsInBackground, warmTransactionDetailForNavigation, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
 import { NavigationProps, Transaction } from '../../types'
-import { analytics } from '../../lib/analytics'
 import { useBalance } from '../../contexts/BalanceContext'
 import { useFocusRefreshAll } from '../../hooks/useFocusRefresh'
 import { useIsRestoring, useQueryClient } from '@tanstack/react-query'
@@ -399,11 +398,6 @@ function TransactionsContent({ navigation }: NavigationProps) {
 
   useEffect(() => {
     void shouldPlayDecorativeMotionEnter().then((play) => setSkipRowEntranceAnim(!play))
-  }, [])
-
-  // Track screen view
-  useEffect(() => {
-    analytics.trackScreenView('Transactions')
   }, [])
 
   const transactions = useMemo<CombinedTransaction[]>(() => {

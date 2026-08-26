@@ -83,6 +83,7 @@ import {
   pickVisibleProcessingFee,
   REVIEW_ROW_LABELS,
   isRelayTronDepositMetadata,
+  formatStablecoinDepositSchemeLabel,
   resolveInboundReceiveDetail,
   resolvePayoutReviewFlow,
   type GlobalPayoutReviewSnapshot,
@@ -479,23 +480,23 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
   const formatScheme = (transaction: LedgerTransaction, paymentRail: string) => {
     const railLower = (paymentRail || '').toLowerCase().replace(/_/g, ' ')
-    
-    // For crypto deposits (liquidation address), show "USDC on SOL" or "EURC on SOL" format
-    if (transaction.source_type === 'liquidation_address') {
-      const railMap: Record<string, string> = {
-        solana: 'SOL',
-        ethereum: 'ETH',
-        polygon: 'MATIC',
-        polygonpos: 'MATIC',
-      }
-      const railDisplay = railMap[railLower] || railLower.toUpperCase()
-      // Map USD->USDC, EUR->EURC from metadata or transaction currency
-      const sourceCurrency = transaction.metadata?.source_currency?.toUpperCase() || 
-        transaction.currency?.toUpperCase() || ''
-      const stablecoin = sourceCurrency === 'EUR' || sourceCurrency === 'EURC' ? 'EURC' : 'USDC'
-      return `${stablecoin} on ${railDisplay}`
+
+    // Stablecoin deposits: same label as live detail (`USDC on Solana`, not `USDC on SOL`)
+    if (
+      transaction.source_type === 'liquidation_address' ||
+      isRelayTronDepositMetadata(transaction.metadata)
+    ) {
+      return formatStablecoinDepositSchemeLabel({
+        sourceCurrency:
+          transaction.metadata?.source_currency ??
+          transaction.asset ??
+          transaction.currency,
+        paymentRail,
+        chain: transaction.chain ?? transaction.metadata?.chain,
+        asset: transaction.asset ?? transaction.metadata?.asset,
+      })
     }
-    
+
     // For fiat deposits (virtual account), determine ACH PUSH, ACH PULL, WIRE, SEPA, or SEPA INSTANT
     if (railLower === 'ach' || railLower.includes('ach')) {
       // Check metadata for ACH type (push/pull)

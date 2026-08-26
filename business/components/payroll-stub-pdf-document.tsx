@@ -1,6 +1,7 @@
 /* eslint-disable jsx-a11y/alt-text -- @react-pdf/renderer Image does not accept the DOM alt prop. */
 import { Document, Page, Text, View, Image, Link, StyleSheet } from "@react-pdf/renderer"
 import { PDF_LOGO_DATA_URL } from "@/lib/pdf-logo-base64"
+import { buildEasnerBusinessMarketingUrl } from "@easner/shared"
 
 export type PayrollStubPdfMeta = {
   documentKind?: "pay_stub" | "payment_reversal"
@@ -160,7 +161,7 @@ export function PayrollStubPDFDocument({ meta, logoUrl = PDF_LOGO_DATA_URL }: Pr
 
         <View style={styles.footer} fixed>
           <Text style={styles.footerText}>Powered by</Text>
-          <Link src="https://www.easner.com/business">
+          <Link src={buildEasnerBusinessMarketingUrl({ campaign: "invoice_pdf" })}>
             <Image style={styles.footerLogo} src={logoUrl} />
           </Link>
         </View>

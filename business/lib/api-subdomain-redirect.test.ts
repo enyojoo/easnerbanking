@@ -4,6 +4,7 @@ import {
   isCheckoutJsPath,
   isPublicCheckoutApiPath,
   maybeRedirectApiHostToBusiness,
+  maybeRedirectJsHostToBusiness,
   maybeRewriteApiV1ToAppApi,
   maybeRewriteJsCheckoutScript,
 } from "./api-subdomain-redirect"
@@ -65,5 +66,20 @@ describe("checkout edge routing", () => {
         "location",
       ),
     ).toBe("https://business.easner.com/checkout")
+  })
+
+  it("redirects non-embed browser paths on the js host", () => {
+    expect(
+      maybeRedirectJsHostToBusiness(request("js.easner.com", "/"))?.headers.get("location"),
+    ).toBe("https://business.easner.com/")
+    expect(
+      maybeRedirectJsHostToBusiness(request("js.easner.com", "/dashboard"))?.headers.get(
+        "location",
+      ),
+    ).toBe("https://business.easner.com/dashboard")
+    expect(maybeRedirectJsHostToBusiness(request("js.easner.com", "/v1/checkout.js"))).toBeNull()
+    expect(maybeRedirectJsHostToBusiness(request("js.easner.com", "/checkout.js"))).toBeNull()
+    expect(maybeRedirectJsHostToBusiness(request("js.easner.com", "/v1.0.0/checkout.js"))).toBeNull()
+    expect(maybeRedirectJsHostToBusiness(request("business.easner.com", "/"))).toBeNull()
   })
 })

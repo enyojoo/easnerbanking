@@ -1,6 +1,10 @@
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import { getCurrencySymbol, getSendAmountFieldSymbol } from "@easner/shared"
+import {
+  formatMoneyDisplay,
+  getCurrencySymbol,
+  getSendAmountFieldSymbol,
+} from "@easner/shared"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -10,11 +14,12 @@ export const defaultCurrency = "USD"
 
 export { getCurrencySymbol, getSendAmountFieldSymbol }
 
-/** Format amount with currency symbol and thousands separators (e.g. $250,000,000.00) */
+/**
+ * Format amount with currency symbol (e.g. $10 or $10.50).
+ * Matches mobile {@link formatMoneyDisplay}: hide trailing .00, keep cents when present.
+ */
 export function formatCurrency(amount: number, currency: string): string {
-  const symbol = getCurrencySymbol(currency)
-  const formatted = amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  return `${symbol}${formatted}`
+  return formatMoneyDisplay(amount, currency)
 }
 
 export function formatDate(dateString: string | Date, options?: Intl.DateTimeFormatOptions): string {

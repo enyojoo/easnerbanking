@@ -1,24 +1,15 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef } from "react"
 import type { ReactNode } from "react"
 import { usePathname } from "next/navigation"
-import { initPostHog, getPostHog } from "@/lib/posthog"
-import { scheduleAfterIdle } from "@/lib/schedule-after-idle"
+import { getPostHog } from "@/lib/posthog"
+import { pageviewProperties } from "@/lib/posthog-attribution"
 
 export function PostHogProvider({ children }: { children: ReactNode }) {
-  const [analyticsReady, setAnalyticsReady] = useState(false)
-
-  useEffect(() => {
-    return scheduleAfterIdle(() => {
-      initPostHog()
-      setAnalyticsReady(true)
-    })
-  }, [])
-
   return (
     <>
-      {analyticsReady ? <PageviewTracker /> : null}
+      <PageviewTracker />
       {children}
     </>
   )
@@ -27,15 +18,23 @@ export function PostHogProvider({ children }: { children: ReactNode }) {
 /**
  * Leaf component: `usePathname()` re-renders its host on every navigation,
  * so it must not live in the provider that wraps the whole app.
+ *
+ * Initial `$pageview` is captured by `capture_pageview: true` at init (before
+ * hydration). This tracker only fires on subsequent SPA route changes.
  */
 function PageviewTracker() {
   const pathname = usePathname()
+  const skipInitial = useRef(true)
 
   useEffect(() => {
     if (typeof window === "undefined" || !pathname) return
+    if (skipInitial.current) {
+      skipInitial.current = false
+      return
+    }
     const posthog = getPostHog()
     posthog.capture("$pageview", {
-      $current_url: window.location.href,
+      ...pageviewProperties(window.location.href, document.referrer),
       platform: "business_web",
       environment: process.env.NODE_ENV,
     })

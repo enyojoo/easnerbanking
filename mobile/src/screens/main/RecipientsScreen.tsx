@@ -42,7 +42,6 @@ import { useScope } from '../../query/scope'
 import { invalidateRecipientsFeed } from '../../query/refresh-user-feeds'
 import { recipientService, RecipientData } from '../../lib/recipientService'
 import { useAuth } from '../../contexts/AuthContext'
-import { analytics } from '../../lib/analytics'
 import { useFocusRefresh } from '../../hooks/useFocusRefresh'
 import { useFixedFooterPadding, useScrollPaddingAboveFooter } from '../../hooks/useScrollBottomPadding'
 import { useSendDestinations } from '../../hooks/useSendDestinations'
@@ -343,11 +342,6 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     newRecipient.currency,
     selectedCountryCurrency?.countryCode,
   ])
-
-  // Track screen view
-  useEffect(() => {
-    analytics.trackScreenView(payrollMode ? 'PayrollReceivingMethod' : 'Recipients')
-  }, [payrollMode])
 
   useEffect(() => {
     if (!payrollMode || payrollSetupOpened.current) return

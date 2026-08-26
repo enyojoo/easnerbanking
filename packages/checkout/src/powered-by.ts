@@ -1,6 +1,8 @@
+import { buildEasnerBusinessMarketingUrl } from "@easner/shared"
+
 const LOGO_URL =
   "https://kixymrjsupzkxokujmwu.supabase.co/storage/v1/object/public/brand/Easner%20Businessblk.svg"
-const BUSINESS_URL = "https://www.easner.com/business"
+const BUSINESS_URL = buildEasnerBusinessMarketingUrl({ campaign: "checkout_embed" })
 
 /** Same mark as invoice and payment-link checkout, for the website embed. */
 export function createPoweredByEasner(): HTMLElement {

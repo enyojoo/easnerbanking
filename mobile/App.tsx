@@ -383,6 +383,7 @@ function App() {
       const responseSubscription = pushNotificationService.addNotificationResponseReceivedListener(
         (response) => {
           console.log('Notification tapped:', response)
+          analytics.trackPushOpened()
           const data = response.notification.request.content.data as Record<string, unknown> | undefined
           void (async () => {
             let scope: PersonalScope | null = null

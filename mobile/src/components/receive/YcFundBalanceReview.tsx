@@ -47,6 +47,7 @@ import {
 } from '../../lib/sendFlowFundBalanceQuote'
 import { getPayoutCorridorCache } from '../../lib/sendDestinations'
 import { corridorMatchesCountryCurrency } from '@easner/shared'
+import { analytics } from '../../lib/analytics'
 
 type Props = {
   navigation: { goBack: () => void; navigate: (name: string, params?: object) => void }
@@ -226,6 +227,10 @@ export function YcFundBalanceReview({
         provider: payInProvider === 'grid' ? 'grid' : 'yellowcard',
       }),
     onSuccess: (transactionId) => {
+      analytics.trackExpressDepositCompleted({
+        currency: localPayInCurrency,
+        rail: payInRail,
+      })
       navigateToTransactionDetailAfterPayIn(navigation, transactionId, 'ReceiveFlow')
     },
   })

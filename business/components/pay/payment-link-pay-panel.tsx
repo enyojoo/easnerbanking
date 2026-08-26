@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react"
 import { QRCodeSVG } from "qrcode.react"
 import { toast } from "sonner"
+import { analytics } from "@/lib/analytics"
+import { ANALYTICS_SURFACE } from "@easner/shared"
 import { Copy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CustomerPayHeader } from "@/components/pay/customer-pay-shell"
@@ -136,6 +138,11 @@ function PaymentLinkSurface({
   const customerAmount = formatCurrency(payload.customerAmountCents / 100, link.currency)
 
   useEffect(() => {
+    analytics.registerSuperProperties({ surface: ANALYTICS_SURFACE.payer })
+    analytics.trackPayerLinkViewed({ path, rail: link.rail })
+  }, [link.rail, path])
+
+  useEffect(() => {
     if (link.rail !== "card_bank" || !payload.onlinePaymentsEnabled || paid) return
     if (initialClientSecret && attempt === 0) {
       setClientSecret(initialClientSecret)
@@ -159,6 +166,7 @@ function PaymentLinkSurface({
           throw new Error(body.error || "Could not start this payment")
         }
         setClientSecret(body.clientSecret)
+        analytics.trackPayerCheckoutStarted({ path, rail: link.rail })
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Could not start this payment")
       } finally {
@@ -173,6 +181,7 @@ function PaymentLinkSurface({
 
   const onPaid = useCallback(() => {
     setPaid(true)
+    analytics.trackPayerPaymentSucceeded({ path, rail: link.rail, currency: link.currency })
     if (link.redirectUrl) {
       window.location.assign(link.redirectUrl)
     }
@@ -256,6 +265,9 @@ function PaymentLinkSurface({
           collectEmail
           hintAlign="center"
           onPaid={onPaid}
+          onPaymentFailed={(message) =>
+            analytics.trackPayerPaymentFailed({ path, rail: link.rail, error: message })
+          }
         />
       )}
     </div>

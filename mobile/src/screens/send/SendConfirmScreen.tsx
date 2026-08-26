@@ -500,10 +500,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   const [transferError, setTransferError] = useState<string | null>(null)
 
   useEffect(() => {
-    analytics.trackScreenView('SendConfirm')
-  }, [])
-
-  useEffect(() => {
     if (!recipient || !user?.id || easetagUi) return
     if (!isDraftRecipientId(recipient.id) || !draftRecipientPersist) return
     let cancelled = false
@@ -694,6 +690,11 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
       void (async () => {
         setSendingAfterPin(true)
+        analytics.trackSendSubmitted({
+          sendCurrency: selectedBalanceCurrency,
+          receiveCurrency: receiveCurrency,
+          amount: calculatedTotalAmount,
+        })
         try {
           let flowRecipient = recipient
           if (
@@ -789,11 +790,22 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
           clearSendPayoutQuote()
           clearSendWalletQuote()
+          analytics.trackSendCompleted({
+            sendCurrency: selectedBalanceCurrency,
+            receiveCurrency: receiveCurrency,
+            amount: calculatedTotalAmount,
+            transactionId: txId,
+          })
           haptics.success()
         } catch (e: unknown) {
           if (!cancelled) {
             haptics.error()
             const msg = e instanceof Error ? e.message : TRANSFER_FAIL_MESSAGE
+            analytics.trackSendFailed({
+              sendCurrency: selectedBalanceCurrency,
+              receiveCurrency: receiveCurrency,
+              error: msg,
+            })
             setTransferError(msg)
           }
         } finally {
@@ -861,6 +873,11 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       setTransferError('Quote expired. Go back and continue again for a fresh quote.')
       return
     }
+    analytics.trackSendSubmitted({
+      sendCurrency: selectedBalanceCurrency,
+      receiveCurrency: receiveCurrency,
+      amount: calculatedTotalAmount,
+    })
     navigation.navigate('SendPin' as never)
   }
 

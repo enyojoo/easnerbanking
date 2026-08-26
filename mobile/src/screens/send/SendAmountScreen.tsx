@@ -162,6 +162,7 @@ import { getCurrencySymbol } from '../../utils/formatters'
 import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
 import { SendAmountShellWebForm } from '../../components/send/SendAmountShellWebForm'
 import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
+import { analytics } from '../../lib/analytics'
 
 function initialSendAmountFromRouteParams(params: Record<string, unknown> | undefined): string {
   const formatted = String(params?.initialSendAmount ?? '').trim()
@@ -1673,6 +1674,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           calculatedTotalAmount = stashedQuote.totalDebited
         }
 
+        analytics.trackSendStarted({
+          sendCurrency: selectedBalanceCurrency,
+          receiveCurrency: activeRecipient.currency,
+          amount: calculatedTotalAmount || receiveAmountValue,
+        })
         navigation.navigate('SendConfirm' as never, {
           recipient: activeRecipient,
           ...(draftPersistForNavigate ? { draftRecipientPersist: draftPersistForNavigate } : {}),
@@ -1764,6 +1770,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               return
             }
           }
+          analytics.trackSendStarted({
+            sendCurrency: selectedOtherCurrency,
+            receiveCurrency: activeRecipient.currency,
+            amount: previewQuote.localPayIn,
+          })
           navigation.navigate('SendConfirm' as never, {
             recipient: activeRecipient,
             ...(draftPersistForNavigate ? { draftRecipientPersist: draftPersistForNavigate } : {}),
@@ -1790,6 +1801,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           } as never)
           return
         }
+        analytics.trackSendStarted({
+          sendCurrency: selectedOtherCurrency,
+          receiveCurrency: activeRecipient.currency,
+          amount: sendingAmount,
+        })
         navigation.navigate('SendConfirm' as never, {
           recipient: activeRecipient,
           ...(draftPersistForNavigate ? { draftRecipientPersist: draftPersistForNavigate } : {}),

@@ -10,7 +10,6 @@ import { Check } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps } from '../../types'
-import { analytics } from '../../lib/analytics'
 import { useThemeColors, borderRadius, spacing, motion } from '../../theme'
 import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
@@ -37,11 +36,6 @@ export default function LoginScreen({ navigation }: NavigationProps) {
 
   // Run entrance animations
   useCalmParallelEnterWhen(true, headerAnim, formAnim)
-
-  // Track screen view
-  useEffect(() => {
-    analytics.trackScreenView('Login')
-  }, [])
 
   const handleLogin = async () => {
     if (!email || !password) {

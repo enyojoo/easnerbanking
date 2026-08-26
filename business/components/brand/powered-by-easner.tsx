@@ -1,8 +1,29 @@
+"use client"
+
+import { useMemo } from "react"
 import { BRAND } from "@/components/brand/brand-constants"
 import { cn } from "@/lib/utils"
+import { getPostHog } from "@/lib/posthog"
+import {
+  buildEasnerBusinessMarketingUrl,
+  type EasnerBusinessMarketingCampaign,
+} from "@/lib/posthog-attribution"
+
+type Props = {
+  className?: string
+  /** Attribution campaign for easner.com/business → business signup funnel. */
+  campaign?: EasnerBusinessMarketingCampaign | string
+}
 
 /** Same “Powered by Easner Business” mark used on invoices, payment links, and Checkout. */
-export function PoweredByEasner({ className }: { className?: string }) {
+export function PoweredByEasner({ className, campaign = "powered_by" }: Props) {
+  const href = useMemo(() => {
+    const ph = getPostHog() as { get_distinct_id?: () => string } | null
+    const distinctId =
+      typeof ph?.get_distinct_id === "function" ? ph.get_distinct_id() : null
+    return buildEasnerBusinessMarketingUrl({ campaign, distinctId })
+  }, [campaign])
+
   return (
     <div
       className={cn(
@@ -12,7 +33,7 @@ export function PoweredByEasner({ className }: { className?: string }) {
     >
       <span>Powered by</span>
       <a
-        href="https://www.easner.com/business"
+        href={href}
         target="_blank"
         rel="noopener noreferrer"
         className="inline-flex items-center"

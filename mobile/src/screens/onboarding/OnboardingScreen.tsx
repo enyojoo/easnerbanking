@@ -21,6 +21,7 @@ import { ripple } from '../../lib/androidRipple'
 import { AUTH_INITIAL_MODE_KEY, ACCOUNT_DELETED_FLAG_KEY } from '../../constants/auth'
 import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
+import { analytics } from '../../lib/analytics'
 // Onboarding images
 const ONBOARDING_DATA = [
   {
@@ -79,6 +80,9 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
     setCurrentIndex((prev) => {
       if (clamped !== prev) {
         haptics.tap()
+        if (Platform.OS !== 'web') {
+          analytics.trackOnboardingStepViewed(clamped)
+        }
       }
       return clamped
     })
@@ -104,6 +108,9 @@ export default function OnboardingScreen({ navigation }: NavigationProps) {
 
   const handleGetStarted = async () => {
     haptics.medium()
+    if (Platform.OS !== 'web') {
+      analytics.trackOnboardingCompleted()
+    }
     try {
       await AsyncStorage.setItem(ONBOARDING_COMPLETED_KEY, 'true')
       // Mark that user is coming from onboarding to show back arrow on auth screen

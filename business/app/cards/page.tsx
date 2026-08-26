@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { TransactionDetailPrefetchLink } from "@/components/transactions/transaction-detail-prefetch-link"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { getDateRange, filterTransactions, type TransactionWithSource } from "@/lib/transactions"
@@ -15,8 +15,12 @@ import { formatCurrency } from "@/lib/utils"
 import type { Card } from "@/lib/finance-types"
 import { PageIntro } from "@/components/copy/page-intro"
 import { PAGE_COPY } from "@/lib/copy/business-ui-copy"
+import { analytics } from "@/lib/analytics"
 
 export default function CardsPage() {
+  useEffect(() => {
+    analytics.trackCardTabViewed()
+  }, [])
   const { data: rows, loading: listLoading } = useTransactionsCached()
   const showListSkeleton = listLoading && rows.length === 0
   const [selectedCard, setSelectedCard] = useState<Card | null>(null)

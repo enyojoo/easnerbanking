@@ -24,6 +24,7 @@ import { getStripeJs } from "@/lib/stripe/load-stripe-js"
 import { paymentElementBillingFields } from "@/lib/stripe/payment-element-billing-fields"
 import { onlinePaymentTabHint } from "@/lib/invoices/invoice-payment-copy"
 import { COLLECTIONS_COPY } from "@/lib/copy/business-ui-copy"
+import { analytics } from "@/lib/analytics"
 
 type Props = {
   clientSecret: string
@@ -47,6 +48,7 @@ type Props = {
   /** Payment-link page centers the methods hint; invoices stay left. */
   hintAlign?: "left" | "center"
   onPaid?: () => void
+  onPaymentFailed?: (message: string) => void
 }
 
 function isValidEmail(value: string): boolean {
@@ -129,6 +131,7 @@ function CheckoutSurface({
   knownEmail = null,
   hintAlign = "left",
   onPaid,
+  onPaymentFailed,
 }: Omit<Props, "clientSecret" | "knownName">) {
   const checkoutState = useCheckoutElements()
   const [submitting, setSubmitting] = useState(false)
@@ -185,6 +188,7 @@ function CheckoutSurface({
       if (result.type === "error") {
         const message = result.error.message || "Payment failed"
         setError(message)
+        onPaymentFailed?.(message)
         return { ok: false, message }
       }
       setSuccess(true)
@@ -193,11 +197,12 @@ function CheckoutSurface({
     } catch (e) {
       const message = e instanceof Error ? e.message : "Payment failed"
       setError(message)
+      onPaymentFailed?.(message)
       return { ok: false, message }
     } finally {
       setSubmitting(false)
     }
-  }, [checkoutState, collectEmail, knownEmail, onPaid, resolvedEmail])
+  }, [checkoutState, collectEmail, knownEmail, onPaid, onPaymentFailed, resolvedEmail])
 
   const handleExpressConfirm = useCallback(
     async (event: StripeExpressCheckoutElementConfirmEvent) => {
@@ -333,7 +338,7 @@ function CheckoutSurface({
                 `Pay ${formatCurrency(amount, currency)}`
               )}
             </Button>
-            <PoweredByEasner className="border-t border-border pt-4" />
+            <PoweredByEasner className="border-t border-border pt-4" campaign="payer_checkout" />
           </>
         ) : null}
       </div>

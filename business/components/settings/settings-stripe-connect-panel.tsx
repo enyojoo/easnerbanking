@@ -31,6 +31,7 @@ import {
 import { ArrowLeft, Check, Circle, Loader2 } from "lucide-react"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { toast } from "sonner"
+import { analytics } from "@/lib/analytics"
 import { isStripePublishableConfigured } from "@/lib/stripe/public-enabled"
 import { easnerStripeConnectAppearance } from "@/lib/stripe/connect-appearance"
 import { browserStripeLocale } from "@/lib/stripe/elements-appearance"
@@ -311,6 +312,7 @@ export function SettingsStripeConnectPanel({
     await fetchWithSession("/api/business/stripe/connect/sync", { method: "POST" }).catch(() => null)
     const next = await refreshStatus()
     if (next?.ready) {
+      analytics.trackStripeConnectCompleted()
       toast.success("Online payments are ready")
     } else if (next?.externalAccountLinked && next.detailsSubmitted) {
       toast.success("Verification saved. Payout linked – finishing setup.")

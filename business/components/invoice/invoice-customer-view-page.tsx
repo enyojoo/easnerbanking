@@ -23,6 +23,8 @@ import { PoweredByEasner } from "@/components/brand/powered-by-easner"
 import { useFxRates } from "@/hooks/queries"
 import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
 import type { InvoicePayInPayload } from "@/lib/invoices/resolve-pay-in-for-business"
+import { analytics } from "@/lib/analytics"
+import { ANALYTICS_SURFACE } from "@easner/shared"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { INVOICE_CUSTOMER_VIEW_COPY } from "@/lib/copy/business-ui-copy"
 import { InvoiceCustomerPageSkeleton } from "@/components/invoice/invoice-customer-page-skeleton"
@@ -183,6 +185,7 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
 
   const markInvoicePaidOptimistically = useCallback(() => {
     optimisticPaidRef.current = true
+    analytics.trackPayerPaymentSucceeded({ invoiceId: invoice?.id, currency: invoice?.currency })
     setInvoice((prev) => {
       if (!prev) return prev
       if (prev.status === "paid" && prev.paymentInfo?.method === "stripe") return prev
@@ -197,7 +200,7 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
       }
     })
     scheduleBackgroundPaidRefetch()
-  }, [scheduleBackgroundPaidRefetch])
+  }, [scheduleBackgroundPaidRefetch, invoice?.id, invoice?.currency])
 
   const skipClientLoad =
     ssrUnauthorized ||
@@ -293,9 +296,14 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
   }, [invoice, fxRates])
 
   useEffect(() => {
+    analytics.registerSuperProperties({ surface: ANALYTICS_SURFACE.payer })
+  }, [])
+
+  useEffect(() => {
     if (mode !== "public" || !invoice?.id) return
+    analytics.trackPayerInvoiceViewed({ invoiceId: invoice.id, currency: invoice.currency })
     fetch(`/api/invoices/${invoice.id}/record-view`, { method: "POST" }).catch(() => {})
-  }, [mode, invoice?.id])
+  }, [mode, invoice?.id, invoice?.currency])
 
   const copyToClipboard = async (text: string, field?: string) => {
     try {
@@ -742,7 +750,7 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
               )
             })()}
 
-          <PoweredByEasner className="mt-8 border-t pt-6 pb-0" />
+          <PoweredByEasner className="mt-8 border-t pt-6 pb-0" campaign="payer_invoice" />
         </CardContent>
       </Card>
     </div>

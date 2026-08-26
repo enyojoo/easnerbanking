@@ -32,6 +32,8 @@ import {
 } from '../lib/auth-mfa'
 import {
   buildVerifiedIdentityFromKycFields,
+  isFreshAuthUser,
+  personPropertiesFromUser,
   SIGNUP_EXISTING_ACCOUNT_SAME_SURFACE,
   isSupabaseSignupDuplicateUser,
   mapSupabaseSignupDuplicateError,
@@ -162,6 +164,25 @@ async function markAccountClosureCancelledIfNeeded(deletionCancelled?: boolean):
   if (!deletionCancelled) return
   await AsyncStorage.setItem(ACCOUNT_CLOSURE_CANCELLED_KEY, '1').catch(() => undefined)
   analytics.trackAccountClosureCancelled()
+}
+
+const authAnalyticsTrackedKeys = new Set<string>()
+
+function trackConsumerAuthSuccess(method: string, user: SupabaseUser) {
+  const dedupeKey = `${user.id}:${method}`
+  if (authAnalyticsTrackedKeys.has(dedupeKey)) return
+  authAnalyticsTrackedKeys.add(dedupeKey)
+  analytics.identify(user.id, personPropertiesFromUser(user))
+  if (isFreshAuthUser(user.created_at)) {
+    analytics.trackSignUp(method, { userId: user.id })
+  }
+  analytics.trackSignIn(method, { userId: user.id })
+}
+
+async function trackConsumerAuthSuccessFromSession(method: string) {
+  const session = await getSessionReliable()
+  if (!session?.user) return
+  trackConsumerAuthSuccess(method, session.user)
 }
 
 function shouldRunPostAuthBootstrap(sourceEvent?: string): boolean {
@@ -495,6 +516,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (finalized.deletionCancelled) {
         await markAccountClosureCancelledIfNeeded(true)
       }
+      if (!finalized.error) {
+        await trackConsumerAuthSuccessFromSession('email')
+      }
       /** After surface is OK – avoids a blank frame: clearing MFA before this left AppNavigator without MfaStack while still awaiting network. */
       setMfaPending(null)
       return { error: null }
@@ -518,6 +542,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Surface gate as soon as the session exists; PIN gate will happen in AppNavigator.
       const surfaceGate = await ensureConsumerMobileAccess()
       if (surfaceGate.error) return { error: surfaceGate.error }
+
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (sessionData.session?.user) {
+        analytics.identify(sessionData.session.user.id, personPropertiesFromUser(sessionData.session.user))
+        analytics.trackSignUp('email', { userId: sessionData.session.user.id })
+      }
 
       return { error: null }
     } catch (e) {
@@ -910,6 +940,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         if (session?.user) {
           if (event === 'INITIAL_SESSION') {
+            analytics.identify(session.user.id, personPropertiesFromUser(session.user))
             const clearedIncompleteMfa = await clearIncompleteMfaSessionOnColdStart(supabase)
             if (clearedIncompleteMfa) {
               if (!mounted) return
@@ -1140,8 +1171,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // ignore
       }
 
-      analytics.trackSignIn('google')
-
       if (Platform.OS === 'web') {
         if (typeof window !== 'undefined') {
           window.location.assign(authUrl)
@@ -1195,6 +1224,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (finalized.deletionCancelled) {
         await markAccountClosureCancelledIfNeeded(true)
       }
+      if (!finalized.error) {
+        await trackConsumerAuthSuccessFromSession('google')
+      }
       return finalized
     } catch (e) {
       return { error: e instanceof Error ? e : new Error('Unable to continue with Google.') }
@@ -1229,6 +1261,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         })
         if (finalized.deletionCancelled) {
           await markAccountClosureCancelledIfNeeded(true)
+        }
+        if (!finalized.error) {
+          await trackConsumerAuthSuccessFromSession('apple')
         }
         return finalized
       } catch (e) {
@@ -1282,6 +1317,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const finalized = await finalizePostAuthSession()
       if (finalized.deletionCancelled) {
         await markAccountClosureCancelledIfNeeded(true)
+      }
+      if (!finalized.error) {
+        await trackConsumerAuthSuccessFromSession('apple')
       }
       return finalized
     } catch (e: unknown) {

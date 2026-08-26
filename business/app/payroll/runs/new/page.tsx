@@ -37,6 +37,7 @@ import {
   type PayrollWeekendPolicy,
 } from "@/lib/payroll/schedule-preview"
 import { safePayrollReturnTo } from "@/lib/payroll/navigation"
+import { analytics } from "@/lib/analytics"
 
 const stepLabels = ["Details", "People", "Amounts", "Readiness", "Review"]
 type Draft = Omit<PayrollRunDraftInput, "lines"> & { amounts: Record<string, number>; selected: string[] }
@@ -347,6 +348,9 @@ export default function NewPayrollRunPage() {
           : await createRun.mutateAsync(runInput)
       sessionStorage.removeItem(storageKey)
       toast.success(editRunId ? "Payroll run updated" : "Payroll run created")
+      if (!editRunId) {
+        analytics.trackPayrollRunCreated({ runId: result.run.id, currency: runInput.sourceCurrency })
+      }
       router.push(`/payroll/runs/${result.run.id}?returnTo=${encodeURIComponent(builderReturnTo)}`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save payroll")

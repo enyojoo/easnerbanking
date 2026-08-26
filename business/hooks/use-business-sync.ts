@@ -15,6 +15,7 @@ import {
   syncBusinessGridStatusUntilAccountsReady,
 } from "@/lib/grid/sync-business-grid-status"
 import { useScope } from "@/lib/query/scope"
+import { analytics } from "@/lib/analytics"
 
 const DEFAULT_INCOMPLETE_POLL_MS = 60_000
 const IN_REVIEW_POLL_MS = 30_000
@@ -64,14 +65,25 @@ export function useBusinessSync(): void {
 
   const lastAutoSyncMsRef = useRef(0)
   const prevTier1CompleteRef = useRef(false)
+  const prevVerificationStatusRef = useRef<string | null>(null)
   const [fiatProvisionResolved, setFiatProvisionResolved] = useState(false)
 
   useEffect(() => {
     if (tier1Complete && !prevTier1CompleteRef.current && user?.id) {
       personalSettingsStore.invalidate(user.id)
+      analytics.trackKybApproved({ businessId: businessId ?? undefined })
     }
     prevTier1CompleteRef.current = tier1Complete
-  }, [tier1Complete, user?.id])
+  }, [tier1Complete, user?.id, businessId])
+
+  useEffect(() => {
+    const status = String(tier1VerificationStatus ?? "").toLowerCase()
+    const prev = prevVerificationStatusRef.current
+    if (prev && prev !== status && (status === "rejected" || status === "declined")) {
+      analytics.trackKybRejected({ businessId: businessId ?? undefined, status })
+    }
+    prevVerificationStatusRef.current = status || null
+  }, [tier1VerificationStatus, businessId])
 
   useEffect(() => {
     setFiatProvisionResolved(false)
