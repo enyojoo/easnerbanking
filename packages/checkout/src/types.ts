@@ -28,7 +28,7 @@ export type EasnerCheckoutApi = {
 
 declare global {
   interface Window {
-    Stripe?: (key: string) => StripeLike
+    Stripe?: (key: string, options?: Record<string, unknown>) => StripeLike
     EasnerCheckout?: EasnerCheckoutApi
     __easnerSdkPromise?: Promise<StripeLike>
     __easnerStripeByKey?: Record<string, Promise<StripeLike>>

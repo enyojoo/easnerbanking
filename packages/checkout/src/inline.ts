@@ -17,6 +17,8 @@ export type CheckoutJsRuntime = {
 const STRIPE_SDK_URL = "https://js.stripe.com/basil/stripe.js"
 const METHODS_HINT = "Pay with card, bank debit, or other methods available."
 const EMAIL_REQUIRED = "Enter your email to continue"
+/** Hide Stripe’s test-mode sandbox assistant on merchant sites. */
+const STRIPE_DEVELOPER_TOOLS = { assistant: { enabled: false } } as const
 
 function stripeCache(): Record<string, Promise<StripeLike>> {
   window.__easnerStripeByKey ??= {}
@@ -32,7 +34,7 @@ function loadStripe(platformKey: string): Promise<StripeLike> {
         reject(new Error("Easner Checkout failed to load"))
         return
       }
-      resolve(window.Stripe(platformKey))
+      resolve(window.Stripe(platformKey, { developerTools: STRIPE_DEVELOPER_TOOLS }))
     }
     if (window.Stripe) {
       start()
@@ -128,7 +130,10 @@ export async function mountInline(
   const mountName = String(options.customerName || "").trim()
   const initOptions: Record<string, unknown> = {
     fetchClientSecret: () => Promise.resolve(options.clientSecret),
-    elementsOptions: { appearance: EASNER_ELEMENTS_APPEARANCE },
+    elementsOptions: {
+      appearance: EASNER_ELEMENTS_APPEARANCE,
+      developerTools: STRIPE_DEVELOPER_TOOLS,
+    },
   }
   if (mountName) {
     initOptions.defaultValues = { billingAddress: { name: mountName } }
