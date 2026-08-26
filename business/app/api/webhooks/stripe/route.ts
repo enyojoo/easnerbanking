@@ -7,18 +7,32 @@ import { recordStripeWebhookDelivery } from "@/lib/stripe/process-webhook"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+function verifyStripeWebhook(raw: Buffer, sig: string, secrets: string[]): Stripe.Event {
+  const unique = [...new Set(secrets.map((s) => s.trim()).filter(Boolean))]
+  let lastError: Error | null = null
+  for (const secret of unique) {
+    try {
+      return getStripe().webhooks.constructEvent(raw, sig, secret)
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error("Invalid signature")
+    }
+  }
+  throw lastError ?? new Error("Invalid signature")
+}
+
 export async function GET() {
   return NextResponse.json({
     ok: true,
     endpoint: "stripe-webhooks",
     enabled: isStripeInvoicePaymentsEnabled(),
-    webhookSecretConfigured: Boolean(getStripeWebhookSecret()),
+    webhookSecretConfigured: Boolean(getStripeWebhookSecret(true) || getStripeWebhookSecret(false)),
   })
 }
 
 export async function POST(request: Request) {
-  const secret = getStripeWebhookSecret()
-  if (!secret) {
+  const liveSecret = getStripeWebhookSecret(true)
+  const testSecret = getStripeWebhookSecret(false)
+  if (!liveSecret && !testSecret) {
     return NextResponse.json({ error: "STRIPE_WEBHOOK_SECRET not configured" }, { status: 503 })
   }
 
@@ -30,7 +44,7 @@ export async function POST(request: Request) {
 
   let event: Stripe.Event
   try {
-    event = getStripe().webhooks.constructEvent(raw, sig, secret)
+    event = verifyStripeWebhook(raw, sig, [liveSecret, testSecret])
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Invalid signature"
     console.warn("[stripe-webhook] verification failed", msg)

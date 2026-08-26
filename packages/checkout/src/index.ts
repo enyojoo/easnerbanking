@@ -1,4 +1,9 @@
-import { mountInline, PLATFORM_KEY_PLACEHOLDER, VALIDATE_URL_PLACEHOLDER } from "./inline"
+import {
+  mountInline,
+  PLATFORM_KEY_PLACEHOLDER,
+  PLATFORM_TEST_KEY_PLACEHOLDER,
+  VALIDATE_URL_PLACEHOLDER,
+} from "./inline"
 import { openOverlay as openOverlayImpl } from "./overlay"
 import type { EasnerCheckoutApi, EasnerCheckoutMountOptions, EasnerCheckoutOverlayOptions, MountedCheckout } from "./types"
 import { resolveElement } from "./validation"
@@ -8,6 +13,7 @@ const mounts = new Set<MountedCheckout>()
 function runtime() {
   return {
     platformKey: PLATFORM_KEY_PLACEHOLDER,
+    platformTestKey: PLATFORM_TEST_KEY_PLACEHOLDER,
     validateUrl: VALIDATE_URL_PLACEHOLDER,
   }
 }

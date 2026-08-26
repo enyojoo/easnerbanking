@@ -111,7 +111,7 @@ export async function handleStripeCheckoutCompleted(
   admin: SupabaseClient,
   event: Stripe.Event,
 ): Promise<{ handled: boolean }> {
-  const stripe = getStripe()
+  const stripe = getStripe(event.livemode !== false)
   let paymentIntentId = ""
   let sessionId: string | null = null
   let metadata: Record<string, string> = {}

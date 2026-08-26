@@ -16,13 +16,14 @@ export async function createRecurringPrice(input: {
   amountCents: number
   currency: string
   interval: PaymentLinkInterval
+  livemode?: boolean
 }): Promise<CreateRecurringPriceResult> {
   if (!isOnlineCheckoutEnabled()) {
     return { ok: false, status: 503, error: "Online payments are not enabled" }
   }
 
   try {
-    const price = await getStripe().prices.create({
+    const price = await getStripe(input.livemode !== false).prices.create({
       currency: input.currency.toLowerCase(),
       unit_amount: input.amountCents,
       recurring: { interval: input.interval },

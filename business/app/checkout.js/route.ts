@@ -3,6 +3,7 @@ import { join } from "node:path"
 import { getStripePublishableKey } from "@/lib/stripe/config"
 
 const PLATFORM_KEY_PLACEHOLDER = "__EASNER_STRIPE_PK__"
+const PLATFORM_TEST_KEY_PLACEHOLDER = "__EASNER_STRIPE_TEST_PK__"
 const VALIDATE_URL_PLACEHOLDER = "__EASNER_VALIDATE_URL__"
 
 /** Same host that served this script — `/api/v1` works; `api.easner.com/v1` currently does not. */
@@ -32,9 +33,11 @@ function loadSdkBundle(): string {
  * the platform Stripe publishable key and the key-validation URL.
  */
 export async function GET(request: Request) {
-  const platformKey = getStripePublishableKey()
+  const platformKey = getStripePublishableKey(true)
+  const platformTestKey = getStripePublishableKey(false)
   const validateUrl = checkoutValidateUrl(request)
   const bundle = loadSdkBundle()
+    .replaceAll(PLATFORM_TEST_KEY_PLACEHOLDER, platformTestKey)
     .replaceAll(PLATFORM_KEY_PLACEHOLDER, platformKey)
     .replaceAll(VALIDATE_URL_PLACEHOLDER, validateUrl)
 

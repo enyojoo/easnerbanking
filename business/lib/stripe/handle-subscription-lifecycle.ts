@@ -17,9 +17,10 @@ function subscriptionIdFrom(value: unknown): string | null {
 
 async function resolveSubscriptionMetadata(
   subscriptionId: string,
+  livemode: boolean,
 ): Promise<Record<string, string>> {
   try {
-    const subscription = await getStripe().subscriptions.retrieve(subscriptionId)
+    const subscription = await getStripe(livemode).subscriptions.retrieve(subscriptionId)
     return (subscription.metadata ?? {}) as Record<string, string>
   } catch {
     return {}
@@ -45,7 +46,7 @@ export async function handleSubscriptionLifecycleEvent(
     const paymentIntentId = subscriptionIdFrom(invoice.payment_intent)
     if (!subscriptionId) return { handled: false }
 
-    const metadata = await resolveSubscriptionMetadata(subscriptionId)
+    const metadata = await resolveSubscriptionMetadata(subscriptionId, event.livemode !== false)
     const businessId = String(metadata.easner_business_id ?? "").trim()
     const source = String(metadata.easner_checkout_source ?? "").trim()
     if (!businessId || (source !== "payment_link" && source !== "embed")) {

@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "build": "next build --webpack",
+    "prebuild": "npm run build --prefix ../packages/checkout",
     "postbuild": "node scripts/assert-static-shells.mjs",
     "dev": "NODE_OPTIONS='--max-http-header-size=1048576' next dev --port 3000 --turbo",
     "lint": "eslint .",

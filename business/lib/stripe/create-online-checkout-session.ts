@@ -15,6 +15,7 @@ import {
   getStripePublishableKey,
   isOnlineCheckoutEnabled,
   isStripeInvoicePaymentsEnabled,
+  isStripeTestPaymentsConfigured,
 } from "./config"
 
 export type { OnlineCheckoutSource }
@@ -148,11 +149,20 @@ export async function createOnlineCheckoutSession(
   const reused = await reuseOpenOnlineSession(admin, input)
   if (reused) return reused
 
+  const livemode = input.livemode !== false
+  if (!livemode && !isStripeTestPaymentsConfigured()) {
+    return {
+      ok: false,
+      status: 503,
+      error:
+        "Test payments are not configured. Add STRIPE_TEST_SECRET_KEY and NEXT_PUBLIC_STRIPE_TEST_PUBLISHABLE_KEY.",
+    }
+  }
+
   const { feeMode } = await resolveCheckoutFeeMode(admin, input.businessId)
   const amounts = computeCheckoutAmounts({ listedAmountCents, feeMode })
 
   const settlementId = randomUUID()
-  const livemode = input.livemode !== false
   const idempotencyKey =
     input.idempotencyKey || `checkout_${input.source}_${settlementId}`
 
@@ -252,7 +262,10 @@ export async function createOnlineCheckoutSession(
         }
 
   try {
-    const session = await getStripe().checkout.sessions.create(
+    const stripe = getStripe(livemode)
+    // Live: Connect destination charge. Test: platform test-mode charge only —
+    // live connected accounts cannot be used with Stripe test keys.
+    const session = await stripe.checkout.sessions.create(
       {
         ui_mode: "elements",
         mode: input.mode,
@@ -265,9 +278,13 @@ export async function createOnlineCheckoutSession(
           ? {
               subscription_data: {
                 metadata,
-                transfer_data: { destination: connectedAccountId },
-                ...(amounts.applicationFeePercent > 0
-                  ? { application_fee_percent: amounts.applicationFeePercent }
+                ...(livemode
+                  ? {
+                      transfer_data: { destination: connectedAccountId },
+                      ...(amounts.applicationFeePercent > 0
+                        ? { application_fee_percent: amounts.applicationFeePercent }
+                        : {}),
+                    }
                   : {}),
                 ...(input.trialDays && input.trialDays > 0
                   ? { trial_period_days: input.trialDays }
@@ -277,9 +294,13 @@ export async function createOnlineCheckoutSession(
           : {
               payment_intent_data: {
                 metadata,
-                transfer_data: { destination: connectedAccountId },
-                ...(amounts.applicationFeeCents > 0
-                  ? { application_fee_amount: amounts.applicationFeeCents }
+                ...(livemode
+                  ? {
+                      transfer_data: { destination: connectedAccountId },
+                      ...(amounts.applicationFeeCents > 0
+                        ? { application_fee_amount: amounts.applicationFeeCents }
+                        : {}),
+                    }
                   : {}),
                 ...(input.statementSuffix?.trim()
                   ? { statement_descriptor_suffix: input.statementSuffix.trim() }
@@ -320,7 +341,7 @@ export async function createOnlineCheckoutSession(
     return {
       ok: true,
       clientSecret: session.client_secret,
-      publishableKey: getStripePublishableKey(),
+      publishableKey: getStripePublishableKey(livemode),
       checkoutSessionId: session.id,
       settlementId,
       amounts,
@@ -372,7 +393,8 @@ async function reuseOpenOnlineSession(
   }
 
   try {
-    const session = await getStripe().checkout.sessions.retrieve(
+    const livemode = input.livemode !== false
+    const session = await getStripe(livemode).checkout.sessions.retrieve(
       String(existing.stripe_checkout_session_id),
     )
     if (session.status === "open" && session.client_secret) {
@@ -382,7 +404,7 @@ async function reuseOpenOnlineSession(
       return {
         ok: true,
         clientSecret: session.client_secret,
-        publishableKey: getStripePublishableKey(),
+        publishableKey: getStripePublishableKey(livemode),
         checkoutSessionId: session.id,
         settlementId: String(existing.easner_settlement_id),
         amounts,

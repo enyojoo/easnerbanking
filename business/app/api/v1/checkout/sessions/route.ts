@@ -143,6 +143,7 @@ export async function POST(request: Request) {
     }
   }
 
+  const livemode = auth.ctx.mode === "live"
   let stripePriceId: string | null = null
   if (mode === "subscription") {
     const interval = parsePaymentLinkInterval(body?.interval ?? "month")
@@ -155,6 +156,7 @@ export async function POST(request: Request) {
       amountCents,
       currency,
       interval,
+      livemode,
     })
     if (!price.ok) {
       return jsonError(price.status, "price_create_failed", price.error)
@@ -187,7 +189,7 @@ export async function POST(request: Request) {
     }),
     returnUrl: successUrl,
     stripePriceId,
-    livemode: auth.ctx.mode === "live",
+    livemode,
     apiKeyId: auth.ctx.keyId,
     idempotencyKey: merchantIdempotencyKey(request.headers.get("idempotency-key")),
     metadata: {

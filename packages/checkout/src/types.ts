@@ -31,6 +31,7 @@ declare global {
     Stripe?: (key: string) => StripeLike
     EasnerCheckout?: EasnerCheckoutApi
     __easnerSdkPromise?: Promise<StripeLike>
+    __easnerStripeByKey?: Record<string, Promise<StripeLike>>
   }
 }
 

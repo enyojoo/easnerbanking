@@ -40,7 +40,7 @@ function ensureStyles() {
 
 export async function openOverlay(
   options: EasnerCheckoutOverlayOptions,
-  runtime: { platformKey: string; validateUrl: string },
+  runtime: { platformKey: string; platformTestKey: string; validateUrl: string },
 ): Promise<MountedCheckout> {
   ensureStyles()
   const backdrop = document.createElement("div")

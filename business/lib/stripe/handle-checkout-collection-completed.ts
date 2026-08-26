@@ -183,7 +183,7 @@ export async function handleCheckoutCollectionCompleted(
     connectedAccountId,
     payerEmail,
     payerName,
-  } = await resolveFeeAndTransfer(getStripe(), input.paymentIntentId, {
+  } = await resolveFeeAndTransfer(getStripe(event.livemode !== false), input.paymentIntentId, {
     sessionPaymentMethodTypes: input.sessionPaymentMethodTypes,
   })
 

@@ -45,11 +45,15 @@ export function getStripePayoutMode(): StripePayoutMode {
   return "scheduled"
 }
 
-export function getStripeSecretKey(): string {
+function isStripeTestCredential(value: string): boolean {
+  return /(?:^|_)test_/.test(value)
+}
+
+function defaultStripeSecretKey(): string {
   return process.env.STRIPE_SECRET_KEY?.trim() || ""
 }
 
-export function getStripePublishableKey(): string {
+function defaultStripePublishableKey(): string {
   return (
     process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim() ||
     process.env.STRIPE_PUBLISHABLE_KEY?.trim() ||
@@ -57,7 +61,48 @@ export function getStripePublishableKey(): string {
   )
 }
 
-export function getStripeWebhookSecret(): string {
+/**
+ * Platform Stripe secret. Pass `false` for merchant test keys so Checkout hits
+ * Stripe test mode (4242, etc.) instead of the live key.
+ */
+export function getStripeSecretKey(livemode: boolean = true): string {
+  if (!livemode) {
+    const dedicated = process.env.STRIPE_TEST_SECRET_KEY?.trim() || ""
+    if (dedicated) return dedicated
+    const fallback = defaultStripeSecretKey()
+    return isStripeTestCredential(fallback) ? fallback : ""
+  }
+  const primary = defaultStripeSecretKey()
+  if (!isStripeTestCredential(primary)) return primary
+  return process.env.STRIPE_LIVE_SECRET_KEY?.trim() || primary
+}
+
+/**
+ * Platform Stripe publishable key. Pass `false` when the merchant key is `easner_pk_test_…`.
+ */
+export function getStripePublishableKey(livemode: boolean = true): string {
+  if (!livemode) {
+    const dedicated =
+      process.env.NEXT_PUBLIC_STRIPE_TEST_PUBLISHABLE_KEY?.trim() ||
+      process.env.STRIPE_TEST_PUBLISHABLE_KEY?.trim() ||
+      ""
+    if (dedicated) return dedicated
+    const fallback = defaultStripePublishableKey()
+    return isStripeTestCredential(fallback) ? fallback : ""
+  }
+  const primary = defaultStripePublishableKey()
+  if (!isStripeTestCredential(primary)) return primary
+  return process.env.NEXT_PUBLIC_STRIPE_LIVE_PUBLISHABLE_KEY?.trim() || primary
+}
+
+export function isStripeTestPaymentsConfigured(): boolean {
+  return Boolean(getStripeSecretKey(false) && getStripePublishableKey(false))
+}
+
+export function getStripeWebhookSecret(livemode: boolean = true): string {
+  if (!livemode) {
+    return process.env.STRIPE_TEST_WEBHOOK_SECRET?.trim() || ""
+  }
   return process.env.STRIPE_WEBHOOK_SECRET?.trim() || ""
 }
 

@@ -1,51 +1,92 @@
 import { EASNER_ELEMENTS_APPEARANCE } from "./appearance"
 import { mountExpressCheckout } from "./express-checkout"
 import type { CheckoutSessionLike, EasnerCheckoutMountOptions, MountedCheckout, StripeLike } from "./types"
-import { isPublishableKey, isValidEmail, resolveElement } from "./validation"
+import { isPublishableKey, isTestPublishableKey, isValidEmail, resolveElement } from "./validation"
 
 export const PLATFORM_KEY_PLACEHOLDER = "__EASNER_STRIPE_PK__"
+export const PLATFORM_TEST_KEY_PLACEHOLDER = "__EASNER_STRIPE_TEST_PK__"
 export const VALIDATE_URL_PLACEHOLDER = "__EASNER_VALIDATE_URL__"
+
+export type CheckoutJsRuntime = {
+  platformKey: string
+  platformTestKey: string
+  validateUrl: string
+}
 
 const STRIPE_SDK_URL = "https://js.stripe.com/basil/stripe.js"
 const METHODS_HINT = "Pay with card, bank debit, or other methods available."
 const EMAIL_REQUIRED = "Enter your email to continue"
 
+function stripeCache(): Record<string, Promise<StripeLike>> {
+  window.__easnerStripeByKey ??= {}
+  return window.__easnerStripeByKey
+}
+
 function loadStripe(platformKey: string): Promise<StripeLike> {
-  if (window.__easnerSdkPromise) return window.__easnerSdkPromise
-  window.__easnerSdkPromise = new Promise((resolve, reject) => {
-    if (window.Stripe) {
-      resolve(window.Stripe(platformKey))
-      return
-    }
-    const script = document.createElement("script")
-    script.src = STRIPE_SDK_URL
-    script.async = true
-    script.onload = () => {
+  const cache = stripeCache()
+  if (cache[platformKey]) return cache[platformKey]
+  cache[platformKey] = new Promise((resolve, reject) => {
+    const start = () => {
       if (!window.Stripe) {
         reject(new Error("Easner Checkout failed to load"))
         return
       }
       resolve(window.Stripe(platformKey))
     }
+    if (window.Stripe) {
+      start()
+      return
+    }
+    const script = document.createElement("script")
+    script.src = STRIPE_SDK_URL
+    script.async = true
+    script.onload = start
     script.onerror = () => reject(new Error("Easner Checkout failed to load"))
     document.head.appendChild(script)
   })
-  return window.__easnerSdkPromise
+  return cache[platformKey]
 }
 
-async function assertPublishableKey(publishableKey: string, validateUrl: string): Promise<void> {
+function platformStripeKey(
+  merchantKey: string,
+  runtime: CheckoutJsRuntime,
+  validatedKey: string,
+): string {
+  const test = isTestPublishableKey(merchantKey)
+  const candidate = validatedKey || (test ? runtime.platformTestKey : runtime.platformKey)
+  if (
+    test &&
+    (!candidate || candidate.includes("EASNER_STRIPE") || /pk_live_/i.test(candidate))
+  ) {
+    throw new Error("Easner Checkout: test payments are not configured")
+  }
+  if (!candidate || candidate.includes("EASNER_STRIPE")) {
+    throw new Error("Easner Checkout failed to load")
+  }
+  return candidate
+}
+
+async function assertPublishableKey(
+  publishableKey: string,
+  validateUrl: string,
+): Promise<string> {
   if (!isPublishableKey(publishableKey)) {
     throw new Error("Easner Checkout: publishableKey is required")
   }
-  if (!validateUrl || validateUrl.includes("EASNER_VALIDATE")) return
+  if (!validateUrl || validateUrl.includes("EASNER_VALIDATE")) return ""
   const url = `${validateUrl}${validateUrl.includes("?") ? "&" : "?"}key=${encodeURIComponent(publishableKey)}`
   const response = await fetch(url, { method: "GET" })
+  const body = (await response.json().catch(() => null)) as {
+    stripe_publishable_key?: string
+    error?: { message?: string }
+  } | null
   if (response.status === 401 || response.status === 403) {
-    throw new Error("Easner Checkout: this publishable key is not valid")
+    throw new Error(body?.error?.message || "Easner Checkout: this publishable key is not valid")
   }
   if (!response.ok) {
-    throw new Error("Easner Checkout: could not verify publishable key")
+    throw new Error(body?.error?.message || "Easner Checkout: could not verify publishable key")
   }
+  return String(body?.stripe_publishable_key || "").trim()
 }
 
 function applyBaseStyles(el: HTMLElement, extra?: Partial<CSSStyleDeclaration>) {
@@ -73,16 +114,15 @@ function renderSkeleton(host: HTMLElement) {
 export async function mountInline(
   target: string | Element,
   options: EasnerCheckoutMountOptions,
-  runtime: { platformKey: string; validateUrl: string },
+  runtime: CheckoutJsRuntime,
 ): Promise<MountedCheckout> {
   const el = resolveElement(target)
   if (!el) throw new Error("Easner Checkout: mount target not found")
   if (!options.clientSecret) throw new Error("Easner Checkout: clientSecret is required")
 
-  await assertPublishableKey(options.publishableKey, runtime.validateUrl)
+  const validatedKey = await assertPublishableKey(options.publishableKey, runtime.validateUrl)
   renderSkeleton(el as HTMLElement)
-
-  const sdk = await loadStripe(runtime.platformKey)
+  const sdk = await loadStripe(platformStripeKey(options.publishableKey, runtime, validatedKey))
   const mountEmail = String(options.customerEmail || "").trim()
   const mountName = String(options.customerName || "").trim()
   const initOptions: Record<string, unknown> = {
