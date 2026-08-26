@@ -1,6 +1,6 @@
 import { emitAppLocked } from "@/lib/app-lock-bus"
 import { APP_IDLE_TIMEOUT_MINUTES } from "@/lib/app-lock-config"
-import { hasPin, isLoginPinModuleAvailable, setAppLocked } from "@/lib/login-pin"
+import { hasPin, isAppLocked, isLoginPinModuleAvailable, setAppLocked } from "@/lib/login-pin"
 import { getLastActivityTimestamp, isIdleLockSuspended } from "@/lib/session-activity"
 
 export type IdlePolicyAction = "ok" | "lock" | "logout"
@@ -22,7 +22,9 @@ export function evaluateIdlePolicy(userId: string, now = Date.now()): IdlePolicy
 /** Apply soft-lock when idle exceeded; returns whether caller should sign out. */
 export function applyIdlePolicy(userId: string, now = Date.now()): IdlePolicyAction {
   const action = evaluateIdlePolicy(userId, now)
-  if (action === "lock") {
+  // Only emit on the 0→1 transition. Re-emitting while already locked retriggers
+  // AppLockProvider's layout effect, which calls this again (main-thread freeze).
+  if (action === "lock" && !isAppLocked(userId)) {
     setAppLocked(userId, true)
     emitAppLocked()
   }

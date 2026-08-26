@@ -11,14 +11,16 @@
       input { width: 100%; box-sizing: border-box; height: 48px; margin: 0 0 12px; padding: 0 16px; border: 1px solid #D6D9D6; border-radius: 100px; }
       p { color: #6F756F; font-size: 14px; line-height: 1.45; }
       code { font-size: 12px; }
+      #easner-checkout { margin-top: 16px; }
     </style>
   </head>
   <body>
     <h1>Easner Checkout test kit</h1>
-    <p>Paste a test <code>client_secret</code> from <code>POST /v1/checkout/sessions</code> and your publishable key. Amount never belongs in this page.</p>
+    <p>Paste a test <code>client_secret</code> from <code>POST /v1/checkout/sessions</code> and your publishable key. Amount never belongs in this page. The form mounts here, the same way invoices and payment links do.</p>
     <input id="pk" placeholder="easner_pk_test_…" />
     <input id="cs" placeholder="client_secret from your server" />
-    <button id="pay" type="button">Open overlay</button>
+    <button id="pay" type="button">Show payment form</button>
+    <div id="easner-checkout"></div>
     <script>
       document.getElementById("pay").onclick = function () {
         var publishableKey = document.getElementById("pk").value.trim();
@@ -27,7 +29,7 @@
           alert("Checkout script did not load");
           return;
         }
-        window.EasnerCheckout.openOverlay({
+        window.EasnerCheckout.mount("#easner-checkout", {
           publishableKey: publishableKey,
           clientSecret: clientSecret,
           onSuccess: function () { alert("Payment received. Fulfil from checkout.completed."); },

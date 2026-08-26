@@ -20,7 +20,7 @@ export const CHECKOUT_RECIPES: CheckoutRecipe[] = [
       mode: "payment",
       amount: 4900,
       currency: "usd",
-      success_url: "https://yoursite.com/thanks?session_id={CHECKOUT_SESSION_ID}",
+      success_url: "https://yoursite.com/thanks",
       metadata: { order_id: "ord_123" },
     },
   },
@@ -35,7 +35,7 @@ export const CHECKOUT_RECIPES: CheckoutRecipe[] = [
       amount: 4900,
       currency: "usd",
       interval: "month",
-      success_url: "https://yoursite.com/thanks?session_id={CHECKOUT_SESSION_ID}",
+      success_url: "https://yoursite.com/thanks",
       metadata: { user_id: "123", plan: "pro" },
     },
   },
@@ -49,7 +49,7 @@ export const CHECKOUT_RECIPES: CheckoutRecipe[] = [
       mode: "payment",
       amount: 12000,
       currency: "usd",
-      success_url: "https://yoursite.com/thanks?session_id={CHECKOUT_SESSION_ID}",
+      success_url: "https://yoursite.com/thanks",
       metadata: { booking_id: "bk_456" },
     },
   },
@@ -79,16 +79,18 @@ export function recipeServerCurl(recipe: CheckoutRecipe): string {
 
 export function recipeBrowserHtml(publishableKey: string): string {
   return `<script src="https://js.easner.com/v1/checkout.js"></script>
-<button id="buy">Pay</button>
+<div id="easner-checkout"></div>
 <script>
-  document.getElementById("buy").onclick = async function () {
-    const session = await fetch("/create-checkout-session", { method: "POST" }).then((r) => r.json());
-    EasnerCheckout.openOverlay({
-      publishableKey: ${JSON.stringify(publishableKey)},
-      clientSecret: session.client_secret,
-      onSuccess: function () { window.location = "/thanks"; }
+  // Same on-page form as invoices and payment links.
+  fetch("/create-checkout-session", { method: "POST" })
+    .then(function (r) { return r.json(); })
+    .then(function (session) {
+      EasnerCheckout.mount("#easner-checkout", {
+        publishableKey: ${JSON.stringify(publishableKey)},
+        clientSecret: session.client_secret,
+        onSuccess: function () { window.location = "/thanks"; }
+      });
     });
-  };
 </script>`
 }
 
@@ -137,8 +139,8 @@ Golden rule: the amount and secret key never go in the browser.
 1. On the server, POST https://api.easner.com/v1/checkout/sessions with Bearer easner_sk_… and this JSON:
 ${JSON.stringify(recipe.sessionBody, null, 2)}
 
-2. In the browser, load https://js.easner.com/v1/checkout.js and call:
-EasnerCheckout.openOverlay({ publishableKey: "easner_pk_…", clientSecret: session.client_secret, onSuccess })
+2. In the browser, load https://js.easner.com/v1/checkout.js and mount the form on the page (same as invoices and payment links):
+EasnerCheckout.mount("#easner-checkout", { publishableKey: "easner_pk_…", clientSecret: session.client_secret, onSuccess })
 
 3. Fulfil on checkout.completed. Verify easner-signature HMAC-SHA256 of "\${t}.\${rawBody}".
 Metadata on the webhook will include ${JSON.stringify(recipe.metadataExample)}.
@@ -148,7 +150,7 @@ Do not send tax, appearance, or amount from the browser.`
 
 export function recipeDebugPrompt(): string {
   return `Debug an Easner Checkout integration.
-Check: secret key only on the server; POST /v1/checkout/sessions returns client_secret; browser uses js.easner.com/v1/checkout.js and openOverlay({ publishableKey, clientSecret }); webhook verifies easner-signature; checkout.completed includes merchant metadata (no easner_* keys). Errors look like { error: { type, code, message } }.`
+Check: secret key only on the server; POST /v1/checkout/sessions returns client_secret; browser uses js.easner.com/v1/checkout.js and mount("#easner-checkout", { publishableKey, clientSecret }); webhook verifies easner-signature; checkout.completed includes merchant metadata (no easner_* keys). Errors look like { error: { type, code, message } }.`
 }
 
 export const CHECKOUT_EVENT_CATALOG: Array<{ event: string; example: Record<string, unknown> }> = [

@@ -71,8 +71,7 @@ function CheckoutStepCode({
 }) {
   const publishableKey =
     data.keys.find((key) => key.mode === "test")?.publishable_key ?? "easner_pk_test_…"
-  const successUrl =
-    site?.successUrl || "https://shop.yoursite.com/thanks?session_id={CHECKOUT_SESSION_ID}"
+  const successUrl = site?.successUrl || "https://shop.yoursite.com/thanks"
   const cancelUrl = site?.cancelUrl || "https://shop.yoursite.com/cart"
 
   if (step === "website") {
@@ -94,8 +93,8 @@ function CheckoutStepCode({
     return (
       <div className="flex flex-col gap-4">
         <p className="text-sm text-muted-foreground">
-          Your server sends these when it creates a session. Easner replaces {"{CHECKOUT_SESSION_ID}"}{" "}
-          on success.
+          Your server can send these when it creates a session. A thanks page is enough. Add{" "}
+          {"?session_id={CHECKOUT_SESSION_ID}"} only if that page needs to look up the order.
         </p>
         <CheckoutCodeBlock
           label="POST /v1/checkout/sessions URLs"
@@ -156,9 +155,9 @@ export function CheckoutIntegrationGuide({ data }: { data: CheckoutHubPayload })
           <li>Add a webhook URL so you can fulfil after payment, not from the browser.</li>
         </ul>
         <p className="text-sm text-muted-foreground">
-          Mental model: your server creates a session (amount + metadata) → the customer pays in an
-          overlay on your site → <code>checkout.completed</code> tells you to unlock access. Golden
-          rule: amount and secret key never in the browser.
+          Mental model: your server creates a session (amount + metadata) → the customer pays on
+          your page — same form as invoices and payment links → <code>checkout.completed</code>{" "}
+          tells you to unlock access. Golden rule: amount and secret key never in the browser.
         </p>
       </section>
 
@@ -181,7 +180,7 @@ export function CheckoutIntegrationGuide({ data }: { data: CheckoutHubPayload })
           <li>POST /v1/checkout/sessions from your server with the secret key.</li>
           <li>Return only client_secret to the page.</li>
           <li>Load js.easner.com/v1/checkout.js.</li>
-          <li>Call EasnerCheckout.openOverlay on Buy / Subscribe.</li>
+          <li>Mount EasnerCheckout on the page (same form as invoices and payment links).</li>
           <li>Fulfil in the checkout.completed webhook using metadata.</li>
         </ol>
         <Tabs value={recipeId} onValueChange={(value) => setRecipeId(value as CheckoutRecipeId)}>

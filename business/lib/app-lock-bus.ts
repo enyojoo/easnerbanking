@@ -9,7 +9,7 @@ export function registerAppLockListener(fn: Listener): () => void {
   return () => listeners.delete(fn)
 }
 
-export function emitAppLocked(): void {
+function notifyAppLockListeners(): void {
   for (const fn of listeners) {
     try {
       fn()
@@ -17,4 +17,12 @@ export function emitAppLocked(): void {
       // ignore
     }
   }
+}
+
+export function emitAppLocked(): void {
+  notifyAppLockListeners()
+}
+
+export function emitAppUnlocked(): void {
+  notifyAppLockListeners()
 }

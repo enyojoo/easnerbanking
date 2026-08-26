@@ -4,6 +4,7 @@ import { useEffect } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { applyIdlePolicy } from "@/lib/app-idle-policy"
 import { APP_IDLE_CHECK_INTERVAL_MS } from "@/lib/app-lock-config"
+import { isAppLocked } from "@/lib/login-pin"
 import { touchSessionActivity } from "@/lib/session-activity"
 
 /**
@@ -19,6 +20,7 @@ export function IdleSessionBridge() {
     const uid = user.id
 
     const enforce = () => {
+      if (isAppLocked(uid)) return
       const action = applyIdlePolicy(uid)
       if (action === "logout") {
         void logout()

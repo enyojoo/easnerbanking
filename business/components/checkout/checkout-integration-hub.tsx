@@ -509,11 +509,12 @@ function StepUrls({ site, onSaved }: SiteStepProps) {
             id="checkout-success"
             value={successUrl}
             onChange={(e) => setSuccessUrl(e.target.value)}
-            placeholder="https://shop.yoursite.com/thanks?session_id={CHECKOUT_SESSION_ID}"
+            placeholder="https://shop.yoursite.com/thanks"
             disabled={!site || !editingSuccess}
           />
           <p className="text-xs text-muted-foreground">
-            Easner replaces {"{CHECKOUT_SESSION_ID}"} so your page can look up the order.
+            A thanks page is enough. Add {"?session_id={CHECKOUT_SESSION_ID}"} only if that page
+            needs to look up the order.
           </p>
         </div>
         <div className="flex flex-col gap-3">

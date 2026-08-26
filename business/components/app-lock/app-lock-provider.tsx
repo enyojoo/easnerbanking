@@ -2,48 +2,28 @@
 
 import { useCallback, useEffect, useLayoutEffect, useState } from "react"
 import type { User } from "@supabase/supabase-js"
+import { toast } from "sonner"
 import { useAuth } from "@/lib/auth-context"
-import { applyIdlePolicy, evaluateIdlePolicy } from "@/lib/app-idle-policy"
+import { evaluateIdlePolicy } from "@/lib/app-idle-policy"
+import { emitAppUnlocked, registerAppLockListener } from "@/lib/app-lock-bus"
 import { PostUnlockResumeProvider } from "@/lib/post-unlock-resume-context"
-import { registerAppLockListener } from "@/lib/app-lock-bus"
-import {
-  hasPin,
-  isAppLocked,
-  isLoginPinModuleAvailable,
-  setAppLocked,
-} from "@/lib/login-pin"
-import { probeStoredSupabaseSession } from "@/lib/query/web-persist"
+import { setAppLocked } from "@/lib/login-pin"
+import { resolveBootUserId, resolvePinGate, type PinGate } from "@/lib/pin-gate"
 import { resetSessionActivity } from "@/lib/session-activity"
 import { requestHostedKybPrime } from "@/lib/compliance/prime-business-verification-flow"
 import { requestWorkspaceWarm } from "@/lib/query/prime-workspace-nav"
 import { PinSetupScreen } from "./pin-setup-screen"
 import { PinUnlockScreen } from "./pin-unlock-screen"
+import { PinLayer } from "./pin-layer"
 
 /**
  * Gates the authenticated shell: mandatory PIN setup (when Web Crypto available), then soft-lock UI.
  * PIN is device-local; not Supabase MFA.
  *
  * Lock decisions run in useLayoutEffect so a reload never paints the app under an active PIN gate.
+ * Gate always starts pending (SSR-safe). The layout effect resolves lock/setup/open before paint.
  */
 const POST_UNLOCK_RESUME_MS = 3_500
-
-type PinGate = "pending" | "open" | "lock" | "setup"
-
-function resolveBootUserId(userId: string | null | undefined, sessionUserId: string | null | undefined): string | null {
-  if (userId) return userId
-  if (sessionUserId) return sessionUserId
-  if (typeof window === "undefined") return null
-  const probe = probeStoredSupabaseSession()
-  return probe.likelyAuthenticated ? probe.userId : null
-}
-
-function resolvePinGate(userId: string | null): PinGate {
-  if (!userId) return "open"
-  if (!isLoginPinModuleAvailable()) return "open"
-  if (!hasPin(userId)) return "setup"
-  if (isAppLocked(userId) || evaluateIdlePolicy(userId) === "lock") return "lock"
-  return "open"
-}
 
 /** Minimal User for unlock UI before Supabase session finishes hydrating. */
 function stubUser(userId: string): User {
@@ -71,7 +51,6 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
   const { user, logout, isLoading, sessionUserId, canBootstrapWorkspace } = useAuth()
   const [bump, setBump] = useState(0)
   const [resume, setResume] = useState({ version: 0, until: 0 })
-  // Start pending so SSR + first client paint never flash the workspace under a PIN lock.
   const [gate, setGate] = useState<PinGate>("pending")
   const [gateUserId, setGateUserId] = useState<string | null>(null)
 
@@ -83,7 +62,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
     const uid = resolveBootUserId(user?.id, sessionUserId)
 
     if (!uid) {
-      // Still restoring a likely session — hold blank rather than painting the app.
+      // Still restoring a likely session — hold rather than painting the app.
       if (isLoading || canBootstrapWorkspace) {
         setGate("pending")
         setGateUserId(null)
@@ -94,7 +73,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
       return
     }
 
-    const action = applyIdlePolicy(uid)
+    const action = evaluateIdlePolicy(uid)
     if (action === "logout") {
       void logout()
       setGate("pending")
@@ -102,7 +81,15 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
       return
     }
 
+    // Persist lock without emitAppLocked — that listener bumps this effect.
+    if (action === "lock") {
+      setAppLocked(uid, true)
+    }
+
     const next = resolvePinGate(uid)
+    if (next === "lock" || next === "setup") {
+      toast.dismiss()
+    }
     setGateUserId(uid)
     setGate(next)
   }, [user?.id, sessionUserId, isLoading, canBootstrapWorkspace, logout, bump])
@@ -112,6 +99,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
     if (!uid) return
     setAppLocked(uid, false)
     resetSessionActivity()
+    emitAppUnlocked()
     setBump((n) => n + 1)
     setResume((r) => ({ version: r.version + 1, until: Date.now() + POST_UNLOCK_RESUME_MS }))
     setGate("open")
@@ -121,6 +109,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
 
   const onSetupComplete = useCallback(() => {
     resetSessionActivity()
+    emitAppUnlocked()
     setBump((n) => n + 1)
     setGate("open")
     requestHostedKybPrime()
@@ -133,23 +122,34 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
     </PostUnlockResumeProvider>
   )
 
-  if (gate === "pending") {
-    return wrap(<PinGateHold />)
+  const gatedWithoutUser = (gate === "lock" || gate === "setup") && !gateUserId
+  if (gate === "pending" || gatedWithoutUser) {
+    return wrap(
+      <PinLayer>
+        <PinGateHold />
+      </PinLayer>,
+    )
   }
 
   if (gate === "setup" && gateUserId) {
-    return wrap(<PinSetupScreen userId={gateUserId} onComplete={onSetupComplete} />)
+    return wrap(
+      <PinLayer>
+        <PinSetupScreen userId={gateUserId} onComplete={onSetupComplete} />
+      </PinLayer>,
+    )
   }
 
   if (gate === "lock" && gateUserId) {
     return wrap(
-      <PinUnlockScreen
-        user={user?.id === gateUserId ? user : stubUser(gateUserId)}
-        onUnlocked={onUnlocked}
-        onLogout={() => {
-          void logout()
-        }}
-      />,
+      <PinLayer>
+        <PinUnlockScreen
+          user={user?.id === gateUserId ? user : stubUser(gateUserId)}
+          onUnlocked={onUnlocked}
+          onLogout={() => {
+            void logout()
+          }}
+        />
+      </PinLayer>,
     )
   }
 

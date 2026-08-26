@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { CHECKOUT_RECIPES, recipeAiPrompt, recipeVerifyWebhook, recipeWebhookHandler } from "./checkout-recipes"
+import { CHECKOUT_RECIPES, recipeAiPrompt, recipeBrowserHtml, recipeVerifyWebhook, recipeWebhookHandler } from "./checkout-recipes"
 
 describe("checkout recipes", () => {
   it("keeps the three use-case tabs", () => {
@@ -16,5 +16,11 @@ describe("checkout recipes", () => {
   it("documents easner-signature HMAC verification", () => {
     expect(recipeWebhookHandler()).toContain("easner-signature")
     expect(recipeVerifyWebhook()).toContain("createHmac")
+  })
+
+  it("mounts the payment form on the page, like invoices and payment links", () => {
+    const html = recipeBrowserHtml("easner_pk_test_x")
+    expect(html).toContain("EasnerCheckout.mount")
+    expect(html).not.toContain("openOverlay")
   })
 })

@@ -5,6 +5,7 @@ import type { User } from "@supabase/supabase-js"
 import { getLockoutState, verifyPin, type VerifyPinResult } from "@/lib/login-pin"
 import { appPinStrings } from "@/lib/i18n/app-pin-en"
 import { usePersonalProfileAvatar } from "@/lib/use-personal-profile-avatar"
+import { useSuspendIdleLock } from "@/hooks/use-suspend-idle-lock"
 import { PinEntryBlock } from "./pin-entry-block"
 import { PinLockedHint } from "./pin-locked-hint"
 import { PinUserAvatar } from "./pin-user-avatar"
@@ -48,6 +49,8 @@ export function PinUnlockScreen({
   const lock = useMemo(() => getLockoutState(user.id), [user.id, lockTick])
   const lastAttemptRef = useRef<string>("")
   const { avatarUrl } = usePersonalProfileAvatar(user.id)
+
+  useSuspendIdleLock(true)
 
   useEffect(() => {
     const id = window.setInterval(() => setLockTick((t) => t + 1), 1000)

@@ -4,7 +4,6 @@ import type React from "react"
 import { useEffect } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { LoadingSpinner } from "@/components/loading-spinner"
 
 export function PayAuthGate({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth()
@@ -22,9 +21,7 @@ export function PayAuthGate({ children }: { children: React.ReactNode }) {
 
   if (isLoading || !user) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <LoadingSpinner />
-      </div>
+      <div className="min-h-[40vh] bg-background" aria-busy="true" aria-label="Loading" />
     )
   }
 

@@ -12,6 +12,7 @@ import {
   resetIntercomHideOnCloseRegistration,
 } from "@/lib/intercom-messenger"
 import { scheduleAfterIdle } from "@/lib/schedule-after-idle"
+import { useAppSoftLocked } from "@/hooks/use-app-soft-locked"
 
 type IntercomRegion = "us" | "eu" | "ap"
 
@@ -95,6 +96,7 @@ function updatePayload(user: User, auth: Extract<IntercomAuthResult, { ok: true 
  */
 export function BusinessIntercom() {
   const { user, isLoading } = useAuth()
+  const pinBlocked = useAppSoftLocked()
   const appId = React.useMemo(() => intercomAppIdFromEnv(), [])
   const region = React.useMemo(
     () => parseIntercomRegion(process.env.NEXT_PUBLIC_INTERCOM_REGION),
@@ -126,6 +128,11 @@ export function BusinessIntercom() {
     }
 
     if (isLoading) return
+
+    if (pinBlocked) {
+      if (prevUserIdRef.current) hide()
+      return
+    }
 
     if (!user) {
       shutdown()
@@ -182,7 +189,7 @@ export function BusinessIntercom() {
     return () => {
       cancelled = true
     }
-  }, [appId, bootAllowed, region, user, isLoading])
+  }, [appId, bootAllowed, region, user, isLoading, pinBlocked])
 
   return null
 }
