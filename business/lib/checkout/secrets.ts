@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from "node:crypto"
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto"
 
 export const CHECKOUT_SECRET_KEY_ID = "checkout-secret-v1"
 
@@ -90,4 +90,36 @@ export function signMerchantWebhookPayload(input: {
     .update(`${input.timestampSeconds}.${input.body}`, "utf8")
     .digest("hex")
   return `t=${input.timestampSeconds},v1=${signature}`
+}
+
+const WEBHOOK_TOLERANCE_SECONDS = 300
+
+/** Verify `Easner-Signature: t=…,v1=…` over the raw request body. */
+export function verifyMerchantWebhookPayload(input: {
+  secret: string
+  body: string
+  signatureHeader: string
+  nowSeconds?: number
+}): boolean {
+  const header = String(input.signatureHeader ?? "").trim()
+  const parts = Object.fromEntries(
+    header
+      .split(",")
+      .map((part) => part.trim().split("=", 2) as [string, string])
+      .filter((pair) => pair[0] && pair[1]),
+  )
+  const timestamp = Number(parts.t)
+  const expected = String(parts.v1 ?? "")
+  if (!Number.isFinite(timestamp) || !expected) return false
+  const now = input.nowSeconds ?? Math.floor(Date.now() / 1000)
+  if (Math.abs(now - timestamp) > WEBHOOK_TOLERANCE_SECONDS) return false
+  const computed = createHmac("sha256", input.secret)
+    .update(`${timestamp}.${input.body}`, "utf8")
+    .digest("hex")
+  if (computed.length !== expected.length) return false
+  try {
+    return timingSafeEqual(Buffer.from(computed, "utf8"), Buffer.from(expected, "utf8"))
+  } catch {
+    return false
+  }
 }

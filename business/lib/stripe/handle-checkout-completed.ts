@@ -57,6 +57,10 @@ async function patchStripeInvoicePaymentMetadata(
       .from("invoice_checkout_sessions")
       .update({ payment_method_type: input.paymentMethodType })
       .eq("easner_settlement_id", input.settlementId)
+    await admin
+      .from("online_checkout_sessions")
+      .update({ payment_method_type: input.paymentMethodType })
+      .eq("easner_settlement_id", input.settlementId)
   }
 
   const { data: inv } = await admin
@@ -236,6 +240,16 @@ export async function handleStripeCheckoutCompleted(
 
   if (!stripeConnectedAccountId) {
     const { data: sessionRow } = await admin
+      .from("online_checkout_sessions")
+      .select("stripe_connected_account_id")
+      .eq("easner_settlement_id", settlementId)
+      .maybeSingle()
+    if (typeof sessionRow?.stripe_connected_account_id === "string") {
+      stripeConnectedAccountId = sessionRow.stripe_connected_account_id
+    }
+  }
+  if (!stripeConnectedAccountId) {
+    const { data: sessionRow } = await admin
       .from("invoice_checkout_sessions")
       .select("stripe_connected_account_id")
       .eq("easner_settlement_id", settlementId)
@@ -268,39 +282,37 @@ export async function handleStripeCheckoutCompleted(
   const netCents = Math.max(0, grossCents - feeCents)
   const paidAt = new Date().toISOString()
 
+  const sessionCompletePatch = {
+    status: "complete",
+    stripe_payment_intent_id: paymentIntentId,
+    gross_cents: grossCents,
+    fee_cents: feeCents,
+    net_cents: netCents,
+    payment_method_type: paymentMethodType,
+    completed_at: paidAt,
+    ...(resolvedCustomerEmail ? { customer_email: resolvedCustomerEmail } : {}),
+    ...(stripeConnectedAccountId
+      ? { stripe_connected_account_id: stripeConnectedAccountId }
+      : {}),
+  }
+
   if (sessionId) {
     await admin
       .from("invoice_checkout_sessions")
-      .update({
-        status: "complete",
-        stripe_payment_intent_id: paymentIntentId,
-        gross_cents: grossCents,
-        fee_cents: feeCents,
-        net_cents: netCents,
-        payment_method_type: paymentMethodType,
-        customer_email: resolvedCustomerEmail,
-        completed_at: paidAt,
-        ...(stripeConnectedAccountId
-          ? { stripe_connected_account_id: stripeConnectedAccountId }
-          : {}),
-      })
+      .update(sessionCompletePatch)
+      .eq("stripe_checkout_session_id", sessionId)
+    await admin
+      .from("online_checkout_sessions")
+      .update(sessionCompletePatch)
       .eq("stripe_checkout_session_id", sessionId)
   } else {
     await admin
       .from("invoice_checkout_sessions")
-      .update({
-        status: "complete",
-        stripe_payment_intent_id: paymentIntentId,
-        gross_cents: grossCents,
-        fee_cents: feeCents,
-        net_cents: netCents,
-        payment_method_type: paymentMethodType,
-        ...(resolvedCustomerEmail ? { customer_email: resolvedCustomerEmail } : {}),
-        completed_at: paidAt,
-        ...(stripeConnectedAccountId
-          ? { stripe_connected_account_id: stripeConnectedAccountId }
-          : {}),
-      })
+      .update(sessionCompletePatch)
+      .eq("easner_settlement_id", settlementId)
+    await admin
+      .from("online_checkout_sessions")
+      .update(sessionCompletePatch)
       .eq("easner_settlement_id", settlementId)
   }
 
@@ -379,6 +391,29 @@ export async function handleStripeCheckoutCompleted(
       net_cents: netCents,
       currency,
       fee_mode: parsed.feeMode,
+      phase: "payment_received",
+      ledger_transaction_id: ledger.transactionId,
+      stripe_event_ids: eventIds,
+      updated_at: paidAt,
+      created_at: paidAt,
+    },
+    { onConflict: "id" },
+  )
+
+  await admin.from("checkout_stripe_settlements").upsert(
+    {
+      id: settlementId,
+      business_id: businessId,
+      invoice_id: invoiceId,
+      source: "invoice",
+      stripe_payment_intent_id: paymentIntentId,
+      stripe_charge_id: chargeId,
+      stripe_connected_account_id: stripeConnectedAccountId,
+      stripe_transfer_id: transferId,
+      gross_cents: grossCents,
+      fee_cents: feeCents,
+      net_cents: netCents,
+      currency,
       phase: "payment_received",
       ledger_transaction_id: ledger.transactionId,
       stripe_event_ids: eventIds,

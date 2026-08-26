@@ -43,6 +43,7 @@ export function completedCheckoutSteps(
     done.add("session")
   }
   if (data.settings.webhookUrl && data.settings.webhookSecretLast4) done.add("webhook")
+  if (data.settings.testPaymentCompletedAt) done.add("test")
   if (data.settings.liveModeEnabled) done.add("live")
   return done
 }
@@ -55,7 +56,7 @@ export function phaseComplete(
     return done.has("keys")
   }
   if (phase.id === "verify") {
-    return done.has("webhook")
+    return done.has("webhook") && done.has("test")
   }
   return phase.steps.every((step) => done.has(step))
 }

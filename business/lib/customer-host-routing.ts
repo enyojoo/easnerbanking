@@ -23,6 +23,8 @@ function isInternalPath(pathname: string): boolean {
     pathname === "/robots.txt" ||
     pathname === "/manifest.webmanifest" ||
     pathname === "/checkout.js" ||
+    pathname.startsWith("/v1/") ||
+    /^\/v[\d.]+\/checkout\.js$/.test(pathname) ||
     pathname === "/og" ||
     pathname.startsWith("/og/")
   )

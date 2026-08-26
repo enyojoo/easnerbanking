@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   if (!ctx.ok) return ctx.response
 
   const admin = createSupabaseAdmin()
-  const [{ data: settings }, feeMode, onlinePayments, { data: keys }, { data: siteRows }] = await Promise.all([
+  const [{ data: settings }, feeMode, onlinePayments, { data: keys }, { data: siteRows }, { data: lastDelivery }] = await Promise.all([
     admin.from("business_checkout_settings").select(SETTINGS_COLUMNS).eq("business_id", ctx.businessId).maybeSingle(),
     resolveCheckoutFeeMode(admin, ctx.businessId),
     resolveOnlinePaymentsEnabled(admin, ctx.businessId),
@@ -41,6 +41,14 @@ export async function GET(request: Request) {
       .select("id, origin, success_url, cancel_url, created_at, updated_at")
       .eq("business_id", ctx.businessId)
       .order("created_at", { ascending: true }),
+    admin
+      .from("checkout_webhook_deliveries")
+      .select("delivered_at")
+      .eq("business_id", ctx.businessId)
+      .eq("status", "delivered")
+      .order("delivered_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ])
 
   const connect =
@@ -65,6 +73,7 @@ export async function GET(request: Request) {
       webhookSecretLast4: settings?.webhook_secret_last4 ?? null,
       liveModeEnabled: Boolean(settings?.live_mode_enabled),
       testPaymentCompletedAt: settings?.test_payment_completed_at ?? null,
+      lastWebhookDeliveredAt: lastDelivery?.delivered_at ?? null,
       onlinePaymentsEnabled: onlinePayments.enabled,
     },
     readiness: {
@@ -191,6 +200,32 @@ export async function PATCH(request: Request) {
       if (!connect.ready) {
         return NextResponse.json(
           { error: connect.reason || "Finish online payment setup before going live." },
+          { status: 409 },
+        )
+      }
+      const [{ data: settingsRow }, { data: delivered }] = await Promise.all([
+        admin
+          .from("business_checkout_settings")
+          .select("test_payment_completed_at")
+          .eq("business_id", ctx.businessId)
+          .maybeSingle(),
+        admin
+          .from("checkout_webhook_deliveries")
+          .select("id")
+          .eq("business_id", ctx.businessId)
+          .eq("status", "delivered")
+          .limit(1)
+          .maybeSingle(),
+      ])
+      if (!settingsRow?.test_payment_completed_at) {
+        return NextResponse.json(
+          { error: "Complete a test payment before going live." },
+          { status: 409 },
+        )
+      }
+      if (!delivered?.id) {
+        return NextResponse.json(
+          { error: "Deliver a webhook successfully (HTTP 200) before going live." },
           { status: 409 },
         )
       }

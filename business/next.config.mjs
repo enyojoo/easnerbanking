@@ -136,13 +136,34 @@ const nextConfig = {
     const invoiceHosts = [...new Set(["invoice.easner.com", hostnameFromOrigin(process.env.NEXT_PUBLIC_INVOICE_APP_URL, "invoice.easner.com")])]
       .filter((host) => host === "invoice.easner.com" || host.startsWith("invoice."))
     const skip =
-      "api|_next|auth|pay-customer|invoice|og|favicon.ico|robots.txt|manifest.webmanifest|checkout.js|crypto-onramp"
+      "api|_next|auth|pay-customer|invoice|og|favicon.ico|robots.txt|manifest.webmanifest|checkout.js|crypto-onramp|v1"
+    const jsHosts = [...new Set(["js.easner.com", hostnameFromOrigin(process.env.NEXT_PUBLIC_EASNER_JS_HOST, "js.easner.com")])]
+      .filter((host) => host === "js.easner.com" || host.startsWith("js."))
+    const apiHosts = [...new Set(["api.easner.com", hostnameFromOrigin(process.env.NEXT_PUBLIC_EASNER_API_HOST, "api.easner.com")])]
+      .filter((host) => host === "api.easner.com" || host.startsWith("api."))
     return {
       beforeFiles: [
         {
           source: "/crypto-onramp/:path*",
           destination: "https://js.stripe.com/crypto-onramp/:path*",
         },
+        ...apiHosts.map((host) => ({
+          source: "/v1/:path*",
+          has: [{ type: "host", value: host }],
+          destination: "/api/v1/:path*",
+        })),
+        ...jsHosts.flatMap((host) => [
+          {
+            source: "/v1/checkout.js",
+            has: [{ type: "host", value: host }],
+            destination: "/checkout.js",
+          },
+          {
+            source: "/:version/checkout.js",
+            has: [{ type: "host", value: host }],
+            destination: "/checkout.js",
+          },
+        ]),
         ...payHosts.map((host) => ({
           source: `/((?!${skip}).*)`,
           has: [{ type: "host", value: host }],

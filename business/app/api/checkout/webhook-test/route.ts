@@ -18,9 +18,14 @@ export async function POST(request: Request) {
     data: {
       test: true,
       checkout_session_id: "cs_test_easner_sample",
+      mode: "payment",
       amount_cents: 4900,
       currency: "USD",
+      customer_email: "customer@example.com",
+      subscription_id: null,
+      metadata: { order_id: "ord_test" },
       paid_at: new Date().toISOString(),
+      livemode: false,
     },
   })
 

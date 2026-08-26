@@ -1,0 +1,246 @@
+import { EASNER_ELEMENTS_APPEARANCE } from "./appearance"
+import { mountExpressCheckout } from "./express-checkout"
+import type { CheckoutSessionLike, EasnerCheckoutMountOptions, MountedCheckout, StripeLike } from "./types"
+import { isPublishableKey, isValidEmail, resolveElement } from "./validation"
+
+export const PLATFORM_KEY_PLACEHOLDER = "__EASNER_STRIPE_PK__"
+export const VALIDATE_URL_PLACEHOLDER = "__EASNER_VALIDATE_URL__"
+
+const STRIPE_SDK_URL = "https://js.stripe.com/basil/stripe.js"
+const METHODS_HINT = "Pay with card, bank debit, or other methods available."
+const EMAIL_REQUIRED = "Enter your email to continue"
+
+function loadStripe(platformKey: string): Promise<StripeLike> {
+  if (window.__easnerSdkPromise) return window.__easnerSdkPromise
+  window.__easnerSdkPromise = new Promise((resolve, reject) => {
+    if (window.Stripe) {
+      resolve(window.Stripe(platformKey))
+      return
+    }
+    const script = document.createElement("script")
+    script.src = STRIPE_SDK_URL
+    script.async = true
+    script.onload = () => {
+      if (!window.Stripe) {
+        reject(new Error("Easner Checkout failed to load"))
+        return
+      }
+      resolve(window.Stripe(platformKey))
+    }
+    script.onerror = () => reject(new Error("Easner Checkout failed to load"))
+    document.head.appendChild(script)
+  })
+  return window.__easnerSdkPromise
+}
+
+async function assertPublishableKey(publishableKey: string, validateUrl: string): Promise<void> {
+  if (!isPublishableKey(publishableKey)) {
+    throw new Error("Easner Checkout: publishableKey is required")
+  }
+  if (!validateUrl || validateUrl.includes("EASNER_VALIDATE")) return
+  const url = `${validateUrl}${validateUrl.includes("?") ? "&" : "?"}key=${encodeURIComponent(publishableKey)}`
+  const response = await fetch(url, { method: "GET" })
+  if (response.status === 401 || response.status === 403) {
+    throw new Error("Easner Checkout: this publishable key is not valid")
+  }
+  if (!response.ok) {
+    throw new Error("Easner Checkout: could not verify publishable key")
+  }
+}
+
+function applyBaseStyles(el: HTMLElement, extra?: Partial<CSSStyleDeclaration>) {
+  Object.assign(el.style, extra)
+}
+
+function renderSkeleton(host: HTMLElement) {
+  host.replaceChildren()
+  const wrap = document.createElement("div")
+  wrap.setAttribute("aria-busy", "true")
+  wrap.setAttribute("aria-label", "Loading payment methods")
+  applyBaseStyles(wrap, { display: "flex", flexDirection: "column", gap: "12px" })
+  for (const height of ["44px", "44px", "48px", "48px", "44px"]) {
+    const bar = document.createElement("div")
+    applyBaseStyles(bar, {
+      height,
+      borderRadius: "12px",
+      background: "#ecebe7",
+    })
+    wrap.appendChild(bar)
+  }
+  host.appendChild(wrap)
+}
+
+export async function mountInline(
+  target: string | Element,
+  options: EasnerCheckoutMountOptions,
+  runtime: { platformKey: string; validateUrl: string },
+): Promise<MountedCheckout> {
+  const el = resolveElement(target)
+  if (!el) throw new Error("Easner Checkout: mount target not found")
+  if (!options.clientSecret) throw new Error("Easner Checkout: clientSecret is required")
+
+  await assertPublishableKey(options.publishableKey, runtime.validateUrl)
+  renderSkeleton(el as HTMLElement)
+
+  const sdk = await loadStripe(runtime.platformKey)
+  const mountEmail = String(options.customerEmail || "").trim()
+  const mountName = String(options.customerName || "").trim()
+  const initOptions: Record<string, unknown> = {
+    fetchClientSecret: () => Promise.resolve(options.clientSecret),
+    elementsOptions: { appearance: EASNER_ELEMENTS_APPEARANCE },
+  }
+  if (mountName) {
+    initOptions.defaultValues = { billingAddress: { name: mountName } }
+  }
+
+  const checkout = await sdk.initCheckout(initOptions)
+  const session = typeof checkout.session === "function" ? checkout.session() : {}
+  const sessionEmail = String(
+    session?.customerEmail || session?.customerDetails?.email || checkout.email || "",
+  ).trim()
+  const knownEmail = mountEmail || sessionEmail
+
+  const root = document.createElement("form")
+  root.setAttribute("novalidate", "novalidate")
+  applyBaseStyles(root, { display: "flex", flexDirection: "column", gap: "12px", margin: "0" })
+
+  const hint = document.createElement("p")
+  hint.textContent = METHODS_HINT
+  applyBaseStyles(hint, { margin: "0", fontSize: "14px", lineHeight: "1.45", color: "#6F756F" })
+
+  const emailLabel = document.createElement("label")
+  emailLabel.textContent = "Email"
+  emailLabel.setAttribute("for", "easner-payer-email")
+  applyBaseStyles(emailLabel, { display: "block", fontSize: "14px", fontWeight: "500" })
+
+  const emailInput = document.createElement("input")
+  emailInput.id = "easner-payer-email"
+  emailInput.type = "email"
+  emailInput.autocomplete = "email"
+  emailInput.placeholder = "you@example.com"
+  emailInput.required = true
+  applyBaseStyles(emailInput, {
+    width: "100%",
+    boxSizing: "border-box",
+    height: "48px",
+    padding: "0 16px",
+    border: "1px solid #D6D9D6",
+    borderRadius: "100px",
+    fontSize: "15px",
+  })
+
+  const expressHost = document.createElement("div")
+  const divider = document.createElement("p")
+  divider.textContent = "Or pay with"
+  applyBaseStyles(divider, {
+    margin: "0",
+    textAlign: "center",
+    fontSize: "13px",
+    color: "#6F756F",
+    display: "none",
+  })
+  const paymentHost = document.createElement("div")
+  const message = document.createElement("p")
+  message.setAttribute("role", "alert")
+  applyBaseStyles(message, { display: "none", margin: "0", fontSize: "14px", color: "#7a2e2e" })
+
+  const button = document.createElement("button")
+  button.type = "submit"
+  const total = session?.total?.total?.amount || "Pay"
+  button.textContent = String(total).startsWith("Pay") ? String(total) : `Pay ${total}`
+  applyBaseStyles(button, {
+    height: "44px",
+    border: "0",
+    borderRadius: "9999px",
+    background: "#0080cc",
+    color: "#fff",
+    fontSize: "16px",
+    fontWeight: "500",
+    cursor: "pointer",
+  })
+
+  root.appendChild(hint)
+  if (!knownEmail) {
+    root.appendChild(emailLabel)
+    root.appendChild(emailInput)
+  }
+  root.appendChild(expressHost)
+  root.appendChild(divider)
+  root.appendChild(paymentHost)
+  root.appendChild(message)
+  root.appendChild(button)
+  el.replaceChildren(root)
+
+  const express = mountExpressCheckout(checkout, expressHost, divider, (walletEmail) =>
+    confirmCheckout(checkout, options, knownEmail || walletEmail || emailInput.value, button, message),
+  )
+
+  const payment = checkout.createPaymentElement({
+    layout: { type: "accordion", radios: "always", spacedAccordionItems: true },
+    fields: {
+      billingDetails: { name: "always", email: "never" },
+      card: { billingDetails: { name: "always", email: "never" } },
+    },
+  })
+  payment.mount(paymentHost)
+
+  const onSubmit = (event: Event) => {
+    event.preventDefault()
+    const email = knownEmail || String(emailInput.value || "").trim()
+    if (!isValidEmail(email)) {
+      message.textContent = EMAIL_REQUIRED
+      message.style.display = "block"
+      return
+    }
+    void confirmCheckout(checkout, options, email, button, message)
+  }
+  root.addEventListener("submit", onSubmit)
+
+  return {
+    destroy() {
+      root.removeEventListener("submit", onSubmit)
+      payment.unmount?.()
+      express?.unmount?.()
+      el.replaceChildren()
+    },
+  }
+}
+
+async function confirmCheckout(
+  checkout: CheckoutSessionLike,
+  options: EasnerCheckoutMountOptions,
+  email: string,
+  button: HTMLButtonElement,
+  message: HTMLElement,
+): Promise<void> {
+  if (!isValidEmail(email)) {
+    message.textContent = EMAIL_REQUIRED
+    message.style.display = "block"
+    throw new Error(EMAIL_REQUIRED)
+  }
+  button.disabled = true
+  message.style.display = "none"
+  const sessionEmail = String(
+    (typeof checkout.session === "function" && checkout.session()?.email) || checkout.email || "",
+  ).trim()
+  try {
+    if (!sessionEmail && typeof checkout.updateEmail === "function") {
+      await checkout.updateEmail(email).catch(() => undefined)
+    }
+    const result = await checkout.confirm({
+      redirect: "if_required",
+      ...(sessionEmail ? {} : { email }),
+    })
+    if (result.type === "error") {
+      throw new Error(result.error?.message || "Payment failed")
+    }
+    options.onSuccess?.(result)
+  } catch (error) {
+    button.disabled = false
+    const err = error instanceof Error ? error : new Error("Payment failed")
+    message.textContent = err.message
+    message.style.display = "block"
+    options.onError?.(err)
+    throw err
+  }
+}

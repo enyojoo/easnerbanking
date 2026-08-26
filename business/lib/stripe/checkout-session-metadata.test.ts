@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   buildCheckoutSessionMetadata,
   parseCheckoutSessionMetadata,
+  sanitizeMerchantMetadata,
   settlesAsCollection,
 } from "./checkout-session-metadata"
 
@@ -71,5 +72,33 @@ describe("checkout session metadata", () => {
 
     expect(metadata.merchant_order_id).toBe("ord_99")
     expect(parseCheckoutSessionMetadata(metadata).settlementId).toBe(BASE.settlementId)
+  })
+
+  it("strips reserved easner_* keys from merchant extra metadata", () => {
+    const metadata = buildCheckoutSessionMetadata({
+      ...BASE,
+      source: "embed",
+      extra: {
+        order_id: "ord_1",
+        easner_checkout_source: "invoice",
+        easner_business_id: "spoof",
+      },
+    })
+    expect(metadata.order_id).toBe("ord_1")
+    expect(metadata.easner_checkout_source).toBe("embed")
+    expect(metadata.easner_business_id).toBe(BASE.businessId)
+  })
+})
+
+describe("sanitizeMerchantMetadata", () => {
+  it("drops reserved keys and non-string empties", () => {
+    expect(
+      sanitizeMerchantMetadata({
+        plan: "pro",
+        easner_settlement_id: "x",
+        EASNER_FOO: "y",
+        skip: null,
+      }),
+    ).toEqual({ plan: "pro" })
   })
 })

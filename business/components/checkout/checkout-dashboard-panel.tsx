@@ -24,7 +24,7 @@ export function CheckoutDashboardPanel({
 
   const snippets = useMemo(
     () => ({
-      html: `<script src="https://js.easner.com/checkout.js"></script>
+      html: `<script src="https://js.easner.com/v1/checkout.js"></script>
 <div id="easner-checkout"></div>
 <script>
   EasnerCheckout.mount("#easner-checkout", {
@@ -37,7 +37,7 @@ export function CheckoutDashboardPanel({
 export function Pay() {
   return (
     <>
-      <Script src="https://js.easner.com/checkout.js" />
+      <Script src="https://js.easner.com/v1/checkout.js" />
       <div id="easner-checkout" />
     </>
   );
@@ -98,6 +98,12 @@ export function Pay() {
               {(liveKey ?? testKey)
                 ? `Ending ${(liveKey ?? testKey)?.secret_key_last4} – rotate in setup to reveal a new one.`
                 : "None yet"}
+              {(liveKey ?? testKey)?.last_used_at ? (
+                <span>
+                  {" "}
+                  Last used {new Date(String((liveKey ?? testKey)?.last_used_at)).toLocaleString()}.
+                </span>
+              ) : null}
             </dd>
           </div>
           <div>

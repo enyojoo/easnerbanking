@@ -3,6 +3,7 @@ import type Stripe from "stripe"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { dispatchMerchantWebhook } from "@/lib/checkout/merchant-webhooks"
+import { checkoutCompletedWebhookData } from "@/lib/checkout/merchant-webhook-payload"
 import { deliverCheckoutPayerReceiptEmail } from "@/lib/checkout/deliver-checkout-payer-receipt-email"
 import type { StripePaymentMethodDisplay } from "@/lib/stripe/parse-payment-method-display"
 import { getStripe } from "./client"
@@ -286,7 +287,7 @@ export async function handleCheckoutCollectionCompleted(
       updated_at: paidAt,
     })
     .eq(sessionMatch.column, sessionMatch.value)
-    .select("id, payment_link_id, metadata, customer_email")
+    .select("id, payment_link_id, metadata, customer_email, mode, stripe_subscription_id")
 
   const sessionRow = sessionRows?.[0] ?? null
   const paymentLinkId =
@@ -297,33 +298,50 @@ export async function handleCheckoutCollectionCompleted(
   if (paymentLinkId) {
     const { data: link } = await admin
       .from("payment_links")
-      .select("label, payment_count")
+      .select("label")
       .eq("id", paymentLinkId)
       .maybeSingle()
     linkLabel = typeof link?.label === "string" ? link.label : null
     if (!isStripeTest) {
-      await admin
-        .from("payment_links")
-        .update({
-          payment_count: Number(link?.payment_count ?? 0) + 1,
-          updated_at: paidAt,
-        })
-        .eq("id", paymentLinkId)
+      await admin.rpc("increment_payment_link_payment_count", {
+        p_link_id: paymentLinkId,
+        p_updated_at: paidAt,
+      })
     }
   }
 
+  const sessionMetadata =
+    sessionRow && "metadata" in sessionRow ? asMetadata(sessionRow.metadata) : {}
   const webhookPayload = {
     businessId: input.businessId,
     event: "checkout.completed" as const,
-    data: {
-      checkout_session_id: input.sessionId,
-      amount_cents: grossCents,
+    data: checkoutCompletedWebhookData({
+      checkoutSessionId: input.sessionId,
+      mode:
+        sessionRow && "mode" in sessionRow && typeof sessionRow.mode === "string"
+          ? sessionRow.mode
+          : input.subscriptionId
+            ? "subscription"
+            : "payment",
+      amountCents: grossCents,
       currency,
-      ...(paymentLinkId ? { payment_link_id: paymentLinkId } : {}),
-      ...(customerEmail ? { customer_email: customerEmail } : {}),
-      paid_at: paidAt,
+      customerEmail:
+        customerEmail ||
+        (sessionRow && typeof sessionRow.customer_email === "string"
+          ? sessionRow.customer_email
+          : null),
+      subscriptionId:
+        input.subscriptionId ||
+        (sessionRow &&
+        "stripe_subscription_id" in sessionRow &&
+        typeof sessionRow.stripe_subscription_id === "string"
+          ? sessionRow.stripe_subscription_id
+          : null),
+      metadata: sessionMetadata,
+      paymentLinkId,
+      paidAt,
       livemode: !isStripeTest,
-    },
+    }),
   }
 
   if (isStripeTest) {

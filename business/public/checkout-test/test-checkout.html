@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Easner Checkout test kit</title>
+    <script src="https://js.easner.com/v1/checkout.js"></script>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 440px; margin: 48px auto; padding: 0 16px; color: #121518; }
+      button { height: 44px; width: 100%; border: 0; border-radius: 9999px; background: #0080cc; color: #fff; font-size: 16px; cursor: pointer; }
+      input { width: 100%; box-sizing: border-box; height: 48px; margin: 0 0 12px; padding: 0 16px; border: 1px solid #D6D9D6; border-radius: 100px; }
+      p { color: #6F756F; font-size: 14px; line-height: 1.45; }
+      code { font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <h1>Easner Checkout test kit</h1>
+    <p>Paste a test <code>client_secret</code> from <code>POST /v1/checkout/sessions</code> and your publishable key. Amount never belongs in this page.</p>
+    <input id="pk" placeholder="easner_pk_test_…" />
+    <input id="cs" placeholder="client_secret from your server" />
+    <button id="pay" type="button">Open overlay</button>
+    <script>
+      document.getElementById("pay").onclick = function () {
+        var publishableKey = document.getElementById("pk").value.trim();
+        var clientSecret = document.getElementById("cs").value.trim();
+        if (!window.EasnerCheckout) {
+          alert("Checkout script did not load");
+          return;
+        }
+        window.EasnerCheckout.openOverlay({
+          publishableKey: publishableKey,
+          clientSecret: clientSecret,
+          onSuccess: function () { alert("Payment received. Fulfil from checkout.completed."); },
+        });
+      };
+    </script>
+  </body>
+</html>

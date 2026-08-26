@@ -7,6 +7,7 @@ import {
 import type { Invoice } from "@/lib/b2b/types"
 import { writeInvoiceAuditLog } from "@/lib/invoices/invoice-audit-log"
 import { notifyInvoiceStripeRefunded } from "@/lib/invoices/notify-invoice-refunded"
+import { applyCheckoutStripeRefund } from "./apply-checkout-stripe-refund"
 
 type RestorableStatus = Extract<Invoice["status"], "sent" | "past_due" | "unpaid">
 
@@ -287,6 +288,13 @@ export async function applyInvoiceStripeRefundSideEffects(
     businessId: settlement.business_id,
     invoice: updatedInvoice,
   }).catch((e) => console.error("[stripe] refund notify:", e))
+
+  await applyCheckoutStripeRefund(admin, {
+    settlementId: settlement.id,
+    refundId,
+    refundedAt: input.refundedAt,
+    stripeEventId: input.stripeEventId,
+  })
 
   return {
     ok: true,

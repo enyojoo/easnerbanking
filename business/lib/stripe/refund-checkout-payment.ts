@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { applyCheckoutStripeRefund } from "./apply-checkout-stripe-refund"
-import { getStripe } from "./client"
+import { applyInvoiceStripeRefundSideEffects } from "./apply-invoice-stripe-refund"
+import { createStripeDestinationRefund } from "./create-destination-refund"
 import { isOnlineCheckoutEnabled } from "./config"
 
 export type RefundCheckoutPaymentResult =
@@ -8,9 +9,9 @@ export type RefundCheckoutPaymentResult =
   | { ok: false; error: string; status: number }
 
 /**
- * Full refund of a Payment Link or website-embed collection. Mirrors the invoice
- * refund path: reverse the destination transfer, then fail the settlement and its
- * ledger entry. Refunds after the balance is credited need an ops clawback.
+ * Full refund of a collection settlement (Payment Link, website embed, or
+ * dual-written invoice). Reverse the destination transfer, then fail the
+ * settlement and its ledger entry.
  */
 export async function refundCheckoutPayment(
   admin: SupabaseClient,
@@ -26,7 +27,7 @@ export async function refundCheckoutPayment(
   const { data: settlement, error } = await admin
     .from("checkout_stripe_settlements")
     .select(
-      "id, stripe_payment_intent_id, phase, stripe_transfer_id, stripe_connected_account_id, stripe_refund_id",
+      "id, stripe_payment_intent_id, phase, stripe_transfer_id, stripe_connected_account_id, stripe_refund_id, source, invoice_id",
     )
     .eq("id", input.settlementId)
     .eq("business_id", input.businessId)
@@ -47,36 +48,33 @@ export async function refundCheckoutPayment(
     }
   }
 
-  const hasDestinationTransfer = Boolean(
-    settlement.stripe_transfer_id || settlement.stripe_connected_account_id,
-  )
-
-  let refund
-  try {
-    refund = await getStripe().refunds.create(
-      {
-        payment_intent: String(settlement.stripe_payment_intent_id),
-        reason: "requested_by_customer",
-        ...(hasDestinationTransfer ? { reverse_transfer: true } : {}),
-        metadata: {
-          business_id: input.businessId,
-          easner_settlement_id: String(settlement.id),
-        },
-      },
-      { idempotencyKey: `checkout_refund_${settlement.id}` },
-    )
-  } catch (e) {
-    return {
-      ok: false,
-      error: e instanceof Error ? e.message : "Refund failed",
-      status: 502,
-    }
+  const refund = await createStripeDestinationRefund({
+    paymentIntentId: String(settlement.stripe_payment_intent_id),
+    businessId: input.businessId,
+    settlementId: String(settlement.id),
+    hasDestinationTransfer: Boolean(
+      settlement.stripe_transfer_id || settlement.stripe_connected_account_id,
+    ),
+    idempotencyKey: `checkout_refund_${settlement.id}`,
+    extraMetadata:
+      typeof settlement.invoice_id === "string" ? { invoice_id: settlement.invoice_id } : undefined,
+  })
+  if (!refund.ok) {
+    return { ok: false, error: refund.error, status: 502 }
   }
 
   await applyCheckoutStripeRefund(admin, {
     settlementId: String(settlement.id),
-    refundId: refund.id,
+    refundId: refund.refundId,
   })
 
-  return { ok: true, refundId: refund.id, status: refund.status ?? "succeeded" }
+  if (settlement.source === "invoice" && typeof settlement.invoice_id === "string") {
+    await applyInvoiceStripeRefundSideEffects(admin, {
+      settlementId: String(settlement.id),
+      refundId: refund.refundId,
+      source: "api",
+    })
+  }
+
+  return { ok: true, refundId: refund.refundId, status: refund.status }
 }

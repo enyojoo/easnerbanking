@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { buildPaymentThanksUrl } from "@/lib/payment-links/public-url"
 import { mapRowToPaymentLink } from "@/lib/payment-links/types"
 import { createOnlineCheckoutSession } from "@/lib/stripe/create-online-checkout-session"
+import { getStripe } from "@/lib/stripe/client"
+import { getStripePublishableKey } from "@/lib/stripe/config"
 import { buildEasnerStatementSuffix } from "@/lib/stripe/statement-descriptor"
 
 export type StartPaymentLinkCheckoutResult =
@@ -39,6 +41,9 @@ export async function startPaymentLinkCheckout(
     .maybeSingle()
   const businessName = typeof biz?.name === "string" ? biz.name : null
 
+  const reused = await reuseOpenPaymentLinkSession(admin, link.id)
+  if (reused) return reused
+
   const result = await createOnlineCheckoutSession(admin, {
     source: "payment_link",
     businessId,
@@ -66,4 +71,50 @@ export async function startPaymentLinkCheckout(
     customerAmountCents: result.amounts.customerAmountCents,
     surchargeCents: result.amounts.surchargeCents,
   }
+}
+
+async function reuseOpenPaymentLinkSession(
+  admin: SupabaseClient,
+  paymentLinkId: string,
+): Promise<StartPaymentLinkCheckoutResult | null> {
+  const { data: existing } = await admin
+    .from("online_checkout_sessions")
+    .select(
+      "id, stripe_checkout_session_id, listed_amount_cents, gross_cents, application_fee_cents",
+    )
+    .eq("payment_link_id", paymentLinkId)
+    .eq("status", "open")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!existing?.stripe_checkout_session_id) return null
+
+  const expire = async () => {
+    await admin
+      .from("online_checkout_sessions")
+      .update({ status: "expired", completed_at: new Date().toISOString() })
+      .eq("id", existing.id)
+  }
+
+  try {
+    const session = await getStripe().checkout.sessions.retrieve(
+      String(existing.stripe_checkout_session_id),
+    )
+    if (session.status === "open" && session.client_secret) {
+      const listed = Number(existing.listed_amount_cents) || 0
+      const gross = Number(existing.gross_cents) || listed
+      return {
+        ok: true,
+        clientSecret: session.client_secret,
+        publishableKey: getStripePublishableKey(),
+        customerAmountCents: gross,
+        surchargeCents: Math.max(0, gross - listed),
+      }
+    }
+    await expire()
+  } catch {
+    await expire()
+  }
+  return null
 }

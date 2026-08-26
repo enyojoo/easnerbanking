@@ -40,6 +40,7 @@ export function buildCheckoutSessionMetadata(input: {
   extra?: Record<string, string>
 }): Record<string, string> {
   return {
+    ...(input.extra ?? {}),
     easner_settlement_id: input.settlementId,
     easner_business_id: input.businessId,
     easner_checkout_source: input.source,
@@ -49,8 +50,35 @@ export function buildCheckoutSessionMetadata(input: {
     ...(input.invoiceId ? { easner_invoice_id: input.invoiceId } : {}),
     ...(input.invoiceNumber ? { easner_invoice_number: input.invoiceNumber } : {}),
     ...(input.paymentLinkId ? { easner_payment_link_id: input.paymentLinkId } : {}),
-    ...(input.extra ?? {}),
   }
+}
+
+/** Keys starting with `easner_` are reserved for webhook routing. */
+export function isReservedCheckoutMetadataKey(key: string): boolean {
+  return key.trim().toLowerCase().startsWith("easner_")
+}
+
+/** Drop reserved keys from merchant-supplied metadata before it is merged. */
+export function sanitizeMerchantMetadata(
+  raw: Record<string, unknown> | null | undefined,
+): Record<string, string> {
+  const out: Record<string, string> = {}
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out
+  for (const [key, value] of Object.entries(raw)) {
+    if (!key || isReservedCheckoutMetadataKey(key)) continue
+    if (value == null) continue
+    const stringValue = typeof value === "string" ? value : String(value)
+    if (!stringValue) continue
+    out[key] = stringValue
+  }
+  return out
+}
+
+/** Merchant-facing metadata: reserved `easner_*` keys never leave the platform. */
+export function publicMerchantMetadata(
+  raw: Record<string, unknown> | null | undefined,
+): Record<string, string> {
+  return sanitizeMerchantMetadata(raw)
 }
 
 export function parseCheckoutSessionMetadata(

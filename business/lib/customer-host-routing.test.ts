@@ -69,6 +69,8 @@ describe("customer host routing", () => {
     expect(rewrittenPath("pay.easner.com", "/api/payment-links/public/acme/tuition-fall")).toBeNull()
     expect(rewrittenPath("pay.easner.com", "/_next/static/chunk.js")).toBeNull()
     expect(rewrittenPath("invoice.easner.com", "/checkout.js")).toBeNull()
+    expect(rewrittenPath("pay.easner.com", "/v1/checkout.js")).toBeNull()
+    expect(rewrittenPath("pay.easner.com", "/v1/checkout/sessions")).toBeNull()
     expect(rewrittenPath("pay.easner.com", "/auth/login")).toBeNull()
     expect(rewrittenPath("pay.easner.com", "/og/customer/acme/tuition-fall")).toBeNull()
     expect(rewrittenPath("invoice.easner.com", "/og/customer/acme/einv-1042")).toBeNull()

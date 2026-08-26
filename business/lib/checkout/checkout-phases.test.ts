@@ -25,6 +25,7 @@ function payload(partial: {
       webhookSecretLast4: null,
       liveModeEnabled: false,
       testPaymentCompletedAt: null,
+      lastWebhookDeliveredAt: null,
       ...settings,
     },
     readiness: { ready: ready ?? false, reason: null },
@@ -62,7 +63,7 @@ describe("checkout phases", () => {
     expect(checkoutSetupComplete(data)).toBe(false)
   })
 
-  it("marks setup complete after keys and a webhook, without an in-app test payment", () => {
+  it("marks setup complete after keys, a webhook, and a test payment", () => {
     const data = payload({
       ready: true,
       businessFeeMode: "merchant_net",
@@ -70,6 +71,8 @@ describe("checkout phases", () => {
       defaultSuccessUrl: "https://a.com/ok",
       webhookUrl: "https://a.com/hooks",
       webhookSecretLast4: "wxyz",
+      testPaymentCompletedAt: "2026-08-26T00:00:00.000Z",
+      lastWebhookDeliveredAt: "2026-08-26T00:00:00.000Z",
     })
     data.keys = [
       {

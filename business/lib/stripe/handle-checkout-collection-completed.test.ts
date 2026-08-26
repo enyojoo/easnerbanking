@@ -69,7 +69,7 @@ function mockAdmin(opts?: {
               return {
                 data: {
                   id: "sess_1",
-                  metadata: opts?.sessionMetadata ?? {},
+                  metadata: opts?.sessionMetadata ?? { user_id: "123", plan: "pro", easner_business_id: BUSINESS_ID },
                   customer_email: "buyer@example.com",
                   payment_link_id: LINK_ID,
                 },
@@ -87,7 +87,16 @@ function mockAdmin(opts?: {
         const result = {
           data:
             table === "online_checkout_sessions"
-              ? [{ id: "sess_1", payment_link_id: LINK_ID, metadata: opts?.sessionMetadata ?? {} }]
+              ? [
+                  {
+                    id: "sess_1",
+                    payment_link_id: LINK_ID,
+                    metadata: opts?.sessionMetadata ?? { user_id: "123", plan: "pro" },
+                    customer_email: "buyer@example.com",
+                    mode: "payment",
+                    stripe_subscription_id: null,
+                  },
+                ]
               : null,
           error: null,
         }
@@ -103,6 +112,10 @@ function mockAdmin(opts?: {
         return { data: null, error: null }
       },
     }),
+    rpc: async (name: string, payload: Record<string, unknown>) => {
+      writes.push({ table: name, op: "rpc", payload })
+      return { data: null, error: null }
+    },
   }
 
   return { admin: admin as unknown as SupabaseClient, writes }
@@ -189,7 +202,19 @@ describe("payment link settlement", () => {
 
     expect(dispatchMerchantWebhook).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ businessId: BUSINESS_ID, event: "checkout.completed" }),
+      expect.objectContaining({
+        businessId: BUSINESS_ID,
+        event: "checkout.completed",
+        data: expect.objectContaining({
+          checkout_session_id: "cs_test_1",
+          mode: "payment",
+          amount_cents: 10_000,
+          currency: "USD",
+          customer_email: "buyer@example.com",
+          metadata: expect.objectContaining({ user_id: "123", plan: "pro" }),
+          livemode: true,
+        }),
+      }),
     )
 
     expect(deliverCheckoutPayerReceiptEmail).toHaveBeenCalledWith(
@@ -240,8 +265,8 @@ describe("payment link settlement", () => {
     const { admin, writes } = mockAdmin()
     await handleStripeCheckoutCompleted(admin, paymentLinkSessionEvent())
 
-    const linkUpdate = writes.find((w) => w.table === "payment_links" && w.op === "update")
-    expect(linkUpdate?.payload).toMatchObject({ payment_count: 3 })
+    const increment = writes.find((w) => w.table === "increment_payment_link_payment_count")
+    expect(increment?.payload).toMatchObject({ p_link_id: LINK_ID })
   })
 
   it("ignores an event with no settlement id", async () => {

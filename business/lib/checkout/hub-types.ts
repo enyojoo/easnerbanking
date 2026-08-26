@@ -22,6 +22,7 @@ export type CheckoutHubSettings = {
   webhookSecretLast4: string | null
   liveModeEnabled: boolean
   testPaymentCompletedAt: string | null
+  lastWebhookDeliveredAt: string | null
 }
 
 export type CheckoutApiKey = {

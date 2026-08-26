@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type Stripe from "stripe"
 import { dispatchMerchantWebhook } from "@/lib/checkout/merchant-webhooks"
+import { subscriptionLifecycleWebhookData } from "@/lib/checkout/merchant-webhook-payload"
 import { getStripe } from "./client"
 import { handleCheckoutCollectionCompleted } from "./handle-checkout-collection-completed"
 
@@ -94,13 +95,12 @@ export async function handleSubscriptionLifecycleEvent(
   await dispatchMerchantWebhook(admin, {
     businessId,
     event: event.type === "customer.subscription.deleted" ? "subscription.canceled" : "subscription.updated",
-    data: {
-      subscription_id: subscription.id,
+    data: subscriptionLifecycleWebhookData({
+      subscriptionId: subscription.id,
       status: subscription.status,
-      ...(subscription.metadata?.easner_payment_link_id
-        ? { payment_link_id: String(subscription.metadata.easner_payment_link_id) }
-        : {}),
-    },
+      metadata: subscription.metadata,
+      paymentLinkId: String(subscription.metadata?.easner_payment_link_id ?? "").trim() || null,
+    }),
   })
 
   return { handled: true }

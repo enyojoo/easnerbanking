@@ -4,10 +4,21 @@ import { getBusinessAppPublicOrigin } from "@/lib/business-app-public-url"
 
 const DEFAULT_API_HOST = "api.easner.com"
 const DEFAULT_BUSINESS_HOST = "business.easner.com"
+const DEFAULT_JS_HOST = "js.easner.com"
 
 /** True for Next.js Route Handlers under `/api` (including `/api` with no trailing slash). */
 export function isBusinessAppApiPath(pathname: string): boolean {
   return pathname === "/api" || pathname.startsWith("/api/")
+}
+
+/** Merchant Checkout API advertised as `api.easner.com/v1/*`. */
+export function isPublicCheckoutApiPath(pathname: string): boolean {
+  return pathname === "/v1" || pathname.startsWith("/v1/")
+}
+
+/** Versioned embed script: `/checkout.js`, `/v1/checkout.js`, `/v1.0.0/checkout.js`. */
+export function isCheckoutJsPath(pathname: string): boolean {
+  return pathname === "/checkout.js" || /^\/v[\d.]+\/checkout\.js$/.test(pathname)
 }
 
 function normalizeHostname(value: string | undefined): string | null {
@@ -73,6 +84,49 @@ export function isApiOnlyHostname(hostname: string): boolean {
   return getApiOnlyHostnames().includes(hostname.toLowerCase())
 }
 
+/**
+ * Hostnames that serve the Checkout embed (`js.easner.com/v1/checkout.js`).
+ * - `EASNER_JS_HOSTS` – comma-separated
+ * - `EASNER_JS_HOST` / `NEXT_PUBLIC_EASNER_JS_HOST`
+ */
+export function getJsCheckoutHostnames(): string[] {
+  const list = process.env.EASNER_JS_HOSTS?.split(",").map((s) => s.trim()).filter(Boolean) ?? []
+  const single = process.env.EASNER_JS_HOST?.trim()
+  const pub = process.env.NEXT_PUBLIC_EASNER_JS_HOST?.trim()
+  const merged = [...list, single || "", pub || ""]
+    .map((s) => normalizeHostname(s))
+    .filter((h): h is string => Boolean(h))
+  return [...new Set([...merged, DEFAULT_JS_HOST])]
+}
+
+export function isJsCheckoutHostname(hostname: string): boolean {
+  if (!hostname) return false
+  return getJsCheckoutHostnames().includes(hostname.toLowerCase())
+}
+
+/** `api.easner.com/v1/*` → `/api/v1/*` so copy-paste snippets hit the real route. */
+export function maybeRewriteApiV1ToAppApi(request: NextRequest): NextResponse | null {
+  const pathname = request.nextUrl.pathname
+  if (!isPublicCheckoutApiPath(pathname)) return null
+  const host = getRequestHostname(request)
+  if (!host || !isApiOnlyHostname(host)) return null
+  const url = request.nextUrl.clone()
+  url.pathname = `/api${pathname === "/v1" ? "/v1" : pathname}`
+  return NextResponse.rewrite(url)
+}
+
+/** `js.easner.com/v1/checkout.js` (and pinned semver paths) → `/checkout.js`. */
+export function maybeRewriteJsCheckoutScript(request: NextRequest): NextResponse | null {
+  const pathname = request.nextUrl.pathname
+  if (!isCheckoutJsPath(pathname)) return null
+  const host = getRequestHostname(request)
+  if (!host || !isJsCheckoutHostname(host)) return null
+  if (pathname === "/checkout.js") return null
+  const url = request.nextUrl.clone()
+  url.pathname = "/checkout.js"
+  return NextResponse.rewrite(url)
+}
+
 /** Where browser users land when they open a non-API path on the API host. */
 export function getBusinessWebOriginForApiHostRedirect(): string {
   const fromEnv = getBusinessAppPublicOrigin()
@@ -95,6 +149,8 @@ export function getBusinessWebOriginForApiHostRedirect(): string {
 export function maybeRedirectApiHostToBusiness(request: NextRequest): NextResponse | null {
   const pathname = request.nextUrl.pathname
   if (isBusinessAppApiPath(pathname)) return null
+  if (isPublicCheckoutApiPath(pathname)) return null
+  if (isCheckoutJsPath(pathname)) return null
   if (pathname.startsWith("/_next")) return null
 
   const host = getRequestHostname(request)

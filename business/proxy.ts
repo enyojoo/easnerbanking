@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-import { maybeRedirectApiHostToBusiness } from "@/lib/api-subdomain-redirect"
+import {
+  maybeRedirectApiHostToBusiness,
+  maybeRewriteApiV1ToAppApi,
+  maybeRewriteJsCheckoutScript,
+} from "@/lib/api-subdomain-redirect"
 import { applyCorsHeaders, corsPreflightResponse, getCorsAllowedOrigins } from "@/lib/cors"
 import {
   maybeRedirectCustomerHostRootToBusiness,
@@ -18,7 +22,15 @@ function getClientIp(request: NextRequest): string {
 export function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
-  /** `api.*` domain: only `/api/*` is meant for clients; send browsers to the business web origin. */
+  /** `api.easner.com/v1/*` is the public Checkout API; rewrite onto `/api/v1/*`. */
+  const apiV1Rewrite = maybeRewriteApiV1ToAppApi(request)
+  if (apiV1Rewrite) return apiV1Rewrite
+
+  /** `js.easner.com/v1/checkout.js` (and pinned semver paths) serve the embed. */
+  const jsCheckoutRewrite = maybeRewriteJsCheckoutScript(request)
+  if (jsCheckoutRewrite) return jsCheckoutRewrite
+
+  /** `api.*` domain: only `/api/*` (and `/v1/*`) is meant for clients; send browsers to the business web origin. */
   const apiHostRedirect = maybeRedirectApiHostToBusiness(request)
   if (apiHostRedirect) return apiHostRedirect
 
@@ -31,7 +43,7 @@ export function proxy(request: NextRequest) {
   if (customerHostRewrite) return customerHostRewrite
 
   // Browser calls from Easner Office (different origin) need CORS on API responses.
-  if (pathname.startsWith("/api/")) {
+  if (pathname.startsWith("/api/") || pathname.startsWith("/v1/")) {
     const allowed = getCorsAllowedOrigins()
     const preflight = corsPreflightResponse(request, allowed)
     if (preflight) return preflight

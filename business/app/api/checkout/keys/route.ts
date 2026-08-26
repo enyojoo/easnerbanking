@@ -79,3 +79,32 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ key: inserted, secretKey }, { status: 201 })
 }
+
+export async function DELETE(request: Request) {
+  const user = await getUserFromApiRequest(request)
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const ctx = await requireEasnerBusinessId(user.id)
+  if (!ctx.ok) return ctx.response
+
+  const body = (await request.json().catch(() => null)) as { id?: string; mode?: string } | null
+  const admin = createSupabaseAdmin()
+  const now = new Date().toISOString()
+  let query = admin
+    .from("business_api_keys")
+    .update({ revoked_at: now, updated_at: now })
+    .eq("business_id", ctx.businessId)
+    .is("revoked_at", null)
+
+  if (body?.id) {
+    query = query.eq("id", body.id)
+  } else if (body?.mode === "test" || body?.mode === "live") {
+    query = query.eq("mode", body.mode)
+  } else {
+    return NextResponse.json({ error: "Choose a key to revoke" }, { status: 400 })
+  }
+
+  const { error } = await query
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  return NextResponse.json({ ok: true })
+}

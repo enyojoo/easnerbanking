@@ -91,22 +91,37 @@ async function reuseOpenInvoiceSession(
   invoiceId: string,
   opts: { connectedAccountId: string | null },
 ): Promise<CreateInvoiceCheckoutResult | null> {
-  const { data: existingOpen } = await admin
-    .from("invoice_checkout_sessions")
+  const { data: unified } = await admin
+    .from("online_checkout_sessions")
     .select("id, stripe_checkout_session_id, easner_settlement_id, stripe_connected_account_id")
     .eq("invoice_id", invoiceId)
+    .eq("source", "invoice")
     .eq("status", "open")
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle()
 
+  const { data: legacy } = unified?.stripe_checkout_session_id
+    ? { data: null }
+    : await admin
+        .from("invoice_checkout_sessions")
+        .select("id, stripe_checkout_session_id, easner_settlement_id, stripe_connected_account_id")
+        .eq("invoice_id", invoiceId)
+        .eq("status", "open")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+  const existingOpen = unified?.stripe_checkout_session_id ? unified : legacy
   if (!existingOpen?.stripe_checkout_session_id) return null
 
   const expire = async (status: "complete" | "expired") => {
+    const patch = { status, completed_at: new Date().toISOString() }
+    await admin.from("online_checkout_sessions").update(patch).eq("id", existingOpen.id)
     await admin
       .from("invoice_checkout_sessions")
-      .update({ status, completed_at: new Date().toISOString() })
-      .eq("id", existingOpen.id)
+      .update(patch)
+      .eq("easner_settlement_id", existingOpen.easner_settlement_id)
   }
 
   const existingConnected =

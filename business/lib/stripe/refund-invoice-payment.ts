@@ -1,7 +1,7 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { getStripe } from "@/lib/stripe/client"
 import { isStripeInvoicePaymentsEnabled } from "@/lib/stripe/config"
 import { applyInvoiceStripeRefundSideEffects } from "@/lib/stripe/apply-invoice-stripe-refund"
+import { createStripeDestinationRefund } from "@/lib/stripe/create-destination-refund"
 import type { Invoice } from "@/lib/b2b/types"
 
 export type RefundInvoicePaymentResult =
@@ -28,7 +28,7 @@ export async function refundInvoiceStripePayment(input: {
   }
 
   const admin = createSupabaseAdmin()
-  const { data: settlement, error } = await admin
+  let { data: settlement, error } = await admin
     .from("invoice_stripe_settlements")
     .select(
       "id,stripe_payment_intent_id,phase,currency,net_cents,ledger_transaction_id,stripe_transfer_id,stripe_connected_account_id",
@@ -41,6 +41,22 @@ export async function refundInvoiceStripePayment(input: {
 
   if (error) {
     return { ok: false, error: error.message, status: 500 }
+  }
+  if (!settlement?.stripe_payment_intent_id) {
+    const fallback = await admin
+      .from("checkout_stripe_settlements")
+      .select(
+        "id,stripe_payment_intent_id,phase,currency,net_cents,ledger_transaction_id,stripe_transfer_id,stripe_connected_account_id",
+      )
+      .eq("invoice_id", input.invoiceId)
+      .eq("business_id", input.businessId)
+      .eq("source", "invoice")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    settlement = fallback.data
+    error = fallback.error
+    if (error) return { ok: false, error: error.message, status: 500 }
   }
   if (!settlement?.stripe_payment_intent_id) {
     return { ok: false, error: "No Stripe settlement found for this invoice", status: 404 }
@@ -56,34 +72,23 @@ export async function refundInvoiceStripePayment(input: {
     }
   }
 
-  const stripe = getStripe()
-  const hasDestinationTransfer = Boolean(
-    settlement.stripe_transfer_id || settlement.stripe_connected_account_id,
-  )
-  let refund
-  try {
-    refund = await stripe.refunds.create(
-      {
-        payment_intent: settlement.stripe_payment_intent_id,
-        reason: "requested_by_customer",
-        // Destination charges: pull funds back from the connected account.
-        ...(hasDestinationTransfer ? { reverse_transfer: true } : {}),
-        metadata: {
-          invoice_id: input.invoiceId,
-          business_id: input.businessId,
-          easner_settlement_id: settlement.id,
-        },
-      },
-      { idempotencyKey: `stripe_refund_${settlement.id}` },
-    )
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "Stripe refund failed"
-    return { ok: false, error: message, status: 502 }
+  const refund = await createStripeDestinationRefund({
+    paymentIntentId: settlement.stripe_payment_intent_id,
+    businessId: input.businessId,
+    settlementId: settlement.id,
+    hasDestinationTransfer: Boolean(
+      settlement.stripe_transfer_id || settlement.stripe_connected_account_id,
+    ),
+    idempotencyKey: `stripe_refund_${settlement.id}`,
+    extraMetadata: { invoice_id: input.invoiceId },
+  })
+  if (!refund.ok) {
+    return { ok: false, error: refund.error, status: 502 }
   }
 
   const sideEffects = await applyInvoiceStripeRefundSideEffects(admin, {
     settlementId: String(settlement.id),
-    refundId: refund.id,
+    refundId: refund.refundId,
     refundedAt: new Date().toISOString(),
     source: "api",
     actorUserId: input.actorUserId ?? null,
@@ -95,8 +100,8 @@ export async function refundInvoiceStripePayment(input: {
 
   return {
     ok: true,
-    refundId: refund.id,
-    status: refund.status ?? "succeeded",
+    refundId: refund.refundId,
+    status: refund.status,
     invoiceStatus: sideEffects.restoredStatus ?? "unpaid",
     ledgerTransactionId: sideEffects.ledgerTransactionId ?? null,
   }

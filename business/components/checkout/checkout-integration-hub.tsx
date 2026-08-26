@@ -34,7 +34,9 @@ import {
   type CheckoutHubPayload,
   type CheckoutSite,
 } from "@/hooks/use-checkout-settings"
+import { CheckoutIntegrationGuide } from "@/components/checkout/checkout-integration-guide"
 import { CheckoutTestPaymentsDialog } from "@/components/checkout/checkout-test-payments-dialog"
+import { CheckoutWebhookDeliveries } from "@/components/checkout/checkout-webhook-deliveries"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { COLLECTIONS_COPY } from "@/lib/copy/business-ui-copy"
 import {
@@ -182,6 +184,8 @@ export function CheckoutIntegrationHub({
           </CardContent>
         </Card>
       </div>
+
+      <CheckoutIntegrationGuide data={data} onSaved={() => void refetch()} />
     </div>
   )
 }
@@ -474,7 +478,9 @@ function StepUrls({ site, onSaved }: SiteStepProps) {
 
 function StepKeys({ data, onSaved }: HubDataProps) {
   const [creating, setCreating] = useState<"test" | "live" | null>(null)
+  const [revoking, setRevoking] = useState<"test" | "live" | null>(null)
   const [revealed, setRevealed] = useState<{ mode: string; secretKey: string } | null>(null)
+  const origins = data.settings.allowedOrigins
 
   const create = async (mode: "test" | "live") => {
     setCreating(mode)
@@ -497,6 +503,26 @@ function StepKeys({ data, onSaved }: HubDataProps) {
       onSaved()
     } finally {
       setCreating(null)
+    }
+  }
+
+  const revoke = async (mode: "test" | "live") => {
+    setRevoking(mode)
+    try {
+      const res = await fetchWithSession("/api/checkout/keys", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
+      })
+      const body = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) {
+        toast.error(body.error || "Could not revoke keys")
+        return
+      }
+      toast.success("Keys revoked. Checkout will fail at mount until you create new ones.")
+      onSaved()
+    } finally {
+      setRevoking(null)
     }
   }
 
@@ -527,6 +553,21 @@ function StepKeys({ data, onSaved }: HubDataProps) {
                   <p className="text-xs leading-relaxed text-muted-foreground">
                     Secret key ending {key.secret_key_last4} – rotate to get a new one.
                   </p>
+                  <p className="text-xs text-muted-foreground">
+                    Last used {key.last_used_at ? new Date(key.last_used_at).toLocaleString() : "never"}
+                    {origins.length ? ` · allowed origins ${origins.join(", ")}` : ""}
+                  </p>
+                  <div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={revoking !== null || creating !== null}
+                      onClick={() => void revoke(mode)}
+                    >
+                      {revoking === mode ? "Revoking…" : "Revoke"}
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <p className="text-sm leading-relaxed text-muted-foreground">
@@ -558,7 +599,7 @@ function StepSnippet({ data }: HubDataProps) {
       <StepHeading title={STEP_COPY.snippet.title} blurb={STEP_COPY.snippet.blurb} />
       <CheckoutCodeBlock
         label="On your checkout page"
-        code={`<script src="https://js.easner.com/checkout.js"></script>
+        code={`<script src="https://js.easner.com/v1/checkout.js"></script>
 <div id="easner-checkout"></div>
 <script>
   // Logged-in apps: pass customerEmail and customerName from POST /v1/checkout/sessions
@@ -571,8 +612,8 @@ function StepSnippet({ data }: HubDataProps) {
       />
       <StepLearnMore>
         <p>
-          The client secret comes from the next step and is never hardcoded. You can pass an
-          appearance object to match your colours and fonts.
+          The client secret comes from the next step and is never hardcoded. Amount and secret keys
+          stay on your server. Checkout uses Easner branding.
         </p>
       </StepLearnMore>
     </>
@@ -745,7 +786,7 @@ function StepWebhook({ data, onSaved }: HubDataProps) {
         {secret ? (
           <RevealOnceValue
             value={secret}
-            note="Use it to verify the Easner-Signature header on every event."
+            note="Use it to verify the easner-signature header on every event."
           />
         ) : null}
       </div>
@@ -773,6 +814,8 @@ function StepWebhook({ data, onSaved }: HubDataProps) {
           <p className="text-xs text-muted-foreground">Save an endpoint before sending a test.</p>
         ) : null}
       </div>
+
+      <CheckoutWebhookDeliveries live />
 
       <div className="space-y-2">
         <p className="text-sm font-medium text-foreground">Events you can listen for</p>
@@ -820,9 +863,9 @@ function StepTest() {
     <>
       <StepHeading title={STEP_COPY.test.title} blurb={STEP_COPY.test.blurb} />
       <p className="text-sm text-muted-foreground">
-        Use the test keys from Integrate on a website you added, then pay with card{" "}
-        <code className="rounded bg-muted px-1.5 py-0.5 text-xs">4242 4242 4242 4242</code>, any
-        future expiry, and any security code.
+        Use Try test checkout in the guide below, or pay on a connected site with card{" "}
+        <code className="rounded bg-muted px-1.5 py-0.5 text-xs">4242 4242 4242 4242</code>. Local HTML
+        kit: <code className="rounded bg-muted px-1.5 py-0.5 text-xs">/checkout-test/test-checkout.html</code>.
       </p>
       <p className="text-sm text-muted-foreground">
         A successful test shows on{" "}
@@ -842,6 +885,10 @@ function StepTest() {
 
 function StepLive({ data, onSaved }: HubDataProps) {
   const [saving, setSaving] = useState(false)
+  const gateReady =
+    data.readiness.ready &&
+    Boolean(data.settings.testPaymentCompletedAt) &&
+    Boolean(data.settings.lastWebhookDeliveredAt)
 
   const toggle = async (next: boolean) => {
     setSaving(true)
@@ -865,14 +912,16 @@ function StepLive({ data, onSaved }: HubDataProps) {
         <div className="min-w-0">
           <p className="text-sm font-medium text-foreground">Live payments</p>
           <p className="text-xs text-muted-foreground">
-            {data.readiness.ready
-              ? "Your account can take real payments."
-              : "Complete verification first."}
+            {gateReady
+              ? "Connect is ready, a test payment succeeded, and a webhook returned 200."
+              : data.readiness.ready
+                ? "Complete a test payment and a successful webhook delivery first."
+                : "Complete verification first."}
           </p>
         </div>
         <Switch
           checked={data.settings.liveModeEnabled}
-          disabled={saving || !data.readiness.ready}
+          disabled={saving || (!data.settings.liveModeEnabled && !gateReady)}
           onCheckedChange={(next) => void toggle(next)}
           aria-label="Live payments"
         />

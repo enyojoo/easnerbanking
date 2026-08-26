@@ -4,7 +4,10 @@ import type Stripe from "stripe"
 import { isBusinessTier1Complete } from "@/lib/compliance/business-tier1"
 import { computeCheckoutAmounts, type CheckoutAmounts } from "./application-fee"
 import { resolveCheckoutFeeMode } from "./checkout-fee-mode"
-import { buildCheckoutSessionMetadata, type OnlineCheckoutSource } from "./checkout-session-metadata"
+import {
+  buildCheckoutSessionMetadata,
+  type OnlineCheckoutSource,
+} from "./checkout-session-metadata"
 import { getStripe } from "./client"
 import { resolveConnectReadyForCheckout } from "./connect"
 import { resolveOnlinePaymentsEnabled } from "./resolve-online-payments-enabled"
@@ -39,6 +42,8 @@ export type CreateOnlineCheckoutSessionInput = {
   trialDays?: number | null
   metadata?: Record<string, string>
   idempotencyKey?: string
+  /** Merchant API key that created this session (embed). */
+  apiKeyId?: string | null
   /** False for merchant test keys. Defaults to live. */
   livemode?: boolean
 }
@@ -54,9 +59,23 @@ export type CreateOnlineCheckoutSessionResult =
     }
   | { ok: false; status: number; error: string }
 
-/** Invoice keeps its own session table until the backfill into online_checkout_sessions lands. */
-function sessionTableFor(source: OnlineCheckoutSource): string {
-  return source === "invoice" ? "invoice_checkout_sessions" : "online_checkout_sessions"
+async function patchLegacyInvoiceSession(
+  admin: SupabaseClient,
+  settlementId: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  await admin.from("invoice_checkout_sessions").update(patch).eq("easner_settlement_id", settlementId)
+}
+
+async function expireSessionRows(
+  admin: SupabaseClient,
+  input: { id: string; settlementId: string; source: OnlineCheckoutSource; status: "complete" | "expired" },
+): Promise<void> {
+  const patch = { status: input.status, completed_at: new Date().toISOString() }
+  await admin.from("online_checkout_sessions").update(patch).eq("id", input.id)
+  if (input.source === "invoice") {
+    await patchLegacyInvoiceSession(admin, input.settlementId, patch)
+  }
 }
 
 /**
@@ -126,6 +145,9 @@ export async function createOnlineCheckoutSession(
   }
   const connectedAccountId = connect.stripeAccountId
 
+  const reused = await reuseOpenOnlineSession(admin, input)
+  if (reused) return reused
+
   const { feeMode } = await resolveCheckoutFeeMode(admin, input.businessId)
   const amounts = computeCheckoutAmounts({ listedAmountCents, feeMode })
 
@@ -133,51 +155,37 @@ export async function createOnlineCheckoutSession(
   const livemode = input.livemode !== false
   const idempotencyKey =
     input.idempotencyKey || `checkout_${input.source}_${settlementId}`
-  const table = sessionTableFor(input.source)
 
   const customerName = input.customerName?.trim() || ""
-  const sessionMetadata =
-    customerName ? { easner_customer_name: customerName } : undefined
+  const sessionMetadata = {
+    ...(input.metadata ?? {}),
+    ...(customerName ? { easner_customer_name: customerName } : {}),
+    ...(input.apiKeyId ? { easner_api_key_id: input.apiKeyId } : {}),
+  }
 
-  const sessionRowPayload: Record<string, unknown> =
-    input.source === "invoice"
-      ? {
-          invoice_id: input.invoiceId,
-          business_id: input.businessId,
-          easner_settlement_id: settlementId,
-          status: "open",
-          gross_cents: amounts.customerAmountCents,
-          listed_amount_cents: amounts.listedAmountCents,
-          application_fee_cents: amounts.applicationFeeCents,
-          fee_mode: feeMode,
-          currency: currency.toUpperCase(),
-          customer_email: input.customerEmail || null,
-          idempotency_key: idempotencyKey,
-          stripe_connected_account_id: connectedAccountId,
-        }
-      : {
-          business_id: input.businessId,
-          source: input.source,
-          invoice_id: input.invoiceId ?? null,
-          payment_link_id: input.paymentLinkId ?? null,
-          mode: input.mode,
-          status: "open",
-          fee_mode: feeMode,
-          easner_settlement_id: settlementId,
-          idempotency_key: idempotencyKey,
-          listed_amount_cents: amounts.listedAmountCents,
-          gross_cents: amounts.customerAmountCents,
-          application_fee_cents: amounts.applicationFeeCents,
-          currency: currency.toUpperCase(),
-          customer_email: input.customerEmail || null,
-          return_url: input.returnUrl,
-          stripe_connected_account_id: connectedAccountId,
-          livemode,
-          ...(sessionMetadata ? { metadata: sessionMetadata } : {}),
-        }
+  const sessionRowPayload: Record<string, unknown> = {
+    business_id: input.businessId,
+    source: input.source,
+    invoice_id: input.invoiceId ?? null,
+    payment_link_id: input.paymentLinkId ?? null,
+    mode: input.mode,
+    status: "open",
+    fee_mode: feeMode,
+    easner_settlement_id: settlementId,
+    idempotency_key: idempotencyKey,
+    listed_amount_cents: amounts.listedAmountCents,
+    gross_cents: amounts.customerAmountCents,
+    application_fee_cents: amounts.applicationFeeCents,
+    currency: currency.toUpperCase(),
+    customer_email: input.customerEmail || null,
+    return_url: input.returnUrl,
+    stripe_connected_account_id: connectedAccountId,
+    livemode,
+    metadata: sessionMetadata,
+  }
 
   const { data: sessionRow, error: insertErr } = await admin
-    .from(table)
+    .from("online_checkout_sessions")
     .insert(sessionRowPayload)
     .select("id")
     .single()
@@ -188,6 +196,24 @@ export async function createOnlineCheckoutSession(
       status: 500,
       error: insertErr?.message || "Failed to create checkout session row",
     }
+  }
+
+  if (input.source === "invoice") {
+    await admin.from("invoice_checkout_sessions").insert({
+      id: sessionRow.id,
+      invoice_id: input.invoiceId,
+      business_id: input.businessId,
+      easner_settlement_id: settlementId,
+      status: "open",
+      gross_cents: amounts.customerAmountCents,
+      listed_amount_cents: amounts.listedAmountCents,
+      application_fee_cents: amounts.applicationFeeCents,
+      fee_mode: feeMode,
+      currency: currency.toUpperCase(),
+      customer_email: input.customerEmail || null,
+      idempotency_key: idempotencyKey,
+      stripe_connected_account_id: connectedAccountId,
+    })
   }
 
   const metadata = buildCheckoutSessionMetadata({
@@ -204,6 +230,7 @@ export async function createOnlineCheckoutSession(
       easner_livemode: livemode ? "true" : "false",
       ...(input.metadata ?? {}),
       ...(customerName ? { easner_customer_name: customerName } : {}),
+      ...(input.apiKeyId ? { easner_api_key_id: input.apiKeyId } : {}),
     },
   })
 
@@ -264,21 +291,31 @@ export async function createOnlineCheckoutSession(
     )
 
     if (!session.client_secret) {
-      await admin.from(table).update({ status: "failed" }).eq("id", sessionRow.id)
+      await expireSessionRows(admin, {
+        id: sessionRow.id,
+        settlementId,
+        source: input.source,
+        status: "expired",
+      })
+      await admin.from("online_checkout_sessions").update({ status: "failed" }).eq("id", sessionRow.id)
+      if (input.source === "invoice") {
+        await patchLegacyInvoiceSession(admin, settlementId, { status: "failed" })
+      }
       return { ok: false, status: 500, error: "Checkout session is missing a client secret" }
     }
 
-    await admin
-      .from(table)
-      .update({
-        stripe_checkout_session_id: session.id,
-        stripe_payment_intent_id:
-          typeof session.payment_intent === "string"
-            ? session.payment_intent
-            : session.payment_intent?.id ?? null,
-        stripe_connected_account_id: connectedAccountId,
-      })
-      .eq("id", sessionRow.id)
+    const stripePatch = {
+      stripe_checkout_session_id: session.id,
+      stripe_payment_intent_id:
+        typeof session.payment_intent === "string"
+          ? session.payment_intent
+          : session.payment_intent?.id ?? null,
+      stripe_connected_account_id: connectedAccountId,
+    }
+    await admin.from("online_checkout_sessions").update(stripePatch).eq("id", sessionRow.id)
+    if (input.source === "invoice") {
+      await patchLegacyInvoiceSession(admin, settlementId, stripePatch)
+    }
 
     return {
       ok: true,
@@ -289,8 +326,71 @@ export async function createOnlineCheckoutSession(
       amounts,
     }
   } catch (e) {
-    await admin.from(table).update({ status: "failed" }).eq("id", sessionRow.id)
+    await expireSessionRows(admin, {
+      id: sessionRow.id,
+      settlementId,
+      source: input.source,
+      status: "expired",
+    })
+    await admin.from("online_checkout_sessions").update({ status: "failed" }).eq("id", sessionRow.id)
+    if (input.source === "invoice") {
+      await patchLegacyInvoiceSession(admin, settlementId, { status: "failed" })
+    }
     const msg = e instanceof Error ? e.message : "Failed to create checkout session"
     return { ok: false, status: 500, error: msg }
   }
+}
+
+async function reuseOpenOnlineSession(
+  admin: SupabaseClient,
+  input: CreateOnlineCheckoutSessionInput,
+): Promise<CreateOnlineCheckoutSessionResult | null> {
+  const key = input.idempotencyKey?.trim()
+  if (!key) return null
+
+  const { data: existing } = await admin
+    .from("online_checkout_sessions")
+    .select(
+      "id, stripe_checkout_session_id, easner_settlement_id, stripe_connected_account_id, listed_amount_cents, gross_cents, application_fee_cents, status",
+    )
+    .eq("business_id", input.businessId)
+    .eq("idempotency_key", key)
+    .eq("status", "open")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!existing?.stripe_checkout_session_id) return null
+
+  const expire = async (status: "complete" | "expired") => {
+    await expireSessionRows(admin, {
+      id: existing.id,
+      settlementId: String(existing.easner_settlement_id),
+      source: input.source,
+      status,
+    })
+  }
+
+  try {
+    const session = await getStripe().checkout.sessions.retrieve(
+      String(existing.stripe_checkout_session_id),
+    )
+    if (session.status === "open" && session.client_secret) {
+      const { feeMode } = await resolveCheckoutFeeMode(admin, input.businessId)
+      const listed = Number(existing.listed_amount_cents) || input.listedAmountCents
+      const amounts = computeCheckoutAmounts({ listedAmountCents: listed, feeMode })
+      return {
+        ok: true,
+        clientSecret: session.client_secret,
+        publishableKey: getStripePublishableKey(),
+        checkoutSessionId: session.id,
+        settlementId: String(existing.easner_settlement_id),
+        amounts,
+      }
+    }
+    await expire(session.status === "complete" ? "complete" : "expired")
+  } catch {
+    await expire("expired")
+  }
+  return null
 }
