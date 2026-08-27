@@ -124,6 +124,7 @@ import {
   resolveInferredWalletAssetNetwork,
 } from '../../lib/walletAddressInference'
 import { RecipientBankNameField } from '../../components/recipients/RecipientBankNameField'
+import { UsTransferTypeGrid } from '../../components/recipients/UsTransferTypeGrid'
 import { useToast } from '../../components/ToastProvider'
 import { useSendDestinations } from '../../hooks/useSendDestinations'
 import { useFocusRefresh } from '../../hooks/useFocusRefresh'
@@ -1789,43 +1790,12 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                   <>
                     {/* Transfer Type Selection - First field for US accounts */}
                     {accountConfig.accountType === "us" && usTransferMethods.length > 0 && (
-                      <View style={styles.transferTypeContainer}>
-                        <View style={styles.transferTypeOptions}>
-                          {usTransferMethods.map((method) => (
-                            <Pressable
-                              key={method.value}
-                              android_ripple={ripple.neutral}
-                              style={[
-                                styles.transferTypeOption,
-                                transferType === method.value && styles.transferTypeOptionSelected,
-                              ]}
-                              onPress={() => {
-                                setTransferType(method.value)
-                                haptics.tap()
-                              }}
-                            >
-                              <Text
-                                style={[
-                                  styles.transferTypeOptionText,
-                                  transferType === method.value && styles.transferTypeOptionTextSelected,
-                                ]}
-                              >
-                                {method.label}
-                              </Text>
-                              {method.speedLabel ? (
-                                <Text
-                                  style={[
-                                    styles.transferTypeOptionSpeed,
-                                    transferType === method.value && styles.transferTypeOptionSpeedSelected,
-                                  ]}
-                                >
-                                  {method.speedLabel}
-                                </Text>
-                              ) : null}
-                            </Pressable>
-                          ))}
-                        </View>
-                      </View>
+                      <UsTransferTypeGrid
+                        methods={usTransferMethods}
+                        value={transferType}
+                        onChange={setTransferType}
+                        disabled={isSubmitting}
+                      />
                     )}
 
                     {/* Account Name */}
@@ -2789,27 +2759,6 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontFamily: fontFamily.regular,
   },
-  transferTypeContainer: {
-    marginBottom: spacing[2],
-  },
-  transferTypeOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing[3],
-  },
-  transferTypeOption: {
-    flexGrow: 1,
-    flexBasis: '47%',
-    backgroundColor: colors.frame.background,
-    borderRadius: borderRadius.full,
-    borderWidth: 1.5,
-    borderColor: colors.frame.border,
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    minHeight: 56,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   bankEnumValue: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
@@ -2824,29 +2773,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[3],
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.frame.border,
-  },
-  transferTypeOptionSelected: {
-    backgroundColor: colors.primary.main + '15',
-    borderColor: colors.primary.main,
-    borderWidth: 1.5,
-  },
-  transferTypeOptionText: {
-    ...textStyles.bodyMedium,
-    color: colors.text.primary,
-    fontFamily: fontFamily.medium,
-  },
-  transferTypeOptionTextSelected: {
-    color: colors.primary.main,
-    fontFamily: fontFamily.semibold,
-  },
-  transferTypeOptionSpeed: {
-    ...textStyles.bodySmall,
-    color: colors.text.secondary,
-    fontFamily: fontFamily.regular,
-    marginTop: 2,
-  },
-  transferTypeOptionSpeedSelected: {
-    color: colors.primary.main,
   },
   errorContainer: {
     backgroundColor: colors.error.background,

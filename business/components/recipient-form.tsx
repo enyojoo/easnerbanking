@@ -1350,28 +1350,30 @@ export function RecipientForm({
                 <div className="space-y-2 col-span-2">
                   <label className="text-xs text-muted-foreground">Transfer type</label>
                   <div className="grid grid-cols-2 gap-2">
-                    {usTransferMethods.map((method) => (
-                      <Button
-                        key={method.value}
-                        type="button"
-                        variant={formData.transferType === method.value ? "default" : "outline"}
-                        className="h-auto min-h-12 flex-col gap-0.5 whitespace-normal py-2"
-                        onClick={() => handleInputChange("transferType", method.value)}
-                      >
-                        <span>{method.label}</span>
-                        {method.speedLabel ? (
+                    {usTransferMethods.map((method) => {
+                      const selected = formData.transferType === method.value
+                      return (
+                        <Button
+                          key={method.value}
+                          type="button"
+                          variant={selected ? "default" : "outline"}
+                          className="h-[4.5rem] min-h-[4.5rem] flex-col justify-center gap-1.5 whitespace-normal py-2"
+                          onClick={() => handleInputChange("transferType", method.value)}
+                        >
+                          <span>{method.label}</span>
                           <span
-                            className={
-                              formData.transferType === method.value
-                                ? "text-[11px] font-normal leading-none opacity-80"
-                                : "text-[11px] font-normal leading-none text-muted-foreground"
-                            }
+                            className={cn(
+                              "inline-flex max-w-full truncate rounded-full px-2 py-0.5 text-[11px] font-normal leading-none",
+                              selected
+                                ? "bg-primary-foreground/15 text-primary-foreground"
+                                : "bg-muted text-muted-foreground",
+                            )}
                           >
                             {method.speedLabel}
                           </span>
-                        ) : null}
-                      </Button>
-                    ))}
+                        </Button>
+                      )
+                    })}
                   </div>
                   {errors.transferType && <p className="text-xs text-red-500">{errors.transferType}</p>}
                 </div>

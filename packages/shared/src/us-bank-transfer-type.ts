@@ -6,23 +6,31 @@ export type UsBankTransferType = "ACH" | "Wire" | "RTP" | "FEDNOW"
 /** Grid quote destination.paymentRail for a USD_ACCOUNT. */
 export type GridUsPaymentRail = "ACH" | "WIRE" | "RTP" | "FEDNOW"
 
+/** Timing chip on every USD transfer-type tile. Short enough to fit in a 2-col grid. */
+export const US_BANK_TRANSFER_SPEED_LABEL: Record<UsBankTransferType, string> = {
+  ACH: "1–3 days",
+  Wire: "Same day",
+  RTP: "Instant",
+  FEDNOW: "Instant",
+}
+
 export type UsBankTransferMethodOption = {
   value: UsBankTransferType
   label: string
-  /** Smaller caption inside the transfer-type chip (RTP / FedNow). */
-  speedLabel?: "Instant"
+  /** Timing chip inside the transfer-type tile. Always set so tiles share one height. */
+  speedLabel: string
 }
 
 const GRID_METHODS: UsBankTransferMethodOption[] = [
-  { value: "ACH", label: "ACH" },
-  { value: "Wire", label: "Wire" },
-  { value: "RTP", label: "RTP", speedLabel: "Instant" },
-  { value: "FEDNOW", label: "FedNow", speedLabel: "Instant" },
+  { value: "ACH", label: "ACH", speedLabel: US_BANK_TRANSFER_SPEED_LABEL.ACH },
+  { value: "Wire", label: "Wire", speedLabel: US_BANK_TRANSFER_SPEED_LABEL.Wire },
+  { value: "RTP", label: "RTP", speedLabel: US_BANK_TRANSFER_SPEED_LABEL.RTP },
+  { value: "FEDNOW", label: "FedNow", speedLabel: US_BANK_TRANSFER_SPEED_LABEL.FEDNOW },
 ]
 
 const NOAH_METHODS: UsBankTransferMethodOption[] = [
-  { value: "ACH", label: "ACH" },
-  { value: "Wire", label: "Wire" },
+  { value: "ACH", label: "ACH", speedLabel: US_BANK_TRANSFER_SPEED_LABEL.ACH },
+  { value: "Wire", label: "Wire", speedLabel: US_BANK_TRANSFER_SPEED_LABEL.Wire },
 ]
 
 export const US_BANK_TRANSFER_TYPES: UsBankTransferType[] = [

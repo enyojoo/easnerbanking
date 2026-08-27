@@ -261,6 +261,7 @@ export {
   resolvePayoutProviderForHolderAddress,
 } from "./payout-corridor"
 export {
+  US_BANK_TRANSFER_SPEED_LABEL,
   US_BANK_TRANSFER_TYPES,
   coerceUsTransferTypeForProvider,
   noahUsPrefersAch,

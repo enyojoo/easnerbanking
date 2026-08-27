@@ -22,13 +22,20 @@ describe("usBankPaymentMethodsForProvider", () => {
       "RTP",
       "FedNow",
     ])
-    expect(
-      usBankPaymentMethodsForProvider("grid").map((m) => m.speedLabel ?? null),
-    ).toEqual([null, null, "Instant", "Instant"])
+    expect(usBankPaymentMethodsForProvider("grid").map((m) => m.speedLabel)).toEqual([
+      "1–3 days",
+      "Same day",
+      "Instant",
+      "Instant",
+    ])
   })
 
   it("returns ACH and Wire for Noah", () => {
     expect(usBankPaymentMethodsForProvider("noah").map((m) => m.value)).toEqual(["ACH", "Wire"])
+    expect(usBankPaymentMethodsForProvider("noah").map((m) => m.speedLabel)).toEqual([
+      "1–3 days",
+      "Same day",
+    ])
   })
 
   it("returns no methods for Yellowcard", () => {
