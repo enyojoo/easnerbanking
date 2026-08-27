@@ -1749,42 +1749,42 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                     />
 
                     {/* US Account Fields */}
-                    {accountConfig.accountType === "us" &&
-                    showsHolderAddress &&
-                    selectedCountryCurrency ? (
+                    {accountConfig.accountType === "us" ? (
                       <>
-                        <RecipientOperationalAddressFields
-                          countryCode={selectedCountryCurrency.countryCode}
-                          scrollRef={formScrollRef}
-                          inputStyle={styles.modalInput}
-                          rowStyle={styles.twoColumnRow}
-                          halfInputStyle={styles.halfInput}
-                          values={{
-                            addressLine1: newRecipient.addressLine1,
-                            city: newRecipient.city,
-                            state: newRecipient.state,
-                            postalCode: newRecipient.postalCode,
-                          }}
-                          onChange={(patch) =>
-                            setNewRecipient((prev) => ({ ...prev, ...patch }))
-                          }
-                          isSubmitting={isSubmitting}
-                          showSubdivisionDropdown={showSubdivisionDropdown}
-                          onToggleSubdivisionDropdown={() => {
-                            setShowSubdivisionDropdown(!showSubdivisionDropdown)
-                            setShowBankDropdown(false)
-                            setShowCurrencyDropdown(false)
-                            setShowProviderDropdown(false)
-                            setShowWalletAssetDropdown(false)
-                            setShowWalletNetworkDropdown(false)
-                          }}
-                          subdivisionSearchTerm={subdivisionSearchTerm}
-                          onSubdivisionSearchTermChange={setSubdivisionSearchTerm}
-                          onCloseSubdivisionDropdown={() => {
-                            setShowSubdivisionDropdown(false)
-                            setSubdivisionSearchTerm('')
-                          }}
-                        />
+                        {showsHolderAddress && selectedCountryCurrency ? (
+                          <RecipientOperationalAddressFields
+                            countryCode={selectedCountryCurrency.countryCode}
+                            scrollRef={formScrollRef}
+                            inputStyle={styles.modalInput}
+                            rowStyle={styles.twoColumnRow}
+                            halfInputStyle={styles.halfInput}
+                            values={{
+                              addressLine1: newRecipient.addressLine1,
+                              city: newRecipient.city,
+                              state: newRecipient.state,
+                              postalCode: newRecipient.postalCode,
+                            }}
+                            onChange={(patch) =>
+                              setNewRecipient((prev) => ({ ...prev, ...patch }))
+                            }
+                            isSubmitting={isSubmitting}
+                            showSubdivisionDropdown={showSubdivisionDropdown}
+                            onToggleSubdivisionDropdown={() => {
+                              setShowSubdivisionDropdown(!showSubdivisionDropdown)
+                              setShowBankDropdown(false)
+                              setShowCurrencyDropdown(false)
+                              setShowProviderDropdown(false)
+                              setShowWalletAssetDropdown(false)
+                              setShowWalletNetworkDropdown(false)
+                            }}
+                            subdivisionSearchTerm={subdivisionSearchTerm}
+                            onSubdivisionSearchTermChange={setSubdivisionSearchTerm}
+                            onCloseSubdivisionDropdown={() => {
+                              setShowSubdivisionDropdown(false)
+                              setSubdivisionSearchTerm('')
+                            }}
+                          />
+                        ) : null}
                         <View>
                           <TextInput
                             style={styles.modalInput}
@@ -1821,7 +1821,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                           />
                         </View>
                       </>
-                    )}
+                    ) : null}
 
                     {/* UK Account Fields */}
                     {accountConfig.accountType === "uk" && (
