@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { normalizePayoutReviewSnapshot } from "./build-payout-execute-snapshot"
+import { buildRecipientSnapshotFromRow, normalizePayoutReviewSnapshot } from "./build-payout-execute-snapshot"
 
 describe("normalizePayoutReviewSnapshot", () => {
   it("preserves display_processing_fee_local for cross-border pay-in", () => {
@@ -39,3 +39,21 @@ describe("normalizePayoutReviewSnapshot", () => {
     expect(review?.principal_local_pay_in).toBe(92_250.8)
   })
 })
+
+describe("buildRecipientSnapshotFromRow", () => {
+  it("includes US transfer_type so ACH and RTP cannot share a lock", () => {
+    const row = {
+      full_name: "Jane Doe",
+      account_number: "123456789",
+      bank_name: "Chase",
+      currency: "USD",
+      country_code: "US",
+      transfer_type: "RTP" as const,
+    }
+    expect(buildRecipientSnapshotFromRow(row).transfer_type).toBe("RTP")
+    expect(buildRecipientSnapshotFromRow({ ...row, transfer_type: "ACH" }).transfer_type).toBe(
+      "ACH",
+    )
+  })
+})
+

@@ -119,6 +119,15 @@ export function buildGridExternalAccountPayload(input: {
       accountInfo.accountNumber = accountNumber
     }
     if (bankName) accountInfo.bankName = bankName
+    if (country === "US" && currency === "USD") {
+      const routing = String(recipient.routing_number ?? "").replace(/\D/g, "")
+      if (routing.length !== 9) {
+        throw new Error("US bank recipient requires a 9-digit routing number.")
+      }
+      accountInfo.routingNumber = routing
+      if (recipient.checking_or_savings === "checking") accountInfo.bankAccountType = "CHECKING"
+      if (recipient.checking_or_savings === "savings") accountInfo.bankAccountType = "SAVINGS"
+    }
     if (currency === "CAD") {
       const cad = mapCadRoutingToGridMetadata({
         routingNumber: recipient.routing_number,

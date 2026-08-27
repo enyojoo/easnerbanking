@@ -31,7 +31,7 @@ export interface RecipientData {
   sortCode?: string
   iban?: string
   swiftBic?: string
-  transferType?: "ACH" | "Wire"
+  transferType?: "ACH" | "Wire" | "RTP" | "FEDNOW"
   checkingOrSavings?: "checking" | "savings"
   addressLine1?: string
   city?: string
@@ -309,7 +309,7 @@ export const recipientService = {
       sortCode?: string
       iban?: string
       swiftBic?: string
-      transferType?: "ACH" | "Wire"
+      transferType?: "ACH" | "Wire" | "RTP" | "FEDNOW"
       checkingOrSavings?: "checking" | "savings"
       addressLine1?: string
       city?: string

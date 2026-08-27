@@ -1,6 +1,7 @@
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
 import type { WalletRecipientRow } from "@/lib/wallet-send/validate-recipient"
 import { destinationReference } from "@/lib/destination-reference"
+import { parseUsBankTransferType } from "@easner/shared"
 
 export type SendDestinationType = "bank" | "mobile_money" | "wallet"
 
@@ -70,7 +71,7 @@ export function sendDestinationFromRow(
     sort_code: stringOrNull(row.sort_code),
     iban: stringOrNull(row.iban),
     swift_bic: stringOrNull(row.swift_bic),
-    transfer_type: row.transfer_type === "Wire" ? "Wire" : row.transfer_type === "ACH" ? "ACH" : null,
+    transfer_type: parseUsBankTransferType(row.transfer_type),
     checking_or_savings:
       row.checking_or_savings === "savings"
         ? "savings"

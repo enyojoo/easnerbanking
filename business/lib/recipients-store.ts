@@ -19,7 +19,7 @@ export type RecipientRow = {
   sort_code?: string | null
   iban?: string | null
   swift_bic?: string | null
-  transfer_type?: "ACH" | "Wire" | null
+  transfer_type?: "ACH" | "Wire" | "RTP" | "FEDNOW" | null
   checking_or_savings?: "checking" | "savings" | null
   address_line1?: string | null
   city?: string | null
@@ -48,7 +48,7 @@ export type RecipientUpsertInput = {
   sortCode?: string
   iban?: string
   swiftBic?: string
-  transferType?: "ACH" | "Wire"
+  transferType?: "ACH" | "Wire" | "RTP" | "FEDNOW"
   checkingOrSavings?: "checking" | "savings"
   addressLine1?: string
   city?: string

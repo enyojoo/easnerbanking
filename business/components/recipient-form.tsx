@@ -17,6 +17,8 @@ import {
   resolveCorridorRecipientOptions,
   resolvePrimaryPayoutProvider,
   resolveYcCorridorSchema,
+  usBankPaymentMethodsForProvider,
+  parseUsBankTransferType,
   sortByEasnerCountryPickerOrder,
   unwrapNoahFieldsSchema,
   validateYcRecipientForCorridor,
@@ -270,7 +272,7 @@ export function RecipientForm({
         walletNetwork: bene.walletNetwork || parsedWalletNetwork || "",
         walletAddress: bene.fullAccountNumber || bene.accountNumber || "",
         mobileProvider: bene.mobileProvider || normalizedMobileProvider || "",
-        transferType: bene.transferType || "ACH",
+        transferType: parseUsBankTransferType(bene.transferType) || "ACH",
         checkingOrSavings: bene.checkingOrSavings || "",
         addressLine1: bene.addressLine1 || "",
         city: bene.city || "",
@@ -446,6 +448,20 @@ export function RecipientForm({
     })
   }, [selectedCountry, currency, payoutRail, selectedCorridorRow])
   const payoutProvider = resolvePrimaryPayoutProvider(selectedCorridorRow?.provider_routing)
+  const usTransferMethods = useMemo(() => {
+    if (formData.recipientType !== "bank" || currency !== "USD") return []
+    if (!selectedCorridorRow) return usBankPaymentMethodsForProvider("noah").slice(0, 1)
+    return usBankPaymentMethodsForProvider(payoutProvider)
+  }, [formData.recipientType, currency, selectedCorridorRow, payoutProvider])
+  useEffect(() => {
+    if (formData.recipientType !== "bank" || currency !== "USD") return
+    const allowed = usTransferMethods.map((method) => method.value)
+    if (allowed.length === 0) return
+    const current = parseUsBankTransferType(formData.transferType)
+    if (!current || !allowed.includes(current)) {
+      setFormData((prev) => ({ ...prev, transferType: allowed[0] }))
+    }
+  }, [formData.recipientType, currency, formData.transferType, usTransferMethods])
   const payoutFormHints = unwrapNoahFieldsSchema(selectedCorridorRow?.fields_schema)
   const ycCorridorSchema = useMemo(() => {
     if (!selectedCountry) return null
@@ -529,16 +545,13 @@ export function RecipientForm({
     if (formData.recipientType === "bank" && currency === "USD" && !formData.routingNumber.trim()) {
       newErrors.routingNumber = "Routing number is required for USD"
     }
-    if (formData.recipientType === "bank" && currency === "USD" && !formData.transferType.trim()) {
-      newErrors.transferType = "Transfer type is required for USD"
-    }
     if (
       formData.recipientType === "bank" &&
       currency === "USD" &&
-      formData.transferType !== "Wire" &&
-      !formData.checkingOrSavings.trim()
+      usTransferMethods.length > 0 &&
+      !formData.transferType.trim()
     ) {
-      newErrors.checkingOrSavings = "Account type is required for USD ACH"
+      newErrors.transferType = "Transfer type is required for USD"
     }
     if (formData.recipientType === "bank" && currency === "USD" && !formData.addressLine1.trim()) {
       newErrors.addressLine1 = "Street address is required for USD"
@@ -575,10 +588,6 @@ export function RecipientForm({
       !isMomoProviderAllowedForCorridor(formData.mobileProvider.trim(), corridorRecipientOptions)
     ) {
       newErrors.mobileProvider = "Select a provider from the list"
-    }
-
-    if (formData.recipientType === "bank" && currency === "USD" && formData.transferType === "Wire") {
-      delete newErrors.checkingOrSavings
     }
 
     if (formData.recipientType === "bank" && payoutFormHints?.needs_phone && !formData.phone.trim()) {
@@ -752,8 +761,11 @@ export function RecipientForm({
       sortCode: formData.sortCode?.trim() || undefined,
       iban: formData.iban?.trim() || undefined,
       swiftBic: formData.recipientType === "bank" ? formData.bic?.trim() || undefined : undefined,
-      transferType: isUsdBank ? (formData.transferType as "ACH" | "Wire") : undefined,
-      checkingOrSavings: isUsdBank ? (formData.checkingOrSavings as "checking" | "savings") : undefined,
+      transferType: isUsdBank ? (parseUsBankTransferType(formData.transferType) ?? "ACH") : undefined,
+      checkingOrSavings:
+        isUsdBank && (formData.checkingOrSavings === "checking" || formData.checkingOrSavings === "savings")
+          ? formData.checkingOrSavings
+          : undefined,
       email: recipientFormNeedsEmail(payoutFormHints) && formData.email.trim() ? formData.email.trim() : undefined,
       addressLine1:
         isUsdBank || recipientFormNeedsAddress({ hints: payoutFormHints, currencyCode: currency })
@@ -1334,46 +1346,22 @@ export function RecipientForm({
 
           {formData.recipientType === "bank" && currency === "USD" && (
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2 col-span-2">
-                <label className="text-xs text-muted-foreground">Transfer type</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    type="button"
-                    variant={formData.transferType === "ACH" ? "default" : "outline"}
-                    onClick={() => handleInputChange("transferType", "ACH")}
-                  >
-                    ACH
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={formData.transferType === "Wire" ? "default" : "outline"}
-                    onClick={() => handleInputChange("transferType", "Wire")}
-                  >
-                    Fedwire
-                  </Button>
-                </div>
-                {errors.transferType && <p className="text-xs text-red-500">{errors.transferType}</p>}
-              </div>
-              {formData.transferType !== "Wire" ? (
+              {usTransferMethods.length > 0 ? (
                 <div className="space-y-2 col-span-2">
-                  <label className="text-xs text-muted-foreground">Account Type</label>
+                  <label className="text-xs text-muted-foreground">Transfer type</label>
                   <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      type="button"
-                      variant={formData.checkingOrSavings === "checking" ? "default" : "outline"}
-                      onClick={() => handleInputChange("checkingOrSavings", "checking")}
-                    >
-                      Checking
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={formData.checkingOrSavings === "savings" ? "default" : "outline"}
-                      onClick={() => handleInputChange("checkingOrSavings", "savings")}
-                    >
-                      Savings
-                    </Button>
+                    {usTransferMethods.map((method) => (
+                      <Button
+                        key={method.value}
+                        type="button"
+                        variant={formData.transferType === method.value ? "default" : "outline"}
+                        onClick={() => handleInputChange("transferType", method.value)}
+                      >
+                        {method.label}
+                      </Button>
+                    ))}
                   </div>
-                  {errors.checkingOrSavings && <p className="text-xs text-red-500">{errors.checkingOrSavings}</p>}
+                  {errors.transferType && <p className="text-xs text-red-500">{errors.transferType}</p>}
                 </div>
               ) : null}
               <div className="space-y-2 col-span-2">

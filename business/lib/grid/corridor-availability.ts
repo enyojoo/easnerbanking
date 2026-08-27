@@ -2,6 +2,7 @@ import {
   gridDiscoverySupportsCorridor,
   listGridDiscoveries,
 } from "@/lib/grid/discoveries"
+import { gridStaticSchemaSupportsRail } from "@easner/shared"
 
 type PayoutRail = "bank_transfer" | "mobile_money"
 
@@ -31,9 +32,11 @@ export async function annotateCorridorsWithGridAvailability<
       currencyCode: row.currency_code,
       rail,
     })
+    const staticOk = gridStaticSchemaSupportsRail(row.country_code, row.currency_code, rail)
+    const capabilityOk = discoveryOk || staticOk
 
-    const grid_send_available = meta.grid_send === true || discoveryOk
-    const grid_receive_available = meta.grid_receive === true || discoveryOk
+    const grid_send_available = meta.grid_send === true || capabilityOk
+    const grid_receive_available = meta.grid_receive === true || capabilityOk
 
     const out: T & { grid_send_available?: boolean; grid_receive_available?: boolean } = { ...row }
     if (grid_send_available) out.grid_send_available = true

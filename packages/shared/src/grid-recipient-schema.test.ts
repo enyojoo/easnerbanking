@@ -8,6 +8,8 @@ import {
   isBankNameAllowedForCorridor,
   validateGridRecipientForCorridor,
   mapCadRoutingToGridMetadata,
+  listGridStaticBankCorridorPairs,
+  gridStaticSchemaSupportsRail,
 } from "./yc-recipient-schema"
 
 describe("resolveGridCorridorSchema", () => {
@@ -25,6 +27,47 @@ describe("resolveGridCorridorSchema", () => {
     })
     expect(schema?.account_number_label).toBe("IBAN")
     expect(schema?.note).toContain("AED_ACCOUNT")
+  })
+
+  it("returns US USD ACH static schema", () => {
+    const schema = resolveGridStaticCorridorSchema("US", "USD")
+    expect(schema?.channel_type).toBe("bank")
+    expect(schema?.note).toContain("USD_ACCOUNT")
+  })
+
+  it("lists US USD among static Grid bank corridors", () => {
+    expect(listGridStaticBankCorridorPairs()).toEqual(
+      expect.arrayContaining([{ countryCode: "US", currencyCode: "USD" }]),
+    )
+    expect(gridStaticSchemaSupportsRail("US", "USD", "bank_transfer")).toBe(true)
+    expect(gridStaticSchemaSupportsRail("US", "USD", "mobile_money")).toBe(false)
+  })
+
+  it("validates US ACH routing number", () => {
+    const ok = validateGridRecipientForCorridor({
+      countryCode: "US",
+      currencyCode: "USD",
+      row: {
+        currency: "USD",
+        full_name: "Jane Doe",
+        account_number: "123456789",
+        routing_number: "021000021",
+      },
+    })
+    expect(ok).toEqual({ ok: true })
+    const missing = validateGridRecipientForCorridor({
+      countryCode: "US",
+      currencyCode: "USD",
+      row: {
+        currency: "USD",
+        full_name: "Jane Doe",
+        account_number: "123456789",
+      },
+    })
+    expect(missing).toEqual({
+      ok: false,
+      message: "US bank recipient requires a 9-digit routing number.",
+    })
   })
 
   it("returns CAD bank/branch extra fields from static schema", () => {

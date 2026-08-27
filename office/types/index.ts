@@ -45,7 +45,7 @@ export interface Recipient {
   city?: string
   state?: string
   postal_code?: string
-  transfer_type?: "ACH" | "Wire"
+  transfer_type?: "ACH" | "Wire" | "RTP" | "FEDNOW"
   checking_or_savings?: "checking" | "savings"
   created_at: string
   updated_at: string

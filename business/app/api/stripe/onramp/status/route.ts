@@ -6,12 +6,15 @@ import {
   expressDepositsSourceCurrency,
   normalizeExpressDepositsCustomer,
   resolveCashPayInMethods,
+  usPayInAllowsExpress,
 } from "@easner/shared"
 import { getApplePayMerchantId } from "@/lib/stripe/onramp-config"
 import { getStripePublishableKey } from "@/lib/stripe/config"
 import { stripeOnrampOfficeFlags } from "@/lib/stripe/onramp-gate"
 import { kycPrefillFromPayer, resolveExpressDepositsContext } from "@/lib/stripe/onramp-context"
 import { stripeOnramp } from "@/lib/stripe/onramp-client"
+import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { loadUsUsdBankPayInMode } from "@/lib/stripe/us-pay-in-corridor"
 
 export const runtime = "nodejs"
 
@@ -19,7 +22,10 @@ export async function GET(request: Request) {
   const resolved = await resolveExpressDepositsContext(request, { requireEligible: false })
   if ("error" in resolved) return resolved.error
   const { payer, businessId, eligible, payerCountry, oauthToken } = resolved.ctx
-  const office = stripeOnrampOfficeFlags()
+  const usPayInMode = await loadUsUsdBankPayInMode(createSupabaseAdmin())
+  const office = stripeOnrampOfficeFlags({
+    usPayInAllowsExpress: usPayInAllowsExpress(usPayInMode),
+  })
   let customer = payer.stripe_crypto_customer_id
     ? { id: payer.stripe_crypto_customer_id }
     : null

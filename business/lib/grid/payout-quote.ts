@@ -9,6 +9,7 @@ import {
   resolveGridPayoutLimits,
   validateBalancePayoutAmountForProvider,
   type PayoutSettlementLeg,
+  type GridUsPaymentRail,
 } from "@easner/shared"
 import {
   findGridBalancePayoutRate,
@@ -27,6 +28,7 @@ import { buildGridIdempotencyKey } from "./idempotency"
 import {
   buildGridBalancePayoutQuoteBody,
   gridQuoteFeesUsd,
+  gridQuotePaymentRailForRecipient,
   gridQuoteSendingAmountMajor,
   quantizeGridUsdcMajor,
 } from "./quote-request"
@@ -52,6 +54,15 @@ function storedGridExternalAccountId(recipient: RecipientSellPrepareRow): string
   const obj = meta && typeof meta === "object" ? (meta as Record<string, unknown>) : {}
   const id = String(obj.grid_external_account_id ?? "").trim()
   return id || null
+}
+
+function gridPaymentRailForPayoutRecipient(recipient: RecipientSellPrepareRow): GridUsPaymentRail | undefined {
+  return gridQuotePaymentRailForRecipient({
+    countryCode: resolveRecipientPayoutCountry(recipient),
+    currency: recipient.currency,
+    transferType: recipient.transfer_type,
+    mobileProvider: recipient.mobile_provider,
+  })
 }
 
 function persistRecipientGridExternalAccount(
@@ -196,6 +207,7 @@ export async function ensureFreshGridBalancePayoutQuote(input: {
   receiveCurrency: string
   receiveAmount: number
   paymentPurpose?: string
+  paymentRail?: GridUsPaymentRail | null
   customerRate: number
   processingFeeBps: number
   originalTotalDebited: number
@@ -244,6 +256,7 @@ export async function ensureFreshGridBalancePayoutQuote(input: {
       receiveCurrency: input.receiveCurrency,
       lockedReceiveMinor: gridMinorUnits(input.receiveAmount, 2),
       purposeOfPayment: input.paymentPurpose,
+      paymentRail: input.paymentRail,
     })
     try {
       live = await gridFetch<GridQuote>({
@@ -626,6 +639,7 @@ export async function lockGridBalancePayoutQuote(
     receiveCurrency,
     lockedReceiveMinor: gridMinorUnits(quoteReceiveAmount, 2),
     purposeOfPayment: input.paymentPurpose,
+    paymentRail: gridPaymentRailForPayoutRecipient(input.recipient),
   })
   const setupMs = Date.now() - lockStartedAt
   const quoteStartedAt = Date.now()
@@ -659,6 +673,7 @@ export async function lockGridBalancePayoutQuote(
       receiveCurrency,
       lockedReceiveMinor: gridMinorUnits(quoteReceiveAmount, 2),
       purposeOfPayment: input.paymentPurpose,
+      paymentRail: gridPaymentRailForPayoutRecipient(input.recipient),
     })
     quote = await gridFetch<GridQuote>({
       method: "POST",

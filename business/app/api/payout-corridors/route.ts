@@ -1,6 +1,6 @@
 import { createHash } from "crypto"
 import { NextResponse } from "next/server"
-import { isBalancePayoutCorridorExecutable, isCustomerFacingFiatCorridorLive, type ProviderRoutingEntry } from "@easner/shared"
+import { isBalancePayoutCorridorExecutable, isCustomerFacingFiatCorridorLive, pickPublicPayInMetadata, type ProviderRoutingEntry } from "@easner/shared"
 import { annotateCorridorsWithGridAvailability } from "@/lib/grid/corridor-availability"
 import { annotateCorridorsWithNoahAvailability } from "@/lib/noah/channel-availability"
 import { annotateCorridorsWithYcAvailability } from "@/lib/yellowcard/channel-availability"
@@ -67,6 +67,7 @@ function publicCorridorPayload(row: AnnotatedCorridorRow) {
     ...(typeof row.yc_send_available === "boolean"
       ? { yc_send_available: row.yc_send_available }
       : {}),
+    ...(row.metadata != null ? { metadata: pickPublicPayInMetadata(row.metadata) } : {}),
   }
 }
 

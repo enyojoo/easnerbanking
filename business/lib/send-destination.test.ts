@@ -23,6 +23,35 @@ describe("sendDestinationFromRow", () => {
     })
   })
 
+  it("preserves US RTP and FedNow transfer types", () => {
+    expect(
+      sendDestinationFromRow(
+        {
+          id: "us-rtp",
+          type: "bank",
+          full_name: "Jane Doe",
+          country_code: "US",
+          currency: "USD",
+          transfer_type: "RTP",
+        },
+        "recipient",
+      ).transfer_type,
+    ).toBe("RTP")
+    expect(
+      sendDestinationFromRow(
+        {
+          id: "us-fednow",
+          type: "bank",
+          full_name: "Jane Doe",
+          country_code: "US",
+          currency: "USD",
+          transfer_type: "FEDNOW",
+        },
+        "recipient",
+      ).transfer_type,
+    ).toBe("FEDNOW")
+  })
+
   it("maps stablecoin methods into wallet destinations", () => {
     const row = sendDestinationFromRow({
       id: "method-wallet",

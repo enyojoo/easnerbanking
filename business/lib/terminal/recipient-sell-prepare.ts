@@ -1,5 +1,5 @@
 import { mobileProviderPrepareSubstrings, bankEnumFromFormSchema, mobileProviderLabelsFromSellItems } from "@/lib/noah/form-schema-hints"
-import { applyProviderBindingToRecipient, resolveCorridorBankName, resolveCorridorMomoProvider } from "@easner/shared"
+import { applyProviderBindingToRecipient, formatPayoutFiatAmountForPrepare, noahUsPrefersAch, resolveCorridorBankName, resolveCorridorMomoProvider } from "@easner/shared"
 import { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-payout-country"
 import { normalizeBankAccountNumber } from "@/lib/noah/sell-form-builders"
 import {
@@ -16,7 +16,6 @@ import {
   isNoahUsAchChannel,
   prepareSellTransaction,
 } from "@/lib/noah/payout-prepare"
-import { formatPayoutFiatAmountForPrepare } from "@easner/shared"
 
 export type RecipientSellPrepareRow = {
   country_code?: string | null
@@ -27,7 +26,7 @@ export type RecipientSellPrepareRow = {
   currency: string
   routing_number?: string | null
   iban?: string | null
-  transfer_type?: "ACH" | "Wire" | null
+  transfer_type?: "ACH" | "Wire" | "RTP" | "FEDNOW" | null
   checking_or_savings?: "checking" | "savings" | null
   address_line1?: string | null
   city?: string | null
@@ -207,7 +206,7 @@ export async function prepareSellFromRecipientRow(input: {
       throw new Error("US bank recipient requires account and routing numbers.")
     }
     const addr = parseUsAddress(row)
-    const preferAch = String(row.transfer_type || "ACH").toUpperCase() !== "WIRE"
+    const preferAch = noahUsPrefersAch(row.transfer_type)
     const channel = await findBankSellChannelId({
       country: payCountry,
       fiatCurrency,

@@ -10,6 +10,7 @@ import {
   isNoahUsAchChannel,
   prepareSellTransaction,
 } from "@/lib/noah/payout-prepare"
+import { noahUsPrefersAch } from "@easner/shared"
 
 /**
  * Prepare Noah sell (form session + crypto authorization) for bank payouts.
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
     postalCode?: string
     accountType?: "Checking" | "Savings"
     /** US domestic: `ACH` or `Wire` (Fedwire). Defaults to ACH when omitted. */
-    transferType?: "ACH" | "Wire"
+    transferType?: "ACH" | "Wire" | "RTP" | "FEDNOW"
   } | null
 
   const country = String(body?.countryCode || "US").toUpperCase()
@@ -96,8 +97,7 @@ export async function POST(request: Request) {
           { status: 400 },
         )
       }
-      const transferTypeRaw = String(body?.transferType ?? "ACH").trim().toUpperCase()
-      const preferAch = transferTypeRaw !== "WIRE"
+      const preferAch = noahUsPrefersAch(body?.transferType)
       const channel = await findBankSellChannelId({
         country,
         fiatCurrency,

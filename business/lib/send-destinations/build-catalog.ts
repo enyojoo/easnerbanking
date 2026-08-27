@@ -5,8 +5,8 @@ import type {
   ProviderRoutingEntry,
   SendDestinationsResponse,
 } from "@easner/shared"
-import type { PayoutCorridorPublic, PayoutFieldsSchemaHint, PayoutRail, PayoutCorridorPayInMetadata } from "@easner/shared"
-import { isBalancePayoutCorridorExecutable, isCustomerFacingFiatCorridorLive } from "@easner/shared"
+import type { PayoutCorridorPublic, PayoutFieldsSchemaHint, PayoutRail } from "@easner/shared"
+import { isBalancePayoutCorridorExecutable, isCustomerFacingFiatCorridorLive, pickPublicPayInMetadata } from "@easner/shared"
 import { annotateCorridorsWithGridAvailability } from "@/lib/grid/corridor-availability"
 import { annotateCorridorsWithNoahAvailability } from "@/lib/noah/channel-availability"
 import { annotateCorridorsWithYcAvailability } from "@/lib/yellowcard/channel-availability"
@@ -28,32 +28,6 @@ type PayoutCorridorRow = {
   fields_schema: unknown
   metadata?: unknown
   updated_at: string
-}
-
-function publicPayInMetadata(raw: unknown): PayoutCorridorPayInMetadata | null {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null
-  const m = raw as Record<string, unknown>
-  const out: PayoutCorridorPayInMetadata = {}
-  const keys = [
-    "pay_in_provider",
-    "yc_receive",
-    "yc_receive_enabled",
-    "grid_receive",
-    "grid_receive_enabled",
-    "noah_receive",
-    "noah_receive_enabled",
-    "yc_send",
-    "yc_send_enabled",
-    "grid_send",
-    "grid_send_enabled",
-    "noah_send_enabled",
-  ] as const
-  for (const key of keys) {
-    if (m[key] !== undefined) {
-      ;(out as Record<string, unknown>)[key] = m[key]
-    }
-  }
-  return Object.keys(out).length ? out : null
 }
 
 type CryptoRow = {
@@ -116,7 +90,7 @@ function publicCorridor(
     ...(row.fields_schema != null
       ? { fields_schema: row.fields_schema as PayoutFieldsSchemaHint }
       : {}),
-    ...(row.metadata != null ? { metadata: publicPayInMetadata(row.metadata) } : {}),
+    ...(row.metadata != null ? { metadata: pickPublicPayInMetadata(row.metadata) } : {}),
   }
 }
 
@@ -206,7 +180,7 @@ export async function buildSendDestinationsCatalog(input?: {
     fiatRows = fiatRows.filter((row) =>
       isBalancePayoutCorridorExecutable({
         provider_routing: parseProviderRouting(row.provider_routing),
-        metadata: publicPayInMetadata(row.metadata),
+        metadata: pickPublicPayInMetadata(row.metadata),
         noah_sell_available: row.noah_sell_available,
         grid_send_available: row.grid_send_available,
         yc_send_available: row.yc_send_available,

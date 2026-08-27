@@ -236,7 +236,13 @@ export {
   payoutReceiveAmountsMatchForCurrency,
 } from "./noah-send-rates"
 export { isVaAnswerSettled, shouldShowBankDepositTab } from "./noah/bank-deposit-tab-visibility"
-export type { PayoutCorridorPublic, PayoutFieldsSchemaHint, PayoutProviderId, PayoutRail } from "./payout-corridor"
+export type {
+  PayoutCorridorPayInMetadata,
+  PayoutCorridorPublic,
+  PayoutFieldsSchemaHint,
+  PayoutProviderId,
+  PayoutRail,
+} from "./payout-corridor"
 export {
   corridorDisplayLabel,
   corridorMatchesCountryCurrency,
@@ -245,12 +251,42 @@ export {
   isGridBalancePayoutCorridor,
   isNoahBalancePayoutCorridor,
   isBalancePayoutCorridorExecutable,
+  pickPublicPayInMetadata,
   resolveBalancePayoutProvider,
   resolveOfficePayoutProvider,
   resolveOfficePayInProvider,
   isCustomerFacingFiatCorridorLive,
   resolvePrimaryPayoutProvider,
 } from "./payout-corridor"
+export {
+  US_BANK_TRANSFER_TYPES,
+  coerceUsTransferTypeForProvider,
+  noahUsPrefersAch,
+  parseUsBankTransferType,
+  toGridPaymentRail,
+  usBankPaymentMethodsForProvider,
+  yellowcardOffersDomesticBankPayout,
+  type GridUsPaymentRail,
+  type UsBankTransferMethodOption,
+  type UsBankTransferType,
+} from "./us-bank-transfer-type"
+export {
+  applyUsPayInModeToMetadata,
+  clearUsCrossBorderMetadata,
+  corridorOffersCrossBorder,
+  findUsUsdBankCorridor,
+  isUsUsdCorridor,
+  parseUsPayInMode,
+  resolveUsPayInMode,
+  resolveUsPayInModeFromCatalog,
+  resolveUsPayInModeFromCorridor,
+  usPayInAllowsExpress,
+  usPayInAllowsVa,
+  usPayInLegacyEnabled,
+  US_PAY_IN_MODE_OPTIONS,
+  type UsPayInMode,
+  type UsPayInModeOption,
+} from "./us-pay-in-mode"
 export {
   mapProviderBalancePayoutRateRows,
   providerSendRatesQueryPath,
@@ -283,6 +319,8 @@ export {
   resolveGridStaticCorridorSchema,
   isGridMomoOnlyCorridor,
   listGridMomoOnlyCorridorPairs,
+  listGridStaticBankCorridorPairs,
+  gridStaticSchemaSupportsRail,
   synthesizeGridSchemaFromNoah,
   synthesizeYcSchemaFromNoah,
   isGenericGridCorridorSchema,

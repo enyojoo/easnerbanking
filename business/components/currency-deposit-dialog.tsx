@@ -128,13 +128,25 @@ type ExpressKind = Extract<
   "express_card" | "express_apple_pay" | "express_google_pay" | "express_ach"
 >
 
-function instantExpressStatus(country: string | null): {
+function instantExpressStatus(
+  country: string | null,
+  usAllowsExpress: boolean,
+): {
   eligible: boolean
   ready: boolean
   officeOn: boolean
   payerCountry: string | null
   methods: ExpressKind[]
 } {
+  if (!usAllowsExpress) {
+    return {
+      eligible: false,
+      ready: false,
+      officeOn: false,
+      payerCountry: country,
+      methods: [],
+    }
+  }
   const cached = peekBusinessExpressOnrampStatus()
   const payerCountry = cached?.payerCountry || country
   if (cached?.eligible === false || cached?.office?.stripeOnrampEnabled === false) {
@@ -310,6 +322,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
     tier1VerificationStatus,
     countryCode,
   } = useBusinessProfile()
+  const usAllowsExpress = account.currency !== "USD" || account.usPayInAllowsExpress !== false
   const stablecoinAccount =
     account.stablecoinAddress && account.stablecoinToken
       ? {
@@ -337,7 +350,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
     officeOn: boolean
     payerCountry: string | null
     methods: ExpressKind[]
-  } | null>(() => (account.currency === "USD" ? instantExpressStatus(countryCode) : null))
+  } | null>(() => (account.currency === "USD" ? instantExpressStatus(countryCode, usAllowsExpress) : null))
   const [relayDepositMethods, setRelayDepositMethods] = useState<StablecoinReceiveMethod[]>([])
   const [selectedStablecoinMethod, setSelectedStablecoinMethod] = useState<StablecoinReceiveMethod | null>(null)
 
@@ -484,6 +497,16 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
 
   useEffect(() => {
     if (account.currency !== "USD") return
+    if (!usAllowsExpress) {
+      setExpressStatus({
+        eligible: false,
+        ready: false,
+        officeOn: false,
+        payerCountry: countryCode,
+        methods: [],
+      })
+      return
+    }
     warmBusinessExpressOnrampStatus()
     let cancelled = false
     void (async () => {
@@ -521,7 +544,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
     return () => {
       cancelled = true
     }
-  }, [account.currency, countryCode])
+  }, [account.currency, countryCode, usAllowsExpress])
 
   useEffect(() => {
     if (account.currency !== "USD" || !effectiveResidence || !localPayInCurrency) {

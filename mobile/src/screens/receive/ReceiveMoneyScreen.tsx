@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
-import { qk, isVaAnswerSettled, shouldShowBankDepositTab, mapResidenceToLocalPayInCurrency, expressDepositsPayerCountry, isExpressCashKind, listExpressCashKinds, type NgLocalIdType } from '@easner/shared'
+import { qk, isVaAnswerSettled, shouldShowBankDepositTab, mapResidenceToLocalPayInCurrency, expressDepositsPayerCountry, isExpressCashKind, listExpressCashKinds, resolveUsPayInModeFromCatalog, usPayInAllowsExpress, usPayInAllowsVa, type NgLocalIdType } from '@easner/shared'
 import {
   View,
   Text,
@@ -84,6 +84,11 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     [],
   )
 
+  const { catalogRevision, bankCorridors, data: sendDestinations } = useSendDestinations()
+  const usPayInMode = resolveUsPayInModeFromCatalog(bankCorridors, sendDestinations != null)
+  const usAllowsVa = currency !== 'USD' || usPayInAllowsVa(usPayInMode)
+  const usAllowsExpress = currency !== 'USD' || usPayInAllowsExpress(usPayInMode)
+
   const instantExpressPayerCountry = expressDepositsPayerCountry({
     residenceCountry: userProfile?.residence_country ?? userProfile?.profile?.residence_country,
     kycAddressCountry: userProfile?.profile?.kyc_address_country,
@@ -94,10 +99,11 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     const kycApproved =
       String(userProfile?.noah_kyc_status || userProfile?.profile?.noah_kyc_status || '').toLowerCase() ===
       'approved'
-    if (currency !== 'USD' || !kycApproved) return []
+    if (currency !== 'USD' || !kycApproved || !usAllowsExpress) return []
     const cached = peekExpressOnrampStatus()
     const country = cached?.payerCountry || instantExpressPayerCountry
     if (cached && cached.eligible === false) return []
+    if (cached?.office?.stripeOnrampEnabled === false) return []
     const fromApi = (cached?.methods ?? []).filter(isExpressCashKind)
     const filterDevice = (kinds: ExpressCashKind[]) =>
       kinds.filter((kind) => {
@@ -202,6 +208,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     verificationComplete,
     vaSettled,
     hasVirtualAccount: hasAccountData,
+    ...(currency === 'USD' ? { officeAllowsVa: usAllowsVa } : {}),
   })
   const showStablecoinTab = supportsStablecoins
   const localPayInCurrency = useMemo(() => {
@@ -210,8 +217,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   }, [userProfile?.residence_country])
 
   const residenceCountry = String(userProfile?.residence_country ?? '').trim().toUpperCase()
-
-  const { catalogRevision } = useSendDestinations()
 
   const payInProvider = useMemo(
     () =>
@@ -303,7 +308,8 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   }, [localPayInCurrency, verificationComplete, currency, residenceCountry])
 
   useEffect(() => {
-    if (currency !== 'USD' || !verificationComplete) {
+    if (currency !== 'USD' || !verificationComplete || !usAllowsExpress) {
+      setExpressReady(false)
       setExpressMethods([])
       return
     }
@@ -341,7 +347,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     return () => {
       cancelled = true
     }
-  }, [currency, verificationComplete, instantExpressPayerCountry, expressDeviceWallets])
+  }, [currency, verificationComplete, usAllowsExpress, instantExpressPayerCountry, expressDeviceWallets])
 
   const accountReady = hasAccountData
 

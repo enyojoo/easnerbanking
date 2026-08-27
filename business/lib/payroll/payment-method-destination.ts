@@ -1,4 +1,5 @@
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
+import { parseUsBankTransferType } from "@easner/shared"
 
 function value(details: Record<string, string>, camel: string, snake: string): string {
   return String(details[camel] || details[snake] || "").trim()
@@ -71,12 +72,7 @@ export function payrollDetailsToPayoutRecipient(
     sort_code: String(details.sortCode || details.sort_code || "").trim() || null,
     iban: String(details.iban || "").trim() || null,
     swift_bic: String(details.swiftBic || details.swift_bic || "").trim() || null,
-    transfer_type:
-      details.transferType === "Wire" || details.transfer_type === "Wire"
-        ? "Wire"
-        : details.transferType === "ACH" || details.transfer_type === "ACH"
-          ? "ACH"
-          : null,
+    transfer_type: parseUsBankTransferType(details.transferType || details.transfer_type),
     checking_or_savings:
       details.accountType === "savings" || details.checking_or_savings === "savings"
         ? "savings"

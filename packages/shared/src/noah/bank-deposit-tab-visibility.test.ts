@@ -66,6 +66,17 @@ describe("shouldShowBankDepositTab", () => {
     ).toBe(true)
   })
 
+  it("hides bank tab when Office disables VA", () => {
+    expect(
+      shouldShowBankDepositTab({
+        verificationComplete: false,
+        vaSettled: false,
+        hasVirtualAccount: false,
+        officeAllowsVa: false,
+      }),
+    ).toBe(false)
+  })
+
   it("hides bank tab from cached negative VA on rehydrate", () => {
     expect(
       shouldShowBankDepositTab({

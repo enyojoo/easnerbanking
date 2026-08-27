@@ -4,10 +4,11 @@ import {
 } from "@easner/shared"
 import { isStripeOnrampEnabled, isStripeOnrampEuEnabled } from "./onramp-config"
 
-export function stripeOnrampOfficeFlags() {
+export function stripeOnrampOfficeFlags(opts?: { usPayInAllowsExpress?: boolean }) {
+  const corridorAllows = opts?.usPayInAllowsExpress !== false
   return {
-    stripeOnrampEnabled: isStripeOnrampEnabled(),
-    stripeOnrampEuEnabled: isStripeOnrampEuEnabled(),
+    stripeOnrampEnabled: isStripeOnrampEnabled() && corridorAllows,
+    stripeOnrampEuEnabled: isStripeOnrampEuEnabled() && corridorAllows,
   }
 }
 

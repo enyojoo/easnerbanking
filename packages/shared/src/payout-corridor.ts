@@ -1,4 +1,5 @@
 import type { ProviderHealthStatus, ProviderRoutingEntry } from "./send-destinations"
+import { resolveUsPayInMode } from "./us-pay-in-mode"
 
 export type PayoutProviderId = "noah" | "yellowcard" | "grid"
 
@@ -41,6 +42,11 @@ export type PayoutFieldsSchemaHint = {
 /** Office corridor flags used to pick YC vs Grid vs Noah for local pay-in. */
 export type PayoutCorridorPayInMetadata = {
   pay_in_provider?: string
+  /** US:USD bank product mode: `va` | `va_express`. Absent + receive off = disabled. */
+  pay_in_mode?: string
+  stripe_express_enabled?: boolean
+  cross_border_enabled?: boolean
+  cross_border_provider?: string
   yc_receive?: boolean
   yc_receive_enabled?: boolean
   grid_receive?: boolean
@@ -84,6 +90,38 @@ export type PayoutCorridorPublic = {
   fields_schema?: PayoutFieldsSchemaHint | import("./yc-recipient-schema").PayoutCorridorFieldsSchema | null
   /** Pay-in routing flags from Office (subset of corridor metadata). */
   metadata?: PayoutCorridorPayInMetadata | null
+}
+
+const PUBLIC_PAY_IN_METADATA_KEYS = [
+  "pay_in_provider",
+  "pay_in_mode",
+  "stripe_express_enabled",
+  "cross_border_enabled",
+  "cross_border_provider",
+  "yc_receive",
+  "yc_receive_enabled",
+  "grid_receive",
+  "grid_receive_enabled",
+  "noah_receive",
+  "noah_receive_enabled",
+  "yc_send",
+  "yc_send_enabled",
+  "grid_send",
+  "grid_send_enabled",
+  "noah_send_enabled",
+] as const
+
+/** Strip corridor metadata to the Office pay-in/payout flags customers need. */
+export function pickPublicPayInMetadata(raw: unknown): PayoutCorridorPayInMetadata | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null
+  const m = raw as Record<string, unknown>
+  const out: PayoutCorridorPayInMetadata = {}
+  for (const key of PUBLIC_PAY_IN_METADATA_KEYS) {
+    if (m[key] !== undefined) {
+      ;(out as Record<string, unknown>)[key] = m[key]
+    }
+  }
+  return Object.keys(out).length ? out : null
 }
 
 export function corridorDisplayLabel(c: Pick<PayoutCorridorPublic, "country_name" | "currency_code" | "currency_name">): string {
@@ -173,6 +211,8 @@ export function isCustomerFacingFiatCorridorLive(input: {
   if (input.enabled !== true) return false
   if (resolveOfficePayoutProvider(input)) return true
   if (resolveOfficePayInProvider(input.metadata)) return true
+  const usMode = resolveUsPayInMode(input.metadata)
+  if (usMode === "va" || usMode === "va_express") return true
   return false
 }
 

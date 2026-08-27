@@ -98,6 +98,7 @@ export type YcRecipientRowLike = {
   phone_number?: string | null
   mobile_provider?: string | null
   checking_or_savings?: "checking" | "savings" | null
+  routing_number?: string | null
   metadata?: RecipientYcMetadata | Record<string, unknown> | null
 }
 
@@ -326,6 +327,14 @@ export const GRID_STATIC_CORRIDOR_SCHEMAS: Record<string, GridCorridorSchemaHint
     extra_fields: [],
     note: "Static Grid MXN_ACCOUNT",
   },
+  "US:USD": {
+    status: "ready",
+    channel_type: "bank",
+    account_number_label: "Account number",
+    account_number_hint: "Requires 9-digit ACH routing number",
+    extra_fields: [],
+    note: "Static Grid USD_ACCOUNT (ACH routing number + account number)",
+  },
   "BW:BWP": gridMomoProviders("MyZaka"),
   "KE:KES": gridMomoProviders("M-PESA", "Airtel Money"),
   "MW:MWK": gridMomoProviders("Airtel Money", "TNM"),
@@ -369,16 +378,41 @@ export function isGridMomoOnlyCorridor(countryCode: string, currencyCode: string
   return resolveGridStaticCorridorSchema(countryCode, currencyCode)?.channel_type === "momo"
 }
 
-export function listGridMomoOnlyCorridorPairs(): Array<{
-  countryCode: string
-  currencyCode: string
-}> {
+function listGridStaticCorridorPairs(
+  channelType: GridCorridorSchemaHint["channel_type"],
+): Array<{ countryCode: string; currencyCode: string }> {
   return Object.entries(GRID_STATIC_CORRIDOR_SCHEMAS)
-    .filter(([, schema]) => schema.channel_type === "momo")
+    .filter(([, schema]) => schema.channel_type === channelType)
     .map(([key]) => {
       const [countryCode, currencyCode] = key.split(":")
       return { countryCode, currencyCode }
     })
+}
+
+export function listGridMomoOnlyCorridorPairs(): Array<{
+  countryCode: string
+  currencyCode: string
+}> {
+  return listGridStaticCorridorPairs("momo")
+}
+
+/** Grid bank corridors with no discovery rows (US ACH, CA, AE, …). */
+export function listGridStaticBankCorridorPairs(): Array<{
+  countryCode: string
+  currencyCode: string
+}> {
+  return listGridStaticCorridorPairs("bank")
+}
+
+export function gridStaticSchemaSupportsRail(
+  countryCode: string,
+  currencyCode: string,
+  rail: "bank_transfer" | "mobile_money",
+): boolean {
+  const schema = resolveGridStaticCorridorSchema(countryCode, currencyCode)
+  if (!schema) return false
+  if (rail === "mobile_money") return schema.channel_type === "momo"
+  return schema.channel_type === "bank"
 }
 
 /** Runtime Grid schema: DB → static API shapes → Noah bank list (bank corridors only). */
@@ -734,6 +768,13 @@ export function validateGridRecipientForCorridor(input: {
   const accountNumber = String(input.row.account_number || "").trim()
   if (!accountNumber && cur !== "AED" && cur !== "DKK") {
     return { ok: false, message: "Account number is required." }
+  }
+
+  if (cc === "US" && cur === "USD") {
+    const routing = digitsOnly(String(input.row.routing_number || ""))
+    if (routing.length !== 9) {
+      return { ok: false, message: "US bank recipient requires a 9-digit routing number." }
+    }
   }
 
   for (const field of schema.extra_fields ?? []) {

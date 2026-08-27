@@ -1,10 +1,16 @@
 import { gridFetch, gridFetchAllPages } from "./http"
 import type { GridQuote } from "./types"
 import { gridMajorUnits } from "./external-account"
+import {
+  parseUsBankTransferType,
+  toGridPaymentRail,
+  type GridUsPaymentRail,
+} from "@easner/shared"
 
 export type GridQuoteAccountDestination = {
   destinationType: "ACCOUNT"
   accountId: string
+  paymentRail?: GridUsPaymentRail
 }
 
 export type GridQuoteRealtimeFundingSource = {
@@ -99,11 +105,31 @@ function normalizeGridCurrency(code: string): string {
   return code.trim().toUpperCase()
 }
 
-export function buildGridAccountDestination(accountId: string): GridQuoteAccountDestination {
-  return {
+export function buildGridAccountDestination(
+  accountId: string,
+  paymentRail?: GridUsPaymentRail | null,
+): GridQuoteAccountDestination {
+  const destination: GridQuoteAccountDestination = {
     destinationType: "ACCOUNT",
     accountId: accountId.trim(),
   }
+  if (paymentRail) destination.paymentRail = paymentRail
+  return destination
+}
+
+/** US USD bank payouts pass the recipient Transfer type so Grid does not AUTO-pick. */
+export function gridQuotePaymentRailForRecipient(input: {
+  countryCode?: string | null
+  currency?: string | null
+  transferType?: string | null
+  mobileProvider?: string | null
+}): GridUsPaymentRail | undefined {
+  if (String(input.mobileProvider ?? "").trim()) return undefined
+  const currency = String(input.currency ?? "").trim().toUpperCase()
+  if (currency !== "USD") return undefined
+  const country = String(input.countryCode ?? "").trim().toUpperCase()
+  if (country && country !== "US") return undefined
+  return toGridPaymentRail(parseUsBankTransferType(input.transferType) ?? "ACH")
 }
 
 /** USDC/USDT payouts and pay-ins fund via on-chain deposit instructions. */
@@ -181,6 +207,7 @@ export function buildGridBalancePayoutQuoteBody(input: {
   receiveCurrency: string
   lockedReceiveMinor: number
   purposeOfPayment?: string
+  paymentRail?: GridUsPaymentRail | null
 }) {
   return {
     source: buildGridRealtimeFundingSource({
@@ -188,7 +215,7 @@ export function buildGridBalancePayoutQuoteBody(input: {
       currency: "USDC",
       cryptoNetwork: "SOLANA",
     }),
-    destination: buildGridAccountDestination(input.externalAccountId),
+    destination: buildGridAccountDestination(input.externalAccountId, input.paymentRail),
     lockedCurrencyAmount: input.lockedReceiveMinor,
     lockedCurrencySide: "RECEIVING" as const,
     purposeOfPayment: input.purposeOfPayment?.trim() || "FAMILY_SUPPORT",

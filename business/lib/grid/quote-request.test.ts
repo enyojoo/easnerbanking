@@ -6,6 +6,7 @@ import {
   buildGridFundBalanceQuoteBody,
   buildGridRealtimeFundingSource,
   gridQuoteFeesUsd,
+  gridQuotePaymentRailForRecipient,
   gridQuoteSendingAmountMajor,
   pickGridInternalAccountForCurrency,
   quantizeGridUsdcMajor,
@@ -49,6 +50,43 @@ describe("buildGridAccountDestination", () => {
       accountId: "ExternalAccount:xyz",
     })
   })
+
+  it("sets paymentRail when provided", () => {
+    expect(buildGridAccountDestination("ExternalAccount:us", "RTP")).toEqual({
+      destinationType: "ACCOUNT",
+      accountId: "ExternalAccount:us",
+      paymentRail: "RTP",
+    })
+  })
+})
+
+describe("gridQuotePaymentRailForRecipient", () => {
+  it("maps US USD bank transfer type to Grid paymentRail", () => {
+    expect(
+      gridQuotePaymentRailForRecipient({
+        countryCode: "US",
+        currency: "USD",
+        transferType: "FEDNOW",
+      }),
+    ).toBe("FEDNOW")
+    expect(
+      gridQuotePaymentRailForRecipient({
+        countryCode: "US",
+        currency: "USD",
+        transferType: "Wire",
+      }),
+    ).toBe("WIRE")
+  })
+
+  it("omits paymentRail for non-US destinations", () => {
+    expect(
+      gridQuotePaymentRailForRecipient({
+        countryCode: "NG",
+        currency: "NGN",
+        transferType: "ACH",
+      }),
+    ).toBeUndefined()
+  })
 })
 
 describe("buildGridBalancePayoutQuoteBody", () => {
@@ -74,6 +112,22 @@ describe("buildGridBalancePayoutQuoteBody", () => {
       lockedCurrencyAmount: 100000,
       lockedCurrencySide: "RECEIVING",
       purposeOfPayment: "FAMILY_SUPPORT",
+    })
+  })
+
+  it("includes paymentRail for US USD payouts", () => {
+    expect(
+      buildGridBalancePayoutQuoteBody({
+        customerId: "Customer:abc",
+        externalAccountId: "ExternalAccount:us",
+        receiveCurrency: "USD",
+        lockedReceiveMinor: 1000,
+        paymentRail: "RTP",
+      }).destination,
+    ).toEqual({
+      destinationType: "ACCOUNT",
+      accountId: "ExternalAccount:us",
+      paymentRail: "RTP",
     })
   })
 })

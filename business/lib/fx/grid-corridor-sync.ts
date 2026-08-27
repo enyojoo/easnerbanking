@@ -4,6 +4,7 @@ import {
   countryDisplayName,
   getCountryCodeForCurrency,
   listGridMomoOnlyCorridorPairs,
+  listGridStaticBankCorridorPairs,
   localPaymentCurrencyForCountry,
 } from "@easner/shared"
 import {
@@ -25,10 +26,10 @@ import { upsertPayoutCorridor } from "@/lib/payout-corridors-upsert"
 
 const BRIDGE_CURRENCIES = new Set(["USD", "USDC", "USDT"])
 
-/** USD is a bridge globally but local currency in SV, EC, etc. */
+/** USD is a settlement bridge except where it is the local payout currency (US, SV, EC, …). */
 function skipBridgeCurrency(currencyCode: string, countryCode: string): boolean {
   if (!BRIDGE_CURRENCIES.has(currencyCode)) return false
-  if (currencyCode === "USD" && countryCode && countryCode !== "US") return false
+  if (currencyCode === "USD" && countryCode) return false
   return true
 }
 
@@ -137,6 +138,16 @@ export function collectGridCorridorTargets(input: {
     }
     targets.set(corridorTargetKey(momoTarget), momoTarget)
     targets.delete(`${pair.countryCode}:${pair.currencyCode}:bank_transfer`)
+  }
+
+  for (const pair of listGridStaticBankCorridorPairs()) {
+    if (isExcludedPayoutCorridorTarget(pair.countryCode, pair.currencyCode, "bank_transfer")) continue
+    const bankTarget: GridCorridorTarget = {
+      countryCode: pair.countryCode,
+      currencyCode: pair.currencyCode,
+      rail: "bank_transfer",
+    }
+    targets.set(corridorTargetKey(bankTarget), bankTarget)
   }
 
   return preferLocalCurrencyTargets(

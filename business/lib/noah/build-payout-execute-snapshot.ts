@@ -26,6 +26,7 @@ export function buildRecipientSnapshotFromRow(
       ? { country_code: row.country_code.trim().toUpperCase() }
       : {}),
     ...(row.currency?.trim() ? { currency: row.currency.trim().toUpperCase() } : {}),
+    ...(row.transfer_type?.trim() ? { transfer_type: row.transfer_type.trim() } : {}),
   }
 }
 

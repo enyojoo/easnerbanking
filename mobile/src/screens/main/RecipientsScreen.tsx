@@ -116,6 +116,9 @@ import {
   validateGridRecipientForCorridor,
   mapCadRoutingToGridMetadata,
   ycAccountNumberLabel,
+  parseUsBankTransferType,
+  usBankPaymentMethodsForProvider,
+  type UsBankTransferType,
 } from '@easner/shared'
 import { PayoutSchemaExtraFields } from '../../components/recipients/PayoutSchemaExtraFields'
 import { CorridorRecipientExtraFields } from '../../components/recipients/YcRecipientExtraFields'
@@ -165,7 +168,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
   const [showBankDropdown, setShowBankDropdown] = useState(false)
   const [bankSearchTerm, setBankSearchTerm] = useState('')
   const [countrySearchTerm, setCountrySearchTerm] = useState('')
-  const [transferType, setTransferType] = useState<'ACH' | 'Wire' | null>(null) // For USA
+  const [transferType, setTransferType] = useState<UsBankTransferType | null>(null) // For USA
   // Shared form flow state (used by both add and edit)
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false)
   const [editingRecipient, setEditingRecipient] = useState<Recipient | null>(null)
@@ -303,6 +306,20 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
   })
 
   const payoutProvider = resolvePrimaryPayoutProvider(selectedBankCorridor?.provider_routing)
+  const usTransferMethods = useMemo(() => {
+    if (selectedRecipientType !== 'bank' || selectedCountryCurrency?.countryCode !== 'US') return []
+    if (!selectedBankCorridor) return usBankPaymentMethodsForProvider('noah').slice(0, 1)
+    return usBankPaymentMethodsForProvider(payoutProvider)
+  }, [selectedRecipientType, selectedCountryCurrency?.countryCode, selectedBankCorridor, payoutProvider])
+
+  useEffect(() => {
+    if (selectedRecipientType !== 'bank' || selectedCountryCurrency?.countryCode !== 'US') return
+    const allowed = usTransferMethods.map((method) => method.value)
+    if (allowed.length === 0) return
+    if (!transferType || !allowed.includes(transferType)) {
+      setTransferType(allowed[0])
+    }
+  }, [selectedRecipientType, selectedCountryCurrency?.countryCode, usTransferMethods, transferType])
 
   const buildFormYcMetadata = useCallback(() => {
     const extras = normalizeRecipientYcMetadata({
@@ -666,7 +683,10 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
         swiftBic: newRecipient.swiftBic || undefined,
         transferType: selectedCountryCurrency?.countryCode === 'US' ? transferType || undefined : undefined,
         checkingOrSavings:
-          selectedCountryCurrency?.countryCode === 'US' ? (newRecipient.checkingOrSavings as 'checking' | 'savings' | '') || undefined : undefined,
+          selectedCountryCurrency?.countryCode === 'US' &&
+          (newRecipient.checkingOrSavings === 'checking' || newRecipient.checkingOrSavings === 'savings')
+            ? newRecipient.checkingOrSavings
+            : undefined,
         addressLine1:
           selectedCountryCurrency?.countryCode === 'US' || needsAddr
             ? newRecipient.addressLine1 || undefined
@@ -767,7 +787,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
 
     setSelectedCountryCurrency(countryCurrency)
     if (countryCurrency?.countryCode === 'US') {
-      setTransferType((recipient.transfer_type as 'ACH' | 'Wire' | null) || null)
+      setTransferType(parseUsBankTransferType(recipient.transfer_type))
     } else {
       setTransferType(null)
     }
@@ -899,7 +919,10 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
         countryCode: selectedCountryCurrency?.countryCode,
         transferType: selectedCountryCurrency?.countryCode === 'US' ? transferType || undefined : undefined,
         checkingOrSavings:
-          selectedCountryCurrency?.countryCode === 'US' ? (newRecipient.checkingOrSavings as 'checking' | 'savings' | '') || undefined : undefined,
+          selectedCountryCurrency?.countryCode === 'US' &&
+          (newRecipient.checkingOrSavings === 'checking' || newRecipient.checkingOrSavings === 'savings')
+            ? newRecipient.checkingOrSavings
+            : undefined,
         addressLine1:
           selectedCountryCurrency?.countryCode === 'US' || needsAddr
             ? newRecipient.addressLine1 || undefined
@@ -986,14 +1009,11 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     if (selectedRecipientType === 'easenet') {
       return Boolean(easenetProfile && newRecipient.payeeEasetag.trim().length >= 1)
     }
-    // For US accounts, transfer type is required
-    if (selectedCountryCurrency?.countryCode === 'US' && !transferType) {
-      return false
-    }
+    // For US accounts, transfer type is required when the corridor offers rails
     if (
       selectedCountryCurrency?.countryCode === 'US' &&
-      transferType !== 'Wire' &&
-      !newRecipient.checkingOrSavings
+      usTransferMethods.length > 0 &&
+      !transferType
     ) {
       return false
     }
@@ -2125,31 +2145,32 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                 return (
                   <>
                     {/* Transfer Type Selection - First field for US accounts */}
-                    {accountConfig.accountType === "us" && (
+                    {accountConfig.accountType === "us" && usTransferMethods.length > 0 && (
                       <View style={styles.transferTypeContainer}>
                         <View style={styles.transferTypeOptions}>
-                          <Pressable
-                           android_ripple={ripple.neutral}
-                            style={[styles.transferTypeOption, transferType === 'ACH' && styles.transferTypeOptionSelected]}
-                            onPress={() => {
-                              setTransferType('ACH')
-                              haptics.tap()
-                            }} >
-                            <Text style={[styles.transferTypeOptionText, transferType === 'ACH' && styles.transferTypeOptionTextSelected]}>
-                              ACH
-                            </Text>
-                          </Pressable>
-                          <Pressable
-                           android_ripple={ripple.neutral}
-                            style={[styles.transferTypeOption, transferType === 'Wire' && styles.transferTypeOptionSelected]}
-                            onPress={() => {
-                              setTransferType('Wire')
-                              haptics.tap()
-                            }} >
-                            <Text style={[styles.transferTypeOptionText, transferType === 'Wire' && styles.transferTypeOptionTextSelected]}>
-                              Fedwire
-                            </Text>
-                          </Pressable>
+                          {usTransferMethods.map((method) => (
+                            <Pressable
+                              key={method.value}
+                              android_ripple={ripple.neutral}
+                              style={[
+                                styles.transferTypeOption,
+                                transferType === method.value && styles.transferTypeOptionSelected,
+                              ]}
+                              onPress={() => {
+                                setTransferType(method.value)
+                                haptics.tap()
+                              }}
+                            >
+                              <Text
+                                style={[
+                                  styles.transferTypeOptionText,
+                                  transferType === method.value && styles.transferTypeOptionTextSelected,
+                                ]}
+                              >
+                                {method.label}
+                              </Text>
+                            </Pressable>
+                          ))}
                         </View>
                       </View>
                     )}
@@ -2210,34 +2231,6 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                     {/* US Account Fields */}
                     {accountConfig.accountType === "us" && (
                       <>
-                        {transferType !== 'Wire' ? (
-                          <View style={styles.transferTypeContainer}>
-                            <View style={styles.transferTypeOptions}>
-                              <Pressable
-                               android_ripple={ripple.neutral}
-                                style={[styles.transferTypeOption, newRecipient.checkingOrSavings === 'checking' && styles.transferTypeOptionSelected]}
-                                onPress={() => {
-                                  setNewRecipient(prev => ({ ...prev, checkingOrSavings: 'checking' }))
-                                  haptics.tap()
-                                }} >
-                                <Text style={[styles.transferTypeOptionText, newRecipient.checkingOrSavings === 'checking' && styles.transferTypeOptionTextSelected]}>
-                                  Checking
-                                </Text>
-                              </Pressable>
-                              <Pressable
-                               android_ripple={ripple.neutral}
-                                style={[styles.transferTypeOption, newRecipient.checkingOrSavings === 'savings' && styles.transferTypeOptionSelected]}
-                                onPress={() => {
-                                  setNewRecipient(prev => ({ ...prev, checkingOrSavings: 'savings' }))
-                                  haptics.tap()
-                                }} >
-                                <Text style={[styles.transferTypeOptionText, newRecipient.checkingOrSavings === 'savings' && styles.transferTypeOptionTextSelected]}>
-                                  Savings
-                                </Text>
-                              </Pressable>
-                            </View>
-                          </View>
-                        ) : null}
                         <UsBankAddressFields
                           scrollRef={formScrollRef}
                           inputStyle={styles.modalInput}
@@ -3238,10 +3231,12 @@ const styles = StyleSheet.create({
   },
   transferTypeOptions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing[3],
   },
   transferTypeOption: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '47%',
     backgroundColor: colors.frame.background,
     borderRadius: borderRadius.full,
     borderWidth: 1.5,

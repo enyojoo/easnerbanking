@@ -44,4 +44,5 @@ export type GlobalPayoutRecipientSnapshot = {
   mobile_provider?: string
   country_code?: string
   currency?: string
+  transfer_type?: string
 }

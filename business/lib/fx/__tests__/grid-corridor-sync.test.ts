@@ -31,15 +31,35 @@ describe("collectGridCorridorTargets", () => {
     expect(targets.some((t) => t.countryCode === "KE" && t.rail === "bank_transfer")).toBe(false)
   })
 
-  it("adds mobile_money targets for static Grid momo corridors without discoveries", () => {
+  it("adds static Grid bank corridors without discoveries, including US USD ACH", () => {
     const targets = collectGridCorridorTargets({ discoveries: [], exchangeRates: [] })
     expect(targets).toEqual(
       expect.arrayContaining([
+        { countryCode: "US", currencyCode: "USD", rail: "bank_transfer" },
+        { countryCode: "CA", currencyCode: "CAD", rail: "bank_transfer" },
         { countryCode: "UG", currencyCode: "UGX", rail: "mobile_money" },
         { countryCode: "RW", currencyCode: "RWF", rail: "mobile_money" },
       ]),
     )
     expect(targets.some((t) => t.countryCode === "UG" && t.rail === "bank_transfer")).toBe(false)
+  })
+
+  it("includes United States USD when Grid returns US bank discoveries", () => {
+    const targets = collectGridCorridorTargets({
+      discoveries: [
+        {
+          country: "US",
+          currency: "USD",
+          bankName: "Chase",
+          paymentRails: ["ACH", "WIRE"],
+        },
+      ],
+      exchangeRates: [],
+    })
+
+    expect(targets).toEqual(
+      expect.arrayContaining([{ countryCode: "US", currencyCode: "USD", rail: "bank_transfer" }]),
+    )
   })
 
   it("does not add targets from USD exchange rates without discoveries", () => {
@@ -51,8 +71,7 @@ describe("collectGridCorridorTargets", () => {
       ],
     })
 
-    expect(targets.every((t) => t.rail === "mobile_money")).toBe(true)
-    expect(targets.some((t) => t.currencyCode === "INR" || t.currencyCode === "BRL")).toBe(false)
+    expect(targets.some((t) => t.countryCode === "BR" && t.currencyCode === "BRL")).toBe(false)
   })
 
   it("excludes NG mobile money corridor target", () => {

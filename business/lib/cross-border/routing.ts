@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   defaultCrossBorderProvider,
   parseCrossBorderProvider,
+  corridorOffersCrossBorder,
   type CrossBorderProviderId,
 } from "@easner/shared"
 import { corridorHasGridPayout } from "@/lib/payout-providers/grid-provider"
@@ -45,6 +46,7 @@ export async function resolveCrossBorderProviderForDestination(
   const country = input.countryCode.trim().toUpperCase()
   const currency = input.currencyCode.trim().toUpperCase()
   if (!country || !currency) return null
+  if (!corridorOffersCrossBorder(country, currency)) return null
 
   let q = admin
     .from("payout_corridors")
@@ -117,6 +119,7 @@ export async function resolveCrossBorderSourcePayInEnabled(
   const country = input.sourceCountry.trim().toUpperCase()
   const currency = input.sourceCurrency.trim().toUpperCase()
   if (!country || !currency) return false
+  if (!corridorOffersCrossBorder(country, currency)) return false
 
   if (input.provider === "grid") {
     const { isGridLocalPayInEnabledForCorridor } = await import("@/lib/grid/grid-receive-gate")

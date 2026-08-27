@@ -15,7 +15,10 @@ export function shouldShowBankDepositTab(opts: {
   /** True once network fetch completed OR we have a persisted/cached VA answer for this currency. */
   vaSettled: boolean
   hasVirtualAccount: boolean
+  /** Office US:USD pay-in mode. Omit for non-US ledgers (EUR). */
+  officeAllowsVa?: boolean
 }): boolean {
+  if (opts.officeAllowsVa === false) return false
   if (!opts.verificationComplete) return true
   if (!opts.vaSettled) return false
   return opts.hasVirtualAccount

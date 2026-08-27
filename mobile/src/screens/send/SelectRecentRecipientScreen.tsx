@@ -88,6 +88,9 @@ import {
   recipientFormNeedsBankCode,
   recipientFormNeedsEmail,
   recipientFormNeedsPhone,
+  resolvePrimaryPayoutProvider,
+  usBankPaymentMethodsForProvider,
+  type UsBankTransferType,
 } from '@easner/shared'
 import { PayoutSchemaExtraFields } from '../../components/recipients/PayoutSchemaExtraFields'
 import { UsBankAddressFields } from '../../components/recipients/UsBankAddressFields'
@@ -178,7 +181,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [selectedCountryCurrency, setSelectedCountryCurrency] = useState<CountryCurrency | null>(null)
-  const [transferType, setTransferType] = useState<'ACH' | 'Wire' | null>(null)
+  const [transferType, setTransferType] = useState<UsBankTransferType | null>(null)
   const [easenetProfile, setEasenetProfile] = useState<{
     easetag: string
     fullName: string
@@ -247,6 +250,33 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       }),
     [bankCorridors, mobileCorridors, cryptoDestinations],
   )
+
+  const selectedBankCorridor = useMemo(() => {
+    if (!selectedCountryCurrency || selectedRecipientType !== 'bank') return null
+    return (
+      bankCorridors.find(
+        (c) =>
+          c.country_code === selectedCountryCurrency.countryCode &&
+          c.currency_code === selectedCountryCurrency.currencyCode,
+      ) ?? null
+    )
+  }, [bankCorridors, selectedCountryCurrency, selectedRecipientType])
+
+  const payoutProvider = resolvePrimaryPayoutProvider(selectedBankCorridor?.provider_routing)
+  const usTransferMethods = useMemo(() => {
+    if (selectedRecipientType !== 'bank' || selectedCountryCurrency?.countryCode !== 'US') return []
+    if (!selectedBankCorridor) return usBankPaymentMethodsForProvider('noah').slice(0, 1)
+    return usBankPaymentMethodsForProvider(payoutProvider)
+  }, [selectedRecipientType, selectedCountryCurrency?.countryCode, selectedBankCorridor, payoutProvider])
+
+  useEffect(() => {
+    if (selectedRecipientType !== 'bank' || selectedCountryCurrency?.countryCode !== 'US') return
+    const allowed = usTransferMethods.map((method) => method.value)
+    if (allowed.length === 0) return
+    if (!transferType || !allowed.includes(transferType)) {
+      setTransferType(allowed[0])
+    }
+  }, [selectedRecipientType, selectedCountryCurrency?.countryCode, usTransferMethods, transferType])
 
   const corridorRecipientOptions = useMemo(() => {
     if (!selectedCountryCurrency) {
@@ -531,13 +561,10 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     if (selectedRecipientType === 'wallet') return !!newRecipient.network && !!newRecipient.walletAddress
     if (selectedRecipientType === 'mobile') return !!newRecipient.provider && !!newRecipient.phoneNumber
 
-    if (selectedCountryCurrency?.countryCode === 'US' && !transferType) {
-      return false
-    }
     if (
       selectedCountryCurrency?.countryCode === 'US' &&
-      transferType !== 'Wire' &&
-      !newRecipient.checkingOrSavings
+      usTransferMethods.length > 0 &&
+      !transferType
     ) {
       return false
     }
@@ -700,7 +727,10 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         swiftBic: newRecipient.swiftBic || undefined,
         transferType: selectedCountryCurrency?.countryCode === 'US' ? transferType || undefined : undefined,
         checkingOrSavings:
-          selectedCountryCurrency?.countryCode === 'US' ? (newRecipient.checkingOrSavings as 'checking' | 'savings' | '') || undefined : undefined,
+          selectedCountryCurrency?.countryCode === 'US' &&
+          (newRecipient.checkingOrSavings === 'checking' || newRecipient.checkingOrSavings === 'savings')
+            ? newRecipient.checkingOrSavings
+            : undefined,
         addressLine1:
           selectedCountryCurrency?.countryCode === 'US' || needsAddr
             ? newRecipient.addressLine1 || undefined
@@ -1635,31 +1665,32 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                 return (
                   <>
                     {/* Transfer Type Selection - First field for US accounts */}
-                    {accountConfig.accountType === "us" && (
+                    {accountConfig.accountType === "us" && usTransferMethods.length > 0 && (
                       <View style={styles.transferTypeContainer}>
                         <View style={styles.transferTypeOptions}>
-                          <Pressable
-                           android_ripple={ripple.neutral}
-                            style={[styles.transferTypeOption, transferType === 'ACH' && styles.transferTypeOptionSelected]}
-                            onPress={() => {
-                              setTransferType('ACH')
-                              haptics.tap()
-                            }} >
-                            <Text style={[styles.transferTypeOptionText, transferType === 'ACH' && styles.transferTypeOptionTextSelected]}>
-                              ACH
-                            </Text>
-                          </Pressable>
-                          <Pressable
-                           android_ripple={ripple.neutral}
-                            style={[styles.transferTypeOption, transferType === 'Wire' && styles.transferTypeOptionSelected]}
-                            onPress={() => {
-                              setTransferType('Wire')
-                              haptics.tap()
-                            }} >
-                            <Text style={[styles.transferTypeOptionText, transferType === 'Wire' && styles.transferTypeOptionTextSelected]}>
-                              Fedwire
-                            </Text>
-                          </Pressable>
+                          {usTransferMethods.map((method) => (
+                            <Pressable
+                              key={method.value}
+                              android_ripple={ripple.neutral}
+                              style={[
+                                styles.transferTypeOption,
+                                transferType === method.value && styles.transferTypeOptionSelected,
+                              ]}
+                              onPress={() => {
+                                setTransferType(method.value)
+                                haptics.tap()
+                              }}
+                            >
+                              <Text
+                                style={[
+                                  styles.transferTypeOptionText,
+                                  transferType === method.value && styles.transferTypeOptionTextSelected,
+                                ]}
+                              >
+                                {method.label}
+                              </Text>
+                            </Pressable>
+                          ))}
                         </View>
                       </View>
                     )}
@@ -1708,34 +1739,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                     {/* US Account Fields */}
                     {accountConfig.accountType === "us" && (
                       <>
-                        {transferType !== 'Wire' ? (
-                          <View style={styles.transferTypeContainer}>
-                            <View style={styles.transferTypeOptions}>
-                              <Pressable
-                               android_ripple={ripple.neutral}
-                                style={[styles.transferTypeOption, newRecipient.checkingOrSavings === 'checking' && styles.transferTypeOptionSelected]}
-                                onPress={() => {
-                                  setNewRecipient(prev => ({ ...prev, checkingOrSavings: 'checking' }))
-                                  haptics.tap()
-                                }} >
-                                <Text style={[styles.transferTypeOptionText, newRecipient.checkingOrSavings === 'checking' && styles.transferTypeOptionTextSelected]}>
-                                  Checking
-                                </Text>
-                              </Pressable>
-                              <Pressable
-                               android_ripple={ripple.neutral}
-                                style={[styles.transferTypeOption, newRecipient.checkingOrSavings === 'savings' && styles.transferTypeOptionSelected]}
-                                onPress={() => {
-                                  setNewRecipient(prev => ({ ...prev, checkingOrSavings: 'savings' }))
-                                  haptics.tap()
-                                }} >
-                                <Text style={[styles.transferTypeOptionText, newRecipient.checkingOrSavings === 'savings' && styles.transferTypeOptionTextSelected]}>
-                                  Savings
-                                </Text>
-                              </Pressable>
-                            </View>
-                          </View>
-                        ) : null}
                         <UsBankAddressFields
                           scrollRef={formScrollRef}
                           inputStyle={styles.modalInput}
@@ -2554,10 +2557,12 @@ const styles = StyleSheet.create({
   },
   transferTypeOptions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing[3],
   },
   transferTypeOption: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '47%',
     backgroundColor: colors.frame.background,
     borderRadius: borderRadius.full,
     borderWidth: 1.5,

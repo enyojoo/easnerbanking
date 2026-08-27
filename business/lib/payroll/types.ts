@@ -357,7 +357,7 @@ export interface PayrollBankInput {
   sortCode?: string
   iban?: string
   swiftBic?: string
-  transferType?: "ACH" | "Wire"
+  transferType?: "ACH" | "Wire" | "RTP" | "FEDNOW"
   checkingOrSavings?: "checking" | "savings"
   phoneNumber?: string
   addressLine1?: string

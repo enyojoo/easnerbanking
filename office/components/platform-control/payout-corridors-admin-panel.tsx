@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
 import { CountryFlag } from "@/components/flags"
 import { payoutCorridorsApi, type PayoutCorridorAdminRow } from "@/lib/payout-corridors-api"
-import { parseCrossBorderProvider, type CrossBorderProviderId } from "@easner/shared"
+import { parseCrossBorderProvider, type CrossBorderProviderId, yellowcardOffersDomesticBankPayout, applyUsPayInModeToMetadata, clearUsCrossBorderMetadata, corridorOffersCrossBorder, isUsUsdCorridor, resolveUsPayInMode, US_PAY_IN_MODE_OPTIONS, type UsPayInMode } from "@easner/shared"
 import { officeKeys } from "@/lib/query/keys"
 import { buildFiatProcessingFeeDraft } from "@/lib/processing-fee-pricing-draft"
 import type { ProcessingFeeScheduleRow } from "@/lib/processing-fee-schedule-api"
@@ -36,6 +36,7 @@ type FiatDestinationRow = {
   payInSelection: FeatureSelection<ProviderId>
   payInSupported: boolean
   payInEnabled: boolean
+  usPayInMode: UsPayInMode
   supportNoahPayout: boolean
   supportYcPayout: boolean
   supportGridPayout: boolean
@@ -49,6 +50,7 @@ type FiatDestinationRow = {
   showNoahBadge: boolean
   showYcBadge: boolean
   showGridBadge: boolean
+  showStripeBadge: boolean
   sample: PayoutCorridorAdminRow
 }
 
@@ -78,6 +80,9 @@ function rowMetadata(row: PayoutCorridorAdminRow): Record<string, unknown> {
 }
 
 function rowSupportsYcPayout(row: PayoutCorridorAdminRow): boolean {
+  if (!yellowcardOffersDomesticBankPayout(row.country_code, row.currency_code, row.rail)) {
+    return false
+  }
   const meta = rowMetadata(row)
   return (
     meta.yc_send === true ||
@@ -130,6 +135,7 @@ function corridorShowsNoahBadge(row: PayoutCorridorAdminRow): boolean {
 }
 
 function corridorShowsYcBadge(row: PayoutCorridorAdminRow): boolean {
+  if (isUsUsdCorridor(row.country_code, row.currency_code)) return false
   const meta = rowMetadata(row)
   return (
     row.yc_send_available === true ||
@@ -251,6 +257,9 @@ function applyPayoutChoiceToCorridor(
 
   if (choice === "disabled") {
     disableAllPayoutSendFlags(metadata, corridor)
+    if (isUsUsdCorridor(corridor.country_code, corridor.currency_code)) {
+      clearUsCrossBorderMetadata(metadata)
+    }
     return { ...corridor, metadata, provider_routing: [] }
   }
 
@@ -258,6 +267,9 @@ function applyPayoutChoiceToCorridor(
   if (row.supportNoahPayout && choice !== "noah") metadata.noah_send_enabled = false
   if (row.supportYcPayout && choice !== "yellowcard") metadata.yc_send_enabled = false
   if (row.supportGridPayout && choice !== "grid") metadata.grid_send_enabled = false
+  if (isUsUsdCorridor(corridor.country_code, corridor.currency_code)) {
+    clearUsCrossBorderMetadata(metadata)
+  }
 
   const routing = buildProviderRouting(choice)
   return { ...corridor, metadata, provider_routing: routing }
@@ -305,6 +317,9 @@ function applyPayInChoiceToCorridors(
         if (row.supportNoahPayIn && provider !== "noah") metadata.noah_receive_enabled = false
         if (row.supportYcPayIn && provider !== "yellowcard") metadata.yc_receive_enabled = false
         if (row.supportGridPayIn && provider !== "grid") metadata.grid_receive_enabled = false
+      }
+      if (isUsUsdCorridor(corridor.country_code, corridor.currency_code)) {
+        clearUsCrossBorderMetadata(metadata)
       }
       next = { ...next, metadata }
     }
@@ -383,35 +398,49 @@ function applyCorridorLiveMetadata(input: {
     metadata.noah_send_enabled = enabled
   }
 
-  if (row.payInSelection !== "disabled" && row.payInProvider === "yellowcard" && rowSupportsYcPayIn(corridor)) {
-    if (enabled) {
-      metadata.yc_receive = true
-      metadata.yc_receive_enabled = true
-    } else {
-      metadata.yc_receive_enabled = false
+  if (!isUsUsdCorridor(row.country_code, row.currency_code)) {
+    if (row.payInSelection !== "disabled" && row.payInProvider === "yellowcard" && rowSupportsYcPayIn(corridor)) {
+      if (enabled) {
+        metadata.yc_receive = true
+        metadata.yc_receive_enabled = true
+      } else {
+        metadata.yc_receive_enabled = false
+      }
     }
-  }
-  if (row.payInSelection !== "disabled" && row.payInProvider === "grid" && rowSupportsGridPayIn(corridor)) {
-    if (enabled) {
-      metadata.grid_receive = true
-      metadata.grid_receive_enabled = true
-    } else {
-      metadata.grid_receive_enabled = false
+    if (row.payInSelection !== "disabled" && row.payInProvider === "grid" && rowSupportsGridPayIn(corridor)) {
+      if (enabled) {
+        metadata.grid_receive = true
+        metadata.grid_receive_enabled = true
+      } else {
+        metadata.grid_receive_enabled = false
+      }
     }
-  }
-  if (row.payInSelection !== "disabled" && row.payInProvider === "noah" && rowSupportsNoahPayIn(corridor)) {
-    metadata.noah_receive_enabled = enabled
-    if (enabled) metadata.noah_receive = true
+    if (row.payInSelection !== "disabled" && row.payInProvider === "noah" && rowSupportsNoahPayIn(corridor)) {
+      metadata.noah_receive_enabled = enabled
+      if (enabled) metadata.noah_receive = true
+    }
   }
 
   if (row.payoutSelection === "disabled") {
     disableAllPayoutSendFlags(metadata, corridor)
   }
-  if (row.payInSelection === "disabled") {
+  if (row.payInSelection === "disabled" && !isUsUsdCorridor(row.country_code, row.currency_code)) {
     disableAllPayInReceiveFlags(metadata, corridor)
+  }
+  if (isUsUsdCorridor(row.country_code, row.currency_code)) {
+    const mode = row.usPayInMode
+    if (enabled) {
+      Object.assign(metadata, applyUsPayInModeToMetadata(metadata, mode))
+    } else {
+      metadata.grid_receive_enabled = false
+      metadata.noah_receive_enabled = false
+      metadata.stripe_express_enabled = false
+      clearUsCrossBorderMetadata(metadata)
+    }
   }
 
   if (
+    !isUsUsdCorridor(row.country_code, row.currency_code) &&
     row.crossBorderSelection !== "disabled" &&
     row.crossBorderSupported &&
     row.crossBorderProvider
@@ -435,6 +464,10 @@ function applyCorridorLiveMetadata(input: {
   }
 
   return metadata
+}
+
+function usPayInModeLabel(mode: Exclude<UsPayInMode, "disabled">): string {
+  return US_PAY_IN_MODE_OPTIONS.find((option) => option.value === mode)?.label ?? mode
 }
 
 function providerLabel(provider: ProviderId): string {
@@ -469,12 +502,13 @@ function payInProviderOptions(caps: {
 
 function payoutProviderOptions(row: Pick<
   FiatDestinationRow,
-  "supportNoahPayout" | "supportYcPayout" | "supportGridPayout"
+  "supportNoahPayout" | "supportYcPayout" | "supportGridPayout" | "country_code" | "currency_code"
 >): ProviderId[] {
+  const ycOk = yellowcardOffersDomesticBankPayout(row.country_code, row.currency_code, "bank_transfer")
   return (
     [
       row.supportNoahPayout ? "noah" : null,
-      row.supportYcPayout ? "yellowcard" : null,
+      row.supportYcPayout && ycOk ? "yellowcard" : null,
       row.supportGridPayout ? "grid" : null,
     ] as Array<ProviderId | null>
   ).filter(Boolean) as ProviderId[]
@@ -482,8 +516,9 @@ function payoutProviderOptions(row: Pick<
 
 function crossBorderProviderOptions(row: Pick<
   FiatDestinationRow,
-  "supportYcPayout" | "supportGridPayout"
+  "supportYcPayout" | "supportGridPayout" | "country_code" | "currency_code"
 >): CrossBorderProviderId[] {
+  if (!corridorOffersCrossBorder(row.country_code, row.currency_code)) return []
   return (
     [
       row.supportYcPayout ? "yellowcard" : null,
@@ -649,29 +684,36 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
     const supportGridPayIn = caps.supportGridPayIn
     const payoutProvider = selectedPayoutProvider(r, caps)
     const payInProvider = selectedPayInProvider(r, caps)
-    const payInSupported =
-      payInProviderOptions({
-        supportYcPayIn,
-        supportNoahPayIn,
-        supportGridPayIn,
-      }).length > 0
+    const meta = rowMetadata(r)
+    const usCorridor = isUsUsdCorridor(r.country_code, r.currency_code)
+    const usPayInMode = usCorridor ? resolveUsPayInMode(meta) : "disabled"
+    const payInSupported = usCorridor
+      ? true
+      : payInProviderOptions({
+          supportYcPayIn,
+          supportNoahPayIn,
+          supportGridPayIn,
+        }).length > 0
     const railRows = filteredRows.filter(
       (row) => row.country_code === r.country_code && row.currency_code === r.currency_code,
     )
-    const payInEnabled =
-      payInProvider !== null
+    const payInEnabled = usCorridor
+      ? usPayInMode !== "disabled"
+      : payInProvider !== null
         ? railRows.some((row) => rowPayInEnabledForProvider(row, payInProvider))
         : false
-    const crossBorderSupported = supportYcPayout || supportGridPayout
-    const meta = rowMetadata(r)
+    const crossBorderSupported =
+      corridorOffersCrossBorder(r.country_code, r.currency_code) &&
+      (supportYcPayout || supportGridPayout)
     const crossBorderProvider = selectedCrossBorderProvider(meta, crossBorderSupported)
     const payoutSelection: FeatureSelection<ProviderId> = payoutProvider ?? "disabled"
     const payInSelection: FeatureSelection<ProviderId> = payInProvider ?? "disabled"
     const crossBorderSelection: FeatureSelection<CrossBorderProviderId> =
       crossBorderProvider ?? "disabled"
-    const showNoahBadge = corridorShowsNoahBadge(r)
-    const showYcBadge = corridorShowsYcBadge(r)
-    const showGridBadge = corridorShowsGridBadge(r)
+    const showNoahBadge = usCorridor ? true : corridorShowsNoahBadge(r)
+    const showYcBadge = usCorridor ? false : corridorShowsYcBadge(r)
+    const showGridBadge = usCorridor ? true : corridorShowsGridBadge(r)
+    const showStripeBadge = usCorridor
 
     if (!existing) {
       map.set(key, {
@@ -690,6 +732,7 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
         payInSelection,
         payInSupported,
         payInEnabled,
+        usPayInMode,
         supportNoahPayout,
         supportYcPayout,
         supportGridPayout,
@@ -702,6 +745,7 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
         showNoahBadge,
         showYcBadge,
         showGridBadge,
+        showStripeBadge,
         sample: r,
       })
       continue
@@ -718,6 +762,7 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
     existing.payInProvider = payInProvider
     existing.payInSupported = payInSupported
     existing.payInEnabled = payInEnabled || existing.payInEnabled
+    existing.usPayInMode = usPayInMode
     existing.payoutProvider = payoutProvider
     existing.payoutSelection = payoutProvider ?? "disabled"
     existing.payInSelection = payInProvider ?? "disabled"
@@ -726,9 +771,10 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
     existing.crossBorderSupported = crossBorderSupported
     existing.crossBorderProvider = crossBorderProvider
     existing.crossBorderSelection = crossBorderProvider ?? "disabled"
-    existing.showNoahBadge = existing.showNoahBadge || corridorShowsNoahBadge(r)
-    existing.showYcBadge = existing.showYcBadge || corridorShowsYcBadge(r)
-    existing.showGridBadge = existing.showGridBadge || corridorShowsGridBadge(r)
+    existing.showNoahBadge = usCorridor ? true : existing.showNoahBadge || corridorShowsNoahBadge(r)
+    existing.showYcBadge = usCorridor ? false : existing.showYcBadge || corridorShowsYcBadge(r)
+    existing.showGridBadge = usCorridor ? true : existing.showGridBadge || corridorShowsGridBadge(r)
+    existing.showStripeBadge = existing.showStripeBadge || showStripeBadge
   }
 
   return [...map.values()].sort(
@@ -856,12 +902,18 @@ export function PayoutCorridorsAdminPanel() {
           const metadata = { ...rowMetadata(existing) }
           if (choice === "disabled") {
             disableAllPayoutSendFlags(metadata, existing)
+            if (isUsUsdCorridor(row.country_code, row.currency_code)) {
+              clearUsCrossBorderMetadata(metadata)
+            }
             return payoutCorridorsApi.patch(id, { metadata, provider_routing: [] })
           }
           applyPayoutSendFlags(metadata, existing, choice, true)
           if (row.supportNoahPayout && choice !== "noah") metadata.noah_send_enabled = false
           if (row.supportYcPayout && choice !== "yellowcard") metadata.yc_send_enabled = false
           if (row.supportGridPayout && choice !== "grid") metadata.grid_send_enabled = false
+          if (isUsUsdCorridor(row.country_code, row.currency_code)) {
+            clearUsCrossBorderMetadata(metadata)
+          }
           const routing = buildProviderRouting(choice)
           return payoutCorridorsApi.patch(id, { provider_routing: routing, metadata })
         }),
@@ -906,6 +958,9 @@ export function PayoutCorridorsAdminPanel() {
           if (payInDisabled) {
             disableAllPayInReceiveFlags(metadata, existing)
             delete metadata.pay_in_provider
+            if (isUsUsdCorridor(row.country_code, row.currency_code)) {
+              clearUsCrossBorderMetadata(metadata)
+            }
             return payoutCorridorsApi.patch(id, { metadata })
           }
           applyPayInReceiveFlags(metadata, existing, provider!, true)
@@ -913,6 +968,9 @@ export function PayoutCorridorsAdminPanel() {
           if (row.supportNoahPayIn && provider !== "noah") metadata.noah_receive_enabled = false
           if (row.supportYcPayIn && provider !== "yellowcard") metadata.yc_receive_enabled = false
           if (row.supportGridPayIn && provider !== "grid") metadata.grid_receive_enabled = false
+          if (isUsUsdCorridor(row.country_code, row.currency_code)) {
+            clearUsCrossBorderMetadata(metadata)
+          }
           return payoutCorridorsApi.patch(id, { metadata })
         }),
       )
@@ -924,10 +982,37 @@ export function PayoutCorridorsAdminPanel() {
     }
   }
 
+  const setUsPayInMode = async (row: FiatDestinationRow, choice: FeatureSelection<UsPayInMode>) => {
+    const mode: UsPayInMode = choice === "disabled" ? "disabled" : choice
+    queryClient.setQueryData<PayoutCorridorAdminRow[]>(officeKeys.payoutCorridors(), (prev) =>
+      (prev ?? []).map((corridor) => {
+        if (!row.corridorIds.includes(corridor.id)) return corridor
+        const metadata = applyUsPayInModeToMetadata(rowMetadata(corridor), mode)
+        return { ...corridor, metadata }
+      }),
+    )
+
+    try {
+      const updates = await Promise.all(
+        row.corridorIds.map((id) => {
+          const existing = rows.find((r) => r.id === id) ?? row.sample
+          const metadata = applyUsPayInModeToMetadata(rowMetadata(existing), mode)
+          return payoutCorridorsApi.patch(id, { metadata })
+        }),
+      )
+      mergeCorridorUpdatesInCache(queryClient, updates)
+      setError(null)
+    } catch (e) {
+      await corridorsQuery.refetch()
+      setError(e instanceof Error ? e.message : "Save failed")
+    }
+  }
+
   const setCrossBorderChoice = async (
     row: FiatDestinationRow,
     choice: FeatureSelection<CrossBorderProviderId>,
   ) => {
+    if (!corridorOffersCrossBorder(row.country_code, row.currency_code)) return
     patchCorridorIdsInCache(queryClient, row.corridorIds, (corridor) =>
       applyCrossBorderChoiceToCorridor(corridor, choice),
     )
@@ -1065,7 +1150,10 @@ export function PayoutCorridorsAdminPanel() {
                           {r.showGridBadge ? (
                             <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">Grid</span>
                           ) : null}
-                          {!r.showNoahBadge && !r.showYcBadge && !r.showGridBadge ? (
+                          {r.showStripeBadge ? (
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">Stripe</span>
+                          ) : null}
+                          {!r.showNoahBadge && !r.showYcBadge && !r.showGridBadge && !r.showStripeBadge ? (
                             <span className="text-muted-foreground text-xs">–</span>
                           ) : null}
                         </div>
@@ -1080,13 +1168,23 @@ export function PayoutCorridorsAdminPanel() {
                         />
                       </TableCell>
                       <TableCell>
-                        <FeatureSelect
-                          value={r.payInSelection}
-                          ariaLabel="Pay-in provider"
-                          providers={payInProviders}
-                          labelFor={providerLabel}
-                          onChange={(choice) => void setPayInChoice(r, choice)}
-                        />
+                        {isUsUsdCorridor(r.country_code, r.currency_code) ? (
+                          <FeatureSelect
+                            value={r.usPayInMode}
+                            ariaLabel="Pay-in mode"
+                            providers={US_PAY_IN_MODE_OPTIONS.map((option) => option.value)}
+                            labelFor={usPayInModeLabel}
+                            onChange={(choice) => void setUsPayInMode(r, choice)}
+                          />
+                        ) : (
+                          <FeatureSelect
+                            value={r.payInSelection}
+                            ariaLabel="Pay-in provider"
+                            providers={payInProviders}
+                            labelFor={providerLabel}
+                            onChange={(choice) => void setPayInChoice(r, choice)}
+                          />
+                        )}
                       </TableCell>
                       <TableCell>
                         <FeatureSelect

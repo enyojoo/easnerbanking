@@ -85,7 +85,14 @@ export function gridDiscoverySupportsCorridor(input: {
     const momo = isMomoGridDiscovery(d)
     const rails = (d.paymentRails ?? []).map((r) => String(r).trim().toUpperCase())
     const hasBankRail = rails.some(
-      (r) => r.includes("BANK") || r.includes("SWIFT") || r.includes("WIRE"),
+      (r) =>
+        r.includes("BANK") ||
+        r.includes("SWIFT") ||
+        r.includes("WIRE") ||
+        r.includes("ACH") ||
+        r.includes("FEDNOW") ||
+        r.includes("SEPA") ||
+        r === "RTP",
     )
 
     if (input.rail === "mobile_money") {

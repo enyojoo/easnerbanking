@@ -90,3 +90,42 @@ describe("buildGridExternalAccountPayload CAD", () => {
     expect(payload.accountInfo.accountNumber).toBe("1234567")
   })
 })
+
+describe("buildGridExternalAccountPayload USD", () => {
+  it("maps US ACH routing number onto USD_ACCOUNT", () => {
+    const payload = buildGridExternalAccountPayload({
+      customerId: "Customer:abc",
+      rail: "bank_transfer",
+      recipient: {
+        currency: "USD",
+        country_code: "US",
+        full_name: "Jane Doe",
+        account_number: "123456789",
+        bank_name: "Chase",
+        routing_number: "021000021",
+        checking_or_savings: "checking",
+      },
+    })
+    expect(payload.accountInfo.accountType).toBe("USD_ACCOUNT")
+    expect(payload.accountInfo.accountNumber).toBe("123456789")
+    expect(payload.accountInfo.routingNumber).toBe("021000021")
+    expect(payload.accountInfo.bankAccountType).toBe("CHECKING")
+  })
+
+  it("omits bankAccountType when checking_or_savings is not stored", () => {
+    const payload = buildGridExternalAccountPayload({
+      customerId: "Customer:abc",
+      rail: "bank_transfer",
+      recipient: {
+        currency: "USD",
+        country_code: "US",
+        full_name: "Jane Doe",
+        account_number: "123456789",
+        bank_name: "Chase",
+        routing_number: "021000021",
+      },
+    })
+    expect(payload.accountInfo.routingNumber).toBe("021000021")
+    expect(payload.accountInfo.bankAccountType).toBeUndefined()
+  })
+})

@@ -57,6 +57,19 @@ describe("resolveCashPayInMethods", () => {
     expect(card?.status).toBe("setup_required")
   })
 
+  it("hides Express when office stripeOnrampEnabled is false", () => {
+    const methods = resolveCashPayInMethods({
+      product: "business",
+      ledgerCurrency: "USD",
+      payerCountry: "US",
+      payerState: "CA",
+      tier1Complete: true,
+      expressDepositsReady: true,
+      officeFlags: { stripeOnrampEnabled: false, stripeOnrampEuEnabled: true },
+    })
+    expect(methods.some((m) => m.kind.startsWith("express_"))).toBe(false)
+  })
+
   it("does not show Stripe on EUR VA ledger", () => {
     const methods = resolveCashPayInMethods({
       product: "mobile",
@@ -93,6 +106,10 @@ describe("listExpressCashKinds", () => {
       "express_google_pay",
       "express_ach",
     ])
+  })
+
+  it("hides Stripe when office flags are off", () => {
+    expect(listExpressCashKinds({ payerCountry: "US", payerState: "CA", officeEnabled: false })).toEqual([])
   })
 
   it("hides ACH for EU payers", () => {

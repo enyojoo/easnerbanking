@@ -3,6 +3,7 @@ import {
   isBalancePayoutCorridorExecutable,
   isCustomerFacingFiatCorridorLive,
   isNoahBalancePayoutCorridor,
+  pickPublicPayInMetadata,
   resolvePrimaryPayoutProvider,
 } from "./payout-corridor"
 
@@ -118,9 +119,23 @@ describe("isCustomerFacingFiatCorridorLive", () => {
       isCustomerFacingFiatCorridorLive({
         enabled: true,
         provider_routing: [],
+        metadata: { pay_in_mode: "va_express" },
+      }),
+    ).toBe(true)
+    expect(
+      isCustomerFacingFiatCorridorLive({
+        enabled: true,
+        provider_routing: [],
         metadata: {},
       }),
     ).toBe(false)
+    expect(
+      isCustomerFacingFiatCorridorLive({
+        enabled: true,
+        provider_routing: [],
+        metadata: { pay_in_mode: "va" },
+      }),
+    ).toBe(true)
     expect(
       isCustomerFacingFiatCorridorLive({
         enabled: false,
@@ -128,5 +143,22 @@ describe("isCustomerFacingFiatCorridorLive", () => {
         metadata: { grid_send_enabled: true },
       }),
     ).toBe(false)
+  })
+})
+
+describe("pickPublicPayInMetadata", () => {
+  it("includes US pay-in mode and Express flag", () => {
+    expect(
+      pickPublicPayInMetadata({
+        pay_in_mode: "va",
+        stripe_express_enabled: false,
+        grid_receive_enabled: true,
+        secret: "nope",
+      }),
+    ).toEqual({
+      pay_in_mode: "va",
+      stripe_express_enabled: false,
+      grid_receive_enabled: true,
+    })
   })
 })

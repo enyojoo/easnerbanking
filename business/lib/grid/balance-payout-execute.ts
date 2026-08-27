@@ -28,6 +28,7 @@ import { isPayoutLockOnReviewEnabled } from "@/lib/payout/payout-lock-flags"
 import { executeGridBalancePayoutTurnkeyLeg } from "@/lib/grid/payout-execute"
 import { buildGridBalancePayoutOutMetadata, mergeGridPayoutLifecycle } from "@/lib/grid/grid-ledger"
 import { ensureFreshGridBalancePayoutQuote, lockGridBalancePayoutQuote } from "@/lib/grid/payout-quote"
+import { gridQuotePaymentRailForRecipient } from "@/lib/grid/quote-request"
 
 async function readAvailableBalance(
   admin: SupabaseClient,
@@ -232,6 +233,12 @@ export async function executeGridBalancePayout(
       originalFundingAddress: fundingAddress,
       originalMarginAmount: Number(input.pricing.marginAmount),
       originalProcessingFee: processingFee,
+      paymentRail: gridQuotePaymentRailForRecipient({
+        countryCode: input.countryCode,
+        currency: fiatCurrency,
+        transferType: input.recipientRow.transfer_type,
+        mobileProvider: input.recipientRow.mobile_provider,
+      }),
     })
     if (!liveQuote.ok) {
       return { ok: false, error: liveQuote.error }

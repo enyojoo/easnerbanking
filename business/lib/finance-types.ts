@@ -19,6 +19,8 @@ export interface Account {
   stablecoinChain?: string
   stablecoinToken?: "USDC" | "EURC"
   showBankDepositTab?: boolean
+  /** Office US:USD Express product. Omit on non-USD ledgers. */
+  usPayInAllowsExpress?: boolean
   /** Fiat VA source for payment instruction copy (Grid vs Noah). */
   depositProvider?: "grid" | "noah"
 }
@@ -168,7 +170,7 @@ export interface Beneficiary {
   currency: string
   email: string
   phone: string
-  transferType?: "ACH" | "Wire"
+  transferType?: "ACH" | "Wire" | "RTP" | "FEDNOW"
   checkingOrSavings?: "checking" | "savings"
   addressLine1?: string
   mobileProvider?: string

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef } from "react"
 import { useIsRestoring, useQuery, useQueryClient } from "@tanstack/react-query"
-import { qk, isVaAnswerSettled, shouldShowBankDepositTab } from "@easner/shared"
+import { qk, isVaAnswerSettled, shouldShowBankDepositTab, resolveUsPayInModeFromCatalog, usPayInAllowsExpress, usPayInAllowsVa } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import type { Account } from "@/lib/finance-types"
@@ -13,6 +13,7 @@ import {
   canPerformNoahMoneyMovement,
 } from "@/lib/compliance-display"
 import { formatUserFacingFetchError, isFatalQueryFailure } from "@/lib/query/fetch-errors"
+import { useSendDestinations } from "@/lib/use-send-destinations"
 
 type VaJson = {
   hasAccount?: boolean
@@ -51,6 +52,8 @@ export function useBusinessAccountRows() {
   const { scope } = useScope()
   const isRestoring = useIsRestoring()
   const { tier1Complete, isLoading: profileLoading, name, baseCurrency } = useBusinessProfile()
+  const { bankCorridors, data: sendDestinations } = useSendDestinations()
+  const usPayInMode = resolveUsPayInModeFromCatalog(bankCorridors, sendDestinations != null)
   const walletQuery = useWalletBalances()
   const lastKnownAuthoritativeBalancesRef = useRef<{ USD: string; EUR: string } | null>(null)
 
@@ -223,6 +226,7 @@ export function useBusinessAccountRows() {
               hasCachedEntry: va != null,
             }),
             hasVirtualAccount: hasVa,
+            ...(currency === "USD" ? { officeAllowsVa: usPayInAllowsVa(usPayInMode) } : {}),
           })
         : true
       const usdc = currency === "USD" || currency === "GBP"
@@ -252,6 +256,7 @@ export function useBusinessAccountRows() {
         stablecoinChain: "Solana",
         stablecoinToken: usdc ? "USDC" : eurc ? "EURC" : "USDC",
         showBankDepositTab,
+        ...(currency === "USD" ? { usPayInAllowsExpress: usPayInAllowsExpress(usPayInMode) } : {}),
       }
     })
   }, [
@@ -263,6 +268,7 @@ export function useBusinessAccountRows() {
     stablecoinDeposit.EUR,
     stablecoinDeposit.USD,
     tier1Complete,
+    usPayInMode,
     vaByCurrency,
     virtualAccountsQuery.isFetched,
   ])

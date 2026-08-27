@@ -1,6 +1,7 @@
 import type { PayoutCorridorPublic } from "./payout-corridor"
 import type { SendDestinationsResponse } from "./send-destinations"
 import { getCurrencySymbol } from "./currency-symbol"
+import { corridorOffersCrossBorder } from "./us-pay-in-mode"
 
 /** Fiat currencies users can hold on balance accounts (not "through another currency"). */
 export const BALANCE_HOLD_CURRENCY_CODES = ["USD", "EUR", "GBP", "NGN"] as const
@@ -33,6 +34,7 @@ export function buildOtherSendCurrencies(catalog: SendDestinationsResponse): Oth
   const hold = new Set(BALANCE_HOLD_CURRENCY_CODES.map((c) => c.toUpperCase()))
   const byCode = new Map<string, OtherSendCurrency>()
   for (const row of distinctCorridors(catalog)) {
+    if (!corridorOffersCrossBorder(row.country_code, row.currency_code)) continue
     const code = String(row.currency_code || "").toUpperCase()
     if (!code) continue
     if (hold.has(code)) continue
@@ -74,11 +76,13 @@ export function buildCrossBorderPaymentMethods(
   }
 
   for (const row of catalog.fiat.bank_transfer) {
+    if (!corridorOffersCrossBorder(row.country_code, row.currency_code)) continue
     const cur = String(row.currency_code || "").toUpperCase()
     if (!cur) continue
     add(cur, { code: "bankTransfer", name: "Bank Transfer" })
   }
   for (const row of catalog.fiat.mobile_money) {
+    if (!corridorOffersCrossBorder(row.country_code, row.currency_code)) continue
     const cur = String(row.currency_code || "").toUpperCase()
     if (!cur) continue
     const mCode = mobileMethodCode(cur, row.providers)
