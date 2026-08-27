@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { assertInternalCronAuthorized } from "@/lib/api/internal-auth"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { reconcilePendingGridBusinessReceiveRails } from "@/lib/grid/reconcile-pending-receive-rails"
 import { processRelayDepositProvisionJobs } from "@/lib/relay-deposit/provision-jobs"
 import { processNextWalletProvisioningJob } from "@/lib/wallet/turnkey-provisioning"
 
@@ -11,6 +12,7 @@ async function drainWalletProvisioningBatch(): Promise<
     ok: true
     results: Awaited<ReturnType<typeof processNextWalletProvisioningJob>>[]
     relayProvision: Awaited<ReturnType<typeof processRelayDepositProvisionJobs>>
+    gridReceiveRails: Awaited<ReturnType<typeof reconcilePendingGridBusinessReceiveRails>>
   }>
 > {
   const admin = createSupabaseAdmin()
@@ -23,7 +25,17 @@ async function drainWalletProvisioningBatch(): Promise<
     }
   }
   const relayProvision = await processRelayDepositProvisionJobs(admin, 20)
-  return NextResponse.json({ ok: true, results, relayProvision })
+  // Durable retry: Grid INTERNAL_FIAT often goes ACTIVE after first KYB refresh.
+  const gridReceiveRails = await reconcilePendingGridBusinessReceiveRails(admin, {
+    limit: 15,
+  }).catch((e) => {
+    console.warn(
+      "[wallet-provisioning] grid receive rails reconcile failed:",
+      e instanceof Error ? e.message : e,
+    )
+    return { scanned: 0, refreshed: 0, pending: 0, rows: [] }
+  })
+  return NextResponse.json({ ok: true, results, relayProvision, gridReceiveRails })
 }
 
 function unauthorizedResponse(e: unknown): NextResponse<{ error: string }> {

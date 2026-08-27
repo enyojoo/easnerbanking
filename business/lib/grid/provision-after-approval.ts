@@ -202,6 +202,22 @@ export async function provisionGridAfterBusinessKybApproved(input: {
     gridCustomerId: input.gridCustomerId,
   })
 
+  const { data: bizCountry } = await input.admin
+    .from("businesses")
+    .select("country")
+    .eq("id", input.businessId)
+    .maybeSingle()
+  const senderCountry = resolveBusinessCountryIso2(bizCountry?.country ?? null)
+  const requiresTurnkeyExternalAccount = !isGridDigitalAssetJurisdiction(senderCountry)
+  const turnkeyExternalOk =
+    !requiresTurnkeyExternalAccount || Boolean(receiveRails.gridExternalAccountId)
+
+  const fullyProvisioned =
+    subOrg.ok &&
+    turnkeyExternalOk &&
+    receiveRails.gridVirtualAccountsPersisted > 0 &&
+    !receiveRails.gridVirtualAccountsPending
+
   return {
     turnkey: true,
     turnkeySubOrgReady: subOrg.ok,
@@ -212,6 +228,8 @@ export async function provisionGridAfterBusinessKybApproved(input: {
     gridExternalAccountId: receiveRails.gridExternalAccountId,
     gridVirtualAccountsPersisted: receiveRails.gridVirtualAccountsPersisted,
     gridVirtualAccountsPending: receiveRails.gridVirtualAccountsPending,
+    /** True when Turnkey vaults, Grid↔Turnkey link (when required), and local USD VA are ready. */
+    fullyProvisioned,
   }
 }
 
@@ -273,7 +291,14 @@ export async function refreshGridBusinessReceiveRails(input: {
     businessId: input.businessId,
     userId: input.userId,
     customerId: gridCustomerId,
-  }).catch(() => ({ persisted: 0, pendingProvisioning: false }))
+  }).catch((e) => {
+    console.warn(
+      "[grid] persist virtual accounts failed:",
+      e instanceof Error ? e.message : e,
+    )
+    // Keep pending so cron / sync-status retries instead of treating as complete.
+    return { persisted: 0, pendingProvisioning: true }
+  })
 
   return {
     gridVirtualAccountsPersisted: vaRes.persisted,

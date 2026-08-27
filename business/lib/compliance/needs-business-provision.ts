@@ -55,7 +55,14 @@ export async function resolveGridBusinessProvisionNeeds(
 }
 
 /**
- * True when KYB is approved but Turnkey vaults or Grid USD receive details are not ready.
+ * True when KYB is approved but post-KYB provisioning is incomplete.
+ *
+ * "Provisioned" for Grid businesses means both:
+ * - Turnkey sub-org + deposit vaults are ready
+ * - Local Grid USD VA row exists (bank details for /accounts; implies receive rails refresh ran)
+ *
+ * Grid↔Turnkey USDC external-account registration is ensured by the same refresh path
+ * (`refreshGridBusinessReceiveRails`) that persists VA rows.
  */
 export async function needsBusinessProvisionAfterApproval(
   admin: SupabaseClient,
