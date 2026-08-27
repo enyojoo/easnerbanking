@@ -70,4 +70,18 @@ describe("pickYcSendNetworkId", () => {
       }),
     ).toBe("net-mtn")
   })
+
+  it("falls back to the first Brazil Pix network when no bank matches", () => {
+    expect(
+      pickYcSendNetworkId({
+        networks: [
+          { id: "net-pix-a", name: "PIX", status: "active" },
+          { id: "net-pix-b", name: "PIX Alt", status: "active" },
+        ],
+        bankName: "Unlisted Bank",
+        isMomo: false,
+        fallbackToFirst: true,
+      }),
+    ).toBe("net-pix-a")
+  })
 })

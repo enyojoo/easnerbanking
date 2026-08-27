@@ -822,8 +822,11 @@ export function RecipientForm({
   }
 
   const getAccountIdentifierLabel = (currency: string) => {
+    const fromOptions = corridorRecipientOptions.accountNumberLabel
     const ycLabel = ycAccountNumberLabel(ycCorridorSchema)
+    if (fromOptions && fromOptions !== "Account number") return fromOptions
     if (ycLabel) return ycLabel
+    if (fromOptions) return fromOptions
     switch (currency) {
       case "EUR":
         return "IBAN"
@@ -1413,7 +1416,7 @@ export function RecipientForm({
                 />
                 {errors.routingNumber && <p className="text-xs text-red-500">{errors.routingNumber}</p>}
               </div>
-              <div className="space-y-2 col-span-2">
+              <div className="space-y-2">
                 <label className="text-xs text-muted-foreground">Account Number</label>
                 <Input
                   value={formData.accountNumber}
@@ -1522,29 +1525,39 @@ export function RecipientForm({
 
           {formData.recipientType === "bank" && !["USD", "EUR", "GBP", "CAD"].includes(currency) && (
             <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-xs text-muted-foreground">{getAccountIdentifierLabel(currency)}</label>
-                <Input
-                  value={formData.accountNumber}
-                  onChange={(e) => handleInputChange("accountNumber", e.target.value)}
-                  placeholder={ycCorridorSchema?.account_number_hint || "1234567890"}
-                  className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 normal-case ${errors.accountNumber ? "border-red-500" : ""}`}
-                  required
-                />
-                {errors.accountNumber && <p className="text-xs text-red-500">{errors.accountNumber}</p>}
-              </div>
-              <CorridorRecipientExtraFields
-                fields={
-                  corridorRecipientOptions.extraFields.length
-                    ? corridorRecipientOptions.extraFields
-                    : ycCorridorSchema?.extra_fields
-                }
-                schema={ycCorridorSchema}
-                values={ycMetadata}
-                onChange={(patch) => setYcMetadata((prev) => ({ ...prev, ...patch }))}
-                errors={errors}
-                disabled={isSubmitting}
-              />
+              {(() => {
+                const extraFields = corridorRecipientOptions.extraFields.length
+                  ? corridorRecipientOptions.extraFields
+                  : ycCorridorSchema?.extra_fields
+                const accountNumberField = (
+                  <div className="space-y-2 min-w-0">
+                    <label className="text-xs text-muted-foreground">{getAccountIdentifierLabel(currency)}</label>
+                    <Input
+                      value={formData.accountNumber}
+                      onChange={(e) => handleInputChange("accountNumber", e.target.value)}
+                      placeholder={
+                        corridorRecipientOptions.accountNumberHint ||
+                        ycCorridorSchema?.account_number_hint ||
+                        "1234567890"
+                      }
+                      className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 normal-case ${errors.accountNumber ? "border-red-500" : ""}`}
+                      required
+                    />
+                    {errors.accountNumber && <p className="text-xs text-red-500">{errors.accountNumber}</p>}
+                  </div>
+                )
+                return (
+                  <CorridorRecipientExtraFields
+                    fields={extraFields}
+                    schema={ycCorridorSchema}
+                    values={ycMetadata}
+                    onChange={(patch) => setYcMetadata((prev) => ({ ...prev, ...patch }))}
+                    errors={errors}
+                    disabled={isSubmitting}
+                    accountNumber={accountNumberField}
+                  />
+                )
+              })()}
               {recipientFormNeedsBankCode(payoutFormHints) ? (
                 <div className="space-y-2">
                   <label className="text-xs text-muted-foreground">SWIFT/BIC</label>

@@ -29,6 +29,8 @@ export function pickYcSendNetworkId(input: {
   bankName?: string | null
   mobileProvider?: string | null
   isMomo: boolean
+  /** When no bank/manual match, use the first active network (Brazil Pix). */
+  fallbackToFirst?: boolean
 }): string | undefined {
   let rows = input.networks.filter((n) => String(n.status ?? "").toLowerCase() !== "inactive")
   const channelId = String(input.channelId ?? "").trim()
@@ -66,6 +68,8 @@ export function pickYcSendNetworkId(input: {
 
   const manual = rows.find(isManualInputNetwork)
   if (manual) return networkIdFrom(manual)
+
+  if (input.fallbackToFirst && rows.length > 0) return networkIdFrom(rows[0])
 
   return rows.length === 1 ? networkIdFrom(rows[0]) : undefined
 }

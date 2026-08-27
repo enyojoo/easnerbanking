@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest"
 import {
   buildYcSendMappingFromRecipient,
+  formatPixKeyTypeLabel,
+  GRID_STATIC_CORRIDOR_SCHEMAS,
+  normalizeBrazilPixKey,
+  normalizePixKeyType,
   normalizeRecipientYcMetadata,
+  resolveBrazilRecipientTaxId,
+  toGridPixKeyType,
   validateYcRecipientForCorridor,
   YC_STATIC_CORRIDOR_SCHEMAS,
 } from "./yc-recipient-schema"
@@ -116,12 +122,26 @@ describe("buildYcSendMappingFromRecipient", () => {
       country_code: "BR",
       currency: "BRL",
       full_name: "João",
-      account_number: "12345678901",
+      account_number: "123.456.789-01",
       bank_name: "Pix",
       metadata: { pix_key_type: "CPF" },
     })
     expect(mapped.destination.pixKeyType).toBe("CPF")
     expect(mapped.destination.accountNumber).toBe("12345678901")
+  })
+
+  it("keeps email Pix keys intact on Yellowcard destination", () => {
+    const mapped = buildYcSendMappingFromRecipient({
+      country_code: "BR",
+      currency: "BRL",
+      full_name: "João",
+      account_number: "joao@example.com",
+      bank_name: "Pix",
+      metadata: { pix_key_type: "EMAIL" },
+    })
+    expect(mapped.destination.pixKeyType).toBe("EMAIL")
+    expect(mapped.destination.accountNumber).toBe("joao@example.com")
+    expect(mapped.root).toBeUndefined()
   })
 
   it("maps Colombia identification to send root", () => {
@@ -184,6 +204,55 @@ describe("normalizeRecipientYcMetadata", () => {
       cuit: "20123456789",
     })
   })
+
+  it("stores Grid RANDOM as RANDOM_KEY", () => {
+    expect(normalizeRecipientYcMetadata({ pix_key_type: "RANDOM" })).toEqual({
+      pix_key_type: "RANDOM_KEY",
+    })
+    expect(normalizeRecipientYcMetadata({ tax_id: "123.456.789-01" })).toEqual({
+      tax_id: "12345678901",
+    })
+  })
+})
+
+describe("pix key type labels", () => {
+  it("formats stored and Grid values for display", () => {
+    expect(formatPixKeyTypeLabel("RANDOM_KEY")).toBe("Random")
+    expect(formatPixKeyTypeLabel("RANDOM")).toBe("Random")
+    expect(formatPixKeyTypeLabel("EMAIL")).toBe("Email")
+    expect(formatPixKeyTypeLabel("PHONE")).toBe("Phone")
+  })
+
+  it("normalizes and maps Grid RANDOM", () => {
+    expect(normalizePixKeyType("RANDOM")).toBe("RANDOM_KEY")
+    expect(normalizePixKeyType("random_key")).toBe("RANDOM_KEY")
+    expect(toGridPixKeyType("RANDOM_KEY")).toBe("RANDOM")
+    expect(toGridPixKeyType("CPF")).toBe("CPF")
+  })
+
+  it("resolves Grid taxId from CPF Pix key or a separate tax_id", () => {
+    expect(
+      resolveBrazilRecipientTaxId({
+        pixKeyType: "CPF",
+        pixKey: "123.456.789-01",
+      }),
+    ).toBe("12345678901")
+    expect(
+      resolveBrazilRecipientTaxId({
+        pixKeyType: "EMAIL",
+        pixKey: "a@b.com",
+        taxId: "12.345.678/0001-95",
+      }),
+    ).toBe("12345678000195")
+    expect(
+      resolveBrazilRecipientTaxId({
+        pixKeyType: "RANDOM_KEY",
+        pixKey: "123e4567-e89b-12d3-a456-426614174000",
+      }),
+    ).toBe("")
+    expect(normalizeBrazilPixKey("CPF", "123.456.789-01")).toBe("12345678901")
+    expect(normalizeBrazilPixKey("EMAIL", "a@b.com")).toBe("a@b.com")
+  })
 })
 
 describe("YC_STATIC_CORRIDOR_SCHEMAS", () => {
@@ -193,6 +262,16 @@ describe("YC_STATIC_CORRIDOR_SCHEMAS", () => {
     expect(YC_STATIC_CORRIDOR_SCHEMAS["AR:ARS"]?.extra_fields?.length).toBeGreaterThan(0)
     expect(YC_STATIC_CORRIDOR_SCHEMAS["CO:COP"]?.extra_fields?.length).toBeGreaterThan(0)
     expect(YC_STATIC_CORRIDOR_SCHEMAS["NG:NGN"]?.status).toBe("ready")
+  })
+
+  it("labels Brazil Pix RANDOM_KEY as Random", () => {
+    const pixType = YC_STATIC_CORRIDOR_SCHEMAS["BR:BRL"]?.extra_fields?.find((f) => f.key === "pix_key_type")
+    expect(pixType?.options).toEqual(
+      expect.arrayContaining([{ value: "RANDOM_KEY", label: "Random" }]),
+    )
+    expect(GRID_STATIC_CORRIDOR_SCHEMAS["BR:BRL"]?.extra_fields?.find((f) => f.key === "pix_key_type")?.options).toEqual(
+      expect.arrayContaining([{ value: "RANDOM_KEY", label: "Random" }]),
+    )
   })
 })
 

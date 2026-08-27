@@ -84,16 +84,23 @@ import { CountryCurrency } from '../../lib/countryCurrencyMapping'
 import {
   isBankNameAllowedForCorridor,
   isMomoProviderAllowedForCorridor,
+  mapCadRoutingToGridMetadata,
+  normalizeRecipientYcMetadata,
   recipientFormShowsAddress,
   recipientFormNeedsBankCode,
   recipientFormNeedsEmail,
   recipientFormNeedsPhone,
   resolvePrimaryPayoutProvider,
+  resolveYcCorridorSchema,
   usBankPaymentMethodsForProvider,
+  validateGridRecipientForCorridor,
+  validateYcRecipientForCorridor,
+  ycAccountNumberLabel,
   type UsBankTransferType,
 } from '@easner/shared'
 import { validateRecipientHolderAddress } from '@easner/shared/postal-address-form'
 import { PayoutSchemaExtraFields } from '../../components/recipients/PayoutSchemaExtraFields'
+import { CorridorRecipientExtraFields, formPatchFromCorridorExtras } from '../../components/recipients/YcRecipientExtraFields'
 import { RecipientOperationalAddressFields } from '../../components/recipients/RecipientOperationalAddressFields'
 import { RecipientFormDropdownHost, RegisterRecipientDropdownSheet } from '../../components/recipients/RecipientFormDropdownHost'
 import {
@@ -283,7 +290,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
 
   const corridorRecipientOptions = useMemo(() => {
     if (!selectedCountryCurrency) {
-      return { bankOptions: [] as string[], momoOptions: [] as string[], momoCandidates: [], extraFields: [] }
+      return { bankOptions: [] as string[], momoOptions: [] as string[], momoCandidates: [], extraFields: [], accountNumberLabel: undefined as string | undefined, accountNumberHint: undefined as string | undefined }
     }
     const rail = selectedRecipientType === 'mobile' ? 'mobile_money' : 'bank_transfer'
     return getCorridorRecipientOptions({
@@ -292,6 +299,15 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       rail,
     })
   }, [selectedCountryCurrency, selectedRecipientType, catalogRevision])
+
+  const ycCorridorSchema = useMemo(() => {
+    if (!selectedCountryCurrency) return null
+    return resolveYcCorridorSchema({
+      countryCode: selectedCountryCurrency.countryCode,
+      currencyCode: selectedCountryCurrency.currencyCode,
+      fieldsSchema: selectedBankCorridor?.fields_schema,
+    })
+  }, [selectedCountryCurrency, selectedBankCorridor])
 
   const [newRecipient, setNewRecipient] = useState({
     fullName: '',
@@ -313,7 +329,58 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     postalCode: '',
     email: '',
     payeeEasetag: '',
+    ycPixKeyType: '',
+    ycTaxId: '',
+    ycCuit: '',
+    ycIdentificationType: '',
+    ycIdentificationNumber: '',
+    ycAccountType: '',
+    ycIfsc: '',
+    ycBankCode: '',
+    ycBranchCode: '',
+    ycGridRegion: '',
   })
+
+  const buildFormYcMetadata = useCallback(() => {
+    const extras = normalizeRecipientYcMetadata({
+      pix_key_type: newRecipient.ycPixKeyType,
+      tax_id: newRecipient.ycTaxId,
+      cuit: newRecipient.ycCuit,
+      identification_type: newRecipient.ycIdentificationType,
+      identification_number: newRecipient.ycIdentificationNumber,
+      account_type: newRecipient.ycAccountType,
+      ifsc: newRecipient.ycIfsc,
+      bank_code: newRecipient.ycBankCode,
+      branch_code: newRecipient.ycBranchCode,
+      grid_region: newRecipient.ycGridRegion,
+    })
+    if (
+      selectedCountryCurrency?.countryCode === 'CA' &&
+      String(newRecipient.currency || '').toUpperCase() === 'CAD'
+    ) {
+      return mapCadRoutingToGridMetadata({
+        routingNumber: newRecipient.routingNumber,
+        sortCode: newRecipient.sortCode,
+        metadata: extras,
+      })
+    }
+    return extras
+  }, [
+    newRecipient.ycPixKeyType,
+    newRecipient.ycTaxId,
+    newRecipient.ycCuit,
+    newRecipient.ycIdentificationType,
+    newRecipient.ycIdentificationNumber,
+    newRecipient.ycAccountType,
+    newRecipient.ycIfsc,
+    newRecipient.ycBankCode,
+    newRecipient.ycBranchCode,
+    newRecipient.ycGridRegion,
+    newRecipient.routingNumber,
+    newRecipient.sortCode,
+    newRecipient.currency,
+    selectedCountryCurrency?.countryCode,
+  ])
 
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
@@ -518,6 +585,16 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       postalCode: '',
       email: '',
       payeeEasetag: '',
+      ycPixKeyType: '',
+      ycTaxId: '',
+      ycCuit: '',
+      ycIdentificationType: '',
+      ycIdentificationNumber: '',
+      ycAccountType: '',
+      ycIfsc: '',
+      ycBankCode: '',
+      ycBranchCode: '',
+      ycGridRegion: '',
     })
     setEasenetProfile(null)
     setEasenetLookupError(null)
@@ -647,6 +724,50 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       if (!swift || !/^[A-Z0-9]{8}([A-Z0-9]{3})?$/i.test(swift)) return false
     }
 
+    if (
+      selectedRecipientType === 'bank' &&
+      selectedCountryCurrency &&
+      ycCorridorSchema?.status === 'ready'
+    ) {
+      const ycCheck = validateYcRecipientForCorridor({
+        countryCode: selectedCountryCurrency.countryCode,
+        currencyCode: selectedCountryCurrency.currencyCode,
+        fieldsSchema: selectedBankCorridor?.fields_schema,
+        row: {
+          country_code: selectedCountryCurrency.countryCode,
+          currency: newRecipient.currency,
+          full_name: newRecipient.fullName,
+          account_number: newRecipient.accountNumber,
+          bank_name: newRecipient.bankName,
+          phone_number: newRecipient.phoneNumber,
+          metadata: buildFormYcMetadata(),
+        },
+      })
+      if (!ycCheck.ok) return false
+    }
+
+    if (
+      selectedRecipientType === 'bank' &&
+      selectedCountryCurrency &&
+      (payoutProvider === 'grid' || corridorRecipientOptions.extraFields.length > 0)
+    ) {
+      const gridCheck = validateGridRecipientForCorridor({
+        countryCode: selectedCountryCurrency.countryCode,
+        currencyCode: selectedCountryCurrency.currencyCode,
+        fieldsSchema: selectedBankCorridor?.fields_schema,
+        row: {
+          country_code: selectedCountryCurrency.countryCode,
+          currency: newRecipient.currency,
+          full_name: newRecipient.fullName,
+          account_number: newRecipient.accountNumber,
+          bank_name: newRecipient.bankName,
+          phone_number: newRecipient.phoneNumber,
+          metadata: buildFormYcMetadata(),
+        },
+      })
+      if (!gridCheck.ok) return false
+    }
+
     return true
   }
 
@@ -743,6 +864,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         city: showsHolderAddress ? newRecipient.city || undefined : undefined,
         state: showsHolderAddress ? newRecipient.state || undefined : undefined,
         postalCode: showsHolderAddress ? newRecipient.postalCode || undefined : undefined,
+        metadata: selectedRecipientType === 'bank' ? buildFormYcMetadata() : undefined,
       }
       const draftKind =
         selectedRecipientType === 'wallet'
@@ -1931,21 +2053,68 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                     {/* Generic Account Fields */}
                     {accountConfig.accountType === "generic" && (
                       <View>
-                        <TextInput
-                          style={styles.modalInput}
-                          value={newRecipient.accountNumber}
-                          onChangeText={(text) => {
-                            const formatted = formatAccountNumber(text)
-                            setNewRecipient(prev => ({ ...prev, accountNumber: formatted }))
-                          }}
-                          placeholder={`${accountConfig.fieldLabels.account_number} *`}
-                          placeholderTextColor={colors.text.secondary}
-                          keyboardType="number-pad"
-                          autoComplete="off"
-                          autoCorrect={false}
-                          textContentType="none"
-                          editable={!isSubmitting}
-                        />
+                        {(() => {
+                          const extraFields = corridorRecipientOptions.extraFields.length
+                            ? corridorRecipientOptions.extraFields
+                            : ycCorridorSchema?.extra_fields
+                          const isPix = (extraFields ?? []).some((field) => field.key === 'pix_key_type')
+                          const pixType = newRecipient.ycPixKeyType
+                          const accountKeyboard = !isPix
+                            ? 'number-pad'
+                            : pixType === 'EMAIL'
+                              ? 'email-address'
+                              : pixType === 'PHONE' || pixType === 'CPF' || pixType === 'CNPJ'
+                                ? 'number-pad'
+                                : 'default'
+                          const accountLabel =
+                            (corridorRecipientOptions.accountNumberLabel &&
+                            corridorRecipientOptions.accountNumberLabel !== 'Account number'
+                              ? corridorRecipientOptions.accountNumberLabel
+                              : null) ||
+                            ycAccountNumberLabel(ycCorridorSchema) ||
+                            corridorRecipientOptions.accountNumberLabel ||
+                            accountConfig.fieldLabels.account_number
+                          const accountNumberField = (
+                            <View>
+                              <Text style={styles.fieldLabel}>{accountLabel} *</Text>
+                              <TextInput
+                                style={[styles.modalInput, styles.modalInputFlush]}
+                                value={newRecipient.accountNumber}
+                                onChangeText={(text) => {
+                                  const formatted = isPix ? text : formatAccountNumber(text)
+                                  setNewRecipient((prev) => ({ ...prev, accountNumber: formatted }))
+                                }}
+                                placeholder={
+                                  corridorRecipientOptions.accountNumberHint ||
+                                  ycCorridorSchema?.account_number_hint ||
+                                  `${accountLabel} *`
+                                }
+                                placeholderTextColor={colors.text.secondary}
+                                keyboardType={accountKeyboard}
+                                autoCapitalize="none"
+                                autoComplete="off"
+                                autoCorrect={false}
+                                textContentType="none"
+                                editable={!isSubmitting}
+                              />
+                            </View>
+                          )
+                          return (
+                            <CorridorRecipientExtraFields
+                              fields={extraFields}
+                              schema={ycCorridorSchema}
+                              values={buildFormYcMetadata()}
+                              onChange={(patch) =>
+                                setNewRecipient((prev) => ({
+                                  ...prev,
+                                  ...formPatchFromCorridorExtras(patch),
+                                }))
+                              }
+                              isSubmitting={isSubmitting}
+                              accountNumber={accountNumberField}
+                            />
+                          )
+                        })()}
                         {selectedCountryCurrency && selectedRecipientType === 'bank' &&
                         recipientFormNeedsBankCode(
                           getPayoutFieldsSchemaForCorridor({
@@ -2419,6 +2588,14 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     marginBottom: spacing[4],
     backgroundColor: colors.frame.background,
+  },
+  modalInputFlush: {
+    marginBottom: 0,
+  },
+  fieldLabel: {
+    ...textStyles.caption,
+    color: colors.text.secondary,
+    marginBottom: spacing[2],
   },
   modalButtons: {
     flexDirection: 'row',

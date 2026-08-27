@@ -124,7 +124,7 @@ import {
   validateRecipientHolderAddress,
 } from '@easner/shared/postal-address-form'
 import { PayoutSchemaExtraFields } from '../../components/recipients/PayoutSchemaExtraFields'
-import { CorridorRecipientExtraFields } from '../../components/recipients/YcRecipientExtraFields'
+import { CorridorRecipientExtraFields, formPatchFromCorridorExtras } from '../../components/recipients/YcRecipientExtraFields'
 import { RecipientOperationalAddressFields } from '../../components/recipients/RecipientOperationalAddressFields'
 import { RecipientFormDropdownHost, RegisterRecipientDropdownSheet } from '../../components/recipients/RecipientFormDropdownHost'
 import { haptics } from '../../lib/haptics'
@@ -221,7 +221,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
 
   const corridorRecipientOptions = useMemo(() => {
     if (!selectedCountryCurrency) {
-      return { bankOptions: [] as string[], momoOptions: [] as string[], momoCandidates: [], extraFields: [] }
+      return { bankOptions: [] as string[], momoOptions: [] as string[], momoCandidates: [], extraFields: [], accountNumberLabel: undefined as string | undefined, accountNumberHint: undefined as string | undefined }
     }
     const rail = selectedRecipientType === 'mobile' ? 'mobile_money' : 'bank_transfer'
     return getCorridorRecipientOptions({
@@ -302,6 +302,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     email: '',
     payeeEasetag: '',
     ycPixKeyType: '',
+    ycTaxId: '',
     ycCuit: '',
     ycIdentificationType: '',
     ycIdentificationNumber: '',
@@ -331,6 +332,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
   const buildFormYcMetadata = useCallback(() => {
     const extras = normalizeRecipientYcMetadata({
       pix_key_type: newRecipient.ycPixKeyType,
+      tax_id: newRecipient.ycTaxId,
       cuit: newRecipient.ycCuit,
       identification_type: newRecipient.ycIdentificationType,
       identification_number: newRecipient.ycIdentificationNumber,
@@ -353,6 +355,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     return extras
   }, [
     newRecipient.ycPixKeyType,
+    newRecipient.ycTaxId,
     newRecipient.ycCuit,
     newRecipient.ycIdentificationType,
     newRecipient.ycIdentificationNumber,
@@ -821,6 +824,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
         ''
       ).replace(/^@+/, ''),
       ycPixKeyType: String((recipient.metadata as Record<string, unknown> | undefined)?.pix_key_type ?? ''),
+      ycTaxId: String((recipient.metadata as Record<string, unknown> | undefined)?.tax_id ?? ''),
       ycCuit: String((recipient.metadata as Record<string, unknown> | undefined)?.cuit ?? ''),
       ycIdentificationType: String(
         (recipient.metadata as Record<string, unknown> | undefined)?.identification_type ?? '',
@@ -1137,6 +1141,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
       email: '',
       payeeEasetag: '',
       ycPixKeyType: '',
+      ycTaxId: '',
       ycCuit: '',
       ycIdentificationType: '',
       ycIdentificationNumber: '',
@@ -2436,59 +2441,78 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                     {/* Generic Account Fields (for African countries, etc.) */}
                     {accountConfig.accountType === "generic" && (
                       <View>
-                        <TextInput
-                          style={[styles.modalInput, fieldErrors.accountNumber && styles.modalInputError]}
-                          value={newRecipient.accountNumber}
-                          onChangeText={(text) => {
-                            const formatted = formatAccountNumber(text)
-                            setNewRecipient(prev => ({ ...prev, accountNumber: formatted }))
-                            validateField('accountNumber', formatted)
-                          }}
-                          onBlur={() => validateField('accountNumber', newRecipient.accountNumber)}
-                          placeholder={`${ycAccountNumberLabel(ycCorridorSchema) || accountConfig.fieldLabels.account_number} *`}
-                          placeholderTextColor={colors.text.secondary}
-                          keyboardType="number-pad"
-                          autoComplete="off"
-                          autoCorrect={false}
-                          textContentType="none"
-                          editable={!isSubmitting}
-                        />
-                        {fieldErrors.accountNumber && (
-                          <Text style={styles.errorText}>{fieldErrors.accountNumber}</Text>
-                        )}
-                        <CorridorRecipientExtraFields
-                          fields={
-                            corridorRecipientOptions.extraFields.length
-                              ? corridorRecipientOptions.extraFields
-                              : ycCorridorSchema?.extra_fields
-                          }
-                          schema={ycCorridorSchema}
-                          values={buildFormYcMetadata()}
-                          onChange={(patch) =>
-                            setNewRecipient((prev) => ({
-                              ...prev,
-                              ...(patch.pix_key_type != null
-                                ? { ycPixKeyType: patch.pix_key_type }
-                                : {}),
-                              ...(patch.cuit != null ? { ycCuit: patch.cuit } : {}),
-                              ...(patch.identification_type != null
-                                ? { ycIdentificationType: patch.identification_type }
-                                : {}),
-                              ...(patch.identification_number != null
-                                ? { ycIdentificationNumber: patch.identification_number }
-                                : {}),
-                              ...(patch.account_type != null
-                                ? { ycAccountType: patch.account_type }
-                                : {}),
-                              ...(patch.ifsc != null ? { ycIfsc: patch.ifsc } : {}),
-                              ...(patch.bank_code != null ? { ycBankCode: patch.bank_code } : {}),
-                              ...(patch.branch_code != null ? { ycBranchCode: patch.branch_code } : {}),
-                              ...(patch.grid_region != null ? { ycGridRegion: patch.grid_region } : {}),
-                            }))
-                          }
-                          fieldErrors={fieldErrors}
-                          isSubmitting={isSubmitting}
-                        />
+                        {(() => {
+                          const extraFields = corridorRecipientOptions.extraFields.length
+                            ? corridorRecipientOptions.extraFields
+                            : ycCorridorSchema?.extra_fields
+                          const isPix = (extraFields ?? []).some((field) => field.key === 'pix_key_type')
+                          const pixType = newRecipient.ycPixKeyType
+                          const accountKeyboard = !isPix
+                            ? 'number-pad'
+                            : pixType === 'EMAIL'
+                              ? 'email-address'
+                              : pixType === 'PHONE' || pixType === 'CPF' || pixType === 'CNPJ'
+                                ? 'number-pad'
+                                : 'default'
+                          const accountLabel =
+                            (corridorRecipientOptions.accountNumberLabel &&
+                            corridorRecipientOptions.accountNumberLabel !== 'Account number'
+                              ? corridorRecipientOptions.accountNumberLabel
+                              : null) ||
+                            ycAccountNumberLabel(ycCorridorSchema) ||
+                            corridorRecipientOptions.accountNumberLabel ||
+                            accountConfig.fieldLabels.account_number
+                          const accountNumberField = (
+                            <View>
+                              <Text style={styles.fieldLabel}>{accountLabel} *</Text>
+                              <TextInput
+                                style={[
+                                  styles.modalInput,
+                                  styles.modalInputFlush,
+                                  fieldErrors.accountNumber && styles.modalInputError,
+                                ]}
+                                value={newRecipient.accountNumber}
+                                onChangeText={(text) => {
+                                  const formatted = isPix ? text : formatAccountNumber(text)
+                                  setNewRecipient((prev) => ({ ...prev, accountNumber: formatted }))
+                                  validateField('accountNumber', formatted)
+                                }}
+                                onBlur={() => validateField('accountNumber', newRecipient.accountNumber)}
+                                placeholder={
+                                  corridorRecipientOptions.accountNumberHint ||
+                                  ycCorridorSchema?.account_number_hint ||
+                                  `${accountLabel} *`
+                                }
+                                placeholderTextColor={colors.text.secondary}
+                                keyboardType={accountKeyboard}
+                                autoCapitalize="none"
+                                autoComplete="off"
+                                autoCorrect={false}
+                                textContentType="none"
+                                editable={!isSubmitting}
+                              />
+                              {fieldErrors.accountNumber && (
+                                <Text style={styles.errorText}>{fieldErrors.accountNumber}</Text>
+                              )}
+                            </View>
+                          )
+                          return (
+                            <CorridorRecipientExtraFields
+                              fields={extraFields}
+                              schema={ycCorridorSchema}
+                              values={buildFormYcMetadata()}
+                              onChange={(patch) =>
+                                setNewRecipient((prev) => ({
+                                  ...prev,
+                                  ...formPatchFromCorridorExtras(patch),
+                                }))
+                              }
+                              fieldErrors={fieldErrors}
+                              isSubmitting={isSubmitting}
+                              accountNumber={accountNumberField}
+                            />
+                          )
+                        })()}
                         {selectedCountryCurrency && selectedRecipientType === 'bank' &&
                         recipientFormNeedsBankCode(
                           getPayoutFieldsSchemaForCorridor({
@@ -2905,6 +2929,14 @@ const styles = StyleSheet.create({
   modalInputError: {
     borderColor: colors.error.main,
     borderWidth: 1.5,
+  },
+  modalInputFlush: {
+    marginBottom: 0,
+  },
+  fieldLabel: {
+    ...textStyles.caption,
+    color: colors.text.secondary,
+    marginBottom: spacing[2],
   },
   easenetHandleRowMargin: {
     marginBottom: spacing[2],

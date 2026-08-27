@@ -60,6 +60,7 @@ export async function mapRecipientToYcSend(
         bankName: resolvedBankName,
         mobileProvider: resolvedMobileProvider,
         isMomo,
+        fallbackToFirst: country === "BR" && !isMomo,
       })
     } catch {
       // best-effort network resolution

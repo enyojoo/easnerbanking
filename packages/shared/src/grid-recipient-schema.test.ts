@@ -129,6 +129,45 @@ describe("resolveGridCorridorSchema", () => {
     expect(missing.ok).toBe(false)
   })
 
+  it("validates Brazil Pix key format and taxId", () => {
+    expect(
+      validateGridRecipientForCorridor({
+        countryCode: "BR",
+        currencyCode: "BRL",
+        row: {
+          currency: "BRL",
+          full_name: "Joao",
+          account_number: "12345678901",
+          metadata: { pix_key_type: "CPF" },
+        },
+      }),
+    ).toEqual({ ok: true })
+    expect(
+      validateGridRecipientForCorridor({
+        countryCode: "BR",
+        currencyCode: "BRL",
+        row: {
+          currency: "BRL",
+          full_name: "Joao",
+          account_number: "joao@example.com",
+          metadata: { pix_key_type: "EMAIL", tax_id: "12345678901" },
+        },
+      }),
+    ).toEqual({ ok: true })
+    const missingTax = validateGridRecipientForCorridor({
+      countryCode: "BR",
+      currencyCode: "BRL",
+      row: {
+        currency: "BRL",
+        full_name: "Joao",
+        account_number: "joao@example.com",
+        metadata: { pix_key_type: "EMAIL" },
+      },
+    })
+    expect(missingTax.ok).toBe(false)
+    if (!missingTax.ok) expect(missingTax.message).toMatch(/tax ID/)
+  })
+
   it("returns momo providers for UG when discoveries are absent", () => {
     const schema = resolveGridStaticCorridorSchema("UG", "UGX")
     expect(schema?.channel_type).toBe("momo")

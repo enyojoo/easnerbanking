@@ -129,3 +129,61 @@ describe("buildGridExternalAccountPayload USD", () => {
     expect(payload.accountInfo.bankAccountType).toBeUndefined()
   })
 })
+
+describe("buildGridExternalAccountPayload BRL", () => {
+  it("maps Pix key and Grid pixKeyType, including RANDOM", () => {
+    const payload = buildGridExternalAccountPayload({
+      customerId: "Customer:abc",
+      rail: "bank_transfer",
+      recipient: {
+        currency: "BRL",
+        country_code: "BR",
+        full_name: "Joao Silva",
+        account_number: "123e4567-e89b-12d3-a456-426614174000",
+        bank_name: "Pix",
+        metadata: { pix_key_type: "RANDOM_KEY", tax_id: "123.456.789-01" },
+      },
+    })
+    expect(payload.accountInfo.accountType).toBe("BRL_ACCOUNT")
+    expect(payload.accountInfo.pixKey).toBe("123e4567-e89b-12d3-a456-426614174000")
+    expect(payload.accountInfo.pixKeyType).toBe("RANDOM")
+    expect(payload.accountInfo.accountNumber).toBeUndefined()
+    expect(payload.accountInfo.bankName).toBeUndefined()
+    expect(payload.accountInfo.taxId).toBe("12345678901")
+  })
+
+  it("requires a separate taxId for email Pix keys", () => {
+    expect(() =>
+      buildGridExternalAccountPayload({
+        customerId: "Customer:abc",
+        rail: "bank_transfer",
+        recipient: {
+          currency: "BRL",
+          country_code: "BR",
+          full_name: "Joao Silva",
+          account_number: "joao@example.com",
+          metadata: { pix_key_type: "EMAIL" },
+        },
+      }),
+    ).toThrow(/tax ID/)
+  })
+
+  it("sets taxId from a CPF Pix key", () => {
+    const payload = buildGridExternalAccountPayload({
+      customerId: "Customer:abc",
+      rail: "bank_transfer",
+      recipient: {
+        currency: "BRL",
+        country_code: "BR",
+        full_name: "Joao Silva",
+        account_number: "123.456.789-01",
+        bank_name: "Pix",
+        metadata: { pix_key_type: "CPF" },
+      },
+    })
+    expect(payload.accountInfo.pixKeyType).toBe("CPF")
+    expect(payload.accountInfo.pixKey).toBe("12345678901")
+    expect(payload.accountInfo.taxId).toBe("12345678901")
+    expect(payload.accountInfo.bankName).toBeUndefined()
+  })
+})

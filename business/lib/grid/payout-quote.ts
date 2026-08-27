@@ -8,6 +8,7 @@ import {
   buildLegacyNoahSettlementFromLeg,
   resolveGridPayoutLimits,
   validateBalancePayoutAmountForProvider,
+  validateGridRecipientForCorridor,
   type PayoutSettlementLeg,
   type GridUsPaymentRail,
 } from "@easner/shared"
@@ -365,6 +366,15 @@ export type LockGridBalancePayoutQuoteResult = {
 /**
  * Amount-screen and review Grid preview (Office rates, no Grid API). Live POST /quotes is background / PIN.
  */
+function assertGridRecipientReady(recipient: RecipientSellPrepareRow, countryCode: string) {
+  const check = validateGridRecipientForCorridor({
+    countryCode,
+    currencyCode: String(recipient.currency || "").trim().toUpperCase(),
+    row: recipient,
+  })
+  if (!check.ok) throw new Error(check.message)
+}
+
 export async function buildGridBalancePayoutPreview(input: {
   admin?: ReturnType<typeof createSupabaseAdmin>
   userId?: string
@@ -386,6 +396,7 @@ export async function buildGridBalancePayoutPreview(input: {
   const receiveCurrency = String(input.recipient.currency || "").trim().toUpperCase()
   const countryCode = resolveRecipientPayoutCountry(input.recipient)
   if (!countryCode) throw new Error("Recipient country is required for Grid payout.")
+  assertGridRecipientReady(input.recipient, countryCode)
 
   const rail =
     input.recipient.mobile_provider ||
@@ -538,6 +549,7 @@ export async function lockGridBalancePayoutQuote(
   const receiveCurrency = String(input.recipient.currency || "").trim().toUpperCase()
   const countryCode = resolveRecipientPayoutCountry(input.recipient)
   if (!countryCode) throw new Error("Recipient country is required for Grid payout.")
+  assertGridRecipientReady(input.recipient, countryCode)
 
   const rail =
     input.recipient.mobile_provider ||

@@ -36,6 +36,7 @@ config.resolver.nodeModulesPaths = [
 
 const sharedRoot = path.resolve(monorepoRoot, 'packages/shared')
 const sharedCurrencyFlagNative = path.join(sharedRoot, 'src/components/CountryFlag.native.tsx')
+const sharedPostalAddressForm = path.join(sharedRoot, 'src/postal-address-form.ts')
 const sharedCountryRegistrationNative = path.join(
   sharedRoot,
   'src/lib-address/country-registration.native.ts',
@@ -46,7 +47,7 @@ const extraNodeModules = {
   // Metro extraNodeModules points at the package dir, not package.json exports subpaths.
   '@easner/shared/warm-flags': path.join(sharedRoot, 'src/flags/warm-flags.native.ts'),
   '@easner/shared/currency-flag': path.join(sharedRoot, 'src/components/CountryFlag.native.tsx'),
-  '@easner/shared/postal-address-form': path.join(sharedRoot, 'src/postal-address-form.ts'),
+  '@easner/shared/postal-address-form': sharedPostalAddressForm,
 }
 
 try {
@@ -102,6 +103,31 @@ const nobleHashesCrypto = (() => {
   }
 })()
 
+function resolveSharedSrcSubpath(moduleName) {
+  const mapped = extraNodeModules[moduleName]
+  if (typeof mapped === 'string' && fs.existsSync(mapped) && fs.statSync(mapped).isFile()) {
+    return mapped
+  }
+  let rest = null
+  if (moduleName.startsWith('@easner/shared/')) {
+    rest = moduleName.slice('@easner/shared/'.length)
+  } else {
+    const normalized = moduleName.replace(/\\/g, '/')
+    const marker = '/packages/shared/'
+    const idx = normalized.lastIndexOf(marker)
+    if (idx >= 0) {
+      rest = normalized.slice(idx + marker.length)
+    }
+  }
+  if (!rest || rest.startsWith('src/') || rest === 'package.json') return null
+  const withoutExt = rest.replace(/\.(tsx?|jsx?)$/, '')
+  for (const ext of ['.ts', '.tsx', '.js', '.jsx']) {
+    const candidate = path.join(sharedRoot, 'src', `${withoutExt}${ext}`)
+    if (fs.existsSync(candidate)) return candidate
+  }
+  return null
+}
+
 const defaultResolveRequest = config.resolver.resolveRequest
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (
@@ -120,6 +146,13 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
       moduleName.startsWith('@stripe/crypto/'))
   ) {
     return { type: 'empty' }
+  }
+  const sharedSrc = resolveSharedSrcSubpath(moduleName)
+  if (sharedSrc) {
+    return { type: 'sourceFile', filePath: sharedSrc }
+  }
+  if (moduleName === '@easner/shared/postal-address-form') {
+    return { type: 'sourceFile', filePath: sharedPostalAddressForm }
   }
   if (
     moduleName === '@easner/shared/currency-flag' ||

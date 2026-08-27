@@ -26,6 +26,10 @@ module.exports = function (api) {
                 ? '../packages/shared/src/components/CountryFlag'
                 : '../packages/shared/src/components/CountryFlag.native',
             ),
+            '@easner/shared/postal-address-form': path.resolve(
+              __dirname,
+              '../packages/shared/src/postal-address-form',
+            ),
             // Monorepo: shared package source (not only root node_modules).
             '@easner/shared': path.resolve(__dirname, '../packages/shared'),
             // @noble/hashes: do not alias here – subpath imports like `@noble/hashes/pbkdf2.js`

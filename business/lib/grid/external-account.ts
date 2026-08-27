@@ -12,6 +12,10 @@ import {
   resolveGridBankName,
   resolveGridMomoProvider,
   mapCadRoutingToGridMetadata,
+  toGridPixKeyType,
+  normalizeBrazilPixKey,
+  resolveBrazilRecipientTaxId,
+  brazilPixKeyIsTaxId,
   type GridMomoProviderOption,
 } from "@easner/shared"
 
@@ -113,12 +117,30 @@ export function buildGridExternalAccountPayload(input: {
     if (swift) accountInfo.swiftCode = swift.toUpperCase()
   } else {
     if (!accountNumber) throw new Error("Bank recipient requires account number.")
-    if (currency === "MXN") {
+    if (currency === "BRL") {
+      const pixType = toGridPixKeyType(metadata.pix_key_type)
+      if (!pixType) throw new Error("Brazil recipient requires a Pix key type.")
+      accountInfo.pixKey = normalizeBrazilPixKey(metadata.pix_key_type, accountNumber)
+      accountInfo.pixKeyType = pixType
+      const taxId = resolveBrazilRecipientTaxId({
+        pixKeyType: metadata.pix_key_type,
+        pixKey: accountNumber,
+        taxId: metadata.tax_id,
+      })
+      if (!taxId) {
+        throw new Error(
+          brazilPixKeyIsTaxId(metadata.pix_key_type)
+            ? "Pix key must be a valid CPF or CNPJ."
+            : "Brazil recipient requires a CPF or CNPJ tax ID.",
+        )
+      }
+      accountInfo.taxId = taxId
+    } else if (currency === "MXN") {
       accountInfo.clabeNumber = accountNumber
     } else {
       accountInfo.accountNumber = accountNumber
     }
-    if (bankName) accountInfo.bankName = bankName
+    if (currency !== "BRL" && bankName) accountInfo.bankName = bankName
     if (country === "US" && currency === "USD") {
       const routing = String(recipient.routing_number ?? "").replace(/\D/g, "")
       if (routing.length !== 9) {

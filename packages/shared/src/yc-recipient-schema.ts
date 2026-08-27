@@ -25,6 +25,8 @@ export {
 /** Provider-specific extras stored on recipients.metadata (LatAm, etc.). */
 export type RecipientYcMetadata = {
   pix_key_type?: string
+  /** Grid BRL_ACCOUNT taxId (CPF/CNPJ). Required when Pix type is not CPF/CNPJ. */
+  tax_id?: string
   cuit?: string
   identification_type?: string
   identification_number?: string
@@ -109,6 +111,80 @@ export type YcSendMapping = {
 
 const PIX_KEY_TYPES = ["CPF", "CNPJ", "EMAIL", "PHONE", "RANDOM_KEY"] as const
 
+const PIX_KEY_TYPE_LABELS: Record<(typeof PIX_KEY_TYPES)[number], string> = {
+  CPF: "CPF",
+  CNPJ: "CNPJ",
+  EMAIL: "Email",
+  PHONE: "Phone",
+  RANDOM_KEY: "Random",
+}
+
+export function formatPixKeyTypeLabel(value: string): string {
+  const normalized = normalizePixKeyType(value)
+  if (!normalized) return value
+  return PIX_KEY_TYPE_LABELS[normalized]
+}
+
+/** Persist YC `RANDOM_KEY`; accept Grid's `RANDOM`. */
+export function normalizePixKeyType(value: string | null | undefined): (typeof PIX_KEY_TYPES)[number] | "" {
+  const raw = String(value ?? "").trim().toUpperCase()
+  if (raw === "RANDOM") return "RANDOM_KEY"
+  if ((PIX_KEY_TYPES as readonly string[]).includes(raw)) return raw as (typeof PIX_KEY_TYPES)[number]
+  return ""
+}
+
+/** Grid BRL_ACCOUNT uses `RANDOM`, not `RANDOM_KEY`. */
+export function toGridPixKeyType(value: string | null | undefined): "CPF" | "CNPJ" | "EMAIL" | "PHONE" | "RANDOM" | "" {
+  const normalized = normalizePixKeyType(value)
+  if (normalized === "RANDOM_KEY") return "RANDOM"
+  return normalized
+}
+
+const PIX_KEY_TYPE_OPTIONS = PIX_KEY_TYPES.map((value) => ({
+  value,
+  label: PIX_KEY_TYPE_LABELS[value],
+}))
+
+const BRAZIL_TAX_ID_FIELD: YcRecipientFieldDef = {
+  key: "tax_id",
+  label: "Tax ID (CPF/CNPJ)",
+  required: false,
+  kind: "text",
+  placeholder: "11-digit CPF or 14-digit CNPJ",
+}
+
+/** CPF/CNPJ Pix keys are themselves the Grid taxId. */
+export function brazilPixKeyIsTaxId(pixKeyType: string | null | undefined): boolean {
+  const type = normalizePixKeyType(pixKeyType)
+  return type === "CPF" || type === "CNPJ"
+}
+
+export function normalizeBrazilPixKey(pixKeyType: string | null | undefined, value: string): string {
+  const type = normalizePixKeyType(pixKeyType)
+  const trimmed = String(value ?? "").trim()
+  if (!trimmed) return trimmed
+  if (type === "EMAIL" || type === "RANDOM_KEY") return trimmed
+  if (type === "CPF" || type === "CNPJ" || type === "PHONE") return digitsOnly(trimmed)
+  return trimmed
+}
+
+/** Grid BRL_ACCOUNT always requires taxId (CPF 11 or CNPJ 14). */
+export function resolveBrazilRecipientTaxId(input: {
+  pixKeyType?: string | null
+  pixKey?: string | null
+  taxId?: string | null
+}): string {
+  const type = normalizePixKeyType(input.pixKeyType)
+  if (type === "CPF" || type === "CNPJ") {
+    const fromKey = digitsOnly(String(input.pixKey ?? ""))
+    if (type === "CPF" && fromKey.length === 11) return fromKey
+    if (type === "CNPJ" && fromKey.length === 14) return fromKey
+  }
+  const fromMeta = digitsOnly(String(input.taxId ?? ""))
+  if (fromMeta.length === 11 || fromMeta.length === 14) return fromMeta
+  return ""
+}
+
 const COP_ID_TYPES: { value: string; label: string }[] = [
   { value: "cc", label: "Citizenship ID (CC)" },
   { value: "nit", label: "Tax ID (NIT)" },
@@ -191,8 +267,9 @@ export const YC_STATIC_CORRIDOR_SCHEMAS: Record<string, YcCorridorSchemaHint> = 
         label: "Pix key type",
         required: true,
         kind: "select",
-        options: PIX_KEY_TYPES.map((v) => ({ value: v, label: v })),
+        options: PIX_KEY_TYPE_OPTIONS,
       },
+      BRAZIL_TAX_ID_FIELD,
     ],
   },
   "AR:ARS": {
@@ -326,6 +403,23 @@ export const GRID_STATIC_CORRIDOR_SCHEMAS: Record<string, GridCorridorSchemaHint
     account_number_hint: "18-digit CLABE",
     extra_fields: [],
     note: "Static Grid MXN_ACCOUNT",
+  },
+  "BR:BRL": {
+    status: "ready",
+    channel_type: "bank",
+    account_number_label: "Pix key",
+    account_number_hint: "Pix key matching the selected type",
+    extra_fields: [
+      {
+        key: "pix_key_type",
+        label: "Pix key type",
+        required: true,
+        kind: "select",
+        options: PIX_KEY_TYPE_OPTIONS,
+      },
+      BRAZIL_TAX_ID_FIELD,
+    ],
+    note: "Static Grid BRL_ACCOUNT (pixKey + pixKeyType + taxId)",
   },
   "US:USD": {
     status: "ready",
@@ -524,7 +618,12 @@ export function normalizeRecipientYcMetadata(raw: unknown): RecipientYcMetadata 
   const o = raw as Record<string, unknown>
   const out: RecipientYcMetadata = {}
   if (typeof o.pix_key_type === "string" && o.pix_key_type.trim()) {
-    out.pix_key_type = o.pix_key_type.trim().toUpperCase()
+    const pixType = normalizePixKeyType(o.pix_key_type)
+    if (pixType) out.pix_key_type = pixType
+  }
+  if (typeof o.tax_id === "string" && o.tax_id.trim()) {
+    const taxId = o.tax_id.replace(/\D/g, "")
+    if (taxId) out.tax_id = taxId
   }
   if (typeof o.cuit === "string" && o.cuit.trim()) {
     out.cuit = o.cuit.replace(/\D/g, "")
@@ -569,9 +668,7 @@ function normalizeYcDestinationAccountNumber(input: {
 
   const pixType = input.metadata.pix_key_type || ""
   if (input.country === "BR" && input.currency === "BRL") {
-    if (pixType === "EMAIL" || pixType === "RANDOM_KEY") return accountNumber
-    if (pixType === "CPF" || pixType === "CNPJ" || pixType === "PHONE") return digitsOnly(accountNumber)
-    return accountNumber
+    return normalizeBrazilPixKey(pixType, accountNumber)
   }
 
   if (accountNumber.startsWith("+")) return accountNumber
@@ -601,7 +698,7 @@ function validatePixKey(type: string, value: string): string | null {
     if (d.length < 10 || d.length > 11) return "Phone Pix key must be 10–11 digits."
     return null
   }
-  if (t === "RANDOM_KEY") {
+  if (t === "RANDOM_KEY" || t === "RANDOM") {
     if (!v.includes("-")) return "Random Pix key must be UUID format."
     return null
   }
@@ -620,8 +717,18 @@ function validateExtraField(field: YcRecipientFieldDef, metadata: RecipientYcMet
   }
   const val = metadata[field.key as YcRecipientMetadataKey]
   const text = typeof val === "string" ? val.trim() : ""
+  if (field.key === "tax_id" && brazilPixKeyIsTaxId(metadata.pix_key_type)) {
+    return null
+  }
   if (field.required && !text) return `${field.label} is required.`
   if (!text) return null
+  if (field.key === "tax_id") {
+    const d = digitsOnly(text)
+    if (d.length !== 11 && d.length !== 14) {
+      return "Tax ID must be an 11-digit CPF or 14-digit CNPJ."
+    }
+    return null
+  }
   if (field.digits != null) {
     const d = field.key === "cuit" ? digitsOnly(text) : text
     const len = field.key === "cuit" ? digitsOnly(text).length : d.length
@@ -780,6 +887,26 @@ export function validateGridRecipientForCorridor(input: {
   for (const field of schema.extra_fields ?? []) {
     const err = validateExtraField(field, metadata, accountNumber)
     if (err) return { ok: false, message: err }
+  }
+
+  if (cc === "BR" && cur === "BRL") {
+    const pixType = metadata.pix_key_type || ""
+    if (!pixType) return { ok: false, message: "Pix key type is required for Brazil." }
+    const pixErr = validatePixKey(pixType, accountNumber)
+    if (pixErr) return { ok: false, message: pixErr }
+    const taxId = resolveBrazilRecipientTaxId({
+      pixKeyType: pixType,
+      pixKey: accountNumber,
+      taxId: metadata.tax_id,
+    })
+    if (!taxId) {
+      return {
+        ok: false,
+        message: brazilPixKeyIsTaxId(pixType)
+          ? "Pix key must be a valid CPF or CNPJ."
+          : "Brazil recipient requires a CPF or CNPJ tax ID.",
+      }
+    }
   }
 
   return { ok: true }
