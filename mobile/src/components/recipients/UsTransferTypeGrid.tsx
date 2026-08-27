@@ -8,7 +8,6 @@ import {
   spacing,
   textStyles,
 } from '../../theme'
-import { ripple } from '../../lib/androidRipple'
 import { haptics } from '../../lib/haptics'
 
 type Props = {
@@ -32,7 +31,6 @@ export function UsTransferTypeGrid({ methods, value, onChange, disabled }: Props
           return (
             <Pressable
               key={method.value}
-              android_ripple={ripple.neutral}
               disabled={disabled}
               accessibilityRole="button"
               accessibilityState={{ selected, disabled: Boolean(disabled) }}
@@ -100,6 +98,9 @@ const styles = StyleSheet.create({
   },
   tileCompact: {
     paddingHorizontal: spacing[1],
+    // Full-radius ovals on ~80×72 tiles. Match business rounded-2xl (16).
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
   },
   tileSelected: {
     backgroundColor: colors.primary.main + '15',
@@ -122,7 +123,6 @@ const styles = StyleSheet.create({
   },
   labelSelected: {
     color: colors.primary.main,
-    fontFamily: fontFamily.semibold,
   },
   chip: {
     paddingHorizontal: spacing[2],

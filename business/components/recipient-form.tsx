@@ -1362,10 +1362,12 @@ export function RecipientForm({
                         <Button
                           key={method.value}
                           type="button"
-                          variant={selected ? "default" : "outline"}
+                          variant="outline"
                           className={cn(
-                            "h-[4.5rem] min-h-[4.5rem] min-w-0 flex-col justify-center gap-1.5 whitespace-normal py-2",
+                            "h-[4.5rem] min-h-[4.5rem] min-w-0 flex-col justify-center gap-1.5 whitespace-normal py-2 transition-none active:translate-y-0",
                             compact ? "px-1" : "px-3",
+                            selected &&
+                              "border-foreground bg-foreground text-background hover:bg-foreground hover:text-background",
                           )}
                           onClick={() => handleInputChange("transferType", method.value)}
                         >
@@ -1375,7 +1377,7 @@ export function RecipientForm({
                               "inline-flex max-w-full truncate rounded-full px-2 py-0.5 text-[11px] font-normal leading-none",
                               compact && "px-1.5 text-[10px]",
                               selected
-                                ? "bg-primary-foreground/15 text-primary-foreground"
+                                ? "bg-background/15 text-background"
                                 : "bg-muted text-muted-foreground",
                             )}
                           >
