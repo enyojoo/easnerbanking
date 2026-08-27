@@ -368,6 +368,25 @@ describe("postal-address-form exemplars", () => {
     )
   })
 
+  it("treats a filled address as complete before country JSON is registered", () => {
+    expect(
+      isOperationalAddressComplete("ZZ", {
+        line1: "1 Main",
+        city: "Town",
+        postalCode: "12345",
+        countryCode: "ZZ",
+      }),
+    ).toBe(true)
+    expect(
+      isOperationalAddressComplete("ZZ", {
+        line1: "",
+        city: "Town",
+        postalCode: "12345",
+        countryCode: "ZZ",
+      }),
+    ).toBe(false)
+  })
+
   it("does not throw config lookup for an unregistered country", () => {
     expect(() => getOperationalAddressFormConfig("ZZ")).not.toThrow()
     expect(getOperationalAddressFormConfig("ZZ").countryCode).toBe("ZZ")

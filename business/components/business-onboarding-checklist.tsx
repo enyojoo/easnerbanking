@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-context"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { isBusinessInfoStepComplete } from "@/lib/business-tab-completion"
-import { ensureBusinessOperationalAddressCountriesRegistered } from "@/lib/address/register-lib-address-countries"
+import { useBusinessOperationalAddressReady } from "@/hooks/use-business-operational-address-ready"
 import { parseBalanceString } from "@/hooks/use-business-account-rows"
 import { useWalletBalances } from "@/hooks/queries/use-wallets"
 import { ONBOARDING_STEP_COPY } from "@/lib/copy/business-ui-copy"
@@ -66,6 +66,7 @@ export function BusinessOnboardingChecklist() {
   const userId = user?.id ?? null
   const profile = useBusinessProfile()
   const walletQuery = useWalletBalances()
+  const addressCatalogReady = useBusinessOperationalAddressReady()
   const [expanded, setExpanded] = useState(false)
   const walletReady = Boolean(walletQuery.isSuccess || walletQuery.isFetched)
   const funded =
@@ -81,10 +82,6 @@ export function BusinessOnboardingChecklist() {
 
   // Drop legacy sticky progress keys that leaked completed steps across accounts.
   useEffect(() => {
-    void ensureBusinessOperationalAddressCountriesRegistered()
-  }, [])
-
-  useEffect(() => {
     if (typeof window === "undefined") return
     try {
       const keys: string[] = []
@@ -98,7 +95,12 @@ export function BusinessOnboardingChecklist() {
     }
   }, [])
 
-  const step1Done = isBusinessInfoStepComplete(profile)
+  // Re-evaluate after lib-address country JSON loads so strict rules replace the
+  // first-paint required-field fallback without hiding the widget.
+  const step1Done = useMemo(
+    () => isBusinessInfoStepComplete(profile),
+    [profile, addressCatalogReady],
+  )
   const mfaStatus = useMfaStatus()
   const step2Done = mfaStatus.verified
   const step3Done = profile.tier1Complete

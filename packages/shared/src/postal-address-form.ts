@@ -271,7 +271,11 @@ export function isOperationalAddressComplete(
 ): boolean {
   const code = normalizeCountryCode(countryCode || parts.countryCode)
   if (!/^[A-Z]{2}$/.test(code)) return false
-  if (!isOperationalAddressCountryRegistered(code)) return false
+  if (!isOperationalAddressCountryRegistered(code)) {
+    // Country JSON loads async in the browser. Required-field fallback avoids a
+    // first-paint "incomplete" flash for already-saved profiles (onboarding checklist).
+    return validateRecipientHolderAddress(code, parts).valid
+  }
 
   const required = getRequiredFields(code as CountryCode)
   const input = toLibAddressInput({ ...parts, countryCode: code })
