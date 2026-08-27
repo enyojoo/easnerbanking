@@ -214,6 +214,57 @@ export function validateOperationalAddress(
   }
 }
 
+export type RecipientHolderAddressFieldErrors = {
+  addressLine1?: string
+  city?: string
+  state?: string
+  postalCode?: string
+}
+
+export function recipientHolderAddressFieldErrors(
+  result: OperationalAddressValidationResult,
+): RecipientHolderAddressFieldErrors {
+  const out: RecipientHolderAddressFieldErrors = {}
+  if (result.errors.line1) out.addressLine1 = result.errors.line1
+  if (result.errors.city) out.city = result.errors.city
+  if (result.errors.state) out.state = result.errors.state
+  if (result.errors.postalCode) out.postalCode = result.errors.postalCode
+  return out
+}
+
+/**
+ * Holder-address check for recipient forms. When country JSON is not loaded
+ * (Metro fallback), require the visible fallback fields instead of failing
+ * the whole country.
+ */
+export function validateRecipientHolderAddress(
+  countryCode: string,
+  parts: OperationalAddressParts,
+): OperationalAddressValidationResult {
+  const code = normalizeCountryCode(countryCode || parts.countryCode)
+  if (!/^[A-Z]{2}$/.test(code)) {
+    return { valid: false, errors: { country: "Select a country" } }
+  }
+  if (isOperationalAddressCountryRegistered(code)) {
+    return validateOperationalAddress(code, parts)
+  }
+
+  const config = getOperationalAddressFormConfig(code)
+  const errors: Partial<Record<OperationalAddressField, string>> = {}
+  const missing = (field: OperationalAddressField) => {
+    errors[field] = "This field is required"
+  }
+  if (config.line1.required && !String(parts.line1 ?? "").trim()) missing("line1")
+  if (config.city.visible && config.city.required && !String(parts.city ?? "").trim()) missing("city")
+  if (config.subdivision.visible && config.subdivision.required && !String(parts.state ?? "").trim()) {
+    missing("state")
+  }
+  if (config.postal.visible && config.postal.required && !String(parts.postalCode ?? "").trim()) {
+    missing("postalCode")
+  }
+  return { valid: Object.keys(errors).length === 0, errors }
+}
+
 export function isOperationalAddressComplete(
   countryCode: string,
   parts: OperationalAddressParts,
@@ -272,9 +323,13 @@ export function sanitizeSubdivisionForCountry(countryCode: string, subdivision: 
   const fields = getCountryFields(code as CountryCode)
   if (!fieldVisible(fields.state)) return ""
 
-  const subdivisions = getCountrySubdivisions(code as CountryCode)
+  const subdivisions = getCountrySubdivisions(code as CountryCode, LIB_ADDRESS_ENGLISH_DISPLAY)
   if (subdivisions.length === 0) return value
-  if (subdivisions.some((row: { value: string; label: string }) => row.value === value)) return value
+  const upper = value.toUpperCase()
+  if (subdivisions.some((row: { value: string; label: string }) => row.value === upper)) return upper
+  const lower = value.toLowerCase()
+  const byLabel = subdivisions.find((row: { value: string; label: string }) => row.label.toLowerCase() === lower)
+  if (byLabel) return byLabel.value
   if (isValidCountrySubdivisionCode(code as CountryCode, value)) return value
   return ""
 }

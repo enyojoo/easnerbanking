@@ -1,3 +1,4 @@
+import { isGridDigitalAssetJurisdiction } from "./jurisdiction-blocked-countries"
 import type { ProviderHealthStatus, ProviderRoutingEntry } from "./send-destinations"
 import { resolveUsPayInMode } from "./us-pay-in-mode"
 
@@ -13,6 +14,32 @@ export function resolvePrimaryPayoutProvider(
   if (provider === "yellowcard") return "yellowcard"
   if (provider === "grid") return "grid"
   return "noah"
+}
+
+/**
+ * Grid digital-asset extra residences cannot use Grid payouts.
+ * Strip `grid` and keep priority order among remaining providers.
+ */
+export function filterProviderRoutingForSender(
+  routing: ProviderRoutingEntry[],
+  senderCountryCode: string | null | undefined,
+): ProviderRoutingEntry[] {
+  if (!isGridDigitalAssetJurisdiction(senderCountryCode)) {
+    return routing
+  }
+  return routing
+    .filter((entry) => String(entry.provider).trim().toLowerCase() !== "grid")
+    .sort((a, b) => a.priority - b.priority)
+}
+
+/** Provider that will actually execute: Office primary after sender-country Grid filter. */
+export function resolvePayoutProviderForHolderAddress(input: {
+  providerRouting?: ProviderRoutingEntry[] | null
+  senderCountryCode?: string | null
+}): PayoutProviderId {
+  return resolvePrimaryPayoutProvider(
+    filterProviderRoutingForSender([...(input.providerRouting ?? [])], input.senderCountryCode),
+  )
 }
 
 export type PayoutRail = "bank_transfer" | "mobile_money"

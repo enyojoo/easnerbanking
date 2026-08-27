@@ -22,6 +22,9 @@ describe("usBankPaymentMethodsForProvider", () => {
       "RTP",
       "FedNow",
     ])
+    expect(
+      usBankPaymentMethodsForProvider("grid").map((m) => m.speedLabel ?? null),
+    ).toEqual([null, null, "Instant", "Instant"])
   })
 
   it("returns ACH and Wire for Noah", () => {

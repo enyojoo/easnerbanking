@@ -9,6 +9,7 @@ import {
   registerOperationalAddressCountries,
   sanitizeSubdivisionForCountry,
   validateOperationalAddress,
+  validateRecipientHolderAddress,
 } from "./postal-address-form"
 
 const EXEMPLAR_CODES = ["US", "GB", "DE", "NG"] as const
@@ -346,6 +347,25 @@ describe("postal-address-form exemplars", () => {
   it("clears incompatible subdivision when switching away from dropdown country", () => {
     expect(sanitizeSubdivisionForCountry("GB", "CA")).toBe("")
     expect(sanitizeSubdivisionForCountry("US", "CA")).toBe("CA")
+  })
+
+  it("maps subdivision labels and lowercase codes to stored codes", () => {
+    expect(sanitizeSubdivisionForCountry("US", "ny")).toBe("NY")
+    expect(sanitizeSubdivisionForCountry("US", "New York")).toBe("NY")
+    expect(sanitizeSubdivisionForCountry("US", "California")).toBe("CA")
+    expect(sanitizeSubdivisionForCountry("CA", "Ontario")).toBe("ON")
+  })
+
+  it("falls back to required street/city/postal when country JSON is not loaded", () => {
+    const result = validateRecipientHolderAddress("ZZ", {
+      line1: "1 Main",
+      city: "Town",
+      postalCode: "12345",
+    })
+    expect(result.valid).toBe(true)
+    expect(validateRecipientHolderAddress("ZZ", { line1: "", city: "Town", postalCode: "12345" }).valid).toBe(
+      false,
+    )
   })
 
   it("does not throw config lookup for an unregistered country", () => {

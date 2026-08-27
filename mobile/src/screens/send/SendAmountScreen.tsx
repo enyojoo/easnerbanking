@@ -41,6 +41,7 @@ import {
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { useToast } from '../../components/ToastProvider'
+import { EasnerAlertSheet } from '../../components/premium'
 import { useNoahSendExchangeRates, prefetchNoahSendExchangeRates } from '../../hooks/queries'
 import { useQueryClient } from '@tanstack/react-query'
 import { useYcCrossBorderFlow, type YcPayInRail, residenceCountryFromPayInCurrency } from '../../hooks/useYcCrossBorderFlow'
@@ -78,6 +79,12 @@ import {
   isGridBalancePayoutCorridor,
   isNoahBalancePayoutCorridor,
   resolveBalancePayoutProvider,
+  resolvePayoutProviderForHolderAddress,
+  recipientNeedsHolderAddressBeforeSend,
+  RECIPIENT_HOLDER_ADDRESS_REQUIRED_TITLE,
+  RECIPIENT_HOLDER_ADDRESS_REQUIRED_BODY,
+  RECIPIENT_HOLDER_ADDRESS_REQUIRED_EDIT_CTA,
+  RECIPIENT_HOLDER_ADDRESS_REQUIRED_BACK_CTA,
   resolveEffectiveYcBalancePayoutMinReceive,
   resolveYcPayoutLimits,
   resolveGridPayoutLimits,
@@ -216,6 +223,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const [walletQuotePreview, setWalletQuotePreview] = useState<WalletSendQuote | null>(null)
   const [isContinuePending, setIsContinuePending] = useState(false)
   const [isContinueLoading, setIsContinueLoading] = useState(false)
+  const [addressRequiredOpen, setAddressRequiredOpen] = useState(false)
   const continueSpinnerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   
   // UI State only - no backend integration
@@ -341,6 +349,14 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const balancePayoutProvider = useMemo(
     () => resolveBalancePayoutProvider(payoutCorridorRow),
     [payoutCorridorRow],
+  )
+  const holderAddressPayoutProvider = useMemo(
+    () =>
+      resolvePayoutProviderForHolderAddress({
+        providerRouting: payoutCorridorRow?.provider_routing,
+        senderCountryCode: userProfile?.residence_country,
+      }),
+    [payoutCorridorRow?.provider_routing, userProfile?.residence_country],
   )
 
   const isNoahBalancePayout =
@@ -1425,6 +1441,25 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         return
       }
       setAmountFieldError(null)
+
+      if (
+        recipientNeedsHolderAddressBeforeSend({
+          rail: payoutRail,
+          isWallet: isWalletRecipient,
+          isEasetag: isEasetagRecipient,
+          hints: payoutHints,
+          currencyCode: activeRecipient.currency || '',
+          countryCode: activeRecipient.country_code,
+          payoutProvider: holderAddressPayoutProvider,
+          addressLine1: activeRecipient.address_line1,
+          city: activeRecipient.city,
+          state: activeRecipient.state,
+          postalCode: activeRecipient.postal_code,
+        })
+      ) {
+        setAddressRequiredOpen(true)
+        return
+      }
 
       haptics.medium()
       payoutQuotePrefetchControls.flush()
@@ -2542,6 +2577,22 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 ))}
               </ScrollView>
         </WebAwareModal>
+        <EasnerAlertSheet
+          visible={addressRequiredOpen}
+          onDismiss={() => setAddressRequiredOpen(false)}
+          title={RECIPIENT_HOLDER_ADDRESS_REQUIRED_TITLE}
+          message={RECIPIENT_HOLDER_ADDRESS_REQUIRED_BODY}
+          primaryLabel={RECIPIENT_HOLDER_ADDRESS_REQUIRED_EDIT_CTA}
+          onPrimary={() => {
+            setAddressRequiredOpen(false)
+            navigation.navigate(
+              'Recipients' as never,
+              (recipient?.id ? { editRecipientId: recipient.id } : {}) as never,
+            )
+          }}
+          secondaryLabel={RECIPIENT_HOLDER_ADDRESS_REQUIRED_BACK_CTA}
+          onSecondary={() => setAddressRequiredOpen(false)}
+        />
       </View>
     </ScreenWrapper>
   )

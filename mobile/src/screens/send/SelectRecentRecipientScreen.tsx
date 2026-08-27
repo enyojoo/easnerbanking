@@ -84,7 +84,7 @@ import { CountryCurrency } from '../../lib/countryCurrencyMapping'
 import {
   isBankNameAllowedForCorridor,
   isMomoProviderAllowedForCorridor,
-  recipientFormNeedsAddress,
+  recipientFormShowsAddress,
   recipientFormNeedsBankCode,
   recipientFormNeedsEmail,
   recipientFormNeedsPhone,
@@ -92,8 +92,9 @@ import {
   usBankPaymentMethodsForProvider,
   type UsBankTransferType,
 } from '@easner/shared'
+import { validateRecipientHolderAddress } from '@easner/shared/postal-address-form'
 import { PayoutSchemaExtraFields } from '../../components/recipients/PayoutSchemaExtraFields'
-import { UsBankAddressFields } from '../../components/recipients/UsBankAddressFields'
+import { RecipientOperationalAddressFields } from '../../components/recipients/RecipientOperationalAddressFields'
 import { RecipientFormDropdownHost, RegisterRecipientDropdownSheet } from '../../components/recipients/RecipientFormDropdownHost'
 import {
   buildRecipientCatalogForType,
@@ -168,6 +169,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const [showBankAccountForm, setShowBankAccountForm] = useState(false)
   const [showBankDropdown, setShowBankDropdown] = useState(false)
   const [bankSearchTerm, setBankSearchTerm] = useState('')
+  const [showSubdivisionDropdown, setShowSubdivisionDropdown] = useState(false)
+  const [subdivisionSearchTerm, setSubdivisionSearchTerm] = useState('')
   const [selectedRecipientType, setSelectedRecipientType] = useState<'wallet' | 'bank' | 'mobile' | 'easenet' | null>(null)
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false)
   const [showProviderDropdown, setShowProviderDropdown] = useState(false)
@@ -527,6 +530,10 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     setShowProviderDropdown(false)
     setShowWalletAssetDropdown(false)
     setShowWalletNetworkDropdown(false)
+    setShowBankDropdown(false)
+    setBankSearchTerm('')
+    setShowSubdivisionDropdown(false)
+    setSubdivisionSearchTerm('')
     setProviderSearchTerm('')
     setWalletAssetSearchTerm('')
     setWalletNetworkSearchTerm('')
@@ -552,6 +559,23 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     setShowWalletAddressScanner(true)
   }
 
+  const bankSchemaHints =
+    selectedCountryCurrency && selectedRecipientType === 'bank'
+      ? getPayoutFieldsSchemaForCorridor({
+          countryCode: selectedCountryCurrency.countryCode,
+          currencyCode: selectedCountryCurrency.currencyCode,
+          rail: 'bank_transfer',
+        })
+      : null
+  const showsHolderAddress =
+    selectedRecipientType === 'bank' &&
+    recipientFormShowsAddress({
+      hints: bankSchemaHints,
+      currencyCode: newRecipient.currency,
+      countryCode: selectedCountryCurrency?.countryCode,
+      payoutProvider,
+    })
+
   const isFormValid = () => {
     if (selectedRecipientType === 'easenet') {
       return Boolean(easenetProfile && newRecipient.payeeEasetag.trim().length >= 1)
@@ -568,11 +592,15 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     ) {
       return false
     }
-    if (selectedCountryCurrency?.countryCode === 'US') {
-      if (!newRecipient.addressLine1.trim()) return false
-      if (!newRecipient.city.trim()) return false
-      if (!newRecipient.state.trim()) return false
-      if (!newRecipient.postalCode.trim()) return false
+    if (showsHolderAddress && selectedCountryCurrency) {
+      const addressResult = validateRecipientHolderAddress(selectedCountryCurrency.countryCode, {
+        line1: newRecipient.addressLine1,
+        city: newRecipient.city,
+        state: newRecipient.state,
+        postalCode: newRecipient.postalCode,
+        countryCode: selectedCountryCurrency.countryCode,
+      })
+      if (!addressResult.valid) return false
     }
 
     const accountConfig = getAccountTypeConfigFromCurrency(newRecipient.currency)
@@ -617,15 +645,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     if (recipientFormNeedsBankCode(schemaHints)) {
       const swift = newRecipient.swiftBic.trim()
       if (!swift || !/^[A-Z0-9]{8}([A-Z0-9]{3})?$/i.test(swift)) return false
-    }
-    if (
-      recipientFormNeedsAddress({ hints: schemaHints, currencyCode: newRecipient.currency }) &&
-      selectedCountryCurrency?.countryCode !== 'US'
-    ) {
-      if (!newRecipient.addressLine1.trim()) return false
-      if (!newRecipient.city.trim()) return false
-      if (!newRecipient.state.trim()) return false
-      if (!newRecipient.postalCode.trim()) return false
     }
 
     return true
@@ -693,17 +712,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
             ? `Mobile Money (${newRecipient.provider})`
             : newRecipient.bankName
 
-      const bankSchemaHints =
-        selectedCountryCurrency && selectedRecipientType === 'bank'
-          ? getPayoutFieldsSchemaForCorridor({
-              countryCode: selectedCountryCurrency.countryCode,
-              currencyCode: selectedCountryCurrency.currencyCode,
-              rail: 'bank_transfer',
-            })
-          : null
-      const needsAddr =
-        selectedRecipientType === 'bank' &&
-        recipientFormNeedsAddress({ hints: bankSchemaHints, currencyCode: newRecipient.currency })
       const persistPayload: RecipientData = {
         fullName: newRecipient.fullName,
         accountNumber: accountNumberForType,
@@ -731,22 +739,10 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           (newRecipient.checkingOrSavings === 'checking' || newRecipient.checkingOrSavings === 'savings')
             ? newRecipient.checkingOrSavings
             : undefined,
-        addressLine1:
-          selectedCountryCurrency?.countryCode === 'US' || needsAddr
-            ? newRecipient.addressLine1 || undefined
-            : undefined,
-        city:
-          selectedCountryCurrency?.countryCode === 'US' || needsAddr
-            ? newRecipient.city || undefined
-            : undefined,
-        state:
-          selectedCountryCurrency?.countryCode === 'US' || needsAddr
-            ? newRecipient.state || undefined
-            : undefined,
-        postalCode:
-          selectedCountryCurrency?.countryCode === 'US' || needsAddr
-            ? newRecipient.postalCode || undefined
-            : undefined,
+        addressLine1: showsHolderAddress ? newRecipient.addressLine1 || undefined : undefined,
+        city: showsHolderAddress ? newRecipient.city || undefined : undefined,
+        state: showsHolderAddress ? newRecipient.state || undefined : undefined,
+        postalCode: showsHolderAddress ? newRecipient.postalCode || undefined : undefined,
       }
       const draftKind =
         selectedRecipientType === 'wallet'
@@ -847,7 +843,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     showProviderDropdown ||
     showWalletAssetDropdown ||
     showWalletNetworkDropdown ||
-    showBankDropdown
+    showBankDropdown ||
+    showSubdivisionDropdown
   const closeAllDropdowns = () => {
     setShowCurrencyDropdown(false)
     setShowProviderDropdown(false)
@@ -855,6 +852,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     setShowWalletNetworkDropdown(false)
     setShowBankDropdown(false)
     setBankSearchTerm('')
+    setShowSubdivisionDropdown(false)
+    setSubdivisionSearchTerm('')
   }
   const renderRecipient = ({ item, index }: { item: Recipient; index: number }) => {
     const isDraftEasenet = isDraftEasenetRecipient(item.id)
@@ -1298,6 +1297,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                 onPress={() => {
                   setShowCurrencyDropdown(!showCurrencyDropdown)
                   setCurrencySearchTerm('')
+                  setShowSubdivisionDropdown(false)
+                  setShowBankDropdown(false)
                 }} >
                 <View style={styles.currencySelectorContent}>
                   {selectedCatalogEntry ? (
@@ -1689,6 +1690,16 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                               >
                                 {method.label}
                               </Text>
+                              {method.speedLabel ? (
+                                <Text
+                                  style={[
+                                    styles.transferTypeOptionSpeed,
+                                    transferType === method.value && styles.transferTypeOptionSpeedSelected,
+                                  ]}
+                                >
+                                  {method.speedLabel}
+                                </Text>
+                              ) : null}
                             </Pressable>
                           ))}
                         </View>
@@ -1727,6 +1738,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                         setShowProviderDropdown(false)
                         setShowWalletAssetDropdown(false)
                         setShowWalletNetworkDropdown(false)
+                        setShowSubdivisionDropdown(false)
                       }}
                       searchTerm={bankSearchTerm}
                       onSearchTermChange={setBankSearchTerm}
@@ -1737,9 +1749,12 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                     />
 
                     {/* US Account Fields */}
-                    {accountConfig.accountType === "us" && (
+                    {accountConfig.accountType === "us" &&
+                    showsHolderAddress &&
+                    selectedCountryCurrency ? (
                       <>
-                        <UsBankAddressFields
+                        <RecipientOperationalAddressFields
+                          countryCode={selectedCountryCurrency.countryCode}
                           scrollRef={formScrollRef}
                           inputStyle={styles.modalInput}
                           rowStyle={styles.twoColumnRow}
@@ -1754,6 +1769,21 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                             setNewRecipient((prev) => ({ ...prev, ...patch }))
                           }
                           isSubmitting={isSubmitting}
+                          showSubdivisionDropdown={showSubdivisionDropdown}
+                          onToggleSubdivisionDropdown={() => {
+                            setShowSubdivisionDropdown(!showSubdivisionDropdown)
+                            setShowBankDropdown(false)
+                            setShowCurrencyDropdown(false)
+                            setShowProviderDropdown(false)
+                            setShowWalletAssetDropdown(false)
+                            setShowWalletNetworkDropdown(false)
+                          }}
+                          subdivisionSearchTerm={subdivisionSearchTerm}
+                          onSubdivisionSearchTermChange={setSubdivisionSearchTerm}
+                          onCloseSubdivisionDropdown={() => {
+                            setShowSubdivisionDropdown(false)
+                            setSubdivisionSearchTerm('')
+                          }}
                         />
                         <View>
                           <TextInput
@@ -1948,18 +1978,48 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                           currencyCode: selectedCountryCurrency.currencyCode,
                           rail: 'bank_transfer',
                         })}
-                        currencyCode={newRecipient.currency}
-                        countryCode={selectedCountryCurrency.countryCode}
                         values={{
                           email: newRecipient.email,
                           phoneNumber: newRecipient.phoneNumber,
+                        }}
+                        onChange={(patch) => setNewRecipient((prev) => ({ ...prev, ...patch }))}
+                        isSubmitting={isSubmitting}
+                      />
+                    ) : null}
+                    {showsHolderAddress &&
+                    selectedCountryCurrency &&
+                    accountConfig.accountType !== 'us' ? (
+                      <RecipientOperationalAddressFields
+                        countryCode={selectedCountryCurrency.countryCode}
+                        scrollRef={formScrollRef}
+                        inputStyle={styles.modalInput}
+                        rowStyle={styles.twoColumnRow}
+                        halfInputStyle={styles.halfInput}
+                        values={{
                           addressLine1: newRecipient.addressLine1,
                           city: newRecipient.city,
                           state: newRecipient.state,
                           postalCode: newRecipient.postalCode,
                         }}
-                        onChange={(patch) => setNewRecipient((prev) => ({ ...prev, ...patch }))}
+                        onChange={(patch) =>
+                          setNewRecipient((prev) => ({ ...prev, ...patch }))
+                        }
                         isSubmitting={isSubmitting}
+                        showSubdivisionDropdown={showSubdivisionDropdown}
+                        onToggleSubdivisionDropdown={() => {
+                          setShowSubdivisionDropdown(!showSubdivisionDropdown)
+                          setShowBankDropdown(false)
+                          setShowCurrencyDropdown(false)
+                          setShowProviderDropdown(false)
+                          setShowWalletAssetDropdown(false)
+                          setShowWalletNetworkDropdown(false)
+                        }}
+                        subdivisionSearchTerm={subdivisionSearchTerm}
+                        onSubdivisionSearchTermChange={setSubdivisionSearchTerm}
+                        onCloseSubdivisionDropdown={() => {
+                          setShowSubdivisionDropdown(false)
+                          setSubdivisionSearchTerm('')
+                        }}
                       />
                     ) : null}
                   </>
@@ -2569,7 +2629,7 @@ const styles = StyleSheet.create({
     borderColor: colors.frame.border,
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
-    minHeight: 48,
+    minHeight: 56,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -2601,6 +2661,15 @@ const styles = StyleSheet.create({
   transferTypeOptionTextSelected: {
     color: colors.primary.main,
     fontFamily: fontFamily.semibold,
+  },
+  transferTypeOptionSpeed: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
+    fontFamily: fontFamily.regular,
+    marginTop: 2,
+  },
+  transferTypeOptionSpeedSelected: {
+    color: colors.primary.main,
   },
   errorContainer: {
     backgroundColor: colors.error.background,

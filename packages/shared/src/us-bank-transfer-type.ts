@@ -9,13 +9,15 @@ export type GridUsPaymentRail = "ACH" | "WIRE" | "RTP" | "FEDNOW"
 export type UsBankTransferMethodOption = {
   value: UsBankTransferType
   label: string
+  /** Smaller caption inside the transfer-type chip (RTP / FedNow). */
+  speedLabel?: "Instant"
 }
 
 const GRID_METHODS: UsBankTransferMethodOption[] = [
   { value: "ACH", label: "ACH" },
   { value: "Wire", label: "Wire" },
-  { value: "RTP", label: "RTP" },
-  { value: "FEDNOW", label: "FedNow" },
+  { value: "RTP", label: "RTP", speedLabel: "Instant" },
+  { value: "FEDNOW", label: "FedNow", speedLabel: "Instant" },
 ]
 
 const NOAH_METHODS: UsBankTransferMethodOption[] = [

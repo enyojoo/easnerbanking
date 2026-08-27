@@ -32,6 +32,14 @@ import {
   isNoahBalancePayoutCorridor,
   isBalancePayoutCorridorExecutable,
   resolveBalancePayoutProvider,
+  resolvePayoutProviderForHolderAddress,
+  recipientNeedsHolderAddressBeforeSend,
+  RECIPIENT_HOLDER_ADDRESS_REQUIRED_TITLE,
+  RECIPIENT_HOLDER_ADDRESS_REQUIRED_BODY_BEFORE,
+  RECIPIENT_HOLDER_ADDRESS_REQUIRED_LINK_LABEL,
+  RECIPIENT_HOLDER_ADDRESS_REQUIRED_BODY_AFTER,
+  RECIPIENT_HOLDER_ADDRESS_REQUIRED_EDIT_CTA,
+  RECIPIENT_HOLDER_ADDRESS_REQUIRED_BACK_CTA,
   type NoahWalletRateRow,
 } from "@easner/shared"
 import { getCurrencySymbol, getSendAmountFieldSymbol } from "@/lib/utils"
@@ -54,6 +62,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { generateTransactionId } from "@/lib/transaction-id"
 import { CurrencyFlag } from "@/components/flags"
 import { CountryFlag } from "@/components/flags"
@@ -196,6 +214,7 @@ export default function SendPage() {
   const [paymentPurpose, setPaymentPurpose] = useState("")
   const [amountFieldError, setAmountFieldError] = useState<string | null>(null)
   const [sourceSheetOpen, setSourceSheetOpen] = useState(false)
+  const [addressRequiredOpen, setAddressRequiredOpen] = useState(false)
   const [payoutQuotePreview, setPayoutQuotePreview] = useState<PayoutQuoteResult | null>(null)
   const walletQuoteCacheRef = useRef<{ key: string; quote: WalletSendQuoteResult } | null>(null)
   const walletQuoteInflightRef = useRef<Promise<WalletSendQuoteResult | null> | null>(null)
@@ -738,6 +757,10 @@ export default function SendPage() {
   const isProviderBalancePayout = isYcBalancePayout || isGridBalancePayout
 
   const balancePayoutProvider = resolveBalancePayoutProvider(payoutCorridorRow)
+  const holderAddressPayoutProvider = resolvePayoutProviderForHolderAddress({
+    providerRouting: payoutCorridorRow?.provider_routing,
+    senderCountryCode: residenceCountry,
+  })
 
   const payoutCorridorExecutable = useMemo(() => {
     if (!recipient || isEasetagRecipient || isWalletRecipient) return true
@@ -1459,6 +1482,24 @@ export default function SendPage() {
         }
       }
       setAmountFieldError(null)
+      if (
+        recipientNeedsHolderAddressBeforeSend({
+          rail: payoutRail,
+          isWallet: isWalletRecipient,
+          isEasetag: isEasetagRecipient,
+          hints: payoutHints,
+          currencyCode: activeRecipient.currency || "",
+          countryCode: activeRecipient.countryCode,
+          payoutProvider: holderAddressPayoutProvider,
+          addressLine1: activeRecipient.addressLine1,
+          city: activeRecipient.city,
+          state: activeRecipient.state,
+          postalCode: activeRecipient.postalCode,
+        })
+      ) {
+        setAddressRequiredOpen(true)
+        return
+      }
       warmYcMetadataCacheOnContinue(
         showThroughLocalCurrency && otherCurrency
           ? {
@@ -1644,6 +1685,10 @@ export default function SendPage() {
       setIsContinueLoading(false)
     }
   }
+
+  const recipientAddressEditHref = recipient?.id
+    ? `/settings?tab=recipients&edit=${encodeURIComponent(recipient.id)}`
+    : "/settings?tab=recipients"
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-6">
@@ -1856,6 +1901,30 @@ export default function SendPage() {
           SEND_AMOUNT_CONTINUE_CTA
         )}
       </Button>
+
+      <AlertDialog open={addressRequiredOpen} onOpenChange={setAddressRequiredOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{RECIPIENT_HOLDER_ADDRESS_REQUIRED_TITLE}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {RECIPIENT_HOLDER_ADDRESS_REQUIRED_BODY_BEFORE}
+              <Link
+                href={recipientAddressEditHref}
+                className="font-medium text-foreground underline underline-offset-2"
+              >
+                {RECIPIENT_HOLDER_ADDRESS_REQUIRED_LINK_LABEL}
+              </Link>
+              {RECIPIENT_HOLDER_ADDRESS_REQUIRED_BODY_AFTER}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{RECIPIENT_HOLDER_ADDRESS_REQUIRED_BACK_CTA}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => router.push(recipientAddressEditHref)}>
+              {RECIPIENT_HOLDER_ADDRESS_REQUIRED_EDIT_CTA}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={sourceSheetOpen} onOpenChange={setSourceSheetOpen}>
         <DialogContent

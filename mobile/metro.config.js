@@ -36,11 +36,25 @@ config.resolver.nodeModulesPaths = [
 
 const sharedRoot = path.resolve(monorepoRoot, 'packages/shared')
 const sharedCurrencyFlagNative = path.join(sharedRoot, 'src/components/CountryFlag.native.tsx')
+const sharedCountryRegistrationNative = path.join(
+  sharedRoot,
+  'src/lib-address/country-registration.native.ts',
+)
+
 const extraNodeModules = {
   '@easner/shared': sharedRoot,
   // Metro extraNodeModules points at the package dir, not package.json exports subpaths.
   '@easner/shared/warm-flags': path.join(sharedRoot, 'src/flags/warm-flags.native.ts'),
   '@easner/shared/currency-flag': path.join(sharedRoot, 'src/components/CountryFlag.native.tsx'),
+  '@easner/shared/postal-address-form': path.join(sharedRoot, 'src/postal-address-form.ts'),
+}
+
+try {
+  extraNodeModules['lib-address'] = path.dirname(
+    require.resolve('lib-address/package.json', { paths: [projectRoot, monorepoRoot] }),
+  )
+} catch {
+  // install issue
 }
 
 // EAS monorepo: hoisted deps may only exist under ../node_modules; force resolution if present.
@@ -120,6 +134,12 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
       moduleName.endsWith('/components/CountryFlag'))
   ) {
     return { type: 'sourceFile', filePath: sharedCurrencyFlagNative }
+  }
+  if (
+    moduleName === './lib-address/country-registration' ||
+    moduleName.endsWith('/lib-address/country-registration')
+  ) {
+    return { type: 'sourceFile', filePath: sharedCountryRegistrationNative }
   }
   if (defaultResolveRequest) {
     return defaultResolveRequest(context, moduleName, platform)

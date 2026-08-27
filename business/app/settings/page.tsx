@@ -124,6 +124,9 @@ function SettingsContent() {
       next.delete("flow")
       setVerificationFlow(null)
     }
+    if (value !== "recipients") {
+      next.delete("edit")
+    }
     if (typeof window !== "undefined") {
       window.history.replaceState(null, "", `/settings?${next.toString()}`)
     }

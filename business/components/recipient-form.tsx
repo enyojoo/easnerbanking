@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Loader2, User, Phone, CreditCard, MapPin, ChevronDown } from "lucide-react"
 import {
-  recipientFormNeedsAddress,
+  recipientFormShowsAddress,
   recipientFormNeedsBankCode,
   recipientFormNeedsEmail,
   normalizeRecipientYcMetadata,
@@ -27,6 +27,11 @@ import {
   ycAccountNumberLabel,
   type RecipientYcMetadata,
 } from "@easner/shared"
+import {
+  recipientHolderAddressFieldErrors,
+  validateRecipientHolderAddress,
+} from "@easner/shared/postal-address-form"
+import { RecipientOperationalAddressFields } from "@/components/recipient-operational-address-fields"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { CountryFlag } from "@/components/flags"
 import { MobileMoneyProviderIcon } from "@/lib/mobile-money-icons"
@@ -463,6 +468,14 @@ export function RecipientForm({
     }
   }, [formData.recipientType, currency, formData.transferType, usTransferMethods])
   const payoutFormHints = unwrapNoahFieldsSchema(selectedCorridorRow?.fields_schema)
+  const showsHolderAddress =
+    formData.recipientType === "bank" &&
+    recipientFormShowsAddress({
+      hints: payoutFormHints,
+      currencyCode: currency,
+      countryCode: selectedCountry?.code,
+      payoutProvider,
+    })
   const ycCorridorSchema = useMemo(() => {
     if (!selectedCountry) return null
     return resolveYcCorridorSchema({
@@ -553,18 +566,6 @@ export function RecipientForm({
     ) {
       newErrors.transferType = "Transfer type is required for USD"
     }
-    if (formData.recipientType === "bank" && currency === "USD" && !formData.addressLine1.trim()) {
-      newErrors.addressLine1 = "Street address is required for USD"
-    }
-    if (formData.recipientType === "bank" && currency === "USD" && !formData.city.trim()) {
-      newErrors.city = "City is required for USD"
-    }
-    if (formData.recipientType === "bank" && currency === "USD" && !formData.state.trim()) {
-      newErrors.state = "State is required for USD"
-    }
-    if (formData.recipientType === "bank" && currency === "USD" && !formData.postalCode.trim()) {
-      newErrors.postalCode = "ZIP code is required for USD"
-    }
 
     if (formData.recipientType === "bank" && currency === "EUR") {
       if (!formData.iban.trim()) {
@@ -594,13 +595,21 @@ export function RecipientForm({
       newErrors.phone = "Phone number is required for this corridor"
     }
 
-    const needsAddress =
-      formData.recipientType === "bank" && recipientFormNeedsAddress({ hints: payoutFormHints, currencyCode: currency })
-    if (needsAddress && currency !== "USD") {
-      if (!formData.addressLine1.trim()) newErrors.addressLine1 = "Street address is required"
-      if (!formData.city.trim()) newErrors.city = "City is required"
-      if (!formData.state.trim()) newErrors.state = "State / region is required"
-      if (!formData.postalCode.trim()) newErrors.postalCode = "Postal code is required"
+    if (showsHolderAddress && selectedCountry?.code) {
+      const addressResult = validateRecipientHolderAddress(selectedCountry.code, {
+        line1: formData.addressLine1,
+        city: formData.city,
+        state: formData.state,
+        postalCode: formData.postalCode,
+        countryCode: selectedCountry.code,
+      })
+      if (!addressResult.valid) {
+        const mapped = recipientHolderAddressFieldErrors(addressResult)
+        if (mapped.addressLine1) newErrors.addressLine1 = mapped.addressLine1
+        if (mapped.city) newErrors.city = mapped.city
+        if (mapped.state) newErrors.state = mapped.state
+        if (mapped.postalCode) newErrors.postalCode = mapped.postalCode
+      }
     }
 
     if (formData.recipientType === "bank" && recipientFormNeedsEmail(payoutFormHints)) {
@@ -767,22 +776,10 @@ export function RecipientForm({
           ? formData.checkingOrSavings
           : undefined,
       email: recipientFormNeedsEmail(payoutFormHints) && formData.email.trim() ? formData.email.trim() : undefined,
-      addressLine1:
-        isUsdBank || recipientFormNeedsAddress({ hints: payoutFormHints, currencyCode: currency })
-          ? formData.addressLine1.trim()
-          : undefined,
-      city:
-        isUsdBank || recipientFormNeedsAddress({ hints: payoutFormHints, currencyCode: currency })
-          ? formData.city.trim()
-          : undefined,
-      state:
-        isUsdBank || recipientFormNeedsAddress({ hints: payoutFormHints, currencyCode: currency })
-          ? formData.state.trim()
-          : undefined,
-      postalCode:
-        isUsdBank || recipientFormNeedsAddress({ hints: payoutFormHints, currencyCode: currency })
-          ? formData.postalCode.trim()
-          : undefined,
+      addressLine1: showsHolderAddress ? formData.addressLine1.trim() : undefined,
+      city: showsHolderAddress ? formData.city.trim() : undefined,
+      state: showsHolderAddress ? formData.state.trim() : undefined,
+      postalCode: showsHolderAddress ? formData.postalCode.trim() : undefined,
       ycMetadata:
         formData.recipientType === "bank"
           ? currency === "CAD"
@@ -1355,59 +1352,56 @@ export function RecipientForm({
                         key={method.value}
                         type="button"
                         variant={formData.transferType === method.value ? "default" : "outline"}
+                        className="h-auto min-h-12 flex-col gap-0.5 whitespace-normal py-2"
                         onClick={() => handleInputChange("transferType", method.value)}
                       >
-                        {method.label}
+                        <span>{method.label}</span>
+                        {method.speedLabel ? (
+                          <span
+                            className={
+                              formData.transferType === method.value
+                                ? "text-[11px] font-normal leading-none opacity-80"
+                                : "text-[11px] font-normal leading-none text-muted-foreground"
+                            }
+                          >
+                            {method.speedLabel}
+                          </span>
+                        ) : null}
                       </Button>
                     ))}
                   </div>
                   {errors.transferType && <p className="text-xs text-red-500">{errors.transferType}</p>}
                 </div>
               ) : null}
-              <div className="space-y-2 col-span-2">
-                <label className="text-xs text-muted-foreground">Street address</label>
-                <Input
-                  value={formData.addressLine1}
-                  onChange={(e) => handleInputChange("addressLine1", e.target.value)}
-                  placeholder="123 Main St"
-                  className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.addressLine1 ? "border-red-500" : ""}`}
-                  required
-                />
-                {errors.addressLine1 && <p className="text-xs text-red-500">{errors.addressLine1}</p>}
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs text-muted-foreground">City</label>
-                <Input
-                  value={formData.city}
-                  onChange={(e) => handleInputChange("city", e.target.value)}
-                  placeholder="New York"
-                  className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.city ? "border-red-500" : ""}`}
-                  required
-                />
-                {errors.city && <p className="text-xs text-red-500">{errors.city}</p>}
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs text-muted-foreground">State</label>
-                <Input
-                  value={formData.state}
-                  onChange={(e) => handleInputChange("state", e.target.value)}
-                  placeholder="NY"
-                  className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.state ? "border-red-500" : ""}`}
-                  required
-                />
-                {errors.state && <p className="text-xs text-red-500">{errors.state}</p>}
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs text-muted-foreground">ZIP code</label>
-                <Input
-                  value={formData.postalCode}
-                  onChange={(e) => handleInputChange("postalCode", e.target.value)}
-                  placeholder="10001"
-                  className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.postalCode ? "border-red-500" : ""}`}
-                  required
-                />
-                {errors.postalCode && <p className="text-xs text-red-500">{errors.postalCode}</p>}
-              </div>
+              {showsHolderAddress && selectedCountry?.code ? (
+                <div className="col-span-2 space-y-4">
+                  <RecipientOperationalAddressFields
+                    countryCode={selectedCountry.code}
+                    values={{
+                      addressLine1: formData.addressLine1,
+                      city: formData.city,
+                      state: formData.state,
+                      postalCode: formData.postalCode,
+                    }}
+                    onChange={(patch) => {
+                      setFormData((prev) => ({ ...prev, ...patch }))
+                      setErrors((prev) => {
+                        const next = { ...prev }
+                        for (const key of Object.keys(patch)) {
+                          if (next[key]) next[key] = ""
+                        }
+                        return next
+                      })
+                    }}
+                    errors={{
+                      addressLine1: errors.addressLine1,
+                      city: errors.city,
+                      state: errors.state,
+                      postalCode: errors.postalCode,
+                    }}
+                  />
+                </div>
+              ) : null}
               <div className="space-y-2">
                 <label className="text-xs text-muted-foreground">Routing Number</label>
                 <Input
@@ -1590,54 +1584,33 @@ export function RecipientForm({
             </div>
           )}
 
-          {formData.recipientType === "bank" &&
-            recipientFormNeedsAddress({ hints: payoutFormHints, currencyCode: currency }) &&
-            currency !== "USD" && (
-              <>
-                <div className="space-y-2">
-                  <label className="text-xs text-muted-foreground">Street address</label>
-                  <Input
-                    value={formData.addressLine1}
-                    onChange={(e) => handleInputChange("addressLine1", e.target.value)}
-                    className={`h-12 ${errors.addressLine1 ? "border-red-500" : ""}`}
-                    required
-                  />
-                  {errors.addressLine1 && <p className="text-xs text-red-500">{errors.addressLine1}</p>}
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-xs text-muted-foreground">City</label>
-                    <Input
-                      value={formData.city}
-                      onChange={(e) => handleInputChange("city", e.target.value)}
-                      className={`h-12 ${errors.city ? "border-red-500" : ""}`}
-                      required
-                    />
-                    {errors.city && <p className="text-xs text-red-500">{errors.city}</p>}
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs text-muted-foreground">State / region</label>
-                    <Input
-                      value={formData.state}
-                      onChange={(e) => handleInputChange("state", e.target.value)}
-                      className={`h-12 ${errors.state ? "border-red-500" : ""}`}
-                      required
-                    />
-                    {errors.state && <p className="text-xs text-red-500">{errors.state}</p>}
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs text-muted-foreground">Postal code</label>
-                    <Input
-                      value={formData.postalCode}
-                      onChange={(e) => handleInputChange("postalCode", e.target.value)}
-                      className={`h-12 ${errors.postalCode ? "border-red-500" : ""}`}
-                      required
-                    />
-                    {errors.postalCode && <p className="text-xs text-red-500">{errors.postalCode}</p>}
-                  </div>
-                </div>
-              </>
-            )}
+          {formData.recipientType === "bank" && showsHolderAddress && currency !== "USD" && selectedCountry?.code ? (
+            <RecipientOperationalAddressFields
+              countryCode={selectedCountry.code}
+              values={{
+                addressLine1: formData.addressLine1,
+                city: formData.city,
+                state: formData.state,
+                postalCode: formData.postalCode,
+              }}
+              onChange={(patch) => {
+                setFormData((prev) => ({ ...prev, ...patch }))
+                setErrors((prev) => {
+                  const next = { ...prev }
+                  for (const key of Object.keys(patch)) {
+                    if (next[key]) next[key] = ""
+                  }
+                  return next
+                })
+              }}
+              errors={{
+                addressLine1: errors.addressLine1,
+                city: errors.city,
+                state: errors.state,
+                postalCode: errors.postalCode,
+              }}
+            />
+          ) : null}
 
           {formData.recipientType === "bank" && payoutFormHints?.needs_phone && currency !== "USD" && (
             <div className="space-y-2">

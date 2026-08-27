@@ -2,6 +2,7 @@ import {
   corridorMatchesCountryCurrency,
   type PayoutCorridorPublic,
   type PayoutFieldsSchemaHint,
+  type PayoutProviderId,
   type PayoutRail,
 } from "./payout-corridor"
 import { unwrapNoahFieldsSchema } from "./yc-recipient-schema"
@@ -163,6 +164,77 @@ export function recipientFormNeedsAddress(input: {
   if (input.hints?.needs_address) return true
   return input.currencyCode.trim().toUpperCase() === "CAD"
 }
+
+function payoutProviderNeedsHolderAddress(
+  payoutProvider: PayoutProviderId | null | undefined,
+): boolean {
+  const provider = payoutProvider ?? "noah"
+  return provider !== "grid" && provider !== "yellowcard"
+}
+
+/** Bank recipient forms that collect holder postal address (Noah US/CAD / schema hints). */
+export function recipientFormShowsAddress(input: {
+  hints: PayoutFieldsSchemaHint | null | undefined
+  currencyCode: string
+  countryCode?: string | null
+  payoutProvider?: PayoutProviderId | null
+}): boolean {
+  if (!payoutProviderNeedsHolderAddress(input.payoutProvider)) return false
+  const country = String(input.countryCode ?? "").trim().toUpperCase()
+  const currency = input.currencyCode.trim().toUpperCase()
+  if (country === "US" || currency === "USD") return true
+  return recipientFormNeedsAddress({ hints: input.hints, currencyCode: input.currencyCode })
+}
+
+export function recipientHolderAddressFieldsPresent(input: {
+  addressLine1?: string | null
+  city?: string | null
+  state?: string | null
+  postalCode?: string | null
+}): boolean {
+  return [input.addressLine1, input.city, input.state, input.postalCode].every(
+    (value) => String(value ?? "").trim().length > 0,
+  )
+}
+
+/** Amount-screen Continue: Noah needs holder address and the saved row is missing it. */
+export function recipientNeedsHolderAddressBeforeSend(input: {
+  rail?: PayoutRail | null
+  isWallet?: boolean
+  isEasetag?: boolean
+  hints: PayoutFieldsSchemaHint | null | undefined
+  currencyCode: string
+  countryCode?: string | null
+  payoutProvider?: PayoutProviderId | null
+  addressLine1?: string | null
+  city?: string | null
+  state?: string | null
+  postalCode?: string | null
+}): boolean {
+  if (input.isWallet || input.isEasetag) return false
+  if (input.rail && input.rail !== "bank_transfer") return false
+  if (
+    !recipientFormShowsAddress({
+      hints: input.hints,
+      currencyCode: input.currencyCode,
+      countryCode: input.countryCode,
+      payoutProvider: input.payoutProvider,
+    })
+  ) {
+    return false
+  }
+  return !recipientHolderAddressFieldsPresent(input)
+}
+
+export const RECIPIENT_HOLDER_ADDRESS_REQUIRED_TITLE = "Address required"
+export const RECIPIENT_HOLDER_ADDRESS_REQUIRED_BODY_BEFORE =
+  "This recipient needs an address. Kindly go to the recipient section "
+export const RECIPIENT_HOLDER_ADDRESS_REQUIRED_LINK_LABEL = "here"
+export const RECIPIENT_HOLDER_ADDRESS_REQUIRED_BODY_AFTER =
+  " to edit and add it. Otherwise, go back and create this receiver as a new recipient."
+export const RECIPIENT_HOLDER_ADDRESS_REQUIRED_BODY = `${RECIPIENT_HOLDER_ADDRESS_REQUIRED_BODY_BEFORE}${RECIPIENT_HOLDER_ADDRESS_REQUIRED_LINK_LABEL}${RECIPIENT_HOLDER_ADDRESS_REQUIRED_BODY_AFTER}`
+export const RECIPIENT_HOLDER_ADDRESS_REQUIRED_EDIT_CTA = "Edit recipient"
+export const RECIPIENT_HOLDER_ADDRESS_REQUIRED_BACK_CTA = "Go back"
 
 /** Recipient form: ZA BankLocal and similar require phone on the saved row. */
 export function recipientFormNeedsPhone(hints: PayoutFieldsSchemaHint | null | undefined): boolean {

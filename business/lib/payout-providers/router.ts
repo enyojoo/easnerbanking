@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { ProviderRoutingEntry } from "@easner/shared"
-import { isGridDigitalAssetJurisdiction } from "@easner/shared"
+import { filterProviderRoutingForSender, isGridDigitalAssetJurisdiction } from "@easner/shared"
 import { gridPayoutProvider } from "./grid-provider"
 import { noahPayoutProvider } from "./noah-provider"
 import { yellowcardPayoutProvider } from "./yellowcard-provider"
@@ -32,21 +32,7 @@ function parseRouting(raw: unknown): ProviderRoutingEntry[] {
   return out.sort((a, b) => a.priority - b.priority)
 }
 
-/**
- * Grid digital-asset extra residences cannot use Grid payouts.
- * Strip `grid` and keep priority order among remaining providers.
- */
-export function filterProviderRoutingForSender(
-  routing: ProviderRoutingEntry[],
-  senderCountryCode: string | null | undefined,
-): ProviderRoutingEntry[] {
-  if (!isGridDigitalAssetJurisdiction(senderCountryCode)) {
-    return routing
-  }
-  return routing
-    .filter((entry) => String(entry.provider).trim().toLowerCase() !== "grid")
-    .sort((a, b) => a.priority - b.priority)
-}
+export { filterProviderRoutingForSender }
 
 /**
  * Manual Office routing: use the priority-1 provider only.

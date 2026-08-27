@@ -1,7 +1,7 @@
 "use client"
 
-import { useRouter } from "next/navigation"
-import { useMemo, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -35,11 +35,13 @@ import { SETTINGS_CARD_COPY } from "@/lib/copy/business-ui-copy"
 
 export function SettingsRecipientsTab() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [selectedRecipient, setSelectedRecipient] = useState<Beneficiary | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const editRecipientId = searchParams.get("edit")
   const {
     data: beneficiariesRaw,
     setData: setBeneficiaries,
@@ -113,9 +115,18 @@ export function SettingsRecipientsTab() {
     setIsCreateDialogOpen(false)
   }
 
+  const clearEditQueryParam = () => {
+    if (!editRecipientId) return
+    const next = new URLSearchParams(searchParams.toString())
+    next.delete("edit")
+    const qs = next.toString()
+    window.history.replaceState(null, "", qs ? `/settings?${qs}` : "/settings?tab=recipients")
+  }
+
   const handleEditSuccess = () => {
     setIsEditDialogOpen(false)
     setSelectedRecipient(null)
+    clearEditQueryParam()
   }
 
   const handleEditSuccessWithData = (beneficiary: Beneficiary) => {
@@ -125,7 +136,16 @@ export function SettingsRecipientsTab() {
     reconcileRecipientsFromServer()
     setIsEditDialogOpen(false)
     setSelectedRecipient(null)
+    clearEditQueryParam()
   }
+
+  useEffect(() => {
+    if (!editRecipientId || isEditDialogOpen) return
+    const match = beneficiaries.find((row) => row.id === editRecipientId)
+    if (!match) return
+    setSelectedRecipient(match)
+    setIsEditDialogOpen(true)
+  }, [editRecipientId, isEditDialogOpen, beneficiaries])
 
   return (
     <div className="space-y-6">
@@ -246,7 +266,16 @@ export function SettingsRecipientsTab() {
         </CardContent>
       </Card>
 
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      <Dialog
+        open={isEditDialogOpen}
+        onOpenChange={(open) => {
+          setIsEditDialogOpen(open)
+          if (!open) {
+            setSelectedRecipient(null)
+            clearEditQueryParam()
+          }
+        }}
+      >
         <DialogContent className="min-w-0 overflow-x-hidden sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Recipient</DialogTitle>

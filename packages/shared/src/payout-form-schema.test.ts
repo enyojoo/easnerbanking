@@ -12,7 +12,11 @@ import {
   deriveSendBudgetFromReceiveAmount,
   validateSendAmountFields,
   recipientFormNeedsBankCode,
+  recipientFormNeedsAddress,
+  recipientFormShowsAddress,
+  recipientNeedsHolderAddressBeforeSend,
 } from "./payout-form-schema"
+import { resolvePayoutProviderForHolderAddress } from "./payout-corridor"
 import type { PayoutCorridorPublic, PayoutFieldsSchemaHint } from "./payout-corridor"
 
 describe("formatPayoutArrivalHint", () => {
@@ -311,5 +315,157 @@ describe("recipientFormNeedsBankCode", () => {
     expect(recipientFormNeedsBankCode({ amount_field_mode: "note_optional_only", needs_bank_code: true })).toBe(true)
     expect(recipientFormNeedsBankCode({ amount_field_mode: "note_optional_only" })).toBe(false)
     expect(recipientFormNeedsBankCode(null)).toBe(false)
+  })
+})
+
+describe("recipientFormShowsAddress", () => {
+  it("shows address for US bank and USD even without schema hints", () => {
+    expect(recipientFormShowsAddress({ hints: null, currencyCode: "USD", countryCode: "US" })).toBe(true)
+    expect(recipientFormShowsAddress({ hints: null, currencyCode: "USD" })).toBe(true)
+    expect(recipientFormShowsAddress({ hints: null, currencyCode: "NGN", countryCode: "US" })).toBe(true)
+  })
+
+  it("shows address for CAD and schema needs_address, not typical NG bank", () => {
+    expect(recipientFormShowsAddress({ hints: null, currencyCode: "CAD", countryCode: "CA" })).toBe(true)
+    expect(recipientFormNeedsAddress({ hints: null, currencyCode: "CAD" })).toBe(true)
+    expect(
+      recipientFormShowsAddress({
+        hints: { amount_field_mode: "note_optional_only", needs_address: true },
+        currencyCode: "ZAR",
+        countryCode: "ZA",
+      }),
+    ).toBe(true)
+    expect(recipientFormShowsAddress({ hints: null, currencyCode: "NGN", countryCode: "NG" })).toBe(false)
+    expect(recipientFormShowsAddress({ hints: null, currencyCode: "EUR", countryCode: "DE" })).toBe(false)
+  })
+
+  it("hides address when Grid or Yellowcard is the payout provider", () => {
+    expect(
+      recipientFormShowsAddress({
+        hints: null,
+        currencyCode: "USD",
+        countryCode: "US",
+        payoutProvider: "grid",
+      }),
+    ).toBe(false)
+    expect(
+      recipientFormShowsAddress({
+        hints: { amount_field_mode: "note_optional_only", needs_address: true },
+        currencyCode: "ZAR",
+        countryCode: "ZA",
+        payoutProvider: "yellowcard",
+      }),
+    ).toBe(false)
+    expect(
+      recipientFormShowsAddress({
+        hints: null,
+        currencyCode: "CAD",
+        countryCode: "CA",
+        payoutProvider: "noah",
+      }),
+    ).toBe(true)
+  })
+})
+
+describe("recipientNeedsHolderAddressBeforeSend", () => {
+  const missingAddress = {
+    addressLine1: "",
+    city: "",
+    state: "",
+    postalCode: "",
+  }
+  const completeAddress = {
+    addressLine1: "1 Main St",
+    city: "New York",
+    state: "NY",
+    postalCode: "10001",
+  }
+
+  it("blocks Continue when Noah needs address and the row is missing it", () => {
+    expect(
+      recipientNeedsHolderAddressBeforeSend({
+        rail: "bank_transfer",
+        hints: null,
+        currencyCode: "USD",
+        countryCode: "US",
+        payoutProvider: "noah",
+        ...missingAddress,
+      }),
+    ).toBe(true)
+    expect(
+      recipientNeedsHolderAddressBeforeSend({
+        rail: "bank_transfer",
+        hints: null,
+        currencyCode: "USD",
+        countryCode: "US",
+        payoutProvider: "noah",
+        ...completeAddress,
+      }),
+    ).toBe(false)
+  })
+
+  it("does not block Grid, Yellowcard, wallet, or mobile money", () => {
+    expect(
+      recipientNeedsHolderAddressBeforeSend({
+        rail: "bank_transfer",
+        hints: null,
+        currencyCode: "USD",
+        countryCode: "US",
+        payoutProvider: "grid",
+        ...missingAddress,
+      }),
+    ).toBe(false)
+    expect(
+      recipientNeedsHolderAddressBeforeSend({
+        rail: "bank_transfer",
+        hints: { amount_field_mode: "note_optional_only", needs_address: true },
+        currencyCode: "ZAR",
+        countryCode: "ZA",
+        payoutProvider: "yellowcard",
+        ...missingAddress,
+      }),
+    ).toBe(false)
+    expect(
+      recipientNeedsHolderAddressBeforeSend({
+        rail: "bank_transfer",
+        isWallet: true,
+        hints: null,
+        currencyCode: "USD",
+        countryCode: "US",
+        payoutProvider: "noah",
+        ...missingAddress,
+      }),
+    ).toBe(false)
+    expect(
+      recipientNeedsHolderAddressBeforeSend({
+        rail: "mobile_money",
+        hints: { amount_field_mode: "note_optional_only", needs_address: true },
+        currencyCode: "KES",
+        countryCode: "KE",
+        payoutProvider: "noah",
+        ...missingAddress,
+      }),
+    ).toBe(false)
+  })
+
+  it("treats Grid-stripped digital-asset senders as Noah when Noah is secondary", () => {
+    const provider = resolvePayoutProviderForHolderAddress({
+      providerRouting: [
+        { provider: "grid", priority: 1 },
+        { provider: "noah", priority: 2 },
+      ],
+      senderCountryCode: "MA",
+    })
+    expect(provider).toBe("noah")
+    expect(
+      recipientNeedsHolderAddressBeforeSend({
+        rail: "bank_transfer",
+        hints: null,
+        currencyCode: "USD",
+        countryCode: "US",
+        payoutProvider: provider,
+        ...missingAddress,
+      }),
+    ).toBe(true)
   })
 })
