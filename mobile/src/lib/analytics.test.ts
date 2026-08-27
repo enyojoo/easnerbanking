@@ -54,4 +54,19 @@ describe("mobile analytics wrapper", () => {
       }),
     )
   })
+
+  it("records Expo web screen views without posthog.screen", async () => {
+    vi.doMock("react-native", () => ({ Platform: { OS: "web" } }))
+    vi.doMock("./posthog", () => ({ getPostHog: () => ({ capture }) }))
+    const { analytics } = await import("./analytics")
+    analytics.trackNavigationScreenView("Home")
+    expect(capture).toHaveBeenCalledWith(
+      "$screen",
+      expect.objectContaining({
+        $screen_name: "Home",
+        platform: ANALYTICS_PLATFORM.consumerWeb,
+        os: "web",
+      }),
+    )
+  })
 })

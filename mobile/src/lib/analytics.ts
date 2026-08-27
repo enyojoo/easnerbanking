@@ -27,6 +27,17 @@ const capture = (event: string, properties?: Props) => {
   posthog.capture(event, withDefaults(properties))
 }
 
+const captureScreen = (screenName: string, properties?: Props) => {
+  const posthog = getPostHog()
+  if (!posthog) return
+  const props = withDefaults(properties)
+  if (typeof posthog.screen === 'function') {
+    posthog.screen(screenName, props)
+    return
+  }
+  posthog.capture('$screen', { $screen_name: screenName, ...props })
+}
+
 export const analytics = {
   setScreenTrackingMode: (mode: ScreenTrackingMode) => {
     screenTrackingMode = mode
@@ -145,9 +156,7 @@ export const analytics = {
 
   trackScreenView: (screenName: string, properties?: Props) => {
     if (screenTrackingMode === 'auto') return
-    const posthog = getPostHog()
-    if (!posthog) return
-    posthog.screen(screenName, withDefaults(properties))
+    captureScreen(screenName, properties)
   },
 
   trackSupportLiveChatOpened: () => {
@@ -155,9 +164,7 @@ export const analytics = {
   },
 
   trackNavigationScreenView: (screenName: string, properties?: Props) => {
-    const posthog = getPostHog()
-    if (!posthog) return
-    posthog.screen(screenName, withDefaults(properties))
+    captureScreen(screenName, properties)
   },
 
   trackWebPageView: (href: string, referrer: string, properties?: Props) => {

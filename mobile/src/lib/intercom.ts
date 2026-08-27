@@ -131,12 +131,36 @@ function ensureWebIntercomStyles(): void {
   document.head.appendChild(style)
 }
 
+function isWindowIntercomReady(): boolean {
+  return typeof window !== 'undefined' && typeof window.Intercom === 'function'
+}
+
+async function waitForWindowIntercom(timeoutMs = 8_000): Promise<boolean> {
+  if (isWindowIntercomReady()) return true
+  if (typeof window === 'undefined') return false
+  const started = Date.now()
+  while (Date.now() - started < timeoutMs) {
+    await new Promise((resolve) => window.setTimeout(resolve, 50))
+    if (isWindowIntercomReady()) return true
+  }
+  return false
+}
+
+function shutdownWebIntercomIfReady(mod: WebIntercomModule): void {
+  if (!isWindowIntercomReady()) return
+  try {
+    mod.shutdown()
+  } catch (e) {
+    console.warn('[Intercom] shutdown failed', e)
+  }
+}
+
 function registerWebIntercomHideOnClose(): void {
   const mod = getWebIntercom()
-  if (!mod || webHideListenerRegistered || typeof window === 'undefined') return
+  if (!mod || webHideListenerRegistered || !isWindowIntercomReady()) return
   webHideListenerRegistered = true
   mod.onHide(() => {
-    mod.hide()
+    if (isWindowIntercomReady()) mod.hide()
   })
 }
 
@@ -358,8 +382,8 @@ async function bootWebIntercom(session: Session | null, options?: { updateOnly?:
 
   const Intercom = mod.default
   if (!session?.user) {
+    shutdownWebIntercomIfReady(mod)
     resetWebIntercomSession()
-    mod.shutdown()
     return false
   }
 
@@ -383,20 +407,27 @@ async function bootWebIntercom(session: Session | null, options?: { updateOnly?:
   ensureWebIntercomStyles()
 
   if (updateOnly && lastIntercomUserId === session.user.id) {
-    mod.update(buildWebUpdatePayload(session.user, auth))
+    if (isWindowIntercomReady()) {
+      mod.update(buildWebUpdatePayload(session.user, auth))
+    }
     markWebIntercomReady()
     return true
   }
 
   if (webIntercomBooted && lastIntercomUserId && lastIntercomUserId !== session.user.id) {
-    mod.shutdown()
+    shutdownWebIntercomIfReady(mod)
     resetWebIntercomSession()
   }
 
   Intercom(buildWebBootPayload(extra.intercomAppId, region, session.user, auth))
+  const widgetReady = await waitForWindowIntercom()
+  if (!widgetReady) {
+    console.warn('[Intercom] web widget did not become ready')
+    return false
+  }
   registerWebIntercomHideOnClose()
   webIntercomBooted = true
-  mod.hide()
+  if (isWindowIntercomReady()) mod.hide()
   markWebIntercomReady()
 
   lastIntercomUserId = session.user.id
@@ -534,6 +565,8 @@ export async function presentIntercomMessenger(): Promise<void> {
       }
       const messengerReady = await whenWebIntercomReady()
       if (!messengerReady) throw new Error('INTERCOM_NOT_READY')
+      const widgetReady = await waitForWindowIntercom()
+      if (!widgetReady || !isWindowIntercomReady()) throw new Error('INTERCOM_NOT_READY')
       webMod.show()
       return
     }

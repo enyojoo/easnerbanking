@@ -19,6 +19,7 @@ type AnalyticsClient = {
 
 let initStarted = false
 let disabled = false
+let wrapped: AnalyticsClient | null = null
 
 function noopClient(): AnalyticsClient {
   return {
@@ -32,10 +33,43 @@ function noopClient(): AnalyticsClient {
   }
 }
 
+function wrapPostHog(): AnalyticsClient {
+  if (wrapped) return wrapped
+  wrapped = {
+    capture: (event, properties) => {
+      posthog.capture(event, properties)
+    },
+    identify: (userId, properties) => {
+      posthog.identify(userId, properties)
+    },
+    reset: () => {
+      posthog.reset()
+    },
+    // posthog-js has no .screen(); RN PostHog does. Map to $screen for Expo web.
+    screen: (screenName, properties) => {
+      posthog.capture('$screen', { $screen_name: screenName, ...properties })
+    },
+    group: (groupType, groupKey, properties) => {
+      posthog.group(groupType, groupKey, properties)
+    },
+    setPersonProperties: (properties) => {
+      if (typeof posthog.setPersonProperties === 'function') {
+        posthog.setPersonProperties(properties)
+        return
+      }
+      posthog.people?.set?.(properties)
+    },
+    register: (properties) => {
+      posthog.register(properties)
+    },
+  }
+  return wrapped
+}
+
 export function initPostHog(): AnalyticsClient {
   if (typeof window === 'undefined') return noopClient()
   if (disabled) return noopClient()
-  if (initStarted) return posthog as unknown as AnalyticsClient
+  if (initStarted) return wrapPostHog()
 
   const posthogKey = process.env.EXPO_PUBLIC_POSTHOG_KEY
   if (!posthogKey) {
@@ -76,14 +110,14 @@ export function initPostHog(): AnalyticsClient {
     environment: __DEV__ ? 'development' : 'production',
   })
 
-  return posthog as unknown as AnalyticsClient
+  return wrapPostHog()
 }
 
 export function getPostHog(): AnalyticsClient | null {
   if (typeof window === 'undefined' || disabled) return null
   if (!initStarted) initPostHog()
   if (disabled) return null
-  return posthog as unknown as AnalyticsClient
+  return wrapPostHog()
 }
 
 export function schedulePostHogBootInit(): void {
