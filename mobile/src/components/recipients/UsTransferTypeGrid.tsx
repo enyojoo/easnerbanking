@@ -18,60 +18,59 @@ type Props = {
   disabled?: boolean
 }
 
-function chunkPairs<T>(items: T[]): T[][] {
-  const rows: T[][] = []
-  for (let i = 0; i < items.length; i += 2) rows.push(items.slice(i, i + 2))
-  return rows
-}
-
-/** Equal-height 2-col USD rail picker. Every tile reserves a timing chip. */
+/** Single-row USD rail picker. Four tiles for Grid, two for Noah, equal height. */
 export function UsTransferTypeGrid({ methods, value, onChange, disabled }: Props) {
   if (methods.length === 0) return null
 
+  const compact = methods.length > 2
+
   return (
     <View style={styles.container}>
-      {chunkPairs(methods).map((row) => (
-        <View key={row.map((method) => method.value).join('-')} style={styles.row}>
-          {row.map((method) => {
-            const selected = value === method.value
-            return (
-              <Pressable
-                key={method.value}
-                android_ripple={ripple.neutral}
-                disabled={disabled}
-                accessibilityRole="button"
-                accessibilityState={{ selected, disabled: Boolean(disabled) }}
-                accessibilityLabel={`${method.label}, ${method.speedLabel}`}
-                style={[
-                  styles.tile,
-                  selected && styles.tileSelected,
-                  disabled && styles.tileDisabled,
-                ]}
-                onPress={() => {
-                  onChange(method.value)
-                  haptics.tap()
-                }}
+      <View style={styles.row}>
+        {methods.map((method) => {
+          const selected = value === method.value
+          return (
+            <Pressable
+              key={method.value}
+              android_ripple={ripple.neutral}
+              disabled={disabled}
+              accessibilityRole="button"
+              accessibilityState={{ selected, disabled: Boolean(disabled) }}
+              accessibilityLabel={`${method.label}, ${method.speedLabel}`}
+              style={[
+                styles.tile,
+                compact && styles.tileCompact,
+                selected && styles.tileSelected,
+                disabled && styles.tileDisabled,
+              ]}
+              onPress={() => {
+                onChange(method.value)
+                haptics.tap()
+              }}
+            >
+              <Text
+                style={[styles.label, compact && styles.labelCompact, selected && styles.labelSelected]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
               >
+                {method.label}
+              </Text>
+              <View style={[styles.chip, compact && styles.chipCompact, selected && styles.chipSelected]}>
                 <Text
-                  style={[styles.label, selected && styles.labelSelected]}
+                  style={[styles.chipText, compact && styles.chipTextCompact, selected && styles.chipTextSelected]}
                   numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.75}
                 >
-                  {method.label}
+                  {method.speedLabel}
                 </Text>
-                <View style={[styles.chip, selected && styles.chipSelected]}>
-                  <Text
-                    style={[styles.chipText, selected && styles.chipTextSelected]}
-                    numberOfLines={1}
-                  >
-                    {method.speedLabel}
-                  </Text>
-                </View>
-              </Pressable>
-            )
-          })}
-          {row.length === 1 ? <View style={styles.tileSpacer} /> : null}
-        </View>
-      ))}
+              </View>
+            </Pressable>
+          )
+        })}
+        {methods.length === 1 ? <View style={styles.tileSpacer} /> : null}
+      </View>
     </View>
   )
 }
@@ -81,7 +80,6 @@ const TILE_HEIGHT = 72
 const styles = StyleSheet.create({
   container: {
     marginBottom: spacing[2],
-    gap: spacing[2],
   },
   row: {
     flexDirection: 'row',
@@ -89,6 +87,7 @@ const styles = StyleSheet.create({
   },
   tile: {
     flex: 1,
+    minWidth: 0,
     height: TILE_HEIGHT,
     backgroundColor: colors.frame.background,
     borderRadius: borderRadius.full,
@@ -99,6 +98,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
+  tileCompact: {
+    paddingHorizontal: spacing[1],
+  },
   tileSelected: {
     backgroundColor: colors.primary.main + '15',
     borderColor: colors.primary.main,
@@ -108,11 +110,15 @@ const styles = StyleSheet.create({
   },
   tileSpacer: {
     flex: 1,
+    minWidth: 0,
   },
   label: {
     ...textStyles.bodyMedium,
     color: colors.text.primary,
     fontFamily: fontFamily.medium,
+  },
+  labelCompact: {
+    fontSize: 13,
   },
   labelSelected: {
     color: colors.primary.main,
@@ -125,6 +131,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.semantic.muted,
     maxWidth: '100%',
   },
+  chipCompact: {
+    paddingHorizontal: 5,
+  },
   chipSelected: {
     backgroundColor: colors.primary.main + '22',
   },
@@ -134,6 +143,10 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.medium,
     fontSize: 11,
     lineHeight: 14,
+  },
+  chipTextCompact: {
+    fontSize: 10,
+    lineHeight: 13,
   },
   chipTextSelected: {
     color: colors.primary.main,

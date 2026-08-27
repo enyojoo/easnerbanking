@@ -1349,21 +1349,31 @@ export function RecipientForm({
               {usTransferMethods.length > 0 ? (
                 <div className="space-y-2 col-span-2">
                   <label className="text-xs text-muted-foreground">Transfer type</label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div
+                    className={cn(
+                      "grid gap-2",
+                      usTransferMethods.length > 2 ? "grid-cols-4" : "grid-cols-2",
+                    )}
+                  >
                     {usTransferMethods.map((method) => {
                       const selected = formData.transferType === method.value
+                      const compact = usTransferMethods.length > 2
                       return (
                         <Button
                           key={method.value}
                           type="button"
                           variant={selected ? "default" : "outline"}
-                          className="h-[4.5rem] min-h-[4.5rem] flex-col justify-center gap-1.5 whitespace-normal py-2"
+                          className={cn(
+                            "h-[4.5rem] min-h-[4.5rem] min-w-0 flex-col justify-center gap-1.5 whitespace-normal py-2",
+                            compact ? "px-1" : "px-3",
+                          )}
                           onClick={() => handleInputChange("transferType", method.value)}
                         >
-                          <span>{method.label}</span>
+                          <span className={cn("truncate", compact && "text-sm")}>{method.label}</span>
                           <span
                             className={cn(
                               "inline-flex max-w-full truncate rounded-full px-2 py-0.5 text-[11px] font-normal leading-none",
+                              compact && "px-1.5 text-[10px]",
                               selected
                                 ? "bg-primary-foreground/15 text-primary-foreground"
                                 : "bg-muted text-muted-foreground",
