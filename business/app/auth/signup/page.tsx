@@ -431,7 +431,25 @@ export default function SignupPage() {
                 )}
 
                 <div className="space-y-2">
-                  <Label htmlFor="name" className="text-sm font-medium">Your full name</Label>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="name" className="text-sm font-medium">Your name</Label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-center"
+                          onClick={(e) => e.preventDefault()}
+                        >
+                          <Info className="h-4 w-4 text-muted-foreground" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="max-w-xs text-sm">
+                          Your personal name, not the company name.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                   <Input
                     id="name"
                     type="text"
