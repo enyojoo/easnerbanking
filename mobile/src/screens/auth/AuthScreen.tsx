@@ -481,7 +481,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
 
             {!isLogin && signupStep === 'form' && (
               <TextField
-                label="Full name"
+                label="Your full name"
                 value={fullName}
                 onChangeText={setFullName}
                 placeholder="John Doe"

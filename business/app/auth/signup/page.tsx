@@ -431,7 +431,7 @@ export default function SignupPage() {
                 )}
 
                 <div className="space-y-2">
-                  <Label htmlFor="name" className="text-sm font-medium">Full name</Label>
+                  <Label htmlFor="name" className="text-sm font-medium">Your full name</Label>
                   <Input
                     id="name"
                     type="text"
