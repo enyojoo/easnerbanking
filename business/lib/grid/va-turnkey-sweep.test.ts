@@ -49,6 +49,7 @@ vi.mock("@/lib/business/org-owner", () => ({
 import {
   executeGridVaTurnkeySweep,
   findGridVaTurnkeySweepForSolanaTx,
+  findPendingGridVaTurnkeySweepForInboundAmount,
   parseGridInternalAccountId,
   startGridVaTurnkeySweepForKnownInbound,
 } from "./va-turnkey-sweep"
@@ -189,12 +190,14 @@ describe("startGridVaTurnkeySweepForKnownInbound", () => {
 })
 
 describe("findGridVaTurnkeySweepForSolanaTx", () => {
-  it("returns the oldest settled sweep still missing an on-chain hash", async () => {
+  it("does not attach an organic inbound to a stale unmatched sweep", async () => {
     const admin = chainAdmin({
       limitRows: [
         {
           id: "sweep-1",
           status: "settled",
+          quoted_pay_in: 2,
+          updated_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
           metadata: { inbound_grid_transaction_id: "Transaction:in-1" },
         },
         {
@@ -206,11 +209,56 @@ describe("findGridVaTurnkeySweepForSolanaTx", () => {
     })
 
     const result = await findGridVaTurnkeySweepForSolanaTx(admin, {
+      txHash: "hash-organic",
+      businessId: "biz-1",
+      userId: "user-1",
+      amount: 2,
+    })
+    expect(result).toBeNull()
+  })
+
+  it("amount-matches a recent settled sweep still missing a Turnkey hash", async () => {
+    const admin = chainAdmin({
+      limitRows: [
+        {
+          id: "sweep-recent",
+          status: "settled",
+          quoted_pay_in: 2,
+          updated_at: new Date().toISOString(),
+          metadata: { inbound_grid_transaction_id: "Transaction:in-1", inbound_amount: 2 },
+        },
+      ],
+    })
+
+    const result = await findGridVaTurnkeySweepForSolanaTx(admin, {
       txHash: "hash-new",
       businessId: "biz-1",
       userId: "user-1",
+      amount: 2,
     })
-    expect(result).toEqual({ transferId: "sweep-1" })
+    expect(result).toEqual({ transferId: "sweep-recent" })
+  })
+
+  it("does not FIFO-match a different amount onto an unmatched sweep", async () => {
+    const admin = chainAdmin({
+      limitRows: [
+        {
+          id: "sweep-1",
+          status: "settled",
+          quoted_pay_in: 2,
+          updated_at: new Date().toISOString(),
+          metadata: { inbound_grid_transaction_id: "Transaction:in-1" },
+        },
+      ],
+    })
+
+    const result = await findGridVaTurnkeySweepForSolanaTx(admin, {
+      txHash: "hash-organic-49",
+      businessId: "biz-1",
+      userId: "user-1",
+      amount: 49.5,
+    })
+    expect(result).toBeNull()
   })
 
   it("matches a settled sweep by amount when Grid already stored a different hash", async () => {
@@ -264,6 +312,54 @@ describe("findGridVaTurnkeySweepForSolanaTx", () => {
       businessId: "biz-1",
       userId: "user-1",
       amount: 0.001,
+    })
+    expect(result).toEqual({ transferId: "sweep-recent" })
+  })
+})
+
+describe("findPendingGridVaTurnkeySweepForInboundAmount", () => {
+  it("does not amount-match a week-old settled sweep", async () => {
+    const admin = chainAdmin({
+      limitRows: [
+        {
+          id: "sweep-stale",
+          status: "settled",
+          quoted_pay_in: 2,
+          created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+          updated_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+          metadata: { inbound_amount: 2 },
+        },
+      ],
+    })
+
+    const result = await findPendingGridVaTurnkeySweepForInboundAmount(admin, {
+      userId: "user-1",
+      businessId: "biz-1",
+      amount: 2,
+      currency: "USD",
+    })
+    expect(result).toBeNull()
+  })
+
+  it("amount-matches a recent settled sweep still missing a Turnkey hash", async () => {
+    const admin = chainAdmin({
+      limitRows: [
+        {
+          id: "sweep-recent",
+          status: "settled",
+          quoted_pay_in: 2,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          metadata: { inbound_amount: 2 },
+        },
+      ],
+    })
+
+    const result = await findPendingGridVaTurnkeySweepForInboundAmount(admin, {
+      userId: "user-1",
+      businessId: "biz-1",
+      amount: 2,
+      currency: "USD",
     })
     expect(result).toEqual({ transferId: "sweep-recent" })
   })

@@ -162,9 +162,8 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
 
   it("suppresses relay Tron vault inbound and reconciles relay credit", async () => {
     mocks.findRelay.mockResolvedValue({
-      reason: "relay_vault_inbound",
-      recipientVaultAta: "Ata111",
-      tronAddress: "T123",
+      reason: "pending_deposit",
+      relayDepositId: "relay-1",
     })
     const admin = { from: vi.fn() }
 

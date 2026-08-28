@@ -29,6 +29,11 @@ export { suppressTurnkeyGridVaChainMirrorRow }
 
 export const GRID_VA_TURNKEY_SWEEP_MODE = "va_turnkey_sweep" as const
 
+/** Dust follow-up legs only attach to a sweep updated in this window. */
+const GRID_VA_SWEEP_DUST_MATCH_MAX_AGE_MS = 2 * 60 * 60 * 1000
+/** Principal Turnkey inbound may amount-match a sweep only while it is still in flight. */
+export const GRID_VA_SWEEP_PRINCIPAL_MATCH_MAX_AGE_MS = 6 * 60 * 60 * 1000
+
 const TERMINAL_SWEEP = new Set(["settled", "failed"])
 
 type SweepTransferRow = {
@@ -58,6 +63,18 @@ function asMeta(value: unknown): Record<string, unknown> {
 function amountsRoughlyEqual(a: number, b: number): boolean {
   if (!(a > 0) || !(b > 0)) return false
   return Math.abs(a - b) <= Math.max(0.02, a * 0.001)
+}
+
+function sweepUpdatedAtMs(row: { updated_at?: unknown; created_at?: unknown }): number {
+  return Date.parse(String(row.updated_at ?? row.created_at ?? ""))
+}
+
+function sweepIsWithinAgeMs(
+  row: { updated_at?: unknown; created_at?: unknown },
+  maxAgeMs: number,
+): boolean {
+  const ts = sweepUpdatedAtMs(row)
+  return Number.isFinite(ts) && Date.now() - ts <= maxAgeMs
 }
 
 export function parseGridInternalAccountId(raw: string | null | undefined): string | null {
@@ -570,6 +587,9 @@ export async function settleGridVaTurnkeySweepForSolanaTx(
  * Match a Grid VA Turnkey sweep to an on-chain signature.
  * Grid's outgoing webhook often records a different hash than the Turnkey wallet credit.
  * Dust legs are linked FIFO to a recent sweep without overwriting the principal hash.
+ *
+ * Principal inbound (organic Stablecoin deposits) must not attach to stale unmatched sweeps:
+ * only an exact hash or a recent amount match may suppress the Turnkey row.
  */
 export async function findGridVaTurnkeySweepForSolanaTx(
   admin: SupabaseClient,
@@ -606,7 +626,6 @@ export async function findGridVaTurnkeySweepForSolanaTx(
 
   const inboundAmount = Number(input.amount)
   const dust = Number.isFinite(inboundAmount) && isGridVaTurnkeyDustAmount(inboundAmount)
-  const dustCutoffMs = Date.now() - 2 * 60 * 60 * 1000
   const hasPrincipalAmount = Number.isFinite(inboundAmount) && inboundAmount >= GRID_VA_TURNKEY_DUST_MAX_USD
 
   for (const row of rows ?? []) {
@@ -621,6 +640,7 @@ export async function findGridVaTurnkeySweepForSolanaTx(
 
   if (hasPrincipalAmount) {
     for (const row of rows ?? []) {
+      if (!sweepIsWithinAgeMs(row, GRID_VA_SWEEP_PRINCIPAL_MATCH_MAX_AGE_MS)) continue
       const meta = asMeta(row.metadata)
       if (String(meta.turnkey_on_chain_tx_hash ?? "").trim()) continue
       const quoted = Number(row.quoted_pay_in ?? meta.inbound_amount ?? 0)
@@ -629,21 +649,11 @@ export async function findGridVaTurnkeySweepForSolanaTx(
     }
   }
 
-  if (!dust) {
-    for (const row of rows ?? []) {
-      const meta = asMeta(row.metadata)
-      if (String(meta.grid_on_chain_tx_hash ?? "").trim()) continue
-      if (String(meta.turnkey_on_chain_tx_hash ?? "").trim()) continue
-      return { transferId: String(row.id) }
-    }
-  }
-
   if (dust) {
     for (const row of [...(rows ?? [])].reverse()) {
       const meta = asMeta(row.metadata)
       if (String(meta.turnkey_dust_tx_hash ?? "").trim()) continue
-      const updatedAt = Date.parse(String(row.updated_at ?? row.created_at ?? ""))
-      if (Number.isFinite(updatedAt) && updatedAt < dustCutoffMs) continue
+      if (!sweepIsWithinAgeMs(row, GRID_VA_SWEEP_DUST_MATCH_MAX_AGE_MS)) continue
       return { transferId: String(row.id) }
     }
   }
@@ -665,7 +675,7 @@ export async function findPendingGridVaTurnkeySweepForInboundAmount(
 
   const { data: rows } = await admin
     .from("grid_transfers")
-    .select("id,quoted_pay_in,metadata,status")
+    .select("id,quoted_pay_in,metadata,status,updated_at,created_at")
     .eq("mode", GRID_VA_TURNKEY_SWEEP_MODE)
     .eq("business_id", input.businessId)
     .in("status", ["pending", "processing", "settled"])
@@ -673,6 +683,7 @@ export async function findPendingGridVaTurnkeySweepForInboundAmount(
     .limit(12)
 
   for (const row of rows ?? []) {
+    if (!sweepIsWithinAgeMs(row, GRID_VA_SWEEP_PRINCIPAL_MATCH_MAX_AGE_MS)) continue
     const meta = asMeta(row.metadata)
     if (String(meta.turnkey_on_chain_tx_hash ?? "").trim()) continue
     const quoted = Number(row.quoted_pay_in ?? meta.inbound_amount ?? 0)
