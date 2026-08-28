@@ -65,6 +65,7 @@ import { hydrateWarmImageUrls } from './src/lib/imageCache'
 import { prefetchIntercomModule } from './src/lib/intercom'
 import { USE_NATIVE_DRIVER } from './src/lib/animation'
 import { ExpressStripeProvider } from './src/components/ExpressStripeProvider'
+import { preloadMainStackScreens } from './src/lib/preloadMainStackScreens'
 
 // Keep the splash screen visible while we load fonts
 SplashScreen.preventAutoHideAsync()
@@ -167,6 +168,16 @@ function AppContent() {
       cancelled = true
     }
   }, [authLoading, navReady, splashFinished])
+
+  // Warm Send/Recipients modules after splash (require-only — no navigation.preload).
+  useEffect(() => {
+    if (Platform.OS === 'web') return
+    if (!navReady || authLoading) return
+    const task = InteractionManager.runAfterInteractions(() => {
+      preloadMainStackScreens()
+    })
+    return () => task.cancel()
+  }, [navReady, authLoading])
 
   // Cold-open from notification: stash intent + flush when main stack is ready (PIN may still be showing).
   useEffect(() => {
@@ -290,6 +301,7 @@ function AppContent() {
 }
 
 export default function App() {
+  const [fontLoadTimedOut, setFontLoadTimedOut] = useState(false)
   const [fontsLoaded] = useFonts(
     Platform.OS === 'web'
       ? {
@@ -447,8 +459,21 @@ export default function App() {
     }
   }, [])
 
+  useEffect(() => {
+    if (Platform.OS === 'web') return
+    if (fontsLoaded) return
+    const timeout = setTimeout(() => {
+      console.warn('[App] Font load timed out; continuing startup')
+      setFontLoadTimedOut(true)
+      void SplashScreen.hideAsync().catch((e) => {
+        console.warn('SplashScreen.hideAsync', e)
+      })
+    }, 12_000)
+    return () => clearTimeout(timeout)
+  }, [fontsLoaded])
+
   // Block first paint until fonts load on native; web paints with system fallback.
-  if (!fontsLoaded && Platform.OS !== 'web') {
+  if (!fontsLoaded && !fontLoadTimedOut && Platform.OS !== 'web') {
     return null
   }
 
