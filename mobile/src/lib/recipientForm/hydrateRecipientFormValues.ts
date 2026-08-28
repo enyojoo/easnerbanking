@@ -9,6 +9,8 @@ import type { EasenetProfilePreview, RecipientFormType, RecipientFormValues } fr
 import { emptyRecipientFormValues, recipientTypeKeyForForm } from './recipientFormTypes'
 
 import { inferRecipientFormType } from './inferRecipientFormType'
+
+export function resolveCountryCurrencyForRecipient(
   recipient: Recipient,
   inferredType: RecipientFormType,
   catalog: ReturnType<typeof buildRecipientCatalogForType>,
