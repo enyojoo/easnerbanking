@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
+import { isLegitimateStripeSettlementExpectation } from "./stripe-settlement-expectation"
 
 const AMOUNT_TOLERANCE = 0.01
 const MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000
@@ -43,6 +44,7 @@ export async function tryMatchTurnkeyStripeSettlement(
   if (!candidates?.length) return { matched: false }
 
   const match = candidates.find((row) => {
+    if (!isLegitimateStripeSettlementExpectation(row)) return false
     const expectedMajor = Number(row.expected_amount_cents ?? 0) / 100
     const amountOk = Math.abs(expectedMajor - input.amount) <= AMOUNT_TOLERANCE
     const dest = String(row.destination_ref ?? "").trim().toLowerCase()

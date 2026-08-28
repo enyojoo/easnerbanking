@@ -116,37 +116,7 @@ async function main() {
     }
   }
 
-  const { data: dummy, error: dummyErr } = await admin
-    .from("grid_transfers")
-    .insert({
-      user_id: OWNER_USER_ID,
-      business_id: BUSINESS_ID,
-      mode: "stripe_settlement",
-      settlement_rail: "turnkey_stablecoin",
-      status: "pending",
-      expected_amount_cents: 100,
-      receive_currency: "USD",
-      destination_ref: "turnkey",
-      invoice_settlement_ids: [],
-      metadata: {
-        source: "va_turnkey_sweep_heal",
-        inbound_grid_transaction_id: INBOUNDS[1].inboundId,
-      },
-    })
-    .select("id")
-    .maybeSingle()
-
-  console.log(
-    JSON.stringify(
-      {
-        results,
-        connectSuppressTransferId: dummy?.id ?? null,
-        connectSuppressError: dummyErr?.message ?? null,
-      },
-      null,
-      2,
-    ),
-  )
+  console.log(JSON.stringify({ results }, null, 2))
 }
 
 main().catch((e) => {
