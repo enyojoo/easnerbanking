@@ -7,7 +7,7 @@ import {
   kybProperties,
   sendFunnelProperties,
 } from '@easner/shared'
-import { getPostHog } from './posthog'
+import { runWithPostHog } from './posthogSafe'
 
 type Props = Record<string, unknown>
 type ScreenTrackingMode = 'manual' | 'auto'
@@ -22,20 +22,20 @@ const withDefaults = (properties?: Props): Props => ({
 })
 
 const capture = (event: string, properties?: Props) => {
-  const posthog = getPostHog()
-  if (!posthog) return
-  posthog.capture(event, withDefaults(properties))
+  runWithPostHog('capture', (client) => {
+    client.capture(event, withDefaults(properties))
+  })
 }
 
 const captureScreen = (screenName: string, properties?: Props) => {
-  const posthog = getPostHog()
-  if (!posthog) return
-  const props = withDefaults(properties)
-  if (typeof posthog.screen === 'function') {
-    posthog.screen(screenName, props)
-    return
-  }
-  posthog.capture('$screen', { $screen_name: screenName, ...props })
+  runWithPostHog('screen', (client) => {
+    const props = withDefaults(properties)
+    if (typeof client.screen === 'function') {
+      client.screen(screenName, props)
+      return
+    }
+    client.capture('$screen', { $screen_name: screenName, ...props })
+  })
 }
 
 export const analytics = {
@@ -44,21 +44,21 @@ export const analytics = {
   },
 
   identify: (userId: string, properties?: Props) => {
-    const posthog = getPostHog()
-    if (!posthog) return
-    posthog.identify(userId, withDefaults(properties))
+    runWithPostHog('identify', (client) => {
+      client.identify(userId, withDefaults(properties))
+    })
   },
 
   group: (groupType: string, groupKey: string, properties?: Props) => {
-    const posthog = getPostHog()
-    if (!posthog) return
-    posthog.group(groupType, groupKey, withDefaults(properties))
+    runWithPostHog('group', (client) => {
+      client.group(groupType, groupKey, withDefaults(properties))
+    })
   },
 
   registerSuperProperties: (properties: Props) => {
-    const posthog = getPostHog()
-    if (!posthog) return
-    posthog.register(withDefaults(properties))
+    runWithPostHog('register', (client) => {
+      client.register(withDefaults(properties))
+    })
   },
 
   trackSignUp: (method: string, properties?: Props) => {
@@ -73,7 +73,9 @@ export const analytics = {
 
   trackSignOut: () => {
     capture(ANALYTICS_EVENTS.userSignedOut)
-    getPostHog()?.reset()
+    runWithPostHog('reset', (client) => {
+      client.reset()
+    })
   },
 
   trackOnboardingStepViewed: (step: number | string, properties?: Props) => {
@@ -168,9 +170,13 @@ export const analytics = {
   },
 
   trackWebPageView: (href: string, referrer: string, properties?: Props) => {
-    const posthog = getPostHog()
-    if (!posthog) return
-    posthog.capture('$pageview', withDefaults({ $current_url: href, $referrer: referrer || '$direct', ...properties }))
+    runWithPostHog('pageview', (client) => {
+      client.capture('$pageview', withDefaults({ $current_url: href, $referrer: referrer || '$direct', ...properties }))
+    })
+  },
+
+  trackWebVital: (properties: Props) => {
+    capture('web_vital', properties)
   },
 
   trackFeatureUsed: (featureName: string, properties?: Props) => {
@@ -226,19 +232,21 @@ export const analytics = {
   },
 
   setUserProperties: (properties: Props) => {
-    const posthog = getPostHog()
-    if (!posthog) return
-    posthog.setPersonProperties(withDefaults(properties))
+    runWithPostHog('setPersonProperties', (client) => {
+      client.setPersonProperties(withDefaults(properties))
+    })
   },
 
   setGroupProperties: (groupType: string, groupKey: string, properties: Props) => {
-    const posthog = getPostHog()
-    if (!posthog) return
-    posthog.group(groupType, groupKey, withDefaults(properties))
+    runWithPostHog('groupProperties', (client) => {
+      client.group(groupType, groupKey, withDefaults(properties))
+    })
   },
 
   reset: () => {
-    getPostHog()?.reset()
+    runWithPostHog('reset', (client) => {
+      client.reset()
+    })
   },
 }
 

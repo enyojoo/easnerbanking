@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { Platform } from 'react-native'
 import { PostHogProvider as PostHogSDKProvider } from 'posthog-react-native'
 import { pageviewProperties } from '@easner/shared'
@@ -10,7 +10,10 @@ interface PostHogProviderProps {
 }
 
 export function PostHogProvider({ children }: PostHogProviderProps) {
-  const client = Platform.OS === 'web' ? null : getPostHog()
+  const client = useMemo(
+    () => (Platform.OS === 'web' ? null : getPostHog()),
+    [],
+  )
 
   if (Platform.OS === 'web') {
     return (

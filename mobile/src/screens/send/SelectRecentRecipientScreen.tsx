@@ -1119,7 +1119,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
               estimatedItemSize={112}
-              removeClippedSubviews
               drawDistance={400}
               contentContainerStyle={{ paddingBottom: listBottomPadding }}
               ListEmptyComponent={

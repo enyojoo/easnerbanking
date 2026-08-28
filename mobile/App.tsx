@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native'
 import Constants from 'expo-constants'
 import { StatusBar } from 'expo-status-bar'
-import { View, Text, StyleSheet, Animated, Platform } from 'react-native'
+import { View, Text, StyleSheet, Animated, Platform, InteractionManager } from 'react-native'
 import * as BackgroundTask from 'expo-background-task'
 import * as TaskManager from 'expo-task-manager'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -81,6 +81,16 @@ function AppContent() {
       return getActiveRouteName(route.state.routes[route.state.index])
     }
     return route.name || 'Unknown'
+  }
+
+  const scheduleNavigationScreenView = (screenName: string) => {
+    if (Platform.OS === 'web') {
+      analytics.trackNavigationScreenView(screenName)
+      return
+    }
+    InteractionManager.runAfterInteractions(() => {
+      analytics.trackNavigationScreenView(screenName)
+    })
   }
 
   const [splashFinished, setSplashFinished] = useState(Platform.OS === 'web')
@@ -193,7 +203,7 @@ function AppContent() {
         const currentRouteName = getActiveRouteName(currentRoute)
         routeNameRef.current = currentRouteName
         setActiveRouteName(currentRouteName)
-        analytics.trackNavigationScreenView(currentRouteName)
+        scheduleNavigationScreenView(currentRouteName)
       }}
       onStateChange={() => {
         const currentRoute = navigationRef.current?.getCurrentRoute()
@@ -201,7 +211,7 @@ function AppContent() {
         setActiveRouteName(currentRouteName)
         if (routeNameRef.current !== currentRouteName) {
           routeNameRef.current = currentRouteName
-          analytics.trackNavigationScreenView(currentRouteName)
+          scheduleNavigationScreenView(currentRouteName)
         }
       }}
       theme={{

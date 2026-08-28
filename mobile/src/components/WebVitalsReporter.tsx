@@ -1,8 +1,7 @@
 import { useEffect } from 'react'
 import { Platform } from 'react-native'
 import { onCLS, onFCP, onINP, onLCP, onTTFB } from 'web-vitals'
-import { getPostHog } from '../lib/posthog'
-import { ANALYTICS_PLATFORM } from '../lib/analytics'
+import { analytics, ANALYTICS_PLATFORM } from '../lib/analytics'
 
 type WebVitalMetric = {
   name: string
@@ -13,9 +12,7 @@ type WebVitalMetric = {
 }
 
 function captureWebVital(metric: WebVitalMetric) {
-  const posthog = getPostHog()
-  if (!posthog?.capture) return
-  posthog.capture('web_vital', {
+  analytics.trackWebVital({
     metric_name: metric.name,
     metric_value: metric.value,
     metric_rating: metric.rating,

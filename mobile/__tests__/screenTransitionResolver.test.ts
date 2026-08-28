@@ -20,31 +20,40 @@ afterEach(() => {
 })
 
 describe('shouldUseFlowHubInstantTransition', () => {
-  it('never uses instant hub transitions so swipe-back stays interactive', () => {
+  it('uses instant transitions within a hub group and on send forward hops', () => {
     expect(
       shouldUseFlowHubInstantTransition({
         routeName: 'SendAmount',
         previousRouteName: 'SelectRecentRecipient',
       }),
-    ).toBe(false)
+    ).toBe(true)
     expect(
       shouldUseFlowHubInstantTransition({
         routeName: 'SelectRecipient',
         previousRouteName: 'SendAmount',
       }),
-    ).toBe(false)
+    ).toBe(true)
     expect(
       shouldUseFlowHubInstantTransition({
         routeName: 'SendAmount',
         routeParams: { fromSelectRecentRecipient: true },
       }),
-    ).toBe(false)
+    ).toBe(true)
     expect(
       shouldUseFlowHubInstantTransition({
         routeName: 'ReceiveLocalAmount',
         previousRouteName: 'ReceiveLocalRail',
       }),
     ).toBe(false)
+  })
+
+  it('uses instant entry from tabs into the send hub', () => {
+    expect(
+      shouldUseFlowHubInstantTransition({
+        routeName: 'SelectRecentRecipient',
+        previousRouteName: 'MainTabs',
+      }),
+    ).toBe(true)
   })
 
   it('receive local rail no longer shares hub group with amount', () => {
@@ -137,14 +146,24 @@ describe('resolveGestureEnabled', () => {
 })
 
 describe('resolveScreenTransitionOptions', () => {
-  it('uses horizontal motion for send hub pairs on native', () => {
+  it('uses instant preset for adjacent send hub screens on native', () => {
     setPlatform('ios')
     const options = resolveScreenTransitionOptions({
       routeName: 'SendAmount',
       previousRouteName: 'SelectRecentRecipient',
     })
-    expect(options.gestureEnabled).toBe(true)
-    expect(presetHasStackMotion(options as Record<string, unknown>)).toBe(true)
+    expect(options.gestureEnabled).toBe(false)
+    expect(presetHasStackMotion(options as Record<string, unknown>)).toBe(false)
+  })
+
+  it('uses instant preset for dashboard entry into send hub on native', () => {
+    setPlatform('ios')
+    const options = resolveScreenTransitionOptions({
+      routeName: 'SelectRecentRecipient',
+      previousRouteName: 'MainTabs',
+    })
+    expect(options.gestureEnabled).toBe(false)
+    expect(presetHasStackMotion(options as Record<string, unknown>)).toBe(false)
   })
 
   it('uses horizontal motion for tab entry on Android with swipe enabled', () => {

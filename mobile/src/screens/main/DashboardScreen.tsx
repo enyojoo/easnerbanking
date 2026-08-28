@@ -79,6 +79,7 @@ import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
 import { buildGroupedActivityItems } from '../../lib/transactionListGrouping'
 import { haptics } from '../../lib/haptics'
 import { prepareTransactionDetailsNavigation } from '../../navigation/transactionNavParams'
+import { preloadMainStackScreens } from '../../lib/preloadMainStackScreens'
 import { useFixedFooterPadding, useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { reportColdStartInteractive } from '../../lib/coldStartMetrics'
 
@@ -274,6 +275,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     if (Platform.OS === 'web' || didPreloadTabsRef.current) return
     didPreloadTabsRef.current = true
     const task = InteractionManager.runAfterInteractions(() => {
+      preloadMainStackScreens()
       const nav = navigation as unknown as { preload?: (name: string) => void }
       if (typeof nav.preload !== 'function') return
       for (const tab of ['Transactions', 'Card', 'More']) {
@@ -281,6 +283,16 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           nav.preload(tab)
         } catch {
           // Best-effort: a failed preload just means the old mount-on-tap path.
+        }
+      }
+      const stackNav = navigation.getParent() as { preload?: (name: string) => void } | undefined
+      if (typeof stackNav?.preload === 'function') {
+        for (const screen of ['SelectRecentRecipient', 'TransactionDetails']) {
+          try {
+            stackNav.preload(screen)
+          } catch {
+            // Stack preload is best-effort on older React Navigation builds.
+          }
         }
       }
     })
@@ -851,6 +863,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
             <Pressable
               android_ripple={ripple.heroOnDark}
               style={({ pressed }) => [styles.heroSendButton, pressed && styles.heroBtnPressed]}
+              onPressIn={preloadMainStackScreens}
               onPress={() => {
                 haptics.tap()
                 navigation.navigate('SelectRecentRecipient' as never, {
@@ -952,6 +965,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                       !seg.isLast && styles.transactionItemDivider,
                       pressed && styles.transactionItemPressed,
                     ]}
+                    onPressIn={preloadMainStackScreens}
                     onPress={() => {
                       haptics.tap()
                       navigation.navigate(

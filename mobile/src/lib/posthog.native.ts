@@ -5,17 +5,24 @@ import { consumerPlatformFromOs } from '@easner/shared'
 const posthogKey = process.env.EXPO_PUBLIC_POSTHOG_KEY
 const posthogHost = process.env.EXPO_PUBLIC_POSTHOG_HOST
 
+/**
+ * Native PostHog config — matches build 206: session replay on iOS and Android.
+ *
+ * Safety retained from crash investigation (these are not session replay):
+ * - captureLog: false — disables stdout piping only; replay screenshots stay on.
+ * - Init try/catch + analytics runWithPostHog (see posthogSafe.ts) — SDK errors must not fatal the app.
+ * - Deferred navigation screen capture (App.tsx) — posthog.screen() off the transition critical path.
+ */
 export const posthogOptions: PostHogOptions | undefined =
   posthogKey && posthogHost
     ? {
         host: posthogHost,
-        captureAppLifecycleEvents: true,
-        enableSessionReplay: true,
+        captureAppLifecycleEvents: Platform.OS !== 'web',
+        enableSessionReplay: Platform.OS !== 'web',
         sessionReplayConfig: {
           maskAllTextInputs: true,
           maskAllImages: true,
           captureNetworkTelemetry: true,
-          // Console log piping crashed release iOS (NSFileHandle fd_monitor thread).
           captureLog: false,
         },
       }
