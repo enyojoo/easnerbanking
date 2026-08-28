@@ -1,7 +1,9 @@
 /**
  * Warm MainStack screen modules off the navigation critical path (M2.5 lazy registry).
- * First tap on Send / transaction rows otherwise pays a large sync `require()` during
- * the stack transition, which janks iOS and can race PostHog session-replay capture.
+ * Call from Send / transaction row `onPressIn` only — not from Dashboard idle effects.
+ * `navigation.preload()` for these screens mounts them off-screen and has crashed iOS
+ * release builds right after PIN unlock; module `require()` here avoids that while
+ * still trimming first-tap jank.
  */
 let didPreload = false
 

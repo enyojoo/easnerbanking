@@ -265,17 +265,20 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     !loadingTransactions && recentTransactions.length > 0
 
   /**
-   * M2.2: after Dashboard's first paint settles, preload the other tab screens
+   * M2.2: after Dashboard's first paint settles, preload sibling tab screens
    * (`navigation.preload`, React Navigation 7) so the first switch to
-   * Transactions/Cards/More doesn't pay mount + lazy-require cost on the tap.
-   * Native only — web tabs use React.lazy chunks that load on demand.
+   * Transactions/Cards/More doesn't pay mount cost on the tap.
+   *
+   * Do NOT preload MainStack send/detail screens here — `navigation.preload`
+   * mounts those routes off-screen right after PIN unlock and has fatally crashed
+   * release iOS builds (~7s post-launch). Warm send/detail modules on Send/row
+   * `onPressIn` via {@link preloadMainStackScreens} instead.
    */
   const didPreloadTabsRef = useRef(false)
   useEffect(() => {
     if (Platform.OS === 'web' || didPreloadTabsRef.current) return
     didPreloadTabsRef.current = true
     const task = InteractionManager.runAfterInteractions(() => {
-      preloadMainStackScreens()
       const nav = navigation as unknown as { preload?: (name: string) => void }
       if (typeof nav.preload !== 'function') return
       for (const tab of ['Transactions', 'Card', 'More']) {
@@ -283,16 +286,6 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           nav.preload(tab)
         } catch {
           // Best-effort: a failed preload just means the old mount-on-tap path.
-        }
-      }
-      const stackNav = navigation.getParent() as { preload?: (name: string) => void } | undefined
-      if (typeof stackNav?.preload === 'function') {
-        for (const screen of ['SelectRecentRecipient', 'TransactionDetails']) {
-          try {
-            stackNav.preload(screen)
-          } catch {
-            // Stack preload is best-effort on older React Navigation builds.
-          }
         }
       }
     })
