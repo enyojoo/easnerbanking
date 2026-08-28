@@ -278,6 +278,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     if (Platform.OS === 'web' || didPreloadTabsRef.current) return
     didPreloadTabsRef.current = true
     const task = InteractionManager.runAfterInteractions(() => {
+      // Module require only — never navigation.preload (mounts off-screen, crashed iOS).
+      preloadMainStackScreens()
       const nav = navigation as unknown as { preload?: (name: string) => void }
       if (typeof nav.preload !== 'function') return
       for (const tab of ['Transactions', 'Card', 'More']) {

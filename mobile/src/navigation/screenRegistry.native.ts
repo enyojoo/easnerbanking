@@ -2,7 +2,22 @@ import * as React from 'react'
 import type { ComponentType } from 'react'
 
 /**
- * Native screen registry (M2.5): each screen module is loaded via `require()`
+ * Send hub + Recipients are eagerly imported (build 206 pattern).
+ *
+ * Deferring them via `lazyNativeScreen` + first-tap `require()` regressed after the
+ * EUR/Grid recipient form grew: Hermes evaluates a huge module during the navigation
+ * transition while PostHog replay snapshots the UI, which fatally crashed iOS release
+ * builds (217). Eager import loads these modules when the main stack registry is
+ * first evaluated (post-PIN), not on the Send/Recipients tap critical path.
+ */
+import SelectRecentRecipientScreenNative from '../screens/send/SelectRecentRecipientScreen'
+import RecipientsScreenNative from '../screens/main/RecipientsScreen'
+
+export const SelectRecentRecipientScreen = SelectRecentRecipientScreenNative
+export const RecipientsScreen = RecipientsScreenNative
+
+/**
+ * Native screen registry (M2.5): remaining flow screens load via `require()`
  * inside the wrapper's first render instead of a static top-level import.
  *
  * The previous version statically imported every screen and passed it to
@@ -34,9 +49,6 @@ function lazyNativeScreen<P extends object>(
 
 export const SendAmountScreen = lazyNativeScreen(
   () => require('../screens/send/SendAmountScreen'),
-)
-export const SelectRecentRecipientScreen = lazyNativeScreen(
-  () => require('../screens/send/SelectRecentRecipientScreen'),
 )
 export const ScanWalletAddressScreen = lazyNativeScreen(
   () => require('../screens/recipients/ScanWalletAddressScreen'),
@@ -88,7 +100,4 @@ export const ReceiveTransactionDetailsScreen = lazyNativeScreen(
 )
 export const AccountVerificationScreen = lazyNativeScreen(
   () => require('../screens/verification/AccountVerificationScreen'),
-)
-export const RecipientsScreen = lazyNativeScreen(
-  () => require('../screens/main/RecipientsScreen'),
 )
