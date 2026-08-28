@@ -202,6 +202,37 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   } | null>(null)
   const [easenetLookupLoading, setEasenetLookupLoading] = useState(false)
   const [easenetLookupError, setEasenetLookupError] = useState<string | null>(null)
+  const [newRecipient, setNewRecipient] = useState({
+    fullName: '',
+    accountNumber: '',
+    bankName: '',
+    currency: 'USD',
+    routingNumber: '',
+    sortCode: '',
+    iban: '',
+    swiftBic: '',
+    phoneNumber: '',
+    provider: '',
+    walletAddress: '',
+    network: '',
+    checkingOrSavings: '',
+    addressLine1: '',
+    city: '',
+    state: '',
+    postalCode: '',
+    email: '',
+    payeeEasetag: '',
+    ycPixKeyType: '',
+    ycTaxId: '',
+    ycCuit: '',
+    ycIdentificationType: '',
+    ycIdentificationNumber: '',
+    ycAccountType: '',
+    ycIfsc: '',
+    ycBankCode: '',
+    ycBranchCode: '',
+    ycGridRegion: '',
+  })
 
   /** Hub search (@mode) live lookup ? separate from add-recipient modal. */
   const [hubSearchEasenet, setHubSearchEasenet] = useState<{
@@ -325,38 +356,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       fieldsSchema: selectedBankCorridor?.fields_schema,
     })
   }, [selectedCountryCurrency, selectedBankCorridor])
-
-  const [newRecipient, setNewRecipient] = useState({
-    fullName: '',
-    accountNumber: '',
-    bankName: '',
-    currency: 'USD',
-    routingNumber: '',
-    sortCode: '',
-    iban: '',
-    swiftBic: '',
-    phoneNumber: '',
-    provider: '',
-    walletAddress: '',
-    network: '',
-    checkingOrSavings: '',
-    addressLine1: '',
-    city: '',
-    state: '',
-    postalCode: '',
-    email: '',
-    payeeEasetag: '',
-    ycPixKeyType: '',
-    ycTaxId: '',
-    ycCuit: '',
-    ycIdentificationType: '',
-    ycIdentificationNumber: '',
-    ycAccountType: '',
-    ycIfsc: '',
-    ycBankCode: '',
-    ycBranchCode: '',
-    ycGridRegion: '',
-  })
 
   const buildFormYcMetadata = useCallback(() => {
     const extras = normalizeRecipientYcMetadata({
