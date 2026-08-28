@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from 'react'
+import React from 'react'
 import { Platform } from 'react-native'
+import { PostHogProvider as PostHogSDKProvider } from 'posthog-react-native'
 import { pageviewProperties } from '@easner/shared'
-import { schedulePostHogBootInit } from '../lib/posthog'
+import { getPostHog } from '../lib/posthog'
 import { analytics } from '../lib/analytics'
 
 interface PostHogProviderProps {
@@ -9,26 +10,34 @@ interface PostHogProviderProps {
 }
 
 export function PostHogProvider({ children }: PostHogProviderProps) {
-  React.useEffect(() => {
-    if (Platform.OS !== 'web') {
-      schedulePostHogBootInit()
-    }
-  }, [])
+  const client = Platform.OS === 'web' ? null : getPostHog()
+
+  if (Platform.OS === 'web') {
+    return (
+      <>
+        <WebPageviewTracker />
+        {children}
+      </>
+    )
+  }
+
+  if (!client) {
+    return <>{children}</>
+  }
 
   return (
-    <>
-      {Platform.OS === 'web' ? <WebPageviewTracker /> : null}
+    <PostHogSDKProvider client={client} autocapture={false} debug={__DEV__}>
       {children}
-    </>
+    </PostHogSDKProvider>
   )
 }
 
 /** Fires SPA $pageview on Expo web route changes (landing handled at init). */
 function WebPageviewTracker() {
-  const skipInitial = useRef(true)
-  const lastHref = useRef(typeof window !== 'undefined' ? window.location.href : '')
+  const skipInitial = React.useRef(true)
+  const lastHref = React.useRef(typeof window !== 'undefined' ? window.location.href : '')
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (typeof window === 'undefined') return
 
     const captureIfChanged = () => {

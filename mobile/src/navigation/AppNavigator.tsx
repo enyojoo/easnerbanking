@@ -500,6 +500,18 @@ function PinGateSetupStack() {
   )
 }
 
+function PinGateEntryStack() {
+  return (
+    <Stack.Navigator screenOptions={FLOW_STACK_SCREEN_OPTIONS} screenListeners={webStackScreenListeners}>
+      <Stack.Screen
+        name="PinEntryGate"
+        component={PinEntryScreen}
+        options={staticScreenTransitionOptions('PinEntryGate')}
+      />
+    </Stack.Navigator>
+  )
+}
+
 /** Same canvas as PIN screens – avoids blank frames during auth / PIN / main handoffs. */
 function AuthFlowLoadingShell({ palette, testId }: { palette: ReturnType<typeof useThemeColors>; testId?: string }) {
   return (
@@ -889,20 +901,31 @@ export default function AppNavigator() {
   }
 
   /**
-   * Lock/unlock (M2.4): on both web and native, the main navigator stays
-   * mounted and the PIN entry renders as a full-screen overlay above it while
-   * locked. Swapping to a separate PinGateEntryStack (the old native path)
-   * remounted the entire tab navigator on every unlock, losing all navigation
-   * and screen state. First-time PIN *setup* keeps the stack swap above —
-   * the main app should not mount behind a mandatory setup gate.
+   * Lock/unlock (M2.4): on web, keep the main navigator mounted under a PIN
+   * overlay so unlock does not remount tabs. On native, mount only the PIN
+   * stack while locked — mounting MainStack behind the overlay pulled in
+   * dashboard queries, session replay, and TextInputs that fatally crashed
+   * release builds (~2–3s after launch on iOS).
    */
-  if (user && (pinGate === 'main' || pinGate === 'pin')) {
+  if (Platform.OS === 'web' && (pinGate === 'main' || pinGate === 'pin')) {
     return (
       <MobileAppLockShell locked={pinGate === 'pin'}>
         <ResponsiveAppShell key="main-app-shell">
           <MainStack />
         </ResponsiveAppShell>
       </MobileAppLockShell>
+    )
+  }
+
+  if (user && pinGate === 'pin') {
+    return <PinGateEntryStack key="pin-gate-entry" />
+  }
+
+  if (user && pinGate === 'main') {
+    return (
+      <ResponsiveAppShell key="main-app-shell">
+        <MainStack />
+      </ResponsiveAppShell>
     )
   }
 
