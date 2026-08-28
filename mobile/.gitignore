@@ -97,5 +97,8 @@ yarn-error.*
 *-firebase-adminsdk-*.json
 firebase-service-account.json
 
+# Local Firebase config backups (canonical: google-services.json)
+google-services(old).json
+
 # typescript
 *.tsbuildinfo
