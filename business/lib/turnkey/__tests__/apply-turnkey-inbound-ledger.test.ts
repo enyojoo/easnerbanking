@@ -375,4 +375,25 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
       }),
     )
   })
+
+  it("forceOrganicStablecoinDeposit bypasses product suppressors", async () => {
+    mocks.findNoah.mockResolvedValue({ linkedTransactionId: "noah-1", kind: "pay_in" })
+    mocks.findEasetag.mockResolvedValue({ transfer_group_id: "tg-1", status: "submitted" })
+    const admin = {
+      from: vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { metadata: {} } }),
+        update: vi.fn().mockReturnThis(),
+      })),
+    }
+
+    const result = await applyTurnkeyInboundLedgerEvent(admin as never, baseInput, {
+      forceOrganicStablecoinDeposit: true,
+    })
+    expect(result.kind).toBe("applied")
+    expect(mocks.reconcileNoah).not.toHaveBeenCalled()
+    expect(mocks.findEasetag).not.toHaveBeenCalled()
+    expect(mocks.upsertLedger).toHaveBeenCalled()
+  })
 })

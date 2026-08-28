@@ -92,14 +92,15 @@ async function settleMatchingGridVaTurnkeySweep(
 export async function applyTurnkeyInboundLedgerEvent(
   admin: SupabaseClient,
   input: TurnkeyInboundLedgerInput,
-  opts?: { skipBalanceDelta?: boolean },
+  opts?: { skipBalanceDelta?: boolean; forceOrganicStablecoinDeposit?: boolean },
 ): Promise<TurnkeyInboundLedgerResult> {
   const { userId, businessId } = input
   const txHash = input.txHash ? String(input.txHash).trim() : null
   const status = input.status
   const direction = input.direction
+  const skipProductSuppressors = opts?.forceOrganicStablecoinDeposit === true
 
-  if (direction === "in") {
+  if (direction === "in" && !skipProductSuppressors) {
     if (txHash && status === "settled") {
       if (isDepositSplitEnabled()) {
         const completed = await tryCompleteDepositSplitFromUserVaultInbound(admin, {
@@ -235,38 +236,57 @@ export async function applyTurnkeyInboundLedgerEvent(
       return { kind: "suppressed_noah" }
     }
 
-    if (isGridVaTurnkeyDustAmount(input.amount) || input.amount <= 0) {
-      return { kind: "skipped" }
+    if (direction === "in" && !skipProductSuppressors) {
+      if (isGridVaTurnkeyDustAmount(input.amount) || input.amount <= 0) {
+        return { kind: "skipped" }
+      }
     }
   }
 
-  const easetagSuppressed = await findEasetagSettlementForChainSuppression(admin, {
-    turnkeySendStatusId: input.providerTransactionId,
-    txHash,
-    ...(direction === "in"
-      ? {
-          payeeUserId: userId,
-          payeeBusinessId: businessId,
-          amount: input.amount,
-          currency: input.currency,
-        }
-      : {}),
-  })
-  if (easetagSuppressed) {
-    if (status === "settled" && txHash) {
-      await updateEasetagSettlementSettled(admin, easetagSuppressed.transfer_group_id, txHash).catch(
-        () => {},
-      )
+  if (!skipProductSuppressors) {
+    const easetagSuppressed = await findEasetagSettlementForChainSuppression(admin, {
+      turnkeySendStatusId: input.providerTransactionId,
+      txHash,
+      ...(direction === "in"
+        ? {
+            payeeUserId: userId,
+            payeeBusinessId: businessId,
+            amount: input.amount,
+            currency: input.currency,
+          }
+        : {}),
+    })
+    if (easetagSuppressed) {
+      if (status === "settled" && txHash) {
+        await updateEasetagSettlementSettled(admin, easetagSuppressed.transfer_group_id, txHash).catch(
+          () => {},
+        )
+      }
+      return { kind: "suppressed_easetag" }
     }
-    return { kind: "suppressed_easetag" }
-  }
 
-  const globalPayoutSuppressed = await findGlobalPayoutSettlementForChainSuppression(admin, {
-    turnkeySendStatusId: input.providerTransactionId,
-    txHash,
-  })
-  if (globalPayoutSuppressed && direction === "out") {
-    return { kind: "suppressed_easetag" }
+    const globalPayoutSuppressed = await findGlobalPayoutSettlementForChainSuppression(admin, {
+      turnkeySendStatusId: input.providerTransactionId,
+      txHash,
+    })
+    if (globalPayoutSuppressed && direction === "out") {
+      return { kind: "suppressed_easetag" }
+    }
+
+    // Stripe invoice settlement payout to Turnkey address – settle Stripe ledger, suppress duplicate inbound row.
+    if (direction === "in" && status === "settled" && businessId) {
+      const { tryMatchTurnkeyStripeSettlement } = await import("./stripe-settlement-match")
+      const stripeMatch = await tryMatchTurnkeyStripeSettlement(admin, {
+        businessId,
+        userId,
+        amount: input.amount,
+        currency: input.currency,
+        walletAddress: input.walletAddress,
+      }).catch(() => ({ matched: false as const }))
+      if (stripeMatch.matched) {
+        return { kind: "suppressed_noah" }
+      }
+    }
   }
 
   if (direction === "in" && status === "settled" && txHash) {
@@ -277,21 +297,6 @@ export async function applyTurnkeyInboundLedgerEvent(
     })
     if (alreadyInLedger) {
       return { kind: "skipped" }
-    }
-  }
-
-  // Stripe invoice settlement payout to Turnkey address – settle Stripe ledger, suppress duplicate inbound row.
-  if (direction === "in" && status === "settled" && businessId) {
-    const { tryMatchTurnkeyStripeSettlement } = await import("./stripe-settlement-match")
-    const stripeMatch = await tryMatchTurnkeyStripeSettlement(admin, {
-      businessId,
-      userId,
-      amount: input.amount,
-      currency: input.currency,
-      walletAddress: input.walletAddress,
-    }).catch(() => ({ matched: false as const }))
-    if (stripeMatch.matched) {
-      return { kind: "suppressed_noah" }
     }
   }
 

@@ -6,14 +6,11 @@ import {
   turnkeyWebhookVerifyInputFromHeaders,
   verifyTurnkeyWebhookSignature,
 } from "@/lib/turnkey/webhook-verify"
-import { applyTurnkeyBalanceWebhookSideEffects } from "@/lib/turnkey/balance-webhook-sync"
-import { applyTurnkeyWebhookSideEffects } from "@/lib/turnkey/chain-sync"
+import { applyTurnkeyEventInboxSideEffects } from "@/lib/turnkey/turnkey-event-inbox-side-effects"
 import {
   isTurnkeyWebhookAllowUnsignedEnabled,
   isTurnkeyWebhookStrictSignatureEnabled,
 } from "@/lib/turnkey/config"
-import { isTurnkeyBalanceConfirmedPayload } from "@/lib/turnkey/turnkey-webhook-classify"
-import { parseTurnkeyBalanceWebhookPayload } from "@/lib/turnkey/turnkey-balance-webhook-payload"
 import {
   isV2TurnkeyWebhookDelivery,
   readTurnkeyWebhookHeaders,
@@ -153,16 +150,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const balanceParsed = parseTurnkeyBalanceWebhookPayload(payload)
-    if (balanceParsed.kind === "deposit") {
-      await applyTurnkeyBalanceWebhookSideEffects(admin, balanceParsed.data, eventId)
-    } else if (balanceParsed.kind === "withdraw") {
-      /* withdraw confirmations are acknowledged but do not create ledger rows */
-    } else if (isTurnkeyBalanceConfirmedPayload(p)) {
-      console.warn("turnkey_webhook: balance-shaped payload could not be parsed for ingest", { eventId, eventType })
-    } else {
-      await applyTurnkeyWebhookSideEffects(admin, p, eventId)
-    }
+    await applyTurnkeyEventInboxSideEffects(admin, payload, eventId)
     await markEventInboxProcessed(admin, "turnkey", eventId, null)
     return NextResponse.json({ ok: true })
   } catch (e) {

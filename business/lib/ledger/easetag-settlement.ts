@@ -168,15 +168,6 @@ export async function findEasetagSettlementForChainSuppression(
     if (viaDebit) return viaDebit
   }
 
-  const payeeUserId = String(input.payeeUserId || "").trim()
-  if (payeeUserId && input.amount != null && input.currency) {
-    return findEasetagSettlementByPayeeInbound(admin, {
-      payeeUserId,
-      payeeBusinessId: input.payeeBusinessId ?? null,
-      amount: Number(input.amount),
-      currency: String(input.currency),
-    })
-  }
   return null
 }
 

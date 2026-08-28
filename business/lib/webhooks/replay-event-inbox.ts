@@ -1,7 +1,7 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { markEventInboxProcessed } from "@/lib/webhooks/event-inbox"
 import { applyNoahWebhookSideEffects } from "@/lib/noah/webhook-side-effects"
-import { applyTurnkeyWebhookSideEffects } from "@/lib/turnkey/chain-sync"
+import { applyTurnkeyEventInboxSideEffects } from "@/lib/turnkey/turnkey-event-inbox-side-effects"
 import { applyYellowcardWebhookSideEffects } from "@/lib/yellowcard/webhook-processor"
 
 import { applyGridWebhookSideEffects } from "@/lib/grid/webhook-processor"
@@ -39,7 +39,7 @@ export async function replayStaleReceivedEventInbox(
       if (provider === "noah") {
         await applyNoahWebhookSideEffects(admin, row.payload)
       } else if (provider === "turnkey") {
-        await applyTurnkeyWebhookSideEffects(admin, row.payload, eventId)
+        await applyTurnkeyEventInboxSideEffects(admin, row.payload, eventId)
       } else if (provider === "grid") {
         await applyGridWebhookSideEffects(admin, row.payload)
       } else {
@@ -83,7 +83,7 @@ export async function replayFailedEventInbox(
       if (provider === "noah") {
         await applyNoahWebhookSideEffects(admin, row.payload)
       } else if (provider === "turnkey") {
-        await applyTurnkeyWebhookSideEffects(admin, row.payload, eventId)
+        await applyTurnkeyEventInboxSideEffects(admin, row.payload, eventId)
       } else if (provider === "grid") {
         await applyGridWebhookSideEffects(admin, row.payload)
       } else {

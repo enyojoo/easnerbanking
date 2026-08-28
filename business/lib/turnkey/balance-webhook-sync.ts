@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { applyTurnkeyInboundLedgerEvent } from "@/lib/turnkey/apply-turnkey-inbound-ledger"
 import { isTurnkeyBalanceWebhooksIngestEnabled } from "@/lib/turnkey/config"
+import { inboundHashHasVisibleLedgerCredit } from "@/lib/turnkey/inbound-hash-visible-ledger"
 import { turnkeyInboundLedgerRowExists } from "@/lib/turnkey/ledger-inbound-exists"
 import type { NormalizedTurnkeyBalanceDeposit } from "@/lib/turnkey/turnkey-balance-webhook-payload"
 import { turnkeyBalanceDepositProviderTransactionId } from "@/lib/turnkey/turnkey-balance-webhook-payload"
@@ -29,7 +30,9 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
   deposit: NormalizedTurnkeyBalanceDeposit,
   eventId: string,
 ): Promise<boolean> {
-  if (!isTurnkeyBalanceWebhooksIngestEnabled()) return false
+  if (!isTurnkeyBalanceWebhooksIngestEnabled()) {
+    throw new Error("turnkey_balance_webhooks_disabled")
+  }
 
   if (isDepositOmnibusAddress(deposit.address)) {
     return handleDepositOmnibusInbound(admin, deposit, eventId)
@@ -83,7 +86,9 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
       asset: { symbol: deposit.asset, amount: deposit.amountMinor ?? deposit.amount, decimals: deposit.decimals },
     },
   })
-  if (!scope) return false
+  if (!scope) {
+    throw new Error(`turnkey_balance_webhook_scope_unresolved:${deposit.address}`)
+  }
 
   const asset = String(scope.walletAccount.asset || deposit.asset).toUpperCase()
   const chain = String(scope.walletAccount.chain || "solana").toLowerCase()
@@ -116,7 +121,7 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
     }
   }
 
-  const result = await applyTurnkeyInboundLedgerEvent(admin, {
+  let result = await applyTurnkeyInboundLedgerEvent(admin, {
     userId: scope.userId,
     businessId: scope.businessId,
     walletAccount: {
@@ -150,19 +155,74 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
     amountMinor: deposit.amountMinor,
   })
 
-  if (result.kind === "suppressed_noah" || result.kind === "suppressed_easetag") {
-    console.info("turnkey_balance_webhook_suppressed", {
-      kind: result.kind,
+  if (
+    (result.kind === "suppressed_noah" || result.kind === "suppressed_easetag") &&
+    deposit.txHash
+  ) {
+    const visible = await inboundHashHasVisibleLedgerCredit(admin, {
       txHash: deposit.txHash,
-      amount: deposit.amount,
-      address: deposit.address,
+      userId: scope.userId,
+      businessId: scope.businessId,
     })
+    if (!visible) {
+      console.warn("turnkey_balance_webhook_suppressed_without_ledger_retry_organic", {
+        kind: result.kind,
+        txHash: deposit.txHash,
+        amount: deposit.amount,
+        address: deposit.address,
+      })
+      result = await applyTurnkeyInboundLedgerEvent(
+        admin,
+        {
+          userId: scope.userId,
+          businessId: scope.businessId,
+          walletAccount: {
+            id: String(scope.walletAccount.id),
+            address: scope.walletAddress,
+            asset,
+            chain,
+            associated_token_account_address: scope.tokenAccountAddress || null,
+          },
+          providerTransactionId,
+          providerEventId: eventId,
+          status: "settled",
+          amount: deposit.amount,
+          currency,
+          direction: "in",
+          payload: deposit.raw,
+          metadata: {
+            source: "turnkey_balance_webhook",
+            operation: "deposit",
+            source_payment_rail: chain,
+            source_currency: asset,
+            organic_deposit_fallback: true,
+            ...(counterpartyAddress ? { from_address: counterpartyAddress } : {}),
+          },
+          txHash: deposit.txHash,
+          walletAddress: scope.walletAddress,
+          counterpartyAddress,
+          occurredAt: deposit.occurredAt,
+          settledAt: deposit.settledAt,
+          asset,
+          chain,
+          amountMinor: deposit.amountMinor,
+        },
+        { forceOrganicStablecoinDeposit: true },
+      )
+    } else {
+      console.info("turnkey_balance_webhook_suppressed", {
+        kind: result.kind,
+        txHash: deposit.txHash,
+        amount: deposit.amount,
+        address: deposit.address,
+      })
+      return true
+    }
   }
 
-  return (
-    result.kind === "applied" ||
-    result.kind === "skipped" ||
-    result.kind === "suppressed_noah" ||
-    result.kind === "suppressed_easetag"
-  )
+  if (result.kind !== "applied" && result.kind !== "skipped") {
+    throw new Error(`turnkey_balance_webhook_no_ledger:${result.kind}:${deposit.txHash}`)
+  }
+
+  return result.kind === "applied" || result.kind === "skipped"
 }
