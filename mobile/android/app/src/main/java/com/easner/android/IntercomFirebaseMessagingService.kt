@@ -1,4 +1,4 @@
-package com.easner.mobile
+package com.easner.android
 
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage

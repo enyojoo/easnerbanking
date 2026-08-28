@@ -1,4 +1,5 @@
-const MOBILE_BUNDLE_ID = "com.easner.mobile"
+const IOS_BUNDLE_ID = "com.easner.mobile"
+const ANDROID_PACKAGE_NAME = "com.easner.android"
 
 export function buildAppleAppSiteAssociation(teamId: string) {
   return {
@@ -6,7 +7,7 @@ export function buildAppleAppSiteAssociation(teamId: string) {
       apps: [] as string[],
       details: [
         {
-          appIDs: [`${teamId}.${MOBILE_BUNDLE_ID}`],
+          appIDs: [`${teamId}.${IOS_BUNDLE_ID}`],
           components: [
             {
               "/": "/auth/callback*",
@@ -35,7 +36,7 @@ export function buildAssetLinks(fingerprints: string[]) {
       relation: ["delegate_permission/common.handle_all_urls"],
       target: {
         namespace: "android_app",
-        package_name: MOBILE_BUNDLE_ID,
+        package_name: ANDROID_PACKAGE_NAME,
         sha256_cert_fingerprints: fingerprints,
       },
     },

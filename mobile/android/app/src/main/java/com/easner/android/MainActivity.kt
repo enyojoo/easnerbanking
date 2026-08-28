@@ -1,4 +1,4 @@
-package com.easner.mobile
+package com.easner.android
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

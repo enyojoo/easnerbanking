@@ -52,7 +52,7 @@
         "backgroundColor": "#007ACC",
         "monochromeImage": "./assets/icons/adaptive-icon.png"
       },
-      "package": "com.easner.mobile",
+      "package": "com.easner.android",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.POST_NOTIFICATIONS",
