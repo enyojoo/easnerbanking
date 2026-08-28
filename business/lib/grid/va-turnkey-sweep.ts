@@ -645,6 +645,11 @@ export async function findGridVaTurnkeySweepForSolanaTx(
       if (String(meta.turnkey_on_chain_tx_hash ?? "").trim()) continue
       const quoted = Number(row.quoted_pay_in ?? meta.inbound_amount ?? 0)
       if (!amountsRoughlyEqual(quoted, inboundAmount)) continue
+      const status = String(row.status ?? "").toLowerCase()
+      const hasGridHash = Boolean(String(meta.grid_on_chain_tx_hash ?? "").trim())
+      // Settled sweeps with no chain hashes are stale — do not steal organic deposits.
+      if (status === "settled" && !hasGridHash) continue
+      if (status !== "pending" && status !== "processing" && status !== "settled") continue
       return { transferId: String(row.id) }
     }
   }
@@ -688,6 +693,10 @@ export async function findPendingGridVaTurnkeySweepForInboundAmount(
     if (String(meta.turnkey_on_chain_tx_hash ?? "").trim()) continue
     const quoted = Number(row.quoted_pay_in ?? meta.inbound_amount ?? 0)
     if (!amountsRoughlyEqual(quoted, input.amount)) continue
+    const status = String(row.status ?? "").toLowerCase()
+    const hasGridHash = Boolean(String(meta.grid_on_chain_tx_hash ?? "").trim())
+    if (status === "settled" && !hasGridHash) continue
+    if (status !== "pending" && status !== "processing" && status !== "settled") continue
     return { transferId: String(row.id) }
   }
   return null

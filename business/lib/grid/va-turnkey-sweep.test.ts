@@ -217,7 +217,7 @@ describe("findGridVaTurnkeySweepForSolanaTx", () => {
     expect(result).toBeNull()
   })
 
-  it("amount-matches a recent settled sweep still missing a Turnkey hash", async () => {
+  it("does not amount-match a recent settled sweep with no chain hashes", async () => {
     const admin = chainAdmin({
       limitRows: [
         {
@@ -236,7 +236,29 @@ describe("findGridVaTurnkeySweepForSolanaTx", () => {
       userId: "user-1",
       amount: 2,
     })
-    expect(result).toEqual({ transferId: "sweep-recent" })
+    expect(result).toBeNull()
+  })
+
+  it("amount-matches a recent pending sweep", async () => {
+    const admin = chainAdmin({
+      limitRows: [
+        {
+          id: "sweep-pending",
+          status: "pending",
+          quoted_pay_in: 2,
+          updated_at: new Date().toISOString(),
+          metadata: { inbound_grid_transaction_id: "Transaction:in-1", inbound_amount: 2 },
+        },
+      ],
+    })
+
+    const result = await findGridVaTurnkeySweepForSolanaTx(admin, {
+      txHash: "hash-new",
+      businessId: "biz-1",
+      userId: "user-1",
+      amount: 2,
+    })
+    expect(result).toEqual({ transferId: "sweep-pending" })
   })
 
   it("does not FIFO-match a different amount onto an unmatched sweep", async () => {
@@ -341,7 +363,7 @@ describe("findPendingGridVaTurnkeySweepForInboundAmount", () => {
     expect(result).toBeNull()
   })
 
-  it("amount-matches a recent settled sweep still missing a Turnkey hash", async () => {
+  it("does not amount-match a recent settled sweep with no chain hashes", async () => {
     const admin = chainAdmin({
       limitRows: [
         {
@@ -361,7 +383,30 @@ describe("findPendingGridVaTurnkeySweepForInboundAmount", () => {
       amount: 2,
       currency: "USD",
     })
-    expect(result).toEqual({ transferId: "sweep-recent" })
+    expect(result).toBeNull()
+  })
+
+  it("amount-matches a recent pending sweep", async () => {
+    const admin = chainAdmin({
+      limitRows: [
+        {
+          id: "sweep-pending",
+          status: "pending",
+          quoted_pay_in: 2,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          metadata: { inbound_amount: 2 },
+        },
+      ],
+    })
+
+    const result = await findPendingGridVaTurnkeySweepForInboundAmount(admin, {
+      userId: "user-1",
+      businessId: "biz-1",
+      amount: 2,
+      currency: "USD",
+    })
+    expect(result).toEqual({ transferId: "sweep-pending" })
   })
 })
 

@@ -150,6 +150,15 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
     amountMinor: deposit.amountMinor,
   })
 
+  if (result.kind === "suppressed_noah" || result.kind === "suppressed_easetag") {
+    console.info("turnkey_balance_webhook_suppressed", {
+      kind: result.kind,
+      txHash: deposit.txHash,
+      amount: deposit.amount,
+      address: deposit.address,
+    })
+  }
+
   return (
     result.kind === "applied" ||
     result.kind === "skipped" ||
