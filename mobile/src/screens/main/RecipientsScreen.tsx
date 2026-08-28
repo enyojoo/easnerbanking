@@ -192,6 +192,38 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
   } | null>(null)
   const [easenetLookupLoading, setEasenetLookupLoading] = useState(false)
   const [easenetLookupError, setEasenetLookupError] = useState<string | null>(null)
+  const [newRecipient, setNewRecipient] = useState({
+    fullName: '',
+    accountNumber: '',
+    bankName: '',
+    currency: 'USD',
+    routingNumber: '',
+    sortCode: '',
+    iban: '',
+    swiftBic: '',
+    phoneNumber: '',
+    provider: '',
+    walletAddress: '',
+    network: '',
+    checkingOrSavings: '',
+    addressLine1: '',
+    city: '',
+    state: '',
+    postalCode: '',
+    email: '',
+    payeeEasetag: '',
+    ycPixKeyType: '',
+    ycTaxId: '',
+    ycCuit: '',
+    ycIdentificationType: '',
+    ycIdentificationNumber: '',
+    ycAccountType: '',
+    ycIfsc: '',
+    ycBankCode: '',
+    ycBranchCode: '',
+    ycGridRegion: '',
+  })
+
   const {
     bankCorridors,
     mobileCorridors,
@@ -282,37 +314,6 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
 
   // Run entrance animations
   useCalmParallelEnterWhen(true, headerAnim, contentAnim)
-  const [newRecipient, setNewRecipient] = useState({
-    fullName: '',
-    accountNumber: '',
-    bankName: '',
-    currency: 'USD',
-    routingNumber: '',
-    sortCode: '',
-    iban: '',
-    swiftBic: '',
-    phoneNumber: '',
-    provider: '',
-    walletAddress: '',
-    network: '',
-    checkingOrSavings: '',
-    addressLine1: '',
-    city: '',
-    state: '',
-    postalCode: '',
-    email: '',
-    payeeEasetag: '',
-    ycPixKeyType: '',
-    ycTaxId: '',
-    ycCuit: '',
-    ycIdentificationType: '',
-    ycIdentificationNumber: '',
-    ycAccountType: '',
-    ycIfsc: '',
-    ycBankCode: '',
-    ycBranchCode: '',
-    ycGridRegion: '',
-  })
 
   const payoutProvider = resolvePrimaryPayoutProvider(selectedBankCorridor?.provider_routing)
   const usTransferMethods = useMemo(() => {

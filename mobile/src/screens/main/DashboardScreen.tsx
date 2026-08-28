@@ -79,7 +79,6 @@ import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
 import { buildGroupedActivityItems } from '../../lib/transactionListGrouping'
 import { haptics } from '../../lib/haptics'
 import { prepareTransactionDetailsNavigation } from '../../navigation/transactionNavParams'
-import { preloadMainStackScreens } from '../../lib/preloadMainStackScreens'
 import { useFixedFooterPadding, useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { reportColdStartInteractive } from '../../lib/coldStartMetrics'
 
@@ -271,8 +270,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
    *
    * Do NOT preload MainStack send/detail screens here — `navigation.preload`
    * mounts those routes off-screen right after PIN unlock and has fatally crashed
-   * release iOS builds (~7s post-launch). Warm send/detail modules on Send/row
-   * `onPressIn` via {@link preloadMainStackScreens} instead.
+   * release iOS builds (~7s post-launch).
    */
   const didPreloadTabsRef = useRef(false)
   useEffect(() => {
@@ -856,7 +854,6 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
             <Pressable
               android_ripple={ripple.heroOnDark}
               style={({ pressed }) => [styles.heroSendButton, pressed && styles.heroBtnPressed]}
-              onPressIn={preloadMainStackScreens}
               onPress={() => {
                 haptics.tap()
                 navigation.navigate('SelectRecentRecipient' as never, {
@@ -958,7 +955,6 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                       !seg.isLast && styles.transactionItemDivider,
                       pressed && styles.transactionItemPressed,
                     ]}
-                    onPressIn={preloadMainStackScreens}
                     onPress={() => {
                       haptics.tap()
                       navigation.navigate(

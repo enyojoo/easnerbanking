@@ -168,32 +168,14 @@ export function sendHubForwardParams(params: Record<string, unknown> | undefined
   return params.fromSelectRecipient === true || params.fromSelectRecentRecipient === true
 }
 
-export function shouldUseFlowHubInstantTransition(args: {
+export function shouldUseFlowHubInstantTransition(_args: {
   routeName: string
   previousRouteName?: string
   routeParams?: Record<string, unknown>
 }): boolean {
-  const { routeName, previousRouteName, routeParams } = args
-  const entry = getScreenTransitionEntry(routeName)
-  if (entry?.intent !== 'flowHub' || !entry.hubGroup) return false
-
-  if (routesShareHubGroup(routeName, previousRouteName)) {
-    return true
-  }
-
-  // Dashboard → send hub: instant entry avoids double motion while a large lazy screen loads.
-  if (
-    previousRouteName === 'MainTabs' &&
-    entry.hubGroup === 'sendHub' &&
-    routeName === 'SelectRecentRecipient'
-  ) {
-    return true
-  }
-
-  if (routeName === 'SendAmount' && sendHubForwardParams(routeParams)) {
-    return true
-  }
-
+  // Hub instant transitions (duration 0) race lazy `require()` of large send screens on
+  // first open and have fatally crashed iOS release builds. Use animated push instead
+  // (build 206 behaviour) — hub-to-hub instant also disabled swipe-back.
   return false
 }
 

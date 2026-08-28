@@ -35,22 +35,64 @@ describe('transactionDetailNavigation', () => {
 
   it('returns to dashboard after pay-in transaction detail', () => {
     const dispatch = jest.fn()
-    navigateBackFromTransactionDetail({ goBack: jest.fn(), dispatch }, 'ReceiveFlow')
-    expect(dispatch).toHaveBeenCalledWith(
-      CommonActions.reset({
-        index: 0,
-        routes: [{ name: 'MainTabs', params: { screen: 'Dashboard' } }],
-      }),
+    const goBack = jest.fn()
+    navigateBackFromTransactionDetail(
+      {
+        goBack,
+        dispatch,
+        canGoBack: () => true,
+        getState: () => ({
+          index: 1,
+          routes: [{ name: 'MainTabs' }, { name: 'TransactionDetails' }],
+        }),
+      },
+      'ReceiveFlow',
     )
+    expect(goBack).toHaveBeenCalled()
+    expect(dispatch).not.toHaveBeenCalled()
   })
 
   it('returns to transactions list when opened from there', () => {
     const dispatch = jest.fn()
-    navigateBackFromTransactionDetail({ goBack: jest.fn(), dispatch }, 'Transactions')
+    const goBack = jest.fn()
+    navigateBackFromTransactionDetail(
+      {
+        goBack,
+        dispatch,
+        canGoBack: () => true,
+        getState: () => ({
+          index: 1,
+          routes: [{ name: 'MainTabs' }, { name: 'TransactionDetails' }],
+        }),
+      },
+      'Transactions',
+    )
+    expect(goBack).toHaveBeenCalled()
+    expect(dispatch).not.toHaveBeenCalled()
+  })
+
+  it('resets when the detail stack is deeper than MainTabs → detail', () => {
+    const dispatch = jest.fn()
+    navigateBackFromTransactionDetail(
+      {
+        goBack: jest.fn(),
+        dispatch,
+        canGoBack: () => true,
+        getState: () => ({
+          index: 2,
+          routes: [
+            { name: 'MainTabs' },
+            { name: 'SelectRecentRecipient' },
+            { name: 'TransactionDetails' },
+          ],
+        }),
+      },
+      'Dashboard',
+    )
     expect(dispatch).toHaveBeenCalledWith(
       CommonActions.reset({
         index: 0,
-        routes: [{ name: 'MainTabs', params: { screen: 'Transactions' } }],
+        routes: [{ name: 'MainTabs', params: { screen: 'Dashboard' } }],
       }),
     )
   })
