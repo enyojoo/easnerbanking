@@ -14,6 +14,13 @@ describe("eurBankPaymentMethodsForProvider", () => {
     ])
   })
 
+  it("uses SEPA title with Instant / 1–3 days chips", () => {
+    expect(eurBankPaymentMethodsForProvider("grid")).toEqual([
+      { value: "SEPA Instant", label: "SEPA", speedLabel: "Instant" },
+      { value: "SEPA", label: "SEPA", speedLabel: "1–3 days" },
+    ])
+  })
+
   it("returns SEPA Instant and SEPA for Noah", () => {
     expect(eurBankPaymentMethodsForProvider("noah").map((m) => m.value)).toEqual([
       "SEPA Instant",

@@ -6,9 +6,16 @@ export type EurBankTransferType = "SEPA Instant" | "SEPA"
 /** Grid quote destination.paymentRail for a EUR_ACCOUNT. */
 export type GridEurPaymentRail = "SEPA" | "SEPA_INSTANT"
 
+/** Timing chip on EUR transfer-type tiles (title stays "SEPA" for both). */
 export const EUR_BANK_TRANSFER_SPEED_LABEL: Record<EurBankTransferType, string> = {
   "SEPA Instant": "Instant",
   SEPA: "1–3 days",
+}
+
+/** Short tile title; stored transfer_type keeps full "SEPA Instant" / "SEPA". */
+export const EUR_BANK_TRANSFER_TILE_LABEL: Record<EurBankTransferType, string> = {
+  "SEPA Instant": "SEPA",
+  SEPA: "SEPA",
 }
 
 export type EurBankTransferMethodOption = {
@@ -20,10 +27,14 @@ export type EurBankTransferMethodOption = {
 const GRID_METHODS: EurBankTransferMethodOption[] = [
   {
     value: "SEPA Instant",
-    label: "SEPA Instant",
+    label: EUR_BANK_TRANSFER_TILE_LABEL["SEPA Instant"],
     speedLabel: EUR_BANK_TRANSFER_SPEED_LABEL["SEPA Instant"],
   },
-  { value: "SEPA", label: "SEPA", speedLabel: EUR_BANK_TRANSFER_SPEED_LABEL.SEPA },
+  {
+    value: "SEPA",
+    label: EUR_BANK_TRANSFER_TILE_LABEL.SEPA,
+    speedLabel: EUR_BANK_TRANSFER_SPEED_LABEL.SEPA,
+  },
 ]
 
 const NOAH_METHODS: EurBankTransferMethodOption[] = [...GRID_METHODS]
