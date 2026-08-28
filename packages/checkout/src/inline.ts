@@ -180,6 +180,15 @@ function renderSkeleton(host: HTMLElement) {
   host.appendChild(wrap)
 }
 
+/** Form slot + Powered by, painted before Stripe loads so the mark is instant. */
+function mountCheckoutChrome(host: HTMLElement): HTMLElement {
+  const formSlot = document.createElement("div")
+  formSlot.setAttribute("data-easner-checkout-form", "")
+  applyBaseStyles(formSlot, FIT_BOX)
+  host.replaceChildren(formSlot, createPoweredByEasner())
+  return formSlot
+}
+
 export async function mountInline(
   target: string | Element,
   options: EasnerCheckoutMountOptions,
@@ -193,8 +202,10 @@ export async function mountInline(
   el.setAttribute("data-easner-checkout", "")
   applyBaseStyles(el, FIT_BOX)
 
+  const formSlot = mountCheckoutChrome(el as HTMLElement)
+  renderSkeleton(formSlot)
+
   const validatedKey = await assertPublishableKey(options.publishableKey, runtime.validateUrl)
-  renderSkeleton(el as HTMLElement)
   const sdk = await loadStripe(platformStripeKey(options.publishableKey, runtime, validatedKey))
   const mountEmail = String(options.customerEmail || "").trim()
   const mountName = String(options.customerName || "").trim()
@@ -298,7 +309,7 @@ export async function mountInline(
   root.appendChild(paymentHost)
   root.appendChild(message)
   root.appendChild(button)
-  el.replaceChildren(root, createPoweredByEasner())
+  formSlot.replaceChildren(root)
 
   const express = mountExpressCheckout(checkout, expressHost, divider, (walletEmail) =>
     confirmCheckout(checkout, options, knownEmail || walletEmail || emailInput.value, button, message, idleLabel),

@@ -47,6 +47,11 @@ type Props = {
   knownName?: string | null
   /** Payment-link page centers the methods hint; invoices stay left. */
   hintAlign?: "left" | "center"
+  /**
+   * Website embed preview only. Invoices and payment links already have a
+   * page-level Powered by mark – leave this off to avoid a duplicate.
+   */
+  showPoweredBy?: boolean
   onPaid?: () => void
   onPaymentFailed?: (message: string) => void
 }
@@ -130,6 +135,7 @@ function CheckoutSurface({
   collectEmail = false,
   knownEmail = null,
   hintAlign = "left",
+  showPoweredBy = false,
   onPaid,
   onPaymentFailed,
 }: Omit<Props, "clientSecret" | "knownName">) {
@@ -338,11 +344,13 @@ function CheckoutSurface({
                 `Pay ${formatCurrency(amount, currency)}`
               )}
             </Button>
-            <PoweredByEasner className="border-t border-border pt-4" campaign="payer_checkout" />
           </>
         ) : null}
       </div>
       </div>
+      {showPoweredBy ? (
+        <PoweredByEasner className="border-t border-border pt-4" campaign="payer_checkout" />
+      ) : null}
     </div>
   )
 }
@@ -350,6 +358,7 @@ function CheckoutSurface({
 /**
  * Card, bank, and wallet payment form for every Easner collection surface
  * (invoice Pay online, Payment Links, website embed preview).
+ * Page-hosted invoices and links omit the under-methods Powered by mark.
  */
 export function EasnerPaymentElementCheckout({
   clientSecret,
