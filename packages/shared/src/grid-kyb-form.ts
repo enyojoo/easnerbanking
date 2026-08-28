@@ -143,6 +143,21 @@ function iso2Country(value: string | null | undefined): string {
   return String(value ?? "").trim().toUpperCase()
 }
 
+/** Grid birthDate / incorporatedOn: ISO 8601 date (`YYYY-MM-DD`). */
+export function normalizeGridIsoDate(value: string | null | undefined): string {
+  const raw = String(value ?? "").trim()
+  if (!raw) return ""
+  const iso = raw.match(/^(\d{4}-\d{2}-\d{2})/)
+  if (iso) return iso[1]
+  const parsed = new Date(raw)
+  if (Number.isNaN(parsed.getTime())) return ""
+  return parsed.toISOString().slice(0, 10)
+}
+
+export function isGridKybIsoDate(value: string | null | undefined): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalizeGridIsoDate(value))
+}
+
 /** Grid's closed beneficial-owner tax idType enum. Accepts cmdk-lowercased values. */
 export function normalizeGridKybIdType(raw: string | null | undefined): GridKybIdType | "" {
   const compact = String(raw ?? "")
@@ -517,6 +532,123 @@ export function withFirstKybOwnerUbo<T extends { roles?: string[] | null }>(peop
   return people.map((person, index) =>
     index === 0 ? { ...person, roles: [...(person.roles ?? []), "UBO"] } : person,
   )
+}
+
+/** Grid KYB needs a UBO and a control person. Fill both on the first owner when missing. */
+export function withRequiredKybOwnerRoles<T extends { roles?: string[] | null }>(people: T[]): T[] {
+  const withUbo = withFirstKybOwnerUbo(people)
+  if (withUbo.length === 0) return withUbo
+  if (withUbo.some((person) => (person.roles ?? []).includes("CONTROL_PERSON"))) return withUbo
+  return withUbo.map((person, index) =>
+    index === 0 ? { ...person, roles: [...(person.roles ?? []), "CONTROL_PERSON"] } : person,
+  )
+}
+
+export type GridKybSyncPerson = {
+  id: string
+  gridBeneficialOwnerId: string | null
+  updatedAt?: string | null
+}
+
+export type GridKybSyncDocument = {
+  id: string
+  personId: string | null
+  gridDocumentId: string | null
+  updatedAt?: string | null
+}
+
+/** Push owners to Grid until the first successful submit, and whenever local data changed. */
+export function peopleNeedingGridSync<T extends GridKybSyncPerson>(
+  people: T[],
+  documents: GridKybSyncDocument[],
+  errors: GridKybVerificationError[],
+  lastSyncedAt: string | null,
+): T[] {
+  const rejectedDocIds = new Set(rejectedGridDocumentIdsFromErrors(errors))
+  const ownerIdsFromErrors = new Set<string>()
+  for (const error of errors) {
+    const resourceId = String(error.resourceId ?? "").trim()
+    if (!resourceId.startsWith("BeneficialOwner:")) continue
+    const ownerId = gridBeneficialOwnerIdFromResource(resourceId)
+    if (ownerId) ownerIdsFromErrors.add(ownerId)
+  }
+
+  return people.filter((person) => {
+    if (!person.gridBeneficialOwnerId) return true
+    if (!lastSyncedAt) return true
+    const gridOwnerId = gridBeneficialOwnerIdFromResource(person.gridBeneficialOwnerId)
+    if (gridOwnerId && ownerIdsFromErrors.has(gridOwnerId)) return true
+    if (
+      documents.some(
+        (document) =>
+          document.personId === person.id &&
+          rejectedDocIds.has(gridDocumentIdFromResource(document.gridDocumentId)),
+      )
+    ) {
+      return true
+    }
+    if (person.updatedAt && person.updatedAt > lastSyncedAt) return true
+    return false
+  })
+}
+
+export function documentsNeedingGridSync<T extends GridKybSyncDocument>(
+  documents: T[],
+  errors: GridKybVerificationError[],
+  lastSyncedAt: string | null,
+): T[] {
+  const rejectedIds = new Set(rejectedGridDocumentIdsFromErrors(errors))
+  return documents.filter((document) => {
+    const existingGridId = gridDocumentIdFromResource(document.gridDocumentId)
+    if (!existingGridId) return true
+    if (rejectedIds.has(existingGridId)) return true
+    if (lastSyncedAt && document.updatedAt && document.updatedAt > lastSyncedAt) return true
+    return false
+  })
+}
+
+/** Identity files attach to the owner; upload those before company files. */
+export function sortKybDocumentsForGridUpload<T extends { personId?: string | null }>(documents: T[]): T[] {
+  return [...documents].sort((a, b) => Number(Boolean(b.personId)) - Number(Boolean(a.personId)))
+}
+
+export type GridKybReadyPerson = {
+  firstName?: string | null
+  lastName?: string | null
+  birthDate?: string | null
+  nationality?: string | null
+  addressLine1?: string | null
+  city?: string | null
+  postalCode?: string | null
+  addressCountry?: string | null
+  identifier?: string | null
+  idType?: string | null
+  countryOfIssuance?: string | null
+}
+
+/** Grid collects name, DOB, address, and tax ID for every beneficial owner / control person. */
+export function hasReadyKybPeople(people: GridKybReadyPerson[]): boolean {
+  if (people.length === 0) return false
+  return people.every((person) => {
+    if (!String(person.firstName ?? "").trim() || !String(person.lastName ?? "").trim()) return false
+    if (!isGridKybIsoDate(person.birthDate)) return false
+    if (!String(person.nationality ?? "").trim()) return false
+    if (
+      !String(person.addressLine1 ?? "").trim() ||
+      !String(person.city ?? "").trim() ||
+      !String(person.postalCode ?? "").trim() ||
+      !String(person.addressCountry ?? "").trim()
+    ) {
+      return false
+    }
+    if (!String(person.identifier ?? "").trim()) return false
+    return Boolean(
+      resolveGridKybOwnerIdType({
+        idType: person.idType,
+        countryOfIssuance: person.countryOfIssuance || person.addressCountry,
+      }),
+    )
+  })
 }
 
 export function hasReadyKybIdentityDocuments(
@@ -1098,7 +1230,7 @@ export function gridKybWizardReadiness(input: {
   status: GridKybApplicationStatus | null | undefined
   remainingPointers: number
   company: GridKybCompanyDraft
-  peopleCount: number
+  hasReadyPeople: boolean
   hasIdentityDocument: boolean
   hasAllRequiredCompanyDocuments: boolean
 }): GridKybWizardReadiness {
@@ -1108,7 +1240,7 @@ export function gridKybWizardReadiness(input: {
   if (status === "in_review" || status === "submitted") return "in_review"
   const ready =
     Boolean(input.company.legalName.trim()) &&
-    input.peopleCount > 0 &&
+    input.hasReadyPeople &&
     input.hasIdentityDocument &&
     input.hasAllRequiredCompanyDocuments
   return ready ? "ready_to_submit" : "not_submitted"

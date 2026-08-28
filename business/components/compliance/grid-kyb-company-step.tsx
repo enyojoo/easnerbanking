@@ -7,6 +7,7 @@ import {
   GRID_KYB_MONTHLY_VOLUME,
   GRID_KYB_PURPOSE_OF_ACCOUNT,
   GRID_KYB_SOURCE_OF_FUNDS,
+  normalizeGridIsoDate,
   type GridKybCompanyDraft,
   type GridKybErrorPointer,
 } from "@easner/shared"
@@ -106,7 +107,7 @@ export function GridKybCompanyStep({ company, onChange, errors, disabled }: Prop
             id="kyb-incorporated"
             type="date"
             className={cn(SETTINGS_INPUT_CLASS, incorporatedError && "border-destructive")}
-            value={company.incorporatedOn}
+            value={normalizeGridIsoDate(company.incorporatedOn)}
             onChange={(event) => onChange({ incorporatedOn: event.target.value })}
             aria-invalid={Boolean(incorporatedError) || undefined}
             disabled={disabled}

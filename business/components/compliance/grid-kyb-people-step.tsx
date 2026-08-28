@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { forwardRef, useImperativeHandle, useRef, useState } from "react"
 import { AlertTriangle, Loader2, Pencil, Plus, Trash2 } from "lucide-react"
 import {
   GRID_KYB_DOCUMENT_CATEGORIES,
@@ -12,6 +12,7 @@ import {
   resolveGridKybOwnerIdType,
   parseGridKybOwnershipPercentageInput,
   gridKybOwnerCountriesFromNationality,
+  normalizeGridIsoDate,
   type GridKybErrorPointer,
 } from "@easner/shared"
 import { Button } from "@/components/ui/button"
@@ -66,16 +67,34 @@ const emptyPerson = {
   countryOfIssuance: "",
 }
 
-export function GridKybPeopleStep({
-  people,
-  documents,
-  errors,
-  disabled,
-  onReload,
-  onDocumentAdded,
-  onPersonSaved,
-  onRemoveDocument,
-}: Props) {
+function ownerFormHasDetails(form: typeof emptyPerson): boolean {
+  return Boolean(
+    form.firstName.trim() ||
+      form.lastName.trim() ||
+      normalizeGridIsoDate(form.birthDate) ||
+      form.email.trim() ||
+      form.identifier.trim() ||
+      form.addressLine1.trim(),
+  )
+}
+
+export type GridKybPeopleStepHandle = {
+  flush: () => Promise<void>
+}
+
+export const GridKybPeopleStep = forwardRef<GridKybPeopleStepHandle, Props>(function GridKybPeopleStep(
+  {
+    people,
+    documents,
+    errors,
+    disabled,
+    onReload,
+    onDocumentAdded,
+    onPersonSaved,
+    onRemoveDocument,
+  }: Props,
+  ref,
+) {
   const [editingId, setEditingId] = useState<string | "new" | null>(null)
   const [formSession, setFormSession] = useState(0)
   const [form, setForm] = useState(emptyPerson)
@@ -125,7 +144,7 @@ export function GridKybPeopleStep({
     setError(null)
     setForm({
       ...emptyPerson,
-      roles: people.length === 0 ? ["UBO"] : [],
+      roles: people.length === 0 ? ["UBO", "CONTROL_PERSON"] : [],
     })
     setFormSession((n) => n + 1)
     setEditingId("new")
@@ -141,7 +160,7 @@ export function GridKybPeopleStep({
       lastName: person.lastName,
       email: person.email,
       phone: person.phone,
-      birthDate: person.birthDate,
+      birthDate: normalizeGridIsoDate(person.birthDate),
       nationality,
       addressLine1: person.addressLine1,
       addressLine2: person.addressLine2,
@@ -172,6 +191,7 @@ export function GridKybPeopleStep({
   function ownerPayload() {
     return {
       ...form,
+      birthDate: normalizeGridIsoDate(form.birthDate),
       nationality: resolveCountryIso2(form.nationality) || form.nationality,
       addressCountry: resolveCountryIso2(form.addressCountry) || form.addressCountry,
       countryOfIssuance: resolveCountryIso2(form.countryOfIssuance) || form.countryOfIssuance,
@@ -193,6 +213,18 @@ export function GridKybPeopleStep({
     if (editingId === "new") setEditingId(json.person.id)
     return json.person
   }
+
+  async function flush() {
+    if (disabled || !editingId) return
+    if (editingId === "new" && !ownerFormHasDetails(form)) return
+    const person = await persistOwner()
+    if (idUploadRef.current?.hasPendingFile()) {
+      const uploaded = await idUploadRef.current.submit(person.id)
+      if (uploaded) onDocumentAdded(uploaded)
+    }
+  }
+
+  useImperativeHandle(ref, () => ({ flush }))
 
   async function ensureOwnerId() {
     if (editingId && editingId !== "new") return editingId
@@ -471,7 +503,7 @@ export function GridKybPeopleStep({
               <Input
                 type="date"
                 className={cn(SETTINGS_INPUT_CLASS, birthDateError && "border-destructive")}
-                value={form.birthDate}
+                value={normalizeGridIsoDate(form.birthDate)}
                 onChange={(e) => patchForm({ birthDate: e.target.value })}
                 disabled={disabled}
               />
@@ -596,4 +628,6 @@ export function GridKybPeopleStep({
       )}
     </div>
   )
-}
+})
+
+GridKybPeopleStep.displayName = "GridKybPeopleStep"

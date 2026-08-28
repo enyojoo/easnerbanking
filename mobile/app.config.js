@@ -233,6 +233,15 @@ module.exports = ({ config }) => {
     plugins: [
       ...(config.plugins || []),
       [
+        'expo-build-properties',
+        {
+          android: {
+            enableMinifyInReleaseBuilds: true,
+            enableShrinkResourcesInReleaseBuilds: true,
+          },
+        },
+      ],
+      [
         'expo-camera',
         {
           cameraPermission:

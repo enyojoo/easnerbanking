@@ -10,7 +10,7 @@ import {
   Keyboard,
   ActivityIndicator,
 } from 'react-native'
-import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'react-native-keyboard-controller'
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { FlashList } from '@shopify/flash-list'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
@@ -1298,7 +1298,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       {/* Step 2: Bank Account Form Modal */}
       <WebAwareModal
         visible={showBankAccountForm}
-        keyboardAvoiding
         onRequestClose={() => {
           closeAllDropdowns()
           setShowBankAccountForm(false)
@@ -1355,17 +1354,19 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                 }}
               />
             ) : (
+            <>
             <KeyboardAwareScrollView
               ref={formScrollRef}
               style={styles.modalScrollView}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={[
                 styles.modalScrollContent,
-                { paddingBottom: footerPadding },
+                { paddingBottom: spacing[4] },
               ]}
               nestedScrollEnabled={true}
               scrollEnabled={!isAnyDropdownOpen}
               keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
               bottomOffset={insets.bottom + spacing[3]}
             >
               <View style={styles.modalContent}>
@@ -2165,6 +2166,9 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                 )
               })()}
 
+              </View>
+            </KeyboardAwareScrollView>
+            <View style={styles.modalButtonsFooter}>
               <View style={styles.modalButtons}>
                 <Pressable
                  android_ripple={ripple.neutral}
@@ -2189,8 +2193,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                   </Text>
                 </Pressable>
               </View>
-              </View>
-            </KeyboardAwareScrollView>
+            </View>
+            </>
             )}
           </View>
           </RecipientFormDropdownHost>
@@ -2567,10 +2571,15 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginBottom: spacing[2],
   },
+  modalButtonsFooter: {
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[3],
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
   modalButtons: {
     flexDirection: 'row',
     gap: spacing[3],
-    marginTop: spacing[2],
   },
   modalButton: {
     flex: 1,

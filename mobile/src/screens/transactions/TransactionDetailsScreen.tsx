@@ -352,10 +352,11 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   }, [transaction])
 
   // Animation refs
-  const headerAnim = useRef(new Animated.Value(0)).current
-  const contentAnim = useRef(new Animated.Value(0)).current
+  const skipDecorativeEnter = Boolean(initialTransaction)
+  const headerAnim = useRef(new Animated.Value(skipDecorativeEnter ? 1 : 0)).current
+  const contentAnim = useRef(new Animated.Value(skipDecorativeEnter ? 1 : 0)).current
 
-  useCalmParallelEnterWhen(true, headerAnim, contentAnim)
+  useCalmParallelEnterWhen(!skipDecorativeEnter, headerAnim, contentAnim)
 
   useLayoutEffect(() => {
     if (!scope || !transactionId) return

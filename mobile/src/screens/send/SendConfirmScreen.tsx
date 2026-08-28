@@ -50,8 +50,10 @@ import { useBalance } from '../../contexts/BalanceContext'
 import { useScope } from '../../query/scope'
 import { apiFetch } from '../../query/api-client'
 import { invalidateTransactionsFeed } from '../../query/refresh-user-feeds'
-import { prefetchTransactionDetail } from '../../hooks/queries'
+import { seedTransactionDetailSnapshot, prefetchTransactionDetail } from '../../hooks/queries'
 import { executeBalanceSend } from '../../hooks/executeBalanceSend'
+import { buildPostSendTransactionSnapshot } from '../../lib/buildPostSendTransactionSnapshot'
+import { prepareTransactionDetailsNavigation } from '../../navigation/transactionNavParams'
 import { ACCOUNT_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import { consumeBalanceSendPinVerified } from '../../lib/sendFlowPostPinGate'
 import { hasPin } from '../../lib/pinAuth'
@@ -737,7 +739,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                 }
               : undefined
 
-          const { detailId } = await executeBalanceSend(
+          const { detailId, transfer } = await executeBalanceSend(
             {
               recipient: flowRecipient,
               calculatedTotalAmount,
@@ -767,7 +769,37 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
             throw new Error('Transfer succeeded but no transaction ID was returned.')
           }
 
+          const initialTransaction = buildPostSendTransactionSnapshot({
+            detailId: txId,
+            transfer,
+            recipient: flowRecipient,
+            selectedBalanceCurrency,
+            quotedReceiveAmount,
+            calculatedTotalAmount,
+            youSendAmount,
+            receiveCurrency,
+            transferMethod,
+            processingTime,
+            ...(reviewSnapshot ? { reviewSnapshot } : {}),
+            ...(sendNote ? { sendNote } : {}),
+            ...(easetagUi ? { easetag: easetagUi } : {}),
+            ...(isWalletRecipient
+              ? {
+                  isWalletSend: true,
+                  ...(walletExecutionModel ? { walletExecutionModel } : {}),
+                  networkFee,
+                }
+              : {}),
+          })
+
           if (scope) {
+            seedTransactionDetailSnapshot(qc, scope, txId, initialTransaction, {
+              aliasIds: [
+                transfer.easner_transaction_id,
+                transfer.transaction_id,
+                transfer.id,
+              ].filter((v): v is string => typeof v === 'string' && v.trim().length > 0),
+            })
             void prefetchTransactionDetail(qc, scope, txId).catch(() => {})
           }
 
@@ -778,7 +810,11 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                 { name: 'MainTabs' },
                 {
                   name: 'TransactionDetails',
-                  params: { transactionId: txId, fromScreen: 'SendFlow' },
+                  params: prepareTransactionDetailsNavigation({
+                    transactionId: txId,
+                    fromScreen: 'SendFlow',
+                    initialTransaction,
+                  }),
                 },
               ],
             }),

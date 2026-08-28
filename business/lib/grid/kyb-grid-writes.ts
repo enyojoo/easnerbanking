@@ -8,6 +8,7 @@ import {
 } from "./kyb-company-to-grid"
 import {
   gridKybOwnerIdTypeForGrid,
+  normalizeGridIsoDate,
   normalizeGridKybOwnershipPercentageForGrid,
   type GridKybCompanyDraft,
 } from "@easner/shared"
@@ -32,6 +33,10 @@ export async function patchGridBusinessKybCustomer(input: {
 
 function ownerPersonalInfo(person: KybPersonRow): Record<string, unknown> {
   const idType = gridKybOwnerIdTypeForGrid(person) || undefined
+  const birthDate = normalizeGridIsoDate(person.birthDate)
+  if (!birthDate) {
+    throw new Error("Add each owner's date of birth before submitting.")
+  }
   const address = gridAddressFromKybParts({
     addressLine1: person.addressLine1,
     addressLine2: person.addressLine2,
@@ -40,18 +45,34 @@ function ownerPersonalInfo(person: KybPersonRow): Record<string, unknown> {
     postalCode: person.postalCode,
     addressCountry: person.addressCountry,
   })
+  if (!address) {
+    throw new Error("Owner street, country, and postal code are required.")
+  }
+  const firstName = person.firstName.trim()
+  const lastName = person.lastName.trim()
+  if (!firstName || !lastName) {
+    throw new Error("Add each owner's first and last name before submitting.")
+  }
+  const identifier = person.identifier.trim()
+  if (!identifier || !idType) {
+    throw new Error("Add each owner's tax ID before submitting.")
+  }
+  const nationality = person.nationality.trim().toUpperCase()
+  if (!nationality) {
+    throw new Error("Add each owner's nationality before submitting.")
+  }
   return {
-    firstName: person.firstName.trim(),
-    lastName: person.lastName.trim(),
+    firstName,
+    lastName,
     middleName: person.middleName.trim() || undefined,
     email: person.email.trim() || undefined,
     phoneNumber: person.phone.trim() || undefined,
-    birthDate: person.birthDate.trim() || undefined,
-    nationality: person.nationality.trim().toUpperCase() || undefined,
-    identifier: person.identifier.trim() || undefined,
+    birthDate,
+    nationality,
+    identifier,
     idType,
     countryOfIssuance: person.countryOfIssuance.trim().toUpperCase() || undefined,
-    ...(address ? { address } : {}),
+    address,
   }
 }
 
@@ -69,9 +90,6 @@ export async function upsertGridBeneficialOwner(input: {
     ownershipPercentage,
     roles: input.person.roles.length ? input.person.roles : ["UBO"],
     personalInfo: ownerPersonalInfo(input.person),
-  }
-  if (!input.person.gridBeneficialOwnerId && !body.personalInfo.address) {
-    throw new Error("Owner street, country, and postal code are required.")
   }
   if (input.person.gridBeneficialOwnerId) {
     const updated = await gridFetch<{ id?: string }>({
@@ -160,6 +178,7 @@ export async function submitGridKybVerification(customerId: string): Promise<{
     method: "POST",
     path: "/verifications",
     json: { customerId: normalizeGridCustomerId(customerId) },
+    timeoutMs: 60_000,
   })
   return {
     id: String(result.id ?? ""),

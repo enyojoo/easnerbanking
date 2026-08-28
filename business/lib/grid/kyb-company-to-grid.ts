@@ -1,4 +1,4 @@
-import { resolveGridKybSourceOfFunds, type GridKybCompanyDraft } from "@easner/shared"
+import { resolveGridKybSourceOfFunds, normalizeGridIsoDate, type GridKybCompanyDraft } from "@easner/shared"
 
 export function gridBusinessInfoFromKybCompany(company: GridKybCompanyDraft): Record<string, unknown> {
   const source = resolveGridKybSourceOfFunds({
@@ -12,7 +12,8 @@ export function gridBusinessInfoFromKybCompany(company: GridKybCompanyDraft): Re
   if (company.registrationNumber.trim()) businessInfo.registrationNumber = company.registrationNumber.trim()
   if (company.taxId.trim()) businessInfo.taxId = company.taxId.trim()
   if (company.country.trim()) businessInfo.country = company.country.trim().toUpperCase()
-  if (company.incorporatedOn.trim()) businessInfo.incorporatedOn = company.incorporatedOn.trim()
+  const incorporatedOn = normalizeGridIsoDate(company.incorporatedOn)
+  if (incorporatedOn) businessInfo.incorporatedOn = incorporatedOn
   if (company.entityType.trim()) businessInfo.entityType = company.entityType.trim()
   if (company.businessType.trim()) businessInfo.businessType = company.businessType.trim()
   if (company.purposeOfAccount.trim()) businessInfo.purposeOfAccount = company.purposeOfAccount.trim()

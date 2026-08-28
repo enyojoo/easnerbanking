@@ -40,6 +40,21 @@ export function formatGridApiError(error: unknown): string {
   return String(error)
 }
 
+function isTimeoutError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false
+  const name = "name" in error ? String((error as { name?: unknown }).name ?? "") : ""
+  if (name === "TimeoutError" || name === "AbortError") return true
+  const msg = error instanceof Error ? error.message : String(error)
+  return /aborted|timeout/i.test(msg)
+}
+
+function isDocumentScreeningError(error: unknown, msg: string): boolean {
+  if (error instanceof GridHttpError && error.status === 422) return true
+  return /DOCUMENT_REJECTED|UNREADABLE|POOR_QUALITY|INCOMPLETE_DOCUMENT|unreadable|poor quality|document.?reject|could not read an uploaded document/i.test(
+    msg,
+  )
+}
+
 /** User-facing copy for hosted KYB start failures. */
 export function formatHostedKybStartError(error: unknown): string {
   const msg = formatGridApiError(error)
@@ -54,6 +69,15 @@ export function formatHostedKybStartError(error: unknown): string {
   }
   if (/customer not found/i.test(msg)) {
     return "Your previous verification session expired. Start verification again."
+  }
+  if (isTimeoutError(error)) {
+    return "Verification is taking longer than expected. Wait a moment and try again."
+  }
+  if (isDocumentScreeningError(error, msg)) {
+    return "This ID photo could not be read. Photograph the physical document in color, all four corners in frame, with no glare or screenshot."
+  }
+  if (/could not be started|could not start verification/i.test(msg)) {
+    return "We couldn’t start verification. Check each owner’s date of birth, address, tax ID, and ID photos, then try again."
   }
   return msg || "Could not start verification."
 }

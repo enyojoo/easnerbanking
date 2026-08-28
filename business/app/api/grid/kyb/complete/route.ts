@@ -1,15 +1,18 @@
+import type { SupabaseClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
 import {
-  gridBeneficialOwnerIdFromResource,
+  allocateGridKybOwnershipPercentagesForGrid,
   gridDocumentIdFromResource,
   gridKybApplicationStatusFromVerification,
   gridKybOwnerIdTypeForGrid,
-  allocateGridKybOwnershipPercentagesForGrid,
+  hasAllRequiredKybCompanyDocuments,
   hasReadyKybIdentityDocuments,
-  withFirstKybOwnerUbo,
+  hasReadyKybPeople,
   mapGridKybVerificationErrors,
-  rejectedGridDocumentIdsFromErrors,
-  type GridKybVerificationError,
+  peopleNeedingGridSync,
+  documentsNeedingGridSync,
+  sortKybDocumentsForGridUpload,
+  withRequiredKybOwnerRoles,
 } from "@easner/shared"
 import { requireKybContext } from "../_context"
 import {
@@ -36,52 +39,43 @@ import { persistVerificationStatus } from "@/lib/compliance/verification-store"
 import { syncGridBusinessKybToSupabase } from "@/lib/grid/sync-kyb"
 import { formatHostedKybStartError } from "@/lib/grid/format-grid-api-error"
 
-function peopleNeedingGridSync(
-  people: KybPersonRow[],
-  documents: KybDocumentRow[],
-  errors: GridKybVerificationError[],
-  lastSyncedAt: string | null,
-): KybPersonRow[] {
-  const rejectedDocIds = new Set(rejectedGridDocumentIdsFromErrors(errors))
-  const ownerIdsFromErrors = new Set<string>()
-  for (const error of errors) {
-    const resourceId = String(error.resourceId ?? "").trim()
-    if (!resourceId.startsWith("BeneficialOwner:")) continue
-    const ownerId = gridBeneficialOwnerIdFromResource(resourceId)
-    if (ownerId) ownerIdsFromErrors.add(ownerId)
+export const maxDuration = 120
+
+async function pushDocumentToGrid(input: {
+  admin: SupabaseClient
+  customerId: string
+  people: KybPersonRow[]
+  document: KybDocumentRow
+}): Promise<void> {
+  const { admin, customerId, people, document } = input
+  const existingGridId = gridDocumentIdFromResource(document.gridDocumentId)
+  const downloaded = await admin.storage.from(KYB_DOCUMENTS_BUCKET).download(document.storagePath)
+  if (downloaded.error || !downloaded.data) {
+    throw new Error("Could not read an uploaded document.")
   }
-
-  return people.filter((person) => {
-    if (!person.gridBeneficialOwnerId) return true
-    const gridOwnerId = gridBeneficialOwnerIdFromResource(person.gridBeneficialOwnerId)
-    if (gridOwnerId && ownerIdsFromErrors.has(gridOwnerId)) return true
-    if (
-      documents.some(
-        (document) =>
-          document.personId === person.id &&
-          rejectedDocIds.has(gridDocumentIdFromResource(document.gridDocumentId)),
-      )
-    ) {
-      return true
-    }
-    if (lastSyncedAt && person.updatedAt && person.updatedAt > lastSyncedAt) return true
-    return false
+  const bytes = Buffer.from(await downloaded.data.arrayBuffer())
+  const holder = document.personId
+    ? people.find((person) => person.id === document.personId)?.gridBeneficialOwnerId
+    : customerId
+  if (!holder) {
+    throw new Error("Upload owner details before their ID document.")
+  }
+  if (existingGridId) {
+    await deleteGridKybDocument(existingGridId).catch((error) => {
+      console.warn("[grid/kyb/complete] Grid delete:", error)
+    })
+  }
+  const gridDocumentId = await uploadGridKybDocument({
+    documentHolder: holder,
+    document,
+    bytes,
+    fileName: document.fileName,
   })
-}
-
-function documentsNeedingGridSync(
-  documents: KybDocumentRow[],
-  errors: GridKybVerificationError[],
-  lastSyncedAt: string | null,
-): KybDocumentRow[] {
-  const rejectedIds = new Set(rejectedGridDocumentIdsFromErrors(errors))
-  return documents.filter((document) => {
-    const existingGridId = gridDocumentIdFromResource(document.gridDocumentId)
-    if (!existingGridId) return true
-    if (rejectedIds.has(existingGridId)) return true
-    if (lastSyncedAt && document.updatedAt && document.updatedAt > lastSyncedAt) return true
-    return false
-  })
+  await admin
+    .from("business_kyb_documents")
+    .update({ grid_document_id: gridDocumentId, updated_at: new Date().toISOString() })
+    .eq("id", document.id)
+  document.gridDocumentId = gridDocumentId
 }
 
 export async function POST(request: Request) {
@@ -119,7 +113,7 @@ export async function POST(request: Request) {
     })
 
     const listedPeople = await listKybPeople(ctx.admin, application.id, true)
-    const people = withFirstKybOwnerUbo(listedPeople)
+    const people = withRequiredKybOwnerRoles(listedPeople)
     const documents = await listKybDocuments(ctx.admin, application.id, true)
     const gridOwnershipPercentages = allocateGridKybOwnershipPercentagesForGrid(
       people.map((person) => person.ownershipPercentage),
@@ -146,9 +140,21 @@ export async function POST(request: Request) {
       }
     }
 
+    if (!hasReadyKybPeople(people)) {
+      return NextResponse.json(
+        { error: "Add name, date of birth, address, and tax ID for each owner before submitting." },
+        { status: 400 },
+      )
+    }
     if (!hasReadyKybIdentityDocuments(people, documents)) {
       return NextResponse.json(
         { error: "Add issuing country, issuing authority, and document number on each owner ID before submitting." },
+        { status: 400 },
+      )
+    }
+    if (!hasAllRequiredKybCompanyDocuments(documents)) {
+      return NextResponse.json(
+        { error: "Upload the required company documents before submitting." },
         { status: 400 },
       )
     }
@@ -177,43 +183,23 @@ export async function POST(request: Request) {
       }),
     )
 
-    const documentsToSync = documentsNeedingGridSync(
-      documents,
-      priorErrors,
-      application.last_synced_at,
+    const documentsToSync = sortKybDocumentsForGridUpload(
+      documentsNeedingGridSync(documents, priorErrors, application.last_synced_at),
     )
-    await Promise.all(
-      documentsToSync.map(async (document) => {
-        const existingGridId = gridDocumentIdFromResource(document.gridDocumentId)
-        const downloaded = await ctx.admin.storage.from(KYB_DOCUMENTS_BUCKET).download(document.storagePath)
-        if (downloaded.error || !downloaded.data) {
-          throw new Error("Could not read an uploaded document.")
-        }
-        const bytes = Buffer.from(await downloaded.data.arrayBuffer())
-        const holder = document.personId
-          ? people.find((person) => person.id === document.personId)?.gridBeneficialOwnerId
-          : customerId
-        if (!holder) {
-          throw new Error("Upload owner details before their ID document.")
-        }
-        if (existingGridId) {
-          await deleteGridKybDocument(existingGridId).catch((error) => {
-            console.warn("[grid/kyb/complete] Grid delete:", error)
-          })
-        }
-        const gridDocumentId = await uploadGridKybDocument({
-          documentHolder: holder,
-          document,
-          bytes,
-          fileName: document.fileName,
-        })
-        await ctx.admin
-          .from("business_kyb_documents")
-          .update({ grid_document_id: gridDocumentId, updated_at: new Date().toISOString() })
-          .eq("id", document.id)
-        document.gridDocumentId = gridDocumentId
-      }),
-    )
+    const identityDocs = documentsToSync.filter((document) => document.personId)
+    const companyDocs = documentsToSync.filter((document) => !document.personId)
+    for (const batch of [identityDocs, companyDocs]) {
+      await Promise.all(
+        batch.map((document) =>
+          pushDocumentToGrid({
+            admin: ctx.admin,
+            customerId,
+            people,
+            document,
+          }),
+        ),
+      )
+    }
 
     const verification = await submitGridKybVerification(customerId)
     const now = new Date().toISOString()

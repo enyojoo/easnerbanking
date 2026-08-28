@@ -15,10 +15,17 @@ import {
   gridKybWizardReadiness,
   hasAllRequiredKybCompanyDocuments,
   hasReadyKybIdentityDocuments,
+  hasReadyKybPeople,
+  isGridKybIsoDate,
+  normalizeGridIsoDate,
   gridKybIdentityDocumentRequiresSides,
   personKybIdentityDocumentsReady,
   isKybIdentityDocumentReady,
   withFirstKybOwnerUbo,
+  withRequiredKybOwnerRoles,
+  peopleNeedingGridSync,
+  documentsNeedingGridSync,
+  sortKybDocumentsForGridUpload,
   mapGridKybVerificationErrors,
   gridKybSectionAttentionCounts,
   isGridMachineRejectionCode,
@@ -628,7 +635,7 @@ describe("gridKybWizardReadiness", () => {
         status: "draft",
         remainingPointers: 0,
         company: { ...emptyGridKybCompanyDraft(), legalName: "Acme" },
-        peopleCount: 0,
+        hasReadyPeople: false,
         hasIdentityDocument: false,
         hasAllRequiredCompanyDocuments: false,
       }),
@@ -639,7 +646,7 @@ describe("gridKybWizardReadiness", () => {
     const base = {
       status: "resolve_errors" as const,
       company: { ...emptyGridKybCompanyDraft(), legalName: "Acme" },
-      peopleCount: 1,
+      hasReadyPeople: true,
       hasIdentityDocument: true,
       hasAllRequiredCompanyDocuments: true,
     }
@@ -653,9 +660,22 @@ describe("gridKybWizardReadiness", () => {
         status: "draft",
         remainingPointers: 0,
         company: { ...emptyGridKybCompanyDraft(), legalName: "Acme" },
-        peopleCount: 1,
+        hasReadyPeople: true,
         hasIdentityDocument: true,
         hasAllRequiredCompanyDocuments: false,
+      }),
+    ).toBe("not_submitted")
+  })
+
+  it("stays not_submitted until each owner has Grid-required personal details", () => {
+    expect(
+      gridKybWizardReadiness({
+        status: "draft",
+        remainingPointers: 0,
+        company: { ...emptyGridKybCompanyDraft(), legalName: "Acme" },
+        hasReadyPeople: false,
+        hasIdentityDocument: true,
+        hasAllRequiredCompanyDocuments: true,
       }),
     ).toBe("not_submitted")
   })
@@ -786,16 +806,124 @@ describe("gridKybWizardReadiness", () => {
     ])
   })
 
+  it("adds CONTROL_PERSON to the first owner when nobody has it", () => {
+    expect(
+      withRequiredKybOwnerRoles([{ id: "p1", roles: ["UBO"] }]),
+    ).toEqual([{ id: "p1", roles: ["UBO", "CONTROL_PERSON"] }])
+    expect(
+      withRequiredKybOwnerRoles([
+        { id: "p1", roles: ["UBO"] },
+        { id: "p2", roles: ["CONTROL_PERSON"] },
+      ]),
+    ).toEqual([
+      { id: "p1", roles: ["UBO"] },
+      { id: "p2", roles: ["CONTROL_PERSON"] },
+    ])
+  })
+})
+
+describe("normalizeGridIsoDate", () => {
+  it("keeps YYYY-MM-DD and strips timestamps so date inputs can show the value", () => {
+    expect(normalizeGridIsoDate("1993-10-06")).toBe("1993-10-06")
+    expect(normalizeGridIsoDate("1993-10-06T00:00:00.000Z")).toBe("1993-10-06")
+    expect(normalizeGridIsoDate("1993-10-06 00:00:00+00")).toBe("1993-10-06")
+    expect(normalizeGridIsoDate("")).toBe("")
+    expect(isGridKybIsoDate("1993-10-06T12:00:00Z")).toBe(true)
+    expect(isGridKybIsoDate("")).toBe(false)
+  })
+})
+
+describe("hasReadyKybPeople", () => {
+  const readyPerson = {
+    firstName: "Kara",
+    lastName: "Ortiz",
+    birthDate: "1993-10-06",
+    nationality: "US",
+    addressLine1: "19 Bender Ct",
+    city: "Portsmouth",
+    postalCode: "23702",
+    addressCountry: "US",
+    identifier: "123-45-6789",
+    idType: "SSN",
+    countryOfIssuance: "US",
+  }
+
+  it("requires Grid's owner fields, including date of birth", () => {
+    expect(hasReadyKybPeople([])).toBe(false)
+    expect(hasReadyKybPeople([readyPerson])).toBe(true)
+    expect(hasReadyKybPeople([{ ...readyPerson, birthDate: "" }])).toBe(false)
+    expect(hasReadyKybPeople([{ ...readyPerson, birthDate: "1993-10-06T00:00:00.000Z" }])).toBe(true)
+    expect(hasReadyKybPeople([{ ...readyPerson, identifier: "" }])).toBe(false)
+    expect(hasReadyKybPeople([{ ...readyPerson, addressLine1: "" }])).toBe(false)
+  })
+})
+
+describe("gridKybWizardReadiness after submit", () => {
   it("stays needs_attention when Grid job is submitted but pointers remain", () => {
     expect(
       gridKybWizardReadiness({
         status: "submitted",
         remainingPointers: 1,
         company: { ...emptyGridKybCompanyDraft(), legalName: "Acme" },
-        peopleCount: 1,
+        hasReadyPeople: true,
         hasIdentityDocument: true,
         hasAllRequiredCompanyDocuments: true,
       }),
     ).toBe("needs_attention")
+  })
+})
+
+describe("peopleNeedingGridSync", () => {
+  const owner = {
+    id: "p1",
+    gridBeneficialOwnerId: "BeneficialOwner:abc",
+    updatedAt: "2026-08-28T06:55:42.000Z",
+  }
+  const identity = {
+    id: "d1",
+    personId: "p1",
+    gridDocumentId: null as string | null,
+    updatedAt: "2026-08-28T05:59:15.000Z",
+  }
+
+  it("always syncs owners before the first successful submit", () => {
+    expect(peopleNeedingGridSync([owner], [identity], [], null).map((row) => row.id)).toEqual(["p1"])
+  })
+
+  it("skips unchanged owners after a successful submit", () => {
+    expect(
+      peopleNeedingGridSync(
+        [{ ...owner, updatedAt: "2026-08-28T05:58:00.000Z" }],
+        [identity],
+        [],
+        "2026-08-28T06:56:05.000Z",
+      ),
+    ).toEqual([])
+  })
+})
+
+describe("documentsNeedingGridSync", () => {
+  it("includes files that never reached Grid", () => {
+    expect(
+      documentsNeedingGridSync(
+        [
+          { id: "d1", personId: "p1", gridDocumentId: null, updatedAt: "2026-08-28T05:59:15.000Z" },
+          { id: "d2", personId: null, gridDocumentId: "Document:co", updatedAt: "2026-08-28T06:23:00.000Z" },
+        ],
+        [],
+        "2026-08-28T06:56:05.000Z",
+      ).map((row) => row.id),
+    ).toEqual(["d1"])
+  })
+})
+
+describe("sortKybDocumentsForGridUpload", () => {
+  it("uploads owner IDs before company files", () => {
+    expect(
+      sortKybDocumentsForGridUpload([
+        { id: "d2", personId: null },
+        { id: "d1", personId: "p1" },
+      ]).map((row) => row.id),
+    ).toEqual(["d1", "d2"])
   })
 })

@@ -197,6 +197,25 @@ export async function warmTransactionDetailForNavigation(
   await prefetchTransactionDetail(qc, scope, id)
 }
 
+/** Sync-write detail cache so post-send / push navigation can paint immediately. */
+export function seedTransactionDetailSnapshot(
+  qc: QueryClient,
+  scope: Scope,
+  txId: string,
+  snapshot: MobileTransactionRow,
+  opts?: { aliasIds?: string[] },
+): void {
+  const id = txId.trim()
+  if (!id) return
+  const response: TransactionDetailResponse = { transaction: snapshot }
+  const aliasIds = [...new Set([...(opts?.aliasIds ?? []).map((a) => a.trim()).filter(Boolean)])]
+  const cacheIds = [id, ...aliasIds.filter((a) => a !== id)]
+  for (const cacheId of cacheIds) {
+    qc.setQueryData(qk.transactions.detail(scope, cacheId), response)
+    void writeCachedTransactionDetail(cacheId, response).catch(() => undefined)
+  }
+}
+
 export function prefetchTransactionDetail(
   qc: QueryClient,
   scope: Scope,

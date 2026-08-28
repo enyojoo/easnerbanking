@@ -9,6 +9,7 @@ export {
   warmTransactionDetailForNavigation,
   transactionDetailLookupId,
   seedTransactionDetailFromDisk,
+  seedTransactionDetailSnapshot,
   transactionDetailQueryOptions,
   unwrapTransactionDetailPayload,
   TRANSACTIONS_LEDGER_PAGE_SIZE,

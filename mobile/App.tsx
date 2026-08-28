@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { NavigationContainerRef } from '@react-navigation/native'
+import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native'
 import Constants from 'expo-constants'
 import { StatusBar } from 'expo-status-bar'
 import { View, Text, StyleSheet, Animated, Platform } from 'react-native'
@@ -12,17 +12,6 @@ import { PressablesConfig } from 'pressto'
 import { useFonts } from 'expo-font'
 import * as SplashScreen from 'expo-splash-screen'
 import * as SystemUI from 'expo-system-ui'
-import { Observe, ObserveRoot, useObserve } from 'expo-observe'
-import { ObserveNavigationContainer } from 'expo-observe/integrations/react-navigation'
-
-// Must run before any screen mounts (React Navigation per-route metrics).
-Observe.configure({
-  integrations: {
-    'react-navigation': {
-      filteredParams: ['transactionId', 'token', 'code', 'pin'],
-    },
-  },
-})
 import { AuthProvider, useAuth } from './src/contexts/AuthContext'
 import { NotificationsProvider } from './src/contexts/NotificationsContext'
 import { BalanceProvider } from './src/contexts/BalanceContext'
@@ -86,7 +75,6 @@ function AppContent() {
   const routeNameRef = useRef<string>('')
   const { loading: authLoading, user: authUser } = useAuth()
   const palette = useThemeColors()
-  const { markInteractive } = useObserve()
   const getActiveRouteName = (route: any): string => {
     if (!route) return 'Unknown'
     if (route.state && route.state.index != null) {
@@ -131,13 +119,12 @@ function AppContent() {
     void SplashScreen.hideAsync().catch((e) => {
       console.warn('SplashScreen.hideAsync', e)
     })
-    markInteractive()
     const onPageShow = (event: PageTransitionEvent) => {
       if (event.persisted) markWebBfcacheRestore()
     }
     window.addEventListener('pageshow', onPageShow)
     return () => window.removeEventListener('pageshow', onPageShow)
-  }, [palette.background.primary, markInteractive])
+  }, [palette.background.primary])
 
   useEffect(() => {
     if (Platform.OS !== 'web') return
@@ -164,13 +151,12 @@ function AppContent() {
       }
       if (!cancelled) {
         setSplashFinished(true)
-        markInteractive()
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [authLoading, navReady, splashFinished, markInteractive])
+  }, [authLoading, navReady, splashFinished])
 
   // Cold-open from notification: stash intent + flush when main stack is ready (PIN may still be showing).
   useEffect(() => {
@@ -190,7 +176,7 @@ function AppContent() {
   }, [splashFinished, appFadeAnim])
 
   const nav = (
-    <ObserveNavigationContainer
+    <NavigationContainer
       ref={navigationRef}
       linking={Platform.OS === 'web' ? webLinking : undefined}
       documentTitle={
@@ -258,7 +244,7 @@ function AppContent() {
       />
       <WebIdleSessionBridge />
       <AppNavigator />
-    </ObserveNavigationContainer>
+    </NavigationContainer>
   )
 
   return (
@@ -293,7 +279,7 @@ function AppContent() {
   )
 }
 
-function App() {
+export default function App() {
   const [fontsLoaded] = useFonts(
     Platform.OS === 'web'
       ? {
@@ -512,8 +498,6 @@ function App() {
     )
   }
 }
-
-export default ObserveRoot.wrap(App)
 
 const styles = StyleSheet.create({
   appRoot: {

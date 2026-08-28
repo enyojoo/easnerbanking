@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import {
   mapGridKybVerificationErrors,
   mergeGridKybCompanyDraft,
-  withFirstKybOwnerUbo,
+  withRequiredKybOwnerRoles,
   type GridKybCompanyDraft,
 } from "@easner/shared"
 import { requireKybContext } from "../_context"
@@ -71,14 +71,14 @@ export async function GET(request: Request) {
       }),
   ])
   people = await linkKybPeopleToGridOwnerErrors(ctx.admin, people, application.last_errors)
-  const peopleWithUbo = withFirstKybOwnerUbo(people)
-  if (peopleWithUbo[0] && peopleWithUbo[0].roles !== people[0]?.roles) {
+  const peopleWithRoles = withRequiredKybOwnerRoles(people)
+  if (peopleWithRoles[0] && peopleWithRoles[0].roles !== people[0]?.roles) {
     await ctx.admin
       .from("business_kyb_people")
-      .update({ roles: peopleWithUbo[0].roles, updated_at: new Date().toISOString() })
-      .eq("id", peopleWithUbo[0].id)
+      .update({ roles: peopleWithRoles[0].roles, updated_at: new Date().toISOString() })
+      .eq("id", peopleWithRoles[0].id)
       .eq("application_id", application.id)
-    people = peopleWithUbo
+    people = peopleWithRoles
   }
   const company = prefillCompanyFromProfile(application.company, profile)
   if (JSON.stringify(application.company) !== JSON.stringify(company)) {

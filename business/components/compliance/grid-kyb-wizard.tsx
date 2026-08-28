@@ -10,6 +10,7 @@ import {
   gridKybWizardReadiness,
   hasAllRequiredKybCompanyDocuments,
   hasReadyKybIdentityDocuments,
+  hasReadyKybPeople,
   mergeGridKybCompanyDraft,
   type GridKybCompanyDraft,
   type GridKybFormSection,
@@ -28,7 +29,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { qk } from "@easner/shared"
 import { useMaybeScope } from "@/lib/query/scope"
 import { GridKybCompanyStep } from "./grid-kyb-company-step"
-import { GridKybPeopleStep } from "./grid-kyb-people-step"
+import { GridKybPeopleStep, type GridKybPeopleStepHandle } from "./grid-kyb-people-step"
 import { GridKybDocumentsStep } from "./grid-kyb-documents-step"
 
 type Props = {
@@ -63,6 +64,7 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
   const [pendingCta, setPendingCta] = useState<"exit" | "next" | "complete" | null>(null)
   const [error, setError] = useState<string | null>(null)
   const companyDirtyRef = useRef(false)
+  const peopleStepRef = useRef<GridKybPeopleStepHandle>(null)
   const hydratedSectionRef = useRef(Boolean(initialPacket.errorPointers?.length))
 
   const setPacket = useCallback(
@@ -123,7 +125,7 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
       status,
       remainingPointers: pointers.length,
       company,
-      peopleCount: packet?.people.length ?? 0,
+      hasReadyPeople: hasReadyKybPeople(packet?.people ?? []),
       hasIdentityDocument: hasReadyKybIdentityDocuments(packet?.people ?? [], documents),
       hasAllRequiredCompanyDocuments: hasAllRequiredKybCompanyDocuments(documents),
     })
@@ -140,21 +142,33 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
     setPacket((prev) => ({ ...prev, company }))
   }
 
+  async function flushPeople() {
+    await peopleStepRef.current?.flush()
+  }
+
+  async function goToSection(next: GridKybFormSection) {
+    if (next === section) return
+    if (section === "company") await saveCompany()
+    else if (section === "people") await flushPeople()
+    setSection(next)
+  }
+
   async function goNext() {
     if (pendingCta === "next") return
-    if (section === "people") {
-      analytics.trackKybStepCompleted({ step: "company" })
-      setSection("documents")
-      return
-    }
     setPendingCta("next")
     setError(null)
     try {
+      if (section === "people") {
+        await flushPeople()
+        analytics.trackKybStepCompleted({ step: "people" })
+        setSection("documents")
+        return
+      }
       await saveCompany()
-      analytics.trackKybStepCompleted({ step: "people" })
+      analytics.trackKybStepCompleted({ step: "company" })
       setSection("people")
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save company details")
+      setError(err instanceof Error ? err.message : "Could not save details")
     } finally {
       setPendingCta(null)
     }
@@ -165,6 +179,7 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
     setPendingCta("complete")
     setError(null)
     try {
+      await flushPeople()
       await saveCompany()
       const res = await fetchWithSession("/api/grid/kyb/complete", { method: "POST" })
       const json = (await res.json().catch(() => ({}))) as {
@@ -210,6 +225,7 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
     setPendingCta("exit")
     setError(null)
     try {
+      await flushPeople()
       await saveCompany()
       onClose()
     } catch (err) {
@@ -296,7 +312,11 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
             <button
               key={item.id}
               type="button"
-              onClick={() => setSection(item.id)}
+              onClick={() => {
+                void goToSection(item.id).catch((err) => {
+                  setError(err instanceof Error ? err.message : "Could not save details")
+                })
+              }}
               className={cn(
                 "rounded-full px-2.5 py-1.5 text-sm sm:px-3",
                 section === item.id ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
@@ -326,6 +346,7 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
           ) : null}
           {section === "people" ? (
             <GridKybPeopleStep
+              ref={peopleStepRef}
               people={packet?.people ?? []}
               documents={packet?.documents ?? []}
               errors={pointers}

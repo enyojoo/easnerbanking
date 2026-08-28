@@ -9,11 +9,10 @@ import {
   RefreshControl,
   Animated,
   ActivityIndicator,
-  ScrollView,
   Platform,
   Keyboard,
 } from 'react-native'
-import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'react-native-keyboard-controller'
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   Plus,
@@ -277,7 +276,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
 
   // Animation refs
   const headerAnim = useRef(new Animated.Value(0)).current
-  const formScrollRef = useRef<ScrollView>(null)
+  const formScrollRef = useRef<React.ComponentRef<typeof KeyboardAwareScrollView>>(null)
   const contentAnim = useRef(new Animated.Value(0)).current
 
   // Run entrance animations
@@ -1652,7 +1651,6 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
       {/* Step 2: Bank Account Form Modal */}
       <WebAwareModal
         visible={showBankAccountForm}
-        keyboardAvoiding
         onRequestClose={() => {
           closeAllDropdowns()
           setShowBankAccountForm(false)
@@ -1711,17 +1709,19 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                 }}
               />
             ) : (
+            <>
             <KeyboardAwareScrollView
               ref={formScrollRef}
               style={styles.modalScrollView}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={[
                 styles.modalScrollContent,
-                { paddingBottom: footerPadding },
+                { paddingBottom: spacing[4] },
               ]}
               nestedScrollEnabled={true}
               scrollEnabled={!isAnyDropdownOpen}
               keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
               bottomOffset={insets.bottom + spacing[3]}
             >
               <View style={styles.modalContent}>
@@ -2574,6 +2574,9 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                 </>
               )}
 
+              </View>
+            </KeyboardAwareScrollView>
+            <View style={styles.modalButtonsFooter}>
               <View style={styles.modalButtons}>
                 <Pressable
                  android_ripple={ripple.neutral}
@@ -2599,8 +2602,8 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                   </Text>
                 </Pressable>
               </View>
-              </View>
-            </KeyboardAwareScrollView>
+            </View>
+            </>
             )}
           </View>
           </RecipientFormDropdownHost>
@@ -2931,10 +2934,15 @@ const styles = StyleSheet.create({
     marginLeft: spacing[1],
     fontFamily: fontFamily.regular,
   },
+  modalButtonsFooter: {
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[3],
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
   modalButtons: {
     flexDirection: 'row',
     gap: spacing[3],
-    marginTop: spacing[2],
   },
   modalButton: {
     flex: 1,
