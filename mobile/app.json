@@ -4,6 +4,8 @@
     "slug": "easner",
     "scheme": "easner",
     "version": "1.0.8",
+    "newArchEnabled": true,
+    "jsEngine": "hermes",
     "orientation": "portrait",
     "icon": "./assets/icons/ios-light.png",
     "userInterfaceStyle": "light",
