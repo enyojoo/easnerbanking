@@ -42,6 +42,7 @@
   },
   "dependencies": {
     "@react-native/normalize-colors": "0.86.3",
+    "expo-constants": "57.0.16",
     "expo-modules-core": "57.0.14",
     "expo-modules-jsi": "57.0.6",
     "next": "^16.1.6",
@@ -58,24 +59,29 @@
     "rimraf": "^5.0.10",
     "react-native-quick-base64": "3.0.0",
     "@react-native/normalize-colors": "0.86.3",
-    "expo": "57.0.17",
+    "expo": "57.0.18",
+    "expo-constants": "57.0.16",
+    "expo-asset": {
+      ".": "~57.0.15",
+      "expo-constants": "~57.0.16"
+    },
     "react-native": "0.86.3",
     "@expo/metro-runtime": "57.0.14",
     "jest-expo": "57.0.5",
     "expo-auth-session": {
       ".": "~57.0.10",
       "expo-application": "~57.0.2",
-      "expo-constants": "~57.0.15",
+      "expo-constants": "~57.0.16",
       "expo-crypto": "~57.0.2",
       "expo-linking": "~57.0.8",
       "expo-web-browser": "~57.0.2"
     },
     "expo-linking": {
       ".": "~57.0.8",
-      "expo-constants": "~57.0.15"
+      "expo-constants": "~57.0.16"
     },
     "easner-mobile": {
-      "expo": "~57.0.17",
+      "expo": "~57.0.18",
       "react": "19.2.3",
       "react-dom": "19.2.3",
       "react-native": "0.86.3",
