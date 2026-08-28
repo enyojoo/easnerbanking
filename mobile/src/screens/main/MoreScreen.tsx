@@ -28,6 +28,7 @@ import { useThemeColors } from '../../contexts/ThemePaletteContext'
 import { ripple } from '../../lib/androidRipple'
 import { EasnerAlertSheet } from '../../components/premium'
 import { SettingsRow } from '../../components/SettingsRow'
+import { preloadMainStackScreens } from '../../lib/preloadMainStackScreens'
 import { SectionCard } from '../../components/ui'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { AvatarImage } from '../../components/AvatarImage'
@@ -308,11 +309,13 @@ function MoreContent({ navigation }: NavigationProps) {
     rightComponent?: React.ReactNode,
     isDestructive: boolean = false,
     isLast: boolean = false,
+    onPressIn?: () => void,
   ) => (
     <SettingsRow
       title={title}
       subtitle={subtitle}
       onPress={onPress}
+      onPressIn={onPressIn}
       icon={IconComponent}
       rightComponent={rightComponent}
       isDestructive={isDestructive}
@@ -555,6 +558,7 @@ function MoreContent({ navigation }: NavigationProps) {
                   undefined,
                   false,
                   true,
+                  preloadMainStackScreens,
                 )}
               </SectionCard>
             </View>

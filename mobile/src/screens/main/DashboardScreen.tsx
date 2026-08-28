@@ -81,6 +81,7 @@ import { haptics } from '../../lib/haptics'
 import { prepareTransactionDetailsNavigation } from '../../navigation/transactionNavParams'
 import { useFixedFooterPadding, useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { reportColdStartInteractive } from '../../lib/coldStartMetrics'
+import { preloadMainStackScreens } from '../../lib/preloadMainStackScreens'
 
 const DASHBOARD_SELECTED_CURRENCY_KEY_PREFIX = 'easner_dashboard_selected_currency_'
 /** Recent activity rows shown on Home (UI only). Ledger fetch uses {@link TRANSACTIONS_LEDGER_PAGE_SIZE}. */
@@ -854,8 +855,10 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
             <Pressable
               android_ripple={ripple.heroOnDark}
               style={({ pressed }) => [styles.heroSendButton, pressed && styles.heroBtnPressed]}
+              onPressIn={preloadMainStackScreens}
               onPress={() => {
                 haptics.tap()
+                preloadMainStackScreens()
                 navigation.navigate('SelectRecentRecipient' as never, {
                   preferredBalanceCurrency:
                     selectedCurrency === 'USD' || selectedCurrency === 'EUR'

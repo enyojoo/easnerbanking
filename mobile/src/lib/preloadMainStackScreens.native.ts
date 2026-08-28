@@ -13,6 +13,7 @@ export function preloadMainStackScreens(): void {
   try {
     require('../screens/send/SelectRecentRecipientScreen')
     require('../screens/send/SendAmountScreen')
+    require('../screens/main/RecipientsScreen')
     require('../screens/transactions/TransactionDetailsScreen')
   } catch (error) {
     didPreload = false

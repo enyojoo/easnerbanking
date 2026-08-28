@@ -6,23 +6,28 @@ const posthogKey = process.env.EXPO_PUBLIC_POSTHOG_KEY
 const posthogHost = process.env.EXPO_PUBLIC_POSTHOG_HOST
 
 /**
- * Native PostHog config — matches build 206: session replay on iOS and Android.
+ * Native PostHog config — event capture only (no session replay).
  *
- * Safety retained from crash investigation (these are not session replay):
- * - captureLog: false — disables stdout piping only; replay screenshots stay on.
- * - Init try/catch + analytics runWithPostHog (see posthogSafe.ts) — SDK errors must not fatal the app.
- * - Deferred navigation screen capture (App.tsx) — posthog.screen() off the transition critical path.
+ * Build 206 (last stable iOS) had no PostHog. Session replay added in c6904c7c
+ * correlates with iOS fatals opening Send / Recipients (PostHogReplayIntegration
+ * queue faults in .ips, RCTExceptionsManager SIGABRT). Replay stays enabled on web.
+ *
+ * Safety for native event capture:
+ * - enableSessionReplay: false — replay screenshots are the crash surface on RN iOS.
+ * - captureLog: false — stdout piping also crashed release iOS historically.
+ * - Init try/catch + analytics runWithPostHog (posthogSafe.ts).
+ * - Deferred navigation screen capture (App.tsx).
  */
 export const posthogOptions: PostHogOptions | undefined =
   posthogKey && posthogHost
     ? {
         host: posthogHost,
         captureAppLifecycleEvents: Platform.OS !== 'web',
-        enableSessionReplay: Platform.OS !== 'web',
+        enableSessionReplay: false,
         sessionReplayConfig: {
           maskAllTextInputs: true,
           maskAllImages: true,
-          captureNetworkTelemetry: true,
+          captureNetworkTelemetry: false,
           captureLog: false,
         },
       }

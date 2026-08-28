@@ -1483,7 +1483,6 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
               estimatedItemSize={112}
-              removeClippedSubviews
               drawDistance={400}
               refreshControl={
                 <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary.main} />

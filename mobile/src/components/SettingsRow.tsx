@@ -10,6 +10,7 @@ export type SettingsRowProps = {
   title: string
   subtitle: string
   onPress: () => void
+  onPressIn?: () => void
   icon: LucideIcon
   rightComponent?: React.ReactNode
   isDestructive?: boolean
@@ -21,6 +22,7 @@ export function SettingsRow({
   title,
   subtitle,
   onPress,
+  onPressIn,
   icon: IconComponent,
   rightComponent,
   isDestructive = false,
@@ -29,6 +31,7 @@ export function SettingsRow({
   return (
     <PressableScale
       style={[styles.menuItem, !isLast && styles.menuItemDivider]}
+      onPressIn={onPressIn}
       onPress={() => {
         haptics.tap()
         onPress()
