@@ -36,6 +36,12 @@ import { isStripePublishableConfigured } from "@/lib/stripe/public-enabled"
 import { easnerStripeConnectAppearance } from "@/lib/stripe/connect-appearance"
 import { browserStripeLocale } from "@/lib/stripe/elements-appearance"
 import {
+  CONNECT_JS_LOAD_ERROR,
+  ensureConnectJsLoaded,
+  prefetchConnectJs,
+} from "@/lib/stripe/load-connect-js"
+import { DelayedOpeningVerificationWait } from "@/components/compliance/opening-verification-wait"
+import {
   EASNER_STRIPE_CONNECT_PRIVACY_URL,
   EASNER_STRIPE_CONNECT_TERMS_URL,
 } from "@/lib/stripe/connect/legal-urls"
@@ -67,6 +73,11 @@ import { VERIFICATION_SECTION_COPY } from "@/lib/copy/business-ui-copy"
 import { cn } from "@/lib/utils"
 
 const ONLINE_PAYMENTS_VERIFICATION_TITLE = "Online payments Verification"
+const CONNECT_LOAD_TIMEOUT_MS = 30_000
+const CONNECT_COMPONENT_LOAD_ERROR =
+  "Couldn’t load Stripe verification. Check your connection and try again."
+const CONNECT_LOAD_TIMEOUT_ERROR =
+  "Stripe verification is taking longer than expected. Check your connection and try again."
 
 function ConnectStatusChecklistTooltip({
   status,
@@ -154,6 +165,8 @@ export function SettingsStripeConnectPanel({
   > | null>(null)
   const clearInstanceAfterCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const startLockRef = useRef(false)
+  const onboardingFrameReadyRef = useRef(false)
+  const startGenerationRef = useRef(0)
 
   // Stripe Connect onboarding is a cross-origin iframe – parent activity listeners
   // never see typing/clicks. Suspend idle PIN lock for the duration of the pane.
@@ -240,6 +253,19 @@ export function SettingsStripeConnectPanel({
     return json.clientSecret
   }, [])
 
+  const markFrameReady = useCallback(() => {
+    onboardingFrameReadyRef.current = true
+    setOnboardingFrameReady(true)
+  }, [])
+
+  const discardConnectRuntime = useCallback(() => {
+    primedConnectInstance = null
+    prefetchedConnectClientSecret = null
+    onboardingFrameReadyRef.current = false
+    setConnectInstance(null)
+    setOnboardingFrameReady(false)
+  }, [])
+
   const createConnectInstance = useCallback(() => {
     if (primedConnectInstance) return primedConnectInstance
     const instance = loadConnectAndInitialize({
@@ -261,21 +287,14 @@ export function SettingsStripeConnectPanel({
 
   const prefetchClientSecret = useCallback(async () => {
     if (!tier1Complete) return
-    if (primedConnectInstance) {
-      setConnectInstance((prev) => prev ?? primedConnectInstance)
-      return
-    }
+    prefetchConnectJs()
+    if (prefetchedConnectClientSecret || primedConnectInstance) return
     try {
-      if (!prefetchedConnectClientSecret) {
-        prefetchedConnectClientSecret = await fetchClientSecret()
-      }
-      if (!publishableKey || !isStripePublishableConfigured()) return
-      const instance = createConnectInstance()
-      setConnectInstance(instance)
+      prefetchedConnectClientSecret = await fetchClientSecret()
     } catch {
       prefetchedConnectClientSecret = null
     }
-  }, [createConnectInstance, fetchClientSecret, publishableKey, tier1Complete])
+  }, [fetchClientSecret, tier1Complete])
 
   const pushConnectFlowUrl = useCallback(() => {
     onFlowOpenChange?.(true, "connect")
@@ -296,6 +315,7 @@ export function SettingsStripeConnectPanel({
   const clearConnectInstance = useCallback(() => {
     if (clearInstanceAfterCloseRef.current) clearTimeout(clearInstanceAfterCloseRef.current)
     clearInstanceAfterCloseRef.current = setTimeout(() => {
+      onboardingFrameReadyRef.current = false
       setConnectInstance(null)
       setOnboardingFrameReady(false)
       setOnboardingError(null)
@@ -306,6 +326,7 @@ export function SettingsStripeConnectPanel({
   }, [])
 
   const closeOnboardingAndSync = useCallback(async () => {
+    const sawVerificationUi = onboardingFrameReadyRef.current
     setOnboardingOpen(false)
     startLockRef.current = false
     clearConnectFlowUrl()
@@ -318,11 +339,40 @@ export function SettingsStripeConnectPanel({
       toast.success("Verification saved. Payout linked – finishing setup.")
     } else if (next?.detailsSubmitted && next.hasGridVa && !next.externalAccountLinked) {
       toast.message("Verification saved. Tap Link payout to connect your virtual account.")
-    } else {
+    } else if (sawVerificationUi) {
       toast.success("Verification updated")
     }
     clearConnectInstance()
   }, [clearConnectFlowUrl, clearConnectInstance, refreshStatus])
+
+  const failOnboardingLoad = useCallback(
+    (error: unknown, fallback: string) => {
+      startGenerationRef.current += 1
+      startLockRef.current = false
+      discardConnectRuntime()
+      const raw =
+        error instanceof Error
+          ? error.message
+          : typeof error === "object" &&
+              error &&
+              "message" in error &&
+              typeof (error as { message?: unknown }).message === "string"
+            ? (error as { message: string }).message
+            : ""
+      const message =
+        raw === CONNECT_JS_LOAD_ERROR || raw.includes("Connect.js")
+          ? CONNECT_COMPONENT_LOAD_ERROR
+          : fallback === CONNECT_LOAD_TIMEOUT_ERROR || fallback === CONNECT_COMPONENT_LOAD_ERROR
+            ? fallback
+            : raw || fallback
+      setOnboardingError(message)
+      setOnboardingOpen(true)
+      analytics.trackError("Failed to load Stripe Connect verification component", {
+        reason: raw || fallback,
+      })
+    },
+    [discardConnectRuntime],
+  )
 
   const startOnboarding = useCallback(async () => {
     if (!tier1Complete) {
@@ -338,6 +388,7 @@ export function SettingsStripeConnectPanel({
       if (primedConnectInstance) setConnectInstance((prev) => prev ?? primedConnectInstance)
       return
     }
+    const generation = ++startGenerationRef.current
     try {
       startLockRef.current = true
       if (clearInstanceAfterCloseRef.current) {
@@ -346,26 +397,26 @@ export function SettingsStripeConnectPanel({
       }
       setOpeningOnboarding(true)
       setOnboardingError(null)
+      onboardingFrameReadyRef.current = false
       setOnboardingFrameReady(false)
+      setOnboardingOpen(true)
+      await ensureConnectJsLoaded()
+      if (generation !== startGenerationRef.current) return
       if (!prefetchedConnectClientSecret && !primedConnectInstance) {
         prefetchedConnectClientSecret = await fetchClientSecret()
       }
-      const instance = connectInstance ?? createConnectInstance()
+      if (generation !== startGenerationRef.current) return
+      const instance = createConnectInstance()
       setConnectInstance(instance)
-      setOnboardingOpen(true)
     } catch (e) {
-      startLockRef.current = false
-      setOnboardingOpen(false)
-      setOnboardingFrameReady(false)
-      prefetchedConnectClientSecret = null
-      primedConnectInstance = null
-      const message = e instanceof Error ? e.message : "Could not start onboarding"
-      setOnboardingError(message)
-      toast.error(message)
+      if (generation !== startGenerationRef.current) return
+      failOnboardingLoad(e, "Could not start onboarding")
     } finally {
-      setOpeningOnboarding(false)
+      if (generation === startGenerationRef.current) {
+        setOpeningOnboarding(false)
+      }
     }
-  }, [connectInstance, createConnectInstance, fetchClientSecret, publishableKey, tier1Complete])
+  }, [createConnectInstance, failOnboardingLoad, fetchClientSecret, publishableKey, tier1Complete])
 
   const openConnectFlow = useCallback(() => {
     if (!tier1Complete) {
@@ -385,14 +436,12 @@ export function SettingsStripeConnectPanel({
   }, [publishableKey, pushConnectFlowUrl, startOnboarding, tier1Complete])
 
   useEffect(() => {
-    if (!onboardingOpen || onboardingFrameReady || !connectInstance) return
+    if (!onboardingOpen || onboardingFrameReady || onboardingError) return
     const timeoutId = window.setTimeout(() => {
-      setOnboardingError(
-        "Stripe verification is taking longer than expected. Check your connection and try again.",
-      )
-    }, 30_000)
+      failOnboardingLoad(new Error("connect_component_timeout"), CONNECT_LOAD_TIMEOUT_ERROR)
+    }, CONNECT_LOAD_TIMEOUT_MS)
     return () => window.clearTimeout(timeoutId)
-  }, [connectInstance, onboardingFrameReady, onboardingOpen])
+  }, [failOnboardingLoad, onboardingError, onboardingFrameReady, onboardingOpen])
 
   const linkPayoutDestination = useCallback(async () => {
     setLinking(true)
@@ -509,25 +558,35 @@ export function SettingsStripeConnectPanel({
                 onClick={() => {
                   setOnboardingError(null)
                   startLockRef.current = false
+                  discardConnectRuntime()
                   void startOnboarding()
                 }}
               >
                 Try again
               </Button>
             </div>
-          ) : connectInstance ? (
-            <ConnectComponentsProvider connectInstance={connectInstance}>
-              <ConnectAccountOnboarding
-                onExit={() => void closeOnboardingAndSync()}
-                onStepChange={() => setOnboardingFrameReady(true)}
-                fullTermsOfServiceUrl={EASNER_STRIPE_CONNECT_TERMS_URL}
-                privacyPolicyUrl={EASNER_STRIPE_CONNECT_PRIVACY_URL}
-                collectionOptions={connectOnboardingCollectionOptions}
-              />
-            </ConnectComponentsProvider>
           ) : (
-            <div className="flex min-h-[12rem] items-center justify-center">
-              <Loader2 className="size-5 animate-spin text-muted-foreground" aria-hidden />
+            <div className="relative min-h-[16rem]">
+              {connectInstance ? (
+                <ConnectComponentsProvider connectInstance={connectInstance}>
+                  <ConnectAccountOnboarding
+                    onExit={() => void closeOnboardingAndSync()}
+                    onLoaderStart={markFrameReady}
+                    onLoadError={({ error }) => {
+                      failOnboardingLoad(error, CONNECT_COMPONENT_LOAD_ERROR)
+                    }}
+                    onStepChange={markFrameReady}
+                    fullTermsOfServiceUrl={EASNER_STRIPE_CONNECT_TERMS_URL}
+                    privacyPolicyUrl={EASNER_STRIPE_CONNECT_PRIVACY_URL}
+                    collectionOptions={connectOnboardingCollectionOptions}
+                  />
+                </ConnectComponentsProvider>
+              ) : null}
+              {!onboardingFrameReady ? (
+                <div className="absolute inset-0 z-10 bg-background">
+                  <DelayedOpeningVerificationWait />
+                </div>
+              ) : null}
             </div>
           )}
         </div>

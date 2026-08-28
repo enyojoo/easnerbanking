@@ -3,6 +3,11 @@ import type Stripe from "stripe"
 import { getVirtualAccountDisplayFromDb } from "@/lib/noah/virtual-accounts-db"
 import { getStripe } from "../client"
 import { createGridVaExternalAccountOnStripe } from "./create-grid-va-external-account"
+import {
+  gridVaMatchesBankAccount,
+  pickCanonicalGridVaBank,
+  type FiatPayoutCurrency,
+} from "./grid-va-bank-match"
 import { getConnectAccountRow } from "./resolve-connect-account"
 
 export type ReconcileGridVaSkipReason =
@@ -16,43 +21,16 @@ export type ReconcileGridVaResult =
   | { skipped: false; ok: true; action: "verified" | "updated_default" | "linked"; stripeExternalAccountId: string }
   | { skipped: false; ok: false; error: string }
 
-type FiatCurrency = "usd" | "eur" | "gbp"
-
 type VaSnapshot = {
   accountNumber?: string | null
   routingNumber?: string | null
   iban?: string | null
 }
 
-function normalizeDigits(value: string | null | undefined): string {
-  return String(value ?? "").replace(/\s+/g, "")
-}
+const inflightByKey = new Map<string, Promise<ReconcileGridVaResult>>()
 
-function last4(value: string | null | undefined): string {
-  const digits = normalizeDigits(value)
-  return digits.length >= 4 ? digits.slice(-4) : digits
-}
-
-function gridVaMatchesBankAccount(
-  va: VaSnapshot,
-  fiat: FiatCurrency,
-  bank: Stripe.BankAccount,
-): boolean {
-  const bankLast4 = String(bank.last4 ?? "").trim()
-  if (!bankLast4) return false
-
-  if (fiat === "usd") {
-    const acctLast4 = last4(va.accountNumber)
-    const routeLast4 = last4(va.routingNumber)
-    const bankRouteLast4 = last4(bank.routing_number)
-    return acctLast4 === bankLast4 && (!routeLast4 || !bankRouteLast4 || routeLast4 === bankRouteLast4)
-  }
-
-  if (fiat === "eur") {
-    return last4(va.iban) === bankLast4
-  }
-
-  return false
+export function __resetReconcileGridVaLockForTests(): void {
+  inflightByKey.clear()
 }
 
 async function persistExternalAccountId(
@@ -71,16 +49,66 @@ async function persistExternalAccountId(
     .eq("business_id", businessId)
 }
 
+async function ensureDefaultBank(
+  stripe: Stripe,
+  stripeAccountId: string,
+  bank: Stripe.BankAccount,
+): Promise<"verified" | "updated_default"> {
+  if (bank.default_for_currency) return "verified"
+  await stripe.accounts.updateExternalAccount(stripeAccountId, bank.id, {
+    default_for_currency: true,
+  })
+  return "updated_default"
+}
+
+function isMissingExternalAccountError(error: unknown): boolean {
+  const code =
+    typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code ?? "") : ""
+  return code === "resource_missing"
+}
+
+async function retrieveStoredBank(
+  stripe: Stripe,
+  stripeAccountId: string,
+  storedId: string,
+): Promise<Stripe.BankAccount | null> {
+  try {
+    const existing = await stripe.accounts.retrieveExternalAccount(stripeAccountId, storedId)
+    if (existing.object !== "bank_account") return null
+    return existing
+  } catch (error) {
+    if (isMissingExternalAccountError(error)) return null
+    throw error
+  }
+}
+
 /**
  * Ensure the connected account's default payout bank is the business Grid VA.
- * Re-asserts when Stripe Dashboard edits drift the destination away from Easner.
+ * Concurrent callers for the same business share one in-flight run so we do not
+ * attach the same virtual account twice.
  */
 export async function reconcileGridVaPayoutDestination(
   admin: SupabaseClient,
   input: { businessId: string; currency?: string },
 ): Promise<ReconcileGridVaResult> {
   const currency = (input.currency || "USD").trim().toUpperCase()
-  const fiat: FiatCurrency = currency === "EUR" ? "eur" : currency === "GBP" ? "gbp" : "usd"
+  const key = `${input.businessId}:${currency}`
+  const existing = inflightByKey.get(key)
+  if (existing) return existing
+
+  const run = reconcileGridVaPayoutDestinationUnlocked(admin, input).finally(() => {
+    if (inflightByKey.get(key) === run) inflightByKey.delete(key)
+  })
+  inflightByKey.set(key, run)
+  return run
+}
+
+async function reconcileGridVaPayoutDestinationUnlocked(
+  admin: SupabaseClient,
+  input: { businessId: string; currency?: string },
+): Promise<ReconcileGridVaResult> {
+  const currency = (input.currency || "USD").trim().toUpperCase()
+  const fiat: FiatPayoutCurrency = currency === "EUR" ? "eur" : currency === "GBP" ? "gbp" : "usd"
 
   const row = await getConnectAccountRow(admin, input.businessId)
   if (!row?.stripe_account_id) {
@@ -106,6 +134,22 @@ export async function reconcileGridVaPayoutDestination(
   }
 
   const stripe = getStripe()
+  const vaSnapshot: VaSnapshot = {
+    accountNumber: va.accountNumber,
+    routingNumber: va.routingNumber,
+    iban: va.iban,
+  }
+  const storedId = row.stripe_external_account_id?.trim() || ""
+
+  if (storedId) {
+    const storedBank = await retrieveStoredBank(stripe, row.stripe_account_id, storedId)
+    if (storedBank && gridVaMatchesBankAccount(vaSnapshot, fiat, storedBank)) {
+      const action = await ensureDefaultBank(stripe, row.stripe_account_id, storedBank)
+      await persistExternalAccountId(admin, input.businessId, storedBank.id)
+      return { skipped: false, ok: true, action, stripeExternalAccountId: storedBank.id }
+    }
+  }
+
   const listed = await stripe.accounts.listExternalAccounts(row.stripe_account_id, {
     object: "bank_account",
     limit: 100,
@@ -114,34 +158,24 @@ export async function reconcileGridVaPayoutDestination(
     (entry): entry is Stripe.BankAccount => entry.object === "bank_account",
   )
   const currencyBanks = banks.filter((bank) => String(bank.currency ?? "").toLowerCase() === fiat)
-  const matching = currencyBanks.filter((bank) => gridVaMatchesBankAccount(va, fiat, bank))
+  const matching = currencyBanks.filter((bank) => gridVaMatchesBankAccount(vaSnapshot, fiat, bank))
+  const target = pickCanonicalGridVaBank(matching, storedId)
   const defaultBank = currencyBanks.find((bank) => bank.default_for_currency) ?? null
 
-  if (matching.length > 0) {
-    const target = matching[0]
-    if (!target.default_for_currency) {
-      await stripe.accounts.updateExternalAccount(row.stripe_account_id, target.id, {
-        default_for_currency: true,
-      })
-      await persistExternalAccountId(admin, input.businessId, target.id)
-      return {
-        skipped: false,
-        ok: true,
-        action: "updated_default",
-        stripeExternalAccountId: target.id,
-      }
+  if (target) {
+    if (matching.length > 1) {
+      console.warn(
+        "[stripe-connect] duplicate Grid VA bank accounts on Connect; reusing one",
+        input.businessId,
+        matching.map((bank) => bank.id),
+      )
     }
-
+    const action = await ensureDefaultBank(stripe, row.stripe_account_id, target)
     await persistExternalAccountId(admin, input.businessId, target.id)
-    return {
-      skipped: false,
-      ok: true,
-      action: row.stripe_external_account_id === target.id ? "verified" : "updated_default",
-      stripeExternalAccountId: target.id,
-    }
+    return { skipped: false, ok: true, action, stripeExternalAccountId: target.id }
   }
 
-  if (defaultBank && !gridVaMatchesBankAccount(va, fiat, defaultBank)) {
+  if (defaultBank && !gridVaMatchesBankAccount(vaSnapshot, fiat, defaultBank)) {
     console.warn(
       "[stripe-connect] payout destination drift detected; re-linking Grid VA",
       input.businessId,

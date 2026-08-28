@@ -1,14 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from "vitest"
-import { reconcileGridVaPayoutDestination } from "./reconcile-grid-va-payout"
+import { reconcileGridVaPayoutDestination, __resetReconcileGridVaLockForTests } from "./reconcile-grid-va-payout"
 
 const listExternalAccounts = vi.fn()
 const updateExternalAccount = vi.fn()
+const retrieveExternalAccount = vi.fn()
 
 vi.mock("../client", () => ({
   getStripe: () => ({
     accounts: {
       listExternalAccounts,
       updateExternalAccount,
+      retrieveExternalAccount,
     },
   }),
 }))
@@ -44,6 +46,8 @@ const admin = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  __resetReconcileGridVaLockForTests()
+  retrieveExternalAccount.mockRejectedValue({ code: "resource_missing" })
   vi.mocked(getConnectAccountRow).mockResolvedValue({
     stripe_account_id: "acct_1",
     details_submitted: true,
@@ -76,11 +80,100 @@ describe("reconcileGridVaPayoutDestination", () => {
     expect(result).toEqual({
       skipped: false,
       ok: true,
-      action: "updated_default",
+      action: "verified",
       stripeExternalAccountId: "ba_grid",
     })
     expect(updateExternalAccount).not.toHaveBeenCalled()
     expect(createGridVaExternalAccountOnStripe).not.toHaveBeenCalled()
+  })
+
+  it("reuses the stored Stripe bank without creating another", async () => {
+    vi.mocked(getConnectAccountRow).mockResolvedValue({
+      stripe_account_id: "acct_1",
+      details_submitted: true,
+      stripe_external_account_id: "ba_grid",
+    } as never)
+    retrieveExternalAccount.mockResolvedValue({
+      object: "bank_account",
+      id: "ba_grid",
+      currency: "usd",
+      last4: "7890",
+      routing_number: "021000021",
+      default_for_currency: true,
+    })
+
+    const result = await reconcileGridVaPayoutDestination(admin, { businessId: "biz_1" })
+    expect(result).toEqual({
+      skipped: false,
+      ok: true,
+      action: "verified",
+      stripeExternalAccountId: "ba_grid",
+    })
+    expect(listExternalAccounts).not.toHaveBeenCalled()
+    expect(createGridVaExternalAccountOnStripe).not.toHaveBeenCalled()
+  })
+
+  it("does not create a second bank when the Grid VA is already listed twice", async () => {
+    listExternalAccounts.mockResolvedValue({
+      data: [
+        {
+          object: "bank_account",
+          id: "ba_grid_1",
+          currency: "usd",
+          last4: "7890",
+          routing_number: "021000021",
+          default_for_currency: false,
+        },
+        {
+          object: "bank_account",
+          id: "ba_grid_2",
+          currency: "usd",
+          last4: "7890",
+          routing_number: "021000021",
+          default_for_currency: true,
+        },
+      ],
+    })
+
+    const result = await reconcileGridVaPayoutDestination(admin, { businessId: "biz_1" })
+    expect(result).toEqual({
+      skipped: false,
+      ok: true,
+      action: "verified",
+      stripeExternalAccountId: "ba_grid_2",
+    })
+    expect(createGridVaExternalAccountOnStripe).not.toHaveBeenCalled()
+  })
+
+  it("coalesces concurrent reconciles so Stripe create runs once", async () => {
+    listExternalAccounts.mockResolvedValue({ data: [] })
+    let resolveCreate: ((value: {
+      ok: true
+      stripeExternalAccountId: string
+      maskedDestination: string
+      payoutInterval: string
+    }) => void) | null = null
+    vi.mocked(createGridVaExternalAccountOnStripe).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCreate = resolve
+        }),
+    )
+
+    const first = reconcileGridVaPayoutDestination(admin, { businessId: "biz_1" })
+    const second = reconcileGridVaPayoutDestination(admin, { businessId: "biz_1" })
+    await vi.waitFor(() => expect(createGridVaExternalAccountOnStripe).toHaveBeenCalledTimes(1))
+    resolveCreate?.({
+      ok: true,
+      stripeExternalAccountId: "ba_new",
+      maskedDestination: "····7890",
+      payoutInterval: "daily",
+    })
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { skipped: false, ok: true, action: "linked", stripeExternalAccountId: "ba_new" },
+      { skipped: false, ok: true, action: "linked", stripeExternalAccountId: "ba_new" },
+    ])
+    expect(createGridVaExternalAccountOnStripe).toHaveBeenCalledTimes(1)
   })
 
   it("promotes Grid VA bank when it exists but is not default", async () => {
