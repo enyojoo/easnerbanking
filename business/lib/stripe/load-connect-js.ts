@@ -4,8 +4,13 @@
  * `@stripe/connect-js` caches a single script-load promise. If that promise
  * rejects ("Failed to load Connect.js"), every later initialize reuses the
  * rejection — Try again cannot recover without a full page reload. Loading the
- * script first (and removing a failed tag on retry) keeps Stripe's loader on
- * the success path.
+ * script first (and never ripping out a tag Stripe is still listening to)
+ * keeps Stripe's loader on the success path.
+ *
+ * Callers must also `await awaitConnectJsInitialized(instance)` before mounting
+ * Connect components. `loadConnectAndInitialize` leaves its internal promise
+ * unhandled; `create()` / setters then `.then()` that promise without a catch,
+ * which PostHog records as an unhandled "Failed to load Connect.js".
  */
 
 export const CONNECT_JS_SRC = "https://connect-js.stripe.com/v1.0/connect.js"
@@ -15,7 +20,12 @@ type StripeConnectGlobal = {
   init?: (...args: unknown[]) => unknown
 }
 
+type ConnectInstanceLike = {
+  debugInstance?: () => Promise<unknown>
+}
+
 let inflight: Promise<void> | null = null
+let injectedScript: HTMLScriptElement | null = null
 
 function stripeConnect(): StripeConnectGlobal | undefined {
   if (typeof window === "undefined") return undefined
@@ -50,24 +60,38 @@ function waitForConnectScript(script: HTMLScriptElement): Promise<void> {
       script.removeEventListener("load", onLoad)
       script.removeEventListener("error", onError)
     }
+    // Listeners must be attached before the script is inserted, or a cached
+    // load/error can fire during appendChild and never be observed.
     script.addEventListener("load", onLoad)
     script.addEventListener("error", onError)
+    if (isConnectJsReady()) {
+      cleanup()
+      resolve()
+    }
   })
 }
 
 async function loadConnectJsScript(): Promise<void> {
   if (isConnectJsReady()) return
 
-  existingConnectScript()?.remove()
+  const reusable =
+    injectedScript?.isConnected && injectedScript.src === CONNECT_JS_SRC ? injectedScript : null
+  if (reusable) {
+    await waitForConnectScript(reusable)
+    return
+  }
 
   const script = document.createElement("script")
-  script.src = CONNECT_JS_SRC
   script.async = true
+  const pending = waitForConnectScript(script)
+  script.src = CONNECT_JS_SRC
+  injectedScript = script
   document.head.appendChild(script)
   try {
-    await waitForConnectScript(script)
+    await pending
   } catch (error) {
     script.remove()
+    if (injectedScript === script) injectedScript = null
     throw error
   }
 }
@@ -85,6 +109,16 @@ export function ensureConnectJsLoaded(): Promise<void> {
   return inflight
 }
 
+/**
+ * Attach to Stripe's internal init promise so a load failure is handled, and
+ * so Connect components are not mounted until `StripeConnect.init` has run.
+ */
+export async function awaitConnectJsInitialized(instance: ConnectInstanceLike): Promise<void> {
+  const debug = instance.debugInstance
+  if (typeof debug !== "function") return
+  await debug.call(instance)
+}
+
 export function prefetchConnectJs(): void {
   if (typeof window === "undefined") return
   void ensureConnectJsLoaded().catch(() => undefined)
@@ -92,6 +126,8 @@ export function prefetchConnectJs(): void {
 
 export function __resetConnectJsLoaderForTests(): void {
   inflight = null
+  injectedScript?.remove()
+  injectedScript = null
   existingConnectScript()?.remove()
   if (typeof window !== "undefined") {
     delete (window as Window & { StripeConnect?: StripeConnectGlobal }).StripeConnect

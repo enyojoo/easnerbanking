@@ -3,13 +3,14 @@ import {
   CONNECT_JS_LOAD_ERROR,
   CONNECT_JS_SRC,
   __resetConnectJsLoaderForTests,
+  awaitConnectJsInitialized,
   ensureConnectJsLoaded,
   isConnectJsReady,
 } from "./load-connect-js"
 
 type Listener = () => void
 
-function installScriptDom() {
+function installScriptDom(options: { errorOnAppend?: boolean } = {}) {
   const listeners = new Map<string, Listener[]>()
   const created: Array<{ src: string; fire: (type: "load" | "error") => void; removed: boolean }> =
     []
@@ -17,6 +18,7 @@ function installScriptDom() {
   const scriptEl = {
     src: "",
     async: false,
+    isConnected: false,
     addEventListener: (type: string, fn: Listener) => {
       const list = listeners.get(type) ?? []
       list.push(fn)
@@ -29,6 +31,7 @@ function installScriptDom() {
       )
     },
     remove: () => {
+      scriptEl.isConnected = false
       const current = created.filter((s) => !s.removed).at(-1)
       if (current) current.removed = true
     },
@@ -37,6 +40,7 @@ function installScriptDom() {
   const documentStub = {
     head: {
       appendChild: (el: typeof scriptEl) => {
+        el.isConnected = true
         created.push({
           src: el.src,
           removed: false,
@@ -44,6 +48,9 @@ function installScriptDom() {
             for (const fn of listeners.get(type) ?? []) fn()
           },
         })
+        if (options.errorOnAppend) {
+          for (const fn of listeners.get("error") ?? []) fn()
+        }
         return el
       },
     },
@@ -132,5 +139,22 @@ describe("ensureConnectJsLoaded", () => {
     }
     dom.fire("load")
     await expect(Promise.all([a, b])).resolves.toEqual([undefined, undefined])
+  })
+
+  it("observes a load error that fires synchronously during insert", async () => {
+    installScriptDom({ errorOnAppend: true })
+    __resetConnectJsLoaderForTests()
+
+    await expect(ensureConnectJsLoaded()).rejects.toThrow(CONNECT_JS_LOAD_ERROR)
+  })
+})
+
+describe("awaitConnectJsInitialized", () => {
+  it("surfaces Stripe's internal load rejection so callers can handle it", async () => {
+    await expect(
+      awaitConnectJsInitialized({
+        debugInstance: () => Promise.reject(new Error(CONNECT_JS_LOAD_ERROR)),
+      }),
+    ).rejects.toThrow(CONNECT_JS_LOAD_ERROR)
   })
 })

@@ -37,7 +37,9 @@ import { easnerStripeConnectAppearance } from "@/lib/stripe/connect-appearance"
 import { browserStripeLocale } from "@/lib/stripe/elements-appearance"
 import {
   CONNECT_JS_LOAD_ERROR,
+  awaitConnectJsInitialized,
   ensureConnectJsLoaded,
+  isConnectJsReady,
   prefetchConnectJs,
 } from "@/lib/stripe/load-connect-js"
 import { DelayedOpeningVerificationWait } from "@/components/compliance/opening-verification-wait"
@@ -133,6 +135,7 @@ function ConnectStatusChecklistTooltip({
 
 let prefetchedConnectClientSecret: string | null = null
 let primedConnectInstance: ReturnType<typeof loadConnectAndInitialize> | null = null
+let primedConnectReady = false
 
 const connectOnboardingCollectionOptions = {
   fields: "eventually_due" as const,
@@ -260,6 +263,7 @@ export function SettingsStripeConnectPanel({
 
   const discardConnectRuntime = useCallback(() => {
     primedConnectInstance = null
+    primedConnectReady = false
     prefetchedConnectClientSecret = null
     onboardingFrameReadyRef.current = false
     setConnectInstance(null)
@@ -268,6 +272,12 @@ export function SettingsStripeConnectPanel({
 
   const createConnectInstance = useCallback(() => {
     if (primedConnectInstance) return primedConnectInstance
+    // Stripe's loader caches a rejected script-load promise. Only initialize
+    // after Connect.js has set `StripeConnect.init` so it never attaches its
+    // own error listener (unhandled "Failed to load Connect.js").
+    if (!isConnectJsReady()) {
+      throw new Error(CONNECT_JS_LOAD_ERROR)
+    }
     const instance = loadConnectAndInitialize({
       publishableKey,
       fetchClientSecret: async () => {
@@ -321,6 +331,7 @@ export function SettingsStripeConnectPanel({
       setOnboardingError(null)
       prefetchedConnectClientSecret = null
       primedConnectInstance = null
+      primedConnectReady = false
       clearInstanceAfterCloseRef.current = null
     }, 280)
   }, [])
@@ -385,7 +396,9 @@ export function SettingsStripeConnectPanel({
     }
     if (startLockRef.current) {
       setOnboardingOpen(true)
-      if (primedConnectInstance) setConnectInstance((prev) => prev ?? primedConnectInstance)
+      if (primedConnectReady && primedConnectInstance) {
+        setConnectInstance((prev) => prev ?? primedConnectInstance)
+      }
       return
     }
     const generation = ++startGenerationRef.current
@@ -407,6 +420,15 @@ export function SettingsStripeConnectPanel({
       }
       if (generation !== startGenerationRef.current) return
       const instance = createConnectInstance()
+      try {
+        await awaitConnectJsInitialized(instance)
+      } catch (error) {
+        primedConnectInstance = null
+        primedConnectReady = false
+        throw error
+      }
+      if (generation !== startGenerationRef.current) return
+      primedConnectReady = true
       setConnectInstance(instance)
     } catch (e) {
       if (generation !== startGenerationRef.current) return
@@ -427,7 +449,7 @@ export function SettingsStripeConnectPanel({
       toast.error("Online payments are not available yet")
       return
     }
-    if (primedConnectInstance) {
+    if (primedConnectReady && primedConnectInstance) {
       setConnectInstance((prev) => prev ?? primedConnectInstance)
       setOnboardingOpen(true)
     }
