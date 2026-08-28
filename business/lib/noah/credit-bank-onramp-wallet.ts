@@ -12,6 +12,7 @@ import { mergeBankDepositLifecycleMetadata } from "@/lib/noah/bank-onramp-tx"
 import { pickNoahOnChainTxHashFromLedgerRow } from "@/lib/noah/noah-on-chain-tx-hash"
 import { isDepositSplitEnabled } from "@/lib/deposit-omnibus/config"
 import { triggerDepositSplitFromOrchestrationOut } from "@/lib/deposit-omnibus/handle-omnibus-inbound"
+import { suppressTurnkeyNoahChainMirrorRow } from "@/lib/noah/turnkey-chain-mirror"
 
 function applyLedgerScope<T extends { eq: (col: string, val: string) => T; is: (col: string, val: null) => T }>(
   query: T,
@@ -102,6 +103,15 @@ export async function tryCreditNoahBankOnrampPayInWallet(
   const priorMeta = (priorCredit?.metadata as Record<string, unknown> | undefined) ?? {}
   if (priorMeta.wallet_balance_credit_key === creditKey) {
     return { credited: false, skippedReason: "already_credited" }
+  }
+
+  const solanaTxHash = String(input.solanaTxHash ?? "").trim()
+  if (solanaTxHash) {
+    await suppressTurnkeyNoahChainMirrorRow(admin, {
+      txHash: solanaTxHash,
+      userId: input.userId,
+      businessId: input.businessId,
+    }).catch(() => ({ suppressed: 0, reversedBalance: 0 }))
   }
 
   const hashCandidates = [

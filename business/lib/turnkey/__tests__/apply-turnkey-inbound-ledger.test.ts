@@ -203,23 +203,23 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     expect(mocks.upsertLedger).not.toHaveBeenCalled()
   })
 
-  it("suppresses pending Noah pay-in by amount before on-chain hash is linked", async () => {
+  it("records stablecoin deposit when pending Noah pay-in only matches by amount", async () => {
     mocks.findPendingNoah.mockResolvedValue({
       payInTransactionId: "noah-pay-1",
       ruleExecutionId: "rule-1",
     })
-    const admin = { from: vi.fn() }
+    const admin = {
+      from: vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { metadata: {} } }),
+        update: vi.fn().mockReturnThis(),
+      })),
+    }
 
     const result = await applyTurnkeyInboundLedgerEvent(admin as never, baseInput)
-    expect(result.kind).toBe("suppressed_noah")
-    expect(mocks.upsertLedger).not.toHaveBeenCalled()
-    expect(mocks.linkNoahPayInHash).toHaveBeenCalledWith(admin, {
-      ruleExecutionId: "rule-1",
-      solanaTxHash: "hash-noah",
-      userId: "user-1",
-      businessId: null,
-    })
-    expect(mocks.reconcileNoah).toHaveBeenCalled()
+    expect(result.kind).toBe("applied")
+    expect(mocks.upsertLedger).toHaveBeenCalled()
   })
 
   it("suppresses global payout refund mirror without upsert", async () => {
@@ -258,22 +258,25 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     expect(mocks.updateEasetag).toHaveBeenCalled()
   })
 
-  it("suppresses pending Grid VA Turnkey sweep and settles hash", async () => {
+  it("records stablecoin deposit when only an amount-matching sweep exists", async () => {
     mocks.findPendingGridSweep.mockResolvedValue({ transferId: "sweep-1" })
-    const admin = { from: vi.fn() }
+    const admin = {
+      from: vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { metadata: {} } }),
+        update: vi.fn().mockReturnThis(),
+      })),
+    }
 
     const result = await applyTurnkeyInboundLedgerEvent(admin as never, {
       ...baseInput,
       businessId: "biz-1",
       txHash: "hash-grid-sweep",
     })
-    expect(result.kind).toBe("suppressed_noah")
-    expect(mocks.settleGridSweep).toHaveBeenCalledWith(admin, {
-      transferId: "sweep-1",
-      solanaTxHash: "hash-grid-sweep",
-      inboundAmount: 10,
-    })
-    expect(mocks.upsertLedger).not.toHaveBeenCalled()
+    expect(result.kind).toBe("applied")
+    expect(mocks.settleGridSweep).not.toHaveBeenCalled()
+    expect(mocks.upsertLedger).toHaveBeenCalled()
   })
 
   it("suppresses settled Grid VA sweep by tx hash when webhook amount is dust", async () => {
@@ -315,7 +318,7 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     expect(mocks.applyDelta).not.toHaveBeenCalled()
   })
 
-  it("settles the Grid VA sweep when a pending bank deposit matches first", async () => {
+  it("records stablecoin deposit when pending bank deposit only matches by amount", async () => {
     mocks.findPendingGridVa.mockResolvedValue({
       transactionId: "grid-pay-1",
       gridTransactionId: "Transaction:in-1",
@@ -323,8 +326,10 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     mocks.findPendingGridSweep.mockResolvedValue({ transferId: "sweep-2" })
     const admin = {
       from: vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { metadata: {} } }),
         update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({}),
       })),
     }
 
@@ -333,14 +338,10 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
       businessId: "biz-1",
       txHash: "hash-grid-payin",
     })
-    expect(result.kind).toBe("suppressed_noah")
-    expect(mocks.reconcileGridVa).toHaveBeenCalled()
-    expect(mocks.settleGridSweep).toHaveBeenCalledWith(admin, {
-      transferId: "sweep-2",
-      solanaTxHash: "hash-grid-payin",
-      inboundAmount: 10,
-    })
-    expect(mocks.upsertLedger).not.toHaveBeenCalled()
+    expect(result.kind).toBe("applied")
+    expect(mocks.reconcileGridVa).not.toHaveBeenCalled()
+    expect(mocks.settleGridSweep).not.toHaveBeenCalled()
+    expect(mocks.upsertLedger).toHaveBeenCalled()
   })
 
   it("suppresses YC fund balance vault delivery without upsert", async () => {

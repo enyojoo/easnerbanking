@@ -31,8 +31,6 @@ export const GRID_VA_TURNKEY_SWEEP_MODE = "va_turnkey_sweep" as const
 
 /** Dust follow-up legs only attach to a sweep updated in this window. */
 const GRID_VA_SWEEP_DUST_MATCH_MAX_AGE_MS = 2 * 60 * 60 * 1000
-/** Principal Turnkey inbound may amount-match a sweep only while it is still in flight. */
-export const GRID_VA_SWEEP_PRINCIPAL_MATCH_MAX_AGE_MS = 6 * 60 * 60 * 1000
 
 const TERMINAL_SWEEP = new Set(["settled", "failed"])
 
@@ -588,8 +586,7 @@ export async function settleGridVaTurnkeySweepForSolanaTx(
  * Grid's outgoing webhook often records a different hash than the Turnkey wallet credit.
  * Dust legs are linked FIFO to a recent sweep without overwriting the principal hash.
  *
- * Principal inbound (organic Stablecoin deposits) must not attach to stale unmatched sweeps:
- * only an exact hash or a recent amount match may suppress the Turnkey row.
+ * Principal inbound must match a known sweep hash (Grid or Turnkey leg). Dust may FIFO-match recent sweeps.
  */
 export async function findGridVaTurnkeySweepForSolanaTx(
   admin: SupabaseClient,
@@ -626,7 +623,6 @@ export async function findGridVaTurnkeySweepForSolanaTx(
 
   const inboundAmount = Number(input.amount)
   const dust = Number.isFinite(inboundAmount) && isGridVaTurnkeyDustAmount(inboundAmount)
-  const hasPrincipalAmount = Number.isFinite(inboundAmount) && inboundAmount >= GRID_VA_TURNKEY_DUST_MAX_USD
 
   for (const row of rows ?? []) {
     const meta = asMeta(row.metadata)
@@ -634,22 +630,6 @@ export async function findGridVaTurnkeySweepForSolanaTx(
     const turnkeyHash = String(meta.turnkey_on_chain_tx_hash ?? "").trim()
     const dustHash = String(meta.turnkey_dust_tx_hash ?? "").trim()
     if (gridHash === txHash || turnkeyHash === txHash || dustHash === txHash) {
-      return { transferId: String(row.id) }
-    }
-  }
-
-  if (hasPrincipalAmount) {
-    for (const row of rows ?? []) {
-      if (!sweepIsWithinAgeMs(row, GRID_VA_SWEEP_PRINCIPAL_MATCH_MAX_AGE_MS)) continue
-      const meta = asMeta(row.metadata)
-      if (String(meta.turnkey_on_chain_tx_hash ?? "").trim()) continue
-      const quoted = Number(row.quoted_pay_in ?? meta.inbound_amount ?? 0)
-      if (!amountsRoughlyEqual(quoted, inboundAmount)) continue
-      const status = String(row.status ?? "").toLowerCase()
-      const hasGridHash = Boolean(String(meta.grid_on_chain_tx_hash ?? "").trim())
-      // Settled sweeps with no chain hashes are stale — do not steal organic deposits.
-      if (status === "settled" && !hasGridHash) continue
-      if (status !== "pending" && status !== "processing" && status !== "settled") continue
       return { transferId: String(row.id) }
     }
   }
@@ -667,38 +647,15 @@ export async function findGridVaTurnkeySweepForSolanaTx(
 }
 
 export async function findPendingGridVaTurnkeySweepForInboundAmount(
-  admin: SupabaseClient,
-  input: {
+  _admin: SupabaseClient,
+  _input: {
     userId: string
     businessId: string | null
     amount: number
     currency: string
   },
 ): Promise<{ transferId: string } | null> {
-  if (String(input.currency || "USD").toUpperCase() !== "USD") return null
-  if (!(input.amount > 0) || isGridVaTurnkeyDustAmount(input.amount) || !input.businessId) return null
-
-  const { data: rows } = await admin
-    .from("grid_transfers")
-    .select("id,quoted_pay_in,metadata,status,updated_at,created_at")
-    .eq("mode", GRID_VA_TURNKEY_SWEEP_MODE)
-    .eq("business_id", input.businessId)
-    .in("status", ["pending", "processing", "settled"])
-    .order("created_at", { ascending: false })
-    .limit(12)
-
-  for (const row of rows ?? []) {
-    if (!sweepIsWithinAgeMs(row, GRID_VA_SWEEP_PRINCIPAL_MATCH_MAX_AGE_MS)) continue
-    const meta = asMeta(row.metadata)
-    if (String(meta.turnkey_on_chain_tx_hash ?? "").trim()) continue
-    const quoted = Number(row.quoted_pay_in ?? meta.inbound_amount ?? 0)
-    if (!amountsRoughlyEqual(quoted, input.amount)) continue
-    const status = String(row.status ?? "").toLowerCase()
-    const hasGridHash = Boolean(String(meta.grid_on_chain_tx_hash ?? "").trim())
-    if (status === "settled" && !hasGridHash) continue
-    if (status !== "pending" && status !== "processing" && status !== "settled") continue
-    return { transferId: String(row.id) }
-  }
+  // Hash-only: organic stablecoin deposits must not be suppressed by amount alone.
   return null
 }
 

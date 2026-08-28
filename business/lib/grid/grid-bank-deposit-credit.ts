@@ -3,6 +3,7 @@ import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { turnkeyInboundAppliedBalanceDelta } from "@/lib/noah/credit-bank-onramp-wallet"
 import { notifyGridBankDepositPayInSettledPush } from "@/lib/notifications/bank-deposit-settled-notify"
 import { mergeBankDepositLifecycleMetadata } from "@/lib/noah/bank-onramp-tx"
+import { suppressTurnkeyGridVaChainMirrorRow } from "./grid-va-turnkey-mirror"
 
 function applyLedgerScope<T extends { eq: (col: string, val: string) => T; is: (col: string, val: null) => T }>(
   query: T,
@@ -93,6 +94,15 @@ export async function tryCreditGridVaBankDepositWallet(
 ): Promise<{ credited: boolean; skippedReason?: string }> {
   if (!(input.creditAmount > 0)) {
     return { credited: false, skippedReason: "no_settled_amount" }
+  }
+
+  const solanaTxHash = String(input.solanaTxHash ?? "").trim()
+  if (solanaTxHash) {
+    await suppressTurnkeyGridVaChainMirrorRow(admin, {
+      txHash: solanaTxHash,
+      userId: input.userId,
+      businessId: input.businessId,
+    }).catch(() => ({ suppressed: 0, reversedBalance: 0 }))
   }
 
   const creditKey = buildGridVaBankDepositCreditKey(input.gridTransactionId)
@@ -214,32 +224,6 @@ export async function reconcileGridVaBankDepositCreditForSolanaTx(
     byMeta = applyLedgerScope(byMeta, opts)
     const res = await byMeta.maybeSingle()
     payInRow = res.data
-  }
-
-  if (!payInRow?.id && opts.inboundAmount != null && opts.inboundAmount > 0) {
-    let byAmount = admin
-      .from("transactions")
-      .select(select)
-      .eq("provider", "grid")
-      .eq("direction", "in")
-      .eq("status", "settled")
-      .is("tx_hash", null)
-      .filter("metadata->>flow", "eq", "bank_onramp")
-      .filter("metadata->>grid_va_inbound", "eq", "true")
-    byAmount = applyLedgerScope(byAmount, opts)
-    const { data: rows } = await byAmount.order("created_at", { ascending: false }).limit(12)
-    const currency = opts.ledgerCurrency ?? "USD"
-    payInRow =
-      (rows ?? []).find((row) => {
-        const meta = (row.metadata as Record<string, unknown> | undefined) ?? {}
-        const onChain =
-          String((row as { tx_hash?: string | null }).tx_hash ?? "").trim() ||
-          (typeof meta.grid_on_chain_tx_hash === "string" ? meta.grid_on_chain_tx_hash.trim() : "")
-        if (onChain) return false
-        const amount = Number(row.amount ?? 0)
-        const ledger = String(meta.wallet_ledger_currency ?? row.currency ?? "USD").toUpperCase()
-        return ledger === currency && Math.abs(amount - opts.inboundAmount!) < 0.02
-      }) ?? null
   }
 
   if (!payInRow?.id) return { credited: false }

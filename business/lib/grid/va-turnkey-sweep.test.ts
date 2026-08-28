@@ -239,7 +239,7 @@ describe("findGridVaTurnkeySweepForSolanaTx", () => {
     expect(result).toBeNull()
   })
 
-  it("amount-matches a recent pending sweep", async () => {
+  it("does not amount-match a recent pending sweep", async () => {
     const admin = chainAdmin({
       limitRows: [
         {
@@ -258,7 +258,7 @@ describe("findGridVaTurnkeySweepForSolanaTx", () => {
       userId: "user-1",
       amount: 2,
     })
-    expect(result).toEqual({ transferId: "sweep-pending" })
+    expect(result).toBeNull()
   })
 
   it("does not FIFO-match a different amount onto an unmatched sweep", async () => {
@@ -283,7 +283,7 @@ describe("findGridVaTurnkeySweepForSolanaTx", () => {
     expect(result).toBeNull()
   })
 
-  it("matches a settled sweep by amount when Grid already stored a different hash", async () => {
+  it("does not amount-match when Grid stored a different hash than Turnkey", async () => {
     const admin = chainAdmin({
       limitRows: [
         {
@@ -306,7 +306,7 @@ describe("findGridVaTurnkeySweepForSolanaTx", () => {
       userId: "user-1",
       amount: 188640,
     })
-    expect(result).toEqual({ transferId: "sweep-hashed" })
+    expect(result).toBeNull()
   })
 
   it("matches dust inbound to the most recent hashed sweep", async () => {
@@ -340,53 +340,7 @@ describe("findGridVaTurnkeySweepForSolanaTx", () => {
 })
 
 describe("findPendingGridVaTurnkeySweepForInboundAmount", () => {
-  it("does not amount-match a week-old settled sweep", async () => {
-    const admin = chainAdmin({
-      limitRows: [
-        {
-          id: "sweep-stale",
-          status: "settled",
-          quoted_pay_in: 2,
-          created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-          updated_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-          metadata: { inbound_amount: 2 },
-        },
-      ],
-    })
-
-    const result = await findPendingGridVaTurnkeySweepForInboundAmount(admin, {
-      userId: "user-1",
-      businessId: "biz-1",
-      amount: 2,
-      currency: "USD",
-    })
-    expect(result).toBeNull()
-  })
-
-  it("does not amount-match a recent settled sweep with no chain hashes", async () => {
-    const admin = chainAdmin({
-      limitRows: [
-        {
-          id: "sweep-recent",
-          status: "settled",
-          quoted_pay_in: 2,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          metadata: { inbound_amount: 2 },
-        },
-      ],
-    })
-
-    const result = await findPendingGridVaTurnkeySweepForInboundAmount(admin, {
-      userId: "user-1",
-      businessId: "biz-1",
-      amount: 2,
-      currency: "USD",
-    })
-    expect(result).toBeNull()
-  })
-
-  it("amount-matches a recent pending sweep", async () => {
+  it("never amount-matches (hash-only inbound policy)", async () => {
     const admin = chainAdmin({
       limitRows: [
         {
@@ -406,7 +360,7 @@ describe("findPendingGridVaTurnkeySweepForInboundAmount", () => {
       amount: 2,
       currency: "USD",
     })
-    expect(result).toEqual({ transferId: "sweep-pending" })
+    expect(result).toBeNull()
   })
 })
 
