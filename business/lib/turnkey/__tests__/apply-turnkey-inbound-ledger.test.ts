@@ -160,6 +160,34 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     mocks.settleGridRefundSweep.mockResolvedValue(undefined)
   })
 
+  it("allows organic fallback for relay pending amount match only", async () => {
+    mocks.findRelay.mockResolvedValue({
+      reason: "pending_deposit",
+      relayDepositId: "relay-pending",
+    })
+    const admin = { from: vi.fn() }
+
+    const result = await applyTurnkeyInboundLedgerEvent(admin as never, {
+      ...baseInput,
+      txHash: "hash-relay-pending",
+    })
+    expect(result).toEqual({ kind: "suppressed_noah", allowOrganicFallback: true })
+  })
+
+  it("disallows organic fallback for relay fill hash match", async () => {
+    mocks.findRelay.mockResolvedValue({
+      reason: "fill_hash",
+      relayDepositId: "relay-1",
+    })
+    const admin = { from: vi.fn() }
+
+    const result = await applyTurnkeyInboundLedgerEvent(admin as never, {
+      ...baseInput,
+      txHash: "hash-relay-fill",
+    })
+    expect(result).toEqual({ kind: "suppressed_noah", allowOrganicFallback: false })
+  })
+
   it("suppresses relay Tron vault inbound and reconciles relay credit", async () => {
     mocks.findRelay.mockResolvedValue({
       reason: "pending_deposit",

@@ -165,50 +165,56 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
       businessId: scope.businessId,
     })
     if (!visible) {
-      console.warn("turnkey_balance_webhook_suppressed_without_ledger_retry_organic", {
-        kind: result.kind,
-        txHash: deposit.txHash,
-        amount: deposit.amount,
-        address: deposit.address,
-      })
-      result = await applyTurnkeyInboundLedgerEvent(
-        admin,
-        {
-          userId: scope.userId,
-          businessId: scope.businessId,
-          walletAccount: {
-            id: String(scope.walletAccount.id),
-            address: scope.walletAddress,
+      if (result.allowOrganicFallback === true) {
+        console.warn("turnkey_balance_webhook_suppressed_without_ledger_retry_organic", {
+          kind: result.kind,
+          txHash: deposit.txHash,
+          amount: deposit.amount,
+          address: deposit.address,
+        })
+        result = await applyTurnkeyInboundLedgerEvent(
+          admin,
+          {
+            userId: scope.userId,
+            businessId: scope.businessId,
+            walletAccount: {
+              id: String(scope.walletAccount.id),
+              address: scope.walletAddress,
+              asset,
+              chain,
+              associated_token_account_address: scope.tokenAccountAddress || null,
+            },
+            providerTransactionId,
+            providerEventId: eventId,
+            status: "settled",
+            amount: deposit.amount,
+            currency,
+            direction: "in",
+            payload: deposit.raw,
+            metadata: {
+              source: "turnkey_balance_webhook",
+              operation: "deposit",
+              source_payment_rail: chain,
+              source_currency: asset,
+              organic_deposit_fallback: true,
+              ...(counterpartyAddress ? { from_address: counterpartyAddress } : {}),
+            },
+            txHash: deposit.txHash,
+            walletAddress: scope.walletAddress,
+            counterpartyAddress,
+            occurredAt: deposit.occurredAt,
+            settledAt: deposit.settledAt,
             asset,
             chain,
-            associated_token_account_address: scope.tokenAccountAddress || null,
+            amountMinor: deposit.amountMinor,
           },
-          providerTransactionId,
-          providerEventId: eventId,
-          status: "settled",
-          amount: deposit.amount,
-          currency,
-          direction: "in",
-          payload: deposit.raw,
-          metadata: {
-            source: "turnkey_balance_webhook",
-            operation: "deposit",
-            source_payment_rail: chain,
-            source_currency: asset,
-            organic_deposit_fallback: true,
-            ...(counterpartyAddress ? { from_address: counterpartyAddress } : {}),
-          },
-          txHash: deposit.txHash,
-          walletAddress: scope.walletAddress,
-          counterpartyAddress,
-          occurredAt: deposit.occurredAt,
-          settledAt: deposit.settledAt,
-          asset,
-          chain,
-          amountMinor: deposit.amountMinor,
-        },
-        { forceOrganicStablecoinDeposit: true },
-      )
+          { forceOrganicStablecoinDeposit: true },
+        )
+      } else {
+        throw new Error(
+          `turnkey_balance_webhook_product_reconcile_pending:${result.kind}:${deposit.txHash}`,
+        )
+      }
     } else {
       console.info("turnkey_balance_webhook_suppressed", {
         kind: result.kind,

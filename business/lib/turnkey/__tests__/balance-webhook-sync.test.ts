@@ -78,9 +78,9 @@ describe("applyTurnkeyBalanceWebhookSideEffects", () => {
     })
   })
 
-  it("retries organic stablecoin deposit when suppressors leave no visible ledger row", async () => {
+  it("retries organic stablecoin deposit when weak suppressors leave no visible ledger row", async () => {
     mocks.applyInbound
-      .mockResolvedValueOnce({ kind: "suppressed_noah" })
+      .mockResolvedValueOnce({ kind: "suppressed_noah", allowOrganicFallback: true })
       .mockResolvedValueOnce({ kind: "applied", transactionId: "tx-organic" })
 
     const ok = await applyTurnkeyBalanceWebhookSideEffects({ from: vi.fn() } as never, deposit, "ev-1")
@@ -89,13 +89,22 @@ describe("applyTurnkeyBalanceWebhookSideEffects", () => {
     expect(mocks.applyInbound.mock.calls[1]?.[2]).toEqual({ forceOrganicStablecoinDeposit: true })
   })
 
-  it("throws when suppressors leave no visible ledger and organic retry still fails", async () => {
-    mocks.applyInbound
-      .mockResolvedValueOnce({ kind: "suppressed_easetag" })
-      .mockResolvedValueOnce({ kind: "suppressed_easetag" })
+  it("throws when hash-proven suppressors leave no visible ledger row", async () => {
+    mocks.applyInbound.mockResolvedValueOnce({ kind: "suppressed_noah", allowOrganicFallback: false })
 
     await expect(
       applyTurnkeyBalanceWebhookSideEffects({ from: vi.fn() } as never, deposit, "ev-2"),
+    ).rejects.toThrow("turnkey_balance_webhook_product_reconcile_pending")
+    expect(mocks.applyInbound).toHaveBeenCalledTimes(1)
+  })
+
+  it("throws when weak suppressors leave no visible ledger and organic retry still fails", async () => {
+    mocks.applyInbound
+      .mockResolvedValueOnce({ kind: "suppressed_easetag", allowOrganicFallback: true })
+      .mockResolvedValueOnce({ kind: "suppressed_easetag", allowOrganicFallback: true })
+
+    await expect(
+      applyTurnkeyBalanceWebhookSideEffects({ from: vi.fn() } as never, deposit, "ev-2b"),
     ).rejects.toThrow("turnkey_balance_webhook_no_ledger")
   })
 

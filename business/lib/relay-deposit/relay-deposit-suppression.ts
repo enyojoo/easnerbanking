@@ -95,6 +95,16 @@ export async function findRelayDepositChainSettlementForSuppression(
 
     for (const row of pending ?? []) {
       if (!(await ownerMatches(admin, String(row.wallet_owner_id), input))) continue
+      if (input.recipientVaultAta) {
+        const { data: addrRow } = await admin
+          .from("relay_deposit_addresses")
+          .select("recipient_vault_ata")
+          .eq("wallet_owner_id", String(row.wallet_owner_id))
+          .maybeSingle()
+        const expectedAta = String(addrRow?.recipient_vault_ata ?? "").trim()
+        const inboundAta = String(input.recipientVaultAta).trim()
+        if (expectedAta && inboundAta && expectedAta !== inboundAta) continue
+      }
       const expected = Number(row.on_chain_usdc ?? row.posted_amount ?? NaN)
       if (!Number.isFinite(expected)) continue
       if (Math.abs(expected - inboundAmount) <= 0.02) {

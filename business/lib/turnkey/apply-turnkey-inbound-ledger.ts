@@ -56,10 +56,18 @@ export type TurnkeyInboundLedgerInput = {
 }
 
 export type TurnkeyInboundLedgerResult =
-  | { kind: "suppressed_noah" }
-  | { kind: "suppressed_easetag" }
+  | { kind: "suppressed_noah"; allowOrganicFallback?: boolean }
+  | { kind: "suppressed_easetag"; allowOrganicFallback?: boolean }
   | { kind: "applied"; transactionId: string | null }
   | { kind: "skipped" }
+
+function suppressedNoah(allowOrganicFallback = false): TurnkeyInboundLedgerResult {
+  return { kind: "suppressed_noah", allowOrganicFallback }
+}
+
+function suppressedEasetag(allowOrganicFallback = false): TurnkeyInboundLedgerResult {
+  return { kind: "suppressed_easetag", allowOrganicFallback }
+}
 
 async function settleMatchingGridVaTurnkeySweep(
   admin: SupabaseClient,
@@ -110,7 +118,7 @@ export async function applyTurnkeyInboundLedgerEvent(
           amount: input.amount,
         }).catch(() => false)
         if (completed) {
-          return { kind: "suppressed_noah" }
+          return suppressedNoah(false)
         }
       }
 
@@ -121,7 +129,7 @@ export async function applyTurnkeyInboundLedgerEvent(
         amount: input.amount,
       }).catch(() => false)
       if (ycCompleted) {
-        return { kind: "suppressed_noah" }
+        return suppressedNoah(false)
       }
     }
 
@@ -137,7 +145,7 @@ export async function applyTurnkeyInboundLedgerEvent(
           userId,
           businessId,
         }).catch(() => {})
-        return { kind: "suppressed_noah" }
+        return suppressedNoah(false)
       }
 
       if (businessId) {
@@ -153,7 +161,7 @@ export async function applyTurnkeyInboundLedgerEvent(
             solanaTxHash: txHash,
             inboundAmount: input.amount,
           }).catch(() => {})
-          return { kind: "suppressed_noah" }
+          return suppressedNoah(false)
         }
       }
 
@@ -177,7 +185,7 @@ export async function applyTurnkeyInboundLedgerEvent(
           currency: input.currency,
           txHash,
         })
-        return { kind: "suppressed_noah" }
+        return suppressedNoah(false)
       }
 
       const relaySuppressed = await findRelayDepositChainSettlementForSuppression(admin, {
@@ -197,7 +205,7 @@ export async function applyTurnkeyInboundLedgerEvent(
           inboundAmount: input.amount,
           recipientVaultAta: input.walletAccount.associated_token_account_address,
         }).catch(() => {})
-        return { kind: "suppressed_noah" }
+        return suppressedNoah(relaySuppressed.reason === "pending_deposit")
       }
 
       const ycSuppressed = await findYcFundBalanceChainSettlementForSuppression(admin, {
@@ -206,7 +214,7 @@ export async function applyTurnkeyInboundLedgerEvent(
         businessId,
       })
       if (ycSuppressed) {
-        return { kind: "suppressed_noah" }
+        return suppressedNoah(false)
       }
 
       const stripeOnrampSuppressed = await findStripeOnrampChainSettlementForSuppression(admin, {
@@ -215,7 +223,7 @@ export async function applyTurnkeyInboundLedgerEvent(
         businessId,
       })
       if (stripeOnrampSuppressed) {
-        return { kind: "suppressed_noah" }
+        return suppressedNoah(false)
       }
     }
 
@@ -233,7 +241,7 @@ export async function applyTurnkeyInboundLedgerEvent(
           txHash,
         }).catch(() => {})
       }
-      return { kind: "suppressed_noah" }
+      return suppressedNoah(false)
     }
 
     if (direction === "in" && !skipProductSuppressors) {
@@ -262,7 +270,7 @@ export async function applyTurnkeyInboundLedgerEvent(
           () => {},
         )
       }
-      return { kind: "suppressed_easetag" }
+      return suppressedEasetag(false)
     }
 
     const globalPayoutSuppressed = await findGlobalPayoutSettlementForChainSuppression(admin, {
@@ -270,7 +278,7 @@ export async function applyTurnkeyInboundLedgerEvent(
       txHash,
     })
     if (globalPayoutSuppressed && direction === "out") {
-      return { kind: "suppressed_easetag" }
+      return suppressedEasetag(false)
     }
 
     // Stripe invoice settlement payout to Turnkey address – settle Stripe ledger, suppress duplicate inbound row.
@@ -284,7 +292,7 @@ export async function applyTurnkeyInboundLedgerEvent(
         walletAddress: input.walletAddress,
       }).catch(() => ({ matched: false as const }))
       if (stripeMatch.matched) {
-        return { kind: "suppressed_noah" }
+        return suppressedNoah(true)
       }
     }
   }
