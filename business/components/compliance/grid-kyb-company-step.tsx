@@ -31,6 +31,12 @@ function fieldError(errors: GridKybErrorPointer[], field: string) {
 }
 
 export function GridKybCompanyStep({ company, onChange, errors, disabled }: Props) {
+  const legalNameError = fieldError(errors, "businessInfo.legalName")
+  const registrationError = fieldError(errors, "businessInfo.registrationNumber")
+  const taxIdError = fieldError(errors, "businessInfo.taxId")
+  const incorporatedError = fieldError(errors, "businessInfo.incorporatedOn")
+  const entityError = fieldError(errors, "businessInfo.entityType")
+  const addressError = fieldError(errors, "address")
   const purposeError = fieldError(errors, "businessInfo.purposeOfAccount")
   const sourceError = fieldError(errors, "businessInfo.sourceOfFunds")
   const typeError = fieldError(errors, "businessInfo.businessType")
@@ -51,11 +57,13 @@ export function GridKybCompanyStep({ company, onChange, errors, disabled }: Prop
           <Label htmlFor="kyb-legal-name">Legal business name</Label>
           <Input
             id="kyb-legal-name"
-            className={SETTINGS_INPUT_CLASS}
+            className={cn(SETTINGS_INPUT_CLASS, legalNameError && "border-destructive")}
             value={company.legalName}
             onChange={(event) => onChange({ legalName: event.target.value })}
+            aria-invalid={Boolean(legalNameError) || undefined}
             disabled={disabled}
           />
+          {legalNameError ? <p className="text-sm text-destructive">{legalNameError.reason}</p> : null}
         </div>
         <div className="space-y-2 md:col-span-2">
           <Label htmlFor="kyb-dba">Doing business as (optional)</Label>
@@ -72,32 +80,38 @@ export function GridKybCompanyStep({ company, onChange, errors, disabled }: Prop
           <Label htmlFor="kyb-reg">Registration number</Label>
           <Input
             id="kyb-reg"
-            className={SETTINGS_INPUT_CLASS}
+            className={cn(SETTINGS_INPUT_CLASS, registrationError && "border-destructive")}
             value={company.registrationNumber}
             onChange={(event) => onChange({ registrationNumber: event.target.value })}
+            aria-invalid={Boolean(registrationError) || undefined}
             disabled={disabled}
           />
+          {registrationError ? <p className="text-sm text-destructive">{registrationError.reason}</p> : null}
         </div>
         <div className="space-y-2">
           <Label htmlFor="kyb-tax">Tax ID</Label>
           <Input
             id="kyb-tax"
-            className={SETTINGS_INPUT_CLASS}
+            className={cn(SETTINGS_INPUT_CLASS, taxIdError && "border-destructive")}
             value={company.taxId}
             onChange={(event) => onChange({ taxId: event.target.value })}
+            aria-invalid={Boolean(taxIdError) || undefined}
             disabled={disabled}
           />
+          {taxIdError ? <p className="text-sm text-destructive">{taxIdError.reason}</p> : null}
         </div>
         <div className="space-y-2">
           <Label htmlFor="kyb-incorporated">Date of incorporation</Label>
           <Input
             id="kyb-incorporated"
             type="date"
-            className={SETTINGS_INPUT_CLASS}
+            className={cn(SETTINGS_INPUT_CLASS, incorporatedError && "border-destructive")}
             value={company.incorporatedOn}
             onChange={(event) => onChange({ incorporatedOn: event.target.value })}
+            aria-invalid={Boolean(incorporatedError) || undefined}
             disabled={disabled}
           />
+          {incorporatedError ? <p className="text-sm text-destructive">{incorporatedError.reason}</p> : null}
         </div>
         <div className="space-y-2">
           <Label>Entity type</Label>
@@ -107,31 +121,37 @@ export function GridKybCompanyStep({ company, onChange, errors, disabled }: Prop
             options={GRID_KYB_ENTITY_TYPES}
             placeholder="Select entity type"
             disabled={disabled}
+            invalid={Boolean(entityError)}
           />
+          {entityError ? <p className="text-sm text-destructive">{entityError.reason}</p> : null}
         </div>
       </div>
 
-      <BusinessAddressFields
-        idPrefix="kyb-"
-        countryCode={company.addressCountry || company.country}
-        values={{
-          line1: company.addressLine1,
-          city: company.city,
-          state: company.state,
-          postalCode: company.postalCode,
-        }}
-        onChange={(patch) =>
-          onChange({
-            addressLine1: patch.line1 ?? company.addressLine1,
-            city: patch.city ?? company.city,
-            state: patch.state ?? company.state,
-            postalCode: patch.postalCode ?? company.postalCode,
-          })
-        }
-        onCountryCodeChange={(code) => onChange({ addressCountry: code, country: company.country || code })}
-        disabled={disabled}
-        editing={!disabled}
-      />
+      <div className="space-y-2">
+        <BusinessAddressFields
+          idPrefix="kyb-"
+          countryCode={company.addressCountry || company.country}
+          values={{
+            line1: company.addressLine1,
+            city: company.city,
+            state: company.state,
+            postalCode: company.postalCode,
+          }}
+          onChange={(patch) =>
+            onChange({
+              addressLine1: patch.line1 ?? company.addressLine1,
+              city: patch.city ?? company.city,
+              state: patch.state ?? company.state,
+              postalCode: patch.postalCode ?? company.postalCode,
+            })
+          }
+          onCountryCodeChange={(code) => onChange({ addressCountry: code, country: company.country || code })}
+          disabled={disabled}
+          editing={!disabled}
+          invalid={Boolean(addressError)}
+        />
+        {addressError ? <p className="text-sm text-destructive">{addressError.reason}</p> : null}
+      </div>
 
       <div className="space-y-4">
         <div className="space-y-2">

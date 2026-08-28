@@ -295,6 +295,8 @@ export async function persistKybApplicationFromGrid(input: {
       ? "draft"
       : inferred
   const now = new Date().toISOString()
+  // Do not stamp updated_at here. Polls used to set it equal to last_synced_at,
+  // which made complete skip PATCHing company fields Grid still did not have.
   await input.admin
     .from("business_kyb_applications")
     .update({
@@ -303,7 +305,6 @@ export async function persistKybApplicationFromGrid(input: {
       grid_verification_id: input.verificationId ?? application.grid_verification_id,
       last_errors: Array.isArray(input.errors) ? input.errors : application.last_errors,
       last_synced_at: now,
-      updated_at: now,
       submitted_at:
         status === "draft" || status === "resolve_errors"
           ? application.submitted_at

@@ -8,6 +8,7 @@ import {
   GRID_KYB_ID_TYPES,
   gridKybApplicationIsEditable,
   gridKybApplicationStatusFromVerification,
+  gridKybCompanyFieldIsFilled,
   gridKybIdTypeOptionsForPerson,
   gridKybOwnerCountriesFromNationality,
   gridKybOwnerIdTypeForGrid,
@@ -436,6 +437,23 @@ describe("gridKybOwnerCountriesFromNationality", () => {
   })
 })
 
+describe("gridKybCompanyFieldIsFilled", () => {
+  it("maps Grid's top-level address field onto street, country, and postal", () => {
+    expect(gridKybCompanyFieldIsFilled(emptyGridKybCompanyDraft(), "address")).toBe(false)
+    expect(
+      gridKybCompanyFieldIsFilled(
+        {
+          ...emptyGridKybCompanyDraft(),
+          addressLine1: "1310 Fetterman Dr",
+          country: "US",
+          postalCode: "82070",
+        },
+        "address",
+      ),
+    ).toBe(true)
+  })
+})
+
 describe("filterResolvedGridKybErrorPointers", () => {
   it("drops company field pointers once the field is filled", () => {
     const remaining = filterResolvedGridKybErrorPointers({
@@ -449,6 +467,31 @@ describe("filterResolvedGridKybErrorPointers", () => {
     })
     expect(remaining).toHaveLength(1)
     expect(remaining[0]?.field).toBe("businessInfo.businessType")
+  })
+
+  it("keeps a top-level address pointer until street, country, and postal are filled", () => {
+    const pointers = [{ section: "company" as const, field: "address", reason: "Business address is required" }]
+    expect(
+      filterResolvedGridKybErrorPointers({
+        pointers,
+        company: { ...emptyGridKybCompanyDraft(), addressLine1: "1310 Fetterman Dr" },
+        people: [],
+        documents: [],
+      }),
+    ).toHaveLength(1)
+    expect(
+      filterResolvedGridKybErrorPointers({
+        pointers,
+        company: {
+          ...emptyGridKybCompanyDraft(),
+          addressLine1: "1310 Fetterman Dr",
+          addressCountry: "US",
+          postalCode: "82070",
+        },
+        people: [],
+        documents: [],
+      }),
+    ).toEqual([])
   })
 
   it("drops document and identity pointers after uploads", () => {

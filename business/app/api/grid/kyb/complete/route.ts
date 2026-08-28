@@ -17,7 +17,6 @@ import {
   KYB_DOCUMENTS_BUCKET,
   listKybDocuments,
   listKybPeople,
-  type KybApplicationRow,
   type KybDocumentRow,
   type KybPersonRow,
 } from "@/lib/grid/kyb-application-store"
@@ -36,21 +35,6 @@ import {
 import { persistVerificationStatus } from "@/lib/compliance/verification-store"
 import { syncGridBusinessKybToSupabase } from "@/lib/grid/sync-kyb"
 import { formatHostedKybStartError } from "@/lib/grid/format-grid-api-error"
-
-function companyNeedsGridSync(
-  application: KybApplicationRow,
-  errors: GridKybVerificationError[],
-): boolean {
-  if (!application.last_synced_at) return true
-  if (application.updated_at && application.updated_at > application.last_synced_at) return true
-  return errors.some((error) => {
-    const resourceId = String(error.resourceId ?? "").trim()
-    const field = String(error.field ?? "").trim()
-    if (resourceId.startsWith("BeneficialOwner:") || resourceId.startsWith("Document:")) return false
-    if (field.startsWith("businessInfo") || field.startsWith("address") || field === "email") return true
-    return resourceId.startsWith("Customer:") || (!resourceId && Boolean(field))
-  })
-}
 
 function peopleNeedingGridSync(
   people: KybPersonRow[],
@@ -126,13 +110,13 @@ export async function POST(request: Request) {
     })
     const priorErrors = application.last_errors ?? []
 
-    if (companyNeedsGridSync(application, priorErrors)) {
-      await patchGridBusinessKybCustomer({
-        customerId,
-        company: application.company,
-        email: contact.email,
-      })
-    }
+    // Always push company + address. Skipping on last_synced_at dropped KYB
+    // fields when a Grid poll stamped last_synced_at without PATCHing businessInfo.
+    await patchGridBusinessKybCustomer({
+      customerId,
+      company: application.company,
+      email: contact.email,
+    })
 
     const listedPeople = await listKybPeople(ctx.admin, application.id, true)
     const people = withFirstKybOwnerUbo(listedPeople)

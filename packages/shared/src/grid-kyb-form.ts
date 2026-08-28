@@ -751,6 +751,13 @@ function lastFieldSegment(field: string): string {
 
 export function gridKybCompanyFieldIsFilled(company: GridKybCompanyDraft, field: string): boolean {
   const path = field.replace(/^businessInfo\./, "")
+  if (path === "address" || path.endsWith(".address")) {
+    return Boolean(
+      company.addressLine1.trim() &&
+        (company.addressCountry.trim() || company.country.trim()) &&
+        company.postalCode.trim(),
+    )
+  }
   if (path.startsWith("address.")) {
     const addr = lastFieldSegment(path)
     if (addr === "line1" || addr === "addressLine1") return Boolean(company.addressLine1.trim())
@@ -758,7 +765,7 @@ export function gridKybCompanyFieldIsFilled(company: GridKybCompanyDraft, field:
     if (addr === "city") return Boolean(company.city.trim())
     if (addr === "state" || addr === "region") return Boolean(company.state.trim())
     if (addr === "postalCode" || addr === "zip" || addr === "zipCode") return Boolean(company.postalCode.trim())
-    if (addr === "country") return Boolean(company.addressCountry.trim())
+    if (addr === "country") return Boolean(company.addressCountry.trim() || company.country.trim())
   }
 
   const key = lastFieldSegment(path)

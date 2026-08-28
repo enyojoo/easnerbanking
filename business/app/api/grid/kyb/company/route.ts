@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { emptyGridKybCompanyDraft, type GridKybCompanyDraft } from "@easner/shared"
 import { requireKybContext } from "../_context"
 import { ensureKybApplication } from "@/lib/grid/kyb-application-store"
+import { patchGridBusinessKybCustomer } from "@/lib/grid/kyb-grid-writes"
 
 function mergeCompany(raw: unknown): GridKybCompanyDraft {
   const base = emptyGridKybCompanyDraft()
@@ -44,6 +45,15 @@ export async function PATCH(request: Request) {
   if (company.state.trim()) publicPatch.registered_address_state = company.state.trim()
   if (company.postalCode.trim()) publicPatch.registered_address_postal_code = company.postalCode.trim()
   await ctx.admin.from("businesses").update(publicPatch).eq("id", ctx.businessId)
+
+  const customerId = application.grid_customer_id
+  if (customerId) {
+    try {
+      await patchGridBusinessKybCustomer({ customerId, company })
+    } catch (error) {
+      console.warn("[grid/kyb/company] Grid patch:", error)
+    }
+  }
 
   return NextResponse.json({ company })
 }
