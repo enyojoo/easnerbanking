@@ -70,6 +70,23 @@ const RECIPIENT_TYPE_TABS = [
   { id: "easenet" as const, label: "Easetag" },
 ]
 
+function transferTypeTileButtonClass(selected: boolean, compact: boolean) {
+  return cn(
+    "h-[4.5rem] min-h-[4.5rem] min-w-0 flex-col justify-center gap-1.5 whitespace-normal rounded-2xl py-2 transition-none active:translate-y-0",
+    compact ? "px-1" : "px-3",
+    selected &&
+      "border-foreground bg-foreground text-background hover:bg-foreground hover:text-background",
+  )
+}
+
+function transferTypeSpeedChipClass(selected: boolean, compact: boolean) {
+  return cn(
+    "inline-flex max-w-full truncate rounded-full px-2 py-0.5 text-[11px] font-normal leading-none",
+    compact && "px-1.5 text-[10px]",
+    selected ? "bg-background/15 text-background" : "bg-muted text-muted-foreground",
+  )
+}
+
 type RailCountryOption = { name: string; currency: string; code: string }
 
 export type RecipientFormRecipientKind = "bank" | "mobile" | "wallet" | "easenet"
@@ -1399,24 +1416,11 @@ export function RecipientForm({
                           key={method.value}
                           type="button"
                           variant="outline"
-                          className={cn(
-                            "h-[4.5rem] min-h-[4.5rem] min-w-0 flex-col justify-center gap-1.5 whitespace-normal py-2 transition-none active:translate-y-0",
-                            compact ? "px-1" : "px-3",
-                            selected &&
-                              "border-foreground bg-foreground text-background hover:bg-foreground hover:text-background",
-                          )}
+                          className={transferTypeTileButtonClass(selected, compact)}
                           onClick={() => handleInputChange("transferType", method.value)}
                         >
                           <span className={cn("truncate", compact && "text-sm")}>{method.label}</span>
-                          <span
-                            className={cn(
-                              "inline-flex max-w-full truncate rounded-full px-2 py-0.5 text-[11px] font-normal leading-none",
-                              compact && "px-1.5 text-[10px]",
-                              selected
-                                ? "bg-background/15 text-background"
-                                : "bg-muted text-muted-foreground",
-                            )}
-                          >
+                          <span className={transferTypeSpeedChipClass(selected, compact)}>
                             {method.speedLabel}
                           </span>
                         </Button>
@@ -1488,27 +1492,17 @@ export function RecipientForm({
                   <div className="grid grid-cols-2 gap-2">
                     {eurTransferMethods.map((method) => {
                       const selected = formData.transferType === method.value
+                      const compact = eurTransferMethods.length > 2
                       return (
                         <Button
                           key={method.value}
                           type="button"
                           variant="outline"
-                          className={cn(
-                            "h-[4.5rem] min-h-[4.5rem] min-w-0 flex-col justify-center gap-1.5 whitespace-normal px-3 py-2 transition-none active:translate-y-0",
-                            selected &&
-                              "border-foreground bg-foreground text-background hover:bg-foreground hover:text-background",
-                          )}
+                          className={transferTypeTileButtonClass(selected, compact)}
                           onClick={() => handleInputChange("transferType", method.value)}
                         >
-                          <span className="truncate">{method.label}</span>
-                          <span
-                            className={cn(
-                              "inline-flex max-w-full truncate rounded-full px-2 py-0.5 text-[11px] font-normal leading-none",
-                              selected
-                                ? "bg-background/15 text-background"
-                                : "bg-muted text-muted-foreground",
-                            )}
-                          >
+                          <span className={cn("truncate", compact && "text-sm")}>{method.label}</span>
+                          <span className={transferTypeSpeedChipClass(selected, compact)}>
                             {method.speedLabel}
                           </span>
                         </Button>

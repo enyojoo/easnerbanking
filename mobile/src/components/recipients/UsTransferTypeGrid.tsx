@@ -96,7 +96,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
     height: TILE_HEIGHT,
     backgroundColor: colors.frame.background,
-    borderRadius: borderRadius.full,
+    // Match business transfer tiles (`rounded-2xl` → 16px).
+    borderRadius: borderRadius.xl,
     borderWidth: 1.5,
     borderColor: colors.frame.border,
     paddingHorizontal: spacing[3],
@@ -106,8 +107,6 @@ const styles = StyleSheet.create({
   },
   tileCompact: {
     paddingHorizontal: spacing[1],
-    // Full-radius ovals on ~80×72 tiles. Match business rounded-2xl (16).
-    borderRadius: borderRadius.xl,
     overflow: 'hidden',
   },
   tileSelected: {
