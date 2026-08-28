@@ -41,9 +41,9 @@
     "turbo": "^2.8.12"
   },
   "dependencies": {
-    "@react-native/normalize-colors": "0.86.2",
-    "expo-modules-core": "57.0.12",
-    "expo-modules-jsi": "57.0.5",
+    "@react-native/normalize-colors": "0.86.3",
+    "expo-modules-core": "57.0.14",
+    "expo-modules-jsi": "57.0.6",
     "next": "^16.1.6",
     "patch-package": "^8.0.1",
     "react": "19.2.3",
@@ -57,36 +57,41 @@
     "glob": "^13.0.6",
     "rimraf": "^5.0.10",
     "react-native-quick-base64": "3.0.0",
-    "@react-native/normalize-colors": "0.86.2",
+    "@react-native/normalize-colors": "0.86.3",
+    "expo": "57.0.17",
+    "react-native": "0.86.3",
+    "@expo/metro-runtime": "57.0.14",
+    "jest-expo": "57.0.5",
     "expo-auth-session": {
-      ".": "~57.0.8",
+      ".": "~57.0.10",
       "expo-application": "~57.0.2",
-      "expo-constants": "~57.0.13",
-      "expo-crypto": "~57.0.1",
-      "expo-linking": "~57.0.7",
+      "expo-constants": "~57.0.15",
+      "expo-crypto": "~57.0.2",
+      "expo-linking": "~57.0.8",
       "expo-web-browser": "~57.0.2"
     },
     "expo-linking": {
-      ".": "~57.0.7",
-      "expo-constants": "~57.0.13"
+      ".": "~57.0.8",
+      "expo-constants": "~57.0.15"
     },
     "easner-mobile": {
-      "expo": "~57.0.15",
+      "expo": "~57.0.17",
       "react": "19.2.3",
       "react-dom": "19.2.3",
-      "expo-asset": "~57.0.13",
-      "expo-auth-session": "~57.0.8",
-      "expo-background-task": "~57.0.12",
+      "react-native": "0.86.3",
+      "expo-asset": "~57.0.15",
+      "expo-auth-session": "~57.0.10",
+      "expo-background-task": "~57.0.14",
       "expo-keep-awake": "~57.0.1",
-      "expo-dev-client": "~57.0.14",
+      "expo-dev-client": "~57.0.16",
       "expo-image": "~57.0.3",
-      "expo-image-manipulator": "~57.0.12",
-      "expo-image-picker": "~57.0.12",
-      "expo-linking": "~57.0.7",
+      "expo-image-manipulator": "~57.0.14",
+      "expo-image-picker": "~57.0.14",
+      "expo-linking": "~57.0.8",
       "expo-media-library": "~57.0.4",
-      "expo-sharing": "~57.0.14",
-      "expo-splash-screen": "~57.0.7",
-      "expo-task-manager": "~57.0.12"
+      "expo-sharing": "~57.0.16",
+      "expo-splash-screen": "~57.0.8",
+      "expo-task-manager": "~57.0.14"
     },
     "jayson": {
       "uuid": "11.1.0"
