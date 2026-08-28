@@ -78,7 +78,7 @@ describe("gridQuotePaymentRailForRecipient", () => {
     ).toBe("WIRE")
   })
 
-  it("omits paymentRail for non-US destinations", () => {
+  it("omits paymentRail for unrelated fiat corridors", () => {
     expect(
       gridQuotePaymentRailForRecipient({
         countryCode: "NG",
@@ -86,6 +86,30 @@ describe("gridQuotePaymentRailForRecipient", () => {
         transferType: "ACH",
       }),
     ).toBeUndefined()
+  })
+
+  it("maps EUR bank transfer type to Grid SEPA paymentRail", () => {
+    expect(
+      gridQuotePaymentRailForRecipient({
+        countryCode: "DE",
+        currency: "EUR",
+        transferType: "SEPA Instant",
+      }),
+    ).toBe("SEPA_INSTANT")
+    expect(
+      gridQuotePaymentRailForRecipient({
+        countryCode: "FR",
+        currency: "EUR",
+        transferType: "SEPA",
+      }),
+    ).toBe("SEPA")
+    expect(
+      gridQuotePaymentRailForRecipient({
+        countryCode: "DE",
+        currency: "EUR",
+        transferType: null,
+      }),
+    ).toBe("SEPA_INSTANT")
   })
 })
 
@@ -128,6 +152,22 @@ describe("buildGridBalancePayoutQuoteBody", () => {
       destinationType: "ACCOUNT",
       accountId: "ExternalAccount:us",
       paymentRail: "RTP",
+    })
+  })
+
+  it("includes SEPA_INSTANT paymentRail for EUR payouts", () => {
+    expect(
+      buildGridBalancePayoutQuoteBody({
+        customerId: "Customer:abc",
+        externalAccountId: "ExternalAccount:de",
+        receiveCurrency: "EUR",
+        lockedReceiveMinor: 1000,
+        paymentRail: "SEPA_INSTANT",
+      }).destination,
+    ).toEqual({
+      destinationType: "ACCOUNT",
+      accountId: "ExternalAccount:de",
+      paymentRail: "SEPA_INSTANT",
     })
   })
 })

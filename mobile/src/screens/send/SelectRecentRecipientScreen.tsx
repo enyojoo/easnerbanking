@@ -93,10 +93,11 @@ import {
   resolvePrimaryPayoutProvider,
   resolveYcCorridorSchema,
   usBankPaymentMethodsForProvider,
+  parseEurBankTransferType,
+  eurBankPaymentMethodsForProvider,
   validateGridRecipientForCorridor,
   validateYcRecipientForCorridor,
   ycAccountNumberLabel,
-  type UsBankTransferType,
 } from '@easner/shared'
 import { validateRecipientHolderAddress } from '@easner/shared/postal-address-form'
 import { PayoutSchemaExtraFields } from '../../components/recipients/PayoutSchemaExtraFields'
@@ -192,7 +193,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [selectedCountryCurrency, setSelectedCountryCurrency] = useState<CountryCurrency | null>(null)
-  const [transferType, setTransferType] = useState<UsBankTransferType | null>(null)
+  const [transferType, setTransferType] = useState<string | null>(null)
   const [easenetProfile, setEasenetProfile] = useState<{
     easetag: string
     fullName: string
@@ -280,6 +281,12 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     return usBankPaymentMethodsForProvider(payoutProvider)
   }, [selectedRecipientType, selectedCountryCurrency?.countryCode, selectedBankCorridor, payoutProvider])
 
+  const eurTransferMethods = useMemo(() => {
+    if (selectedRecipientType !== 'bank' || newRecipient.currency !== 'EUR') return []
+    if (!selectedBankCorridor) return eurBankPaymentMethodsForProvider('noah').slice(0, 1)
+    return eurBankPaymentMethodsForProvider(payoutProvider)
+  }, [selectedRecipientType, newRecipient.currency, selectedBankCorridor, payoutProvider])
+
   useEffect(() => {
     if (selectedRecipientType !== 'bank' || selectedCountryCurrency?.countryCode !== 'US') return
     const allowed = usTransferMethods.map((method) => method.value)
@@ -288,6 +295,15 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       setTransferType(allowed[0])
     }
   }, [selectedRecipientType, selectedCountryCurrency?.countryCode, usTransferMethods, transferType])
+
+  useEffect(() => {
+    if (selectedRecipientType !== 'bank' || newRecipient.currency !== 'EUR') return
+    const allowed = eurTransferMethods.map((method) => method.value)
+    if (allowed.length === 0) return
+    if (!transferType || !allowed.includes(transferType)) {
+      setTransferType(allowed[0])
+    }
+  }, [selectedRecipientType, newRecipient.currency, eurTransferMethods, transferType])
 
   const corridorRecipientOptions = useMemo(() => {
     if (!selectedCountryCurrency) {
@@ -670,6 +686,9 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     ) {
       return false
     }
+    if (newRecipient.currency === 'EUR' && eurTransferMethods.length > 0 && !transferType) {
+      return false
+    }
     if (showsHolderAddress && selectedCountryCurrency) {
       const addressResult = validateRecipientHolderAddress(selectedCountryCurrency.countryCode, {
         line1: newRecipient.addressLine1,
@@ -761,6 +780,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           currency: newRecipient.currency,
           full_name: newRecipient.fullName,
           account_number: newRecipient.accountNumber,
+          iban: newRecipient.iban,
+          swift_bic: newRecipient.swiftBic,
           bank_name: newRecipient.bankName,
           phone_number: newRecipient.phoneNumber,
           metadata: buildFormYcMetadata(),
@@ -855,7 +876,10 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         sortCode: newRecipient.sortCode || undefined,
         iban: newRecipient.iban || undefined,
         swiftBic: newRecipient.swiftBic || undefined,
-        transferType: selectedCountryCurrency?.countryCode === 'US' ? transferType || undefined : undefined,
+        transferType:
+          selectedCountryCurrency?.countryCode === 'US' || newRecipient.currency === 'EUR'
+            ? transferType || undefined
+            : undefined,
         checkingOrSavings:
           selectedCountryCurrency?.countryCode === 'US' &&
           (newRecipient.checkingOrSavings === 'checking' || newRecipient.checkingOrSavings === 'savings')
@@ -1792,6 +1816,14 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                     {accountConfig.accountType === "us" && usTransferMethods.length > 0 && (
                       <UsTransferTypeGrid
                         methods={usTransferMethods}
+                        value={transferType}
+                        onChange={setTransferType}
+                        disabled={isSubmitting}
+                      />
+                    )}
+                    {accountConfig.accountType === "euro" && eurTransferMethods.length > 0 && (
+                      <UsTransferTypeGrid
+                        methods={eurTransferMethods}
                         value={transferType}
                         onChange={setTransferType}
                         disabled={isSubmitting}

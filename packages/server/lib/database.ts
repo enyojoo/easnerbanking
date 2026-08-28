@@ -247,7 +247,7 @@ export const recipientService = {
       city?: string
       state?: string
       postalCode?: string
-      transferType?: "ACH" | "Wire" | "RTP" | "FEDNOW"
+      transferType?: "ACH" | "Wire" | "RTP" | "FEDNOW" | "SEPA" | "SEPA Instant"
       checkingOrSavings?: "checking" | "savings"
     },
   ) {
@@ -328,7 +328,7 @@ export const recipientService = {
       city?: string
       state?: string
       postalCode?: string
-      transferType?: "ACH" | "Wire" | "RTP" | "FEDNOW"
+      transferType?: "ACH" | "Wire" | "RTP" | "FEDNOW" | "SEPA" | "SEPA Instant"
       checkingOrSavings?: "checking" | "savings"
     },
   ) {

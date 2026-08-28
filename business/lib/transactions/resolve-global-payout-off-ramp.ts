@@ -214,6 +214,12 @@ function derivePayoutReview(
           currency: enrichment.receiveCurrency,
           countryCode: enrichment.countryCode,
           bankName: enrichment.bankName,
+          transferType:
+            meta.transfer_type != null
+              ? String(meta.transfer_type)
+              : meta.transferType != null
+                ? String(meta.transferType)
+                : null,
         })
         const totalDebited = ledgerAmount
         const sendCurrency = ledgerCurrency
@@ -327,6 +333,12 @@ function derivePayoutReview(
       bankName: meta.bank_name != null ? String(meta.bank_name) : null,
       mobileProvider:
         meta.mobile_provider != null ? String(meta.mobile_provider) : null,
+      transferType:
+        meta.transfer_type != null
+          ? String(meta.transfer_type)
+          : meta.transferType != null
+            ? String(meta.transferType)
+            : null,
     })
 
   return {

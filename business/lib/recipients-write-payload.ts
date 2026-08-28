@@ -11,7 +11,7 @@ export type RecipientWritePayload = {
   sort_code?: string | null
   iban?: string | null
   swift_bic?: string | null
-  transfer_type?: "ACH" | "Wire" | "RTP" | "FEDNOW" | null
+  transfer_type?: "ACH" | "Wire" | "RTP" | "FEDNOW" | "SEPA" | "SEPA Instant" | null
   checking_or_savings?: "checking" | "savings" | null
   address_line1?: string | null
   city?: string | null

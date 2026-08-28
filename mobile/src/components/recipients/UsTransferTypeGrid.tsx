@@ -1,6 +1,5 @@
 import React from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import type { UsBankTransferMethodOption, UsBankTransferType } from '@easner/shared'
 import {
   borderRadius,
   colors,
@@ -10,15 +9,21 @@ import {
 } from '../../theme'
 import { haptics } from '../../lib/haptics'
 
+export type BankTransferMethodOption = {
+  value: string
+  label: string
+  speedLabel: string
+}
+
 type Props = {
-  methods: UsBankTransferMethodOption[]
-  value: UsBankTransferType | null
-  onChange: (value: UsBankTransferType) => void
+  methods: BankTransferMethodOption[]
+  value: string | null
+  onChange: (value: string) => void
   disabled?: boolean
 }
 
-/** Single-row USD rail picker. Four tiles for Grid, two for Noah, equal height. */
-export function UsTransferTypeGrid({ methods, value, onChange, disabled }: Props) {
+/** Single-row bank rail picker. Four tiles for Grid USD, two for Noah / EUR. */
+export function BankTransferTypeGrid({ methods, value, onChange, disabled }: Props) {
   if (methods.length === 0) return null
 
   const compact = methods.length > 2
@@ -72,6 +77,9 @@ export function UsTransferTypeGrid({ methods, value, onChange, disabled }: Props
     </View>
   )
 }
+
+/** @deprecated Use BankTransferTypeGrid */
+export const UsTransferTypeGrid = BankTransferTypeGrid
 
 const TILE_HEIGHT = 72
 

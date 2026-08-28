@@ -70,10 +70,20 @@ describe("getGlobalPayoutTransferMethod", () => {
     ).toBe("Local transfer")
   })
 
-  it("uses SEPA Instant for EUR corridors", () => {
+  it("uses SEPA Instant for EUR corridors by default", () => {
     expect(getGlobalPayoutTransferMethod({ currency: "EUR", countryCode: "DE" })).toBe(
       "SEPA Instant",
     )
+  })
+
+  it("uses stored EUR transfer type when provided", () => {
+    expect(
+      getGlobalPayoutTransferMethod({
+        currency: "EUR",
+        countryCode: "DE",
+        transferType: "SEPA",
+      }),
+    ).toBe("SEPA")
   })
 })
 

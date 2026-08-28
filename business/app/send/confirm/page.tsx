@@ -114,6 +114,7 @@ function corridorTransferMethod(recipient: Beneficiary, currency: string): strin
     bankName: recipient.bankName,
     mobileProvider: recipient.mobileProvider,
     payeeEasetag: recipient.payeeEasetag,
+    transferType: recipient.transferType,
   })
 }
 

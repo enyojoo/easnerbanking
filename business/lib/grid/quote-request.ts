@@ -2,15 +2,20 @@ import { gridFetch, gridFetchAllPages } from "./http"
 import type { GridQuote } from "./types"
 import { gridMajorUnits } from "./external-account"
 import {
+  parseEurBankTransferType,
   parseUsBankTransferType,
+  toGridEurPaymentRail,
   toGridPaymentRail,
+  type GridEurPaymentRail,
   type GridUsPaymentRail,
 } from "@easner/shared"
+
+export type GridPaymentRail = GridUsPaymentRail | GridEurPaymentRail
 
 export type GridQuoteAccountDestination = {
   destinationType: "ACCOUNT"
   accountId: string
-  paymentRail?: GridUsPaymentRail
+  paymentRail?: GridPaymentRail
 }
 
 export type GridQuoteRealtimeFundingSource = {
@@ -107,7 +112,7 @@ function normalizeGridCurrency(code: string): string {
 
 export function buildGridAccountDestination(
   accountId: string,
-  paymentRail?: GridUsPaymentRail | null,
+  paymentRail?: GridPaymentRail | null,
 ): GridQuoteAccountDestination {
   const destination: GridQuoteAccountDestination = {
     destinationType: "ACCOUNT",
@@ -117,19 +122,27 @@ export function buildGridAccountDestination(
   return destination
 }
 
-/** US USD bank payouts pass the recipient Transfer type so Grid does not AUTO-pick. */
+/** US USD and EUR SEPA bank payouts pass transfer type so Grid does not AUTO-pick. */
 export function gridQuotePaymentRailForRecipient(input: {
   countryCode?: string | null
   currency?: string | null
   transferType?: string | null
   mobileProvider?: string | null
-}): GridUsPaymentRail | undefined {
+}): GridPaymentRail | undefined {
   if (String(input.mobileProvider ?? "").trim()) return undefined
   const currency = String(input.currency ?? "").trim().toUpperCase()
-  if (currency !== "USD") return undefined
   const country = String(input.countryCode ?? "").trim().toUpperCase()
-  if (country && country !== "US") return undefined
-  return toGridPaymentRail(parseUsBankTransferType(input.transferType) ?? "ACH")
+
+  if (currency === "USD") {
+    if (country && country !== "US") return undefined
+    return toGridPaymentRail(parseUsBankTransferType(input.transferType) ?? "ACH")
+  }
+
+  if (currency === "EUR") {
+    return toGridEurPaymentRail(parseEurBankTransferType(input.transferType) ?? "SEPA Instant")
+  }
+
+  return undefined
 }
 
 /** USDC/USDT payouts and pay-ins fund via on-chain deposit instructions. */
@@ -207,7 +220,7 @@ export function buildGridBalancePayoutQuoteBody(input: {
   receiveCurrency: string
   lockedReceiveMinor: number
   purposeOfPayment?: string
-  paymentRail?: GridUsPaymentRail | null
+  paymentRail?: GridPaymentRail | null
 }) {
   return {
     source: buildGridRealtimeFundingSource({

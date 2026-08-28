@@ -23,7 +23,7 @@ function currencyAccountType(currency: string): string {
   return `${currency.trim().toUpperCase()}_ACCOUNT`
 }
 
-const GRID_IBAN_CURRENCIES = new Set(["AED", "DKK"])
+const GRID_IBAN_CURRENCIES = new Set(["AED", "DKK", "EUR"])
 const GRID_MOMO_FIAT_CURRENCIES = new Set(["UGX", "RWF", "KES", "TZS", "MWK", "BWP", "ZMW", "XOF", "XAF"])
 
 function gridUsesMomoAccountShape(input: {

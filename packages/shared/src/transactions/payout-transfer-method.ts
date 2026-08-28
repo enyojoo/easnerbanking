@@ -5,6 +5,7 @@ export type PayoutTransferMethodInput = {
   bankName?: string | null
   mobileProvider?: string | null
   payeeEasetag?: string | null
+  transferType?: string | null
 }
 
 function normalizeCountry(input: PayoutTransferMethodInput): string {
@@ -28,7 +29,11 @@ export function getGlobalPayoutTransferMethod(input: PayoutTransferMethodInput):
   const country = normalizeCountry(input)
 
   if (currency === "USD" && country === "US") return "ACH"
-  if (currency === "EUR") return "SEPA Instant"
+  if (currency === "EUR") {
+    const parsed = String(input.transferType ?? "").trim()
+    if (parsed === "SEPA" || parsed === "SEPA Instant") return parsed
+    return "SEPA Instant"
+  }
   if (currency === "GBP" && country === "GB") return "Faster Payments"
   return "Local transfer"
 }

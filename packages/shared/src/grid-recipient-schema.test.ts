@@ -168,6 +168,37 @@ describe("resolveGridCorridorSchema", () => {
     if (!missingTax.ok) expect(missingTax.message).toMatch(/tax ID/)
   })
 
+  it("validates DE EUR IBAN from iban column", () => {
+    const ok = validateGridRecipientForCorridor({
+      countryCode: "DE",
+      currencyCode: "EUR",
+      row: {
+        currency: "EUR",
+        full_name: "Maria Garcia",
+        account_number: "",
+        iban: "DE89370400440532013000",
+      },
+    })
+    expect(ok).toEqual({ ok: true })
+
+    const missing = validateGridRecipientForCorridor({
+      countryCode: "DE",
+      currencyCode: "EUR",
+      row: {
+        currency: "EUR",
+        full_name: "Maria Garcia",
+        account_number: "",
+      },
+    })
+    expect(missing).toEqual({ ok: false, message: "IBAN is required for EUR." })
+  })
+
+  it("resolves static EUR SEPA schema for DE", () => {
+    const schema = resolveGridStaticCorridorSchema("DE", "EUR")
+    expect(schema?.account_number_label).toBe("IBAN")
+    expect(schema?.channel_type).toBe("bank")
+  })
+
   it("returns momo providers for UG when discoveries are absent", () => {
     const schema = resolveGridStaticCorridorSchema("UG", "UGX")
     expect(schema?.channel_type).toBe("momo")

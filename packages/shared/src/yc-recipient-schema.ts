@@ -101,6 +101,8 @@ export type YcRecipientRowLike = {
   mobile_provider?: string | null
   checking_or_savings?: "checking" | "savings" | null
   routing_number?: string | null
+  iban?: string | null
+  swift_bic?: string | null
   metadata?: RecipientYcMetadata | Record<string, unknown> | null
 }
 
@@ -440,6 +442,55 @@ export const GRID_STATIC_CORRIDOR_SCHEMAS: Record<string, GridCorridorSchemaHint
   "CM:XAF": gridMomoProviders("MTN", "Orange", "Moov Money"),
 }
 
+/** Grid SEPA zone countries with EUR_ACCOUNT bank payouts. */
+export const GRID_EUR_SEPA_COUNTRY_CODES = new Set([
+  "AT",
+  "BE",
+  "BG",
+  "HR",
+  "CY",
+  "CZ",
+  "DK",
+  "EE",
+  "FI",
+  "FR",
+  "DE",
+  "GR",
+  "HU",
+  "IS",
+  "IE",
+  "IT",
+  "LV",
+  "LI",
+  "LT",
+  "LU",
+  "MT",
+  "NL",
+  "NO",
+  "PL",
+  "PT",
+  "RO",
+  "SK",
+  "SI",
+  "ES",
+  "SE",
+  "CH",
+])
+
+const GRID_EUR_SEPA_STATIC_SCHEMA: GridCorridorSchemaHint = {
+  status: "ready",
+  channel_type: "bank",
+  account_number_label: "IBAN",
+  extra_fields: [],
+  note: "Static Grid EUR_ACCOUNT (IBAN + optional SWIFT)",
+}
+
+export function isGridEurSepaCorridor(countryCode: string, currencyCode: string): boolean {
+  const cc = String(countryCode || "").trim().toUpperCase()
+  const cur = String(currencyCode || "").trim().toUpperCase()
+  return cur === "EUR" && GRID_EUR_SEPA_COUNTRY_CODES.has(cc)
+}
+
 export function isGenericGridCorridorSchema(schema: GridCorridorSchemaHint | null | undefined): boolean {
   const note = String(schema?.note ?? "")
   return note.includes("Generic Grid bank schema")
@@ -464,7 +515,10 @@ export function resolveGridStaticCorridorSchema(
   currencyCode: string,
 ): GridCorridorSchemaHint | null {
   const key = ycCorridorSchemaKey(countryCode, currencyCode)
-  return GRID_STATIC_CORRIDOR_SCHEMAS[key] ?? null
+  const fromMap = GRID_STATIC_CORRIDOR_SCHEMAS[key]
+  if (fromMap) return fromMap
+  if (isGridEurSepaCorridor(countryCode, currencyCode)) return GRID_EUR_SEPA_STATIC_SCHEMA
+  return null
 }
 
 /** Grid API supports mobile money only for this country/currency (no bank rail). */
@@ -873,7 +927,15 @@ export function validateGridRecipientForCorridor(input: {
 
   const metadata = normalizeRecipientYcMetadata(input.row.metadata)
   const accountNumber = String(input.row.account_number || "").trim()
-  if (!accountNumber && cur !== "AED" && cur !== "DKK") {
+  const normalizedIban = String(input.row.iban ?? accountNumber)
+    .replace(/\s/g, "")
+    .toUpperCase()
+
+  if (cur === "EUR") {
+    if (!normalizedIban) {
+      return { ok: false, message: "IBAN is required for EUR." }
+    }
+  } else if (!accountNumber && cur !== "AED" && cur !== "DKK") {
     return { ok: false, message: "Account number is required." }
   }
 

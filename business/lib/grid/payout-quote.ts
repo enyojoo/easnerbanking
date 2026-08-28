@@ -10,7 +10,6 @@ import {
   validateBalancePayoutAmountForProvider,
   validateGridRecipientForCorridor,
   type PayoutSettlementLeg,
-  type GridUsPaymentRail,
 } from "@easner/shared"
 import {
   findGridBalancePayoutRate,
@@ -32,6 +31,7 @@ import {
   gridQuotePaymentRailForRecipient,
   gridQuoteSendingAmountMajor,
   quantizeGridUsdcMajor,
+  type GridPaymentRail,
 } from "./quote-request"
 import { gridFetch } from "./http"
 import {
@@ -57,7 +57,7 @@ function storedGridExternalAccountId(recipient: RecipientSellPrepareRow): string
   return id || null
 }
 
-function gridPaymentRailForPayoutRecipient(recipient: RecipientSellPrepareRow): GridUsPaymentRail | undefined {
+function gridPaymentRailForPayoutRecipient(recipient: RecipientSellPrepareRow): GridPaymentRail | undefined {
   return gridQuotePaymentRailForRecipient({
     countryCode: resolveRecipientPayoutCountry(recipient),
     currency: recipient.currency,
@@ -208,7 +208,7 @@ export async function ensureFreshGridBalancePayoutQuote(input: {
   receiveCurrency: string
   receiveAmount: number
   paymentPurpose?: string
-  paymentRail?: GridUsPaymentRail | null
+  paymentRail?: GridPaymentRail | null
   customerRate: number
   processingFeeBps: number
   originalTotalDebited: number

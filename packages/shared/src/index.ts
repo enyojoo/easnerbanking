@@ -274,6 +274,18 @@ export {
   type UsBankTransferType,
 } from "./us-bank-transfer-type"
 export {
+  EUR_BANK_TRANSFER_SPEED_LABEL,
+  EUR_BANK_TRANSFER_TYPES,
+  coerceEurTransferTypeForProvider,
+  eurBankPaymentMethodsForProvider,
+  noahEurPrefersInstant,
+  parseEurBankTransferType,
+  toGridEurPaymentRail,
+  type EurBankTransferMethodOption,
+  type EurBankTransferType,
+  type GridEurPaymentRail,
+} from "./eur-bank-transfer-type"
+export {
   applyUsPayInModeToMetadata,
   clearUsCrossBorderMetadata,
   corridorOffersCrossBorder,

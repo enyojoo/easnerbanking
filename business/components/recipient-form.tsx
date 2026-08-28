@@ -19,6 +19,8 @@ import {
   resolveYcCorridorSchema,
   usBankPaymentMethodsForProvider,
   parseUsBankTransferType,
+  eurBankPaymentMethodsForProvider,
+  parseEurBankTransferType,
   sortByEasnerCountryPickerOrder,
   unwrapNoahFieldsSchema,
   validateYcRecipientForCorridor,
@@ -277,7 +279,10 @@ export function RecipientForm({
         walletNetwork: bene.walletNetwork || parsedWalletNetwork || "",
         walletAddress: bene.fullAccountNumber || bene.accountNumber || "",
         mobileProvider: bene.mobileProvider || normalizedMobileProvider || "",
-        transferType: parseUsBankTransferType(bene.transferType) || "ACH",
+        transferType:
+          (matchedCountry?.currency || bene.currency) === "EUR"
+            ? parseEurBankTransferType(bene.transferType) || "SEPA Instant"
+            : parseUsBankTransferType(bene.transferType) || "ACH",
         checkingOrSavings: bene.checkingOrSavings || "",
         addressLine1: bene.addressLine1 || "",
         city: bene.city || "",
@@ -458,6 +463,11 @@ export function RecipientForm({
     if (!selectedCorridorRow) return usBankPaymentMethodsForProvider("noah").slice(0, 1)
     return usBankPaymentMethodsForProvider(payoutProvider)
   }, [formData.recipientType, currency, selectedCorridorRow, payoutProvider])
+  const eurTransferMethods = useMemo(() => {
+    if (formData.recipientType !== "bank" || currency !== "EUR") return []
+    if (!selectedCorridorRow) return eurBankPaymentMethodsForProvider("noah").slice(0, 1)
+    return eurBankPaymentMethodsForProvider(payoutProvider)
+  }, [formData.recipientType, currency, selectedCorridorRow, payoutProvider])
   useEffect(() => {
     if (formData.recipientType !== "bank" || currency !== "USD") return
     const allowed = usTransferMethods.map((method) => method.value)
@@ -467,6 +477,15 @@ export function RecipientForm({
       setFormData((prev) => ({ ...prev, transferType: allowed[0] }))
     }
   }, [formData.recipientType, currency, formData.transferType, usTransferMethods])
+  useEffect(() => {
+    if (formData.recipientType !== "bank" || currency !== "EUR") return
+    const allowed = eurTransferMethods.map((method) => method.value)
+    if (allowed.length === 0) return
+    const current = parseEurBankTransferType(formData.transferType)
+    if (!current || !allowed.includes(current)) {
+      setFormData((prev) => ({ ...prev, transferType: allowed[0] }))
+    }
+  }, [formData.recipientType, currency, formData.transferType, eurTransferMethods])
   const payoutFormHints = unwrapNoahFieldsSchema(selectedCorridorRow?.fields_schema)
   const showsHolderAddress =
     formData.recipientType === "bank" &&
@@ -565,6 +584,15 @@ export function RecipientForm({
       !formData.transferType.trim()
     ) {
       newErrors.transferType = "Transfer type is required for USD"
+    }
+
+    if (
+      formData.recipientType === "bank" &&
+      currency === "EUR" &&
+      eurTransferMethods.length > 0 &&
+      !formData.transferType.trim()
+    ) {
+      newErrors.transferType = "Transfer type is required for EUR"
     }
 
     if (formData.recipientType === "bank" && currency === "EUR") {
@@ -683,13 +711,16 @@ export function RecipientForm({
           currency,
           full_name: formData.name,
           account_number: formData.accountNumber,
+          iban: formData.iban,
+          swift_bic: formData.bic,
           bank_name: formData.bankName,
           phone_number: formData.phone,
           metadata: gridMeta,
         },
       })
       if (!gridCheck.ok) {
-        newErrors.accountNumber = gridCheck.message
+        if (currency === "EUR") newErrors.iban = gridCheck.message
+        else newErrors.accountNumber = gridCheck.message
       }
     }
 
@@ -747,6 +778,7 @@ export function RecipientForm({
     const selectedCountry = allCountriesForLookup.find((c) => c.name === formData.country)
     const currency = formData.recipientType === "wallet" ? formData.walletAsset : selectedCountry?.currency || "USD"
     const isUsdBank = formData.recipientType === "bank" && currency === "USD"
+    const isEurBank = formData.recipientType === "bank" && currency === "EUR"
     const payload: RecipientUpsertInput = {
       recipientType: formData.recipientType as "bank" | "mobile" | "wallet",
       countryCode: selectedCountry?.code,
@@ -770,7 +802,11 @@ export function RecipientForm({
       sortCode: formData.sortCode?.trim() || undefined,
       iban: formData.iban?.trim() || undefined,
       swiftBic: formData.recipientType === "bank" ? formData.bic?.trim() || undefined : undefined,
-      transferType: isUsdBank ? (parseUsBankTransferType(formData.transferType) ?? "ACH") : undefined,
+      transferType: isUsdBank
+        ? (parseUsBankTransferType(formData.transferType) ?? "ACH")
+        : isEurBank
+          ? (parseEurBankTransferType(formData.transferType) ?? "SEPA Instant")
+          : undefined,
       checkingOrSavings:
         isUsdBank && (formData.checkingOrSavings === "checking" || formData.checkingOrSavings === "savings")
           ? formData.checkingOrSavings
@@ -1444,31 +1480,68 @@ export function RecipientForm({
             </div>
           )}
 
-          {currency === "EUR" && (
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2 col-span-2">
-                <label className="text-xs text-muted-foreground">IBAN</label>
-                <Input
-                  value={formData.iban || ""}
-                  onChange={(e) => handleInputChange("iban", e.target.value)}
-                  placeholder="DE89370400440532013000"
-                  className={`h-12 font-mono text-sm placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.iban ? "border-red-500" : ""}`}
-                  required
-                />
-                {errors.iban && <p className="text-xs text-red-500">{errors.iban}</p>}
+          {formData.recipientType === "bank" && currency === "EUR" && (
+            <>
+              {eurTransferMethods.length > 0 ? (
+                <div className="space-y-2">
+                  <label className="text-xs text-muted-foreground">Transfer type</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {eurTransferMethods.map((method) => {
+                      const selected = formData.transferType === method.value
+                      return (
+                        <Button
+                          key={method.value}
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            "h-[4.5rem] min-h-[4.5rem] min-w-0 flex-col justify-center gap-1.5 whitespace-normal px-3 py-2 transition-none active:translate-y-0",
+                            selected &&
+                              "border-foreground bg-foreground text-background hover:bg-foreground hover:text-background",
+                          )}
+                          onClick={() => handleInputChange("transferType", method.value)}
+                        >
+                          <span className="truncate">{method.label}</span>
+                          <span
+                            className={cn(
+                              "inline-flex max-w-full truncate rounded-full px-2 py-0.5 text-[11px] font-normal leading-none",
+                              selected
+                                ? "bg-background/15 text-background"
+                                : "bg-muted text-muted-foreground",
+                            )}
+                          >
+                            {method.speedLabel}
+                          </span>
+                        </Button>
+                      )
+                    })}
+                  </div>
+                  {errors.transferType && <p className="text-xs text-red-500">{errors.transferType}</p>}
+                </div>
+              ) : null}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2 col-span-2">
+                  <label className="text-xs text-muted-foreground">IBAN</label>
+                  <Input
+                    value={formData.iban || ""}
+                    onChange={(e) => handleInputChange("iban", e.target.value)}
+                    placeholder="DE89370400440532013000"
+                    className={`h-12 font-mono text-sm placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.iban ? "border-red-500" : ""}`}
+                    required
+                  />
+                  {errors.iban && <p className="text-xs text-red-500">{errors.iban}</p>}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs text-muted-foreground">BIC/SWIFT</label>
+                  <Input
+                    value={formData.bic || ""}
+                    onChange={(e) => handleInputChange("bic", e.target.value)}
+                    placeholder="SOBKDEB2XXX"
+                    className={`h-12 font-mono text-sm placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.bic ? "border-red-500" : ""}`}
+                  />
+                  {errors.bic && <p className="text-xs text-red-500">{errors.bic}</p>}
+                </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-xs text-muted-foreground">BIC/SWIFT</label>
-                <Input
-                  value={formData.bic || ""}
-                  onChange={(e) => handleInputChange("bic", e.target.value)}
-                  placeholder="SOBKDEB2XXX"
-                  className={`h-12 font-mono text-sm placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.bic ? "border-red-500" : ""}`}
-                  required
-                />
-                {errors.bic && <p className="text-xs text-red-500">{errors.bic}</p>}
-              </div>
-            </div>
+            </>
           )}
 
           {currency === "GBP" && (

@@ -48,7 +48,7 @@ export type RecipientUpsertInput = {
   sortCode?: string
   iban?: string
   swiftBic?: string
-  transferType?: "ACH" | "Wire" | "RTP" | "FEDNOW"
+  transferType?: "ACH" | "Wire" | "RTP" | "FEDNOW" | "SEPA" | "SEPA Instant"
   checkingOrSavings?: "checking" | "savings"
   addressLine1?: string
   city?: string

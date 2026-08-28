@@ -22,7 +22,7 @@ export interface Beneficiary {
   email: string
   phone: string
   /** US bank rail: Fedwire is stored as `Wire`. */
-  transferType?: "ACH" | "Wire" | "RTP" | "FEDNOW"
+  transferType?: "ACH" | "Wire" | "RTP" | "FEDNOW" | "SEPA" | "SEPA Instant"
   checkingOrSavings?: "checking" | "savings"
   addressLine1?: string
   city?: string

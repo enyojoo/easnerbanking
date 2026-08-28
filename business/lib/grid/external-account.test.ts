@@ -68,6 +68,28 @@ describe("extractGridFundingSolanaAddress", () => {
   })
 })
 
+describe("buildGridExternalAccountPayload EUR", () => {
+  it("maps IBAN onto EUR_ACCOUNT without accountNumber", () => {
+    const payload = buildGridExternalAccountPayload({
+      customerId: "Customer:abc",
+      rail: "bank_transfer",
+      recipient: {
+        currency: "EUR",
+        country_code: "DE",
+        full_name: "Maria Garcia",
+        account_number: "",
+        iban: "DE89370400440532013000",
+        swift_bic: "COBADEFFXXX",
+        bank_name: "Commerzbank",
+      },
+    })
+    expect(payload.accountInfo.accountType).toBe("EUR_ACCOUNT")
+    expect(payload.accountInfo.iban).toBe("DE89370400440532013000")
+    expect(payload.accountInfo.swiftCode).toBe("COBADEFFXXX")
+    expect(payload.accountInfo.accountNumber).toBeUndefined()
+  })
+})
+
 describe("buildGridExternalAccountPayload CAD", () => {
   it("maps routing/sort into bankCode and branchCode", () => {
     const payload = buildGridExternalAccountPayload({

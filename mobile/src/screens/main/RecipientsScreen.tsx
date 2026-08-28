@@ -118,7 +118,8 @@ import {
   ycAccountNumberLabel,
   parseUsBankTransferType,
   usBankPaymentMethodsForProvider,
-  type UsBankTransferType,
+  parseEurBankTransferType,
+  eurBankPaymentMethodsForProvider,
 } from '@easner/shared'
 import {
   validateRecipientHolderAddress,
@@ -175,7 +176,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
   const [showSubdivisionDropdown, setShowSubdivisionDropdown] = useState(false)
   const [subdivisionSearchTerm, setSubdivisionSearchTerm] = useState('')
   const [countrySearchTerm, setCountrySearchTerm] = useState('')
-  const [transferType, setTransferType] = useState<UsBankTransferType | null>(null) // For USA
+  const [transferType, setTransferType] = useState<string | null>(null)
   // Shared form flow state (used by both add and edit)
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false)
   const [editingRecipient, setEditingRecipient] = useState<Recipient | null>(null)
@@ -320,6 +321,12 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     return usBankPaymentMethodsForProvider(payoutProvider)
   }, [selectedRecipientType, selectedCountryCurrency?.countryCode, selectedBankCorridor, payoutProvider])
 
+  const eurTransferMethods = useMemo(() => {
+    if (selectedRecipientType !== 'bank' || newRecipient.currency !== 'EUR') return []
+    if (!selectedBankCorridor) return eurBankPaymentMethodsForProvider('noah').slice(0, 1)
+    return eurBankPaymentMethodsForProvider(payoutProvider)
+  }, [selectedRecipientType, newRecipient.currency, selectedBankCorridor, payoutProvider])
+
   useEffect(() => {
     if (selectedRecipientType !== 'bank' || selectedCountryCurrency?.countryCode !== 'US') return
     const allowed = usTransferMethods.map((method) => method.value)
@@ -328,6 +335,15 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
       setTransferType(allowed[0])
     }
   }, [selectedRecipientType, selectedCountryCurrency?.countryCode, usTransferMethods, transferType])
+
+  useEffect(() => {
+    if (selectedRecipientType !== 'bank' || newRecipient.currency !== 'EUR') return
+    const allowed = eurTransferMethods.map((method) => method.value)
+    if (allowed.length === 0) return
+    if (!transferType || !allowed.includes(transferType)) {
+      setTransferType(allowed[0])
+    }
+  }, [selectedRecipientType, newRecipient.currency, eurTransferMethods, transferType])
 
   const buildFormYcMetadata = useCallback(() => {
     const extras = normalizeRecipientYcMetadata({
@@ -699,7 +715,10 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
         sortCode: newRecipient.sortCode || undefined,
         iban: newRecipient.iban || undefined,
         swiftBic: newRecipient.swiftBic || undefined,
-        transferType: selectedCountryCurrency?.countryCode === 'US' ? transferType || undefined : undefined,
+        transferType:
+          selectedCountryCurrency?.countryCode === 'US' || newRecipient.currency === 'EUR'
+            ? transferType || undefined
+            : undefined,
         checkingOrSavings:
           selectedCountryCurrency?.countryCode === 'US' &&
           (newRecipient.checkingOrSavings === 'checking' || newRecipient.checkingOrSavings === 'savings')
@@ -794,6 +813,8 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     setSelectedCountryCurrency(countryCurrency)
     if (countryCurrency?.countryCode === 'US') {
       setTransferType(parseUsBankTransferType(recipient.transfer_type))
+    } else if (recipient.currency === 'EUR') {
+      setTransferType(parseEurBankTransferType(recipient.transfer_type))
     } else {
       setTransferType(null)
     }
@@ -930,7 +951,10 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
         iban: newRecipient.iban || undefined,
         swiftBic: newRecipient.swiftBic || undefined,
         countryCode: selectedCountryCurrency?.countryCode,
-        transferType: selectedCountryCurrency?.countryCode === 'US' ? transferType || undefined : undefined,
+        transferType:
+          selectedCountryCurrency?.countryCode === 'US' || newRecipient.currency === 'EUR'
+            ? transferType || undefined
+            : undefined,
         checkingOrSavings:
           selectedCountryCurrency?.countryCode === 'US' &&
           (newRecipient.checkingOrSavings === 'checking' || newRecipient.checkingOrSavings === 'savings')
@@ -1012,6 +1036,9 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     }
     // For US accounts, transfer type is required when the corridor offers rails
     if (selectedCountryCurrency?.countryCode === 'US' && usTransferMethods.length > 0 && !transferType) {
+      return false
+    }
+    if (newRecipient.currency === 'EUR' && eurTransferMethods.length > 0 && !transferType) {
       return false
     }
     if (showsHolderAddress && selectedCountryCurrency) {
@@ -1108,6 +1135,8 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
           currency: newRecipient.currency,
           full_name: newRecipient.fullName,
           account_number: newRecipient.accountNumber,
+          iban: newRecipient.iban,
+          swift_bic: newRecipient.swiftBic,
           bank_name: newRecipient.bankName,
           phone_number: newRecipient.phoneNumber,
           metadata: buildFormYcMetadata(),
@@ -2142,6 +2171,14 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                     {accountConfig.accountType === "us" && usTransferMethods.length > 0 && (
                       <UsTransferTypeGrid
                         methods={usTransferMethods}
+                        value={transferType}
+                        onChange={setTransferType}
+                        disabled={isSubmitting}
+                      />
+                    )}
+                    {accountConfig.accountType === "euro" && eurTransferMethods.length > 0 && (
+                      <UsTransferTypeGrid
+                        methods={eurTransferMethods}
                         value={transferType}
                         onChange={setTransferType}
                         disabled={isSubmitting}

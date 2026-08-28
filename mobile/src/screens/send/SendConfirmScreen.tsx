@@ -494,6 +494,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           bankName: recipient.bank_name,
           mobileProvider: recipient.mobile_provider,
           payeeEasetag: recipient.payee_easetag,
+          transferType: recipient.transfer_type,
         })
     : 'Local transfer'
   const processingTime = arrivalHint ?? undefined
