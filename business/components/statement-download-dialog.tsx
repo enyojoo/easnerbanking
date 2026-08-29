@@ -60,7 +60,7 @@ export function StatementDownloadDialog({ trigger, accountScopeHeader, accountCu
     setError(null)
     setLoading(true)
     try {
-      const res = await fetchWithSession("/api/noah/statements/pdf", {
+      const res = await fetchWithSession("/api/statements/pdf", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

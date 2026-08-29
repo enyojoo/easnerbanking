@@ -1570,7 +1570,7 @@ export const noahService = {
   }): Promise<{ uri: string; filename: string; sharedByDownload: boolean }> {
     const session = await requireAuthSession()
 
-    const response = await fetch(`${apiUrl()}/api/noah/statements/pdf`, {
+    const response = await fetch(`${apiUrl()}/api/statements/pdf`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

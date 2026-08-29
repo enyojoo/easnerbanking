@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "../../_helpers"
+import { requireAuth } from "@/app/api/noah/_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { generateAndPersistStatement } from "@/lib/statements/generate"

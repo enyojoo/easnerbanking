@@ -44,8 +44,8 @@ const nextConfig = {
       "./assets/easner-logo.png",
       "./assets/og-fonts/**",
     ],
-    "/api/noah/statements/pdf": ["./assets/statement-fonts/**"],
-    "/api/noah/statements/pdf/route": ["./assets/statement-fonts/**"],
+    "/api/statements/pdf": ["./assets/statement-fonts/**"],
+    "/api/statements/pdf/route": ["./assets/statement-fonts/**"],
   },
   transpilePackages: ["@easner/server", "@easner/shared", "@sumsub/websdk"],
   /**
