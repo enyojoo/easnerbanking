@@ -1563,7 +1563,8 @@ export const noahService = {
   async downloadStatementPdf(params: {
     from: string
     to: string
-    currency: 'USD' | 'EUR' | 'GBP'
+    currency: 'USD' | 'EUR'
+    timeZone?: string
   }): Promise<{ uri: string; filename: string }> {
     const session = await requireAuthSession()
 
@@ -1577,6 +1578,7 @@ export const noahService = {
         from: params.from,
         to: params.to,
         currency: params.currency,
+        timeZone: params.timeZone,
       }),
     })
     if (!response.ok) {

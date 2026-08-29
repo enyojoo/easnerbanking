@@ -9,11 +9,19 @@ export interface EmailTemplate {
   text: (data: any, audience?: EmailAudience) => string
 }
 
+export type EmailAttachment = {
+  content: string
+  filename: string
+  type: string
+  disposition?: "attachment" | "inline"
+}
+
 export interface EmailData {
   to: string
   template: string
   data: any
   audience?: EmailAudience
+  attachments?: EmailAttachment[]
 }
 
 export interface TransactionEmailData {
@@ -159,6 +167,14 @@ export interface AppDownloadLinkEmailData {
   playStoreUrl?: string
   downloadPageUrl?: string
   appWebUrl?: string
+}
+
+export interface AccountStatementEmailData {
+  firstName?: string
+  statementId: string
+  periodLabel: string
+  currency: string
+  availableLabel: string
 }
 
 /** @deprecated Legacy remittance shape – use TransactionEmailData from ledger descriptor */

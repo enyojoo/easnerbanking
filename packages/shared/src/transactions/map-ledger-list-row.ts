@@ -27,6 +27,7 @@ import {
   toEasnerTransactionPrimaryLabel,
 } from "./product-label"
 import { resolveLedgerWhenAt } from "./transaction-timing-display"
+import { isSuccessfulTransactionStatus } from "./ledger-status-display"
 import {
   ledgerTransactionStatusDisplayForRow,
   resolveYcPayInFeedStatus,
@@ -308,6 +309,14 @@ export function mapLedgerStatusForUserFeed(st: string): string {
   if (lower === "failed" || lower === "cancelled") return "failed"
   if (lower === "unknown") return "pending"
   return lower || "unknown"
+}
+
+/** Feed-visible success: YC in-flight stays pending/processing; settled/deposited count. */
+export function isSuccessfulFeedTransaction(row: Record<string, unknown>): boolean {
+  const ledgerStatus = String(row.status ?? "")
+  const meta = isObject(row.metadata) ? row.metadata : null
+  const feed = resolveYcPayInFeedStatus(meta, ledgerStatus)
+  return isSuccessfulTransactionStatus(feed ?? ledgerStatus)
 }
 
 // ---------------------------------------------------------------------------

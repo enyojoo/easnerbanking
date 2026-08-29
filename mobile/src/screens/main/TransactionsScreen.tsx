@@ -54,6 +54,7 @@ import { ripple } from '../../lib/androidRipple'
 import { buildGroupedActivityItems } from '../../lib/transactionListGrouping'
 import { formatSignedCurrency, getTransactionStatusDisplay } from '../../utils/formatters'
 import {
+  isSuccessfulTransactionStatus,
   markRecentMoneyActivity,
   qk,
   resolveReportingAmountForFeed,
@@ -569,7 +570,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
     [reportingFxRates],
   )
 
-  /** Same basis as the list: date range + search + All / Money in / Money out / Card (business sums credits+debits from its filtered set). */
+  /** Date range + search + direction chips; only successful movements count toward Money in / Money out. */
   const summaryTotals = useMemo(() => {
     let inAmount = 0
     let outAmount = 0
@@ -577,6 +578,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
     let outCurrency: string | null = null
     for (const tx of filteredTransactions) {
       if (!tx) continue
+      if (!isSuccessfulTransactionStatus(tx.status)) continue
       const dateStr = tx.noah_created_at || tx.created_at
       if (!dateStr) continue
       const txType = tx.transaction_type || tx.type
@@ -715,7 +717,7 @@ function TransactionsContent({ navigation }: NavigationProps) {
           />
         }
       >
-        {/* Money in / Money out – totals match filtered list (search + chips + date range), same idea as business */}
+        {/* Money in / Money out – successful movements only, same date/search/chip filters as the list */}
         <View style={styles.summaryRow}>
           <SectionCard style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>MONEY IN</Text>

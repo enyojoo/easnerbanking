@@ -81,13 +81,21 @@ export class EmailService {
           ? template.subject(emailData.data, audience)
           : template.subject
 
-      const msg = {
+      const msg: Record<string, unknown> = {
         to: emailData.to,
         from: this.fromForAudience(audience),
         replyTo: this.config.replyTo,
         subject,
         html: template.html(emailData.data, audience),
         text: template.text(emailData.data, audience),
+      }
+      if (emailData.attachments?.length) {
+        msg.attachments = emailData.attachments.map((a) => ({
+          content: a.content,
+          filename: a.filename,
+          type: a.type,
+          disposition: a.disposition ?? "attachment",
+        }))
       }
 
       const response = await sgMail.send(msg)

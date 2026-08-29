@@ -171,20 +171,24 @@ export default function AccountsPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <StatementDownloadDialog
-                          accountScopeHeader={accountScopeHeaders}
-                          accountCurrency={account.currency}
-                          trigger={
-                            <DropdownMenuItem
-                              className="gap-2"
-                              onSelect={(e) => e.preventDefault()}
-                            >
-                              <FileText className="h-4 w-4" />
-                              Download Statement
-                            </DropdownMenuItem>
-                          }
-                        />
-                        <DropdownMenuSeparator />
+                        {account.currency === "USD" || account.currency === "EUR" ? (
+                          <>
+                            <StatementDownloadDialog
+                              accountScopeHeader={accountScopeHeaders}
+                              accountCurrency={account.currency}
+                              trigger={
+                                <DropdownMenuItem
+                                  className="gap-2"
+                                  onSelect={(e) => e.preventDefault()}
+                                >
+                                  <FileText className="h-4 w-4" />
+                                  Download Statement
+                                </DropdownMenuItem>
+                              }
+                            />
+                            <DropdownMenuSeparator />
+                          </>
+                        ) : null}
                         <DropdownMenuItem className="gap-2">
                           <Ban className="h-4 w-4" />
                           Disable Account

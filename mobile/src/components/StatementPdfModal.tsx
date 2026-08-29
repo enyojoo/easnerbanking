@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
   Modal,
   View,
@@ -20,27 +20,49 @@ import { useWebCenteredModal } from '../lib/webCenteredModal'
 
 const ISO_RE = /^\d{4}-\d{2}-\d{2}$/
 
-type AccountCurrency = 'USD' | 'EUR' | 'GBP'
+type AccountCurrency = 'USD' | 'EUR'
+type Preset = '30d' | '3m' | '6m' | 'custom'
 
 type Props = {
   visible: boolean
   onClose: () => void
-  /** Receive screen currency – statement is only for this account */
   accountCurrency: AccountCurrency
 }
 
-function defaultFrom(): string {
-  const x = new Date()
-  x.setDate(x.getDate() - 30)
-  return x.toISOString().slice(0, 10)
+function toIso(d: Date): string {
+  return d.toISOString().slice(0, 10)
+}
+
+function todayIso(): string {
+  return toIso(new Date())
+}
+
+function fromPreset(preset: Exclude<Preset, 'custom'>): string {
+  const d = new Date()
+  if (preset === '30d') d.setDate(d.getDate() - 30)
+  if (preset === '3m') d.setMonth(d.getMonth() - 3)
+  if (preset === '6m') d.setMonth(d.getMonth() - 6)
+  return toIso(d)
 }
 
 export function StatementPdfModal({ visible, onClose, accountCurrency }: Props) {
   const useCenteredModal = useWebCenteredModal()
-  const [fromStr, setFromStr] = useState(() => defaultFrom())
-  const [toStr, setToStr] = useState(() => new Date().toISOString().slice(0, 10))
+  const [preset, setPreset] = useState<Preset>('30d')
+  const [fromStr, setFromStr] = useState(() => fromPreset('30d'))
+  const [toStr, setToStr] = useState(() => todayIso())
   const [loading, setLoading] = useState(false)
   const { showError, showWarning, showSuccess } = useToast()
+  const timeZone = useMemo(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    [],
+  )
+
+  const applyPreset = (next: Preset) => {
+    setPreset(next)
+    if (next === 'custom') return
+    setFromStr(fromPreset(next))
+    setToStr(todayIso())
+  }
 
   const download = async () => {
     if (!ISO_RE.test(fromStr) || !ISO_RE.test(toStr)) {
@@ -57,6 +79,7 @@ export function StatementPdfModal({ visible, onClose, accountCurrency }: Props) 
         from: fromStr,
         to: toStr,
         currency: accountCurrency,
+        timeZone,
       })
       const can = await Sharing.isAvailableAsync()
       if (can) {
@@ -100,30 +123,54 @@ export function StatementPdfModal({ visible, onClose, accountCurrency }: Props) 
               <X size={22} color={colors.text.primary} strokeWidth={2} />
             </Pressable>
           </View>
-          <Text style={styles.hint}>Export a PDF of your account statement for the selected period.</Text>
+          <Text style={styles.hint}>
+            Export a PDF of your account statement. We also email a copy to your signed-in address.
+          </Text>
           <Text style={styles.accountLine}>
             Account: <Text style={styles.accountStrong}>{accountCurrency}</Text>
           </Text>
 
-          <Text style={styles.label}>From (YYYY-MM-DD)</Text>
-          <TextInput
-            style={styles.input}
-            value={fromStr}
-            onChangeText={setFromStr}
-            placeholder="2026-01-01"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
+          <View style={styles.presetRow}>
+            {([
+              ['30d', '30 days'],
+              ['3m', '3 months'],
+              ['6m', '6 months'],
+              ['custom', 'Custom'],
+            ] as const).map(([key, label]) => (
+              <Pressable
+                key={key}
+                onPress={() => applyPreset(key)}
+                style={[styles.preset, preset === key && styles.presetActive]}
+              >
+                <Text style={[styles.presetText, preset === key && styles.presetTextActive]}>
+                  {label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
 
-          <Text style={styles.label}>To (YYYY-MM-DD)</Text>
-          <TextInput
-            style={styles.input}
-            value={toStr}
-            onChangeText={setToStr}
-            placeholder="2026-03-30"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
+          {preset === 'custom' ? (
+            <>
+              <Text style={styles.label}>From (YYYY-MM-DD)</Text>
+              <TextInput
+                style={styles.input}
+                value={fromStr}
+                onChangeText={setFromStr}
+                placeholder="2026-01-01"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <Text style={styles.label}>To (YYYY-MM-DD)</Text>
+              <TextInput
+                style={styles.input}
+                value={toStr}
+                onChangeText={setToStr}
+                placeholder="2026-03-30"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </>
+          ) : null}
 
           <Pressable
             style={({ pressed }) => [
@@ -198,6 +245,30 @@ const styles = StyleSheet.create({
   accountStrong: {
     fontFamily: fontFamily.semibold,
     color: colors.text.primary,
+  },
+  presetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: spacing[2],
+  },
+  preset: {
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    borderRadius: borderRadius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  presetActive: {
+    backgroundColor: colors.primary.main,
+    borderColor: colors.primary.main,
+  },
+  presetText: {
+    ...textStyles.labelMedium,
+    color: colors.text.secondary,
+  },
+  presetTextActive: {
+    color: colors.neutral.white,
   },
   label: {
     ...textStyles.labelMedium,

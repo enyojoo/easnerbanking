@@ -30,7 +30,7 @@ import {
   hasHistoricalBaseCurrencyMismatch,
   REPORTING_FX_BASE_CHANGE_NOTE,
 } from "@/lib/fx/base-currency-display"
-import { resolveReportingAmountForFeed } from "@easner/shared"
+import { isSuccessfulTransactionStatus, resolveReportingAmountForFeed } from "@easner/shared"
 
 function exportToCsv(
   transactions: {
@@ -155,10 +155,10 @@ export default function TransactionsPage() {
     Math.abs(reportingFor(t)?.reportingAmount ?? 0)
 
   const totalCredit = filteredTransactions
-    .filter((t) => t.direction === "credit")
+    .filter((t) => t.direction === "credit" && isSuccessfulTransactionStatus(t.status))
     .reduce((sum, t) => sum + amountInBase(t), 0)
   const totalDebit = filteredTransactions
-    .filter((t) => t.direction === "debit")
+    .filter((t) => t.direction === "debit" && isSuccessfulTransactionStatus(t.status))
     .reduce((sum, t) => sum + amountInBase(t), 0)
 
   const summaryCurrency = baseCurrencyCode

@@ -73,3 +73,8 @@ export function ledgerStatusMatchesUserFilter(ledgerStatus: string, filter: stri
   if (filter === "all") return true
   return mapLedgerStatusToUserStatus(ledgerStatus) === filter
 }
+
+/** Settled movements only — Money in / Money out and account-statement totals. */
+export function isSuccessfulTransactionStatus(status: string): boolean {
+  return mapLedgerStatusToUserStatus(status) === "completed"
+}

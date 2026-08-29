@@ -34,7 +34,7 @@ import {
   hasHistoricalBaseCurrencyMismatch,
   REPORTING_FX_BASE_CHANGE_NOTE,
 } from "@/lib/fx/base-currency-display"
-import { resolveReportingAmountForFeed } from "@easner/shared"
+import { isSuccessfulTransactionStatus, resolveReportingAmountForFeed } from "@easner/shared"
 
 export function DashboardPageClient() {
   const {
@@ -103,10 +103,10 @@ export function DashboardPageClient() {
   }
 
   const moneyIn = filteredTransactions
-    .filter((t) => t.direction === "credit")
+    .filter((t) => t.direction === "credit" && isSuccessfulTransactionStatus(t.status))
     .reduce((sum, t) => sum + amountInBase(t, baseCurrency), 0)
   const moneyOut = filteredTransactions
-    .filter((t) => t.direction === "debit")
+    .filter((t) => t.direction === "debit" && isSuccessfulTransactionStatus(t.status))
     .reduce((sum, t) => sum + amountInBase(t, baseCurrency), 0)
 
   const showBaseChangeNote = useMemo(

@@ -1,12 +1,7 @@
 import { renderToBuffer } from "@react-pdf/renderer"
-import { StatementPDFDocument, type StatementPdfMeta, type StatementPdfRow } from "@/components/statement-pdf-document"
-import { PDF_LOGO_DATA_URL } from "@/lib/pdf-logo-base64"
+import { StatementPDFDocument } from "@/components/statement-pdf-document"
+import type { AssembledStatement } from "@/lib/statements/types"
 
-export async function generateStatementPdfBuffer(
-  meta: StatementPdfMeta,
-  rows: StatementPdfRow[],
-): Promise<Buffer> {
-  return renderToBuffer(
-    <StatementPDFDocument meta={meta} rows={rows} logoUrl={PDF_LOGO_DATA_URL} />,
-  )
+export async function generateStatementPdfBuffer(doc: AssembledStatement): Promise<Buffer> {
+  return renderToBuffer(<StatementPDFDocument doc={doc} />)
 }

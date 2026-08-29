@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   displayEasnerTransactionIdForList,
   inferLedgerListSourceType,
+  isSuccessfulFeedTransaction,
   mapLedgerRowToMobileListItem,
   resolveGlobalPayoutListDisplay,
   shouldIncludeRowInUserFeed,
@@ -372,5 +373,29 @@ describe("mapLedgerRowToMobileListItem", () => {
     )
     expect(item.recipient_id).toBe("rec-ke-1")
     expect(item.transaction_type).toBe("send")
+  })
+})
+
+describe("isSuccessfulFeedTransaction", () => {
+  it("counts settled and deposited ledger rows", () => {
+    expect(isSuccessfulFeedTransaction(baseRow({ status: "settled" }))).toBe(true)
+    expect(isSuccessfulFeedTransaction(baseRow({ status: "deposited" }))).toBe(true)
+  })
+
+  it("excludes pending, failed, and cancelled rows", () => {
+    expect(isSuccessfulFeedTransaction(baseRow({ status: "pending" }))).toBe(false)
+    expect(isSuccessfulFeedTransaction(baseRow({ status: "failed" }))).toBe(false)
+    expect(isSuccessfulFeedTransaction(baseRow({ status: "cancelled" }))).toBe(false)
+  })
+
+  it("treats in-flight YC pay-ins as unsuccessful even when ledger is pending", () => {
+    expect(
+      isSuccessfulFeedTransaction(
+        baseRow({
+          status: "pending",
+          metadata: { yc_mode: "fund_balance" },
+        }),
+      ),
+    ).toBe(false)
   })
 })

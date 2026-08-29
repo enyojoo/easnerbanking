@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  isSuccessfulTransactionStatus,
   ledgerStatusMatchesUserFilter,
   ledgerTransactionStatusDisplay,
   mapLedgerStatusToUserStatus,
@@ -40,5 +41,22 @@ describe("ledgerStatusMatchesUserFilter", () => {
   it("matches settled rows under completed filter", () => {
     expect(ledgerStatusMatchesUserFilter("settled", "completed")).toBe(true)
     expect(ledgerStatusMatchesUserFilter("settled", "processing")).toBe(false)
+  })
+})
+
+describe("isSuccessfulTransactionStatus", () => {
+  it("counts settled and deposited as successful", () => {
+    expect(isSuccessfulTransactionStatus("settled")).toBe(true)
+    expect(isSuccessfulTransactionStatus("completed")).toBe(true)
+    expect(isSuccessfulTransactionStatus("deposited")).toBe(true)
+  })
+
+  it("excludes pending, processing, and failed", () => {
+    expect(isSuccessfulTransactionStatus("pending")).toBe(false)
+    expect(isSuccessfulTransactionStatus("processing")).toBe(false)
+    expect(isSuccessfulTransactionStatus("processing_payment")).toBe(false)
+    expect(isSuccessfulTransactionStatus("failed")).toBe(false)
+    expect(isSuccessfulTransactionStatus("cancelled")).toBe(false)
+    expect(isSuccessfulTransactionStatus("canceled")).toBe(false)
   })
 })

@@ -19,6 +19,7 @@ export {
   useOfficeTerminalSessions,
 } from "./use-office-merchant-lists"
 export { useOfficeEventInbox } from "./use-office-event-inbox"
+export { useOfficeStatementsList } from "./use-office-statements"
 export { useQueryInitialLoading } from "./use-query-initial-loading"
 export { useOfficeCurrencies } from "./use-office-currencies"
 export { useOfficeNoahRates } from "./use-office-noah-rates"

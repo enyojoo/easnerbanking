@@ -807,6 +807,7 @@ export {
   displayEasnerTransactionIdForList,
   readEasnerTransactionIdFromMetadata,
   inferLedgerListSourceType,
+  isSuccessfulFeedTransaction,
   mapLedgerRowToMobileListItem,
   mapLedgerStatusForUserFeed,
   resolveGlobalPayoutListDisplay,
@@ -890,6 +891,7 @@ export {
   type TransactionReceiptDetailInput,
 } from "./transactions/transaction-receipt-detail-rows"
 export {
+  isSuccessfulTransactionStatus,
   ledgerStatusMatchesUserFilter,
   ledgerTransactionStatusDisplay,
   mapLedgerStatusToUserStatus,

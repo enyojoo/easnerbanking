@@ -29,6 +29,7 @@ import type {
   KycOpsEmailData,
   WelcomeEmailData,
   AppDownloadLinkEmailData,
+  AccountStatementEmailData,
 } from "./email-types"
 
 const WELCOME_PERSONAL_PREHEADER =
@@ -235,6 +236,43 @@ Get the app: ${downloadPage}
 
 If you did not request this email, you can safely ignore it.`
     },
+  },
+
+  accountStatement: {
+    subject: (data: AccountStatementEmailData) =>
+      `Your ${data.currency} account statement ${data.statementId}`,
+    preheader: (data: AccountStatementEmailData) =>
+      `Statement ${data.statementId} for ${data.periodLabel}.`,
+    html: (data: AccountStatementEmailData, audience = "personal") => {
+      const subject = `Your ${data.currency} account statement`
+      const content = `
+        ${easnerUserGreetingParagraphHtml(data.firstName)}
+        <p class="confirmation-text">
+          Your ${data.currency} account statement for ${data.periodLabel} is attached.
+          Available balance on this statement: ${data.availableLabel}.
+        </p>
+        <p class="confirmation-text">
+          Statement ID: <strong>${data.statementId}</strong>
+        </p>
+        <p class="confirmation-text">
+          Easner is a financial technology company, not a bank. This PDF is an Easner
+          account statement, not a statement issued by a bank.
+        </p>
+      `
+      return generateBaseEmailTemplate(subject, "", content, undefined, {
+        audience,
+        showPreferencesLink: false,
+        preheader: `Statement ${data.statementId} for ${data.periodLabel}.`,
+      })
+    },
+    text: (data: AccountStatementEmailData) =>
+      `${formatEasnerUserGreetingPlain(data.firstName)}
+
+Your ${data.currency} account statement for ${data.periodLabel} is attached. Available balance on this statement: ${data.availableLabel}.
+
+Statement ID: ${data.statementId}
+
+Easner is a financial technology company, not a bank. This PDF is an Easner account statement, not a statement issued by a bank.`,
   },
 
   welcomeBusiness: {

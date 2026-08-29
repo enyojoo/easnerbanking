@@ -12,10 +12,11 @@ import {
   GridRatesPanel,
   CryptoRatesPanel,
   WebhookInboxPanel,
+  StatementsHubPanel,
 } from "@/components/platform-control/platform-control-panels"
 import { OfficePageSkeleton } from "@/components/data/office-page-skeleton"
 
-const TABS = ["platform", "noah-rates", "yc-rates", "grid-rates", "crypto-rates", "fiat", "crypto", "webhooks"] as const
+const TABS = ["platform", "noah-rates", "yc-rates", "grid-rates", "crypto-rates", "fiat", "crypto", "webhooks", "statements"] as const
 type PlatformControlTab = (typeof TABS)[number]
 
 function normalizeTab(raw: string | null): string | null {
@@ -69,6 +70,7 @@ function PlatformControlHubBody() {
             <TabsTrigger value="fiat">Fiat corridors</TabsTrigger>
             <TabsTrigger value="crypto">Crypto</TabsTrigger>
             <TabsTrigger value="webhooks">Webhook inbox</TabsTrigger>
+            <TabsTrigger value="statements">Statements</TabsTrigger>
           </TabsList>
           <TabsContent value="platform" className={TAB_CONTENT_CLASS}>
             <PlatformConfigPanel />
@@ -93,6 +95,9 @@ function PlatformControlHubBody() {
           </TabsContent>
           <TabsContent value="webhooks" className={TAB_CONTENT_CLASS}>
             <WebhookInboxPanel />
+          </TabsContent>
+          <TabsContent value="statements" className={TAB_CONTENT_CLASS}>
+            <StatementsHubPanel />
           </TabsContent>
         </Tabs>
       </div>

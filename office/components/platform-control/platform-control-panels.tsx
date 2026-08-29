@@ -9,6 +9,7 @@ import { OfficeYcRatesPanel } from "@/components/settings/office-yc-rates-panel"
 import { OfficeGridRatesPanel } from "@/components/settings/office-grid-rates-panel"
 import { OfficeCryptoRatesPanel } from "@/components/settings/office-crypto-rates-panel"
 import { EventInboxPanel } from "@/components/platform-control/event-inbox-panel"
+import { StatementsPanel } from "@/components/platform-control/statements-panel"
 
 export function PlatformConfigPanel() {
   return (
@@ -45,4 +46,8 @@ export function CryptoRatesPanel() {
 
 export function WebhookInboxPanel() {
   return <EventInboxPanel />
+}
+
+export function StatementsHubPanel() {
+  return <StatementsPanel />
 }
