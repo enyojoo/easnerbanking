@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native'
 import Constants from 'expo-constants'
 import { StatusBar } from 'expo-status-bar'
-import { View, Text, StyleSheet, Platform, InteractionManager } from 'react-native'
+import { View, Text, StyleSheet, Platform, InteractionManager, Animated } from 'react-native'
 import * as BackgroundTask from 'expo-background-task'
 import * as TaskManager from 'expo-task-manager'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -62,6 +62,7 @@ import { supabaseConfigError } from './src/lib/supabase'
 import { warmBundledFlagCache } from './src/lib/warmBundledFlagCache'
 import { hydrateWarmImageUrls } from './src/lib/imageCache'
 import { prefetchIntercomModule } from './src/lib/intercom'
+import { USE_NATIVE_DRIVER } from './src/lib/animation'
 import { ExpressStripeProvider } from './src/components/ExpressStripeProvider'
 import { hideNativeSplash } from './src/lib/splashGate'
 
@@ -89,9 +90,11 @@ function AppContent() {
     })
   }
 
+  const [splashFinished, setSplashFinished] = useState(Platform.OS === 'web')
   const [navReady, setNavReady] = useState(false)
   /** Leaf route name – used so status bar stays light on dark chrome (e.g. onboarding) after splash hides. */
   const [activeRouteName, setActiveRouteName] = useState('')
+  const appFadeAnim = useRef(new Animated.Value(0)).current
 
   // Expose navigation ref globally for logout navigation
   useEffect(() => {
@@ -132,6 +135,34 @@ function AppContent() {
     if (Platform.OS !== 'web') return
     setPreserveUserPathOverAuth(authLoading && !authUser)
   }, [authLoading, authUser])
+
+  // Build 206: keep native splash until session restore and navigation are ready.
+  // Opacity stays 0 so ivory loading shells never flash under the splash.
+  useEffect(() => {
+    if (Platform.OS === 'web') return
+    if (splashFinished) return
+    if (authLoading) return
+    if (!navReady) return
+    let cancelled = false
+    void (async () => {
+      if (cancelled) return
+      hideNativeSplash()
+      if (!cancelled) setSplashFinished(true)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [authLoading, navReady, splashFinished])
+
+  useEffect(() => {
+    if (splashFinished) {
+      Animated.timing(appFadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: USE_NATIVE_DRIVER,
+      }).start()
+    }
+  }, [splashFinished, appFadeAnim])
 
   // Cold-open from notification: stash intent + flush when main stack is ready (PIN may still be showing).
   useEffect(() => {
@@ -202,7 +233,7 @@ function AppContent() {
         // Native splash (#007ACC): light icons. Main chrome is light: dark icons.
         // Onboarding keeps light icons on dark background after splash is dismissed.
         style={
-          !activeRouteName || activeRouteName === 'Onboarding' ? 'light' : 'dark'
+          !splashFinished || activeRouteName === 'Onboarding' ? 'light' : 'dark'
         }
         backgroundColor={Platform.OS === 'android' ? palette.background.primary : undefined}
       />
@@ -212,7 +243,14 @@ function AppContent() {
   )
 
   return (
-    <View style={styles.appRoot}>
+    <Animated.View
+      style={[
+        styles.appRoot,
+        {
+          opacity: Platform.OS === 'web' ? 1 : splashFinished ? appFadeAnim : 0,
+        },
+      ]}
+    >
       {isIosOnMac() ? (
         <View style={[styles.macFrameOuter, { backgroundColor: palette.background.primary }]}>
           <View
@@ -232,7 +270,7 @@ function AppContent() {
       ) : (
         nav
       )}
-    </View>
+    </Animated.View>
   )
 }
 
@@ -403,8 +441,12 @@ export default function App() {
     return () => clearTimeout(timeout)
   }, [fontsLoaded])
 
-  // Do not return null: native splash is already held, and AppContent
-  // (hide + failsafe) never mounts while this tree is empty.
+  // Block first paint until fonts load on native; web paints with system fallback.
+  // If fonts stall, continue so AppContent can hide splash (build 206 returned null
+  // here with no timeout and could never dismiss splash).
+  if (!fontsLoaded && !fontLoadTimedOut && Platform.OS !== 'web') {
+    return null
+  }
 
   if (supabaseConfigError) {
     return (

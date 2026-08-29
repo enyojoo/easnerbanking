@@ -1,13 +1,19 @@
 /**
  * Native splash only. Do not hold a splash overlay on Expo web.
- * Must stay free of App / navigator imports so the failsafe timer is scheduled
+ * Must stay free of App / navigator imports so preventAutoHide is scheduled
  * even if those modules throw during evaluation.
+ *
+ * Build 206 hid splash from App.tsx after session restore + nav ready.
+ * Do not auto-hide after a few seconds — that reveals login under splash.
  */
 import { Platform } from 'react-native'
 import * as SplashScreen from 'expo-splash-screen'
 
 /** Matches `app.json` / expo-splash-screen backgroundColor (iOS / Android). */
 export const NATIVE_SPLASH_BACKGROUND = '#007ACC'
+
+let hideRequested = false
+let preventPromise: Promise<void> | null = null
 
 function safeHide() {
   try {
@@ -17,27 +23,33 @@ function safeHide() {
   }
 }
 
-function safePreventAutoHide() {
-  try {
-    void SplashScreen.preventAutoHideAsync().catch(() => {})
-  } catch {
-    // Native module may not be ready yet.
-  }
-}
-
 if (Platform.OS === 'web') {
   safeHide()
 } else {
-  safePreventAutoHide()
+  try {
+    preventPromise = SplashScreen.preventAutoHideAsync()
+      .then(() => undefined)
+      .catch(() => {})
+  } catch {
+    preventPromise = Promise.resolve()
+  }
 }
 
 export function hideNativeSplash() {
   if (Platform.OS === 'web') return
-  safeHide()
-}
-
-if (Platform.OS !== 'web') {
-  setTimeout(() => {
-    hideNativeSplash()
-  }, 8_000)
+  if (hideRequested) {
+    safeHide()
+    return
+  }
+  hideRequested = true
+  void (async () => {
+    try {
+      await preventPromise
+    } catch {
+      // ignore
+    }
+    safeHide()
+    setTimeout(() => safeHide(), 50)
+    setTimeout(() => safeHide(), 400)
+  })()
 }
