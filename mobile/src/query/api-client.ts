@@ -5,12 +5,16 @@
  * Supabase bearer token (from the mobile auth session) instead of the
  * short-lived business-app session cookie.
  *
+ * `getSessionReliable` refreshes tokens that are expired or about to expire.
+ * If the server still returns 401, refresh once more and retry (Safari / tab
+ * sleep can leave a JWT that GoTrue already rejects).
+ *
  * Errors are wrapped in `ApiError` so `createBaseQueryClient`'s retry
  * logic (via `isAuthError` / `isClientError`) short-circuits 4xx responses.
  */
 
 import { getApiBaseUrl } from '../lib/apiClient'
-import { getSessionReliable } from '../lib/authSession'
+import { getSessionReliable, refreshAuthSession } from '../lib/authSession'
 
 export class ApiError extends Error {
   readonly status: number
@@ -100,30 +104,43 @@ export async function apiFetch<TResponse = unknown, TBody = unknown>(
   const { method = 'GET', body, query, signal, headers, anonymous = false } = options
   const url = buildUrl(path, query)
 
-  const authHeader: Record<string, string> = {}
+  let accessToken: string | null = null
   if (!anonymous) {
     const session = await getSessionReliable()
-    if (!session?.access_token) {
+    accessToken = session?.access_token ?? null
+    if (!accessToken) {
       throw new ApiError('Not authenticated', 401, 'UNAUTHENTICATED', null)
     }
-    authHeader.Authorization = `Bearer ${session.access_token}`
   }
 
-  const init: RequestInit = {
-    method,
-    signal,
-    headers: {
-      Accept: 'application/json',
-      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-      ...authHeader,
-      ...headers,
-    },
-  }
-  if (body !== undefined) {
-    init.body = JSON.stringify(body)
+  const buildInit = (token: string | null): RequestInit => {
+    const init: RequestInit = {
+      method,
+      signal,
+      headers: {
+        Accept: 'application/json',
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...headers,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    }
+    if (body !== undefined) {
+      init.body = JSON.stringify(body)
+    }
+    return init
   }
 
-  const res = await fetch(url, init)
+  let res = await fetch(url, buildInit(accessToken))
+
+  if (res.status === 401 && !anonymous && accessToken) {
+    const refreshed = await refreshAuthSession()
+    const nextToken = refreshed?.access_token ?? null
+    if (nextToken && nextToken !== accessToken) {
+      await res.text().catch(() => undefined)
+      res = await fetch(url, buildInit(nextToken))
+    }
+  }
+
   const text = await res.text()
   const parsed = text ? safeJson(text) : undefined
 
