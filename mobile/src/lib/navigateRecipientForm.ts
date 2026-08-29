@@ -42,9 +42,39 @@ type StackRoute = {
 type StackNavigationLike = {
   canGoBack?: () => boolean
   goBack?: () => void
+  getParent?: () => StackNavigationLike | undefined
   getState: () => { index: number; routes: StackRoute[] }
   dispatch: (action: unknown) => void
   navigate: (...args: unknown[]) => void
+}
+
+/** In-memory send-amount entry so web linking can drop `/user/send` query objects. */
+let pendingSendAmountParams: Record<string, unknown> | null = null
+
+export function stashPendingSendAmountParams(params: Record<string, unknown>): void {
+  pendingSendAmountParams = params
+}
+
+export function consumePendingSendAmountParams(): Record<string, unknown> | null {
+  const next = pendingSendAmountParams
+  pendingSendAmountParams = null
+  return next
+}
+
+function findStackWithRoute(
+  navigation: StackNavigationLike,
+  routeName: string,
+): { navigation: StackNavigationLike; index: number; routes: StackRoute[] } | null {
+  let nav: StackNavigationLike | undefined = navigation
+  while (nav) {
+    const state = nav.getState?.()
+    const routes = state?.routes
+    if (routes?.some((route) => route.name === routeName)) {
+      return { navigation: nav, index: state.index, routes }
+    }
+    nav = nav.getParent?.()
+  }
+  return null
 }
 
 export function recipientFormRouteForType(type: RecipientFormType): RecipientFormRouteName {
@@ -81,45 +111,33 @@ export function navigateToRecipientFormRail(
   navigation.dispatch(StackActions.push(recipientFormRouteForType(type), params))
 }
 
-/** Pop type + form so back from SendAmount returns to the send hub. */
+/**
+ * Pop type + form so back from SendAmount returns to the send hub.
+ * Do not CommonActions.reset: on web, linking rehydrates `/user/send` from the
+ * URL and drops the in-memory recipient (looks like a reload with an empty amount screen).
+ */
 export function collapseRecipientFormToSendAmount(
   navigation: StackNavigationLike,
   sendAmountParams: Record<string, unknown>,
 ): void {
-  const state = navigation.getState()
-  const routes = state?.routes
-  if (!routes?.length) {
-    navigation.navigate('SendAmount' as never, sendAmountParams as never)
-    return
-  }
-
-  const idx = state.index
-  let hubIdx = -1
-  for (let i = idx; i >= 0; i--) {
-    if (routes[i]?.name === 'SelectRecentRecipient') {
-      hubIdx = i
-      break
+  stashPendingSendAmountParams(sendAmountParams)
+  const hub = findStackWithRoute(navigation, 'SelectRecentRecipient')
+  if (hub) {
+    let hubIdx = -1
+    for (let i = hub.index; i >= 0; i--) {
+      if (hub.routes[i]?.name === 'SelectRecentRecipient') {
+        hubIdx = i
+        break
+      }
     }
-  }
-
-  if (hubIdx < 0) {
-    navigation.navigate('SendAmount' as never, sendAmountParams as never)
+    if (hubIdx >= 0 && hub.index > hubIdx) {
+      hub.navigation.dispatch(StackActions.pop(hub.index - hubIdx))
+    }
+    hub.navigation.navigate('SendAmount' as never, sendAmountParams as never)
     return
   }
 
-  const preserved = routes.slice(0, hubIdx + 1).map((route) => ({
-    name: route.name,
-    params: route.params,
-    key: route.key,
-    state: route.state,
-  }))
-
-  navigation.dispatch(
-    CommonActions.reset({
-      index: preserved.length,
-      routes: [...preserved, { name: 'SendAmount', params: sendAmountParams }],
-    }),
-  )
+  navigation.navigate('SendAmount' as never, sendAmountParams as never)
 }
 
 /** Leave add/edit form (and type picker) and land on Recipients or the send hub. */

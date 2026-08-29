@@ -1,5 +1,5 @@
 import React from 'react'
-import { View, Text, Pressable } from 'react-native'
+import { View, Text, Pressable, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ArrowLeft } from 'lucide-react-native'
 import ScreenWrapper from '../../components/ScreenWrapper'
@@ -111,12 +111,19 @@ export function RecipientFormScreenLayout({
               </Pressable>
               <Pressable
                 android_ripple={ripple.neutral}
+                // RN web maps accessibilityRole="button" to <button>, which submits a
+                // parent form (full page load to /user/send with no recipient).
+                {...(Platform.OS === 'web' ? { type: 'button' as const } : null)}
                 style={[
                   styles.modalButton,
                   styles.saveButton,
                   (submitting || submitDisabled) && styles.disabledButton,
                 ]}
-                onPress={onSubmit}
+                onPress={(event) => {
+                  event?.preventDefault?.()
+                  haptics.tap()
+                  onSubmit()
+                }}
                 disabled={submitting || submitDisabled}
                 accessibilityRole="button"
                 accessibilityLabel={submitting ? submittingLabel : submitLabel}

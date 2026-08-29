@@ -1,12 +1,16 @@
-import { CommonActions } from '@react-navigation/native'
 import { getScreenTransitionEntry } from '../src/navigation/screenTransitionRegistry'
 import {
   applyScannedWalletAddressToForm,
   collapseRecipientFormToSendAmount,
+  consumePendingSendAmountParams,
   navigateToRecipientFormRail,
   popRecipientFormToList,
   recipientFormRouteForType,
 } from '../src/lib/navigateRecipientForm'
+
+afterEach(() => {
+  consumePendingSendAmountParams()
+})
 
 describe('navigateRecipientForm', () => {
   it('maps recipient types to rail routes', () => {
@@ -35,15 +39,11 @@ describe('navigateRecipientForm', () => {
     collapseRecipientFormToSendAmount(navigation, { recipient: { id: 'draft-1' } })
 
     expect(dispatch).toHaveBeenCalledTimes(1)
-    const action = dispatch.mock.calls[0][0] as ReturnType<typeof CommonActions.reset>
-    expect(action.type).toBe('RESET')
-    const payload = (action as { payload: { index: number; routes: Array<{ name: string }> } }).payload
-    expect(payload.routes.map((r) => r.name)).toEqual([
-      'MainTabs',
-      'SelectRecentRecipient',
+    expect(JSON.stringify(dispatch.mock.calls[0][0])).toContain('POP')
+    expect(navigation.navigate).toHaveBeenCalledWith(
       'SendAmount',
-    ])
-    expect(payload.index).toBe(2)
+      expect.objectContaining({ recipient: { id: 'draft-1' } }),
+    )
   })
 
   it('writes the scanned address onto AddWalletRecipient then pops', () => {

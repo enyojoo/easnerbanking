@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import { mapResidenceToLocalPayInCurrency } from "@easner/shared"
+import { isDraftRecipientId, mapResidenceToLocalPayInCurrency } from "@easner/shared"
 
 export type LocalPayInRail = "bank_transfer" | "mobile_money"
 
@@ -101,7 +101,7 @@ export function useThroughLocalCurrencyFlow(input: {
   )
 
   useEffect(() => {
-    if (!input.enabled || !input.recipientId) {
+    if (!input.enabled || !input.recipientId || isDraftRecipientId(input.recipientId)) {
       setEligibility(null)
       setEligibilityLoading(false)
       return

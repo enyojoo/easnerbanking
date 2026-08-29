@@ -15,7 +15,12 @@ function resolveLinkingPrefix(): string {
 
 const prefix = resolveLinkingPrefix()
 
-const NON_SERIALIZABLE_QUERY_KEYS = ['initialTransaction', 'existingMethod'] as const
+const NON_SERIALIZABLE_QUERY_KEYS = [
+  'initialTransaction',
+  'existingMethod',
+  'recipient',
+  'draftRecipientPersist',
+] as const
 
 function stripNonSerializableQueryParams(path: string): string {
   const qIndex = path.indexOf('?')

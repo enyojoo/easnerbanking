@@ -165,6 +165,7 @@ import { haptics } from '../../lib/haptics'
 import { buildDynamicAmountTextStyle, getDynamicAmountFontSize } from '../../lib/dynamicAmountFontSize'
 import { formatSendAgainKeypadAmount } from '../../lib/resolveSendAgainRecipient'
 import { getSendAmountFieldSymbol } from '../../lib/sendAmountFieldSymbol'
+import { consumePendingSendAmountParams } from '../../lib/navigateRecipientForm'
 import { getCurrencySymbol } from '../../utils/formatters'
 import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
 import { SendAmountShellWebForm } from '../../components/send/SendAmountShellWebForm'
@@ -186,6 +187,7 @@ function initialAmountEntryModeFromRouteParams(
 }
 
 export default function SendAmountScreen({ navigation, route }: NavigationProps) {
+  const pendingSendAmount = useRef(consumePendingSendAmountParams()).current
   const { width: windowWidth, height: windowHeight } = useWindowDimensions()
   const { isWeb, mode } = useResponsiveLayout()
   const useWebShellLayout = isWeb && (mode === 'tablet' || mode === 'desktop')
@@ -205,18 +207,24 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const { balances, refreshBalances } = useBalance()
   
   // Get recipient from route params if coming from the send recipient hub
-  const recipientFromRoute = (route.params as any)?.recipient as Recipient | undefined
-  const draftRecipientPersistFromRoute = (route.params as any)?.draftRecipientPersist as
-    | RecipientData
+  const recipientFromRoute = ((route.params as any)?.recipient ?? pendingSendAmount?.recipient) as
+    | Recipient
     | undefined
-  const preferredBalanceCurrencyFromRoute = String((route.params as any)?.preferredBalanceCurrency || '').toUpperCase()
-  const selectedPaymentMethodFromRoute = (route.params as any)?.selectedPaymentMethod as
-    | 'balance'
-    | 'otherCurrency'
-    | undefined
-  const selectedOtherCurrencyFromRoute = (route.params as any)?.selectedOtherCurrency as string | undefined
-  const selectedOtherPaymentMethodFromRoute = (route.params as any)?.selectedOtherPaymentMethod as string | undefined
-  const routeParamsRecord = route.params as Record<string, unknown> | undefined
+  const draftRecipientPersistFromRoute = ((route.params as any)?.draftRecipientPersist ??
+    pendingSendAmount?.draftRecipientPersist) as RecipientData | undefined
+  const preferredBalanceCurrencyFromRoute = String(
+    (route.params as any)?.preferredBalanceCurrency ?? pendingSendAmount?.preferredBalanceCurrency || '',
+  ).toUpperCase()
+  const selectedPaymentMethodFromRoute = ((route.params as any)?.selectedPaymentMethod ??
+    pendingSendAmount?.selectedPaymentMethod) as 'balance' | 'otherCurrency' | undefined
+  const selectedOtherCurrencyFromRoute = ((route.params as any)?.selectedOtherCurrency ??
+    pendingSendAmount?.selectedOtherCurrency) as string | undefined
+  const selectedOtherPaymentMethodFromRoute = ((route.params as any)?.selectedOtherPaymentMethod ??
+    pendingSendAmount?.selectedOtherPaymentMethod) as string | undefined
+  const routeParamsRecord = {
+    ...(pendingSendAmount ?? {}),
+    ...((route.params as Record<string, unknown> | undefined) ?? {}),
+  }
   const isPreferredBalanceCurrency = preferredBalanceCurrencyFromRoute === 'USD' || preferredBalanceCurrencyFromRoute === 'EUR'
   const didInitializeBalanceCurrency = useRef(false)
   const sendAgainPrefillAppliedRef = useRef(false)
@@ -556,7 +564,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       if (noahKycStatus !== 'approved') {
         void refreshUserProfile()
       }
-      const params = route.params as Record<string, unknown> | undefined
+      const params = {
+        ...(pendingSendAmount ?? {}),
+        ...((route.params as Record<string, unknown> | undefined) ?? {}),
+      }
       if (params?.recipient) {
         // Update recipient immediately for smooth transition
         setRecipient(params.recipient as Recipient)

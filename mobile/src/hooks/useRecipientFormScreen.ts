@@ -62,6 +62,7 @@ export function useRecipientFormScreen(
 
   useFocusEffect(
     useCallback(() => {
+      if (Platform.OS === 'web') return
       const sub = BackHandler.addEventListener('hardwareBackPress', () => {
         if (form.isAnyDropdownOpen) {
           form.closeAllDropdowns()
