@@ -5,41 +5,14 @@ import './src/lib/backgroundTasks';
 import { installStaleWebBundleReload } from './src/lib/reloadStaleWebBundle';
 
 installStaleWebBundleReload();
-import React, { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import React from 'react';
 import { registerRootComponent } from 'expo';
 
-/**
- * Load App on the next tick so splashBoot timers can run. A static import of
- * App pulls AppNavigator (and PostHog eager init) onto the same turn and
- * can block hideAsync forever.
- */
+import App from './App';
+import { PostHogProvider } from './src/components/PostHogProvider';
+
 function Root() {
-  const [tree, setTree] = useState<{
-    PostHogProvider: React.ComponentType<{ children: React.ReactNode }>
-    App: React.ComponentType
-  } | null>(null)
-
-  useEffect(() => {
-    const id = setTimeout(() => {
-      const { PostHogProvider } = require('./src/components/PostHogProvider')
-      const App = require('./App').default
-      setTree({ PostHogProvider, App })
-    }, 0)
-    return () => clearTimeout(id)
-  }, [])
-
-  if (!tree) {
-    return React.createElement(View, {
-      style: { flex: 1, backgroundColor: '#007ACC' },
-    })
-  }
-
-  return React.createElement(
-    tree.PostHogProvider,
-    null,
-    React.createElement(tree.App),
-  )
+  return React.createElement(PostHogProvider, null, React.createElement(App));
 }
 
 registerRootComponent(Root);
