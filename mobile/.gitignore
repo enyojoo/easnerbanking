@@ -96,6 +96,7 @@ yarn-error.*
 # Firebase FCM V1 service account (private key – upload to EAS only; do not commit)
 *-firebase-adminsdk-*.json
 firebase-service-account.json
+google-services(old).json
 
 # typescript
 *.tsbuildinfo
