@@ -4,6 +4,6 @@ import { registerStatementFonts } from "@/lib/statements/register-fonts"
 import type { AssembledStatement } from "@/lib/statements/types"
 
 export async function generateStatementPdfBuffer(doc: AssembledStatement): Promise<Buffer> {
-  registerStatementFonts()
+  await registerStatementFonts()
   return renderToBuffer(<StatementPDFDocument doc={doc} />)
 }

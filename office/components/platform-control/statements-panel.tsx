@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Download, Search } from "lucide-react"
+import { Download, Loader2, Search } from "lucide-react"
 import { useOfficeStatementsList, useQueryInitialLoading } from "@/hooks/queries"
 import { downloadOfficeStatement } from "@/hooks/queries/use-office-statements"
 import { OfficeQueryError } from "@/components/data/office-data-status"
@@ -93,23 +93,24 @@ export function StatementsPanel() {
 
       <Card>
         <CardContent className="p-0">
-          <Table>
+          <Table className="table-fixed w-full">
             <TableHeader>
               <TableRow>
-                <TableHead>Statement ID</TableHead>
-                <TableHead>Generated</TableHead>
-                <TableHead>Who</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Currency</TableHead>
-                <TableHead>Period</TableHead>
-                <TableHead className="text-right">Download</TableHead>
+                <TableHead className="w-[18%]">Statement ID</TableHead>
+                <TableHead className="w-[18%]">Generated</TableHead>
+                <TableHead className="w-[32%]">Who</TableHead>
+                <TableHead className="w-[12%]">Type</TableHead>
+                <TableHead className="w-[12%]">Currency</TableHead>
+                <TableHead className="w-[8%] text-right">
+                  <span className="sr-only">Download</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading
                 ? Array.from({ length: 6 }).map((_, i) => (
                     <TableRow key={i}>
-                      <TableCell colSpan={7}>
+                      <TableCell colSpan={6}>
                         <Skeleton className="h-8 w-full" />
                       </TableCell>
                     </TableRow>
@@ -128,18 +129,19 @@ export function StatementsPanel() {
                         </Badge>
                       </TableCell>
                       <TableCell>{row.currency}</TableCell>
-                      <TableCell>
-                        {row.period_from} – {row.period_to}
-                      </TableCell>
                       <TableCell className="text-right">
                         <Button
-                          size="sm"
+                          size="icon-sm"
                           variant="outline"
                           disabled={downloadingId === row.statement_id}
                           onClick={() => void onDownload(row.statement_id)}
+                          aria-label={`Download statement ${row.statement_id}`}
                         >
-                          <Download className="h-4 w-4 mr-1" />
-                          {downloadingId === row.statement_id ? "…" : "Download"}
+                          {downloadingId === row.statement_id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Download className="h-4 w-4" />
+                          )}
                         </Button>
                       </TableCell>
                     </TableRow>
