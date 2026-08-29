@@ -213,7 +213,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const draftRecipientPersistFromRoute = ((route.params as any)?.draftRecipientPersist ??
     pendingSendAmount?.draftRecipientPersist) as RecipientData | undefined
   const preferredBalanceCurrencyFromRoute = String(
-    (route.params as any)?.preferredBalanceCurrency ?? pendingSendAmount?.preferredBalanceCurrency || '',
+    (route.params as any)?.preferredBalanceCurrency ??
+      pendingSendAmount?.preferredBalanceCurrency ??
+      '',
   ).toUpperCase()
   const selectedPaymentMethodFromRoute = ((route.params as any)?.selectedPaymentMethod ??
     pendingSendAmount?.selectedPaymentMethod) as 'balance' | 'otherCurrency' | undefined
