@@ -185,8 +185,8 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
       console.error('Error deleting recipient:', error)
       const message =
         error instanceof Error && error.message?.includes('linked to a transaction')
-          ? 'Failed to delete - linked to a transaction'
-          : 'Failed to delete recipient'
+        ? 'Failed to delete - linked to a transaction'
+        : 'Failed to delete recipient'
       showError(message)
     } finally {
       setDeletingId(null)
@@ -204,7 +204,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     const isLast = index === filteredRecipients.length - 1
     return (
       <Pressable
-        android_ripple={ripple.neutral}
+       android_ripple={ripple.neutral}
         style={[styles.recipientItem, !isLast && styles.recipientItemDivider]}
         onPress={() => {
           haptics.tap()
@@ -217,7 +217,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
               <EasenetRecipientHydratedPreview recipient={item} variant="row" getInitials={getInitials} />
               <View style={styles.recipientActions}>
                 <Pressable
-                  android_ripple={ripple.neutral}
+                 android_ripple={ripple.neutral}
                   style={styles.actionIcon}
                   onPress={() => {
                     haptics.tap()
@@ -227,7 +227,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                   <Pencil size={18} color={colors.text.primary} strokeWidth={2} />
                 </Pressable>
                 <Pressable
-                  android_ripple={ripple.neutral}
+                 android_ripple={ripple.neutral}
                   style={[styles.actionIcon, styles.actionIconDelete]}
                   onPress={() => {
                     haptics.medium()
@@ -248,7 +248,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
               <RecipientPayoutPreview recipient={item} variant="row" getInitials={getInitials} />
               <View style={styles.recipientActions}>
                 <Pressable
-                  android_ripple={ripple.neutral}
+                 android_ripple={ripple.neutral}
                   style={styles.actionIcon}
                   onPress={() => {
                     haptics.tap()
@@ -258,7 +258,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                   <Pencil size={18} color={colors.text.primary} strokeWidth={2} />
                 </Pressable>
                 <Pressable
-                  android_ripple={ripple.neutral}
+                 android_ripple={ripple.neutral}
                   style={[styles.actionIcon, styles.actionIconDelete]}
                   onPress={() => {
                     haptics.medium()
@@ -283,165 +283,165 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
   return (
     <ScreenWrapper>
       <KeyboardSafeContainer>
-        <View style={styles.container}>
-          <Animated.View
-            style={[
-              styles.header,
-              {
-                opacity: headerAnim,
+      <View style={styles.container}>
+        <Animated.View
+          style={[
+            styles.header,
+            {
+              opacity: headerAnim,
                 transform: [
                   {
-                    translateY: headerAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [-motion.screenEnterTranslateY, 0],
+                translateY: headerAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-motion.screenEnterTranslateY, 0],
                     }),
                   },
                 ],
               },
-            ]}
-          >
-            <Pressable
-              android_ripple={ripple.neutral}
+          ]}
+        >
+          <Pressable
+           android_ripple={ripple.neutral}
               onPress={() => {
-                haptics.tap()
-                navigation.goBack()
-              }}
+              haptics.tap()
+              navigation.goBack()
+            }}
               style={styles.backButton}
             >
-              <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
-            </Pressable>
-            <View style={styles.headerContent}>
+            <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
+          </Pressable>
+          <View style={styles.headerContent}>
               <Text style={styles.title}>Recipients</Text>
-            </View>
-          </Animated.View>
+      </View>
+        </Animated.View>
 
-          <Animated.View
-            style={[
-              styles.searchContainer,
-              {
-                opacity: contentAnim,
+        <Animated.View
+          style={[
+            styles.searchContainer,
+            {
+              opacity: contentAnim,
                 transform: [
                   {
-                    translateY: contentAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [motion.screenEnterTranslateY, 0],
+                translateY: contentAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [motion.screenEnterTranslateY, 0],
                     }),
                   },
                 ],
               },
-            ]}
-          >
-            <View style={styles.searchWrapper}>
-              <Search size={18} color={colors.primary.main} strokeWidth={2} />
-              <TextInput
-                style={styles.searchInput}
-                value={searchTerm}
-                onChangeText={setSearchTerm}
+          ]}
+        >
+          <View style={styles.searchWrapper}>
+            <Search size={18} color={colors.primary.main} strokeWidth={2} />
+            <TextInput
+              style={styles.searchInput}
+              value={searchTerm}
+              onChangeText={setSearchTerm}
                 placeholder="Search recipients..."
-                placeholderTextColor={colors.text.secondary}
-                returnKeyType="done"
-                onSubmitEditing={() => Keyboard.dismiss()}
-              />
-              {searchTerm.length > 0 && (
-                <Pressable android_ripple={ripple.neutral} onPress={() => setSearchTerm('')}>
-                  <CircleX size={18} color={colors.primary.main} strokeWidth={2} />
-                </Pressable>
-              )}
-            </View>
-          </Animated.View>
+              placeholderTextColor={colors.text.secondary}
+              returnKeyType="done"
+              onSubmitEditing={() => Keyboard.dismiss()}
+            />
+            {searchTerm.length > 0 && (
+              <Pressable android_ripple={ripple.neutral} onPress={() => setSearchTerm('')}>
+                <CircleX size={18} color={colors.primary.main} strokeWidth={2} />
+              </Pressable>
+            )}
+          </View>
+        </Animated.View>
 
-          <Animated.View
-            style={[
-              styles.recipientsTray,
-              styles.listTray,
-              {
-                opacity: contentAnim,
+        <Animated.View
+          style={[
+            styles.recipientsTray,
+            styles.listTray,
+            {
+              opacity: contentAnim,
                 transform: [
                   {
-                    translateY: contentAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [motion.screenEnterTranslateY, 0],
+                translateY: contentAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [motion.screenEnterTranslateY, 0],
                     }),
                   },
                 ],
               },
-            ]}
-          >
-            {recipientsLoading ? (
-              <View>
-                {[0, 1, 2, 3, 4, 5].map((i) => (
-                  <ListRowSkeleton key={i} variant="recipient" showDivider={i < 5} />
-                ))}
-              </View>
-            ) : (
-              <FlashList
-                data={filteredRecipients}
-                renderItem={renderRecipient}
-                keyExtractor={(item) => item.id}
-                style={styles.list}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-                estimatedItemSize={112}
-                drawDistance={400}
-                refreshControl={
+          ]}
+        >
+          {recipientsLoading ? (
+            <View>
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <ListRowSkeleton key={i} variant="recipient" showDivider={i < 5} />
+              ))}
+            </View>
+          ) : (
+            <FlashList
+              data={filteredRecipients}
+              renderItem={renderRecipient}
+              keyExtractor={(item) => item.id}
+              style={styles.list}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              estimatedItemSize={112}
+              drawDistance={400}
+              refreshControl={
                   <RefreshControl
                     refreshing={refreshing}
                     onRefresh={onRefresh}
                     tintColor={colors.primary.main}
                   />
-                }
-                contentContainerStyle={{ paddingBottom: listBottomPadding }}
-                ListEmptyComponent={
-                  <EmptyState
-                    icon={Users}
+              }
+              contentContainerStyle={{ paddingBottom: listBottomPadding }}
+              ListEmptyComponent={
+                <EmptyState
+                  icon={Users}
                     title={searchTerm.trim() ? 'No matches' : 'No recipients found'}
-                    message={
+                  message={
                       searchTerm.trim()
                         ? 'Try another search'
                         : 'Add a new recipient to get started'
-                    }
-                    action={
-                      !searchTerm.trim()
-                        ? {
+                  }
+                  action={
+                    !searchTerm.trim()
+                      ? {
                             label: 'Add recipient',
                             onPress: handleOpenAdd,
-                          }
-                        : undefined
-                    }
-                  />
-                }
-              />
-            )}
-          </Animated.View>
+                        }
+                      : undefined
+                  }
+                />
+              }
+            />
+          )}
+        </Animated.View>
 
-          <View style={[styles.bottomButtonContainer, { paddingBottom: footerPadding }]}>
-            <Pressable
-              android_ripple={ripple.neutral}
-              style={styles.addRecipientButton}
+        <View style={[styles.bottomButtonContainer, { paddingBottom: footerPadding }]}>
+          <Pressable
+           android_ripple={ripple.neutral}
+            style={styles.addRecipientButton}
               onPressIn={preloadRecipientTypeScreen}
               onPress={handleOpenAdd}
             >
               <Text style={styles.addRecipientButtonText}>Add new recipient</Text>
-            </Pressable>
-          </View>
-        </View>
+              </Pressable>
+            </View>
+                </View>
 
-        <EasnerAlertSheet
-          visible={deleteConfirmation !== null}
-          onDismiss={() => {
-            if (!deletingId) setDeleteConfirmation(null)
-          }}
-          title="Delete Recipient"
-          message={`Are you sure you want to delete ${deleteConfirmation?.full_name ?? 'this recipient'}? This action cannot be undone.`}
-          primaryLabel="Delete"
-          onPrimary={() => void confirmDelete()}
-          secondaryLabel="Cancel"
-          onSecondary={() => {
-            if (!deletingId) setDeleteConfirmation(null)
-          }}
-          primaryDestructive
-          primaryLoading={Boolean(deletingId)}
-        />
+      <EasnerAlertSheet
+        visible={deleteConfirmation !== null}
+        onDismiss={() => {
+          if (!deletingId) setDeleteConfirmation(null)
+        }}
+        title="Delete Recipient"
+        message={`Are you sure you want to delete ${deleteConfirmation?.full_name ?? 'this recipient'}? This action cannot be undone.`}
+        primaryLabel="Delete"
+        onPrimary={() => void confirmDelete()}
+        secondaryLabel="Cancel"
+        onSecondary={() => {
+          if (!deletingId) setDeleteConfirmation(null)
+        }}
+        primaryDestructive
+        primaryLoading={Boolean(deletingId)}
+      />
       </KeyboardSafeContainer>
     </ScreenWrapper>
   )

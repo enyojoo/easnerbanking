@@ -93,7 +93,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   }, [txHubQuery.data, user?.id])
   const [searchTerm, setSearchTerm] = useState('')
   const [lastSentAtByRecipient, setLastSentAtByRecipient] = useState<Record<string, number>>({})
-
+  
   const headerAnim = useRef(new Animated.Value(0)).current
   const contentAnim = useRef(new Animated.Value(0)).current
 
@@ -220,18 +220,18 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
 
   const navigateToSendAmount = useCallback(
     (recipient: Recipient, draftRecipientPersist?: RecipientData) => {
-      navigation.navigate('SendAmount' as never, {
-        recipient,
+    navigation.navigate('SendAmount' as never, {
+      recipient,
         ...(draftRecipientPersist ? { draftRecipientPersist } : {}),
-        fromSelectRecentRecipient: true,
+      fromSelectRecentRecipient: true,
         preferredBalanceCurrency:
           preferredBalanceCurrency === 'USD' || preferredBalanceCurrency === 'EUR'
-            ? preferredBalanceCurrency
-            : undefined,
-        selectedPaymentMethod: routePaymentMethod,
-        selectedOtherCurrency: routeOtherCurrency ?? null,
-        selectedOtherPaymentMethod: routeOtherPaymentMethod ?? null,
-      } as never)
+        ? preferredBalanceCurrency
+        : undefined,
+      selectedPaymentMethod: routePaymentMethod,
+      selectedOtherCurrency: routeOtherCurrency ?? null,
+      selectedOtherPaymentMethod: routeOtherPaymentMethod ?? null,
+    } as never)
     },
     [
       navigation,
@@ -255,11 +255,11 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       mode: 'draft',
       preferredBalanceCurrency:
         preferredBalanceCurrency === 'USD' || preferredBalanceCurrency === 'EUR'
-          ? preferredBalanceCurrency
-          : undefined,
-      selectedPaymentMethod: routePaymentMethod,
-      selectedOtherCurrency: routeOtherCurrency ?? null,
-      selectedOtherPaymentMethod: routeOtherPaymentMethod ?? null,
+            ? preferredBalanceCurrency
+            : undefined,
+          selectedPaymentMethod: routePaymentMethod,
+          selectedOtherCurrency: routeOtherCurrency ?? null,
+          selectedOtherPaymentMethod: routeOtherPaymentMethod ?? null,
     })
   }
 
@@ -269,7 +269,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     const isLast = index === sendHubFlatListData.length - 1
     return (
       <Pressable
-        android_ripple={ripple.neutral}
+       android_ripple={ripple.neutral}
         style={[styles.recipientItem, !isLast && styles.recipientItemDivider]}
         onPressIn={() => {
           prefetchSendRatesForRecipient(qc, item)
@@ -315,7 +315,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           ]}
         >
           <Pressable
-            android_ripple={ripple.neutral}
+           android_ripple={ripple.neutral}
             onPress={() => {
               haptics.tap()
               exitSendFlowFromHub(navigation)
@@ -426,7 +426,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
 
         <View style={[styles.bottomButtonContainer, { paddingBottom: footerPadding }]}>
           <Pressable
-            android_ripple={ripple.neutral}
+           android_ripple={ripple.neutral}
             style={styles.addRecipientButton}
             onPressIn={preloadRecipientTypeScreen}
             onPress={handleAddNewRecipient}
