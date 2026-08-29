@@ -70,6 +70,27 @@ describe("resolveGridCorridorSchema", () => {
     })
   })
 
+  it("does not require Grid extra_fields for US ACH when routing is present", () => {
+    const ok = validateGridRecipientForCorridor({
+      countryCode: "US",
+      currencyCode: "USD",
+      fieldsSchema: {
+        grid: {
+          status: "ready",
+          channel_type: "bank",
+          extra_fields: [{ key: "bank_code", label: "Bank code", required: true, kind: "text" }],
+        },
+      },
+      row: {
+        currency: "USD",
+        full_name: "Jane Doe",
+        account_number: "123456789",
+        routing_number: "021000021",
+      },
+    })
+    expect(ok).toEqual({ ok: true })
+  })
+
   it("returns CAD bank/branch extra fields from static schema", () => {
     const schema = resolveGridStaticCorridorSchema("CA", "CAD")
     expect(schema?.extra_fields?.map((f) => f.key)).toEqual(["bank_code", "branch_code"])

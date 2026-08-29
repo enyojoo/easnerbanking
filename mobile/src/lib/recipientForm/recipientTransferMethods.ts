@@ -22,7 +22,8 @@ export function usTransferMethodsForForm(args: {
     return []
   }
   if (!args.hasSelectedBankCorridor) {
-    return usBankPaymentMethodsForProvider('noah').slice(0, 1)
+    // Prefer the real provider when known; default Noah ACH so the tile exists before catalog loads.
+    return usBankPaymentMethodsForProvider(args.payoutProvider === 'grid' ? 'grid' : 'noah')
   }
   return usBankPaymentMethodsForProvider(args.payoutProvider)
 }

@@ -73,7 +73,7 @@ describe('recipientFormValidation', () => {
         values,
         transferType: null,
       }),
-    ).toBe(false)
+    ).toBe(true)
     expect(
       isRecipientFormValid({
         ...baseValidationCtx,
@@ -107,6 +107,64 @@ describe('recipientFormValidation', () => {
       }),
     ).toBe(true)
     mocked.mockReturnValue(null)
+  })
+
+  it('enables US Add when Grid extras and SWIFT BankCode are present in schema', () => {
+    const mocked = getPayoutFieldsSchemaForCorridor as jest.MockedFunction<
+      typeof getPayoutFieldsSchemaForCorridor
+    >
+    mocked.mockReturnValue({ needs_bank_code: true, needs_email: true } as never)
+    const values = {
+      ...emptyRecipientFormValues(),
+      fullName: 'Jane Doe',
+      bankName: 'Chase',
+      routingNumber: '021000021',
+      accountNumber: '1234 5678',
+      addressLine1: '1 Main St',
+      city: 'New York',
+      state: 'NY',
+      postalCode: '10001',
+    }
+    expect(
+      isRecipientFormValid({
+        ...baseValidationCtx,
+        values,
+        transferType: 'ACH',
+        payoutProvider: 'grid',
+        corridorRecipientOptions: {
+          ...baseValidationCtx.corridorRecipientOptions,
+          extraFields: [{ key: 'bank_code', label: 'Bank code', required: true }],
+        },
+      }),
+    ).toBe(true)
+    mocked.mockReturnValue(null)
+  })
+
+  it('enables Grid US Add like EUR: no address, typed bank, no transfer tap', () => {
+    const values = {
+      ...emptyRecipientFormValues(),
+      fullName: 'Jane Doe',
+      bankName: 'Chase',
+      routingNumber: '021000021',
+      accountNumber: '123456789',
+    }
+    expect(
+      isRecipientFormValid({
+        ...baseValidationCtx,
+        values,
+        transferType: null,
+        payoutProvider: 'grid',
+        usTransferMethods: [
+          { value: 'ACH', label: 'ACH', speedLabel: '1–3 days' },
+          { value: 'Wire', label: 'Wire', speedLabel: 'Same day' },
+        ],
+        corridorRecipientOptions: {
+          ...baseValidationCtx.corridorRecipientOptions,
+          bankOptions: ['Wells Fargo'],
+          extraFields: [{ key: 'bank_code', label: 'Bank code', required: true }],
+        },
+      }),
+    ).toBe(true)
   })
 
   it('validates wallet requires network and address', () => {

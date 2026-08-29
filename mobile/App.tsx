@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native'
 import Constants from 'expo-constants'
 import { StatusBar } from 'expo-status-bar'
@@ -36,7 +36,7 @@ import {
 } from './src/query/refresh-money-feeds'
 import { warmTransactionDetailForNavigation } from './src/hooks/queries/use-transactions'
 import { getMobileQueryClient } from './src/query/client'
-const AppNavigator = React.lazy(() => import('./src/navigation/AppNavigator'))
+import AppNavigator from './src/navigation/AppNavigator'
 import { webLinking } from './src/navigation/linking'
 import { setPreserveUserPathOverAuth } from './src/navigation/webLinkingGuard'
 import { formatWebDocumentTitle, setWebDocumentTitle } from './src/navigation/webDocumentTitle'
@@ -63,7 +63,7 @@ import { warmBundledFlagCache } from './src/lib/warmBundledFlagCache'
 import { hydrateWarmImageUrls } from './src/lib/imageCache'
 import { prefetchIntercomModule } from './src/lib/intercom'
 import { ExpressStripeProvider } from './src/components/ExpressStripeProvider'
-import { hideNativeSplash, NATIVE_SPLASH_BACKGROUND } from './src/lib/splashGate'
+import { hideNativeSplash } from './src/lib/splashGate'
 
 // Inner app component that has access to AuthContext
 function AppContent() {
@@ -207,21 +207,7 @@ function AppContent() {
         backgroundColor={Platform.OS === 'android' ? palette.background.primary : undefined}
       />
       <WebIdleSessionBridge />
-      <Suspense
-        fallback={
-          <View
-            style={[
-              styles.appRoot,
-              {
-                backgroundColor:
-                  Platform.OS === 'web' ? palette.background.primary : NATIVE_SPLASH_BACKGROUND,
-              },
-            ]}
-          />
-        }
-      >
-        <AppNavigator />
-      </Suspense>
+      <AppNavigator />
     </NavigationContainer>
   )
 

@@ -111,7 +111,6 @@ export function CountryCurrencySelector({ form }: { form: FormSlice }) {
                     currencyName: item.currencyName,
                     flagEmoji: '',
                   })
-                  form.setTransferType(null)
                   const firstProvider =
                     getRecipientProviders(item.currencyCode, 'mobile_money', item.countryCode)[0] || ''
                   form.setNewRecipient((prev) => ({

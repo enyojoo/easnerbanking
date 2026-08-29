@@ -4,19 +4,20 @@ import {
   recipientFormNeedsEmail,
   recipientFormNeedsPhone,
   recipientFormShowsAddress,
+  recipientHolderAddressFieldsPresent,
   validateGridRecipientForCorridor,
   validateYcRecipientForCorridor,
   recipientFormRequiresSwiftBic,
   type PayoutProviderId,
 } from '@easner/shared'
 import { validateRecipientHolderAddress } from '@easner/shared/postal-address-form'
-import { getAccountTypeConfigFromCurrency } from '../currencyAccountTypes'
+import { getAccountTypeConfigFromCurrency, getAccountTypeFromCurrency } from '../currencyAccountTypes'
 import type { CountryCurrency } from '../countryCurrencyMapping'
 import { getPayoutFieldsSchemaForCorridor, type getCorridorRecipientOptions } from '../recipientCatalog'
 import { buildRecipientYcMetadata } from './buildRecipientYcMetadata'
 import { mapRecipientFormFieldName } from './mapRecipientFormFieldName'
+import { coerceTransferType, type BankTransferMethodOption } from './recipientTransferMethods'
 import type { EasenetProfilePreview, RecipientFormType, RecipientFormValues } from './recipientFormTypes'
-import type { BankTransferMethodOption } from './recipientTransferMethods'
 
 export type RecipientFormValidationContext = {
   values: RecipientFormValues
@@ -64,6 +65,49 @@ export function isRecipientFormValid(ctx: RecipientFormValidationContext): boole
   }
   if (selectedRecipientType === 'mobile') {
     return !!values.provider && !!values.phoneNumber
+  }
+
+  const schemaHints =
+    ctx.selectedCountryCurrency && selectedRecipientType === 'bank'
+      ? getPayoutFieldsSchemaForCorridor({
+          countryCode: ctx.selectedCountryCurrency.countryCode,
+          currencyCode: ctx.selectedCountryCurrency.currencyCode,
+          rail: 'bank_transfer',
+        })
+      : null
+
+  // US ACH UI is routing + account (Noah BankCode is not SWIFT). Do not apply
+  // Grid extra_fields, bank-enum, or lib-address ZIP rules that are not on this form.
+  if (selectedRecipientType === 'bank' && getAccountTypeFromCurrency(values.currency) === 'us') {
+    if (!values.fullName.trim() || !values.bankName.trim()) return false
+    if (values.routingNumber.replace(/\D/g, '').length !== 9) return false
+    if (!values.accountNumber.replace(/\s/g, '')) return false
+    // Grid has ACH/Wire/RTP/FedNow tiles; treat a missing selection as the first rail
+    // (same as EUR SEPA auto-pick). Do not require address for Grid/YC.
+    if (
+      ctx.usTransferMethods.length > 0 &&
+      !coerceTransferType(ctx.transferType, ctx.usTransferMethods)
+    ) {
+      return false
+    }
+    if (
+      showsHolderAddress &&
+      ctx.payoutProvider !== 'grid' &&
+      ctx.payoutProvider !== 'yellowcard' &&
+      ctx.selectedCountryCurrency
+    ) {
+      if (
+        !recipientHolderAddressFieldsPresent({
+          addressLine1: values.addressLine1,
+          city: values.city,
+          state: values.state,
+          postalCode: values.postalCode,
+        })
+      ) {
+        return false
+      }
+    }
+    return true
   }
 
   if (
@@ -114,14 +158,6 @@ export function isRecipientFormValid(ctx: RecipientFormValidationContext): boole
     return false
   }
 
-  const schemaHints =
-    ctx.selectedCountryCurrency && selectedRecipientType === 'bank'
-      ? getPayoutFieldsSchemaForCorridor({
-          countryCode: ctx.selectedCountryCurrency.countryCode,
-          currencyCode: ctx.selectedCountryCurrency.currencyCode,
-          rail: 'bank_transfer',
-        })
-      : null
   if (recipientFormNeedsEmail(schemaHints) && !values.email.trim()) return false
   if (recipientFormNeedsPhone(schemaHints) && !values.phoneNumber.trim()) return false
   if (recipientFormRequiresSwiftBic({ currencyCode: values.currency, hints: schemaHints })) {

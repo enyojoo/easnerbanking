@@ -944,6 +944,9 @@ export function validateGridRecipientForCorridor(input: {
     if (routing.length !== 9) {
       return { ok: false, message: "US bank recipient requires a 9-digit routing number." }
     }
+    // Routing is collected on the US form. Skip Grid extra_fields (bank_code, …)
+    // that are not shown on that UI.
+    return { ok: true }
   }
 
   for (const field of schema.extra_fields ?? []) {

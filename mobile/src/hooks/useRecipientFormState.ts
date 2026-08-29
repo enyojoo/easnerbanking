@@ -122,7 +122,7 @@ function seedRecipientFormState(
   return {
     selectedRecipientType: 'bank',
     selectedCountryCurrency: US_COUNTRY_CURRENCY,
-    transferType: null,
+    transferType: 'ACH',
     easenetProfile: null,
     newRecipient: { ...emptyRecipientFormValues(), currency: 'USD' },
     editingRecipient: null,
@@ -240,7 +240,7 @@ export function useRecipientFormState(options: UseRecipientFormStateOptions) {
   useEffect(() => {
     if (selectedRecipientType !== 'bank' || selectedCountryCurrency?.countryCode !== 'US') return
     setTransferType((current) => coerceTransferType(current, usTransferMethods))
-  }, [selectedRecipientType, selectedCountryCurrency?.countryCode, usTransferMethods])
+  }, [selectedRecipientType, selectedCountryCurrency?.countryCode, usTransferMethods, transferType])
 
   useEffect(() => {
     if (selectedRecipientType !== 'bank' || newRecipient.currency !== 'EUR') return

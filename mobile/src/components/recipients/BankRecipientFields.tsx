@@ -101,7 +101,7 @@ export function BankRecipientFields({ form }: { form: FormSlice }) {
       </View>
 
       <RecipientBankNameField
-        banks={form.selectedCountryCurrency ? form.corridorRecipientOptions.bankOptions : []}
+        banks={accountConfig.accountType === 'us' ? [] : form.corridorRecipientOptions.bankOptions}
         value={form.newRecipient.bankName}
         onChange={(bank) => form.setNewRecipient((prev) => ({ ...prev, bankName: bank }))}
         placeholder={`${accountConfig.fieldLabels.bank_name} *`}
