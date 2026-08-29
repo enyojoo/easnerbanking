@@ -2,9 +2,10 @@ import React from 'react'
 import { View, TextInput, StyleSheet } from 'react-native'
 import type { PayoutFieldsSchemaHint } from '@easner/shared'
 import {
-  recipientFormNeedsAddress,
   recipientFormNeedsEmail,
   recipientFormNeedsPhone,
+  recipientFormShowsAddress,
+  type PayoutProviderId,
 } from '@easner/shared'
 import { colors, spacing, textStyles, compactInputMetrics } from '../../theme'
 
@@ -21,6 +22,7 @@ type Props = {
   hints: PayoutFieldsSchemaHint | null
   currencyCode: string
   countryCode?: string
+  payoutProvider?: PayoutProviderId | null
   values: PayoutRecipientExtraValues
   onChange: (patch: Partial<PayoutRecipientExtraValues>) => void
   isSubmitting?: boolean
@@ -31,6 +33,7 @@ export function PayoutSchemaExtraFields({
   hints,
   currencyCode,
   countryCode,
+  payoutProvider,
   values,
   onChange,
   isSubmitting,
@@ -38,7 +41,12 @@ export function PayoutSchemaExtraFields({
   const needsEmail = recipientFormNeedsEmail(hints)
   const needsPhone = recipientFormNeedsPhone(hints)
   const needsAddress =
-    recipientFormNeedsAddress({ hints, currencyCode }) && countryCode !== 'US'
+    recipientFormShowsAddress({
+      hints,
+      currencyCode,
+      countryCode,
+      payoutProvider,
+    }) && currencyCode.trim().toUpperCase() !== 'USD'
 
   if (!needsEmail && !needsPhone && !needsAddress) return null
 

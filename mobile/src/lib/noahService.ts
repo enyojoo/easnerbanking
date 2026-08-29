@@ -1152,7 +1152,7 @@ export const noahService = {
     postalCode?: string
     accountType?: 'Checking' | 'Savings'
     /** US: ACH vs Fedwire (stored as `Wire` on recipient). Ignored for EUR. */
-    transferType?: 'ACH' | 'Wire'
+    transferType?: 'ACH' | 'Wire' | 'RTP' | 'FEDNOW'
   }): Promise<{
     ok: boolean
     formSessionId: string | null

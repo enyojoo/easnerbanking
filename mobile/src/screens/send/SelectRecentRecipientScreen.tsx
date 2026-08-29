@@ -84,13 +84,13 @@ import { CountryCurrency } from '../../lib/countryCurrencyMapping'
 import {
   isBankNameAllowedForCorridor,
   isMomoProviderAllowedForCorridor,
-  recipientFormNeedsAddress,
-  recipientFormNeedsBankCode,
   recipientFormNeedsEmail,
   recipientFormNeedsPhone,
+  recipientFormRequiresSwiftBic,
 } from '@easner/shared'
 import { PayoutSchemaExtraFields } from '../../components/recipients/PayoutSchemaExtraFields'
 import { UsBankAddressFields } from '../../components/recipients/UsBankAddressFields'
+import { BankTransferTypeGrid } from '../../components/recipients/UsTransferTypeGrid'
 import { RecipientFormDropdownHost, RegisterRecipientDropdownSheet } from '../../components/recipients/RecipientFormDropdownHost'
 import {
   buildRecipientCatalogForType,
@@ -115,6 +115,7 @@ import {
 import { RecipientBankNameField } from '../../components/recipients/RecipientBankNameField'
 import { useToast } from '../../components/ToastProvider'
 import { useSendDestinations } from '../../hooks/useSendDestinations'
+import { useBankRecipientFormRails } from '../../hooks/useBankRecipientFormRails'
 import { useFocusRefresh } from '../../hooks/useFocusRefresh'
 import { useFocusEffect } from '@react-navigation/native'
 import { haptics } from '../../lib/haptics'
@@ -177,7 +178,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [selectedCountryCurrency, setSelectedCountryCurrency] = useState<CountryCurrency | null>(null)
-  const [transferType, setTransferType] = useState<'ACH' | 'Wire' | null>(null)
+  const [transferType, setTransferType] = useState<string | null>(null)
   const [easenetProfile, setEasenetProfile] = useState<{
     easetag: string
     fullName: string
@@ -203,6 +204,25 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     catalogRevision,
     refresh: refreshCatalog,
   } = useSendDestinations()
+
+  const {
+    usTransferMethods,
+    eurTransferMethods,
+    showsHolderAddress,
+    requiresSwiftBic,
+    schemaHints,
+    payoutProvider,
+    coerceTransferType,
+  } = useBankRecipientFormRails({
+    selectedRecipientType,
+    selectedCountryCurrency,
+    bankCorridors,
+  })
+
+  useEffect(() => {
+    if (usTransferMethods.length === 0 && eurTransferMethods.length === 0) return
+    setTransferType((prev) => coerceTransferType(prev))
+  }, [usTransferMethods, eurTransferMethods, coerceTransferType])
 
   useFocusEffect(
     useCallback(() => {
@@ -529,17 +549,17 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     if (selectedRecipientType === 'wallet') return !!newRecipient.network && !!newRecipient.walletAddress
     if (selectedRecipientType === 'mobile') return !!newRecipient.provider && !!newRecipient.phoneNumber
 
-    if (selectedCountryCurrency?.countryCode === 'US' && !transferType) {
+    if ((usTransferMethods.length > 0 || eurTransferMethods.length > 0) && !transferType) {
       return false
     }
     if (
-      selectedCountryCurrency?.countryCode === 'US' &&
+      selectedCountryCurrency?.currencyCode === 'USD' &&
       transferType !== 'Wire' &&
       !newRecipient.checkingOrSavings
     ) {
       return false
     }
-    if (selectedCountryCurrency?.countryCode === 'US') {
+    if (showsHolderAddress) {
       if (!newRecipient.addressLine1.trim()) return false
       if (!newRecipient.city.trim()) return false
       if (!newRecipient.state.trim()) return false
@@ -585,18 +605,9 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         : null
     if (recipientFormNeedsEmail(schemaHints) && !newRecipient.email.trim()) return false
     if (recipientFormNeedsPhone(schemaHints) && !newRecipient.phoneNumber.trim()) return false
-    if (recipientFormNeedsBankCode(schemaHints)) {
+    if (recipientFormRequiresSwiftBic({ currencyCode: newRecipient.currency, hints: schemaHints })) {
       const swift = newRecipient.swiftBic.trim()
       if (!swift || !/^[A-Z0-9]{8}([A-Z0-9]{3})?$/i.test(swift)) return false
-    }
-    if (
-      recipientFormNeedsAddress({ hints: schemaHints, currencyCode: newRecipient.currency }) &&
-      selectedCountryCurrency?.countryCode !== 'US'
-    ) {
-      if (!newRecipient.addressLine1.trim()) return false
-      if (!newRecipient.city.trim()) return false
-      if (!newRecipient.state.trim()) return false
-      if (!newRecipient.postalCode.trim()) return false
     }
 
     return true
@@ -672,9 +683,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
               rail: 'bank_transfer',
             })
           : null
-      const needsAddr =
-        selectedRecipientType === 'bank' &&
-        recipientFormNeedsAddress({ hints: bankSchemaHints, currencyCode: newRecipient.currency })
       const persistPayload: RecipientData = {
         fullName: newRecipient.fullName,
         accountNumber: accountNumberForType,
@@ -696,25 +704,16 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         sortCode: newRecipient.sortCode || undefined,
         iban: newRecipient.iban || undefined,
         swiftBic: newRecipient.swiftBic || undefined,
-        transferType: selectedCountryCurrency?.countryCode === 'US' ? transferType || undefined : undefined,
+        transferType:
+          usTransferMethods.length > 0 || eurTransferMethods.length > 0
+            ? (transferType as RecipientData['transferType']) || undefined
+            : undefined,
         checkingOrSavings:
           selectedCountryCurrency?.countryCode === 'US' ? (newRecipient.checkingOrSavings as 'checking' | 'savings' | '') || undefined : undefined,
-        addressLine1:
-          selectedCountryCurrency?.countryCode === 'US' || needsAddr
-            ? newRecipient.addressLine1 || undefined
-            : undefined,
-        city:
-          selectedCountryCurrency?.countryCode === 'US' || needsAddr
-            ? newRecipient.city || undefined
-            : undefined,
-        state:
-          selectedCountryCurrency?.countryCode === 'US' || needsAddr
-            ? newRecipient.state || undefined
-            : undefined,
-        postalCode:
-          selectedCountryCurrency?.countryCode === 'US' || needsAddr
-            ? newRecipient.postalCode || undefined
-            : undefined,
+        addressLine1: showsHolderAddress ? newRecipient.addressLine1 || undefined : undefined,
+        city: showsHolderAddress ? newRecipient.city || undefined : undefined,
+        state: showsHolderAddress ? newRecipient.state || undefined : undefined,
+        postalCode: showsHolderAddress ? newRecipient.postalCode || undefined : undefined,
       }
       const draftKind =
         selectedRecipientType === 'wallet'
@@ -1152,7 +1151,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
         }}
         nativePanelStyle={{
           height: '92%',
-          paddingBottom: footerPadding,
         }}
         webPanelStyle={{
           maxWidth: 560,
@@ -1201,18 +1199,16 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                 }}
               />
             ) : (
+            <>
             <KeyboardAwareScrollView
               ref={formScrollRef}
               style={styles.modalScrollView}
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={[
-                styles.modalScrollContent,
-                { paddingBottom: footerPadding },
-              ]}
+              contentContainerStyle={styles.modalScrollContent}
               nestedScrollEnabled={true}
               scrollEnabled={!isAnyDropdownOpen}
               keyboardShouldPersistTaps="handled"
-              bottomOffset={insets.bottom + spacing[3]}
+              bottomOffset={72}
             >
               <View style={styles.modalContent}>
               {error ? (
@@ -1633,34 +1629,14 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                 return (
                   <>
                     {/* Transfer Type Selection - First field for US accounts */}
-                    {accountConfig.accountType === "us" && (
-                      <View style={styles.transferTypeContainer}>
-                        <View style={styles.transferTypeOptions}>
-                          <Pressable
-                           android_ripple={ripple.neutral}
-                            style={[styles.transferTypeOption, transferType === 'ACH' && styles.transferTypeOptionSelected]}
-                            onPress={() => {
-                              setTransferType('ACH')
-                              haptics.tap()
-                            }} >
-                            <Text style={[styles.transferTypeOptionText, transferType === 'ACH' && styles.transferTypeOptionTextSelected]}>
-                              ACH
-                            </Text>
-                          </Pressable>
-                          <Pressable
-                           android_ripple={ripple.neutral}
-                            style={[styles.transferTypeOption, transferType === 'Wire' && styles.transferTypeOptionSelected]}
-                            onPress={() => {
-                              setTransferType('Wire')
-                              haptics.tap()
-                            }} >
-                            <Text style={[styles.transferTypeOptionText, transferType === 'Wire' && styles.transferTypeOptionTextSelected]}>
-                              Fedwire
-                            </Text>
-                          </Pressable>
-                        </View>
-                      </View>
-                    )}
+                    {usTransferMethods.length > 0 ? (
+                      <BankTransferTypeGrid
+                        methods={usTransferMethods}
+                        value={transferType}
+                        onChange={setTransferType}
+                        disabled={isSubmitting}
+                      />
+                    ) : null}
 
                     {/* Account Name */}
                     <View>
@@ -1734,6 +1710,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                             </View>
                           </View>
                         ) : null}
+                        {showsHolderAddress ? (
                         <UsBankAddressFields
                           scrollRef={formScrollRef}
                           inputStyle={styles.modalInput}
@@ -1750,6 +1727,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                           }
                           isSubmitting={isSubmitting}
                         />
+                        ) : null}
                         <View>
                           <TextInput
                             style={styles.modalInput}
@@ -1861,6 +1839,14 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                     {/* EURO Account Fields */}
                     {accountConfig.accountType === "euro" && (
                       <>
+                        {eurTransferMethods.length > 0 ? (
+                          <BankTransferTypeGrid
+                            methods={eurTransferMethods}
+                            value={transferType}
+                            onChange={setTransferType}
+                            disabled={isSubmitting}
+                          />
+                        ) : null}
                         <View>
                           <TextInput
                             style={styles.modalInput}
@@ -1870,19 +1856,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                               setNewRecipient(prev => ({ ...prev, iban: formatted }))
                             }}
                             placeholder={`${accountConfig.fieldLabels.iban} *`}
-                            placeholderTextColor={colors.text.secondary}
-                            autoCapitalize="characters"
-                            returnKeyType="done"
-                            onSubmitEditing={() => Keyboard.dismiss()}
-                            editable={!isSubmitting}
-                          />
-                        </View>
-                        <View>
-                          <TextInput
-                            style={styles.modalInput}
-                            value={newRecipient.swiftBic}
-                            onChangeText={(text) => setNewRecipient(prev => ({ ...prev, swiftBic: text.toUpperCase() }))}
-                            placeholder={accountConfig.fieldLabels.swift_bic}
                             placeholderTextColor={colors.text.secondary}
                             autoCapitalize="characters"
                             returnKeyType="done"
@@ -1911,14 +1884,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                           textContentType="none"
                           editable={!isSubmitting}
                         />
-                        {selectedCountryCurrency && selectedRecipientType === 'bank' &&
-                        recipientFormNeedsBankCode(
-                          getPayoutFieldsSchemaForCorridor({
-                            countryCode: selectedCountryCurrency.countryCode,
-                            currencyCode: selectedCountryCurrency.currencyCode,
-                            rail: 'bank_transfer',
-                          }),
-                        ) ? (
+                        {requiresSwiftBic ? (
                           <TextInput
                             style={styles.modalInput}
                             value={newRecipient.swiftBic}
@@ -1945,6 +1911,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                         })}
                         currencyCode={newRecipient.currency}
                         countryCode={selectedCountryCurrency.countryCode}
+                        payoutProvider={payoutProvider}
                         values={{
                           email: newRecipient.email,
                           phoneNumber: newRecipient.phoneNumber,
@@ -1961,7 +1928,9 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                 )
               })()}
 
-              <View style={styles.modalButtons}>
+              </View>
+            </KeyboardAwareScrollView>
+              <View style={[styles.modalButtons, { paddingBottom: footerPadding }]}>
                 <Pressable
                  android_ripple={ripple.neutral}
                   style={[styles.modalButton, styles.cancelButton]}
@@ -1985,8 +1954,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                   </Text>
                 </Pressable>
               </View>
-              </View>
-            </KeyboardAwareScrollView>
+            </>
             )}
           </View>
           </RecipientFormDropdownHost>
@@ -2358,7 +2326,11 @@ const styles = StyleSheet.create({
   modalButtons: {
     flexDirection: 'row',
     gap: spacing[3],
-    marginTop: spacing[2],
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[3],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border.light,
+    backgroundColor: colors.background.primary,
   },
   modalButton: {
     flex: 1,

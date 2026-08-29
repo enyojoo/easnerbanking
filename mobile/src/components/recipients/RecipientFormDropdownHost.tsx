@@ -88,7 +88,7 @@ export function RecipientFormDropdownHost({ children }: { children: React.ReactN
 
   return (
     <RecipientFormDropdownHostContext.Provider value={value}>
-      {children}
+      <View style={{ flex: 1, minHeight: 0 }}>{children}</View>
       <RecipientFormSelectSheet
         visible={sheet != null}
         onClose={() => closeSheet({ notify: true })}

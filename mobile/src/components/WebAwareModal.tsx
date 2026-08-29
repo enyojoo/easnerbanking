@@ -73,7 +73,12 @@ export function WebAwareModal({
         onRequestClose={onRequestClose}
         statusBarTranslucent
       >
-        <View style={webCenteredModalStyles.overlay}>
+        <View
+          style={[
+            webCenteredModalStyles.overlay,
+            keyboardAvoiding && keyboardBottom > 0 ? { paddingBottom: keyboardBottom } : null,
+          ]}
+        >
           <Pressable
             style={StyleSheet.absoluteFill}
             onPress={onRequestClose}
@@ -99,9 +104,6 @@ export function WebAwareModal({
     )
   }
 
-  const keyboardPanelStyle: ViewStyle | undefined =
-    keyboardAvoiding && keyboardBottom > 0 ? { marginBottom: keyboardBottom } : undefined
-
   return (
     <Modal
       visible
@@ -110,13 +112,17 @@ export function WebAwareModal({
       onRequestClose={onRequestClose}
       statusBarTranslucent
     >
-      <View style={styles.nativeOverlay}>
+      <View
+        style={[
+          styles.nativeOverlay,
+          keyboardAvoiding && keyboardBottom > 0 ? { paddingBottom: keyboardBottom } : null,
+        ]}
+      >
         <Pressable style={StyleSheet.absoluteFill} onPress={onRequestClose} />
         <View
           style={[
             styles.nativePanel,
             { backgroundColor: palette.background.primary },
-            keyboardPanelStyle,
             nativePanelStyle,
           ]}
         >
@@ -135,6 +141,7 @@ const styles = StyleSheet.create({
   },
   nativePanel: {
     flexDirection: 'column',
+    maxHeight: '92%',
     borderTopLeftRadius: borderRadius['3xl'],
     borderTopRightRadius: borderRadius['3xl'],
     paddingTop: spacing[2],

@@ -51,7 +51,7 @@ export interface Recipient {
   /** Client-only snapshot from Easenet lookup / profile cache – not a DB column. */
   payee_avatar_url?: string | null
   payee_account_kind?: 'business' | 'personal'
-  transfer_type?: "ACH" | "Wire"
+  transfer_type?: "ACH" | "Wire" | "RTP" | "FEDNOW" | "SEPA" | "SEPA Instant"
   checking_or_savings?: "checking" | "savings"
   mobile_provider?: string
   wallet_network?: string

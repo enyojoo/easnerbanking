@@ -13,7 +13,7 @@ import {
   Platform,
   Keyboard,
 } from 'react-native'
-import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'react-native-keyboard-controller'
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   Plus,
@@ -46,6 +46,8 @@ import { analytics } from '../../lib/analytics'
 import { useFocusRefresh } from '../../hooks/useFocusRefresh'
 import { useFixedFooterPadding, useScrollPaddingAboveFooter } from '../../hooks/useScrollBottomPadding'
 import { useSendDestinations } from '../../hooks/useSendDestinations'
+import { useBankRecipientFormRails } from '../../hooks/useBankRecipientFormRails'
+import { BankTransferTypeGrid } from '../../components/recipients/UsTransferTypeGrid'
 import { useFocusEffect } from '@react-navigation/native'
 import { getAccountTypeConfigFromCurrency, formatFieldValue } from '../../lib/currencyAccountTypes'
 import { validateRequired, validateAccountNumber, validateIBAN } from '../../utils/validators'
@@ -107,12 +109,10 @@ import {
   isBankNameAllowedForCorridor,
   isMomoProviderAllowedForCorridor,
   normalizeRecipientYcMetadata,
-  recipientFormNeedsAddress,
-  recipientFormNeedsBankCode,
   recipientFormNeedsEmail,
   recipientFormNeedsPhone,
+  recipientFormRequiresSwiftBic,
   resolveYcCorridorSchema,
-  resolvePrimaryPayoutProvider,
   validateYcRecipientForCorridor,
   validateGridRecipientForCorridor,
   mapCadRoutingToGridMetadata,
@@ -166,7 +166,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
   const [showBankDropdown, setShowBankDropdown] = useState(false)
   const [bankSearchTerm, setBankSearchTerm] = useState('')
   const [countrySearchTerm, setCountrySearchTerm] = useState('')
-  const [transferType, setTransferType] = useState<'ACH' | 'Wire' | null>(null) // For USA
+  const [transferType, setTransferType] = useState<string | null>(null)
   // Shared form flow state (used by both add and edit)
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false)
   const [editingRecipient, setEditingRecipient] = useState<Recipient | null>(null)
@@ -190,16 +190,25 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     refresh: refreshCatalog,
   } = useSendDestinations()
 
-  const selectedBankCorridor = useMemo(() => {
-    if (!selectedCountryCurrency || selectedRecipientType !== 'bank') return null
-    return (
-      bankCorridors.find(
-        (c) =>
-          c.country_code === selectedCountryCurrency.countryCode &&
-          c.currency_code === selectedCountryCurrency.currencyCode,
-      ) ?? null
-    )
-  }, [bankCorridors, selectedCountryCurrency, selectedRecipientType])
+  const {
+    selectedBankCorridor,
+    payoutProvider,
+    schemaHints,
+    usTransferMethods,
+    eurTransferMethods,
+    showsHolderAddress,
+    requiresSwiftBic,
+    coerceTransferType,
+  } = useBankRecipientFormRails({
+    selectedRecipientType,
+    selectedCountryCurrency,
+    bankCorridors,
+  })
+
+  useEffect(() => {
+    if (usTransferMethods.length === 0 && eurTransferMethods.length === 0) return
+    setTransferType((prev) => coerceTransferType(prev))
+  }, [usTransferMethods, eurTransferMethods, coerceTransferType])
 
   const ycCorridorSchema = useMemo(() => {
     if (!selectedCountryCurrency) return null
@@ -302,8 +311,6 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     ycBranchCode: '',
     ycGridRegion: '',
   })
-
-  const payoutProvider = resolvePrimaryPayoutProvider(selectedBankCorridor?.provider_routing)
 
   const buildFormYcMetadata = useCallback(() => {
     const extras = normalizeRecipientYcMetadata({
@@ -646,9 +653,6 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
               rail: 'bank_transfer',
             })
           : null
-      const needsAddr =
-        selectedRecipientType === 'bank' &&
-        recipientFormNeedsAddress({ hints: bankSchemaHints, currencyCode: newRecipient.currency })
       const createdRecipient = await recipientService.create(userProfile.id, {
         fullName: newRecipient.fullName,
         accountNumber: accountNumberForType,
@@ -670,25 +674,16 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
         sortCode: newRecipient.sortCode || undefined,
         iban: newRecipient.iban || undefined,
         swiftBic: newRecipient.swiftBic || undefined,
-        transferType: selectedCountryCurrency?.countryCode === 'US' ? transferType || undefined : undefined,
+        transferType:
+          usTransferMethods.length > 0 || eurTransferMethods.length > 0
+            ? (transferType as RecipientData['transferType']) || undefined
+            : undefined,
         checkingOrSavings:
           selectedCountryCurrency?.countryCode === 'US' ? (newRecipient.checkingOrSavings as 'checking' | 'savings' | '') || undefined : undefined,
-        addressLine1:
-          selectedCountryCurrency?.countryCode === 'US' || needsAddr
-            ? newRecipient.addressLine1 || undefined
-            : undefined,
-        city:
-          selectedCountryCurrency?.countryCode === 'US' || needsAddr
-            ? newRecipient.city || undefined
-            : undefined,
-        state:
-          selectedCountryCurrency?.countryCode === 'US' || needsAddr
-            ? newRecipient.state || undefined
-            : undefined,
-        postalCode:
-          selectedCountryCurrency?.countryCode === 'US' || needsAddr
-            ? newRecipient.postalCode || undefined
-            : undefined,
+        addressLine1: showsHolderAddress ? newRecipient.addressLine1 || undefined : undefined,
+        city: showsHolderAddress ? newRecipient.city || undefined : undefined,
+        state: showsHolderAddress ? newRecipient.state || undefined : undefined,
+        postalCode: showsHolderAddress ? newRecipient.postalCode || undefined : undefined,
         metadata: selectedRecipientType === 'bank' ? buildFormYcMetadata() : undefined,
       })
       if (await attachPayrollReceivingMethod(createdRecipient, selectedRecipientType)) return
@@ -772,8 +767,8 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
       : getAllCountryCurrencies().find((cc) => cc.currencyCode === recipient.currency) || null
 
     setSelectedCountryCurrency(countryCurrency)
-    if (countryCurrency?.countryCode === 'US') {
-      setTransferType((recipient.transfer_type as 'ACH' | 'Wire' | null) || null)
+    if (countryCurrency?.currencyCode === 'USD' || countryCurrency?.currencyCode === 'EUR') {
+      setTransferType(coerceTransferType(recipient.transfer_type))
     } else {
       setTransferType(null)
     }
@@ -880,9 +875,6 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
               rail: 'bank_transfer',
             })
           : null
-      const needsAddr =
-        selectedRecipientType === 'bank' &&
-        recipientFormNeedsAddress({ hints: bankSchemaHints, currencyCode: newRecipient.currency })
       const updatedRecipient = await recipientService.update(editingRecipient.id, user.id, {
         fullName: newRecipient.fullName,
         accountNumber: accountNumberForType,
@@ -903,25 +895,16 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
         iban: newRecipient.iban || undefined,
         swiftBic: newRecipient.swiftBic || undefined,
         countryCode: selectedCountryCurrency?.countryCode,
-        transferType: selectedCountryCurrency?.countryCode === 'US' ? transferType || undefined : undefined,
+        transferType:
+          usTransferMethods.length > 0 || eurTransferMethods.length > 0
+            ? (transferType as RecipientData['transferType']) || undefined
+            : undefined,
         checkingOrSavings:
           selectedCountryCurrency?.countryCode === 'US' ? (newRecipient.checkingOrSavings as 'checking' | 'savings' | '') || undefined : undefined,
-        addressLine1:
-          selectedCountryCurrency?.countryCode === 'US' || needsAddr
-            ? newRecipient.addressLine1 || undefined
-            : undefined,
-        city:
-          selectedCountryCurrency?.countryCode === 'US' || needsAddr
-            ? newRecipient.city || undefined
-            : undefined,
-        state:
-          selectedCountryCurrency?.countryCode === 'US' || needsAddr
-            ? newRecipient.state || undefined
-            : undefined,
-        postalCode:
-          selectedCountryCurrency?.countryCode === 'US' || needsAddr
-            ? newRecipient.postalCode || undefined
-            : undefined,
+        addressLine1: showsHolderAddress ? newRecipient.addressLine1 || undefined : undefined,
+        city: showsHolderAddress ? newRecipient.city || undefined : undefined,
+        state: showsHolderAddress ? newRecipient.state || undefined : undefined,
+        postalCode: showsHolderAddress ? newRecipient.postalCode || undefined : undefined,
         metadata: selectedRecipientType === 'bank' ? buildFormYcMetadata() : undefined,
       })
       setUiRecipients((prev) => prev.map((r) => (r.id === updatedRecipient.id ? updatedRecipient : r)))
@@ -992,28 +975,21 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     if (selectedRecipientType === 'easenet') {
       return Boolean(easenetProfile && newRecipient.payeeEasetag.trim().length >= 1)
     }
-    // For US accounts, transfer type is required
-    if (selectedCountryCurrency?.countryCode === 'US' && !transferType) {
+    if ((usTransferMethods.length > 0 || eurTransferMethods.length > 0) && !transferType) {
       return false
     }
     if (
-      selectedCountryCurrency?.countryCode === 'US' &&
+      selectedCountryCurrency?.currencyCode === 'USD' &&
       transferType !== 'Wire' &&
       !newRecipient.checkingOrSavings
     ) {
       return false
     }
-    if (selectedCountryCurrency?.countryCode === 'US' && !newRecipient.addressLine1.trim()) {
-      return false
-    }
-    if (selectedCountryCurrency?.countryCode === 'US' && !newRecipient.city.trim()) {
-      return false
-    }
-    if (selectedCountryCurrency?.countryCode === 'US' && !newRecipient.state.trim()) {
-      return false
-    }
-    if (selectedCountryCurrency?.countryCode === 'US' && !newRecipient.postalCode.trim()) {
-      return false
+    if (showsHolderAddress) {
+      if (!newRecipient.addressLine1.trim()) return false
+      if (!newRecipient.city.trim()) return false
+      if (!newRecipient.state.trim()) return false
+      if (!newRecipient.postalCode.trim()) return false
     }
     if (!newRecipient.fullName || !newRecipient.currency) return false
     if (selectedRecipientType === 'wallet') return !!newRecipient.network && !!newRecipient.walletAddress
@@ -1058,18 +1034,9 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
         : null
     if (recipientFormNeedsEmail(schemaHints) && !newRecipient.email.trim()) return false
     if (recipientFormNeedsPhone(schemaHints) && !newRecipient.phoneNumber.trim()) return false
-    if (recipientFormNeedsBankCode(schemaHints)) {
+    if (recipientFormRequiresSwiftBic({ currencyCode: newRecipient.currency, hints: schemaHints })) {
       const swift = newRecipient.swiftBic.trim()
       if (!swift || !/^[A-Z0-9]{8}([A-Z0-9]{3})?$/i.test(swift)) return false
-    }
-    if (
-      recipientFormNeedsAddress({ hints: schemaHints, currencyCode: newRecipient.currency }) &&
-      selectedCountryCurrency?.countryCode !== 'US'
-    ) {
-      if (!newRecipient.addressLine1.trim()) return false
-      if (!newRecipient.city.trim()) return false
-      if (!newRecipient.state.trim()) return false
-      if (!newRecipient.postalCode.trim()) return false
     }
 
     if (
@@ -1250,7 +1217,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
         currencyCode: selectedCountryCurrency.currencyCode,
         rail: 'bank_transfer',
       })
-      if (recipientFormNeedsBankCode(schemaHints)) {
+      if (requiresSwiftBic) {
         if (!value.trim()) {
           const error = 'SWIFT/BIC is required'
           setFieldErrors(prev => ({ ...prev, [fieldName]: error }))
@@ -1655,7 +1622,6 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
         }}
         nativePanelStyle={{
           height: '92%',
-          paddingBottom: footerPadding,
         }}
         webPanelStyle={{
           maxWidth: 560,
@@ -1705,18 +1671,16 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                 }}
               />
             ) : (
+            <>
             <KeyboardAwareScrollView
               ref={formScrollRef}
               style={styles.modalScrollView}
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={[
-                styles.modalScrollContent,
-                { paddingBottom: footerPadding },
-              ]}
+              contentContainerStyle={styles.modalScrollContent}
               nestedScrollEnabled={true}
               scrollEnabled={!isAnyDropdownOpen}
               keyboardShouldPersistTaps="handled"
-              bottomOffset={insets.bottom + spacing[3]}
+              bottomOffset={72}
             >
               <View style={styles.modalContent}>
               {error ? (
@@ -2131,34 +2095,14 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                 return (
                   <>
                     {/* Transfer Type Selection - First field for US accounts */}
-                    {accountConfig.accountType === "us" && (
-                      <View style={styles.transferTypeContainer}>
-                        <View style={styles.transferTypeOptions}>
-                          <Pressable
-                           android_ripple={ripple.neutral}
-                            style={[styles.transferTypeOption, transferType === 'ACH' && styles.transferTypeOptionSelected]}
-                            onPress={() => {
-                              setTransferType('ACH')
-                              haptics.tap()
-                            }} >
-                            <Text style={[styles.transferTypeOptionText, transferType === 'ACH' && styles.transferTypeOptionTextSelected]}>
-                              ACH
-                            </Text>
-                          </Pressable>
-                          <Pressable
-                           android_ripple={ripple.neutral}
-                            style={[styles.transferTypeOption, transferType === 'Wire' && styles.transferTypeOptionSelected]}
-                            onPress={() => {
-                              setTransferType('Wire')
-                              haptics.tap()
-                            }} >
-                            <Text style={[styles.transferTypeOptionText, transferType === 'Wire' && styles.transferTypeOptionTextSelected]}>
-                              Fedwire
-                            </Text>
-                          </Pressable>
-                        </View>
-                      </View>
-                    )}
+                    {usTransferMethods.length > 0 ? (
+                      <BankTransferTypeGrid
+                        methods={usTransferMethods}
+                        value={transferType}
+                        onChange={setTransferType}
+                        disabled={isSubmitting}
+                      />
+                    ) : null}
 
                     {/* Account Name */}
                     <View>
@@ -2244,6 +2188,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                             </View>
                           </View>
                         ) : null}
+                        {showsHolderAddress ? (
                         <UsBankAddressFields
                           scrollRef={formScrollRef}
                           inputStyle={styles.modalInput}
@@ -2260,6 +2205,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                           }
                           isSubmitting={isSubmitting}
                         />
+                        ) : null}
                         <View>
                           <TextInput
                             style={[styles.modalInput, fieldErrors.routingNumber && styles.modalInputError]}
@@ -2396,6 +2342,14 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                     {/* EURO Account Fields */}
                     {accountConfig.accountType === "euro" && (
                       <>
+                        {eurTransferMethods.length > 0 ? (
+                          <BankTransferTypeGrid
+                            methods={eurTransferMethods}
+                            value={transferType}
+                            onChange={setTransferType}
+                            disabled={isSubmitting}
+                          />
+                        ) : null}
                         <View>
                           <TextInput
                             style={[styles.modalInput, fieldErrors.iban && styles.modalInputError]}
@@ -2415,17 +2369,6 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                             <Text style={styles.errorText}>{fieldErrors.iban}</Text>
                           )}
                         </View>
-                        <TextInput
-                          style={styles.modalInput}
-                          value={newRecipient.swiftBic}
-                          onChangeText={(text) => setNewRecipient(prev => ({ ...prev, swiftBic: text.toUpperCase() }))}
-                          placeholder={accountConfig.fieldLabels.swift_bic}
-                          placeholderTextColor={colors.text.secondary}
-                          autoCapitalize="characters"
-                          returnKeyType="done"
-                          onSubmitEditing={() => Keyboard.dismiss()}
-                          editable={!isSubmitting}
-                        />
                       </>
                     )}
 
@@ -2485,14 +2428,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                           fieldErrors={fieldErrors}
                           isSubmitting={isSubmitting}
                         />
-                        {selectedCountryCurrency && selectedRecipientType === 'bank' &&
-                        recipientFormNeedsBankCode(
-                          getPayoutFieldsSchemaForCorridor({
-                            countryCode: selectedCountryCurrency.countryCode,
-                            currencyCode: selectedCountryCurrency.currencyCode,
-                            rail: 'bank_transfer',
-                          }),
-                        ) ? (
+                        {requiresSwiftBic ? (
                           <>
                             <TextInput
                               style={[styles.modalInput, fieldErrors.swiftBic && styles.modalInputError]}
@@ -2527,6 +2463,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                         })}
                         currencyCode={newRecipient.currency}
                         countryCode={selectedCountryCurrency.countryCode}
+                        payoutProvider={payoutProvider}
                         values={{
                           email: newRecipient.email,
                           phoneNumber: newRecipient.phoneNumber,
@@ -2545,8 +2482,9 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
               })()}
                 </>
               )}
-
-              <View style={styles.modalButtons}>
+              </View>
+            </KeyboardAwareScrollView>
+              <View style={[styles.modalButtons, { paddingBottom: footerPadding }]}>
                 <Pressable
                  android_ripple={ripple.neutral}
                   style={[styles.modalButton, styles.cancelButton]}
@@ -2571,8 +2509,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                   </Text>
                 </Pressable>
               </View>
-              </View>
-            </KeyboardAwareScrollView>
+            </>
             )}
           </View>
           </RecipientFormDropdownHost>
@@ -2898,7 +2835,11 @@ const styles = StyleSheet.create({
   modalButtons: {
     flexDirection: 'row',
     gap: spacing[3],
-    marginTop: spacing[2],
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[3],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border.light,
+    backgroundColor: colors.background.primary,
   },
   modalButton: {
     flex: 1,
