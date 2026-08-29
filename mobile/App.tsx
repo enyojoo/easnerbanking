@@ -141,30 +141,17 @@ function AppContent() {
     setPreserveUserPathOverAuth(authLoading && !authUser)
   }, [authLoading, authUser])
 
-  // Single native splash (`app.json` + `expo-splash-screen`): keep it visible until:
-  // - Supabase session restore has resolved (`authLoading` false)
-  // - React Navigation has mounted (`navReady` true)
-  //
-  // Web skips the opacity gate below; loading shells and PIN render immediately on the themed canvas.
+  // Hide when navigation is up. Do not wait on auth: 206 did, and on this
+  // tree a stalled GoTrue session leaves the native splash up forever.
   useEffect(() => {
     if (Platform.OS === 'web') return
     if (splashFinished) return
-    if (authLoading) return
     if (!navReady) return
-    let cancelled = false
-    void (async () => {
-      if (cancelled) return
-      try {
-        await SplashScreen.hideAsync()
-      } catch (e) {
-        console.warn('SplashScreen.hideAsync', e)
-      }
-      if (!cancelled) setSplashFinished(true)
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [authLoading, navReady, splashFinished])
+    void SplashScreen.hideAsync().catch((e) => {
+      console.warn('SplashScreen.hideAsync', e)
+    })
+    setSplashFinished(true)
+  }, [navReady, splashFinished])
 
   useEffect(() => {
     if (splashFinished) {
@@ -175,6 +162,15 @@ function AppContent() {
       }).start()
     }
   }, [splashFinished, appFadeAnim])
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return
+    const timeout = setTimeout(() => {
+      void SplashScreen.hideAsync().catch(() => {})
+      setSplashFinished(true)
+    }, 2_000)
+    return () => clearTimeout(timeout)
+  }, [])
 
   // Cold-open from notification: stash intent + flush when main stack is ready (PIN may still be showing).
   useEffect(() => {
@@ -443,11 +439,6 @@ export default function App() {
       cancelled = true
     }
   }, [])
-
-  // Block first paint until fonts load on native; web paints with system fallback.
-  if (!fontsLoaded && Platform.OS !== 'web') {
-    return null
-  }
 
   if (supabaseConfigError) {
     return (

@@ -1,3 +1,5 @@
+// Must be first: native splash failsafe before PostHog / AppNavigator evaluate.
+import './src/lib/splashBoot';
 // First import on purpose: captures the JS-start timestamp for the
 // `mobile_cold_start` metric (see src/lib/coldStartMetrics.ts).
 import './src/lib/coldStartMetrics';
