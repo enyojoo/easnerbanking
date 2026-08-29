@@ -35,6 +35,10 @@ async function loadFont(url: URL, fallbackRel: string): Promise<Buffer> {
   throw new Error(`Statement font not found: ${fallbackRel}`)
 }
 
+function fontDataUrl(buffer: Buffer): string {
+  return `data:font/truetype;base64,${buffer.toString("base64")}`
+}
+
 /** Geist includes ₦ and other local-currency glyphs Helvetica drops. */
 export async function registerStatementFonts(): Promise<void> {
   if (registered) return
@@ -47,8 +51,8 @@ export async function registerStatementFonts(): Promise<void> {
       Font.register({
         family: "StatementSans",
         fonts: [
-          { src: regular, fontWeight: 400 },
-          { src: bold, fontWeight: 700 },
+          { src: fontDataUrl(regular), fontWeight: 400 },
+          { src: fontDataUrl(bold), fontWeight: 700 },
         ],
       })
       registered = true
