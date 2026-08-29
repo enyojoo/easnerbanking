@@ -10,6 +10,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
 import { PressablesConfig } from 'pressto'
 import { useFonts } from 'expo-font'
+import * as SplashScreen from 'expo-splash-screen'
 import * as SystemUI from 'expo-system-ui'
 import { AuthProvider, useAuth } from './src/contexts/AuthContext'
 import { NotificationsProvider } from './src/contexts/NotificationsContext'
@@ -64,7 +65,9 @@ import { hydrateWarmImageUrls } from './src/lib/imageCache'
 import { prefetchIntercomModule } from './src/lib/intercom'
 import { USE_NATIVE_DRIVER } from './src/lib/animation'
 import { ExpressStripeProvider } from './src/components/ExpressStripeProvider'
-import { hideNativeSplash } from './src/lib/splashGate'
+
+// Keep the splash screen visible while we load fonts (build 206).
+SplashScreen.preventAutoHideAsync()
 
 // Inner app component that has access to AuthContext
 function AppContent() {
@@ -123,7 +126,9 @@ function AppContent() {
       root.style.minHeight = '100%'
       root.style.backgroundColor = canvas
     }
-    hideNativeSplash()
+    void SplashScreen.hideAsync().catch((e) => {
+      console.warn('SplashScreen.hideAsync', e)
+    })
     const onPageShow = (event: PageTransitionEvent) => {
       if (event.persisted) markWebBfcacheRestore()
     }
@@ -136,16 +141,30 @@ function AppContent() {
     setPreserveUserPathOverAuth(authLoading && !authUser)
   }, [authLoading, authUser])
 
-  // Hide native splash as soon as navigation has mounted. Do not wait on
-  // auth restore: if GoTrue stalls, waiting here is a stuck splash. Session
-  // restore still uses the ivory shell in AppNavigator (same as 206).
+  // Single native splash (`app.json` + `expo-splash-screen`): keep it visible until:
+  // - Supabase session restore has resolved (`authLoading` false)
+  // - React Navigation has mounted (`navReady` true)
+  //
+  // Web skips the opacity gate below; loading shells and PIN render immediately on the themed canvas.
   useEffect(() => {
     if (Platform.OS === 'web') return
     if (splashFinished) return
+    if (authLoading) return
     if (!navReady) return
-    hideNativeSplash()
-    setSplashFinished(true)
-  }, [navReady, splashFinished])
+    let cancelled = false
+    void (async () => {
+      if (cancelled) return
+      try {
+        await SplashScreen.hideAsync()
+      } catch (e) {
+        console.warn('SplashScreen.hideAsync', e)
+      }
+      if (!cancelled) setSplashFinished(true)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [authLoading, navReady, splashFinished])
 
   useEffect(() => {
     if (splashFinished) {
@@ -156,15 +175,6 @@ function AppContent() {
       }).start()
     }
   }, [splashFinished, appFadeAnim])
-
-  useEffect(() => {
-    if (Platform.OS === 'web') return
-    const timeout = setTimeout(() => {
-      hideNativeSplash()
-      setSplashFinished(true)
-    }, 2_000)
-    return () => clearTimeout(timeout)
-  }, [])
 
   // Cold-open from notification: stash intent + flush when main stack is ready (PIN may still be showing).
   useEffect(() => {
@@ -333,7 +343,9 @@ export default function App() {
 
   useEffect(() => {
     if (!fontsLoaded || !supabaseConfigError) return
-    hideNativeSplash()
+    void SplashScreen.hideAsync().catch((e) => {
+      console.warn('SplashScreen.hideAsync', e)
+    })
   }, [fontsLoaded, supabaseConfigError])
 
   // Foreground/tap listeners only; token registration is gated on user prefs in PushNotificationBootstrap
@@ -431,6 +443,11 @@ export default function App() {
       cancelled = true
     }
   }, [])
+
+  // Block first paint until fonts load on native; web paints with system fallback.
+  if (!fontsLoaded && Platform.OS !== 'web') {
+    return null
+  }
 
   if (supabaseConfigError) {
     return (
