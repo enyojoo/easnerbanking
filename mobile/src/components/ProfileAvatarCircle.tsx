@@ -2,18 +2,19 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { View, StyleSheet, type StyleProp, type ViewStyle, type ImageStyle } from 'react-native'
 import { AvatarImage } from './AvatarImage'
 import { avatarImageUri } from '../lib/avatarCache'
+import { isImageWarm, prefetchImageUri } from '../lib/imageCache'
+
+type ProfileAvatarCircleProps = {
+  avatarUrl: unknown
+  fallback: ReactNode
+  style?: StyleProp<ViewStyle>
+  imageStyle?: StyleProp<ImageStyle>
+  onError?: () => void
+}
 
 /**
- * Profile avatar with initials fallback (PIN, dashboard header, Easetag rows).
- *
- * The fallback renders BEHIND the image unconditionally — no JS "warm" gate.
- * An earlier version painted initials over the photo until an async
- * `isImageWarm`/prefetch round-trip resolved, which lost its own race against
- * the boot-time warm-index hydration and flashed initials→photo on every cold
- * start even when expo-image had the bytes on disk. expo-image with
- * `cachePolicy="memory-disk"` and `transition={0}` paints a cached image on
- * the first frame; while a cold image streams in, it is transparent and the
- * initials show through — same placeholder UX, zero added delay.
+ * Profile avatar with initials fallback that hides once the image is warm in cache
+ * (PIN, dashboard header, Easetag rows).
  */
 export function ProfileAvatarCircle({
   avatarUrl,
@@ -21,18 +22,28 @@ export function ProfileAvatarCircle({
   style,
   imageStyle,
   onError,
-}: {
-  avatarUrl: unknown
-  fallback: ReactNode
-  style?: StyleProp<ViewStyle>
-  imageStyle?: StyleProp<ImageStyle>
-  onError?: () => void
-}) {
+}: ProfileAvatarCircleProps) {
   const uri = avatarImageUri(avatarUrl)
+  const [ready, setReady] = useState(() => Boolean(uri && isImageWarm(uri)))
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
     setFailed(false)
+    if (!uri) {
+      setReady(false)
+      return
+    }
+    if (isImageWarm(uri)) {
+      setReady(true)
+      return
+    }
+    let cancelled = false
+    void prefetchImageUri(uri).then(() => {
+      if (!cancelled) setReady(true)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [uri])
 
   if (!uri || failed) {
@@ -41,11 +52,12 @@ export function ProfileAvatarCircle({
 
   return (
     <View style={[styles.shell, style]}>
-      <View style={[styles.fallbackHost, StyleSheet.absoluteFill]}>{fallback}</View>
+      {!ready ? <View style={[styles.fallbackHost, StyleSheet.absoluteFill]}>{fallback}</View> : null}
       <AvatarImage
         avatarUrl={avatarUrl}
         style={[StyleSheet.absoluteFill, imageStyle]}
         prefetch={false}
+        onLoad={() => setReady(true)}
         onError={() => {
           setFailed(true)
           onError?.()

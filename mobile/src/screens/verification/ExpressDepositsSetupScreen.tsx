@@ -35,7 +35,6 @@ import {
   lineHeight as lineHeightScale,
 } from '../../theme'
 import { haptics } from '../../lib/haptics'
-import { analytics } from '../../lib/analytics'
 import { useStackHardwareBack } from '../../hooks/useStackHardwareBack'
 import { navigateStackBack } from '../../navigation/stackBackNavigation'
 import { apiFetch } from '../../query/api-client'
@@ -114,7 +113,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
     const peeked = peekExpressOnrampStatus()
     if (peeked?.publishableKey) void loadMobileExpressOnramp(peeked.publishableKey).catch(() => undefined)
     else prefetchMobileExpressOnramp()
-    void refresh(true).catch((e) =>
+    void refresh(false).catch((e) =>
       setMessage(e instanceof Error ? e.message : EXPRESS_DEPOSITS_COPY.geoUnavailable),
     )
   }, [refresh])
@@ -424,7 +423,6 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
                 }
               : {}),
           })
-          analytics.trackKycSubmitted({ provider: step === 'eu_kyc' ? 'stripe_eu' : 'stripe_us' })
         } catch (e) {
           if (!isExpressKycAlreadyVerified(e instanceof Error ? e.message : String(e))) throw e
         }

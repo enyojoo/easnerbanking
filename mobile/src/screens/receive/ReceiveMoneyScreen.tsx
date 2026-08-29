@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
-import { qk, isVaAnswerSettled, shouldShowBankDepositTab, mapResidenceToLocalPayInCurrency, expressDepositsPayerCountry, isExpressCashKind, listExpressCashKinds, resolveUsPayInModeFromCatalog, usPayInAllowsExpress, usPayInAllowsVa, type NgLocalIdType } from '@easner/shared'
+import { qk, isVaAnswerSettled, shouldShowBankDepositTab, mapResidenceToLocalPayInCurrency, expressDepositsPayerCountry, isExpressCashKind, listExpressCashKinds, type NgLocalIdType } from '@easner/shared'
 import {
   View,
   Text,
@@ -49,13 +49,11 @@ import {
   resolveWarmYcLocalDepositCorridor,
   ensureYcLocalDepositCachesReady,
   prefetchNgLocalVerification,
-  clearNgLocalVerificationCache,
-  readCachedNgLocalMissingTypes,
+  readCachedNgLocalMissingType,
   resolveReceiveRailsForDisplay,
 } from '../../lib/warmYcLocalDepositCaches'
 import { useStackHardwareBack } from '../../hooks/useStackHardwareBack'
 import { navigateStackBack } from '../../navigation/stackBackNavigation'
-import { analytics } from '../../lib/analytics'
 
 type TabType = 'cash' | 'stablecoin'
 
@@ -70,12 +68,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const relayDepositQuery = useConsumerRelayDepositAddresses(currency === 'USD')
 
   const [activeTab, setActiveTab] = useState<TabType>('cash')
-  useFocusEffect(
-    useCallback(() => {
-      analytics.trackReceiveViewed({ currency })
-    }, [currency]),
-  )
-  const [ngMissingTypes, setNgMissingTypes] = useState<NgLocalIdType[]>([])
+  const [ngMissingType, setNgMissingType] = useState<NgLocalIdType | null>(null)
   const expressDeviceWallets = useMemo(
     () => ({
       applePay: Platform.OS === 'ios' || Platform.OS === 'web',
@@ -83,11 +76,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     }),
     [],
   )
-
-  const { catalogRevision, bankCorridors, data: sendDestinations } = useSendDestinations()
-  const usPayInMode = resolveUsPayInModeFromCatalog(bankCorridors, sendDestinations != null)
-  const usAllowsVa = currency !== 'USD' || usPayInAllowsVa(usPayInMode)
-  const usAllowsExpress = currency !== 'USD' || usPayInAllowsExpress(usPayInMode)
 
   const instantExpressPayerCountry = expressDepositsPayerCountry({
     residenceCountry: userProfile?.residence_country ?? userProfile?.profile?.residence_country,
@@ -99,11 +87,10 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     const kycApproved =
       String(userProfile?.noah_kyc_status || userProfile?.profile?.noah_kyc_status || '').toLowerCase() ===
       'approved'
-    if (currency !== 'USD' || !kycApproved || !usAllowsExpress) return []
+    if (currency !== 'USD' || !kycApproved) return []
     const cached = peekExpressOnrampStatus()
     const country = cached?.payerCountry || instantExpressPayerCountry
     if (cached && cached.eligible === false) return []
-    if (cached?.office?.stripeOnrampEnabled === false) return []
     const fromApi = (cached?.methods ?? []).filter(isExpressCashKind)
     const filterDevice = (kinds: ExpressCashKind[]) =>
       kinds.filter((kind) => {
@@ -208,7 +195,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     verificationComplete,
     vaSettled,
     hasVirtualAccount: hasAccountData,
-    ...(currency === 'USD' ? { officeAllowsVa: usAllowsVa } : {}),
   })
   const showStablecoinTab = supportsStablecoins
   const localPayInCurrency = useMemo(() => {
@@ -217,6 +203,8 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   }, [userProfile?.residence_country])
 
   const residenceCountry = String(userProfile?.residence_country ?? '').trim().toUpperCase()
+
+  const { catalogRevision } = useSendDestinations()
 
   const payInProvider = useMemo(
     () =>
@@ -264,7 +252,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
   const bankAvailable = displayRails?.rails.bank_transfer.available ?? false
   const momoAvailable = displayRails?.rails.mobile_money.available ?? false
-  const localDepositBlocked = Boolean(localPayInCurrency === 'NGN' && ngMissingTypes.length > 0)
+  const localDepositBlocked = Boolean(localPayInCurrency === 'NGN' && ngMissingType)
 
   const navigateToBankDetails = () => {
     haptics.medium()
@@ -284,23 +272,23 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
       payInRail,
       bankAvailable,
       momoAvailable,
-      ngMissingTypes,
+      ngMissingType,
     } as never)
   }
 
   useEffect(() => {
     if (localPayInCurrency !== 'NGN' || !verificationComplete || currency !== 'USD' || !residenceCountry) {
-      setNgMissingTypes([])
+      setNgMissingType(null)
       return
     }
-    const cachedMissing = readCachedNgLocalMissingTypes(residenceCountry)
+    const cachedMissing = readCachedNgLocalMissingType(residenceCountry)
     if (cachedMissing !== undefined) {
-      setNgMissingTypes(cachedMissing)
+      setNgMissingType(cachedMissing)
     }
     let cancelled = false
     void (async () => {
-      const missingTypes = await prefetchNgLocalVerification(residenceCountry)
-      if (!cancelled) setNgMissingTypes(missingTypes)
+      const missingType = await prefetchNgLocalVerification(residenceCountry)
+      if (!cancelled) setNgMissingType(missingType)
     })()
     return () => {
       cancelled = true
@@ -308,8 +296,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   }, [localPayInCurrency, verificationComplete, currency, residenceCountry])
 
   useEffect(() => {
-    if (currency !== 'USD' || !verificationComplete || !usAllowsExpress) {
-      setExpressReady(false)
+    if (currency !== 'USD' || !verificationComplete) {
       setExpressMethods([])
       return
     }
@@ -347,7 +334,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     return () => {
       cancelled = true
     }
-  }, [currency, verificationComplete, usAllowsExpress, instantExpressPayerCountry, expressDeviceWallets])
+  }, [currency, verificationComplete, instantExpressPayerCountry, expressDeviceWallets])
 
   const accountReady = hasAccountData
 
@@ -683,12 +670,11 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                 renderDepositVerificationNotice('cash')
               ) : (
               <View style={{ gap: spacing[4] }}>
-                {localPayInCurrency === 'NGN' && ngMissingTypes.length > 0 ? (
+                {localPayInCurrency === 'NGN' && ngMissingType ? (
                   <NgLocalVerificationNotice
-                    missingTypes={ngMissingTypes}
+                    missingType={ngMissingType}
                     onSaved={() => {
-                      setNgMissingTypes([])
-                      if (residenceCountry) clearNgLocalVerificationCache(residenceCountry)
+                      setNgMissingType(null)
                       void refreshUserProfile?.()
                     }}
                   />

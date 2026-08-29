@@ -1,27 +1,46 @@
 import React from 'react'
 import { View, TextInput, StyleSheet } from 'react-native'
 import type { PayoutFieldsSchemaHint } from '@easner/shared'
-import { recipientFormNeedsEmail, recipientFormNeedsPhone } from '@easner/shared'
+import {
+  recipientFormNeedsAddress,
+  recipientFormNeedsEmail,
+  recipientFormNeedsPhone,
+} from '@easner/shared'
 import { colors, spacing, textStyles, compactInputMetrics } from '../../theme'
 
 export type PayoutRecipientExtraValues = {
   email: string
   phoneNumber: string
+  addressLine1: string
+  city: string
+  state: string
+  postalCode: string
 }
 
 type Props = {
   hints: PayoutFieldsSchemaHint | null
+  currencyCode: string
+  countryCode?: string
   values: PayoutRecipientExtraValues
   onChange: (patch: Partial<PayoutRecipientExtraValues>) => void
   isSubmitting?: boolean
 }
 
-/** Email and phone when Noah fields_schema requires them (ZA, …). */
-export function PayoutSchemaExtraFields({ hints, values, onChange, isSubmitting }: Props) {
+/** Email, phone, and holder address when Noah fields_schema requires them (ZA, CA, …). */
+export function PayoutSchemaExtraFields({
+  hints,
+  currencyCode,
+  countryCode,
+  values,
+  onChange,
+  isSubmitting,
+}: Props) {
   const needsEmail = recipientFormNeedsEmail(hints)
   const needsPhone = recipientFormNeedsPhone(hints)
+  const needsAddress =
+    recipientFormNeedsAddress({ hints, currencyCode }) && countryCode !== 'US'
 
-  if (!needsEmail && !needsPhone) return null
+  if (!needsEmail && !needsPhone && !needsAddress) return null
 
   return (
     <View style={styles.wrap}>
@@ -48,6 +67,46 @@ export function PayoutSchemaExtraFields({ hints, values, onChange, isSubmitting 
           editable={!isSubmitting}
         />
       ) : null}
+      {needsAddress ? (
+        <>
+          <TextInput
+            style={styles.input}
+            value={values.addressLine1}
+            onChangeText={(text) => onChange({ addressLine1: text })}
+            placeholder="Street address *"
+            placeholderTextColor={colors.text.secondary}
+            autoCapitalize="words"
+            editable={!isSubmitting}
+          />
+          <TextInput
+            style={styles.input}
+            value={values.city}
+            onChangeText={(text) => onChange({ city: text })}
+            placeholder="City *"
+            placeholderTextColor={colors.text.secondary}
+            autoCapitalize="words"
+            editable={!isSubmitting}
+          />
+          <View style={styles.row}>
+            <TextInput
+              style={[styles.input, styles.half]}
+              value={values.state}
+              onChangeText={(text) => onChange({ state: text })}
+              placeholder="State / region *"
+              placeholderTextColor={colors.text.secondary}
+              editable={!isSubmitting}
+            />
+            <TextInput
+              style={[styles.input, styles.half]}
+              value={values.postalCode}
+              onChangeText={(text) => onChange({ postalCode: text })}
+              placeholder="Postal code *"
+              placeholderTextColor={colors.text.secondary}
+              editable={!isSubmitting}
+            />
+          </View>
+        </>
+      ) : null}
     </View>
   )
 }
@@ -66,4 +125,6 @@ const styles = StyleSheet.create({
     minHeight: 48,
     ...compactInputMetrics,
   },
+  row: { flexDirection: 'row', gap: spacing[3] },
+  half: { flex: 1 },
 })

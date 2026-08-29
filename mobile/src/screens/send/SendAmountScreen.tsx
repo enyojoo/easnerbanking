@@ -41,7 +41,6 @@ import {
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { useToast } from '../../components/ToastProvider'
-import { EasnerAlertSheet } from '../../components/premium'
 import { useNoahSendExchangeRates, prefetchNoahSendExchangeRates } from '../../hooks/queries'
 import { useQueryClient } from '@tanstack/react-query'
 import { useYcCrossBorderFlow, type YcPayInRail, residenceCountryFromPayInCurrency } from '../../hooks/useYcCrossBorderFlow'
@@ -79,12 +78,6 @@ import {
   isGridBalancePayoutCorridor,
   isNoahBalancePayoutCorridor,
   resolveBalancePayoutProvider,
-  resolvePayoutProviderForHolderAddress,
-  recipientNeedsHolderAddressBeforeSend,
-  RECIPIENT_HOLDER_ADDRESS_REQUIRED_TITLE,
-  RECIPIENT_HOLDER_ADDRESS_REQUIRED_BODY,
-  RECIPIENT_HOLDER_ADDRESS_REQUIRED_EDIT_CTA,
-  RECIPIENT_HOLDER_ADDRESS_REQUIRED_BACK_CTA,
   resolveEffectiveYcBalancePayoutMinReceive,
   resolveYcPayoutLimits,
   resolveGridPayoutLimits,
@@ -111,10 +104,8 @@ import {
   ensureSendPayoutQuoteLocked,
   isCompletePayoutQuote,
   isStashedPayoutQuoteFresh,
-  isStashedPayoutQuotePreviewFresh,
   peekLastPayoutQuoteError,
   peekSendPayoutQuote,
-  peekSendPayoutQuotePreview,
   clearSendPayoutQuote,
   payoutRequestedReceiveAmount,
   payoutDisplayAmountsFromQuote,
@@ -123,10 +114,8 @@ import {
   ensureSendWalletQuoteStashed,
   ensureSendWalletOrderConfirmed,
   isStashedWalletQuoteFresh,
-  isStashedWalletQuotePreviewFresh,
   peekLastWalletQuoteError,
   peekSendWalletQuote,
-  peekSendWalletQuotePreview,
   clearSendWalletQuote,
 } from '../../lib/sendFlowWalletQuote'
 import {
@@ -135,17 +124,14 @@ import {
 } from '../../lib/sendFlowFundBalanceQuote'
 import {
   clearCrossBorderQuote,
-  isStashedCrossBorderQuoteFresh,
   isUsableCrossBorderQuotePreview,
-  peekCrossBorderQuote,
   prefetchCrossBorderQuotePipeline,
   peekLastCrossBorderQuoteError,
   warmCrossBorderQuotePipeline,
 } from '../../lib/sendFlowCrossBorderQuote'
-import { getPayoutCorridorCache, isRecipientPayoutCorridorActive } from '../../lib/payoutCorridors'
+import { getPayoutCorridorCache, isRecipientPayoutCorridorActive, refreshPayoutCorridors } from '../../lib/payoutCorridors'
 import {
   getCachedSendDestinations,
-  getSendDestinationsMemory,
   refreshSendDestinations,
 } from '../../lib/sendDestinations'
 import type { SendDestinationsResponse } from '@easner/shared'
@@ -165,12 +151,10 @@ import { haptics } from '../../lib/haptics'
 import { buildDynamicAmountTextStyle, getDynamicAmountFontSize } from '../../lib/dynamicAmountFontSize'
 import { formatSendAgainKeypadAmount } from '../../lib/resolveSendAgainRecipient'
 import { getSendAmountFieldSymbol } from '../../lib/sendAmountFieldSymbol'
-import { consumePendingSendAmountParams } from '../../lib/navigateRecipientForm'
 import { getCurrencySymbol } from '../../utils/formatters'
 import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
 import { SendAmountShellWebForm } from '../../components/send/SendAmountShellWebForm'
 import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
-import { analytics } from '../../lib/analytics'
 
 function initialSendAmountFromRouteParams(params: Record<string, unknown> | undefined): string {
   const formatted = String(params?.initialSendAmount ?? '').trim()
@@ -187,7 +171,6 @@ function initialAmountEntryModeFromRouteParams(
 }
 
 export default function SendAmountScreen({ navigation, route }: NavigationProps) {
-  const pendingSendAmount = useRef(consumePendingSendAmountParams()).current
   const { width: windowWidth, height: windowHeight } = useWindowDimensions()
   const { isWeb, mode } = useResponsiveLayout()
   const useWebShellLayout = isWeb && (mode === 'tablet' || mode === 'desktop')
@@ -207,33 +190,24 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const { balances, refreshBalances } = useBalance()
   
   // Get recipient from route params if coming from the send recipient hub
-  const recipientFromRoute = ((route.params as any)?.recipient ?? pendingSendAmount?.recipient) as
-    | Recipient
+  const recipientFromRoute = (route.params as any)?.recipient as Recipient | undefined
+  const draftRecipientPersistFromRoute = (route.params as any)?.draftRecipientPersist as
+    | RecipientData
     | undefined
-  const draftRecipientPersistFromRoute = ((route.params as any)?.draftRecipientPersist ??
-    pendingSendAmount?.draftRecipientPersist) as RecipientData | undefined
-  const preferredBalanceCurrencyFromRoute = String(
-    (route.params as any)?.preferredBalanceCurrency ??
-      pendingSendAmount?.preferredBalanceCurrency ??
-      '',
-  ).toUpperCase()
-  const selectedPaymentMethodFromRoute = ((route.params as any)?.selectedPaymentMethod ??
-    pendingSendAmount?.selectedPaymentMethod) as 'balance' | 'otherCurrency' | undefined
-  const selectedOtherCurrencyFromRoute = ((route.params as any)?.selectedOtherCurrency ??
-    pendingSendAmount?.selectedOtherCurrency) as string | undefined
-  const selectedOtherPaymentMethodFromRoute = ((route.params as any)?.selectedOtherPaymentMethod ??
-    pendingSendAmount?.selectedOtherPaymentMethod) as string | undefined
-  const routeParamsRecord = {
-    ...(pendingSendAmount ?? {}),
-    ...((route.params as Record<string, unknown> | undefined) ?? {}),
-  }
+  const preferredBalanceCurrencyFromRoute = String((route.params as any)?.preferredBalanceCurrency || '').toUpperCase()
+  const selectedPaymentMethodFromRoute = (route.params as any)?.selectedPaymentMethod as
+    | 'balance'
+    | 'otherCurrency'
+    | undefined
+  const selectedOtherCurrencyFromRoute = (route.params as any)?.selectedOtherCurrency as string | undefined
+  const selectedOtherPaymentMethodFromRoute = (route.params as any)?.selectedOtherPaymentMethod as string | undefined
+  const routeParamsRecord = route.params as Record<string, unknown> | undefined
   const isPreferredBalanceCurrency = preferredBalanceCurrencyFromRoute === 'USD' || preferredBalanceCurrencyFromRoute === 'EUR'
   const didInitializeBalanceCurrency = useRef(false)
   const sendAgainPrefillAppliedRef = useRef(false)
   const [walletQuotePreview, setWalletQuotePreview] = useState<WalletSendQuote | null>(null)
   const [isContinuePending, setIsContinuePending] = useState(false)
   const [isContinueLoading, setIsContinueLoading] = useState(false)
-  const [addressRequiredOpen, setAddressRequiredOpen] = useState(false)
   const continueSpinnerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   
   // UI State only - no backend integration
@@ -359,14 +333,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const balancePayoutProvider = useMemo(
     () => resolveBalancePayoutProvider(payoutCorridorRow),
     [payoutCorridorRow],
-  )
-  const holderAddressPayoutProvider = useMemo(
-    () =>
-      resolvePayoutProviderForHolderAddress({
-        providerRouting: payoutCorridorRow?.provider_routing,
-        senderCountryCode: userProfile?.residence_country,
-      }),
-    [payoutCorridorRow?.provider_routing, userProfile?.residence_country],
   )
 
   const isNoahBalancePayout =
@@ -566,10 +532,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       if (noahKycStatus !== 'approved') {
         void refreshUserProfile()
       }
-      const params = {
-        ...(pendingSendAmount ?? {}),
-        ...((route.params as Record<string, unknown> | undefined) ?? {}),
-      }
+      const params = route.params as Record<string, unknown> | undefined
       if (params?.recipient) {
         // Update recipient immediately for smooth transition
         setRecipient(params.recipient as Recipient)
@@ -599,7 +562,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
   useFocusEffect(
     React.useCallback(() => {
-      const applyCorridorGate = () => {
+      void getCachedSendDestinations().then((c) => {
+        if (c) setSendDestinations(c)
+      })
+      void refreshSendDestinations().then((c) => {
+        if (c) setSendDestinations(c)
+      })
+      void refreshPayoutCorridors().then(() => {
         const params = route.params as { recipient?: Recipient } | undefined
         const r = params?.recipient || recipient
         if (r) {
@@ -607,24 +576,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         } else {
           setPayoutCorridorActive(true)
         }
-      }
-      // Seed synchronously from the in-process catalog so the CTA is never
-      // network-gated when a cached catalog exists.
-      const memoryCatalog = getSendDestinationsMemory()
-      if (memoryCatalog) {
-        setSendDestinations(memoryCatalog)
-        applyCorridorGate()
-      }
-      void getCachedSendDestinations().then((c) => {
-        if (c) {
-          setSendDestinations(c)
-          applyCorridorGate()
-        }
-      })
-      // Single deduped refresh (refreshPayoutCorridors is the same function).
-      void refreshSendDestinations().then((c) => {
-        if (c) setSendDestinations(c)
-        applyCorridorGate()
       })
     }, [route.params, recipient]),
   )
@@ -1149,9 +1100,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       amountEntryMode: 'receive' as const,
       entryAmount: receiveAmount,
       receiveCurrency,
-      sourceBalanceCurrency: selectedBalanceCurrency,
     }),
-    [recipient?.id, receiveAmount, receiveCurrency, selectedBalanceCurrency],
+    [recipient?.id, receiveAmount, receiveCurrency],
   )
 
   const walletQuoteFresh = isStashedWalletQuoteFresh(walletQuoteStashMeta)
@@ -1244,7 +1194,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       amountEntryMode,
       entryAmount: amountEntryMode === 'send' ? sendingAmount : receiveAmount,
       receiveCurrency,
-      sourceBalanceCurrency: selectedBalanceCurrency,
     }
     void ensureSendPayoutQuoteStashed(
       () =>
@@ -1416,12 +1365,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         draftRecipientPersist &&
         !isEasetagRecipient
       ) {
-        // Pending set synchronously before the await – guards double-tap while
-        // the draft recipient POST resolves (spinner only after the 175ms grace).
-        setIsContinuePending(true)
-        if (!continueSpinnerTimerRef.current) {
-          continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
-        }
         activeRecipient = await resolveDraftRecipient(userProfile.id, recipient, draftRecipientPersist)
         setRecipient(activeRecipient)
         setDraftRecipientPersist(undefined)
@@ -1454,25 +1397,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         return
       }
       setAmountFieldError(null)
-
-      if (
-        recipientNeedsHolderAddressBeforeSend({
-          rail: payoutRail,
-          isWallet: isWalletRecipient,
-          isEasetag: isEasetagRecipient,
-          hints: payoutHints,
-          currencyCode: activeRecipient.currency || '',
-          countryCode: activeRecipient.country_code,
-          payoutProvider: holderAddressPayoutProvider,
-          addressLine1: activeRecipient.address_line1,
-          city: activeRecipient.city,
-          state: activeRecipient.state,
-          postalCode: activeRecipient.postal_code,
-        })
-      ) {
-        setAddressRequiredOpen(true)
-        return
-      }
 
       haptics.medium()
       payoutQuotePrefetchControls.flush()
@@ -1515,7 +1439,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             ? navAmounts.sendAmount
             : receiveAmountValue,
         receiveCurrency,
-        sourceBalanceCurrency: selectedBalanceCurrency,
       }
 
       if (
@@ -1569,105 +1492,68 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       const quoteAlreadyWarm =
         needsQuoteAwait &&
         (isWalletRecipient
-          ? isStashedWalletQuoteFresh(quoteStashMeta) ||
-            isStashedWalletQuotePreviewFresh(quoteStashMeta)
-          : isStashedPayoutQuoteFresh(quoteStashMeta) ||
-            isStashedPayoutQuotePreviewFresh(quoteStashMeta))
+          ? isStashedWalletQuoteFresh(quoteStashMeta)
+          : isStashedPayoutQuoteFresh(quoteStashMeta))
 
       if (needsQuoteAwait && !quoteAlreadyWarm) {
         setIsContinuePending(true)
-        if (!continueSpinnerTimerRef.current) {
-          continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
-        }
+        continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
       }
 
-      let stashedWalletQuote: WalletSendQuote | null = null
-      if (
+      const stashedWalletQuote =
         selectedPaymentMethod === 'balance' &&
         isWalletRecipient &&
         receiveAmountValue > 0
-      ) {
-        const fetchWalletQuote = () =>
-          noahService.createWalletSendQuote({
-            recipientId: activeRecipient.id,
-            sourceBalanceCurrency: selectedBalanceCurrency,
-            amountEntryMode: 'receive',
-            receiveAmount: receiveAmountValue,
-          })
-        const fetchWalletConfirm = (formSessionId: string) =>
-          noahService.confirmWalletSendOrder({ formSessionId })
-        if (isStashedWalletQuoteFresh(quoteStashMeta)) {
-          stashedWalletQuote = peekSendWalletQuote()
-        } else if (isStashedWalletQuotePreviewFresh(quoteStashMeta)) {
-          // Navigate-then-resolve: fire the confirm in the background and go.
-          // The review re-locks on mount and joins this deduped in-flight
-          // confirm (same meta key) – never a second provider order.
-          stashedWalletQuote = peekSendWalletQuotePreview()
-          void ensureSendWalletOrderConfirmed(
-            fetchWalletQuote,
-            fetchWalletConfirm,
-            quoteStashMeta,
-          ).catch(() => {})
-        } else {
-          stashedWalletQuote = await ensureSendWalletOrderConfirmed(
-            fetchWalletQuote,
-            fetchWalletConfirm,
-            quoteStashMeta,
-          )
-        }
-      } else if (isStashedWalletQuoteFresh(quoteStashMeta)) {
-        stashedWalletQuote = peekSendWalletQuote()
-      }
+          ? await ensureSendWalletOrderConfirmed(
+              () =>
+                noahService.createWalletSendQuote({
+                  recipientId: activeRecipient.id,
+                  sourceBalanceCurrency: selectedBalanceCurrency,
+                  amountEntryMode: 'receive',
+                  receiveAmount: receiveAmountValue,
+                }),
+              (formSessionId) => noahService.confirmWalletSendOrder({ formSessionId }),
+              quoteStashMeta,
+            )
+          : isStashedWalletQuoteFresh(quoteStashMeta)
+            ? peekSendWalletQuote()
+            : null
 
       let stashedQuote: Awaited<ReturnType<typeof ensureSendPayoutQuoteLocked>> = null
-      let payoutQuoteIsPreview = false
       if (
         selectedPaymentMethod === 'balance' &&
         !isEasetagRecipient &&
         !isWalletRecipient &&
         receiveAmountValue > 0
       ) {
-        const fetchPayoutQuote = () =>
-          noahService.createPayoutQuote({
-            recipientId: activeRecipient.id,
-            receiveAmount: receiveAmountValue,
-            sourceBalanceCurrency: selectedBalanceCurrency,
-            amountEntryMode,
-            ...(amountEntryMode === 'send' && navAmounts.sendAmount > 0
-              ? { sendAmount: navAmounts.sendAmount }
-              : {}),
-            ...(note.trim() ? { note: note.trim() } : {}),
-            ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
-          })
-        const fetchPayoutConfirm = () =>
-          noahService.confirmPayoutOrder({
-            recipientId: activeRecipient.id,
-            receiveAmount: receiveAmountValue,
-            sourceBalanceCurrency: selectedBalanceCurrency,
-            amountEntryMode,
-            ...(amountEntryMode === 'send' && navAmounts.sendAmount > 0
-              ? { sendAmount: navAmounts.sendAmount }
-              : {}),
-            ...(note.trim() ? { note: note.trim() } : {}),
-            ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
-          })
         if (isStashedPayoutQuoteFresh(quoteStashMeta)) {
           stashedQuote = peekSendPayoutQuote()
-        } else if (isStashedPayoutQuotePreviewFresh(quoteStashMeta)) {
-          // Navigate-then-resolve: lock fires in the background; the review's
-          // mount lock joins the same deduped in-flight confirm (same meta key)
-          // – a single /api/payouts/confirm, a single provider lock.
-          stashedQuote = peekSendPayoutQuotePreview()
-          payoutQuoteIsPreview = true
-          void ensureSendPayoutQuoteLocked(
-            fetchPayoutQuote,
-            fetchPayoutConfirm,
-            quoteStashMeta,
-          ).catch(() => {})
         } else {
           stashedQuote = await ensureSendPayoutQuoteLocked(
-            fetchPayoutQuote,
-            fetchPayoutConfirm,
+            () =>
+              noahService.createPayoutQuote({
+                recipientId: activeRecipient.id,
+                receiveAmount: receiveAmountValue,
+                sourceBalanceCurrency: selectedBalanceCurrency,
+                amountEntryMode,
+                ...(amountEntryMode === 'send' && navAmounts.sendAmount > 0
+                  ? { sendAmount: navAmounts.sendAmount }
+                  : {}),
+                ...(note.trim() ? { note: note.trim() } : {}),
+                ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+              }),
+            () =>
+              noahService.confirmPayoutOrder({
+                recipientId: activeRecipient.id,
+                receiveAmount: receiveAmountValue,
+                sourceBalanceCurrency: selectedBalanceCurrency,
+                amountEntryMode,
+                ...(amountEntryMode === 'send' && navAmounts.sendAmount > 0
+                  ? { sendAmount: navAmounts.sendAmount }
+                  : {}),
+                ...(note.trim() ? { note: note.trim() } : {}),
+                ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+              }),
             quoteStashMeta,
           )
         }
@@ -1678,7 +1564,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         !isEasetagRecipient &&
         !isWalletRecipient &&
         receiveAmountValue > 0 &&
-        !payoutQuoteIsPreview &&
         !isCompletePayoutQuote(stashedQuote)
       ) {
         showError(peekLastPayoutQuoteError() || 'Could not load payout quote. Try again.')
@@ -1722,11 +1607,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           calculatedTotalAmount = stashedQuote.totalDebited
         }
 
-        analytics.trackSendStarted({
-          sendCurrency: selectedBalanceCurrency,
-          receiveCurrency: activeRecipient.currency,
-          amount: calculatedTotalAmount || receiveAmountValue,
-        })
         navigation.navigate('SendConfirm' as never, {
           recipient: activeRecipient,
           ...(draftPersistForNavigate ? { draftRecipientPersist: draftPersistForNavigate } : {}),
@@ -1792,6 +1672,12 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             return
           }
           // Preview (+ background leg2) only – POST /receive happens on review Pay.
+          setIsContinuePending(true)
+          setIsContinueLoading(true)
+          if (continueSpinnerTimerRef.current) {
+            clearTimeout(continueSpinnerTimerRef.current)
+            continueSpinnerTimerRef.current = null
+          }
           const crossBorderMeta = {
             recipientId: activeRecipient.id,
             payInCurrency: selectedOtherCurrency,
@@ -1800,29 +1686,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
             receiveAmount: receiveAmountValue,
             crossBorderProvider: ycFlow.crossBorderProvider,
           }
-          let previewQuote = isStashedCrossBorderQuoteFresh(crossBorderMeta)
-            ? peekCrossBorderQuote()
-            : null
-          if (previewQuote && isUsableCrossBorderQuotePreview(previewQuote)) {
-            // Navigate-then-resolve: remaining pipeline (leg2 lock) continues in
-            // the background – deduped by meta key in sendFlowCrossBorderQuote.
-            void warmCrossBorderQuotePipeline(crossBorderMeta).catch(() => {})
-          } else {
-            setIsContinuePending(true)
-            if (!continueSpinnerTimerRef.current) {
-              continueSpinnerTimerRef.current = setTimeout(() => setIsContinueLoading(true), 175)
-            }
-            previewQuote = await warmCrossBorderQuotePipeline(crossBorderMeta)
-            if (!previewQuote || !isUsableCrossBorderQuotePreview(previewQuote)) {
-              showError(peekLastCrossBorderQuoteError() || 'Could not load transfer quote')
-              return
-            }
+          const previewQuote = await warmCrossBorderQuotePipeline(crossBorderMeta)
+          if (!previewQuote || !isUsableCrossBorderQuotePreview(previewQuote)) {
+            showError(peekLastCrossBorderQuoteError() || 'Could not load transfer quote')
+            return
           }
-          analytics.trackSendStarted({
-            sendCurrency: selectedOtherCurrency,
-            receiveCurrency: activeRecipient.currency,
-            amount: previewQuote.localPayIn,
-          })
           navigation.navigate('SendConfirm' as never, {
             recipient: activeRecipient,
             ...(draftPersistForNavigate ? { draftRecipientPersist: draftPersistForNavigate } : {}),
@@ -1849,11 +1717,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           } as never)
           return
         }
-        analytics.trackSendStarted({
-          sendCurrency: selectedOtherCurrency,
-          receiveCurrency: activeRecipient.currency,
-          amount: sendingAmount,
-        })
         navigation.navigate('SendConfirm' as never, {
           recipient: activeRecipient,
           ...(draftPersistForNavigate ? { draftRecipientPersist: draftPersistForNavigate } : {}),
@@ -2590,22 +2453,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 ))}
               </ScrollView>
         </WebAwareModal>
-        <EasnerAlertSheet
-          visible={addressRequiredOpen}
-          onDismiss={() => setAddressRequiredOpen(false)}
-          title={RECIPIENT_HOLDER_ADDRESS_REQUIRED_TITLE}
-          message={RECIPIENT_HOLDER_ADDRESS_REQUIRED_BODY}
-          primaryLabel={RECIPIENT_HOLDER_ADDRESS_REQUIRED_EDIT_CTA}
-          onPrimary={() => {
-            setAddressRequiredOpen(false)
-            navigation.navigate(
-              'Recipients' as never,
-              (recipient?.id ? { editRecipientId: recipient.id } : {}) as never,
-            )
-          }}
-          secondaryLabel={RECIPIENT_HOLDER_ADDRESS_REQUIRED_BACK_CTA}
-          onSecondary={() => setAddressRequiredOpen(false)}
-        />
       </View>
     </ScreenWrapper>
   )

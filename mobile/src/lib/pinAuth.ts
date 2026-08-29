@@ -10,7 +10,6 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { analytics } from './analytics'
 import { Platform } from 'react-native'
 import { getRandomBytes } from 'expo-crypto'
 import { pbkdf2 } from '@noble/hashes/pbkdf2.js'
@@ -486,7 +485,6 @@ export async function evaluateIdleLock(userId: string): Promise<'locked' | 'sign
   if (idleMs <= SESSION_TIMEOUT_MS) return 'ok'
   if (await hasPin(userId)) {
     await setAppLocked(userId, true)
-    analytics.trackAppLocked({ reason: 'idle' })
     return 'locked'
   }
   return 'signed_out'

@@ -1,4 +1,4 @@
-const ANDROID_PACKAGE_NAME = 'com.easner.android'
+const MOBILE_BUNDLE_ID = 'com.easner.mobile'
 
 function buildAssetLinks(fingerprints) {
   return [
@@ -6,7 +6,7 @@ function buildAssetLinks(fingerprints) {
       relation: ['delegate_permission/common.handle_all_urls'],
       target: {
         namespace: 'android_app',
-        package_name: ANDROID_PACKAGE_NAME,
+        package_name: MOBILE_BUNDLE_ID,
         sha256_cert_fingerprints: fingerprints,
       },
     },

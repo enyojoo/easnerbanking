@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native'
 import Constants from 'expo-constants'
 import { StatusBar } from 'expo-status-bar'
-import { View, Text, StyleSheet, Platform, InteractionManager, Animated } from 'react-native'
+import { View, Text, StyleSheet, Animated, Platform } from 'react-native'
 import * as BackgroundTask from 'expo-background-task'
 import * as TaskManager from 'expo-task-manager'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -66,8 +66,8 @@ import { prefetchIntercomModule } from './src/lib/intercom'
 import { USE_NATIVE_DRIVER } from './src/lib/animation'
 import { ExpressStripeProvider } from './src/components/ExpressStripeProvider'
 
-// Do not call preventAutoHideAsync here. splashBoot already holds/hides.
-// A second prevent after hideAsync re-shows the native splash forever.
+// Keep the splash screen visible while we load fonts
+SplashScreen.preventAutoHideAsync()
 
 // Inner app component that has access to AuthContext
 function AppContent() {
@@ -81,16 +81,6 @@ function AppContent() {
       return getActiveRouteName(route.state.routes[route.state.index])
     }
     return route.name || 'Unknown'
-  }
-
-  const scheduleNavigationScreenView = (screenName: string) => {
-    if (Platform.OS === 'web') {
-      analytics.trackNavigationScreenView(screenName)
-      return
-    }
-    InteractionManager.runAfterInteractions(() => {
-      analytics.trackNavigationScreenView(screenName)
-    })
   }
 
   const [splashFinished, setSplashFinished] = useState(Platform.OS === 'web')
@@ -126,7 +116,6 @@ function AppContent() {
       root.style.minHeight = '100%'
       root.style.backgroundColor = canvas
     }
-    SplashScreen.hide()
     void SplashScreen.hideAsync().catch((e) => {
       console.warn('SplashScreen.hideAsync', e)
     })
@@ -142,18 +131,38 @@ function AppContent() {
     setPreserveUserPathOverAuth(authLoading && !authUser)
   }, [authLoading, authUser])
 
-  // Hide when navigation is up. Do not wait on auth: 206 did, and on this
-  // tree a stalled GoTrue session leaves the native splash up forever.
+  // Single native splash (`app.json` + `expo-splash-screen`): keep it visible until:
+  // - Supabase session restore has resolved (`authLoading` false)
+  // - React Navigation has mounted (`navReady` true)
+  //
+  // Web skips the opacity gate below; loading shells and PIN render immediately on the themed canvas.
   useEffect(() => {
     if (Platform.OS === 'web') return
     if (splashFinished) return
+    if (authLoading) return
     if (!navReady) return
-    SplashScreen.hide()
-    void SplashScreen.hideAsync().catch((e) => {
-      console.warn('SplashScreen.hideAsync', e)
-    })
-  }, [navReady, splashFinished])
+    let cancelled = false
+    void (async () => {
+      if (cancelled) return
+      try {
+        await SplashScreen.hideAsync()
+      } catch (e) {
+        console.warn('SplashScreen.hideAsync', e)
+      }
+      if (!cancelled) setSplashFinished(true)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [authLoading, navReady, splashFinished])
 
+  // Cold-open from notification: stash intent + flush when main stack is ready (PIN may still be showing).
+  useEffect(() => {
+    if (!navReady || Platform.OS === 'web') return
+    void bootstrapPushNotificationDeepLink()
+  }, [navReady])
+
+  // Fade in app content when splash finishes
   useEffect(() => {
     if (splashFinished) {
       Animated.timing(appFadeAnim, {
@@ -163,22 +172,6 @@ function AppContent() {
       }).start()
     }
   }, [splashFinished, appFadeAnim])
-
-  useEffect(() => {
-    if (Platform.OS === 'web') return
-    const timeout = setTimeout(() => {
-      SplashScreen.hide()
-      void SplashScreen.hideAsync().catch(() => {})
-      setSplashFinished(true)
-    }, 2_000)
-    return () => clearTimeout(timeout)
-  }, [])
-
-  // Cold-open from notification: stash intent + flush when main stack is ready (PIN may still be showing).
-  useEffect(() => {
-    if (!navReady || Platform.OS === 'web') return
-    void bootstrapPushNotificationDeepLink()
-  }, [navReady])
 
   const nav = (
     <NavigationContainer
@@ -198,7 +191,7 @@ function AppContent() {
         const currentRouteName = getActiveRouteName(currentRoute)
         routeNameRef.current = currentRouteName
         setActiveRouteName(currentRouteName)
-        scheduleNavigationScreenView(currentRouteName)
+        analytics.trackNavigationScreenView(currentRouteName)
       }}
       onStateChange={() => {
         const currentRoute = navigationRef.current?.getCurrentRoute()
@@ -206,7 +199,7 @@ function AppContent() {
         setActiveRouteName(currentRouteName)
         if (routeNameRef.current !== currentRouteName) {
           routeNameRef.current = currentRouteName
-          scheduleNavigationScreenView(currentRouteName)
+          analytics.trackNavigationScreenView(currentRouteName)
         }
       }}
       theme={{
@@ -341,7 +334,6 @@ export default function App() {
 
   useEffect(() => {
     if (!fontsLoaded || !supabaseConfigError) return
-    SplashScreen.hide()
     void SplashScreen.hideAsync().catch((e) => {
       console.warn('SplashScreen.hideAsync', e)
     })
@@ -375,7 +367,6 @@ export default function App() {
       const responseSubscription = pushNotificationService.addNotificationResponseReceivedListener(
         (response) => {
           console.log('Notification tapped:', response)
-          analytics.trackPushOpened()
           const data = response.notification.request.content.data as Record<string, unknown> | undefined
           void (async () => {
             let scope: PersonalScope | null = null
@@ -442,6 +433,11 @@ export default function App() {
       cancelled = true
     }
   }, [])
+
+  // Block first paint until fonts load on native; web paints with system fallback.
+  if (!fontsLoaded && Platform.OS !== 'web') {
+    return null
+  }
 
   if (supabaseConfigError) {
     return (

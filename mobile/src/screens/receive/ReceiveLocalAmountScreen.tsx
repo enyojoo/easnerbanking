@@ -65,9 +65,6 @@ import {
   ensureFundBalanceQuoteStashed,
   ensurePayInNetworksCached,
   isCompleteFundBalanceQuote,
-  isStashedFundBalanceQuoteFresh,
-  isUsableFundBalanceQuotePreview,
-  peekFundBalanceQuote,
   peekLastFundBalanceQuoteError,
 } from '../../lib/sendFlowFundBalanceQuote'
 import { warmYcLocalDepositCaches, ensureYcLocalDepositCachesReady } from '../../lib/warmYcLocalDepositCaches'
@@ -85,7 +82,7 @@ type RouteParams = {
   payInRail: YcPayInRail
   bankAvailable?: boolean
   momoAvailable?: boolean
-  ngMissingTypes?: NgLocalIdType[]
+  ngMissingType?: NgLocalIdType | null
 }
 
 export default function ReceiveLocalAmountScreen({ navigation, route }: NavigationProps) {
@@ -107,7 +104,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
   const payInRail = params.payInRail ?? 'bank_transfer'
   const bankAvailable = params.bankAvailable ?? false
   const momoAvailable = params.momoAvailable ?? false
-  const ngMissingTypes = params.ngMissingTypes ?? []
+  const ngMissingType = params.ngMissingType ?? null
 
   const handleBack = useCallback(() => navigateStackBack(navigation), [navigation])
   useStackHardwareBack(handleBack)
@@ -439,27 +436,6 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
       return
     }
 
-    // Navigate-then-resolve: with a fresh preview stashed, fire the confirm in the
-    // background and go – the review locks on mount and joins the same in-flight
-    // confirm (deduped by meta key in sendFlowFundBalanceQuote).
-    const stashedPreview = isStashedFundBalanceQuoteFresh(fundBalanceQuoteMeta)
-      ? peekFundBalanceQuote()
-      : null
-    if (stashedPreview && isUsableFundBalanceQuotePreview(stashedPreview)) {
-      void ensureFundBalanceOrderConfirmed(fundBalanceQuoteMeta).catch(() => {})
-      navigation.navigate('ReceiveLocalReview' as never, {
-        localPayInCurrency,
-        residenceCountry,
-        payInRail,
-        amountEntryMode,
-        enteredAmount,
-        usdCredit: stashedPreview.usdCredit,
-        localPayIn: stashedPreview.localPayIn,
-        customerRate: stashedPreview.customerRate,
-      } as never)
-      return
-    }
-
     setIsContinuePending(true)
     setIsContinueLoading(true)
     try {
@@ -484,12 +460,12 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     }
   }
 
-  if (ngMissingTypes.length > 0) {
+  if (ngMissingType) {
     return (
       <ScreenWrapper>
         <View style={styles.blocked}>
           <ReceiveFlowHeader title="Add money" onBack={handleBack} />
-          <NgLocalVerificationNotice missingTypes={ngMissingTypes} onSaved={() => navigation.goBack()} />
+          <NgLocalVerificationNotice missingType={ngMissingType} onSaved={() => navigation.goBack()} />
         </View>
       </ScreenWrapper>
     )

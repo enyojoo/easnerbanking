@@ -9,19 +9,14 @@ type MobileAppLockShellProps = {
 }
 
 /**
- * Full-screen PIN overlay while keeping the main navigator mounted so tab
- * return and idle unlock do not reset navigation state (M2.4).
- *
- * Used on both web and native. `PinEntryScreen` is rendered directly (not via
- * a nested Stack.Navigator) because two sibling navigators under one
- * NavigationContainer are not allowed; the screen never uses its navigation
- * prop — unlock is signalled through the app-lock bus (`emitAppLocked`).
- *
- * While locked, the app pane is hidden (opacity 0), non-interactive
- * (`pointerEvents="none"`) and removed from the accessibility tree; the lock
- * pane paints an opaque background above it, so no content leaks through.
+ * Web-only: full-screen PIN while keeping the main navigator mounted so tab return
+ * and idle unlock do not reset navigation state. Native uses PinGateEntryStack instead.
  */
 export function MobileAppLockShell({ locked, children }: MobileAppLockShellProps) {
+  if (Platform.OS !== 'web') {
+    return <>{children}</>
+  }
+
   return (
     <View style={styles.root}>
       <View

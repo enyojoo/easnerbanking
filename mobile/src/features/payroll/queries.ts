@@ -55,48 +55,6 @@ export function prefetchPayrollConnectionDetail(
   })
 }
 
-export const PAYROLL_CONNECTIONS_SUMMARY_STALE_MS = 5 * 60_000
-
-/** Lightweight badge/visibility payload — counts only, safe to persist. */
-const PAYROLL_CONNECTIONS_SUMMARY_META = { safePersist: true, freshness: 'operational' as const }
-
-export type PayrollConnectionsSummary = {
-  pendingCount?: number
-  hasActivity?: boolean
-}
-
-/**
- * Nested under `payrollConnectionsKey` on purpose: prefix invalidations of the
- * connections list (accept/decline invitation, method changes) also refresh
- * the More-screen badge summary.
- */
-export function payrollConnectionsSummaryKey(userId: string) {
-  return [...payrollConnectionsKey(userId), 'summary'] as const
-}
-
-export function fetchPayrollConnectionsSummary() {
-  return apiFetch<PayrollConnectionsSummary>('/api/payroll/connections?summary=true')
-}
-
-/**
- * M3.4a: replaces MoreScreen's fetch-into-local-state-on-every-focus with a
- * cached query (staleTime 5 min).
- */
-export function usePayrollConnectionsSummary() {
-  const { scope } = useScope()
-  return useQuery({
-    queryKey: scope
-      ? payrollConnectionsSummaryKey(scope.userId)
-      : ['personal', 'payroll', 'connections', 'summary', 'disabled'],
-    enabled: Boolean(scope),
-    queryFn: fetchPayrollConnectionsSummary,
-    staleTime: PAYROLL_CONNECTIONS_SUMMARY_STALE_MS,
-    gcTime: 60 * 60_000,
-    refetchOnWindowFocus: true,
-    meta: PAYROLL_CONNECTIONS_SUMMARY_META,
-  })
-}
-
 export function usePayrollConnections() {
   const { scope } = useScope()
   return useQuery({

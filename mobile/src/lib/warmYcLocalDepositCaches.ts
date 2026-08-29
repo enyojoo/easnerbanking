@@ -61,12 +61,12 @@ const OPTIMISTIC_MOMO_COUNTRIES = new Set([
 const receiveRailsCache = new Map<string, { data: YcReceiveRailsResponse; at: number }>()
 const gridReceiveRailsCache = new Map<string, { data: YcReceiveRailsResponse; at: number }>()
 let payInRatesCache: { rates: YcRateClientRow[]; at: number } | null = null
-const ngVerifyCache = new Map<string, { missingTypes: NgLocalIdType[]; at: number }>()
+const ngVerifyCache = new Map<string, { missingType: NgLocalIdType | null; at: number }>()
 
 const receiveRailsInflight = new Map<string, Promise<YcReceiveRailsResponse | null>>()
 const gridReceiveRailsInflight = new Map<string, Promise<YcReceiveRailsResponse | null>>()
 let payInRatesInflight: Promise<YcRateClientRow[] | null> | null = null
-const ngVerifyInflight = new Map<string, Promise<NgLocalIdType[]>>()
+const ngVerifyInflight = new Map<string, Promise<NgLocalIdType | null>>()
 let diskHydratePromise: Promise<void> | null = null
 
 export function receiveRailsCacheKey(country: string, currency: string): string {
@@ -179,15 +179,7 @@ function writeYcPayInRatesCache(rates: YcRateClientRow[]): void {
   payInRatesCache = { rates, at: Date.now() }
 }
 
-export function clearNgLocalVerificationCache(residenceCountry?: string): void {
-  if (residenceCountry) {
-    ngVerifyCache.delete(residenceCountry.trim().toUpperCase())
-    return
-  }
-  ngVerifyCache.clear()
-}
-
-export function readCachedNgLocalMissingTypes(residenceCountry: string): NgLocalIdType[] | undefined {
+export function readCachedNgLocalMissingType(residenceCountry: string): NgLocalIdType | null | undefined {
   const key = residenceCountry.trim().toUpperCase()
   if (!key) return undefined
   const hit = ngVerifyCache.get(key)
@@ -196,14 +188,7 @@ export function readCachedNgLocalMissingTypes(residenceCountry: string): NgLocal
     ngVerifyCache.delete(key)
     return undefined
   }
-  return hit.missingTypes
-}
-
-/** @deprecated Prefer readCachedNgLocalMissingTypes */
-export function readCachedNgLocalMissingType(residenceCountry: string): NgLocalIdType | null | undefined {
-  const types = readCachedNgLocalMissingTypes(residenceCountry)
-  if (types === undefined) return undefined
-  return types[0] ?? null
+  return hit.missingType
 }
 
 export function readCachedGridReceiveRails(
@@ -345,11 +330,11 @@ async function prefetchGridPayInRates(currency: string): Promise<YcRateClientRow
 
 export async function prefetchNgLocalVerification(
   residenceCountry: string,
-): Promise<NgLocalIdType[]> {
+): Promise<NgLocalIdType | null> {
   const cc = residenceCountry.trim().toUpperCase()
-  if (!cc) return []
+  if (!cc) return null
 
-  const cached = readCachedNgLocalMissingTypes(cc)
+  const cached = readCachedNgLocalMissingType(cc)
   if (cached !== undefined) return cached
 
   const inflight = ngVerifyInflight.get(cc)
@@ -371,10 +356,10 @@ export async function prefetchNgLocalVerification(
         ngLocalIdType: data.ngLocalIdType,
         ngLocalIdNumber: data.ngLocalIdNumber,
       })
-      ngVerifyCache.set(cc, { missingTypes: state.missingTypes, at: Date.now() })
-      return state.missingTypes
+      ngVerifyCache.set(cc, { missingType: state.missingType, at: Date.now() })
+      return state.missingType
     } catch {
-      return []
+      return null
     } finally {
       ngVerifyInflight.delete(cc)
     }

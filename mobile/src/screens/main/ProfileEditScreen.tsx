@@ -295,16 +295,13 @@ function ProfileEditContent({ navigation }: NavigationProps) {
   }
 
   const handlePickProfilePhoto = async () => {
-    // Android 13+ uses the system photo picker – no READ_MEDIA_* permission required.
-    if (Platform.OS === 'ios') {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
-      if (!perm.granted) {
-        setNoticeSheet({
-          title: 'Permission needed',
-          message: 'Allow photo library access to set a profile photo.',
-        })
-        return
-      }
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) {
+      setNoticeSheet({
+        title: 'Permission needed',
+        message: 'Allow photo library access to set a profile photo.',
+      })
+      return
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { isDraftRecipientId } from '@easner/shared'
 import { apiFetch } from '../query/api-client'
 
 export type YcPayInRail = 'bank_transfer' | 'mobile_money'
@@ -103,7 +102,7 @@ export function useYcCrossBorderFlow(input: {
     (eligibility?.throughLocalCurrency.provider === 'grid' ? 'grid' : 'yellowcard')
 
   useEffect(() => {
-    if (!input.enabled || !input.recipientId || isDraftRecipientId(input.recipientId)) {
+    if (!input.enabled || !input.recipientId) {
       setEligibility(null)
       setEligibilityLoading(false)
       return

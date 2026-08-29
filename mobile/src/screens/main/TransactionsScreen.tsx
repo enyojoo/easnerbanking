@@ -29,9 +29,10 @@ import EmptyState from '../../components/EmptyState'
 import { FilterChip, SectionCard } from '../../components/ui'
 import { useCurrenciesCatalog, useReportingFxRates, useTransactionsList, prefetchRecentTransactionDetailsInBackground, warmTransactionDetailForNavigation, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
 import { NavigationProps, Transaction } from '../../types'
+import { analytics } from '../../lib/analytics'
 import { useBalance } from '../../contexts/BalanceContext'
 import { useFocusRefreshAll } from '../../hooks/useFocusRefresh'
-import { useIsRestoring, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { useScope } from '../../query/scope'
 import { apiFetch } from '../../query/api-client'
 import { ACCOUNT_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
@@ -400,14 +401,16 @@ function TransactionsContent({ navigation }: NavigationProps) {
     void shouldPlayDecorativeMotionEnter().then((play) => setSkipRowEntranceAnim(!play))
   }, [])
 
+  // Track screen view
+  useEffect(() => {
+    analytics.trackScreenView('Transactions')
+  }, [])
+
   const transactions = useMemo<CombinedTransaction[]>(() => {
     const pages = txQuery.data?.pages ?? []
     return pages.flatMap((p) => (p.transactions ?? []) as CombinedTransaction[])
   }, [txQuery.data])
-  // Not "loading" while the persisted cache is restoring from disk — that
-  // takes milliseconds and flashing a skeleton over it reads as a slow app.
-  const isRestoringCache = useIsRestoring()
-  const loading = !isRestoringCache && txQuery.isPending && transactions.length === 0
+  const loading = txQuery.isPending && transactions.length === 0
 
   useEffect(() => {
     if (!scope || transactions.length === 0) return

@@ -253,41 +253,36 @@ export async function executeBalanceSend(
 
   haptics.success()
 
-  const recipientForDetails: Recipient = recipient
+  let recipientForDetails: Recipient = recipient
   if (
     ctx.userId &&
     recipient?.id &&
     isDraftRecipientId(recipient.id) &&
     ctx.userProfile?.id
   ) {
-    // Fire-and-forget: the transfer already succeeded – don't hold the result
-    // (and the success navigation) on recipient bookkeeping.
-    const userId = ctx.userId
-    const userProfileId = ctx.userProfile.id
-    const tag = easetag
-    const persist =
-      input.draftRecipientPersist ??
-      (tag
-        ? {
-            fullName: recipient.full_name,
-            accountNumber: tag,
-            bankName: `Easetag (@${tag})`,
-            currency: 'USD',
-            countryCode: 'US',
-            payeeAvatarUrl: recipient.payee_avatar_url,
-            payeeAccountKind: recipient.payee_account_kind,
-          }
-        : undefined)
-    if (persist) {
-      void (async () => {
-        try {
-          const created = await recipientService.findOrCreate(userProfileId, persist)
-          if (ctx.scope) await invalidateRecipientsFeed(ctx.qc, ctx.scope, userId)
-          void recordRecipientSentTouch(userId, created.id)
-        } catch (persistErr) {
-          console.warn('Post-send draft recipient save failed:', persistErr)
-        }
-      })()
+    try {
+      const tag = easetag
+      const persist =
+        input.draftRecipientPersist ??
+        (tag
+          ? {
+              fullName: recipient.full_name,
+              accountNumber: tag,
+              bankName: `Easetag (@${tag})`,
+              currency: 'USD',
+              countryCode: 'US',
+              payeeAvatarUrl: recipient.payee_avatar_url,
+              payeeAccountKind: recipient.payee_account_kind,
+            }
+          : undefined)
+      if (persist) {
+        const created = await recipientService.findOrCreate(ctx.userProfile.id, persist)
+        if (ctx.scope && ctx.userId) await invalidateRecipientsFeed(ctx.qc, ctx.scope, ctx.userId)
+        recipientForDetails = created
+        void recordRecipientSentTouch(ctx.userId, created.id)
+      }
+    } catch (persistErr) {
+      console.warn('Post-send draft recipient save failed:', persistErr)
     }
   } else if (ctx.userId && recipient?.id) {
     void recordRecipientSentTouch(ctx.userId, recipient.id)

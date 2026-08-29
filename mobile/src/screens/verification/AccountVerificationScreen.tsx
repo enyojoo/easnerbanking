@@ -70,7 +70,6 @@ import {
 import { useScope } from '../../query/scope'
 import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
-import { analytics } from '../../lib/analytics'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { KycRequiredDocumentsNotice } from '../../components/compliance/KycRequiredDocumentsNotice'
 import { ResidenceCountryField } from '../../components/compliance/ResidenceCountryField'
@@ -121,11 +120,6 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   const syncIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Ref to prevent multiple simultaneous syncs
   const syncingRef = useRef(false)
-  const prevKycStatusRef = useRef<string | null>(null)
-
-  useEffect(() => {
-    analytics.trackKycStarted()
-  }, [])
 
   // KYC open state (hosted link opens via in-app browser – same as Legal)
   const [loadingKyc, setLoadingKyc] = useState(false)
@@ -360,18 +354,6 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   const localExpressEligible = isStripeOnrampPayerEligible({ country: localExpressCountry })
   const showExpressCard =
     isGlobalBankingVerified(userProfile) && (expressEligible ?? localExpressEligible)
-  const expressReady = expressStatus === 'approved'
-  const expressInProgress = expressStatus === 'in_progress'
-  const expressSetupCta = expressInProgress
-    ? EXPRESS_DEPOSITS_COPY.continueCta
-    : EXPRESS_DEPOSITS_COPY.setupCta
-
-  const openExpressSetup = () => {
-    haptics.tap()
-    const pk = peekExpressOnrampStatus()?.publishableKey
-    if (pk) void loadMobileExpressOnramp(pk).catch(() => undefined)
-    navigation.navigate('ExpressDepositsSetup' as never)
-  }
 
   const applyExpressStatus = useCallback((data: { eligible?: boolean; ready?: boolean; status?: string } | null) => {
     setExpressEligible(typeof data?.eligible === 'boolean' ? data.eligible : null)
@@ -458,13 +440,6 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     .toLowerCase()
   const noahKycInReview = kycStatusLower === 'under_review' || kycStatusLower === 'in_review'
   const noahKycRejected = kycStatusLower === 'rejected'
-  useEffect(() => {
-    const prev = prevKycStatusRef.current
-    if (prev && prev !== 'approved' && (kycStatusLower === 'approved' || noahKycApproved)) {
-      analytics.trackKycCompleted({ status: kycStatusLower || 'approved' })
-    }
-    prevKycStatusRef.current = kycStatusLower || (noahKycApproved ? 'approved' : null)
-  }, [kycStatusLower, noahKycApproved])
   const rejectionReasons =
     userProfile?.noah_kyc_rejection_reasons ?? userProfile?.profile?.noah_kyc_rejection_reasons
   const rejectionDisplay = noahKycRejected ? getNoahRejectionDisplay(rejectionReasons) : null
@@ -920,7 +895,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                         )}
                       </View>
                     </View>
-                    {!loadingKyc && !noahKycInReview ? (
+                    {!loadingKyc ? (
                       <Pressable
                         onPress={async () => {
                           haptics.tap()
@@ -942,13 +917,8 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
 
               {showExpressCard ? (
                 <View style={styles.card}>
-                  <View style={expressReady ? undefined : styles.cardInner}>
-                    <View
-                      style={[
-                        styles.cardContent,
-                        !expressReady && styles.cardContentWithCta,
-                      ]}
-                    >
+                  <View style={styles.cardInner}>
+                    <View style={[styles.cardContent, styles.cardContentWithCta]}>
                       <View style={styles.cardLeft}>
                         <View style={styles.iconContainer}>
                           <Zap size={24} color={colors.primary.main} strokeWidth={2} />
@@ -960,19 +930,22 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                       </View>
                       <View style={styles.cardRight}>{getStatusBadge(expressStatus)}</View>
                     </View>
-                    {!expressReady ? (
-                      <Pressable
-                        onPress={openExpressSetup}
-                        style={({ pressed }) => [
-                          styles.startBadge,
-                          pressed && Platform.OS === 'ios' && styles.cardPressed,
-                        ]}
-                        android_ripple={{ color: 'rgba(0, 122, 204, 0.12)', borderless: false }}
-                      >
-                        <Text style={styles.startBadgeText}>{expressSetupCta}</Text>
-                        <ChevronRight size={12} color={colors.neutral.white} strokeWidth={2} />
-                      </Pressable>
-                    ) : null}
+                    <Pressable
+                      onPress={() => {
+                        haptics.tap()
+                        const pk = peekExpressOnrampStatus()?.publishableKey
+                        if (pk) void loadMobileExpressOnramp(pk).catch(() => undefined)
+                        navigation.navigate('ExpressDepositsSetup' as never)
+                      }}
+                      style={({ pressed }) => [
+                        styles.startBadge,
+                        pressed && Platform.OS === 'ios' && styles.cardPressed,
+                      ]}
+                      android_ripple={{ color: 'rgba(0, 122, 204, 0.12)', borderless: false }}
+                    >
+                      <Text style={styles.startBadgeText}>{EXPRESS_DEPOSITS_COPY.setupCta}</Text>
+                      <ChevronRight size={12} color={colors.neutral.white} strokeWidth={2} />
+                    </Pressable>
                   </View>
                 </View>
               ) : null}

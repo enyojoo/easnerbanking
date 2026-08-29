@@ -7,7 +7,6 @@ import {
   Pressable,
   Platform,
   RefreshControl,
-  InteractionManager,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -50,7 +49,7 @@ import { useEffect } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { useBalance } from '../../contexts/BalanceContext'
 import { apiGet, apiPost } from '../../lib/apiClient'
-import { useIsRestoring, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { useScope } from '../../query/scope'
 import { ACCOUNT_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import EmptyState from '../../components/EmptyState'
@@ -80,8 +79,6 @@ import { buildGroupedActivityItems } from '../../lib/transactionListGrouping'
 import { haptics } from '../../lib/haptics'
 import { prepareTransactionDetailsNavigation } from '../../navigation/transactionNavParams'
 import { useFixedFooterPadding, useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
-import { reportColdStartInteractive } from '../../lib/coldStartMetrics'
-import { preloadMainStackScreens } from '../../lib/preloadMainStackScreens'
 
 const DASHBOARD_SELECTED_CURRENCY_KEY_PREFIX = 'easner_dashboard_selected_currency_'
 /** Recent activity rows shown on Home (UI only). Ledger fetch uses {@link TRANSACTIONS_LEDGER_PAGE_SIZE}. */
@@ -254,59 +251,16 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     const firstPage = txQuery.data?.pages?.[0]?.transactions ?? []
     return (firstPage as DashboardTransaction[]).slice(0, DASHBOARD_RECENT_TX_LIMIT)
   }, [txQuery.data])
-  // Not "loading" while the persisted cache is restoring from disk — that
-  // takes milliseconds and flashing a skeleton over it reads as a slow app.
-  const isRestoringCache = useIsRestoring()
-  const loadingTransactions = !isRestoringCache && txQuery.isPending && recentTransactions.length === 0
+  const loadingTransactions = txQuery.isPending && recentTransactions.length === 0
   const hasAttemptedLoad = txQuery.isFetched
   const lastStableBalanceTextRef = useRef<Record<string, string>>({})
   /** Recent list + "All" row: reduce scroll end padding so the card sits closer to the tab bar. */
   const dashboardRecentListWithAllRow =
     !loadingTransactions && recentTransactions.length > 0
 
-  /**
-   * M2.2: after Dashboard's first paint settles, preload sibling tab screens
-   * (`navigation.preload`, React Navigation 7) so the first switch to
-   * Transactions/Cards/More doesn't pay mount cost on the tap.
-   *
-   * Do NOT preload MainStack send/detail screens here — `navigation.preload`
-   * mounts those routes off-screen right after PIN unlock and has fatally crashed
-   * release iOS builds (~7s post-launch).
-   */
-  const didPreloadTabsRef = useRef(false)
-  useEffect(() => {
-    if (Platform.OS === 'web' || didPreloadTabsRef.current) return
-    didPreloadTabsRef.current = true
-    const task = InteractionManager.runAfterInteractions(() => {
-      const nav = navigation as unknown as { preload?: (name: string) => void }
-      if (typeof nav.preload !== 'function') return
-      for (const tab of ['Transactions', 'Card', 'More']) {
-        try {
-          nav.preload(tab)
-        } catch {
-          // Best-effort: a failed preload just means the old mount-on-tap path.
-        }
-      }
-    })
-    return () => task.cancel()
-  }, [navigation])
-
-  // M0: first authenticated screen interactive with data present → fire the
-  // `mobile_cold_start` metric (once per JS launch; guarded inside the lib).
-  const dashboardHasData = hasResolvedBalance || hasAttemptedLoad
-  useEffect(() => {
-    if (!dashboardHasData) return
-    const task = InteractionManager.runAfterInteractions(() => {
-      reportColdStartInteractive()
-    })
-    return () => task.cancel()
-  }, [dashboardHasData])
-
   useEffect(() => {
     if (!scope || recentTransactions.length === 0) return
-    // 4 rows: the dashboard shows a short recent list; warming 10 details on
-    // every list identity change competed with the user's first interactions.
-    prefetchRecentTransactionDetailsInBackground(qc, scope, recentTransactions, 4)
+    prefetchRecentTransactionDetailsInBackground(qc, scope, recentTransactions, 10)
   }, [qc, recentTransactions, scope])
 
   const warmReceiveLocalDeposit = useCallback(() => {
@@ -855,10 +809,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
             <Pressable
               android_ripple={ripple.heroOnDark}
               style={({ pressed }) => [styles.heroSendButton, pressed && styles.heroBtnPressed]}
-              onPressIn={preloadMainStackScreens}
               onPress={() => {
                 haptics.tap()
-                preloadMainStackScreens()
                 navigation.navigate('SelectRecentRecipient' as never, {
                   preferredBalanceCurrency:
                     selectedCurrency === 'USD' || selectedCurrency === 'EUR'

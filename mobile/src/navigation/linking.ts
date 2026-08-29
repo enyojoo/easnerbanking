@@ -15,12 +15,7 @@ function resolveLinkingPrefix(): string {
 
 const prefix = resolveLinkingPrefix()
 
-const NON_SERIALIZABLE_QUERY_KEYS = [
-  'initialTransaction',
-  'existingMethod',
-  'recipient',
-  'draftRecipientPersist',
-] as const
+const NON_SERIALIZABLE_QUERY_KEYS = ['initialTransaction', 'existingMethod'] as const
 
 function stripNonSerializableQueryParams(path: string): string {
   const qIndex = path.indexOf('?')
@@ -79,11 +74,6 @@ export const webLinking: LinkingOptions<Record<string, unknown>> = {
       ReceiveLocalReview: 'user/receive/local/review',
       ReceiveTransactionDetails: 'user/receive/transactions/:transactionId',
       Recipients: 'user/recipients',
-      AddRecipientType: 'user/recipients/add',
-      AddBankRecipient: 'user/recipients/add/bank',
-      AddMobileRecipient: 'user/recipients/add/mobile',
-      AddWalletRecipient: 'user/recipients/add/wallet',
-      AddEasenetRecipient: 'user/recipients/add/easetag',
       Support: 'user/support',
       Profile: 'user/profile',
       ChangePassword: 'user/profile/password',

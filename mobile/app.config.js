@@ -232,16 +232,6 @@ module.exports = ({ config }) => {
     },
     plugins: [
       ...(config.plugins || []),
-      'expo-font',
-      [
-        'expo-build-properties',
-        {
-          android: {
-            enableMinifyInReleaseBuilds: true,
-            enableShrinkResourcesInReleaseBuilds: true,
-          },
-        },
-      ],
       [
         'expo-camera',
         {
@@ -257,14 +247,11 @@ module.exports = ({ config }) => {
           photosPermission: 'Allow Easner to save transaction receipts to your photos.',
           savePhotosPermission: 'Allow Easner to save transaction receipts to your photos.',
           isAccessMediaLocationEnabled: false,
-          /** Save-only on Android – no READ_MEDIA_IMAGES/VIDEO (Play photo picker policy). */
-          granularPermissions: [],
         },
       ],
       './plugins/withHermesCompilerPath.js',
       './plugins/withInternalExpoImport.js',
       './plugins/withAndroidStoragePermissionsMaxSdk.js',
-      './plugins/withAndroidBlockedMediaReadPermissions.js',
       './plugins/withStripeOnrampAndroid.js',
       ...intercomPlugins,
     ],

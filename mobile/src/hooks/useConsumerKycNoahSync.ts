@@ -65,12 +65,6 @@ export function useConsumerKycNoahSync(): void {
         ? await noahService.syncStatusUntilAccountsReady({ scope: 'individual' })
         : await noahService.syncStatus({ scope: 'individual' })
       if (result.success && result.synced) {
-        if (
-          result.data?.turnkeySubOrgReady === false ||
-          result.data?.provisioned?.turnkeySubOrgReady === false
-        ) {
-          await noahService.ensureTurnkeySubOrg().catch(() => undefined)
-        }
         if (result.data?.needsFiatAccounts === false || result.accountsReady === true) {
           await writeFiatProvisionResolved(user.id)
           setFiatProvisionResolved(true)

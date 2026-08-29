@@ -96,9 +96,7 @@ if (Platform.OS === 'ios' || Platform.OS === 'android') {
 export async function registerBackgroundTaskAsync() {
   if (Platform.OS !== 'ios' && Platform.OS !== 'android') return
   return BackgroundTask.registerTaskAsync(BACKGROUND_TASK_IDENTIFIER, {
-    // expo-background-task takes MINUTES (12 * 60 was 12 hours, not 12 minutes).
-    // iOS won't schedule below ~15 min anyway, so 15 is the effective floor.
-    minimumInterval: 15,
+    minimumInterval: 12 * 60,
   })
 }
 

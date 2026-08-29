@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../lib/supabase'
 import { getApiBaseUrl } from '../../lib/apiClient'
 import { NavigationProps } from '../../types'
+import { analytics } from '../../lib/analytics'
 import { colors, borderRadius, spacing, surfaceChromeCircleStyle } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { authScreenStyles } from '../../theme/authScreen'
@@ -30,6 +31,11 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
   const [isValidSession, setIsValidSession] = useState(false)
   const insets = useSafeAreaInsets()
   const { showError, showInfo, showSuccess } = useToast()
+
+  // Track screen view
+  useEffect(() => {
+    analytics.trackScreenView('ResetPassword')
+  }, [])
 
   useEffect(() => {
     const { email, resetToken } = route.params || {}

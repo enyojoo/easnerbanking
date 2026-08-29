@@ -21,6 +21,7 @@ import {
 } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { useAuth } from '../../contexts/AuthContext'
+import { analytics } from '../../lib/analytics'
 import { appPinStrings } from '../../constants/app-pin-en'
 import { getLockoutState, verifyPin } from '../../lib/pinAuth'
 import { PinKeypad } from '../../components/pin'
@@ -54,6 +55,10 @@ export default function SendPinScreen({ navigation }: NavigationProps) {
     setLockedOut(s.lockedOut)
     setLockMsRemaining(s.lockedOut ? Math.max(0, s.msRemaining) : 0)
   }, [user?.id])
+
+  useEffect(() => {
+    analytics.trackScreenView('SendPin')
+  }, [])
 
   useEffect(() => {
     return () => {

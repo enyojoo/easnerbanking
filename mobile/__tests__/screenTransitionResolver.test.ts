@@ -20,7 +20,7 @@ afterEach(() => {
 })
 
 describe('shouldUseFlowHubInstantTransition', () => {
-  it('keeps animated push for all hub routes (instant disabled for iOS stability)', () => {
+  it('never uses instant hub transitions so swipe-back stays interactive', () => {
     expect(
       shouldUseFlowHubInstantTransition({
         routeName: 'SendAmount',
@@ -29,14 +29,20 @@ describe('shouldUseFlowHubInstantTransition', () => {
     ).toBe(false)
     expect(
       shouldUseFlowHubInstantTransition({
-        routeName: 'SelectRecentRecipient',
-        previousRouteName: 'MainTabs',
+        routeName: 'SelectRecipient',
+        previousRouteName: 'SendAmount',
       }),
     ).toBe(false)
     expect(
       shouldUseFlowHubInstantTransition({
         routeName: 'SendAmount',
         routeParams: { fromSelectRecentRecipient: true },
+      }),
+    ).toBe(false)
+    expect(
+      shouldUseFlowHubInstantTransition({
+        routeName: 'ReceiveLocalAmount',
+        previousRouteName: 'ReceiveLocalRail',
       }),
     ).toBe(false)
   })
@@ -131,21 +137,11 @@ describe('resolveGestureEnabled', () => {
 })
 
 describe('resolveScreenTransitionOptions', () => {
-  it('uses horizontal motion for adjacent send hub screens on native', () => {
+  it('uses horizontal motion for send hub pairs on native', () => {
     setPlatform('ios')
     const options = resolveScreenTransitionOptions({
       routeName: 'SendAmount',
       previousRouteName: 'SelectRecentRecipient',
-    })
-    expect(options.gestureEnabled).toBe(true)
-    expect(presetHasStackMotion(options as Record<string, unknown>)).toBe(true)
-  })
-
-  it('uses horizontal motion for dashboard entry into send hub on native', () => {
-    setPlatform('ios')
-    const options = resolveScreenTransitionOptions({
-      routeName: 'SelectRecentRecipient',
-      previousRouteName: 'MainTabs',
     })
     expect(options.gestureEnabled).toBe(true)
     expect(presetHasStackMotion(options as Record<string, unknown>)).toBe(true)
@@ -170,29 +166,6 @@ describe('resolveScreenTransitionOptions', () => {
     expect(options.gestureEnabled).toBe(false)
     expect(options.cardStyleInterpolator).toBeDefined()
     expect(presetHasStackMotion(options as Record<string, unknown>)).toBe(true)
-  })
-
-  it('presents AddRecipientType as a transparent sheet over the list', () => {
-    setPlatform('ios')
-    const options = resolveScreenTransitionOptions({
-      routeName: 'AddRecipientType',
-      previousRouteName: 'SelectRecentRecipient',
-    })
-    expect(options.presentation).toBe('transparentModal')
-    expect(options.gestureDirection).toBe('vertical')
-    expect(options.gestureEnabled).toBe(true)
-    expect(options.gestureResponseDistance).toBe(2000)
-    expect(options.cardStyleInterpolator).toBeDefined()
-  })
-
-  it('detaches the type sheet while a recipient form is open', () => {
-    setPlatform('ios')
-    const options = resolveScreenTransitionOptions({
-      routeName: 'AddBankRecipient',
-      previousRouteName: 'AddRecipientType',
-    })
-    expect(options.detachPreviousScreen).toBe(true)
-    expect(options.gestureEnabled).toBe(true)
   })
 
   it('uses desktop web fade when sidebar shell active', () => {

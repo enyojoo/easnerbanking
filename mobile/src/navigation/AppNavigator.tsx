@@ -33,7 +33,6 @@ import { prefetchIntercomModule, prepareIntercomMessenger } from '../lib/interco
 import { avatarImageUri, warmAvatarCacheAsync } from '../lib/avatarCache'
 import { useConsumerKycNoahSync } from '../hooks/useConsumerKycNoahSync'
 import { haptics } from '../lib/haptics'
-import { markTabSwitchEnd, markTabSwitchStart } from '../lib/coldStartMetrics'
 import { useResponsiveLayout } from '../contexts/ResponsiveLayoutContext'
 import { ResponsiveAppShell } from '../components/layout/ResponsiveAppShell'
 import { MobileAppLockShell } from '../components/MobileAppLockShell'
@@ -55,11 +54,6 @@ import {
   ReceiveStablecoinDetailsScreen,
   ReceiveTransactionDetailsScreen,
   RecipientsScreen,
-  AddRecipientTypeScreen,
-  AddBankRecipientScreen,
-  AddMobileRecipientScreen,
-  AddWalletRecipientScreen,
-  AddEasenetRecipientScreen,
   ScanWalletAddressScreen,
   SelectRecentRecipientScreen,
   SelectRecipientScreen,
@@ -69,72 +63,36 @@ import {
   SendPinScreen,
 } from './screenRegistry'
 
-// Auth Screens – kept EAGER: these are on the guaranteed-first-paint path
-// (cold start lands on Auth, PIN entry, or mandatory PIN setup).
+// Auth Screens
 import AuthScreen from '../screens/auth/AuthScreen'
+import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen'
+import ResetPasswordScreen from '../screens/auth/ResetPasswordScreen'
 import PinSetupScreen from '../screens/auth/PinSetupScreen'
 import PinEntryScreen from '../screens/auth/PinEntryScreen'
+import MfaVerifyScreen from '../screens/auth/MfaVerifyScreen'
 
 // Components
 import PinSetupPrompt from '../components/PinSetupPrompt'
 
-// Tab Screens – kept EAGER: tabs are preloaded on entry to the main app, so a
-// lazy wrapper would only add a first-tap module resolve. (The Card tab comes
-// from the screenRegistry, which already defers it.)
+// Main Screens
 import DashboardScreen from '../screens/main/DashboardScreen'
 import TransactionsScreen from '../screens/main/TransactionsScreen'
 import MoreScreen from '../screens/main/MoreScreen'
-
-/**
- * Deferred flow/modal screens (M2.5) – same pattern as
- * `screenRegistry.native.ts` (`lazyNativeScreen`): the screen module is loaded
- * via `require()` on the wrapper's first render instead of a static top-level
- * import, so Metro's `inlineRequires` keeps these modules out of cold-start JS
- * evaluation. Wrappers are created once at module level, so component identity
- * stays stable across renders (react-navigation remounts on identity change).
- *
- * This file is also bundled for web, where the synchronous `require()` works
- * the same way (see `loadTransactionDetailsScreen` below, which predates this).
- * These screens were previously static imports in the main web bundle, so web
- * bundle shape is unchanged; per-screen code-splitting for web lives in
- * `screenRegistry.web.tsx`.
- *
- * All modules below use default exports (verified per module).
- */
-function lazyScreen<P extends object>(load: () => { default: React.ComponentType<P> }): React.ComponentType<P> {
-  let Loaded: React.ComponentType<P> | null = null
-  function LazyScreen(props: P) {
-    if (!Loaded) {
-      Loaded = load().default
-    }
-    return React.createElement(Loaded, props)
-  }
-  return LazyScreen as React.ComponentType<P>
-}
-
-// Auth flow screens off the first-paint path
-const ForgotPasswordScreen = lazyScreen(() => require('../screens/auth/ForgotPasswordScreen'))
-const ResetPasswordScreen = lazyScreen(() => require('../screens/auth/ResetPasswordScreen'))
-const MfaVerifyScreen = lazyScreen(() => require('../screens/auth/MfaVerifyScreen'))
-
-// Main flow/modal screens
-const OpenCurrencyAccountScreen = lazyScreen(() => require('../screens/main/OpenCurrencyAccountScreen'))
-const ProfileEditScreen = lazyScreen(() => require('../screens/main/ProfileEditScreen'))
-const SupportScreen = lazyScreen(() => require('../screens/main/SupportScreen'))
-const TransactionCardScreen = lazyScreen(() => require('../screens/main/TransactionCardScreen'))
-const ChangePasswordScreen = lazyScreen(() => require('../screens/main/ChangePasswordScreen'))
-const ChangePinScreen = lazyScreen(() => require('../screens/main/ChangePinScreen'))
-const MfaSetupScreen = lazyScreen(() => require('../screens/main/MfaSetupScreen'))
-const NotificationsScreen = lazyScreen(() => require('../screens/main/NotificationsScreen'))
-const InAppNotificationsScreen = lazyScreen(() => require('../screens/main/InAppNotificationsScreen'))
-const LegalScreen = lazyScreen(() => require('../screens/main/LegalScreen'))
-
-// Payroll screens
-const PayrollApprovalScreen = lazyScreen(() => require('../screens/payroll/PayrollApprovalScreen'))
-const PayrollConnectionsScreen = lazyScreen(() => require('../screens/payroll/PayrollConnectionsScreen'))
-const PayrollConnectionDetailScreen = lazyScreen(() => require('../screens/payroll/PayrollConnectionDetailScreen'))
-const PayrollInvitationScreen = lazyScreen(() => require('../screens/payroll/PayrollInvitationScreen'))
-const PayrollReceivingMethodScreen = lazyScreen(() => require('../screens/payroll/PayrollReceivingMethodScreen'))
+import OpenCurrencyAccountScreen from '../screens/main/OpenCurrencyAccountScreen'
+import ProfileEditScreen from '../screens/main/ProfileEditScreen'
+import SupportScreen from '../screens/main/SupportScreen'
+import TransactionCardScreen from '../screens/main/TransactionCardScreen'
+import ChangePasswordScreen from '../screens/main/ChangePasswordScreen'
+import ChangePinScreen from '../screens/main/ChangePinScreen'
+import MfaSetupScreen from '../screens/main/MfaSetupScreen'
+import NotificationsScreen from '../screens/main/NotificationsScreen'
+import InAppNotificationsScreen from '../screens/main/InAppNotificationsScreen'
+import LegalScreen from '../screens/main/LegalScreen'
+import PayrollApprovalScreen from '../screens/payroll/PayrollApprovalScreen'
+import PayrollConnectionsScreen from '../screens/payroll/PayrollConnectionsScreen'
+import PayrollConnectionDetailScreen from '../screens/payroll/PayrollConnectionDetailScreen'
+import PayrollInvitationScreen from '../screens/payroll/PayrollInvitationScreen'
+import PayrollReceivingMethodScreen from '../screens/payroll/PayrollReceivingMethodScreen'
 
 // Transaction Screens – lazy-loaded so receipt capture native modules never run at app launch.
 function loadTransactionDetailsScreen() {
@@ -194,21 +152,13 @@ function MainTabs() {
 
   return (
     <Tab.Navigator
-      screenListeners={({ route }) => ({
+      screenListeners={{
         tabPress: () => {
           haptics.select()
-          // M0: measure tabPress → next screen focus as `mobile_tab_switch`.
-          markTabSwitchStart()
         },
-        focus: () => {
-          markTabSwitchEnd(route.name)
-        },
-      })}
+      }}
       screenOptions={{
         headerShown: false,
-        // Blurred tabs stay mounted (instant switch-back) but stop re-rendering
-        // on context/query ticks while hidden.
-        freezeOnBlur: true,
         tabBarStyle: hideTabBarOnWebShell
           ? { display: 'none', height: 0 }
           : {
@@ -341,9 +291,6 @@ function MainStack() {
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
-          // Screens beneath the top of the stack stop re-rendering on
-          // context/query ticks; they resume when refocused.
-          freezeOnBlur: true,
         }}
         screenListeners={webStackScreenListeners}
       >
@@ -424,31 +371,6 @@ function MainStack() {
           options={transitionOptions('TransactionDetails')}
         />
         <Stack.Screen name="Recipients" component={RecipientsScreen} options={transitionOptions('Recipients')} />
-        <Stack.Screen
-          name="AddRecipientType"
-          component={AddRecipientTypeScreen}
-          options={transitionOptions('AddRecipientType')}
-        />
-        <Stack.Screen
-          name="AddBankRecipient"
-          component={AddBankRecipientScreen}
-          options={transitionOptions('AddBankRecipient')}
-        />
-        <Stack.Screen
-          name="AddMobileRecipient"
-          component={AddMobileRecipientScreen}
-          options={transitionOptions('AddMobileRecipient')}
-        />
-        <Stack.Screen
-          name="AddWalletRecipient"
-          component={AddWalletRecipientScreen}
-          options={transitionOptions('AddWalletRecipient')}
-        />
-        <Stack.Screen
-          name="AddEasenetRecipient"
-          component={AddEasenetRecipientScreen}
-          options={transitionOptions('AddEasenetRecipient')}
-        />
         <Stack.Screen name="Card" component={CardScreen} options={transitionOptions('Card')} />
         <Stack.Screen
           name="TransactionCard"
@@ -633,6 +555,7 @@ export default function AppNavigator() {
         setCheckingAuth(false)
         return
       }
+      // Check onboarding status from AsyncStorage
       const onboardingValue = await AsyncStorage.getItem(ONBOARDING_COMPLETED_KEY)
       setOnboardingCompleted(onboardingValue === 'true')
       setCheckingAuth(false)
@@ -716,23 +639,19 @@ export default function AppNavigator() {
     let cancelled = false
     void (async () => {
       await applyColdStartPinLockIfNeeded(user.id)
-      // These are independent storage reads: run them concurrently instead of
-      // serially — this gate blocks the first real screen behind a spinner.
-      const [setup, idle, lockedFlag] = await Promise.all([
-        isPinSetup(user.id),
-        evaluateIdleLock(user.id),
-        isAppLocked(user.id),
-      ])
+      const setup = await isPinSetup(user.id)
       if (cancelled) return
       if (!setup) {
         setPinGate('setup')
         return
       }
+      const idle = await evaluateIdleLock(user.id)
+      if (cancelled) return
       if (idle === 'signed_out') {
         await signOutRef.current()
         return
       }
-      const locked = idle === 'locked' || lockedFlag
+      const locked = idle === 'locked' || (await isAppLocked(user.id))
       setPinGate(locked ? 'pin' : 'main')
     })()
     return () => {
@@ -800,12 +719,46 @@ export default function AppNavigator() {
     }
   }, [onboardingCompleted])
 
-  // NOTE: the 500ms AsyncStorage polling loops that used to watch
-  // ONBOARDING_COMPLETED_KEY are gone — every writer of that key
-  // (OnboardingScreen completion, AuthScreen back-button reset) already calls
-  // `global.triggerOnboardingCheck()` right after writing, and the AppState
-  // handler above re-checks on foreground. Polling storage at 2Hz forever on
-  // the auth/onboarding screens was pure overhead.
+  // Poll for onboarding completion when showing onboarding screen
+  // This ensures we detect when user completes onboarding
+  useEffect(() => {
+    if (onboardingCompleted === false) {
+      // While onboarding is not completed, poll AsyncStorage to detect when it's completed
+      const interval = setInterval(async () => {
+        try {
+          const onboardingValue = await AsyncStorage.getItem(ONBOARDING_COMPLETED_KEY)
+          if (onboardingValue === 'true') {
+            setOnboardingCompleted(true)
+          }
+        } catch (error) {
+          console.error('Error polling onboarding status:', error)
+        }
+      }, 500) // Check every 500ms
+
+      return () => clearInterval(interval)
+    }
+  }, [onboardingCompleted])
+
+  // Poll for onboarding reset when showing auth screen (user clicked back button)
+  // This ensures we detect when user resets onboarding from auth screen
+  useEffect(() => {
+    if (onboardingCompleted === true && !user) {
+      // While showing auth screen and onboarding is completed, poll to detect if it was reset
+      const interval = setInterval(async () => {
+        try {
+          const onboardingValue = await AsyncStorage.getItem(ONBOARDING_COMPLETED_KEY)
+          if (onboardingValue !== 'true') {
+            // Onboarding was reset, update state to show onboarding again
+            setOnboardingCompleted(false)
+          }
+        } catch (error) {
+          console.error('Error polling onboarding status from auth:', error)
+        }
+      }, 500) // Check every 500ms
+
+      return () => clearInterval(interval)
+    }
+  }, [onboardingCompleted, user])
 
   // Expose function to trigger onboarding re-check (for AuthScreen back button)
   useEffect(() => {
@@ -929,17 +882,10 @@ export default function AppNavigator() {
     return <PinGateSetupStack key="pin-gate-setup" />
   }
 
-  /**
-   * Lock/unlock (M2.4): on web, keep the main navigator mounted under a PIN
-   * overlay so unlock does not remount tabs. On native, mount only the PIN
-   * stack while locked — mounting MainStack behind the overlay pulled in
-   * dashboard queries, session replay, and TextInputs that fatally crashed
-   * release builds (~2–3s after launch on iOS).
-   */
   if (Platform.OS === 'web' && (pinGate === 'main' || pinGate === 'pin')) {
     return (
       <MobileAppLockShell locked={pinGate === 'pin'}>
-        <ResponsiveAppShell key="main-app-shell">
+        <ResponsiveAppShell>
           <MainStack />
         </ResponsiveAppShell>
       </MobileAppLockShell>

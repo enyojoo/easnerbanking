@@ -3,22 +3,16 @@ import { View, Text, StyleSheet, ActivityIndicator, Pressable, TextInput } from 
 import {
   EXPRESS_DEPOSITS_COPY,
   expressDepositMethodTitle,
-  expressDepositsQuoteIsStale,
   formatMoneyDisplay,
-  formatSendRateLabel,
   useExpressDepositsAmountLimits,
   validateExpressDepositsAmount,
-  type ExpressDepositsPricingBreakdown,
 } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { colors, spacing, textStyles, surfaceFrameStyle } from '../../theme'
 import { ReceiveFlowHeader } from '../../components/receive/ReceiveFlowHeader'
-import { analytics } from '../../lib/analytics'
-import { ExpressDepositsReviewSection } from '../../components/receive/ExpressDepositsReviewSection'
 import { useStackHardwareBack } from '../../hooks/useStackHardwareBack'
 import { navigateStackBack } from '../../navigation/stackBackNavigation'
-import { navigateToTransactionDetailAfterPayIn } from '../../navigation/transactionDetailNavigation'
 import { apiFetch } from '../../query/api-client'
 import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
 import type { ExpressCashKind } from '../../components/receive/ReceiveCashMethodList'
@@ -33,7 +27,7 @@ export default function ExpressDepositAmountScreen({ navigation, route }: Naviga
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [step, setStep] = useState<'amount' | 'review' | 'complete'>('amount')
-  const [pricing, setPricing] = useState<ExpressDepositsPricingBreakdown | null>(null)
+  const [youPay, setYouPay] = useState<number | null>(null)
   const [sourceCurrency, setSourceCurrency] = useState('USD')
   const [ready, setReady] = useState(false)
   const [publishableKey, setPublishableKey] = useState<string | null>(null)
@@ -46,7 +40,6 @@ export default function ExpressDepositAmountScreen({ navigation, route }: Naviga
   useStackHardwareBack(handleBack)
 
   const usdCredit = Number.parseFloat(amount) || 0
-  const youPay = pricing?.totalToPay ?? null
   const amountLimit = validateExpressDepositsAmount({
     usdCredit,
     youPay,
@@ -69,24 +62,6 @@ export default function ExpressDepositAmountScreen({ navigation, route }: Naviga
           ? 'google_pay'
           : 'card'
 
-  const fetchQuote = useCallback(async (): Promise<ExpressDepositsPricingBreakdown | null> => {
-    const data = await apiFetch<{
-      pricing?: ExpressDepositsPricingBreakdown
-      sourceCurrency?: string
-      error?: string
-    }>('/api/stripe/onramp/quote', {
-      method: 'POST',
-      body: { usdCredit, paymentMethod },
-    })
-    if (data.sourceCurrency) setSourceCurrency(data.sourceCurrency.toUpperCase())
-    if (data.pricing) {
-      setPricing(data.pricing)
-      return data.pricing
-    }
-    setPricing(null)
-    return null
-  }, [usdCredit, paymentMethod])
-
   useEffect(() => {
     void apiFetch<{
       ready?: boolean
@@ -104,15 +79,32 @@ export default function ExpressDepositAmountScreen({ navigation, route }: Naviga
   }, [])
 
   useEffect(() => {
-    if (!(usdCredit > 0) || !ready || !amountLimit.ok) {
-      setPricing(null)
-      return
-    }
+    if (!(usdCredit > 0) || !ready || !amountLimit.ok) return
     const t = setTimeout(() => {
-      void fetchQuote().catch(() => setPricing(null))
+      void apiFetch<{
+        source_total_amount?: string
+        source_amount?: string
+        sourceCurrency?: string
+        quotes?: Array<{ source_total_amount?: string; source_amount?: string }>
+      }>('/api/stripe/onramp/quote', {
+        method: 'POST',
+        body: { usdCredit, paymentMethod },
+      })
+        .then((data) => {
+          if (data.sourceCurrency) setSourceCurrency(data.sourceCurrency.toUpperCase())
+          const pay = Number(
+            data.source_total_amount ??
+              data.source_amount ??
+              data.quotes?.[0]?.source_total_amount ??
+              data.quotes?.[0]?.source_amount ??
+              usdCredit,
+          )
+          setYouPay(Number.isFinite(pay) && pay > 0 ? pay : usdCredit)
+        })
+        .catch(() => setYouPay(usdCredit))
     }, 400)
     return () => clearTimeout(t)
-  }, [amountLimit.ok, fetchQuote, ready, usdCredit])
+  }, [amountLimit.ok, usdCredit, paymentMethod, ready])
 
   const handleContinue = () => {
     if (!ready) {
@@ -123,32 +115,14 @@ export default function ExpressDepositAmountScreen({ navigation, route }: Naviga
       setError(amountLimit.message)
       return
     }
-    if (!pricing) {
-      setError(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
-      return
-    }
     setStep('review')
-    analytics.trackExpressDepositStarted({ method, currency: sourceCurrency })
-  }
-
-  const ensureFreshPricing = async (): Promise<ExpressDepositsPricingBreakdown> => {
-    if (pricing && !expressDepositsQuoteIsStale(pricing.rateFetchedAt)) return pricing
-    const next = await fetchQuote()
-    if (!next) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
-    const limit = validateExpressDepositsAmount({
-      usdCredit,
-      youPay: next.totalToPay,
-      sourceCurrency: next.sourceCurrency,
-    })
-    if (!limit.ok) throw new Error(limit.message)
-    return next
   }
 
   const handlePay = async () => {
     setBusy(true)
     setError(null)
     try {
-      const freshPricing = await ensureFreshPricing()
+      if (!amountLimit.ok) throw new Error(amountLimit.message)
       if (!publishableKey) throw new Error(EXPRESS_DEPOSITS_COPY.setupRequiredHint)
       const sdk = await loadMobileExpressOnramp(publishableKey, cryptoCustomerId)
       let token = paymentTokenId
@@ -162,8 +136,8 @@ export default function ExpressDepositAmountScreen({ navigation, route }: Naviga
                   applePay: method === 'express_apple_pay' ? 'auto' : 'never',
                   googlePay: method === 'express_google_pay' ? 'auto' : 'never',
                 },
-                amount: freshPricing.totalToPay,
-                currency: freshPricing.sourceCurrency,
+                amount: youPay,
+                currency: 'USD',
               },
               async (result) => {
                 if (!result.cryptoPaymentToken) {
@@ -193,15 +167,11 @@ export default function ExpressDepositAmountScreen({ navigation, route }: Naviga
         })
       }
       setBusy(true)
-      const created = await apiFetch<{ session?: { id?: string }; easnerTransactionId?: string | null }>(
-        '/api/stripe/onramp/sessions',
-        {
-          method: 'POST',
-          body: { usdCredit, paymentMethod, paymentTokenId: token },
-        },
-      )
+      const created = await apiFetch<{ session?: { id?: string } }>('/api/stripe/onramp/sessions', {
+        method: 'POST',
+        body: { usdCredit, sourceAmount: youPay, paymentMethod, paymentTokenId: token },
+      })
       const id = created.session?.id
-      const transactionId = String(created.easnerTransactionId || '').trim()
       if (!id) throw new Error('Could not start payment')
       if (sdk.performCheckout) {
         await sdk.performCheckout(id, async (sessionId) => {
@@ -214,11 +184,6 @@ export default function ExpressDepositAmountScreen({ navigation, route }: Naviga
         })
       } else {
         throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
-      }
-      if (transactionId) {
-        analytics.trackExpressDepositCompleted({ method, currency: freshPricing.sourceCurrency })
-        navigateToTransactionDetailAfterPayIn(navigation, transactionId, 'ReceiveFlow')
-        return
       }
       setStep('complete')
     } catch (e) {
@@ -242,33 +207,28 @@ export default function ExpressDepositAmountScreen({ navigation, route }: Naviga
                 onChangeText={setAmount}
                 keyboardType="decimal-pad"
               />
-              {pricing?.exchangeRate && pricing.exchangeRate.rate > 0 ? (
+              {youPay ? (
                 <Text style={styles.label}>
-                  {formatSendRateLabel(
-                    pricing.exchangeRate.from,
-                    pricing.exchangeRate.to,
-                    pricing.exchangeRate.rate,
-                  )}
-                </Text>
-              ) : null}
-              {pricing ? (
-                <Text style={styles.label}>
-                  {EXPRESS_DEPOSITS_COPY.estimatedTotalToPay}:{' '}
-                  {formatMoneyDisplay(pricing.totalToPay, pricing.sourceCurrency)}
+                  {EXPRESS_DEPOSITS_COPY.youPay}: {formatMoneyDisplay(youPay, sourceCurrency)}
                 </Text>
               ) : null}
               <Pressable
                 style={styles.pay}
-                disabled={!(usdCredit > 0) || Boolean(amountLimitError) || !pricing}
+                disabled={!(usdCredit > 0) || Boolean(amountLimitError)}
                 onPress={handleContinue}
               >
                 <Text style={styles.payText}>{EXPRESS_DEPOSITS_COPY.continueCta}</Text>
               </Pressable>
             </>
           ) : null}
-          {step === 'review' && pricing ? (
+          {step === 'review' ? (
             <>
-              <ExpressDepositsReviewSection pricing={pricing} method={method} />
+              <Text style={styles.label}>
+                {EXPRESS_DEPOSITS_COPY.youGet}: {formatMoneyDisplay(usdCredit, 'USD')}
+              </Text>
+              <Text style={styles.label}>
+                {EXPRESS_DEPOSITS_COPY.youPay}: {formatMoneyDisplay(youPay ?? usdCredit, sourceCurrency)}
+              </Text>
               <ExpressStripeHost element={stripeEl} />
               {!stripeEl ? (
                 <Pressable style={styles.pay} disabled={busy} onPress={() => void handlePay()}>
@@ -281,10 +241,15 @@ export default function ExpressDepositAmountScreen({ navigation, route }: Naviga
               ) : null}
             </>
           ) : null}
-          {step === 'complete' && pricing ? (
+          {step === 'complete' ? (
             <>
               <Text style={styles.amount}>{EXPRESS_DEPOSITS_COPY.completeTitle}</Text>
-              <ExpressDepositsReviewSection pricing={pricing} method={method} />
+              <Text style={styles.label}>
+                {EXPRESS_DEPOSITS_COPY.youGet}: {formatMoneyDisplay(usdCredit, 'USD')}
+              </Text>
+              <Text style={styles.label}>
+                {EXPRESS_DEPOSITS_COPY.youPay}: {formatMoneyDisplay(youPay ?? usdCredit, sourceCurrency)}
+              </Text>
               {last4 ? <Text style={styles.label}>···· {last4}</Text> : null}
               <Pressable style={styles.pay} onPress={handleBack}>
                 <Text style={styles.payText}>Done</Text>

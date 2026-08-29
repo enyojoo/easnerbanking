@@ -1,4 +1,4 @@
-package com.easner.android
+package com.easner.mobile
 import com.intercom.reactnative.IntercomModule
 
 import android.app.Application

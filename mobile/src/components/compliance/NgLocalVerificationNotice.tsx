@@ -12,64 +12,34 @@ import { haptics } from '../../lib/haptics'
 import { apiPatch } from '../../lib/apiClient'
 
 type Props = {
-  /** IDs still needed – one field each, or both when neither is on file. */
-  missingTypes: NgLocalIdType[]
+  missingType: NgLocalIdType
   style?: object
   onSaved?: () => void
 }
 
-function digitsOnly(value: string): string {
-  return value.replace(/\D/g, '').slice(0, 11)
-}
-
-export function NgLocalVerificationNotice({ missingTypes, style, onSaved }: Props) {
+export function NgLocalVerificationNotice({ missingType, style, onSaved }: Props) {
   const [open, setOpen] = useState(false)
-  const [nin, setNin] = useState('')
-  const [bvn, setBvn] = useState('')
+  const [value, setValue] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const copy = NG_LOCAL_VERIFICATION_COPY
-
-  const needNin = missingTypes.includes('NIN')
-  const needBvn = missingTypes.includes('BVN')
-  const needBoth = needNin && needBvn
-  const singleType = !needBoth ? missingTypes[0] : null
-
-  const intro = useMemo(
-    () => (needBoth ? copy.introBoth : copy.introOne),
-    [needBoth, copy],
+  const fieldLabel = useMemo(
+    () => (missingType === 'NIN' ? copy.fieldLabelNin : copy.fieldLabelBvn),
+    [missingType, copy],
   )
 
   async function save() {
     setError(null)
-    if (needBoth) {
-      if (!isValidNgLocalIdNumber(nin) || !isValidNgLocalIdNumber(bvn)) {
-        setError('Enter an 11-digit NIN and BVN')
-        return
-      }
-    } else if (singleType === 'NIN') {
-      if (!isValidNgLocalIdNumber(nin)) {
-        setError('Enter an 11-digit NIN')
-        return
-      }
-    } else if (singleType === 'BVN') {
-      if (!isValidNgLocalIdNumber(bvn)) {
-        setError('Enter an 11-digit BVN')
-        return
-      }
-    } else {
+    if (!isValidNgLocalIdNumber(value)) {
+      setError('Enter an 11-digit number')
       return
     }
-
     setSaving(true)
     try {
-      const body = needBoth
-        ? { nin: nin.trim(), bvn: bvn.trim() }
-        : singleType === 'NIN'
-          ? { ngLocalIdType: 'NIN', ngLocalIdNumber: nin.trim() }
-          : { ngLocalIdType: 'BVN', ngLocalIdNumber: bvn.trim() }
-
-      const res = await apiPatch('/api/compliance/ng-local-verification', body)
+      const res = await apiPatch('/api/compliance/ng-local-verification', {
+        ngLocalIdType: missingType,
+        ngLocalIdNumber: value.trim(),
+      })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
         setError(typeof data.error === 'string' ? data.error : 'Save failed')
@@ -77,8 +47,7 @@ export function NgLocalVerificationNotice({ missingTypes, style, onSaved }: Prop
       }
       haptics.success()
       setOpen(false)
-      setNin('')
-      setBvn('')
+      setValue('')
       onSaved?.()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed')
@@ -87,12 +56,10 @@ export function NgLocalVerificationNotice({ missingTypes, style, onSaved }: Prop
     }
   }
 
-  if (missingTypes.length === 0) return null
-
   return (
     <>
       <Text style={[styles.inline, style]}>
-        {ngSupplementInlinePrompt(missingTypes)}
+        {ngSupplementInlinePrompt(missingType)}
         <Text
           style={styles.link}
           onPress={() => {
@@ -106,41 +73,20 @@ export function NgLocalVerificationNotice({ missingTypes, style, onSaved }: Prop
       <WebAwareModal visible={open} onRequestClose={() => setOpen(false)} keyboardAvoiding compact>
         <View style={styles.modalPanel}>
           <Text style={styles.title}>{copy.title}</Text>
-          <Text style={styles.intro}>{intro}</Text>
-          {needNin ? (
-            <>
-              <Text style={styles.label}>{copy.fieldLabelNin}</Text>
-              <TextInput
-                style={styles.input}
-                keyboardType="number-pad"
-                maxLength={11}
-                value={nin}
-                onChangeText={(t) => setNin(digitsOnly(t))}
-                placeholder="00000000000"
-                placeholderTextColor={colors.text.tertiary}
-                autoFocus
-                returnKeyType={needBvn ? 'next' : 'done'}
-                textContentType="none"
-              />
-            </>
-          ) : null}
-          {needBvn ? (
-            <>
-              <Text style={styles.label}>{copy.fieldLabelBvn}</Text>
-              <TextInput
-                style={styles.input}
-                keyboardType="number-pad"
-                maxLength={11}
-                value={bvn}
-                onChangeText={(t) => setBvn(digitsOnly(t))}
-                placeholder="00000000000"
-                placeholderTextColor={colors.text.tertiary}
-                autoFocus={!needNin}
-                returnKeyType="done"
-                textContentType="none"
-              />
-            </>
-          ) : null}
+          <Text style={styles.intro}>{copy.introBoth}</Text>
+          <Text style={styles.label}>{fieldLabel}</Text>
+          <TextInput
+            style={styles.input}
+            keyboardType="number-pad"
+            maxLength={11}
+            value={value}
+            onChangeText={(t) => setValue(t.replace(/\D/g, '').slice(0, 11))}
+            placeholder="00000000000"
+            placeholderTextColor={colors.text.tertiary}
+            autoFocus
+            returnKeyType="done"
+            textContentType="none"
+          />
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Pressable
             style={styles.saveBtn}

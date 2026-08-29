@@ -86,19 +86,12 @@ export function useSaveTransactionReceipt(
       const perm = await MediaLibrary.requestPermissionsAsync(true)
       if (!perm.granted) {
         showWarning('Allow photo access to save the receipt.')
-        const shared = await shareUri(uri)
-        if (!shared) showWarning('Could not save or share receipt.')
+        await shareUri(uri)
         return
       }
 
-      try {
-        await MediaLibrary.saveToLibraryAsync(uri)
-        showSuccess('Receipt saved to Photos')
-      } catch {
-        const shared = await shareUri(uri)
-        if (shared) showSuccess('Receipt shared')
-        else showWarning('Could not save receipt. Try Share instead.')
-      }
+      await MediaLibrary.saveToLibraryAsync(uri)
+      showSuccess('Receipt saved to Photos')
     } catch (e: unknown) {
       showError(e instanceof Error ? e.message : 'Could not save receipt')
     } finally {

@@ -11,16 +11,14 @@ type Props = KeyboardAwareScrollViewProps & {
 /**
  * Scroll surface that tracks the software keyboard – pilot replacement for KeyboardAvoidingView + ScrollView.
  */
-const KeyboardAwareScreen = React.forwardRef<
-  React.ComponentRef<typeof KeyboardAwareScrollView>,
-  Props
->(function KeyboardAwareScreen(
-  { children, keyboardShouldPersistTaps = 'handled', bottomOffset = 16, ...props },
-  ref,
-) {
+export default function KeyboardAwareScreen({
+  children,
+  keyboardShouldPersistTaps = 'handled',
+  bottomOffset = 16,
+  ...props
+}: Props) {
   return (
     <KeyboardAwareScrollView
-      ref={ref}
       keyboardShouldPersistTaps={keyboardShouldPersistTaps}
       bottomOffset={bottomOffset}
       {...props}
@@ -28,6 +26,4 @@ const KeyboardAwareScreen = React.forwardRef<
       {children}
     </KeyboardAwareScrollView>
   )
-})
-
-export default KeyboardAwareScreen
+}

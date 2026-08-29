@@ -1,5 +1,4 @@
-import { EXPRESS_DEPOSITS_COPY, expressNativeTrustedInstallMessage } from '@easner/shared'
-import { Platform } from 'react-native'
+import { EXPRESS_DEPOSITS_COPY } from '@easner/shared'
 import { EXPRESS_NATIVE_AUTH_REQUIRED, type ExpressOnrampSdk } from './express-onramp-types'
 
 export { EXPRESS_NATIVE_AUTH_REQUIRED }
@@ -95,7 +94,7 @@ async function presentIdentity(
 ) {
   const result = await onramp.verifyIdentity()
   if (result.error && isAttestationError(result.error)) {
-    throw new Error(expressNativeTrustedInstallMessage(Platform.OS))
+    throw new Error(EXPRESS_DEPOSITS_COPY.nativeTrustedInstall)
   }
   if (result.error && onramp.isAuthError?.(result.error)) {
     throw new Error(EXPRESS_NATIVE_AUTH_REQUIRED)
@@ -140,7 +139,7 @@ export function adaptNativeOnramp(onramp: NativeOnramp): ExpressOnrampSdk {
   const throwIf = (error?: { message?: string; stripeErrorCode?: string; code?: string }) => {
     if (!error?.message) return
     if (isAttestationError(error)) {
-      throw new Error(expressNativeTrustedInstallMessage(Platform.OS))
+      throw new Error(EXPRESS_DEPOSITS_COPY.nativeTrustedInstall)
     }
     throw new Error(error.message)
   }

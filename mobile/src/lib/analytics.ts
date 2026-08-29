@@ -1,41 +1,20 @@
-import { Platform } from 'react-native'
-import {
-  ANALYTICS_EVENTS,
-  ANALYTICS_PLATFORM,
-  consumerPlatformFromOs,
-  invoiceProperties,
-  kybProperties,
-  sendFunnelProperties,
-} from '@easner/shared'
-import { runWithPostHog } from './posthogSafe'
+import { getPostHog } from './posthog'
 
-type Props = Record<string, unknown>
+type Props = Record<string, any>
 type ScreenTrackingMode = 'manual' | 'auto'
 
 let screenTrackingMode: ScreenTrackingMode = 'manual'
 
 const withDefaults = (properties?: Props): Props => ({
-  platform: consumerPlatformFromOs(Platform.OS),
-  os: Platform.OS,
+  platform: 'mobile',
   environment: __DEV__ ? 'development' : 'production',
   ...properties,
 })
 
 const capture = (event: string, properties?: Props) => {
-  runWithPostHog('capture', (client) => {
-    client.capture(event, withDefaults(properties))
-  })
-}
-
-const captureScreen = (screenName: string, properties?: Props) => {
-  runWithPostHog('screen', (client) => {
-    const props = withDefaults(properties)
-    if (typeof client.screen === 'function') {
-      client.screen(screenName, props)
-      return
-    }
-    client.capture('$screen', { $screen_name: screenName, ...props })
-  })
+  const posthog = getPostHog()
+  if (!posthog) return
+  posthog.capture(event, withDefaults(properties))
 }
 
 export const analytics = {
@@ -43,186 +22,141 @@ export const analytics = {
     screenTrackingMode = mode
   },
 
+  // User identification and authentication
   identify: (userId: string, properties?: Props) => {
-    runWithPostHog('identify', (client) => {
-      client.identify(userId, withDefaults(properties))
-    })
+    const posthog = getPostHog()
+    if (!posthog) return
+    posthog.identify(userId, withDefaults(properties))
   },
 
-  group: (groupType: string, groupKey: string, properties?: Props) => {
-    runWithPostHog('group', (client) => {
-      client.group(groupType, groupKey, withDefaults(properties))
-    })
-  },
-
-  registerSuperProperties: (properties: Props) => {
-    runWithPostHog('register', (client) => {
-      client.register(withDefaults(properties))
-    })
-  },
-
+  // Track user registration
   trackSignUp: (method: string, properties?: Props) => {
-    capture(ANALYTICS_EVENTS.userSignedUp, { method, ...properties })
-    capture(ANALYTICS_EVENTS.signupCompleted, { method, ...properties })
+    capture('user_signed_up', { method, ...properties })
   },
 
+  // Track user login
   trackSignIn: (method: string, properties?: Props) => {
-    capture(ANALYTICS_EVENTS.userSignedIn, { method, ...properties })
-    capture(ANALYTICS_EVENTS.loginCompleted, { method, ...properties })
+    capture('user_signed_in', { method, ...properties })
   },
 
+  // Track user logout
   trackSignOut: () => {
-    capture(ANALYTICS_EVENTS.userSignedOut)
-    runWithPostHog('reset', (client) => {
-      client.reset()
-    })
+    capture('user_signed_out')
+    getPostHog()?.reset()
   },
 
-  trackOnboardingStepViewed: (step: number | string, properties?: Props) => {
-    capture(ANALYTICS_EVENTS.onboardingStepViewed, { step, ...properties })
+  // Transaction tracking
+  trackTransactionStarted: (properties: {
+    sendCurrency: string
+    receiveCurrency: string
+    sendAmount: number
+    receiveAmount: number
+    exchangeRate: number
+    fee: number
+  }) => {
+    capture('transaction_started', properties)
   },
 
-  trackOnboardingCompleted: (properties?: Props) => {
-    capture(ANALYTICS_EVENTS.onboardingCompleted, properties)
+  trackTransactionCompleted: (properties: {
+    transactionId: string
+    sendCurrency: string
+    receiveCurrency: string
+    sendAmount: number
+    receiveAmount: number
+    exchangeRate: number
+    fee: number
+    totalAmount: number
+  }) => {
+    capture('transaction_completed', properties)
   },
 
-  trackSendStarted: (properties?: Props & Parameters<typeof sendFunnelProperties>[0]) => {
-    capture(ANALYTICS_EVENTS.sendStarted, { ...sendFunnelProperties(properties ?? {}), ...properties })
-    capture(ANALYTICS_EVENTS.transactionStarted, { ...sendFunnelProperties(properties ?? {}), ...properties })
-  },
-
-  trackSendSubmitted: (properties?: Props & Parameters<typeof sendFunnelProperties>[0]) => {
-    capture(ANALYTICS_EVENTS.sendSubmitted, { ...sendFunnelProperties(properties ?? {}), ...properties })
-  },
-
-  trackSendCompleted: (properties?: Props & Parameters<typeof sendFunnelProperties>[0]) => {
-    capture(ANALYTICS_EVENTS.sendCompleted, { ...sendFunnelProperties(properties ?? {}), ...properties })
-    capture(ANALYTICS_EVENTS.transactionCompleted, { ...sendFunnelProperties(properties ?? {}), ...properties })
-  },
-
-  trackSendFailed: (properties?: Props & Parameters<typeof sendFunnelProperties>[0]) => {
-    capture(ANALYTICS_EVENTS.sendFailed, { ...sendFunnelProperties(properties ?? {}), ...properties })
-  },
-
-  trackReceiveViewed: (properties?: Props) => {
-    capture(ANALYTICS_EVENTS.receiveViewed, properties)
-  },
-
-  trackExpressDepositStarted: (properties?: Props) => {
-    capture(ANALYTICS_EVENTS.expressDepositStarted, properties)
-  },
-
-  trackExpressDepositCompleted: (properties?: Props) => {
-    capture(ANALYTICS_EVENTS.expressDepositCompleted, properties)
-  },
-
-  trackKycStarted: (properties?: Props) => {
-    capture(ANALYTICS_EVENTS.kycStarted, properties)
-  },
-
-  trackKycSubmitted: (properties?: Props) => {
-    capture(ANALYTICS_EVENTS.kycSubmitted, { ...kybProperties(properties ?? {}), ...properties })
-  },
-
-  trackKycCompleted: (properties?: Props) => {
-    capture(ANALYTICS_EVENTS.kycCompleted, properties)
-  },
-
-  trackTransactionStarted: (properties: Props) => {
-    capture(ANALYTICS_EVENTS.transactionStarted, properties)
-  },
-
-  trackTransactionCompleted: (properties: Props) => {
-    capture(ANALYTICS_EVENTS.transactionCompleted, properties)
-  },
-
-  trackCurrencyConverted: (properties: Props) => {
+  // Currency converter usage
+  trackCurrencyConverted: (properties: {
+    fromCurrency: string
+    toCurrency: string
+    amount: number
+    convertedAmount: number
+    exchangeRate: number
+  }) => {
     capture('currency_converted', properties)
   },
 
-  trackCurrencyConversion: (properties: Props) => {
+  trackCurrencyConversion: (properties: {
+    fromCurrency: string
+    toCurrency: string
+    amount: number
+    convertedAmount: number
+    exchangeRate: number
+  }) => {
     capture('currency_converted', properties)
   },
 
-  trackRecipientAdded: (properties: Props) => {
-    capture(ANALYTICS_EVENTS.recipientAdded, properties)
+  // Recipient management
+  trackRecipientAdded: (properties: {
+    recipientId: string
+    bankName: string
+    country: string
+  }) => {
+    capture('recipient_added', properties)
   },
 
-  trackRecipientEdited: (properties: Props) => {
-    capture(ANALYTICS_EVENTS.recipientEdited, properties)
+  trackRecipientEdited: (properties: {
+    recipientId: string
+    bankName: string
+    country: string
+  }) => {
+    capture('recipient_edited', properties)
   },
 
-  trackRecipientSelected: (properties: Props) => {
-    capture(ANALYTICS_EVENTS.recipientSelected, properties)
+  trackRecipientSelected: (properties: {
+    recipientId: string
+    recipientType?: string
+    country?: string
+  }) => {
+    capture('recipient_selected', properties)
   },
 
+  // Screen navigation
   trackScreenView: (screenName: string, properties?: Props) => {
     if (screenTrackingMode === 'auto') return
-    captureScreen(screenName, properties)
+    const posthog = getPostHog()
+    if (!posthog) return
+    posthog.screen(screenName, withDefaults(properties))
   },
 
   trackSupportLiveChatOpened: () => {
-    capture(ANALYTICS_EVENTS.supportLiveChatOpened)
+    capture('support_live_chat_opened')
   },
 
   trackNavigationScreenView: (screenName: string, properties?: Props) => {
-    captureScreen(screenName, properties)
+    const posthog = getPostHog()
+    if (!posthog) return
+    posthog.screen(screenName, withDefaults(properties))
   },
 
-  trackWebPageView: (href: string, referrer: string, properties?: Props) => {
-    runWithPostHog('pageview', (client) => {
-      client.capture('$pageview', withDefaults({ $current_url: href, $referrer: referrer || '$direct', ...properties }))
-    })
-  },
-
-  trackWebVital: (properties: Props) => {
-    capture('web_vital', properties)
-  },
-
+  // Feature usage
   trackFeatureUsed: (featureName: string, properties?: Props) => {
-    capture(ANALYTICS_EVENTS.featureUsed, { feature: featureName, ...properties })
+    capture('feature_used', { feature: featureName, ...properties })
   },
 
+  // Error tracking
   trackError: (error: string, properties?: Props) => {
-    capture(ANALYTICS_EVENTS.errorOccurred, { error, ...properties })
-  },
-
-  trackSignInFailed: (method: string, properties?: Props) => {
-    capture(ANALYTICS_EVENTS.signInFailed, { method, ...properties })
+    capture('error_occurred', { error, ...properties })
   },
 
   trackSignInCancelled: (method: string, properties?: Props) => {
-    capture(ANALYTICS_EVENTS.signInCancelled, { method, ...properties })
+    capture('sign_in_cancelled', { method, ...properties })
   },
 
   trackAccountClosureCancelled: (properties?: Props) => {
     capture('account_closure_cancelled', properties)
   },
 
-  trackPushOpened: (properties?: Props) => {
-    capture(ANALYTICS_EVENTS.pushOpened, properties)
-  },
-
-  trackDeepLinkOpened: (properties?: Props) => {
-    capture(ANALYTICS_EVENTS.deepLinkOpened, properties)
-  },
-
-  trackPayrollDeepLinkOpened: (properties?: Props) => {
-    capture(ANALYTICS_EVENTS.payrollDeepLinkOpened, properties)
-  },
-
-  trackPinSetupCompleted: (properties?: Props) => {
-    capture(ANALYTICS_EVENTS.pinSetupCompleted, properties)
-  },
-
-  trackAppLocked: (properties?: Props) => {
-    capture(ANALYTICS_EVENTS.appLocked, properties)
-  },
-
   track: (event: string, properties?: Props) => {
     capture(event, properties)
   },
 
+  // App lifecycle
   trackAppOpened: () => {
     capture('app_opened')
   },
@@ -231,23 +165,21 @@ export const analytics = {
     capture('app_backgrounded')
   },
 
+  // User properties
   setUserProperties: (properties: Props) => {
-    runWithPostHog('setPersonProperties', (client) => {
-      client.setPersonProperties(withDefaults(properties))
-    })
+    const posthog = getPostHog()
+    if (!posthog) return
+    posthog.setPersonProperties(withDefaults(properties))
   },
 
+  // Group properties (for organization-level analytics)
   setGroupProperties: (groupType: string, groupKey: string, properties: Props) => {
-    runWithPostHog('groupProperties', (client) => {
-      client.group(groupType, groupKey, withDefaults(properties))
-    })
+    const posthog = getPostHog()
+    if (!posthog) return
+    posthog.group(groupType, groupKey, withDefaults(properties))
   },
 
   reset: () => {
-    runWithPostHog('reset', (client) => {
-      client.reset()
-    })
+    getPostHog()?.reset()
   },
 }
-
-export { ANALYTICS_PLATFORM }

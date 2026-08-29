@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import React, { createContext, useContext, useState, useEffect } from 'react'
 import { Platform } from 'react-native'
 import type { Notification as ExpoPushNotification } from 'expo-notifications'
 import { pushNotificationService } from '../lib/pushNotificationService'
@@ -117,47 +117,42 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     }
   }, [])
 
-  const markAsRead = useCallback((id: string) => {
-    setNotifications(prev =>
-      prev.map(notif =>
+  const markAsRead = (id: string) => {
+    setNotifications(prev => 
+      prev.map(notif => 
         notif.id === id ? { ...notif, read: true } : notif
       )
     )
-  }, [])
+  }
 
-  const markAllAsRead = useCallback(() => {
-    setNotifications(prev =>
+  const markAllAsRead = () => {
+    setNotifications(prev => 
       prev.map(notif => ({ ...notif, read: true }))
     )
-  }, [])
+  }
 
-  const addNotification = useCallback((notification: Notification) => {
+  const addNotification = (notification: Notification) => {
     setNotifications(prev => [notification, ...prev])
-  }, [])
+  }
 
-  const refreshNotifications = useCallback(async () => {
+  const refreshNotifications = async () => {
     // TODO: Fetch notifications from backend API
     // const response = await apiClient.get('/notifications')
     // setNotifications(response.data)
-  }, [])
-
-  // Identity-stable value: consumers include mounted tab screens, which would
-  // otherwise re-render on every provider render.
-  const value = useMemo(
-    () => ({
-      notifications,
-      unreadCount,
-      setNotifications,
-      markAsRead,
-      markAllAsRead,
-      addNotification,
-      refreshNotifications,
-    }),
-    [notifications, unreadCount, markAsRead, markAllAsRead, addNotification, refreshNotifications],
-  )
+  }
 
   return (
-    <NotificationsContext.Provider value={value}>
+    <NotificationsContext.Provider
+      value={{
+        notifications,
+        unreadCount,
+        setNotifications,
+        markAsRead,
+        markAllAsRead,
+        addNotification,
+        refreshNotifications,
+      }}
+    >
       {children}
     </NotificationsContext.Provider>
   )

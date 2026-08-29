@@ -5,83 +5,39 @@ export type SendWalletQuoteStashMeta = {
   amountEntryMode: 'send' | 'receive'
   entryAmount: number
   receiveCurrency: string
-  /** The quote body sends this; a stash keyed without it survives a balance switch. */
-  sourceBalanceCurrency: string
 }
-
-/**
- * A preview that expires mid-navigation makes Continue seed a review the
- * confirm step then rejects. Treat previews as stale this long before their
- * actual expiry so Continue re-quotes instead.
- */
-const PREVIEW_EXPIRY_MARGIN_MS = 20_000
 
 let stashed: WalletSendQuote | null = null
 let stashedMeta: SendWalletQuoteStashMeta | null = null
-let previewStashed: WalletSendQuote | null = null
-let previewStashedMeta: SendWalletQuoteStashMeta | null = null
 
 export function stashSendWalletQuote(quote: WalletSendQuote, meta: SendWalletQuoteStashMeta): void {
   stashed = quote
   stashedMeta = meta
 }
 
-export function stashSendWalletQuotePreview(
-  quote: WalletSendQuote,
-  meta: SendWalletQuoteStashMeta,
-): void {
-  if (!quote?.formSessionId || !quote.expiresAt) return
-  previewStashed = quote
-  previewStashedMeta = meta
-}
-
 export function peekSendWalletQuote(): WalletSendQuote | null {
   return stashed
-}
-
-export function peekSendWalletQuotePreview(): WalletSendQuote | null {
-  return previewStashed
 }
 
 export function clearSendWalletQuote(): void {
   stashed = null
   stashedMeta = null
-  previewStashed = null
-  previewStashedMeta = null
 }
 
 function entryAmountsMatch(a: number, b: number): boolean {
   return Math.round(a * 100) / 100 === Math.round(b * 100) / 100
 }
 
-function metaMatches(a: SendWalletQuoteStashMeta, b: SendWalletQuoteStashMeta): boolean {
-  if (a.recipientId.trim() !== b.recipientId.trim()) return false
-  if (a.amountEntryMode !== b.amountEntryMode) return false
-  if (a.receiveCurrency.trim().toUpperCase() !== b.receiveCurrency.trim().toUpperCase()) {
-    return false
-  }
-  if (
-    a.sourceBalanceCurrency.trim().toUpperCase() !== b.sourceBalanceCurrency.trim().toUpperCase()
-  ) {
-    return false
-  }
-  return entryAmountsMatch(a.entryAmount, b.entryAmount)
-}
-
 export function isStashedWalletQuoteFresh(input: SendWalletQuoteStashMeta): boolean {
   if (!stashed?.expiresAt || !stashed.formSessionId || !stashedMeta) return false
   if (new Date(stashed.expiresAt).getTime() <= Date.now()) return false
   if (stashed.quotePhase === 'preview') return false
-  return metaMatches(stashedMeta, input)
-}
-
-/** Fresh un-confirmed preview from the typing prefetch – lets Continue navigate-then-resolve. */
-export function isStashedWalletQuotePreviewFresh(input: SendWalletQuoteStashMeta): boolean {
-  if (!previewStashed?.expiresAt || !previewStashed.formSessionId || !previewStashedMeta) return false
-  if (new Date(previewStashed.expiresAt).getTime() <= Date.now() + PREVIEW_EXPIRY_MARGIN_MS) {
+  if (stashedMeta.recipientId.trim() !== input.recipientId.trim()) return false
+  if (stashedMeta.amountEntryMode !== input.amountEntryMode) return false
+  if (stashedMeta.receiveCurrency.trim().toUpperCase() !== input.receiveCurrency.trim().toUpperCase()) {
     return false
   }
-  return metaMatches(previewStashedMeta, input)
+  return entryAmountsMatch(stashedMeta.entryAmount, input.entryAmount)
 }
 
 let inflightQuote: Promise<WalletSendQuote | null> | null = null
@@ -91,13 +47,7 @@ let inflightConfirmKey = ''
 let lastWalletQuoteError: string | null = null
 
 function quoteMetaKey(meta: SendWalletQuoteStashMeta): string {
-  return [
-    meta.recipientId,
-    meta.amountEntryMode,
-    meta.entryAmount,
-    meta.receiveCurrency,
-    meta.sourceBalanceCurrency,
-  ].join('|')
+  return [meta.recipientId, meta.amountEntryMode, meta.entryAmount, meta.receiveCurrency].join('|')
 }
 
 export function peekLastWalletQuoteError(): string | null {
@@ -108,8 +58,6 @@ export async function ensureSendWalletQuoteStashed(
   fetchQuote: () => Promise<WalletSendQuote>,
   meta: SendWalletQuoteStashMeta,
 ): Promise<WalletSendQuote | null> {
-  if (isStashedWalletQuotePreviewFresh(meta)) return peekSendWalletQuotePreview()
-
   const key = quoteMetaKey(meta)
   if (inflightQuote && inflightQuoteKey === key) return inflightQuote
 
@@ -118,21 +66,15 @@ export async function ensureSendWalletQuoteStashed(
   inflightQuote = fetchQuote()
     .then((quote) => {
       lastWalletQuoteError = null
-      const preview = { ...quote, quotePhase: 'preview' as const }
-      stashSendWalletQuotePreview(preview, meta)
-      return preview
+      return { ...quote, quotePhase: 'preview' as const }
     })
     .catch((err) => {
       lastWalletQuoteError = err instanceof Error ? err.message : 'quote_failed'
       return null
     })
     .finally(() => {
-      // Clear only OUR registration: a stale (superseded-key) settle must
-      // not deregister a newer in-flight lock (duplicate provider lock).
-      if (inflightQuoteKey === key) {
-        inflightQuote = null
-        inflightQuoteKey = ''
-      }
+      inflightQuote = null
+      inflightQuoteKey = ''
     })
 
   return inflightQuote
@@ -151,10 +93,7 @@ export async function ensureSendWalletOrderConfirmed(
   inflightConfirmKey = key
   lastWalletQuoteError = null
   inflightConfirm = (async () => {
-    // Skip the quote POST when the typing prefetch already stashed a fresh preview.
-    const preview = isStashedWalletQuotePreviewFresh(meta)
-      ? peekSendWalletQuotePreview()
-      : await ensureSendWalletQuoteStashed(fetchQuote, meta)
+    const preview = await ensureSendWalletQuoteStashed(fetchQuote, meta)
     if (!preview?.formSessionId) return null
     try {
       const locked = await fetchConfirm(preview.formSessionId)
@@ -166,12 +105,8 @@ export async function ensureSendWalletOrderConfirmed(
       return null
     }
   })().finally(() => {
-    // Clear only OUR registration: a stale (superseded-key) settle must
-    // not deregister a newer in-flight lock (duplicate provider lock).
-    if (inflightConfirmKey === key) {
-      inflightConfirm = null
-      inflightConfirmKey = ''
-    }
+    inflightConfirm = null
+    inflightConfirmKey = ''
   })
 
   return inflightConfirm

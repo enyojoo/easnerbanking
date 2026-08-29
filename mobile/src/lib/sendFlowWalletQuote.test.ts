@@ -44,7 +44,6 @@ describe('sendFlowWalletQuote stash', () => {
       amountEntryMode: 'receive',
       entryAmount: 100,
       receiveCurrency: 'USDC',
-      sourceBalanceCurrency: 'USD',
     })
 
     expect(
@@ -53,7 +52,6 @@ describe('sendFlowWalletQuote stash', () => {
         amountEntryMode: 'receive',
         entryAmount: 100,
         receiveCurrency: 'USDC',
-        sourceBalanceCurrency: 'USD',
       }),
     ).toBe(true)
 
@@ -63,7 +61,6 @@ describe('sendFlowWalletQuote stash', () => {
         amountEntryMode: 'receive',
         entryAmount: 100,
         receiveCurrency: 'USDC',
-        sourceBalanceCurrency: 'USD',
       }),
     ).toBe(false)
   })

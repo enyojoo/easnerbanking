@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
 import { Platform } from 'react-native'
 import * as Linking from 'expo-linking'
 import {
@@ -32,8 +32,6 @@ import {
 } from '../lib/auth-mfa'
 import {
   buildVerifiedIdentityFromKycFields,
-  isFreshAuthUser,
-  personPropertiesFromUser,
   SIGNUP_EXISTING_ACCOUNT_SAME_SURFACE,
   isSupabaseSignupDuplicateUser,
   mapSupabaseSignupDuplicateError,
@@ -164,25 +162,6 @@ async function markAccountClosureCancelledIfNeeded(deletionCancelled?: boolean):
   if (!deletionCancelled) return
   await AsyncStorage.setItem(ACCOUNT_CLOSURE_CANCELLED_KEY, '1').catch(() => undefined)
   analytics.trackAccountClosureCancelled()
-}
-
-const authAnalyticsTrackedKeys = new Set<string>()
-
-function trackConsumerAuthSuccess(method: string, user: SupabaseUser) {
-  const dedupeKey = `${user.id}:${method}`
-  if (authAnalyticsTrackedKeys.has(dedupeKey)) return
-  authAnalyticsTrackedKeys.add(dedupeKey)
-  analytics.identify(user.id, personPropertiesFromUser(user))
-  if (isFreshAuthUser(user.created_at)) {
-    analytics.trackSignUp(method, { userId: user.id })
-  }
-  analytics.trackSignIn(method, { userId: user.id })
-}
-
-async function trackConsumerAuthSuccessFromSession(method: string) {
-  const session = await getSessionReliable()
-  if (!session?.user) return
-  trackConsumerAuthSuccess(method, session.user)
 }
 
 function shouldRunPostAuthBootstrap(sourceEvent?: string): boolean {
@@ -516,9 +495,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (finalized.deletionCancelled) {
         await markAccountClosureCancelledIfNeeded(true)
       }
-      if (!finalized.error) {
-        await trackConsumerAuthSuccessFromSession('email')
-      }
       /** After surface is OK – avoids a blank frame: clearing MFA before this left AppNavigator without MfaStack while still awaiting network. */
       setMfaPending(null)
       return { error: null }
@@ -542,12 +518,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Surface gate as soon as the session exists; PIN gate will happen in AppNavigator.
       const surfaceGate = await ensureConsumerMobileAccess()
       if (surfaceGate.error) return { error: surfaceGate.error }
-
-      const { data: sessionData } = await supabase.auth.getSession()
-      if (sessionData.session?.user) {
-        analytics.identify(sessionData.session.user.id, personPropertiesFromUser(sessionData.session.user))
-        analytics.trackSignUp('email', { userId: sessionData.session.user.id })
-      }
 
       return { error: null }
     } catch (e) {
@@ -821,10 +791,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const getInitialSession = async () => {
       let hadSessionUser = false
       try {
-        const initialUrl = await Promise.race([
-          Linking.getInitialURL(),
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500)),
-        ])
+        const initialUrl = await Linking.getInitialURL()
         if (initialUrl) {
           await consumeOAuthCallbackIfPresent(initialUrl)
           if (isUserDeepLinkUrl(initialUrl)) {
@@ -943,7 +910,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         if (session?.user) {
           if (event === 'INITIAL_SESSION') {
-            analytics.identify(session.user.id, personPropertiesFromUser(session.user))
             const clearedIncompleteMfa = await clearIncompleteMfaSessionOnColdStart(supabase)
             if (clearedIncompleteMfa) {
               if (!mounted) return
@@ -1028,17 +994,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       subscription.unsubscribe()
     }
   }, [consumeOAuthCallbackIfPresent, syncMfaGateFromSession, markSessionUserHydrated, clearSessionUserHydrated])
-
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      setLoading((current) => {
-        if (!current) return current
-        console.warn('[Auth] Session restore timed out; continuing startup')
-        return false
-      })
-    }, 8_000)
-    return () => clearTimeout(timeout)
-  }, [])
 
   useEffect(() => {
     if (user?.id) {
@@ -1185,6 +1140,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // ignore
       }
 
+      analytics.trackSignIn('google')
+
       if (Platform.OS === 'web') {
         if (typeof window !== 'undefined') {
           window.location.assign(authUrl)
@@ -1238,9 +1195,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (finalized.deletionCancelled) {
         await markAccountClosureCancelledIfNeeded(true)
       }
-      if (!finalized.error) {
-        await trackConsumerAuthSuccessFromSession('google')
-      }
       return finalized
     } catch (e) {
       return { error: e instanceof Error ? e : new Error('Unable to continue with Google.') }
@@ -1275,9 +1229,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         })
         if (finalized.deletionCancelled) {
           await markAccountClosureCancelledIfNeeded(true)
-        }
-        if (!finalized.error) {
-          await trackConsumerAuthSuccessFromSession('apple')
         }
         return finalized
       } catch (e) {
@@ -1331,9 +1282,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const finalized = await finalizePostAuthSession()
       if (finalized.deletionCancelled) {
         await markAccountClosureCancelledIfNeeded(true)
-      }
-      if (!finalized.error) {
-        await trackConsumerAuthSuccessFromSession('apple')
       }
       return finalized
     } catch (e: unknown) {
@@ -1485,13 +1433,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     await signOut()
   }, [signOut])
 
-  /**
-   * Identity-stable context value: 41 `useAuth()` consumers (including every
-   * mounted tab screen) re-render whenever this changes, and this provider
-   * sits above the entire tree. Handlers are exposed through stable wrappers
-   * over a ref so the memoized value only changes when auth STATE changes.
-   */
-  const handlersRef = useRef({
+  const value = {
+    user,
+    userProfile,
+    loading,
+    mfaPending,
+    mfaGateResolved,
     signIn,
     signInWithGoogle,
     signInWithApple,
@@ -1503,55 +1450,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     signOut,
     refreshUserProfile,
     applyPersonalSettingsFromServer,
-  })
-  useEffect(() => {
-    handlersRef.current = {
-      signIn,
-      signInWithGoogle,
-      signInWithApple,
-      resendSignupOtp,
-      verifySignupOtp,
-      verifyMfa,
-      cancelMfaSignIn,
-      signUp,
-      signOut,
-      refreshUserProfile,
-      applyPersonalSettingsFromServer,
-    }
-  })
-  const stableHandlers = useMemo(
-    () => ({
-      signIn: (email: string, password: string, rememberMe?: boolean) =>
-        handlersRef.current.signIn(email, password, rememberMe),
-      signInWithGoogle: () => handlersRef.current.signInWithGoogle(),
-      signInWithApple: () => handlersRef.current.signInWithApple(),
-      resendSignupOtp: (email: string) => handlersRef.current.resendSignupOtp(email),
-      verifySignupOtp: (email: string, otp: string) => handlersRef.current.verifySignupOtp(email, otp),
-      verifyMfa: (code: string) => handlersRef.current.verifyMfa(code),
-      cancelMfaSignIn: () => handlersRef.current.cancelMfaSignIn(),
-      signUp: (email: string, password: string, name: string, residenceCountry?: string) =>
-        handlersRef.current.signUp(email, password, name, residenceCountry),
-      signOut: (options?: { preserveOnboarding?: boolean }) => handlersRef.current.signOut(options),
-      refreshUserProfile: () => handlersRef.current.refreshUserProfile(),
-      applyPersonalSettingsFromServer: (
-        personal: PersonalSettingsPayload,
-        options?: { easetag?: string },
-      ) => handlersRef.current.applyPersonalSettingsFromServer(personal, options),
-    }),
-    [],
-  )
-
-  const value = useMemo<AuthContextType>(
-    () => ({
-      user,
-      userProfile,
-      loading,
-      mfaPending,
-      mfaGateResolved,
-      ...stableHandlers,
-    }),
-    [user, userProfile, loading, mfaPending, mfaGateResolved, stableHandlers],
-  )
+  }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

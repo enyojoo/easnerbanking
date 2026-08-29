@@ -1,100 +1,103 @@
-import * as React from 'react'
-import type { ComponentType } from 'react'
+import { createWebLazyScreen } from './createWebLazyScreen'
 
-/**
- * Native screen registry (M2.5): flow screens load via `require()` inside the
- * wrapper's first render instead of a static top-level import.
- *
- * Send hub + Recipients stay lazy so cold start / splash is not blocked by
- * those large modules (build 219 hung). Do not eager-import them and do not
- * require() them from App.tsx navReady or Dashboard idle (builds 216/220
- * SIGABRT). Warm via onPressIn `preloadMainStackScreens()` only.
- */
-function lazyNativeScreen<P extends object>(
-  load: () => { default: ComponentType<P> },
-): ComponentType<P> {
-  let Loaded: ComponentType<P> | null = null
-  function LazyNativeScreen(props: P) {
-    if (!Loaded) {
-      Loaded = load().default
-    }
-    return React.createElement(Loaded, props)
-  }
-  return LazyNativeScreen as ComponentType<P>
-}
+import SendAmountScreenNative from '../screens/send/SendAmountScreen'
+import SelectRecentRecipientScreenNative from '../screens/send/SelectRecentRecipientScreen'
+import ScanWalletAddressScreenNative from '../screens/recipients/ScanWalletAddressScreen'
+import SelectRecipientScreenNative from '../screens/send/SelectRecipientScreen'
+import SendConfirmScreenNative from '../screens/send/SendConfirmScreen'
+import SendCrossBorderMomoSetupScreenNative from '../screens/send/SendCrossBorderMomoSetupScreen'
+import SendPinScreenNative from '../screens/send/SendPinScreen'
+import CardScreenNative from '../screens/main/CardScreen'
+import ReceiveMoneyScreenNative from '../screens/receive/ReceiveMoneyScreen'
+import ReceiveBankDetailsScreenNative from '../screens/receive/ReceiveBankDetailsScreen'
+import ReceiveStablecoinDetailsScreenNative from '../screens/receive/ReceiveStablecoinDetailsScreen'
+import ReceiveLocalRailScreenNative from '../screens/receive/ReceiveLocalRailScreen'
+import ReceiveLocalAmountScreenNative from '../screens/receive/ReceiveLocalAmountScreen'
+import ExpressDepositAmountScreenNative from '../screens/receive/ExpressDepositAmountScreen'
+import ExpressDepositsSetupScreenNative from '../screens/verification/ExpressDepositsSetupScreen'
+import ReceiveLocalReviewScreenNative from '../screens/receive/ReceiveLocalReviewScreen'
+import ReceiveLocalMomoSetupScreenNative from '../screens/receive/ReceiveLocalMomoSetupScreen'
+import ReceiveTransactionDetailsScreenNative from '../screens/receive/ReceiveTransactionDetailsScreen'
+import AccountVerificationScreenNative from '../screens/verification/AccountVerificationScreen'
+import RecipientsScreenNative from '../screens/main/RecipientsScreen'
 
-export const SelectRecentRecipientScreen = lazyNativeScreen(
-  () => require('../screens/send/SelectRecentRecipientScreen'),
+export const SendAmountScreen = createWebLazyScreen(
+  () => import('../screens/send/SendAmountScreen'),
+  SendAmountScreenNative,
 )
-export const RecipientsScreen = lazyNativeScreen(
-  () => require('../screens/main/RecipientsScreen'),
+export const SelectRecentRecipientScreen = createWebLazyScreen(
+  () => import('../screens/send/SelectRecentRecipientScreen'),
+  SelectRecentRecipientScreenNative,
 )
-export const AddRecipientTypeScreen = lazyNativeScreen(
-  () => require('../screens/recipients/AddRecipientTypeScreen'),
+export const ScanWalletAddressScreen = createWebLazyScreen(
+  () => import('../screens/recipients/ScanWalletAddressScreen'),
+  ScanWalletAddressScreenNative,
 )
-export const AddBankRecipientScreen = lazyNativeScreen(
-  () => require('../screens/recipients/AddBankRecipientScreen'),
+export const SelectRecipientScreen = createWebLazyScreen(
+  () => import('../screens/send/SelectRecipientScreen'),
+  SelectRecipientScreenNative,
 )
-export const AddMobileRecipientScreen = lazyNativeScreen(
-  () => require('../screens/recipients/AddMobileRecipientScreen'),
+export const SendConfirmScreen = createWebLazyScreen(
+  () => import('../screens/send/SendConfirmScreen'),
+  SendConfirmScreenNative,
 )
-export const AddWalletRecipientScreen = lazyNativeScreen(
-  () => require('../screens/recipients/AddWalletRecipientScreen'),
+export const SendCrossBorderMomoSetupScreen = createWebLazyScreen(
+  () => import('../screens/send/SendCrossBorderMomoSetupScreen'),
+  SendCrossBorderMomoSetupScreenNative,
 )
-export const AddEasenetRecipientScreen = lazyNativeScreen(
-  () => require('../screens/recipients/AddEasenetRecipientScreen'),
+export const SendPinScreen = createWebLazyScreen(
+  () => import('../screens/send/SendPinScreen'),
+  SendPinScreenNative,
 )
-export const SendAmountScreen = lazyNativeScreen(
-  () => require('../screens/send/SendAmountScreen'),
+export const CardScreen = createWebLazyScreen(
+  () => import('../screens/main/CardScreen'),
+  CardScreenNative,
 )
-export const ScanWalletAddressScreen = lazyNativeScreen(
-  () => require('../screens/recipients/ScanWalletAddressScreen'),
+export const ReceiveMoneyScreen = createWebLazyScreen(
+  () => import('../screens/receive/ReceiveMoneyScreen'),
+  ReceiveMoneyScreenNative,
 )
-export const SelectRecipientScreen = lazyNativeScreen(
-  () => require('../screens/send/SelectRecipientScreen'),
+export const ReceiveBankDetailsScreen = createWebLazyScreen(
+  () => import('../screens/receive/ReceiveBankDetailsScreen'),
+  ReceiveBankDetailsScreenNative,
 )
-export const SendConfirmScreen = lazyNativeScreen(
-  () => require('../screens/send/SendConfirmScreen'),
+export const ReceiveStablecoinDetailsScreen = createWebLazyScreen(
+  () => import('../screens/receive/ReceiveStablecoinDetailsScreen'),
+  ReceiveStablecoinDetailsScreenNative,
 )
-export const SendCrossBorderMomoSetupScreen = lazyNativeScreen(
-  () => require('../screens/send/SendCrossBorderMomoSetupScreen'),
+export const ReceiveLocalRailScreen = createWebLazyScreen(
+  () => import('../screens/receive/ReceiveLocalRailScreen'),
+  ReceiveLocalRailScreenNative,
 )
-export const SendPinScreen = lazyNativeScreen(
-  () => require('../screens/send/SendPinScreen'),
+export const ReceiveLocalAmountScreen = createWebLazyScreen(
+  () => import('../screens/receive/ReceiveLocalAmountScreen'),
+  ReceiveLocalAmountScreenNative,
 )
-export const CardScreen = lazyNativeScreen(
-  () => require('../screens/main/CardScreen'),
+export const ExpressDepositAmountScreen = createWebLazyScreen(
+  () => import('../screens/receive/ExpressDepositAmountScreen'),
+  ExpressDepositAmountScreenNative,
 )
-export const ReceiveMoneyScreen = lazyNativeScreen(
-  () => require('../screens/receive/ReceiveMoneyScreen'),
+export const ExpressDepositsSetupScreen = createWebLazyScreen(
+  () => import('../screens/verification/ExpressDepositsSetupScreen'),
+  ExpressDepositsSetupScreenNative,
 )
-export const ReceiveBankDetailsScreen = lazyNativeScreen(
-  () => require('../screens/receive/ReceiveBankDetailsScreen'),
+export const ReceiveLocalReviewScreen = createWebLazyScreen(
+  () => import('../screens/receive/ReceiveLocalReviewScreen'),
+  ReceiveLocalReviewScreenNative,
 )
-export const ReceiveStablecoinDetailsScreen = lazyNativeScreen(
-  () => require('../screens/receive/ReceiveStablecoinDetailsScreen'),
+export const ReceiveLocalMomoSetupScreen = createWebLazyScreen(
+  () => import('../screens/receive/ReceiveLocalMomoSetupScreen'),
+  ReceiveLocalMomoSetupScreenNative,
 )
-export const ReceiveLocalRailScreen = lazyNativeScreen(
-  () => require('../screens/receive/ReceiveLocalRailScreen'),
+export const ReceiveTransactionDetailsScreen = createWebLazyScreen(
+  () => import('../screens/receive/ReceiveTransactionDetailsScreen'),
+  ReceiveTransactionDetailsScreenNative,
 )
-export const ReceiveLocalAmountScreen = lazyNativeScreen(
-  () => require('../screens/receive/ReceiveLocalAmountScreen'),
+export const AccountVerificationScreen = createWebLazyScreen(
+  () => import('../screens/verification/AccountVerificationScreen'),
+  AccountVerificationScreenNative,
 )
-export const ExpressDepositAmountScreen = lazyNativeScreen(
-  () => require('../screens/receive/ExpressDepositAmountScreen'),
-)
-export const ExpressDepositsSetupScreen = lazyNativeScreen(
-  () => require('../screens/verification/ExpressDepositsSetupScreen'),
-)
-export const ReceiveLocalReviewScreen = lazyNativeScreen(
-  () => require('../screens/receive/ReceiveLocalReviewScreen'),
-)
-export const ReceiveLocalMomoSetupScreen = lazyNativeScreen(
-  () => require('../screens/receive/ReceiveLocalMomoSetupScreen'),
-)
-export const ReceiveTransactionDetailsScreen = lazyNativeScreen(
-  () => require('../screens/receive/ReceiveTransactionDetailsScreen'),
-)
-export const AccountVerificationScreen = lazyNativeScreen(
-  () => require('../screens/verification/AccountVerificationScreen'),
+export const RecipientsScreen = createWebLazyScreen(
+  () => import('../screens/main/RecipientsScreen'),
+  RecipientsScreenNative,
 )

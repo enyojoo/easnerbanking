@@ -50,10 +50,8 @@ import { useBalance } from '../../contexts/BalanceContext'
 import { useScope } from '../../query/scope'
 import { apiFetch } from '../../query/api-client'
 import { invalidateTransactionsFeed } from '../../query/refresh-user-feeds'
-import { seedTransactionDetailSnapshot, prefetchTransactionDetail } from '../../hooks/queries'
+import { prefetchTransactionDetail } from '../../hooks/queries'
 import { executeBalanceSend } from '../../hooks/executeBalanceSend'
-import { buildPostSendTransactionSnapshot } from '../../lib/buildPostSendTransactionSnapshot'
-import { prepareTransactionDetailsNavigation } from '../../navigation/transactionNavParams'
 import { ACCOUNT_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import { consumeBalanceSendPinVerified } from '../../lib/sendFlowPostPinGate'
 import { hasPin } from '../../lib/pinAuth'
@@ -245,16 +243,8 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       amountEntryMode,
       entryAmount: amountEntryMode === 'send' ? amountScreenSendAmount : receiveAmountValue,
       receiveCurrency,
-      sourceBalanceCurrency: selectedBalanceCurrency,
     }),
-    [
-      recipient?.id,
-      amountEntryMode,
-      amountScreenSendAmount,
-      receiveAmountValue,
-      receiveCurrency,
-      selectedBalanceCurrency,
-    ],
+    [recipient?.id, amountEntryMode, amountScreenSendAmount, receiveAmountValue, receiveCurrency],
   )
 
   const [quotedReceiveAmount, setQuotedReceiveAmount] = useState(() => {
@@ -267,7 +257,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           ? (params.amountScreenSendAmount ?? params.calculatedSendingAmount ?? 0)
           : (params.receiveAmountValue ?? 0),
       receiveCurrency: params.receiveCurrency ?? params.recipient?.currency ?? '',
-      sourceBalanceCurrency: selectedBalanceCurrency,
     }
     if (stashed && isStashedPayoutQuoteFresh(meta)) {
       return payoutCustomerFacingReceiveAmount(stashed)
@@ -285,7 +274,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           ? (params.amountScreenSendAmount ?? params.calculatedSendingAmount ?? 0)
           : (params.receiveAmountValue ?? 0),
       receiveCurrency: params.receiveCurrency ?? params.recipient?.currency ?? '',
-      sourceBalanceCurrency: selectedBalanceCurrency,
     }
     if (isWalletRecipient && walletStashed && isStashedWalletQuoteFresh(walletMeta)) {
       const display = walletDisplayAmountsFromQuote(walletStashed)
@@ -314,7 +302,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           ? (params.amountScreenSendAmount ?? params.calculatedSendingAmount ?? 0)
           : (params.receiveAmountValue ?? 0),
       receiveCurrency: params.receiveCurrency ?? params.recipient?.currency ?? '',
-      sourceBalanceCurrency: selectedBalanceCurrency,
     }
     const useStashed = stashed && isStashedPayoutQuoteFresh(meta) && isCompletePayoutQuote(stashed)
     if (useStashed) {
@@ -390,6 +377,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
     payoutSession,
     walletSession,
     quoteDisplay,
+    quoteLoading,
     quoteError,
   } = pricing
 
@@ -494,13 +482,16 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           bankName: recipient.bank_name,
           mobileProvider: recipient.mobile_provider,
           payeeEasetag: recipient.payee_easetag,
-          transferType: recipient.transfer_type,
         })
     : 'Local transfer'
   const processingTime = arrivalHint ?? undefined
 
   const [sendingAfterPin, setSendingAfterPin] = useState(false)
   const [transferError, setTransferError] = useState<string | null>(null)
+
+  useEffect(() => {
+    analytics.trackScreenView('SendConfirm')
+  }, [])
 
   useEffect(() => {
     if (!recipient || !user?.id || easetagUi) return
@@ -693,11 +684,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
       void (async () => {
         setSendingAfterPin(true)
-        analytics.trackSendSubmitted({
-          sendCurrency: selectedBalanceCurrency,
-          receiveCurrency: receiveCurrency,
-          amount: calculatedTotalAmount,
-        })
         try {
           let flowRecipient = recipient
           if (
@@ -740,7 +726,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                 }
               : undefined
 
-          const { detailId, transfer } = await executeBalanceSend(
+          const { detailId } = await executeBalanceSend(
             {
               recipient: flowRecipient,
               calculatedTotalAmount,
@@ -770,37 +756,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
             throw new Error('Transfer succeeded but no transaction ID was returned.')
           }
 
-          const initialTransaction = buildPostSendTransactionSnapshot({
-            detailId: txId,
-            transfer,
-            recipient: flowRecipient,
-            selectedBalanceCurrency,
-            quotedReceiveAmount,
-            calculatedTotalAmount,
-            youSendAmount,
-            receiveCurrency,
-            transferMethod,
-            processingTime,
-            ...(reviewSnapshot ? { reviewSnapshot } : {}),
-            ...(sendNote ? { sendNote } : {}),
-            ...(easetagUi ? { easetag: easetagUi } : {}),
-            ...(isWalletRecipient
-              ? {
-                  isWalletSend: true,
-                  ...(walletExecutionModel ? { walletExecutionModel } : {}),
-                  networkFee,
-                }
-              : {}),
-          })
-
           if (scope) {
-            seedTransactionDetailSnapshot(qc, scope, txId, initialTransaction, {
-              aliasIds: [
-                transfer.easner_transaction_id,
-                transfer.transaction_id,
-                transfer.id,
-              ].filter((v): v is string => typeof v === 'string' && v.trim().length > 0),
-            })
             void prefetchTransactionDetail(qc, scope, txId).catch(() => {})
           }
 
@@ -811,11 +767,7 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                 { name: 'MainTabs' },
                 {
                   name: 'TransactionDetails',
-                  params: prepareTransactionDetailsNavigation({
-                    transactionId: txId,
-                    fromScreen: 'SendFlow',
-                    initialTransaction,
-                  }),
+                  params: { transactionId: txId, fromScreen: 'SendFlow' },
                 },
               ],
             }),
@@ -827,22 +779,11 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
 
           clearSendPayoutQuote()
           clearSendWalletQuote()
-          analytics.trackSendCompleted({
-            sendCurrency: selectedBalanceCurrency,
-            receiveCurrency: receiveCurrency,
-            amount: calculatedTotalAmount,
-            transactionId: txId,
-          })
           haptics.success()
         } catch (e: unknown) {
           if (!cancelled) {
             haptics.error()
             const msg = e instanceof Error ? e.message : TRANSFER_FAIL_MESSAGE
-            analytics.trackSendFailed({
-              sendCurrency: selectedBalanceCurrency,
-              receiveCurrency: receiveCurrency,
-              error: msg,
-            })
             setTransferError(msg)
           }
         } finally {
@@ -910,11 +851,6 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       setTransferError('Quote expired. Go back and continue again for a fresh quote.')
       return
     }
-    analytics.trackSendSubmitted({
-      sendCurrency: selectedBalanceCurrency,
-      receiveCurrency: receiveCurrency,
-      amount: calculatedTotalAmount,
-    })
     navigation.navigate('SendPin' as never)
   }
 
@@ -1156,15 +1092,13 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
             end={{ x: 1, y: 0 }}
             style={styles.ctaGradient}
           >
-            {/* No spinner while the background lock lands: the review shows
-                full preview economics and the lock (already in flight from
-                Continue) flips quoteReady before the user finishes reading —
-                money reviews never show loading (Instant Standard). */}
             {sendingAfterPin ? (
               <View style={styles.ctaSendingRow}>
                 <ActivityIndicator color="#fff" size="small" />
                 <Text style={styles.ctaText}>Sending…</Text>
               </View>
+            ) : !easetagUi && quoteLoading && !quoteReady ? (
+              <ActivityIndicator color="#fff" size="small" />
             ) : (
               <Text style={styles.ctaText}>{SEND_REVIEW_CONFIRM_CTA}</Text>
             )}
