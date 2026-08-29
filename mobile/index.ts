@@ -30,7 +30,9 @@ function Root() {
   }, [])
 
   if (!tree) {
-    return <View style={{ flex: 1, backgroundColor: '#007ACC' }} />
+    return React.createElement(View, {
+      style: { flex: 1, backgroundColor: '#007ACC' },
+    })
   }
 
   return React.createElement(
