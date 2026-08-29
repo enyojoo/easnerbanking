@@ -7,6 +7,7 @@ import {
   type ProcessingFeeScheduleScope,
 } from "@/lib/processing-fee-schedule-api"
 import { officeKeys } from "@/lib/query/keys"
+import { useOfficeRealtimeRefetchInterval } from "@/lib/query/attach-office-realtime-bridge"
 import { officeReferenceQueryDefaults } from "./query-options"
 import { useOfficeAdminEnabled } from "./use-office-admin-enabled"
 
@@ -31,11 +32,13 @@ export function officeProcessingFeeScheduleQueryOptions(scope: ProcessingFeeSche
 
 export function useOfficeProcessingFeeSchedule(scope: ProcessingFeeScheduleScope | null) {
   const { enabled } = useOfficeAdminEnabled()
+  const refetchInterval = useOfficeRealtimeRefetchInterval("reference")
 
   return useQuery({
     queryKey: officeKeys.processingFeeSchedule(scope ?? "none"),
     enabled: enabled && scope != null,
     ...officeReferenceQueryDefaults,
+    refetchInterval,
     queryFn: () => fetchOfficeProcessingFeeSchedule(scope!),
   })
 }

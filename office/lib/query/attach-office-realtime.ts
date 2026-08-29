@@ -86,10 +86,6 @@ function invalidateMerchantQueries(qc: QueryClient, refetchType: "active" | "ina
   qc.invalidateQueries({ queryKey: officeKeys.terminalSessions(), refetchType })
 }
 
-function invalidateEventInboxQueries(qc: QueryClient, refetchType: "active" | "inactive" = "inactive"): void {
-  qc.invalidateQueries({ queryKey: [...officeKeys.root, "event-inbox"], refetchType })
-}
-
 export interface AttachOfficeRealtimeOptions {
   qc: QueryClient
   supabase: SupabaseLikeClient
@@ -111,8 +107,28 @@ export function attachOfficeRealtime({
 
   const channel = supabase.channel("office:admin", { config: { broadcast: { self: false } } })
 
+  const markEvent = () => {
+    health.lastEventAt = Date.now()
+    emit()
+  }
+
+  const listen = (
+    table: string,
+    event: "*" | "INSERT" | "UPDATE",
+    handler: (row: Record<string, unknown>) => void,
+  ) => {
+    channel.on("postgres_changes", { event, schema: "public", table }, (payload) => {
+      markEvent()
+      handler((payload.new ?? {}) as Record<string, unknown>)
+    })
+  }
+
+  const schedule = (key: readonly unknown[], fn: () => void) => {
+    batcher.schedule(key, fn)
+  }
+
   const scheduleTransactions = (row?: Record<string, unknown>) => {
-    batcher.schedule(TRANSACTIONS_QUERY_PREFIX, () => {
+    schedule(TRANSACTIONS_QUERY_PREFIX, () => {
       if (row && shouldInvalidateTransactionUpdate(row)) {
         invalidateAllTransactionQueries(qc, "active")
         invalidateOverviewLazy()
@@ -128,106 +144,115 @@ export function attachOfficeRealtime({
   }
 
   const scheduleUsers = () => {
-    batcher.schedule(officeKeys.users(), () => {
+    schedule(officeKeys.users(), () => {
       qc.invalidateQueries({ queryKey: officeKeys.users(), refetchType: "active" })
       invalidateOverviewLazy()
     })
   }
 
   const scheduleMerchant = () => {
-    batcher.schedule(officeKeys.businesses(), () => {
+    schedule(officeKeys.businesses(), () => {
       invalidateMerchantQueries(qc, "active")
       invalidateOverviewLazy()
     })
   }
 
-  const scheduleEventInbox = () => {
-    batcher.schedule([...officeKeys.root, "event-inbox"], () => {
-      invalidateEventInboxQueries(qc, "active")
+  listen("transactions", "INSERT", () => scheduleTransactions())
+  listen("transactions", "UPDATE", (row) => scheduleTransactions(row))
+  listen("users", "INSERT", scheduleUsers)
+  listen("users", "UPDATE", scheduleUsers)
+  listen("wallet_balances", "*", () => {
+    schedule(officeKeys.overviewRoot(), invalidateOverviewLazy)
+  })
+
+  for (const table of ["businesses", "business_customers", "invoices", "terminal_sessions"] as const) {
+    listen(table, "*", scheduleMerchant)
+  }
+
+  listen("event_inbox", "*", () => {
+    schedule(officeKeys.eventInboxRoot(), () => {
+      qc.invalidateQueries({ queryKey: officeKeys.eventInboxRoot(), refetchType: "active" })
+    })
+  })
+
+  listen("account_statements", "*", () => {
+    schedule(officeKeys.statementsRoot(), () => {
+      qc.invalidateQueries({ queryKey: officeKeys.statementsRoot(), refetchType: "active" })
+    })
+  })
+
+  listen("system_settings", "*", () => {
+    schedule(officeKeys.systemSettings(), () => {
+      qc.invalidateQueries({ queryKey: officeKeys.systemSettings(), refetchType: "active" })
+    })
+  })
+
+  listen("currencies", "*", () => {
+    schedule(officeKeys.currenciesRoot(), () => {
+      qc.invalidateQueries({ queryKey: officeKeys.currenciesRoot(), refetchType: "active" })
+    })
+  })
+
+  listen("exchange_rates", "*", () => {
+    schedule(officeKeys.currenciesRoot(), () => {
+      qc.invalidateQueries({ queryKey: officeKeys.currenciesRoot(), refetchType: "active" })
+    })
+  })
+
+  const rateTables: Array<{ table: string; key: readonly unknown[] }> = [
+    { table: "noah_rates", key: officeKeys.noahRates() },
+    { table: "yellowcard_rates", key: officeKeys.ycRates() },
+    { table: "grid_rates", key: officeKeys.gridRates() },
+    { table: "crypto_rates", key: officeKeys.cryptoRates() },
+    { table: "payout_corridors", key: officeKeys.payoutCorridors() },
+    { table: "crypto_destinations", key: officeKeys.cryptoDestinations() },
+  ]
+  for (const { table, key } of rateTables) {
+    listen(table, "*", () => {
+      schedule(key, () => {
+        qc.invalidateQueries({ queryKey: [...key], refetchType: "active" })
+      })
     })
   }
 
-  channel.on(
-    "postgres_changes",
-    { event: "INSERT", schema: "public", table: "transactions" },
-    () => {
-      health.lastEventAt = Date.now()
-      emit()
-      scheduleTransactions()
-    },
-  )
+  listen("processing_fee_schedule", "*", () => {
+    schedule(officeKeys.processingFeeScheduleRoot(), () => {
+      qc.invalidateQueries({ queryKey: officeKeys.processingFeeScheduleRoot(), refetchType: "active" })
+    })
+  })
 
-  channel.on(
-    "postgres_changes",
-    { event: "UPDATE", schema: "public", table: "transactions" },
-    (p) => {
-      health.lastEventAt = Date.now()
-      emit()
-      scheduleTransactions((p.new ?? {}) as Record<string, unknown>)
-    },
-  )
+  listen("processing_fee_overrides", "*", () => {
+    schedule(officeKeys.processingFeeOverrideRoot(), () => {
+      qc.invalidateQueries({ queryKey: officeKeys.processingFeeOverrideRoot(), refetchType: "active" })
+    })
+  })
 
-  channel.on(
-    "postgres_changes",
-    { event: "INSERT", schema: "public", table: "users" },
-    () => {
-      health.lastEventAt = Date.now()
-      emit()
-      scheduleUsers()
-    },
-  )
+  listen("business_checkout_fee_overrides", "*", () => {
+    schedule(officeKeys.businesses(), () => {
+      invalidateMerchantQueries(qc, "active")
+    })
+  })
 
-  channel.on(
-    "postgres_changes",
-    { event: "UPDATE", schema: "public", table: "users" },
-    () => {
-      health.lastEventAt = Date.now()
-      emit()
-      scheduleUsers()
-    },
-  )
-
-  channel.on(
-    "postgres_changes",
-    { event: "*", schema: "public", table: "wallet_balances" },
-    () => {
-      health.lastEventAt = Date.now()
-      emit()
-      batcher.schedule(officeKeys.root, () => {
-        invalidateOverviewLazy()
-      })
-    },
-  )
-
-  for (const table of ["businesses", "business_customers", "invoices", "terminal_sessions"] as const) {
-    channel.on(
-      "postgres_changes",
-      { event: "*", schema: "public", table },
-      () => {
-        health.lastEventAt = Date.now()
-        emit()
-        scheduleMerchant()
-      },
-    )
-  }
-
-  channel.on(
-    "postgres_changes",
-    { event: "*", schema: "public", table: "event_inbox" },
-    () => {
-      health.lastEventAt = Date.now()
-      emit()
-      scheduleEventInbox()
-    },
-  )
-
+  let hadSubscribed = false
   channel.subscribe((status, err) => {
+    const wasSubscribed = health.subscribed
     health.subscribed = status === "SUBSCRIBED"
-    if (err) health.lastError = err
+    if (health.subscribed) {
+      health.lastError = null
+      if (hadSubscribed && !wasSubscribed) {
+        qc.invalidateQueries({ queryKey: officeKeys.root, refetchType: "active" })
+      }
+      hadSubscribed = true
+    } else if (err) {
+      health.lastError = err
+    }
     emit()
   })
 
+  const heartbeat = setInterval(emit, 30_000)
+
   return () => {
+    clearInterval(heartbeat)
     batcher.flush()
     try {
       channel.unsubscribe()

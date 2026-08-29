@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query"
 import { officeFetch } from "@/lib/api-client"
 import { officeKeys } from "@/lib/query/keys"
 import type { CommunicationPreferences } from "@easner/shared"
+import { useOfficeRealtimeRefetchInterval } from "@/lib/query/attach-office-realtime-bridge"
 import { officeOperationalQueryDefaults } from "./query-options"
 import { useOfficeAdminEnabled } from "./use-office-admin-enabled"
 
@@ -110,9 +111,11 @@ export function officeUsersQueryOptions() {
 
 export function useOfficeUsersDirectory() {
   const { enabled } = useOfficeAdminEnabled()
+  const refetchInterval = useOfficeRealtimeRefetchInterval("operational")
 
   return useQuery({
     ...officeUsersQueryOptions(),
     enabled,
+    refetchInterval,
   })
 }

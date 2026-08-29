@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query"
 import { officeFetch } from "@/lib/api-client"
 import type { OfficeTransaction } from "@/lib/types/office-transaction"
 import { officeKeys } from "@/lib/query/keys"
+import { useOfficeRealtimeRefetchInterval } from "@/lib/query/attach-office-realtime-bridge"
 import { officeOperationalQueryDefaults } from "./query-options"
 import { useOfficeAdminEnabled } from "./use-office-admin-enabled"
 
@@ -19,11 +20,13 @@ export async function fetchOfficeUserTransactions(userId: string): Promise<Offic
 export function useOfficeUserTransactions(userId: string | null | undefined) {
   const { enabled: adminEnabled } = useOfficeAdminEnabled()
   const enabled = adminEnabled && Boolean(userId)
+  const refetchInterval = useOfficeRealtimeRefetchInterval("operational")
 
   return useQuery({
     queryKey: officeKeys.userTransactions(userId ?? ""),
     enabled,
     ...officeOperationalQueryDefaults,
+    refetchInterval,
     queryFn: () => fetchOfficeUserTransactions(String(userId)),
   })
 }

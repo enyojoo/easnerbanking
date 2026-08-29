@@ -1,12 +1,10 @@
 "use client"
 
 import { useInfiniteQuery } from "@tanstack/react-query"
-import { pollingIntervalFor } from "@easner/shared"
 import { officeFetch } from "@/lib/api-client"
 import { officeKeys } from "@/lib/query/keys"
 import type { OfficeStatement, OfficeStatementsPage } from "@/lib/types/office-statement"
-import { useDocumentVisibility } from "@/lib/query/use-document-visibility"
-import { useOfficeRealtimeHealth } from "@/lib/query/attach-office-realtime-bridge"
+import { useOfficeRealtimeRefetchInterval } from "@/lib/query/attach-office-realtime-bridge"
 import { OFFICE_TRANSACTIONS_PAGE_SIZE } from "./constants"
 import { officeOperationalQueryDefaults } from "./query-options"
 import { useOfficeAdminEnabled } from "./use-office-admin-enabled"
@@ -57,13 +55,12 @@ export function officeStatementsInfiniteOptions(filters: OfficeStatementFilters 
 
 export function useOfficeStatementsList(filters: OfficeStatementFilters = {}) {
   const { enabled } = useOfficeAdminEnabled()
-  const realtimeHealth = useOfficeRealtimeHealth()
-  const tabVisible = useDocumentVisibility()
+  const refetchInterval = useOfficeRealtimeRefetchInterval("operational")
 
   return useInfiniteQuery({
     ...officeStatementsInfiniteOptions(filters),
     enabled,
-    refetchInterval: tabVisible ? pollingIntervalFor("operational", realtimeHealth) : false,
+    refetchInterval,
   })
 }
 

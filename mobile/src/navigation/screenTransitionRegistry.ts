@@ -62,6 +62,7 @@ export type ScreenRouteName =
   | 'TransactionCard'
   | 'Support'
   | 'Legal'
+  | 'AccountStatement'
   | 'ReceiveTransactionDetails'
   | 'AccountVerification'
   | 'Profile'
@@ -138,6 +139,7 @@ export const SCREEN_TRANSITION_MAP: Record<ScreenRouteName, ScreenTransitionEntr
   ChangePin: { intent: 'settingsLeaf' },
   MfaSetup: { intent: 'settingsLeaf', blockGesture: true },
   Legal: { intent: 'settingsLeaf' },
+  AccountStatement: { intent: 'settingsLeaf' },
   InAppNotifications: { intent: 'settingsLeaf' },
 }
 

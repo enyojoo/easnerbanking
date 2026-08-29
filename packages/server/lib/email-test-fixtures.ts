@@ -19,6 +19,7 @@ export const accountStatementFixture: AccountStatementEmailData = {
   firstName: "Sam",
   statementId: "EST-20260829-A3K9",
   periodLabel: "13 Jul 2026 – 29 Aug 2026",
+  periodToLabel: "29 Aug 2026",
   currency: "USD",
   availableLabel: "$0.90",
 }

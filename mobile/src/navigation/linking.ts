@@ -80,6 +80,7 @@ export const webLinking: LinkingOptions<Record<string, unknown>> = {
       ChangePin: 'user/profile/pin',
       MfaSetup: 'user/profile/mfa',
       Legal: 'user/legal',
+      AccountStatement: 'user/account-statement',
       Notifications: 'user/notifications',
       InAppNotifications: 'user/notifications/in-app',
       AccountVerification: 'user/verification',

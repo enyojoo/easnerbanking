@@ -1,12 +1,10 @@
 "use client"
 
 import { useQuery } from "@tanstack/react-query"
-import { pollingIntervalFor } from "@easner/shared"
 import { officeFetch } from "@/lib/api-client"
 import type { OfficeOverviewResponse } from "@/lib/types/office-overview"
 import { officeKeys } from "@/lib/query/keys"
-import { useDocumentVisibility } from "@/lib/query/use-document-visibility"
-import { useOfficeRealtimeHealth } from "@/lib/query/attach-office-realtime-bridge"
+import { useOfficeRealtimeRefetchInterval } from "@/lib/query/attach-office-realtime-bridge"
 import { officeAnalyticsQueryDefaults } from "./query-options"
 import { useOfficeAdminEnabled } from "./use-office-admin-enabled"
 
@@ -31,12 +29,11 @@ export function officeOverviewQueryOptions(preset = "7d") {
 
 export function useOfficeOverview(preset = "7d") {
   const { enabled } = useOfficeAdminEnabled()
-  const realtimeHealth = useOfficeRealtimeHealth()
-  const tabVisible = useDocumentVisibility()
+  const refetchInterval = useOfficeRealtimeRefetchInterval("analytics")
 
   return useQuery({
     ...officeOverviewQueryOptions(preset),
     enabled,
-    refetchInterval: tabVisible ? pollingIntervalFor("analytics", realtimeHealth) : false,
+    refetchInterval,
   })
 }

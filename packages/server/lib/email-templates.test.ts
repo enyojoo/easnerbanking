@@ -336,6 +336,27 @@ describe("emailTemplates", () => {
     const html = emailTemplates.welcomeBusiness.html(templateFixtures.welcomeBusiness, "business")
     expect(html).toContain("Easner Business account")
   })
+
+  it("account statement email uses period end in subject, bold available, and muted disclaimer", () => {
+    const data = templateFixtures.accountStatement
+    const subject = renderSubject("accountStatement", data, "personal")
+    expect(subject).toBe("Your Easner USD Balance account statement – 29 Aug 2026")
+
+    const html = emailTemplates.accountStatement.html(data, "personal")
+    expect(html).toContain("Hey Sam,")
+    expect(html).toContain("Your USD account statement for 13 Jul 2026 – 29 Aug 2026 is attached.")
+    expect(html).toContain("<strong>$0.90</strong>")
+    expect(html).not.toContain("Statement ID")
+    expect(html).not.toContain("EST-20260829-A3K9")
+    expect(html).toContain("Easner Group, Inc.")
+    expect(html).toContain("easner.com/terms")
+    expect(html).toContain("#6F756F")
+
+    const text = emailTemplates.accountStatement.text(data, "personal")
+    expect(text).toContain("Available balance on this statement: $0.90.")
+    expect(text).not.toContain("Statement ID")
+    expect(text).toContain("easner.com/terms")
+  })
 })
 
 // Dark-mode email variant not implemented – snapshots deferred until email-theme supports it.

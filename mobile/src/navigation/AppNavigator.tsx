@@ -88,6 +88,7 @@ import MfaSetupScreen from '../screens/main/MfaSetupScreen'
 import NotificationsScreen from '../screens/main/NotificationsScreen'
 import InAppNotificationsScreen from '../screens/main/InAppNotificationsScreen'
 import LegalScreen from '../screens/main/LegalScreen'
+import AccountStatementScreen from '../screens/main/AccountStatementScreen'
 import PayrollApprovalScreen from '../screens/payroll/PayrollApprovalScreen'
 import PayrollConnectionsScreen from '../screens/payroll/PayrollConnectionsScreen'
 import PayrollConnectionDetailScreen from '../screens/payroll/PayrollConnectionDetailScreen'
@@ -379,6 +380,11 @@ function MainStack() {
         />
         <Stack.Screen name="Support" component={SupportScreen} options={transitionOptions('Support')} />
         <Stack.Screen name="Legal" component={LegalScreen} options={transitionOptions('Legal')} />
+        <Stack.Screen
+          name="AccountStatement"
+          component={AccountStatementScreen}
+          options={transitionOptions('AccountStatement')}
+        />
         <Stack.Screen
           name="ReceiveTransactionDetails"
           component={ReceiveTransactionDetailsScreen}

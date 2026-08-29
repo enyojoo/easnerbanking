@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { payoutCorridorsApi, type PayoutCorridorAdminRow } from "@/lib/payout-corridors-api"
 import { officeKeys } from "@/lib/query/keys"
+import { useOfficeRealtimeRefetchInterval } from "@/lib/query/attach-office-realtime-bridge"
 import { officeReferenceQueryDefaults } from "./query-options"
 import { useOfficeAdminEnabled } from "./use-office-admin-enabled"
 
@@ -22,9 +23,11 @@ export function officePayoutCorridorsQueryOptions() {
 
 export function useOfficePayoutCorridors() {
   const { enabled } = useOfficeAdminEnabled()
+  const refetchInterval = useOfficeRealtimeRefetchInterval("reference")
 
   return useQuery({
     ...officePayoutCorridorsQueryOptions(),
     enabled,
+    refetchInterval,
   })
 }

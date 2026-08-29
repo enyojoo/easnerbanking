@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { supabase } from "@/lib/supabase"
 import { officeKeys } from "@/lib/query/keys"
+import { useOfficeRealtimeRefetchInterval } from "@/lib/query/attach-office-realtime-bridge"
 import { officeReferenceQueryDefaults } from "./query-options"
 import { useOfficeAdminEnabled } from "./use-office-admin-enabled"
 
@@ -35,21 +36,17 @@ export function officeSystemSettingsQueryOptions() {
   return {
     queryKey: officeKeys.systemSettings(),
     ...officeReferenceQueryDefaults,
-    // Two admins can edit system settings concurrently; a 60s poll (paused
-    // while the tab is backgrounded via refetchIntervalInBackground: false
-    // from the shared defaults) keeps their views converging. Long term the
-    // better fix is a Supabase realtime subscription on `system_settings`
-    // feeding the query cache instead of polling.
-    refetchInterval: 60_000,
     queryFn: fetchOfficeSystemSettings,
   }
 }
 
 export function useOfficeSystemSettings() {
   const { enabled } = useOfficeAdminEnabled()
+  const refetchInterval = useOfficeRealtimeRefetchInterval("reference")
 
   return useQuery({
     ...officeSystemSettingsQueryOptions(),
     enabled,
+    refetchInterval,
   })
 }

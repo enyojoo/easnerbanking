@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { cryptoRatesApi, type CryptoRateAdminRow } from "@/lib/crypto-rates-api"
 import { officeKeys } from "@/lib/query/keys"
+import { useOfficeRealtimeRefetchInterval } from "@/lib/query/attach-office-realtime-bridge"
 import { officeRatesQueryDefaults } from "./query-options"
 import { useOfficeAdminEnabled } from "./use-office-admin-enabled"
 
@@ -22,9 +23,11 @@ export function officeCryptoRatesQueryOptions() {
 
 export function useOfficeCryptoRates() {
   const { enabled } = useOfficeAdminEnabled()
+  const refetchInterval = useOfficeRealtimeRefetchInterval("reference")
 
   return useQuery({
     ...officeCryptoRatesQueryOptions(),
     enabled,
+    refetchInterval,
   })
 }

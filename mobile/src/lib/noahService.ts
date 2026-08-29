@@ -1,7 +1,9 @@
 // Noah – mobile API client (calls Easner backend under /api/noah/*).
 // Noah REST API: https://docs.noah.com/
 
+import { Platform } from 'react-native'
 import * as FileSystem from 'expo-file-system/legacy'
+import { File, Paths } from 'expo-file-system'
 import type { Session } from '@supabase/supabase-js'
 import { getApiBaseUrl, getAccountScopeHeaders } from './apiClient'
 import { getSessionReliable } from './authSession'
@@ -1565,7 +1567,7 @@ export const noahService = {
     to: string
     currency: 'USD' | 'EUR'
     timeZone?: string
-  }): Promise<{ uri: string; filename: string }> {
+  }): Promise<{ uri: string; filename: string; sharedByDownload: boolean }> {
     const session = await requireAuthSession()
 
     const response = await fetch(`${apiUrl()}/api/noah/statements/pdf`, {
@@ -1587,19 +1589,41 @@ export const noahService = {
     }
 
     const arrayBuffer = await response.arrayBuffer()
-    const base64 = arrayBufferToBase64(arrayBuffer)
     const filename = `easner-statement-${params.currency}-${params.from}-${params.to}.pdf`
 
-    const dir = FileSystem.documentDirectory
-    if (!dir) {
-      throw new Error('Document directory is not available')
+    if (Platform.OS === 'web') {
+      const blob = new Blob([arrayBuffer], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      return { uri: url, filename, sharedByDownload: true }
     }
+
+    const uri = await writeStatementPdfFile(filename, arrayBuffer)
+    return { uri, filename, sharedByDownload: false }
+  },
+}
+
+async function writeStatementPdfFile(filename: string, arrayBuffer: ArrayBuffer): Promise<string> {
+  const base64 = arrayBufferToBase64(arrayBuffer)
+  const dir = FileSystem.documentDirectory ?? FileSystem.cacheDirectory
+  if (dir) {
     const path = `${dir}${filename}`
     await FileSystem.writeAsStringAsync(path, base64, {
       encoding: 'base64',
     })
-    return { uri: path, filename }
-  },
+    return path
+  }
+
+  const file = new File(Paths.cache, filename)
+  if (file.exists) file.delete()
+  file.create()
+  file.write(new Uint8Array(arrayBuffer))
+  return file.uri
 }
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {

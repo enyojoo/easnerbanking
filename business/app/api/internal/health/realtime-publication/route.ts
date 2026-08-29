@@ -9,8 +9,8 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
  * even against a table that was never added to the `supabase_realtime`
  * publication, in which case it receives zero events and the polling
  * fallback stays disabled. This cron-driven check compares the publication's
- * actual membership against every table the shared bridge subscribes to and
- * fails loudly on drift.
+ * actual membership against every table the shared and office bridges
+ * subscribe to and fails loudly on drift.
  */
 const REQUIRED_PUBLICATION_TABLES = [
   "transactions",
@@ -28,6 +28,22 @@ const REQUIRED_PUBLICATION_TABLES = [
   "users",
   "business_stripe_connect_accounts",
   "business_checkout_settings",
+  "business_customers",
+  "terminal_sessions",
+  "event_inbox",
+  "account_statements",
+  "system_settings",
+  "currencies",
+  "exchange_rates",
+  "noah_rates",
+  "yellowcard_rates",
+  "grid_rates",
+  "crypto_rates",
+  "payout_corridors",
+  "crypto_destinations",
+  "processing_fee_schedule",
+  "processing_fee_overrides",
+  "business_checkout_fee_overrides",
 ] as const
 
 export async function GET(request: Request) {
@@ -52,7 +68,7 @@ export async function GET(request: Request) {
     console.error(
       `[realtime-publication-check] FAILED — missing from supabase_realtime publication: ${missing.join(", ")}. ` +
         "Realtime consumers for these tables receive no events while reporting healthy. " +
-        "Apply supabase/migrations/20260825120000_realtime_money_tables_publication.sql.",
+        "Apply supabase/migrations/20260825120000_realtime_money_tables_publication.sql and 20260829230000_office_realtime_publication.sql.",
     )
     return NextResponse.json({ ok: false, missing }, { status: 500 })
   }

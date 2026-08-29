@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { currenciesApi, type CurrencyAdminRow } from "@/lib/currencies-api"
 import { officeKeys, type OfficeCurrencyScope } from "@/lib/query/keys"
+import { useOfficeRealtimeRefetchInterval } from "@/lib/query/attach-office-realtime-bridge"
 import { officeReferenceQueryDefaults } from "./query-options"
 import { useOfficeAdminEnabled } from "./use-office-admin-enabled"
 
@@ -22,9 +23,11 @@ export function officeCurrenciesQueryOptions(scope?: OfficeCurrencyScope) {
 
 export function useOfficeCurrencies(scope?: OfficeCurrencyScope) {
   const { enabled } = useOfficeAdminEnabled()
+  const refetchInterval = useOfficeRealtimeRefetchInterval("reference")
 
   return useQuery({
     ...officeCurrenciesQueryOptions(scope),
     enabled,
+    refetchInterval,
   })
 }

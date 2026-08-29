@@ -173,6 +173,8 @@ export interface AccountStatementEmailData {
   firstName?: string
   statementId: string
   periodLabel: string
+  /** Calendar end of the requested period, e.g. `29 Aug 2026`. */
+  periodToLabel: string
   currency: string
   availableLabel: string
 }

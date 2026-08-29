@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { noahRatesApi, type NoahRateAdminRow } from "@/lib/noah-rates-api"
 import { officeKeys } from "@/lib/query/keys"
+import { useOfficeRealtimeRefetchInterval } from "@/lib/query/attach-office-realtime-bridge"
 import { officeRatesQueryDefaults } from "./query-options"
 import { useOfficeAdminEnabled } from "./use-office-admin-enabled"
 
@@ -22,9 +23,11 @@ export function officeNoahRatesQueryOptions() {
 
 export function useOfficeNoahRates() {
   const { enabled } = useOfficeAdminEnabled()
+  const refetchInterval = useOfficeRealtimeRefetchInterval("reference")
 
   return useQuery({
     ...officeNoahRatesQueryOptions(),
     enabled,
+    refetchInterval,
   })
 }

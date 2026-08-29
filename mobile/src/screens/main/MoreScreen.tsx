@@ -52,7 +52,6 @@ import {
 } from '../../lib/mfaStatusCache'
 import { isGlobalBankingVerified } from '../../lib/compliance'
 import { VERIFICATION_STATUS_COPY } from '@easner/shared'
-import { StatementPdfModal } from '../../components/StatementPdfModal'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { apiFetch } from '../../query/api-client'
 import { useScope } from '../../query/scope'
@@ -123,8 +122,6 @@ function MoreContent({ navigation }: NavigationProps) {
   const [payrollActivityVisible, setPayrollActivityVisible] = useState(() =>
     Boolean(user?.id && peekPayrollActivityVisible(user.id)),
   )
-  const [statementOpen, setStatementOpen] = useState(false)
-  const [statementCurrency, setStatementCurrency] = useState<'USD' | 'EUR'>('USD')
   const lastKycProfileRefreshRef = useRef(0)
   /** Latest profile for focus handler – avoids putting `noah_kyc_status` in `useFocusEffect` deps (would re-run MFA listFactors on every profile poll while More stays focused). */
   const userProfileRef = useRef(userProfile)
@@ -136,14 +133,6 @@ function MoreContent({ navigation }: NavigationProps) {
       setMfaStatusResolved(false)
     }
   }, [user?.id])
-
-  useEffect(() => {
-    const uid = userProfile?.id || user?.id
-    if (!uid) return
-    void AsyncStorage.getItem(`easner_dashboard_selected_currency_${uid}`).then((stored) => {
-      if (stored === 'USD' || stored === 'EUR') setStatementCurrency(stored)
-    })
-  }, [userProfile?.id, user?.id])
 
   useEffect(() => {
     let active = true
@@ -589,10 +578,7 @@ function MoreContent({ navigation }: NavigationProps) {
                 {renderMenuItem(
                   'Account statement',
                   'Download a PDF of your USD or EUR activity',
-                  () => {
-                    haptics.tap()
-                    setStatementOpen(true)
-                  },
+                  () => navigateFromMoreTab('AccountStatement'),
                   FileText,
                   undefined,
                   false,
@@ -725,11 +711,6 @@ function MoreContent({ navigation }: NavigationProps) {
         </ScrollView>
       </View>
 
-      <StatementPdfModal
-        visible={statementOpen}
-        onClose={() => setStatementOpen(false)}
-        accountCurrency={statementCurrency}
-      />
       <EasnerAlertSheet
         visible={showLogoutDialog}
         onDismiss={() => setShowLogoutDialog(false)}

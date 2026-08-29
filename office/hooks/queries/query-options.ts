@@ -45,11 +45,9 @@ export const officeReferenceQueryDefaults = {
 }
 
 /**
- * Admin rate catalogs – cron-synced server-side every ~5 minutes, so a 60s
- * client staleTime plus a 5-minute poll tracks the source of truth without
- * refetching on every mount/navigation. The poll pauses while the tab is
- * backgrounded (`refetchIntervalInBackground: false`); the react-query mount
- * default still refetches stale data when a rates page is revisited.
+ * Admin rate catalogs – cron-synced server-side; office realtime invalidates
+ * the cache on upsert. Polling is applied in the hooks only when the channel
+ * is unhealthy.
  */
 export const officeRatesQueryDefaults = {
   staleTime: 60_000,
@@ -58,7 +56,6 @@ export const officeRatesQueryDefaults = {
   retry: 1,
   refetchOnWindowFocus: false,
   refetchOnReconnect: true,
-  refetchInterval: 5 * 60_000,
   refetchIntervalInBackground: false,
   meta: { webPersist: "reduced" as const, freshness: "reference" as const },
 }

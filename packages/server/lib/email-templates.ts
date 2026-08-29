@@ -240,39 +240,44 @@ If you did not request this email, you can safely ignore it.`
 
   accountStatement: {
     subject: (data: AccountStatementEmailData) =>
-      `Your ${data.currency} account statement ${data.statementId}`,
+      `Your Easner ${data.currency} Balance account statement – ${data.periodToLabel}`,
     preheader: (data: AccountStatementEmailData) =>
-      `Statement ${data.statementId} for ${data.periodLabel}.`,
+      `Your ${data.currency} account statement for ${data.periodLabel} is attached.`,
     html: (data: AccountStatementEmailData, audience = "personal") => {
-      const subject = `Your ${data.currency} account statement`
+      const currency = escapeHtmlText(data.currency)
+      const periodLabel = escapeHtmlText(data.periodLabel)
+      const availableLabel = escapeHtmlText(data.availableLabel)
+      const title = `Your ${data.currency} account statement`
+      const preheader = `Your ${data.currency} account statement for ${data.periodLabel} is attached.`
       const content = `
         ${easnerUserGreetingParagraphHtml(data.firstName)}
         <p class="confirmation-text">
-          Your ${data.currency} account statement for ${data.periodLabel} is attached.
-          Available balance on this statement: ${data.availableLabel}.
+          Your ${currency} account statement for ${periodLabel} is attached.
         </p>
         <p class="confirmation-text">
-          Statement ID: <strong>${data.statementId}</strong>
+          Available balance on this statement: <strong>${availableLabel}</strong>.
         </p>
-        <p class="confirmation-text">
-          Easner is a financial technology company, not a bank. This PDF is an Easner
-          account statement, not a statement issued by a bank.
+        <p class="confirmation-text" style="font-size: 13px; color: #6F756F;">
+          Easner Group, Inc. ("Easner") is a financial technology company, not a bank.
+          Banking, payment, verification, and card services are provided by licensed partners.
+          This PDF is an Easner account statement, not a statement issued by a bank.
+          More here: <a href="https://www.easner.com/terms" style="color: #6F756F; text-decoration: underline;">easner.com/terms</a>
         </p>
       `
-      return generateBaseEmailTemplate(subject, "", content, undefined, {
+      return generateBaseEmailTemplate(title, "", content, undefined, {
         audience,
         showPreferencesLink: false,
-        preheader: `Statement ${data.statementId} for ${data.periodLabel}.`,
+        preheader,
       })
     },
     text: (data: AccountStatementEmailData) =>
       `${formatEasnerUserGreetingPlain(data.firstName)}
 
-Your ${data.currency} account statement for ${data.periodLabel} is attached. Available balance on this statement: ${data.availableLabel}.
+Your ${data.currency} account statement for ${data.periodLabel} is attached.
 
-Statement ID: ${data.statementId}
+Available balance on this statement: ${data.availableLabel}.
 
-Easner is a financial technology company, not a bank. This PDF is an Easner account statement, not a statement issued by a bank.`,
+Easner Group, Inc. ("Easner") is a financial technology company, not a bank. Banking, payment, verification, and card services are provided by licensed partners. This PDF is an Easner account statement, not a statement issued by a bank. More here: easner.com/terms`,
   },
 
   welcomeBusiness: {

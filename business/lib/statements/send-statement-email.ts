@@ -1,10 +1,12 @@
 import { emailService } from "@easner/server"
+import { formatStatementCalendarDate } from "./format"
 import type { AssembledStatement } from "./types"
 
 export type AccountStatementEmailData = {
   firstName?: string
   statementId: string
   periodLabel: string
+  periodToLabel: string
   currency: string
   availableLabel: string
 }
@@ -27,6 +29,7 @@ export async function sendAccountStatementEmail(input: {
         firstName: input.assembled.holderFirstName ?? undefined,
         statementId: input.assembled.statementId,
         periodLabel: input.assembled.periodLabel,
+        periodToLabel: formatStatementCalendarDate(input.assembled.periodTo),
         currency: input.assembled.currency,
         availableLabel: input.assembled.availableLabel,
       } satisfies AccountStatementEmailData,

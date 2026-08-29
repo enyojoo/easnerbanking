@@ -13,6 +13,7 @@ type EventHandler = (payload: Record<string, unknown>) => void
 function buildMockSupabase() {
   type HandlerEntry = { table: string; handler: EventHandler }
   const handlers: Record<string, HandlerEntry[]> = {}
+  let subscribeCb: ((status: string, err?: unknown) => void) | undefined
 
   const channel: SupabaseLikeChannel = {
     on(_type, filter, callback) {
@@ -22,6 +23,7 @@ function buildMockSupabase() {
       return this
     },
     subscribe(cb) {
+      subscribeCb = cb
       cb?.("SUBSCRIBED")
       return this
     },
@@ -34,25 +36,40 @@ function buildMockSupabase() {
   }
 
   const fire = (event: string, row: Record<string, unknown>, table = "transactions") => {
-    for (const entry of handlers[event] ?? []) {
-      if (entry.table !== table) continue
-      entry.handler({ eventType: event, schema: "public", table, new: row, old: {}, commit_timestamp: "" })
+    const payload = { eventType: event, schema: "public", table, new: row, old: {}, commit_timestamp: "" }
+    for (const key of [event, "*"]) {
+      for (const entry of handlers[key] ?? []) {
+        if (entry.table !== table) continue
+        entry.handler(payload)
+      }
     }
   }
 
-  return { supabase, triggerUpdate: (row: Record<string, unknown>) => fire("UPDATE", row) }
+  return {
+    supabase,
+    triggerUpdate: (row: Record<string, unknown>, table = "transactions") => fire("UPDATE", row, table),
+    triggerInsert: (row: Record<string, unknown>, table: string) => fire("INSERT", row, table),
+    resubscribeAfterGap: () => {
+      subscribeCb?.("CHANNEL_ERROR", new Error("gap"))
+      subscribeCb?.("SUBSCRIBED")
+    },
+  }
 }
 
 describe("attachOfficeRealtime", () => {
   let qc: QueryClient
   let detach: () => void
-  let triggerUpdate: (row: Record<string, unknown>) => void
+  let triggerUpdate: (row: Record<string, unknown>, table?: string) => void
+  let triggerInsert: (row: Record<string, unknown>, table: string) => void
+  let resubscribeAfterGap: () => void
 
   beforeEach(() => {
     qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const mock = buildMockSupabase()
     detach = attachOfficeRealtime({ qc, supabase: mock.supabase, batchMs: 0 })
     triggerUpdate = mock.triggerUpdate
+    triggerInsert = mock.triggerInsert
+    resubscribeAfterGap = mock.resubscribeAfterGap
     qc.setQueryData(officeKeys.transactions({}), {
       pages: [{ transactions: [{ id: "tx-1", status: "pending" }], summary: {}, nextCursor: null }],
       pageParams: [null],
@@ -98,6 +115,52 @@ describe("attachOfficeRealtime", () => {
         ([args]) =>
           Array.isArray((args as { queryKey?: unknown[] }).queryKey) &&
           (args as { queryKey: unknown[] }).queryKey[1] === "transactions" &&
+          (args as { refetchType?: string }).refetchType === "active",
+      ),
+    ).toBe(true)
+  })
+
+  it("invalidates statements when account_statements changes", async () => {
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries")
+    triggerInsert({ statement_id: "EST-20260829-ABCD" }, "account_statements")
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    expect(
+      invalidateSpy.mock.calls.some(
+        ([args]) =>
+          Array.isArray((args as { queryKey?: unknown[] }).queryKey) &&
+          (args as { queryKey: unknown[] }).queryKey[1] === "statements",
+      ),
+    ).toBe(true)
+  })
+
+  it("invalidates platform-control catalogs on rate and settings changes", async () => {
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries")
+    triggerUpdate({ key: "feature_x" }, "system_settings")
+    triggerUpdate({ from_currency: "USD" }, "noah_rates")
+    triggerUpdate({ country_code: "NG" }, "payout_corridors")
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    const keys = invalidateSpy.mock.calls
+      .map(([args]) => (args as { queryKey?: unknown[] }).queryKey)
+      .filter((key): key is unknown[] => Array.isArray(key))
+      .map((key) => key[1])
+
+    expect(keys).toContain("system-settings")
+    expect(keys).toContain("noah-rates")
+    expect(keys).toContain("payout-corridors")
+  })
+
+  it("refetches all office queries after a realtime reconnect gap", async () => {
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries")
+    resubscribeAfterGap()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    expect(
+      invalidateSpy.mock.calls.some(
+        ([args]) =>
+          Array.isArray((args as { queryKey?: unknown[] }).queryKey) &&
+          (args as { queryKey: unknown[] }).queryKey[0] === "office" &&
           (args as { refetchType?: string }).refetchType === "active",
       ),
     ).toBe(true)

@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { cryptoDestinationsApi, type CryptoDestinationAdminRow } from "@/lib/crypto-destinations-api"
 import { officeKeys } from "@/lib/query/keys"
+import { useOfficeRealtimeRefetchInterval } from "@/lib/query/attach-office-realtime-bridge"
 import { officeReferenceQueryDefaults } from "./query-options"
 import { useOfficeAdminEnabled } from "./use-office-admin-enabled"
 
@@ -22,9 +23,11 @@ export function officeCryptoDestinationsQueryOptions() {
 
 export function useOfficeCryptoDestinations() {
   const { enabled } = useOfficeAdminEnabled()
+  const refetchInterval = useOfficeRealtimeRefetchInterval("reference")
 
   return useQuery({
     ...officeCryptoDestinationsQueryOptions(),
     enabled,
+    refetchInterval,
   })
 }

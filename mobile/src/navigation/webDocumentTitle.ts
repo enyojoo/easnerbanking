@@ -28,6 +28,7 @@ const ROUTE_TITLES: Record<string, string> = {
   Notifications: 'Notifications',
   InAppNotifications: 'Notifications',
   Legal: 'Legal',
+  AccountStatement: 'Account statement',
   ChangePassword: 'Security',
   ChangePin: 'Security',
   MfaSetup: 'Security',

@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { ycRatesApi, type YcRateAdminRow } from "@/lib/yc-rates-api"
 import { officeKeys } from "@/lib/query/keys"
+import { useOfficeRealtimeRefetchInterval } from "@/lib/query/attach-office-realtime-bridge"
 import { officeRatesQueryDefaults } from "./query-options"
 import { useOfficeAdminEnabled } from "./use-office-admin-enabled"
 
@@ -22,9 +23,11 @@ export function officeYcRatesQueryOptions() {
 
 export function useOfficeYcRates() {
   const { enabled } = useOfficeAdminEnabled()
+  const refetchInterval = useOfficeRealtimeRefetchInterval("reference")
 
   return useQuery({
     ...officeYcRatesQueryOptions(),
     enabled,
+    refetchInterval,
   })
 }

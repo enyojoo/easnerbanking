@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { officeFetch } from "@/lib/api-client"
 import { officeKeys } from "@/lib/query/keys"
+import { useOfficeRealtimeRefetchInterval } from "@/lib/query/attach-office-realtime-bridge"
 import { officeOperationalQueryDefaults } from "./query-options"
 import { useOfficeAdminEnabled } from "./use-office-admin-enabled"
 
@@ -78,36 +79,44 @@ export function officeTerminalSessionsQueryOptions() {
 
 export function useOfficeBusinesses() {
   const { enabled } = useOfficeAdminEnabled()
+  const refetchInterval = useOfficeRealtimeRefetchInterval("operational")
 
   return useQuery({
     ...officeBusinessesQueryOptions(),
     enabled,
+    refetchInterval,
   })
 }
 
 export function useOfficeCustomers() {
   const { enabled } = useOfficeAdminEnabled()
+  const refetchInterval = useOfficeRealtimeRefetchInterval("operational")
 
   return useQuery({
     ...officeCustomersQueryOptions(),
     enabled,
+    refetchInterval,
   })
 }
 
 export function useOfficeInvoices() {
   const { enabled } = useOfficeAdminEnabled()
+  const refetchInterval = useOfficeRealtimeRefetchInterval("operational")
 
   return useQuery({
     ...officeInvoicesQueryOptions(),
     enabled,
+    refetchInterval,
   })
 }
 
 export function useOfficeTerminalSessions() {
   const { enabled } = useOfficeAdminEnabled()
+  const refetchInterval = useOfficeRealtimeRefetchInterval("operational")
 
   return useQuery({
     ...officeTerminalSessionsQueryOptions(),
     enabled,
+    refetchInterval,
   })
 }

@@ -1,11 +1,12 @@
 "use client"
 
 import * as React from "react"
-import type { RealtimeHealth } from "@easner/shared"
+import { pollingIntervalFor, type FreshnessBand, type RealtimeHealth } from "@easner/shared"
 import { useOfficeAdminEnabled } from "@/hooks/queries/use-office-admin-enabled"
 import { supabase } from "@/lib/supabase"
 import { attachOfficeRealtime } from "./attach-office-realtime"
 import { getBrowserQueryClient } from "./query-client"
+import { useDocumentVisibility } from "./use-document-visibility"
 
 export const OfficeRealtimeHealthContext = React.createContext<RealtimeHealth>({
   subscribed: false,
@@ -15,6 +16,13 @@ export const OfficeRealtimeHealthContext = React.createContext<RealtimeHealth>({
 
 export function useOfficeRealtimeHealth(): RealtimeHealth {
   return React.useContext(OfficeRealtimeHealthContext)
+}
+
+/** Poll only when the tab is visible and the office realtime channel is unhealthy. */
+export function useOfficeRealtimeRefetchInterval(band: FreshnessBand): number | false {
+  const health = useOfficeRealtimeHealth()
+  const tabVisible = useDocumentVisibility()
+  return tabVisible ? pollingIntervalFor(band, health) : false
 }
 
 function OfficeRealtimeActive({ children }: { children: React.ReactNode }) {

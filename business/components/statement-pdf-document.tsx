@@ -1,19 +1,24 @@
 import { Document, Page, Text, View, Image, StyleSheet, Link } from "@react-pdf/renderer"
 import { STATEMENT_LOGO_DATA_URL } from "@/lib/statement-logo-base64"
-import type { AssembledStatement } from "@/lib/statements/types"
+import { chunkStatementActivityPages } from "@/lib/statements/paginate"
+import type { AssembledStatement, StatementActivityPdfRow } from "@/lib/statements/types"
 
 const INK = "#1A1C1A"
 const MUTED = "#6F756F"
 const LINE = "#E9E4D8"
 const ACCENT = "#007ACC"
+const SUCCESS = "#0F8A5F"
+const HEADER_FILL = "#F3F0E6"
+const STRIPE_FILL = "#F8F6F0"
+const ROW_LINE = "#EFECE2"
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 132,
+    paddingTop: 32,
     paddingBottom: 56,
     paddingHorizontal: 40,
     fontSize: 9,
-    fontFamily: "Helvetica",
+    fontFamily: "StatementSans",
     color: INK,
   },
   header: {
@@ -27,7 +32,8 @@ const styles = StyleSheet.create({
   },
   issuerName: {
     fontSize: 9,
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "StatementSans",
+    fontWeight: 700,
     marginBottom: 2,
   },
   muted: {
@@ -40,7 +46,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 13,
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "StatementSans",
+    fontWeight: 700,
     marginBottom: 3,
   },
   statementId: {
@@ -63,20 +70,20 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   fieldLabel: {
-    fontSize: 7,
+    fontSize: 8,
     color: MUTED,
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "StatementSans",
+    fontWeight: 700,
     marginBottom: 2,
-    textTransform: "uppercase",
-    letterSpacing: 0.3,
   },
   fieldValue: {
     fontSize: 9,
-    fontFamily: "Helvetica",
+    fontFamily: "StatementSans",
   },
   sectionTitle: {
-    fontSize: 11,
-    fontFamily: "Helvetica-Bold",
+    fontSize: 12,
+    fontFamily: "StatementSans",
+    fontWeight: 700,
     marginBottom: 8,
     marginTop: 4,
   },
@@ -104,27 +111,42 @@ const styles = StyleSheet.create({
   },
   summaryValue: {
     fontSize: 11,
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "StatementSans",
+    fontWeight: 700,
     marginBottom: 2,
+  },
+  tableShell: {
+    borderWidth: 1,
+    borderColor: LINE,
+    borderRadius: 8,
+    overflow: "hidden",
   },
   tableHeader: {
     flexDirection: "row",
+    backgroundColor: HEADER_FILL,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
     borderBottomWidth: 1,
     borderBottomColor: LINE,
-    paddingBottom: 4,
-    marginBottom: 2,
   },
   th: {
-    fontSize: 7,
+    fontSize: 8,
     color: MUTED,
-    fontFamily: "Helvetica-Bold",
-    textTransform: "uppercase",
+    fontFamily: "StatementSans",
+    fontWeight: 700,
   },
   tr: {
     flexDirection: "row",
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#EFECE2",
-    paddingVertical: 5,
+    borderBottomColor: ROW_LINE,
+  },
+  trStripe: {
+    backgroundColor: STRIPE_FILL,
+  },
+  trLast: {
+    borderBottomWidth: 0,
   },
   colDate: { width: "16%" },
   colType: { width: "14%" },
@@ -133,12 +155,19 @@ const styles = StyleSheet.create({
   colOut: { width: "16%", textAlign: "right" },
   footer: {
     position: "absolute",
-    left: 40,
-    right: 40,
+    left: 0,
+    right: 0,
     bottom: 24,
-    textAlign: "center",
+    alignItems: "center",
+  },
+  footerRule: {
+    width: "58%",
+    borderTopWidth: 1,
+    borderTopColor: LINE,
+    marginBottom: 8,
   },
   footerText: {
+    width: "58%",
     fontSize: 7,
     color: MUTED,
     textAlign: "center",
@@ -151,13 +180,14 @@ const styles = StyleSheet.create({
   endNote: {
     marginTop: 14,
     textAlign: "center",
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "StatementSans",
+    fontWeight: 700,
     fontSize: 9,
   },
   continuation: {
     fontSize: 8,
     color: MUTED,
-    marginBottom: 10,
+    marginBottom: 12,
   },
 })
 
@@ -210,7 +240,7 @@ function SummaryBlock({ doc }: { doc: AssembledStatement }) {
           <Text style={styles.fieldLabel}>Money out</Text>
         </View>
         <View style={styles.summaryCell}>
-          <Text style={[styles.summaryValue, { color: ACCENT }]}>{doc.availableLabel}</Text>
+          <Text style={[styles.summaryValue, { color: SUCCESS }]}>{doc.availableLabel}</Text>
           <Text style={styles.fieldLabel}>Available</Text>
         </View>
       </View>
@@ -218,32 +248,43 @@ function SummaryBlock({ doc }: { doc: AssembledStatement }) {
   )
 }
 
-function ActivityTable({ rows }: { rows: AssembledStatement["lines"] }) {
+function ActivityTable({ rows }: { rows: StatementActivityPdfRow[] }) {
   return (
-    <View>
-      <View style={styles.tableHeader} fixed>
+    <View style={styles.tableShell}>
+      <View style={styles.tableHeader}>
         <Text style={[styles.th, styles.colDate]}>Date</Text>
         <Text style={[styles.th, styles.colType]}>Type</Text>
         <Text style={[styles.th, styles.colDetails]}>Details</Text>
         <Text style={[styles.th, styles.colIn]}>In</Text>
         <Text style={[styles.th, styles.colOut]}>Out</Text>
       </View>
-      {rows.map((row, i) => (
-        <View key={`${row.date}-${row.details}-${i}`} style={styles.tr} wrap={false}>
-          <Text style={styles.colDate}>{row.date}</Text>
-          <Text style={styles.colType}>{row.type}</Text>
-          <Text style={styles.colDetails}>{row.details}</Text>
-          <Text style={styles.colIn}>{row.moneyIn}</Text>
-          <Text style={styles.colOut}>{row.moneyOut}</Text>
-        </View>
-      ))}
+      {rows.map((row, i) => {
+        const last = i === rows.length - 1
+        return (
+          <View
+            key={`${row.date}-${row.details}-${i}`}
+            wrap={false}
+            style={[
+              styles.tr,
+              i % 2 === 1 ? styles.trStripe : {},
+              last ? styles.trLast : {},
+            ]}
+          >
+            <Text style={styles.colDate}>{row.date}</Text>
+            <Text style={styles.colType}>{row.type}</Text>
+            <Text style={styles.colDetails}>{row.details}</Text>
+            <Text style={styles.colIn}>{row.moneyIn}</Text>
+            <Text style={styles.colOut}>{row.moneyOut}</Text>
+          </View>
+        )
+      })}
     </View>
   )
 }
 
-function Header({ statementId }: { statementId: string }) {
+function Header({ statementId, pageLabel }: { statementId: string; pageLabel: string }) {
   return (
-    <View style={styles.header} fixed>
+    <View style={styles.header}>
       <View>
         <Image src={STATEMENT_LOGO_DATA_URL} style={{ width: 114, height: 25, objectFit: "contain" }} />
         <View style={styles.issuer}>
@@ -255,10 +296,7 @@ function Header({ statementId }: { statementId: string }) {
       <View style={styles.titleBlock}>
         <Text style={styles.title}>Account statement</Text>
         <Text style={styles.statementId}>{statementId}</Text>
-        <Text
-          style={styles.pagePill}
-          render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`}
-        />
+        <Text style={styles.pagePill}>{pageLabel}</Text>
       </View>
     </View>
   )
@@ -267,7 +305,7 @@ function Header({ statementId }: { statementId: string }) {
 function StatementFooter() {
   return (
     <View style={styles.footer} fixed>
-      <View style={{ borderTopWidth: 1, borderTopColor: LINE, marginBottom: 8 }} />
+      <View style={styles.footerRule} />
       <Text style={styles.footerText}>
         Easner Group, Inc. ("Easner") is a financial technology company, not a bank. Banking,
         payment, verification, and card services are provided by licensed partners. More here:{" "}
@@ -280,29 +318,48 @@ function StatementFooter() {
 }
 
 export function StatementPDFDocument({ doc }: { doc: AssembledStatement }) {
+  const pages = chunkStatementActivityPages(doc.lines)
+  const totalPages = pages.length
+  const continuation = `${doc.holderName} · ${doc.currency} · ${doc.periodLabel}`
+
   return (
     <Document>
-      <Page size="A4" style={styles.page} wrap>
-        <Header statementId={doc.statementId} />
-        <View style={styles.metaRow}>
-          <View>
-            <Text style={styles.fieldLabel}>Period</Text>
-            <Text style={styles.fieldValue}>{doc.periodLabel}</Text>
-          </View>
-          <View style={{ alignItems: "flex-end" }}>
-            <Text style={styles.fieldLabel}>Available as of</Text>
-            <Text style={styles.fieldValue}>{doc.availableAsOfLabel}</Text>
-          </View>
-        </View>
-        <View style={styles.divider} />
-        <AccountBlock doc={doc} />
-        <View style={styles.divider} />
-        <SummaryBlock doc={doc} />
-        <Text style={styles.sectionTitle}>Activity</Text>
-        <ActivityTable rows={doc.lines} />
-        <Text style={styles.endNote}>End of statement</Text>
-        <StatementFooter />
-      </Page>
+      {pages.map((rows, pageIndex) => {
+        const isFirst = pageIndex === 0
+        const isLast = pageIndex === totalPages - 1
+        return (
+          <Page key={`statement-page-${pageIndex}`} size="A4" style={styles.page} wrap={false}>
+            <Header
+              statementId={doc.statementId}
+              pageLabel={`Page ${pageIndex + 1} of ${totalPages}`}
+            />
+            {isFirst ? (
+              <>
+                <View style={styles.metaRow}>
+                  <View>
+                    <Text style={styles.fieldLabel}>Period</Text>
+                    <Text style={styles.fieldValue}>{doc.periodLabel}</Text>
+                  </View>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text style={styles.fieldLabel}>Available as of</Text>
+                    <Text style={styles.fieldValue}>{doc.availableAsOfLabel}</Text>
+                  </View>
+                </View>
+                <View style={styles.divider} />
+                <AccountBlock doc={doc} />
+                <View style={styles.divider} />
+                <SummaryBlock doc={doc} />
+                <Text style={styles.sectionTitle}>Activity</Text>
+              </>
+            ) : (
+              <Text style={styles.continuation}>{continuation}</Text>
+            )}
+            <ActivityTable rows={rows} />
+            {isLast ? <Text style={styles.endNote}>End of statement</Text> : null}
+            <StatementFooter />
+          </Page>
+        )
+      })}
     </Document>
   )
 }
