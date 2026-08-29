@@ -26,6 +26,21 @@ export function formatIbanDisplay(value: string): string {
   return cleaned.replace(/(.{4})/g, "$1 ").trim()
 }
 
+/** Compact IBAN for chips (send amount, lists) – same middle ellipsis as wallet addresses. */
+export function formatIbanPreview(value: string): string {
+  const compact = String(value || "").replace(/\s/g, "").toUpperCase()
+  if (!compact) return ""
+  if (compact.length <= 12) return formatIbanDisplay(compact)
+  return truncateMiddle(compact, 6, 6)
+}
+
+function looksLikeIban(compact: string): boolean {
+  const t = compact.replace(/\s/g, "").toUpperCase()
+  if (t.length < 15) return false
+  if (/^[A-Z]{2}[0-9]{2}[A-Z0-9]+$/.test(t)) return true
+  return /^\d{15,}$/.test(t)
+}
+
 function isEasetagRow(input: PayoutRecipientSubtitleInput): boolean {
   return Boolean(String(input.payeeEasetag || "").trim())
 }
@@ -104,11 +119,15 @@ function formatBankAccountDisplay(input: PayoutRecipientSubtitleInput): string {
   const iban = String(input.iban || "").replace(/\s/g, "").trim()
   const acct = String(input.fullAccountNumber || input.accountNumber || "").trim()
   if (iban) {
-    return formatIbanDisplay(iban)
+    return formatIbanPreview(iban)
   }
   if (acct) {
     if (/^0x[a-fA-F0-9]+$/.test(acct)) {
       return truncateMiddle(acct, 6, 6)
+    }
+    const compact = acct.replace(/\s/g, "")
+    if (looksLikeIban(compact)) {
+      return formatIbanPreview(compact)
     }
     const digits = acct.replace(/\D/g, "")
     if (digits.length >= 8) {

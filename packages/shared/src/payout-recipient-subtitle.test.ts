@@ -60,6 +60,22 @@ describe("getPayoutRecipientSubtitleParts", () => {
     expect(parts.left).toBe("Ethereum")
     expect(parts.right).toContain("...")
   })
+
+  it("truncates EUR IBAN like a wallet address", () => {
+    const parts = getPayoutRecipientSubtitleParts({
+      bankName: "Allied Irish Banks",
+      iban: "IE29AIBK93115212345678",
+    })
+    expect(parts.right).toBe("IE29AI...345678")
+  })
+
+  it("truncates a long IBAN stored in the account number field", () => {
+    const parts = getPayoutRecipientSubtitleParts({
+      bankName: "Central Bank",
+      fullAccountNumber: "22828828828282882822",
+    })
+    expect(parts.right).toBe("228288...882822")
+  })
 })
 
 describe("formatPayoutRecipientSubtitle", () => {

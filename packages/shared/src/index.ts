@@ -479,6 +479,7 @@ export {
   beneficiaryToPayoutSubtitleInput,
   formatAccountNumberDigits,
   formatIbanDisplay,
+  formatIbanPreview,
   formatMaskedSenderDisplay,
   formatPayoutRecipientSubtitle,
   getPayoutRecipientSubtitleParts,
