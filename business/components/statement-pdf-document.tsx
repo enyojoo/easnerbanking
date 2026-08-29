@@ -11,15 +11,23 @@ const SUCCESS = "#0F8A5F"
 const HEADER_FILL = "#F3F0E6"
 const STRIPE_FILL = "#F8F6F0"
 const ROW_LINE = "#EFECE2"
+/** A4 height in PDF points — keeps every page full size even with few rows. */
+const PAGE_HEIGHT = 841.89
 
 const styles = StyleSheet.create({
   page: {
+    height: PAGE_HEIGHT,
+    flexDirection: "column",
     paddingTop: 32,
-    paddingBottom: 56,
+    paddingBottom: 24,
     paddingHorizontal: 40,
     fontSize: 9,
     fontFamily: "StatementSans",
     color: INK,
+  },
+  pageBody: {
+    flex: 1,
+    flexDirection: "column",
   },
   header: {
     flexDirection: "row",
@@ -153,12 +161,19 @@ const styles = StyleSheet.create({
   colDetails: { width: "38%" },
   colIn: { width: "16%", textAlign: "right" },
   colOut: { width: "16%", textAlign: "right" },
+  amountBold: {
+    fontFamily: "StatementSans",
+    fontWeight: 700,
+  },
+  headerCompact: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginBottom: 12,
+  },
   footer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 24,
     alignItems: "center",
+    marginTop: "auto",
+    paddingTop: 16,
   },
   footerRule: {
     width: "58%",
@@ -273,8 +288,8 @@ function ActivityTable({ rows }: { rows: StatementActivityPdfRow[] }) {
             <Text style={styles.colDate}>{row.date}</Text>
             <Text style={styles.colType}>{row.type}</Text>
             <Text style={styles.colDetails}>{row.details}</Text>
-            <Text style={styles.colIn}>{row.moneyIn}</Text>
-            <Text style={styles.colOut}>{row.moneyOut}</Text>
+            <Text style={[styles.colIn, row.moneyIn ? styles.amountBold : {}]}>{row.moneyIn}</Text>
+            <Text style={[styles.colOut, row.moneyOut ? styles.amountBold : {}]}>{row.moneyOut}</Text>
           </View>
         )
       })}
@@ -282,7 +297,27 @@ function ActivityTable({ rows }: { rows: StatementActivityPdfRow[] }) {
   )
 }
 
-function Header({ statementId, pageLabel }: { statementId: string; pageLabel: string }) {
+function Header({
+  statementId,
+  pageLabel,
+  compact = false,
+}: {
+  statementId: string
+  pageLabel: string
+  compact?: boolean
+}) {
+  const titleBlock = (
+    <View style={styles.titleBlock}>
+      <Text style={styles.title}>Account statement</Text>
+      <Text style={styles.statementId}>{statementId}</Text>
+      <Text style={styles.pagePill}>{pageLabel}</Text>
+    </View>
+  )
+
+  if (compact) {
+    return <View style={styles.headerCompact}>{titleBlock}</View>
+  }
+
   return (
     <View style={styles.header}>
       <View>
@@ -293,18 +328,14 @@ function Header({ statementId, pageLabel }: { statementId: string; pageLabel: st
           <Text style={styles.muted}>San Francisco, CA 94114</Text>
         </View>
       </View>
-      <View style={styles.titleBlock}>
-        <Text style={styles.title}>Account statement</Text>
-        <Text style={styles.statementId}>{statementId}</Text>
-        <Text style={styles.pagePill}>{pageLabel}</Text>
-      </View>
+      {titleBlock}
     </View>
   )
 }
 
 function StatementFooter() {
   return (
-    <View style={styles.footer} fixed>
+    <View style={styles.footer}>
       <View style={styles.footerRule} />
       <Text style={styles.footerText}>
         Easner Group, Inc. ("Easner") is a financial technology company, not a bank. Banking,
@@ -328,35 +359,38 @@ export function StatementPDFDocument({ doc }: { doc: AssembledStatement }) {
         const isFirst = pageIndex === 0
         const isLast = pageIndex === totalPages - 1
         return (
-          <Page key={`statement-page-${pageIndex}`} size="A4" style={styles.page} wrap={false}>
-            <Header
-              statementId={doc.statementId}
-              pageLabel={`Page ${pageIndex + 1} of ${totalPages}`}
-            />
-            {isFirst ? (
-              <>
-                <View style={styles.metaRow}>
-                  <View>
-                    <Text style={styles.fieldLabel}>Period</Text>
-                    <Text style={styles.fieldValue}>{doc.periodLabel}</Text>
+          <Page key={`statement-page-${pageIndex}`} size="A4" style={styles.page}>
+            <View style={styles.pageBody}>
+              <Header
+                statementId={doc.statementId}
+                pageLabel={`Page ${pageIndex + 1} of ${totalPages}`}
+                compact={!isFirst}
+              />
+              {isFirst ? (
+                <>
+                  <View style={styles.metaRow}>
+                    <View>
+                      <Text style={styles.fieldLabel}>Period</Text>
+                      <Text style={styles.fieldValue}>{doc.periodLabel}</Text>
+                    </View>
+                    <View style={{ alignItems: "flex-end" }}>
+                      <Text style={styles.fieldLabel}>Available as of</Text>
+                      <Text style={styles.fieldValue}>{doc.availableAsOfLabel}</Text>
+                    </View>
                   </View>
-                  <View style={{ alignItems: "flex-end" }}>
-                    <Text style={styles.fieldLabel}>Available as of</Text>
-                    <Text style={styles.fieldValue}>{doc.availableAsOfLabel}</Text>
-                  </View>
-                </View>
-                <View style={styles.divider} />
-                <AccountBlock doc={doc} />
-                <View style={styles.divider} />
-                <SummaryBlock doc={doc} />
-                <Text style={styles.sectionTitle}>Activity</Text>
-              </>
-            ) : (
-              <Text style={styles.continuation}>{continuation}</Text>
-            )}
-            <ActivityTable rows={rows} />
-            {isLast ? <Text style={styles.endNote}>End of statement</Text> : null}
-            <StatementFooter />
+                  <View style={styles.divider} />
+                  <AccountBlock doc={doc} />
+                  <View style={styles.divider} />
+                  <SummaryBlock doc={doc} />
+                  <Text style={styles.sectionTitle}>Activity</Text>
+                </>
+              ) : (
+                <Text style={styles.continuation}>{continuation}</Text>
+              )}
+              <ActivityTable rows={rows} />
+              {isLast ? <Text style={styles.endNote}>End of statement</Text> : null}
+              <StatementFooter />
+            </View>
           </Page>
         )
       })}
