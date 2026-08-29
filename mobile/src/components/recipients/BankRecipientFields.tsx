@@ -261,39 +261,22 @@ export function BankRecipientFields({ form }: { form: FormSlice }) {
       ) : null}
 
       {accountConfig.accountType === 'euro' ? (
-        <>
-          <View>
-            <TextInput
-              style={styles.modalInput}
-              value={form.newRecipient.iban}
-              onChangeText={(text) => {
-                const formatted = formatIBAN(text)
-                form.setNewRecipient((prev) => ({ ...prev, iban: formatted }))
-              }}
-              placeholder={`${accountConfig.fieldLabels.iban} *`}
-              placeholderTextColor={colors.text.secondary}
-              autoCapitalize="characters"
-              returnKeyType="done"
-              onSubmitEditing={() => Keyboard.dismiss()}
-              editable={!form.isSubmitting}
-            />
-          </View>
-          <View>
-            <TextInput
-              style={styles.modalInput}
-              value={form.newRecipient.swiftBic}
-              onChangeText={(text) =>
-                form.setNewRecipient((prev) => ({ ...prev, swiftBic: text.toUpperCase() }))
-              }
-              placeholder={accountConfig.fieldLabels.swift_bic}
-              placeholderTextColor={colors.text.secondary}
-              autoCapitalize="characters"
-              returnKeyType="done"
-              onSubmitEditing={() => Keyboard.dismiss()}
-              editable={!form.isSubmitting}
-            />
-          </View>
-        </>
+        <View>
+          <TextInput
+            style={styles.modalInput}
+            value={form.newRecipient.iban}
+            onChangeText={(text) => {
+              const formatted = formatIBAN(text)
+              form.setNewRecipient((prev) => ({ ...prev, iban: formatted }))
+            }}
+            placeholder={`${accountConfig.fieldLabels.iban} *`}
+            placeholderTextColor={colors.text.secondary}
+            autoCapitalize="characters"
+            returnKeyType="done"
+            onSubmitEditing={() => Keyboard.dismiss()}
+            editable={!form.isSubmitting}
+          />
+        </View>
       ) : null}
 
       {accountConfig.accountType === 'generic' ? (

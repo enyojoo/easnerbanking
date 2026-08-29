@@ -677,7 +677,7 @@ export function RecipientForm({
       newErrors.routingNumber = "Routing number is required for CAD (CPA format)"
     }
 
-    if (formData.recipientType === "bank" && recipientFormNeedsBankCode(payoutFormHints)) {
+    if (formData.recipientType === "bank" && currency !== "EUR" && recipientFormNeedsBankCode(payoutFormHints)) {
       const swift = formData.bic?.trim() || ""
       if (!swift) {
         newErrors.bic = "SWIFT/BIC is required for this corridor"
@@ -686,7 +686,12 @@ export function RecipientForm({
       }
     }
 
-    if (formData.recipientType === "bank" && selectedCountry && ycCorridorSchema?.status === "ready") {
+    if (
+      formData.recipientType === "bank" &&
+      selectedCountry &&
+      payoutProvider === "yellowcard" &&
+      ycCorridorSchema?.status === "ready"
+    ) {
       const ycCheck = validateYcRecipientForCorridor({
         countryCode: selectedCountry.code,
         currencyCode: currency,
@@ -695,7 +700,9 @@ export function RecipientForm({
           country_code: selectedCountry.code,
           currency,
           full_name: formData.name,
-          account_number: formData.accountNumber,
+          account_number: formData.accountNumber?.trim() || formData.iban?.replace(/\s/g, "").toUpperCase(),
+          iban: formData.iban,
+          routing_number: formData.routingNumber,
           bank_name: formData.bankName,
           phone_number: formData.phone,
           metadata: ycMetadata,
@@ -727,8 +734,9 @@ export function RecipientForm({
           country_code: selectedCountry.code,
           currency,
           full_name: formData.name,
-          account_number: formData.accountNumber,
+          account_number: formData.accountNumber?.trim() || formData.iban?.replace(/\s/g, "").toUpperCase(),
           iban: formData.iban,
+          routing_number: formData.routingNumber,
           swift_bic: formData.bic,
           bank_name: formData.bankName,
           phone_number: formData.phone,
@@ -818,7 +826,10 @@ export function RecipientForm({
       routingNumber: formData.routingNumber?.trim() || undefined,
       sortCode: formData.sortCode?.trim() || undefined,
       iban: formData.iban?.trim() || undefined,
-      swiftBic: formData.recipientType === "bank" ? formData.bic?.trim() || undefined : undefined,
+      swiftBic:
+        formData.recipientType === "bank" && currency !== "EUR"
+          ? formData.bic?.trim() || undefined
+          : undefined,
       transferType: isUsdBank
         ? (parseUsBankTransferType(formData.transferType) ?? "ACH")
         : isEurBank
@@ -1512,28 +1523,16 @@ export function RecipientForm({
                   {errors.transferType && <p className="text-xs text-red-500">{errors.transferType}</p>}
                 </div>
               ) : null}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2 col-span-2">
-                  <label className="text-xs text-muted-foreground">IBAN</label>
-                  <Input
-                    value={formData.iban || ""}
-                    onChange={(e) => handleInputChange("iban", e.target.value)}
-                    placeholder="DE89370400440532013000"
-                    className={`h-12 font-mono text-sm placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.iban ? "border-red-500" : ""}`}
-                    required
-                  />
-                  {errors.iban && <p className="text-xs text-red-500">{errors.iban}</p>}
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs text-muted-foreground">BIC/SWIFT</label>
-                  <Input
-                    value={formData.bic || ""}
-                    onChange={(e) => handleInputChange("bic", e.target.value)}
-                    placeholder="SOBKDEB2XXX"
-                    className={`h-12 font-mono text-sm placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.bic ? "border-red-500" : ""}`}
-                  />
-                  {errors.bic && <p className="text-xs text-red-500">{errors.bic}</p>}
-                </div>
+              <div className="space-y-2">
+                <label className="text-xs text-muted-foreground">IBAN</label>
+                <Input
+                  value={formData.iban || ""}
+                  onChange={(e) => handleInputChange("iban", e.target.value)}
+                  placeholder="DE89370400440532013000"
+                  className={`h-12 font-mono text-sm placeholder:text-xs placeholder:text-muted-foreground/60 ${errors.iban ? "border-red-500" : ""}`}
+                  required
+                />
+                {errors.iban && <p className="text-xs text-red-500">{errors.iban}</p>}
               </div>
             </>
           )}
@@ -1639,7 +1638,7 @@ export function RecipientForm({
                   />
                 )
               })()}
-              {recipientFormNeedsBankCode(payoutFormHints) ? (
+              {currency !== "EUR" && recipientFormNeedsBankCode(payoutFormHints) ? (
                 <div className="space-y-2">
                   <label className="text-xs text-muted-foreground">SWIFT/BIC</label>
                   <Input

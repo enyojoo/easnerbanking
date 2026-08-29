@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { BackHandler, Keyboard } from 'react-native'
+import { BackHandler, Keyboard, Platform } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
 import { useRecipientFormState } from './useRecipientFormState'
@@ -49,7 +49,9 @@ export function useRecipientFormScreen(
       navigation.setParams({ scannedWalletAddress: undefined } as never)
     },
     onWalletScanPress:
-      routeType === 'wallet' ? () => navigation.navigate('ScanWalletAddress' as never) : undefined,
+      routeType === 'wallet' && Platform.OS !== 'web'
+        ? () => navigation.navigate('ScanWalletAddress' as never)
+        : undefined,
   })
 
   useFocusEffect(

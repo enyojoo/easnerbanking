@@ -124,31 +124,25 @@ export function isRecipientFormValid(ctx: RecipientFormValidationContext): boole
       : null
   if (recipientFormNeedsEmail(schemaHints) && !values.email.trim()) return false
   if (recipientFormNeedsPhone(schemaHints) && !values.phoneNumber.trim()) return false
-  if (recipientFormNeedsBankCode(schemaHints)) {
+  if (values.currency !== 'EUR' && recipientFormNeedsBankCode(schemaHints)) {
     const swift = values.swiftBic.trim()
     if (!swift || !/^[A-Z0-9]{8}([A-Z0-9]{3})?$/i.test(swift)) return false
   }
 
   const ycMetadata = buildRecipientYcMetadata(values, ctx.selectedCountryCurrency?.countryCode)
+  const corridorRow = bankCorridorValidationRow(ctx, ycMetadata)
 
   if (
     selectedRecipientType === 'bank' &&
     ctx.selectedCountryCurrency &&
+    ctx.payoutProvider === 'yellowcard' &&
     ctx.ycCorridorSchema?.status === 'ready'
   ) {
     const ycCheck = validateYcRecipientForCorridor({
       countryCode: ctx.selectedCountryCurrency.countryCode,
       currencyCode: ctx.selectedCountryCurrency.currencyCode,
       fieldsSchema: ctx.selectedBankCorridorFieldsSchema,
-      row: {
-        country_code: ctx.selectedCountryCurrency.countryCode,
-        currency: values.currency,
-        full_name: values.fullName,
-        account_number: values.accountNumber,
-        bank_name: values.bankName,
-        phone_number: values.phoneNumber,
-        metadata: ycMetadata,
-      },
+      row: corridorRow,
     })
     if (!ycCheck.ok) return false
   }
@@ -162,20 +156,31 @@ export function isRecipientFormValid(ctx: RecipientFormValidationContext): boole
       countryCode: ctx.selectedCountryCurrency.countryCode,
       currencyCode: ctx.selectedCountryCurrency.currencyCode,
       fieldsSchema: ctx.selectedBankCorridorFieldsSchema,
-      row: {
-        country_code: ctx.selectedCountryCurrency.countryCode,
-        currency: values.currency,
-        full_name: values.fullName,
-        account_number: values.accountNumber,
-        iban: values.iban,
-        swift_bic: values.swiftBic,
-        bank_name: values.bankName,
-        phone_number: values.phoneNumber,
-        metadata: ycMetadata,
-      },
+      row: corridorRow,
     })
     if (!gridCheck.ok) return false
   }
 
   return true
+}
+
+/** Include routing / IBAN so Grid US and EUR match the visible form fields. */
+function bankCorridorValidationRow(
+  ctx: RecipientFormValidationContext,
+  metadata: ReturnType<typeof buildRecipientYcMetadata>,
+) {
+  const { values, selectedCountryCurrency } = ctx
+  const iban = values.iban.replace(/\s/g, '').toUpperCase()
+  return {
+    country_code: selectedCountryCurrency?.countryCode,
+    currency: values.currency,
+    full_name: values.fullName,
+    account_number: values.accountNumber.trim() || iban,
+    iban: values.iban,
+    swift_bic: values.swiftBic,
+    routing_number: values.routingNumber,
+    bank_name: values.bankName,
+    phone_number: values.phoneNumber,
+    metadata,
+  }
 }

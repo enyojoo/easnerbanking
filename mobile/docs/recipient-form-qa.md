@@ -12,7 +12,7 @@ Add starts as a **navigation sheet** over the list (tap outside, X, swipe down, 
 4. **Send → Add US bank** — complete form → lands on SendAmount with draft recipient (no DB write). Back from amount returns to the send hub (not the form).
 5. **Send → Add EUR (SEPA tiles)** — complete form → SendAmount with draft.
 6. **Recipients → Add / Edit / Delete** — persisted recipients update list correctly. Edit skips the type sheet and uses an Edit title for that rail.
-7. **Wallet QR** — from the wallet form, ScanWalletAddress writes `scannedWalletAddress` back onto AddWalletRecipient.
+7. **Wallet QR** — iOS/Android: scan button opens ScanWalletAddress and writes `scannedWalletAddress` back onto AddWalletRecipient. Web: no scan button; paste in the address field (same asset/network inference).
 
 Payroll receiving methods stay on PayrollReceivingMethod. They do not go through this flow or the recipients table.
 

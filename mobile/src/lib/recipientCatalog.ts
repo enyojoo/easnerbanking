@@ -196,7 +196,6 @@ export function getBankFieldsForCurrency(currencyCode: string): RecipientFieldSp
       { key: 'fullName', label: 'Account name', placeholder: 'Account name', required: true },
       { key: 'bankName', label: 'Bank name', placeholder: 'Bank name', required: true },
       { key: 'iban', label: 'IBAN', placeholder: 'IBAN', required: true },
-      { key: 'swiftBic', label: 'SWIFT/BIC', placeholder: 'SWIFT/BIC', required: false },
     ]
   }
   return bankDefaultFields

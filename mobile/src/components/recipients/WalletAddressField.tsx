@@ -1,5 +1,5 @@
 import React from 'react'
-import { View, TextInput, Pressable, StyleSheet } from 'react-native'
+import { Platform, View, TextInput, Pressable, StyleSheet } from 'react-native'
 import { ScanLine } from 'lucide-react-native'
 import { colors, spacing, borderRadius, compactFormInputStyle } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
@@ -7,7 +7,7 @@ import { ripple } from '../../lib/androidRipple'
 type WalletAddressFieldProps = {
   value: string
   onChangeText: (text: string) => void
-  onScanPress: () => void
+  onScanPress?: () => void
   placeholder?: string
   editable?: boolean
 }
@@ -19,10 +19,12 @@ export function WalletAddressField({
   placeholder = 'Wallet Address',
   editable = true,
 }: WalletAddressFieldProps) {
+  const showScan = Platform.OS !== 'web' && Boolean(onScanPress)
+
   return (
     <View style={styles.wrap}>
       <TextInput
-        style={styles.input}
+        style={[styles.input, showScan ? styles.inputWithScan : null]}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
@@ -31,16 +33,18 @@ export function WalletAddressField({
         autoCapitalize="none"
         autoCorrect={false}
       />
-      <Pressable
-        android_ripple={ripple.neutral}
-        style={styles.scanButton}
-        onPress={onScanPress}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel="Scan wallet address QR code"
-      >
-        <ScanLine size={20} color={colors.primary.main} strokeWidth={2} />
-      </Pressable>
+      {showScan ? (
+        <Pressable
+          android_ripple={ripple.neutral}
+          style={styles.scanButton}
+          onPress={onScanPress}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Scan wallet address QR code"
+        >
+          <ScanLine size={20} color={colors.primary.main} strokeWidth={2} />
+        </Pressable>
+      ) : null}
     </View>
   )
 }
@@ -54,11 +58,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.frame.border,
     borderRadius: borderRadius.full,
-    paddingLeft: spacing[4],
-    paddingRight: spacing[12],
+    paddingHorizontal: spacing[4],
     ...compactFormInputStyle,
     color: colors.text.primary,
     backgroundColor: colors.frame.background,
+  },
+  inputWithScan: {
+    paddingRight: spacing[12],
   },
   scanButton: {
     position: 'absolute',

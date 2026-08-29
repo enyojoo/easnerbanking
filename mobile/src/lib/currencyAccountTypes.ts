@@ -99,18 +99,16 @@ export function getAccountTypeConfig(accountType: AccountType): AccountTypeConfi
       return {
         accountType: "euro",
         requiredFields: ["account_name", "bank_name", "iban"],
-        optionalFields: ["swift_bic"],
+        optionalFields: [],
         fieldLabels: {
           account_name: "Account Name",
           bank_name: "Bank Name",
           iban: "IBAN",
-          swift_bic: "SWIFT/BIC",
         },
         fieldPlaceholders: {
           account_name: "e.g., Max Mustermann",
           bank_name: "e.g., Deutsche Bank",
           iban: "e.g., DE89 3704 0044 0532 0130 00",
-          swift_bic: "e.g., COBADEFFXXX",
         },
         fieldFormatters: {
           iban: (value: string) => {
