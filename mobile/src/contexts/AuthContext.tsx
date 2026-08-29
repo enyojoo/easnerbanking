@@ -821,7 +821,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const getInitialSession = async () => {
       let hadSessionUser = false
       try {
-        const initialUrl = await Linking.getInitialURL()
+        const initialUrl = await Promise.race([
+          Linking.getInitialURL(),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500)),
+        ])
         if (initialUrl) {
           await consumeOAuthCallbackIfPresent(initialUrl)
           if (isUserDeepLinkUrl(initialUrl)) {
@@ -1025,6 +1028,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
       subscription.unsubscribe()
     }
   }, [consumeOAuthCallbackIfPresent, syncMfaGateFromSession, markSessionUserHydrated, clearSessionUserHydrated])
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setLoading((current) => {
+        if (!current) return current
+        console.warn('[Auth] Session restore timed out; continuing startup')
+        return false
+      })
+    }, 8_000)
+    return () => clearTimeout(timeout)
+  }, [])
 
   useEffect(() => {
     if (user?.id) {

@@ -1,6 +1,5 @@
-import React, { useMemo } from 'react'
-import { Platform } from 'react-native'
-import { PostHogProvider as PostHogSDKProvider } from 'posthog-react-native'
+import React, { useEffect } from 'react'
+import { InteractionManager, Platform } from 'react-native'
 import { pageviewProperties } from '@easner/shared'
 import { getPostHog } from '../lib/posthog'
 import { analytics } from '../lib/analytics'
@@ -10,10 +9,13 @@ interface PostHogProviderProps {
 }
 
 export function PostHogProvider({ children }: PostHogProviderProps) {
-  const client = useMemo(
-    () => (Platform.OS === 'web' ? null : getPostHog()),
-    [],
-  )
+  useEffect(() => {
+    if (Platform.OS === 'web') return
+    const task = InteractionManager.runAfterInteractions(() => {
+      getPostHog()
+    })
+    return () => task.cancel()
+  }, [])
 
   if (Platform.OS === 'web') {
     return (
@@ -24,15 +26,7 @@ export function PostHogProvider({ children }: PostHogProviderProps) {
     )
   }
 
-  if (!client) {
-    return <>{children}</>
-  }
-
-  return (
-    <PostHogSDKProvider client={client} autocapture={false} debug={__DEV__}>
-      {children}
-    </PostHogSDKProvider>
-  )
+  return <>{children}</>
 }
 
 /** Fires SPA $pageview on Expo web route changes (landing handled at init). */

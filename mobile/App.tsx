@@ -99,6 +99,18 @@ function AppContent() {
   const [activeRouteName, setActiveRouteName] = useState('')
   const appFadeAnim = useRef(new Animated.Value(0)).current
 
+  useEffect(() => {
+    if (Platform.OS === 'web') return
+    const timeout = setTimeout(() => {
+      console.warn('[App] Splash failsafe: revealing UI')
+      void SplashScreen.hideAsync().catch((e) => {
+        console.warn('SplashScreen.hideAsync', e)
+      })
+      setSplashFinished(true)
+    }, 8_000)
+    return () => clearTimeout(timeout)
+  }, [])
+
   // Expose navigation ref globally for logout navigation
   useEffect(() => {
     ;(global as any).rootNavigationRef = navigationRef
@@ -141,15 +153,13 @@ function AppContent() {
     setPreserveUserPathOverAuth(authLoading && !authUser)
   }, [authLoading, authUser])
 
-  // Single native splash (`app.json` + `expo-splash-screen`): keep it visible until:
-  // - Supabase session restore has resolved (`authLoading` false)
-  // - React Navigation has mounted (`navReady` true)
-  //
-  // Web skips the opacity gate below; loading shells and PIN render immediately on the themed canvas.
+  // Native splash stays up until React Navigation has mounted. Do not wait for
+  // Supabase session restore — if getSession / INITIAL_SESSION stall, gating on
+  // `authLoading` leaves the tree at opacity 0 (looks like a frozen splash).
+  // AppNavigator already shows AuthFlowLoadingShell while auth is restoring.
   useEffect(() => {
     if (Platform.OS === 'web') return
     if (splashFinished) return
-    if (authLoading) return
     if (!navReady) return
     let cancelled = false
     void (async () => {
@@ -166,7 +176,7 @@ function AppContent() {
     return () => {
       cancelled = true
     }
-  }, [authLoading, navReady, splashFinished])
+  }, [navReady, splashFinished])
 
   // Cold-open from notification: stash intent + flush when main stack is ready (PIN may still be showing).
   useEffect(() => {
@@ -454,10 +464,7 @@ export default function App() {
     const timeout = setTimeout(() => {
       console.warn('[App] Font load timed out; continuing startup')
       setFontLoadTimedOut(true)
-      void SplashScreen.hideAsync().catch((e) => {
-        console.warn('SplashScreen.hideAsync', e)
-      })
-    }, 12_000)
+    }, 8_000)
     return () => clearTimeout(timeout)
   }, [fontsLoaded])
 
