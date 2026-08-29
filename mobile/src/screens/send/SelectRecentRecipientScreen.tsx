@@ -552,13 +552,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     if ((usTransferMethods.length > 0 || eurTransferMethods.length > 0) && !transferType) {
       return false
     }
-    if (
-      selectedCountryCurrency?.currencyCode === 'USD' &&
-      transferType !== 'Wire' &&
-      !newRecipient.checkingOrSavings
-    ) {
-      return false
-    }
     if (showsHolderAddress) {
       if (!newRecipient.addressLine1.trim()) return false
       if (!newRecipient.city.trim()) return false
@@ -1628,10 +1621,9 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
 
                 return (
                   <>
-                    {/* Transfer Type Selection - First field for US accounts */}
-                    {usTransferMethods.length > 0 ? (
+                    {(usTransferMethods.length > 0 || eurTransferMethods.length > 0) ? (
                       <BankTransferTypeGrid
-                        methods={usTransferMethods}
+                        methods={usTransferMethods.length > 0 ? usTransferMethods : eurTransferMethods}
                         value={transferType}
                         onChange={setTransferType}
                         disabled={isSubmitting}
@@ -1682,34 +1674,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                     {/* US Account Fields */}
                     {accountConfig.accountType === "us" && (
                       <>
-                        {transferType !== 'Wire' ? (
-                          <View style={styles.transferTypeContainer}>
-                            <View style={styles.transferTypeOptions}>
-                              <Pressable
-                               android_ripple={ripple.neutral}
-                                style={[styles.transferTypeOption, newRecipient.checkingOrSavings === 'checking' && styles.transferTypeOptionSelected]}
-                                onPress={() => {
-                                  setNewRecipient(prev => ({ ...prev, checkingOrSavings: 'checking' }))
-                                  haptics.tap()
-                                }} >
-                                <Text style={[styles.transferTypeOptionText, newRecipient.checkingOrSavings === 'checking' && styles.transferTypeOptionTextSelected]}>
-                                  Checking
-                                </Text>
-                              </Pressable>
-                              <Pressable
-                               android_ripple={ripple.neutral}
-                                style={[styles.transferTypeOption, newRecipient.checkingOrSavings === 'savings' && styles.transferTypeOptionSelected]}
-                                onPress={() => {
-                                  setNewRecipient(prev => ({ ...prev, checkingOrSavings: 'savings' }))
-                                  haptics.tap()
-                                }} >
-                                <Text style={[styles.transferTypeOptionText, newRecipient.checkingOrSavings === 'savings' && styles.transferTypeOptionTextSelected]}>
-                                  Savings
-                                </Text>
-                              </Pressable>
-                            </View>
-                          </View>
-                        ) : null}
                         {showsHolderAddress ? (
                         <UsBankAddressFields
                           scrollRef={formScrollRef}
@@ -1839,14 +1803,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                     {/* EURO Account Fields */}
                     {accountConfig.accountType === "euro" && (
                       <>
-                        {eurTransferMethods.length > 0 ? (
-                          <BankTransferTypeGrid
-                            methods={eurTransferMethods}
-                            value={transferType}
-                            onChange={setTransferType}
-                            disabled={isSubmitting}
-                          />
-                        ) : null}
                         <View>
                           <TextInput
                             style={styles.modalInput}
