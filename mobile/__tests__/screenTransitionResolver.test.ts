@@ -172,6 +172,29 @@ describe('resolveScreenTransitionOptions', () => {
     expect(presetHasStackMotion(options as Record<string, unknown>)).toBe(true)
   })
 
+  it('presents AddRecipientType as a transparent sheet over the list', () => {
+    setPlatform('ios')
+    const options = resolveScreenTransitionOptions({
+      routeName: 'AddRecipientType',
+      previousRouteName: 'SelectRecentRecipient',
+    })
+    expect(options.presentation).toBe('transparentModal')
+    expect(options.gestureDirection).toBe('vertical')
+    expect(options.gestureEnabled).toBe(true)
+    expect(options.gestureResponseDistance).toBe(2000)
+    expect(options.cardStyleInterpolator).toBeDefined()
+  })
+
+  it('detaches the type sheet while a recipient form is open', () => {
+    setPlatform('ios')
+    const options = resolveScreenTransitionOptions({
+      routeName: 'AddBankRecipient',
+      previousRouteName: 'AddRecipientType',
+    })
+    expect(options.detachPreviousScreen).toBe(true)
+    expect(options.gestureEnabled).toBe(true)
+  })
+
   it('uses desktop web fade when sidebar shell active', () => {
     setPlatform('web')
     const options = resolveScreenTransitionOptions({

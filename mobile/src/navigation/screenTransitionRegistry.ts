@@ -59,6 +59,11 @@ export type ScreenRouteName =
   | 'PayrollInvitation'
   | 'PayrollReceivingMethod'
   | 'Recipients'
+  | 'AddRecipientType'
+  | 'AddBankRecipient'
+  | 'AddMobileRecipient'
+  | 'AddWalletRecipient'
+  | 'AddEasenetRecipient'
   | 'TransactionCard'
   | 'Support'
   | 'Legal'
@@ -118,6 +123,11 @@ export const SCREEN_TRANSITION_MAP: Record<ScreenRouteName, ScreenTransitionEntr
   // Stack entry from tabs
   OpenCurrencyAccount: { intent: 'stackEntry' },
   Recipients: { intent: 'stackEntry' },
+  AddRecipientType: { intent: 'modalSheet' },
+  AddBankRecipient: { intent: 'flowStep' },
+  AddMobileRecipient: { intent: 'flowStep' },
+  AddWalletRecipient: { intent: 'flowStep' },
+  AddEasenetRecipient: { intent: 'flowStep' },
   Support: { intent: 'settingsLeaf' },
   Notifications: { intent: 'stackEntry' },
   AccountVerification: { intent: 'stackEntry' },

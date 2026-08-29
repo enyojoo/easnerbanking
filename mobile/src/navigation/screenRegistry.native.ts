@@ -5,9 +5,10 @@ import type { ComponentType } from 'react'
  * Native screen registry (M2.5): flow screens load via `require()` inside the
  * wrapper's first render instead of a static top-level import.
  *
- * Send hub + Recipients are warmed via require() in preloadMainStackScreens()
- * after nav is ready (App.tsx AppContent) — not on first navigation tap (iOS
- * crash) and not via navigation.preload (off-screen mount crash post-PIN).
+ * Send hub + Recipients stay lazy so cold start / splash is not blocked by
+ * those large modules (build 219 hung). Do not eager-import them and do not
+ * require() them from App.tsx navReady or Dashboard idle (builds 216/220
+ * SIGABRT). Warm via onPressIn `preloadMainStackScreens()` only.
  */
 function lazyNativeScreen<P extends object>(
   load: () => { default: ComponentType<P> },
@@ -27,6 +28,21 @@ export const SelectRecentRecipientScreen = lazyNativeScreen(
 )
 export const RecipientsScreen = lazyNativeScreen(
   () => require('../screens/main/RecipientsScreen'),
+)
+export const AddRecipientTypeScreen = lazyNativeScreen(
+  () => require('../screens/recipients/AddRecipientTypeScreen'),
+)
+export const AddBankRecipientScreen = lazyNativeScreen(
+  () => require('../screens/recipients/AddBankRecipientScreen'),
+)
+export const AddMobileRecipientScreen = lazyNativeScreen(
+  () => require('../screens/recipients/AddMobileRecipientScreen'),
+)
+export const AddWalletRecipientScreen = lazyNativeScreen(
+  () => require('../screens/recipients/AddWalletRecipientScreen'),
+)
+export const AddEasenetRecipientScreen = lazyNativeScreen(
+  () => require('../screens/recipients/AddEasenetRecipientScreen'),
 )
 export const SendAmountScreen = lazyNativeScreen(
   () => require('../screens/send/SendAmountScreen'),

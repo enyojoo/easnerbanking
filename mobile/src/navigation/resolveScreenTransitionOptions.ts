@@ -4,6 +4,7 @@
 import { Platform } from 'react-native'
 import type { StackNavigationOptions } from '@react-navigation/stack'
 import type { LayoutMode } from '../theme/layoutMetrics'
+import { isRecipientFormRoute } from '../lib/navigateRecipientForm'
 import {
   getScreenTransitionEntry,
   resolveGestureEnabled,
@@ -131,6 +132,36 @@ export function resolveScreenTransitionOptions(
         ? webPresetForIntent(false, showSidebarShell)
         : (modalBottomPreset() as StackNavigationOptions)),
       cardStyle: { backgroundColor: '#000' },
+    }
+  }
+
+  if (routeName === 'AddRecipientType') {
+    const sheetMotion =
+      Platform.OS === 'web'
+        ? webPresetForIntent(false, showSidebarShell)
+        : (modalBottomPreset() as StackNavigationOptions)
+    return {
+      ...base,
+      ...sheetMotion,
+      presentation: 'transparentModal',
+      cardOverlayEnabled: true,
+      gestureEnabled: Platform.OS !== 'web',
+      gestureDirection: 'vertical',
+      // Full-card vertical dismiss so dragging the sheet handle works, not only the top edge.
+      gestureResponseDistance: 2000,
+      cardStyle: { backgroundColor: 'transparent' },
+    }
+  }
+
+  if (isRecipientFormRoute(routeName)) {
+    const formMotion =
+      Platform.OS === 'web'
+        ? webPresetForIntent(false, showSidebarShell)
+        : nativePresetForIntent(entry, routeName, gestureEnabled)
+    return {
+      ...base,
+      ...formMotion,
+      detachPreviousScreen: true,
     }
   }
 

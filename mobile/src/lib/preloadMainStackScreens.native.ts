@@ -1,9 +1,12 @@
 /**
- * Warm MainStack screen modules off the navigation critical path (M2.5 lazy registry).
- * Call from Send / transaction row `onPressIn` only — not from Dashboard idle effects.
- * `navigation.preload()` for these screens mounts them off-screen and has crashed iOS
- * release builds right after PIN unlock; module `require()` here avoids that while
- * still trimming first-tap jank.
+ * Warm Send / Recipients / amount / transaction-detail modules off the
+ * navigation critical path.
+ *
+ * Call from Send / Recipients / row `onPressIn` only.
+ * Do not call from App.tsx `navReady` or Dashboard idle effects — that
+ * `require()` during first mount has SIGABRT'd release iOS (builds 216, 220).
+ * `navigation.preload()` for these screens mounts them off-screen and has
+ * also crashed iOS after PIN unlock.
  */
 let didPreload = false
 

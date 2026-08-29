@@ -1,11 +1,11 @@
 import React, { useCallback, useState } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import { CommonActions } from '@react-navigation/native'
 import { NavigationProps } from '../../types'
 import { colors, spacing, textStyles } from '../../theme'
 import { extractWalletAddress } from '../../lib/extract-wallet-address'
 import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
+import { applyScannedWalletAddressToForm } from '../../lib/navigateRecipientForm'
 
 /** Web fallback when camera QR scan is unavailable. */
 export default function ScanWalletAddressScreen({ navigation }: NavigationProps) {
@@ -23,20 +23,7 @@ export default function ScanWalletAddressScreen({ navigation }: NavigationProps)
         showWarning('Paste a valid wallet address or QR payload.')
         return
       }
-      const state = navigation.getState()
-      const routes = state?.routes
-      if (!routes || routes.length < 2) {
-        navigation.goBack()
-        return
-      }
-      const prevRoute = routes[routes.length - 2]
-      navigation.dispatch(
-        CommonActions.setParams({
-          key: prevRoute.key,
-          params: { scannedWalletAddress: address },
-        }),
-      )
-      navigation.goBack()
+      applyScannedWalletAddressToForm(navigation, address)
     },
     [navigation, showWarning],
   )

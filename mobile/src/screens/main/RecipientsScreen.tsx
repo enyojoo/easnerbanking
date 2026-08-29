@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { FlashList } from '@shopify/flash-list'
 import {
   View,
@@ -32,7 +32,6 @@ import { recipientService } from '../../lib/recipientService'
 import { useAuth } from '../../contexts/AuthContext'
 import { useFocusRefresh } from '../../hooks/useFocusRefresh'
 import { useFixedFooterPadding, useScrollPaddingAboveFooter } from '../../hooks/useScrollBottomPadding'
-import { useFocusEffect } from '@react-navigation/native'
 import {
   colors,
   shadows,
@@ -58,17 +57,11 @@ import { ListRowSkeleton } from '../../components/skeletons'
 import EmptyState from '../../components/EmptyState'
 import { isEasenetRecipientRecord, resolveRecipientEasetagForUi } from '../../lib/easenetRecipientUi'
 import { haptics } from '../../lib/haptics'
-import { apiFetch } from '../../query/api-client'
-import { useRecipientFormState } from '../../hooks/useRecipientFormState'
-import { RecipientFormFlow } from '../../components/recipients/RecipientFormFlow'
-import {
-  buildEasenetPersistPayload,
-  buildRecipientPersistPayload,
-} from '../../lib/recipientForm'
-import type { RecipientFormType } from '../../lib/recipientForm'
+import { navigateToAddRecipient, navigateToEditRecipient } from '../../lib/navigateRecipientForm'
+import { preloadRecipientTypeScreen } from '../../lib/preloadRecipientFormScreens'
 
 function RecipientsContent({ navigation, route }: NavigationProps) {
-  const { user, userProfile } = useAuth()
+  const { user } = useAuth()
   const { showSuccess, showError } = useToast()
   const qc = useQueryClient()
   const { scope } = useScope()
@@ -78,26 +71,8 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
   const recipientsLoading = recipientsQuery.isPending && recipients.length === 0
   const listBottomPadding = useScrollPaddingAboveFooter()
   const footerPadding = useFixedFooterPadding(spacing[4])
-  const payrollInvitationId =
-    typeof route.params?.payrollInvitationId === 'string' ? route.params.payrollInvitationId : null
-  const payrollConnectionId =
-    typeof route.params?.payrollConnectionId === 'string' ? route.params.payrollConnectionId : null
-  const payrollMode =
-    route.params?.payrollMode === true && Boolean(payrollInvitationId || payrollConnectionId)
   const handleEditRecipientRef = useRef<(recipient: Recipient) => void>(() => {})
   const openedEditRecipientIdRef = useRef<string | null>(null)
-
-  const scannedWalletAddress = (route.params as { scannedWalletAddress?: string } | undefined)
-    ?.scannedWalletAddress
-
-  const recipientForm = useRecipientFormState({
-    hideEasenet: payrollMode,
-    autoOpenAdd: payrollMode,
-    scannedWalletAddress,
-    onScannedWalletAddressConsumed: () => {
-      navigation.setParams({ scannedWalletAddress: undefined } as never)
-    },
-  })
 
   const [uiRecipients, setUiRecipients] = useState<Recipient[]>([])
   const [searchTerm, setSearchTerm] = useState('')
@@ -109,12 +84,6 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
   const contentAnim = useRef(new Animated.Value(0)).current
 
   useCalmParallelEnterWhen(true, headerAnim, contentAnim)
-
-  useFocusEffect(
-    useCallback(() => {
-      void recipientForm.refreshCatalog()
-    }, [recipientForm.refreshCatalog]),
-  )
 
   useFocusRefresh(
     () => {
@@ -177,128 +146,10 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
       .toUpperCase()
   }
 
-  const attachPayrollReceivingMethod = async (
-    createdRecipient: Recipient,
-    selectedType: RecipientFormType | null,
-  ) => {
-    if (!payrollMode || selectedType === 'easenet') return false
-    const type =
-      selectedType === 'wallet'
-        ? 'stablecoin'
-        : selectedType === 'mobile'
-          ? 'mobile_money'
-          : 'bank'
-    const path = payrollInvitationId
-      ? `/api/payroll/invitations/${payrollInvitationId}/methods`
-      : `/api/payroll/connections/${payrollConnectionId}/methods`
-    await apiFetch(path, {
-      method: 'POST',
-      body: {
-        type,
-        providerRecipientId: createdRecipient.id,
-        ...(payrollConnectionId ? { preferred: true } : {}),
-      },
-    })
-    recipientForm.resetForm()
-    recipientForm.setShowBankAccountForm(false)
-    recipientForm.setShowRecipientTypeModal(false)
-    showSuccess('Receiving method added')
-    navigation.navigate('PayrollApproval', {
-      ...(payrollInvitationId ? { invitationId: payrollInvitationId } : {}),
-      ...(payrollConnectionId ? { connectionId: payrollConnectionId } : {}),
-      methodUpdatedAt: Date.now(),
-    })
-    return true
-  }
-
-  const handleSubmitRecipient = async () => {
-    if (!userProfile?.id) {
-      showError('User not authenticated')
-      return
-    }
-
-    if (!recipientForm.isValid) {
-      showError('Please fill in all required fields')
-      return
-    }
-
-    const {
-      editingRecipient,
-      selectedRecipientType,
-      easenetProfile,
-      newRecipient,
-      selectedCountryCurrency,
-      transferType,
-      validationContext,
-    } = recipientForm
-
-    try {
-      recipientForm.setIsSubmitting(true)
-      recipientForm.setError('')
-
-      const payload =
-        selectedRecipientType === 'easenet'
-          ? (() => {
-              if (!easenetProfile) {
-                showError('Enter a valid Easetag and wait for the profile to load')
-                return null
-              }
-              return buildEasenetPersistPayload(easenetProfile)
-            })()
-          : selectedRecipientType
-            ? buildRecipientPersistPayload({
-                values: newRecipient,
-                selectedRecipientType,
-                selectedCountryCurrency,
-                transferType,
-                validationContext,
-              })
-            : null
-
-      if (!payload) {
-        if (selectedRecipientType === 'easenet' && !easenetProfile) return
-        showError('Please fill in all required fields')
-        return
-      }
-
-      if (editingRecipient) {
-        if (!user?.id) {
-          recipientForm.setError('Not signed in')
-          return
-        }
-        const updatedRecipient = await recipientService.update(editingRecipient.id, user.id, payload)
-        setUiRecipients((prev) =>
-          prev.map((r) => (r.id === updatedRecipient.id ? updatedRecipient : r)),
-        )
-        if (scope && user?.id) await invalidateRecipientsFeed(qc, scope, user.id)
-        recipientForm.setError('')
-        recipientForm.setShowBankAccountForm(false)
-        recipientForm.resetForm()
-        showSuccess('Recipient updated successfully')
-        return
-      }
-
-      const createdRecipient = await recipientService.create(userProfile.id, payload)
-      if (await attachPayrollReceivingMethod(createdRecipient, selectedRecipientType)) return
-      setUiRecipients((prev) => [createdRecipient, ...prev.filter((r) => r.id !== createdRecipient.id)])
-      if (scope && user?.id) await invalidateRecipientsFeed(qc, scope, user.id)
-      recipientForm.setError('')
-      recipientForm.resetForm()
-      recipientForm.setShowBankAccountForm(false)
-      showSuccess('Recipient added successfully')
-    } catch (error) {
-      console.error('Error saving recipient:', error)
-      recipientForm.setError(
-        editingRecipient ? 'Failed to update recipient' : 'Failed to add recipient',
-      )
-      showError(editingRecipient ? 'Failed to update recipient' : 'Failed to add recipient')
-    } finally {
-      recipientForm.setIsSubmitting(false)
-    }
-  }
+  const persistFormParams = { mode: 'persist' as const }
 
   const handleEditRecipient = (recipient: Recipient) => {
-    recipientForm.openEdit(recipient)
+    navigateToEditRecipient(navigation, recipient, persistFormParams)
   }
   handleEditRecipientRef.current = handleEditRecipient
 
@@ -345,11 +196,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
 
   const handleOpenAdd = () => {
     haptics.tap()
-    recipientForm.openAdd()
-  }
-
-  const handlePayrollDismiss = () => {
-    navigation.goBack()
+    navigateToAddRecipient(navigation, persistFormParams)
   }
 
   const renderRecipient = ({ item, index }: { item: Recipient; index: number }) => {
@@ -376,7 +223,6 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                     haptics.tap()
                     handleEditRecipient(item)
                   }}
-                  disabled={recipientForm.isSubmitting}
                 >
                   <Pencil size={18} color={colors.text.primary} strokeWidth={2} />
                 </Pressable>
@@ -408,7 +254,6 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                     haptics.tap()
                     handleEditRecipient(item)
                   }}
-                  disabled={recipientForm.isSubmitting}
                 >
                   <Pencil size={18} color={colors.text.primary} strokeWidth={2} />
                 </Pressable>
@@ -466,7 +311,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
               <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
             </Pressable>
             <View style={styles.headerContent}>
-              <Text style={styles.title}>{payrollMode ? 'Receiving method' : 'Recipients'}</Text>
+              <Text style={styles.title}>Recipients</Text>
             </View>
           </Animated.View>
 
@@ -492,7 +337,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                 style={styles.searchInput}
                 value={searchTerm}
                 onChangeText={setSearchTerm}
-                placeholder={payrollMode ? 'Search receiving methods...' : 'Search recipients...'}
+                placeholder="Search recipients..."
                 placeholderTextColor={colors.text.secondary}
                 returnKeyType="done"
                 onSubmitEditing={() => Keyboard.dismiss()}
@@ -549,24 +394,16 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                 ListEmptyComponent={
                   <EmptyState
                     icon={Users}
-                    title={
-                      searchTerm.trim()
-                        ? 'No matches'
-                        : payrollMode
-                          ? 'No receiving methods found'
-                          : 'No recipients found'
-                    }
+                    title={searchTerm.trim() ? 'No matches' : 'No recipients found'}
                     message={
                       searchTerm.trim()
                         ? 'Try another search'
-                        : payrollMode
-                          ? 'Add a method to receive payroll'
-                          : 'Add a new recipient to get started'
+                        : 'Add a new recipient to get started'
                     }
                     action={
                       !searchTerm.trim()
                         ? {
-                            label: payrollMode ? 'Add receiving method' : 'Add recipient',
+                            label: 'Add recipient',
                             onPress: handleOpenAdd,
                           }
                         : undefined
@@ -581,23 +418,13 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
             <Pressable
               android_ripple={ripple.neutral}
               style={styles.addRecipientButton}
+              onPressIn={preloadRecipientTypeScreen}
               onPress={handleOpenAdd}
             >
-              <Text style={styles.addRecipientButtonText}>
-                {payrollMode ? 'Add receiving method' : 'Add new recipient'}
-              </Text>
+              <Text style={styles.addRecipientButtonText}>Add new recipient</Text>
             </Pressable>
           </View>
         </View>
-
-        <RecipientFormFlow
-          form={recipientForm}
-          footerPadding={footerPadding}
-          editing={Boolean(recipientForm.editingRecipient)}
-          payrollMode={payrollMode}
-          onPayrollDismiss={handlePayrollDismiss}
-          onSubmit={() => void handleSubmitRecipient()}
-        />
 
         <EasnerAlertSheet
           visible={deleteConfirmation !== null}

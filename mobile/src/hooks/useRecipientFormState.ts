@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import {
   resolvePrimaryPayoutProvider,
@@ -19,7 +19,6 @@ import {
   inferWalletAddressFromApi,
   resolveInferredWalletAssetNetwork,
 } from '../lib/walletAddressInference'
-import { haptics } from '../lib/haptics'
 import { useSendDestinations } from './useSendDestinations'
 import {
   buildRecipientYcMetadata,
@@ -37,24 +36,128 @@ import {
 } from '../lib/recipientForm'
 import type { Recipient } from '../types'
 
-export type UseRecipientFormStateOptions = {
-  hideEasenet?: boolean
-  autoOpenAdd?: boolean
-  scannedWalletAddress?: string
-  onScannedWalletAddressConsumed?: () => void
+const US_COUNTRY_CURRENCY: CountryCurrency = {
+  countryCode: 'US',
+  countryName: 'United States',
+  currencyCode: 'USD',
+  currencyName: 'US Dollar',
+  flagEmoji: '',
 }
 
-export function useRecipientFormState(options: UseRecipientFormStateOptions = {}) {
-  const { hideEasenet = false, autoOpenAdd = false, scannedWalletAddress, onScannedWalletAddressConsumed } =
-    options
+type FormSeed = {
+  selectedRecipientType: RecipientFormType
+  selectedCountryCurrency: CountryCurrency | null
+  transferType: string | null
+  easenetProfile: EasenetProfilePreview | null
+  newRecipient: RecipientFormValues
+  editingRecipient: Recipient | null
+}
 
-  const [showRecipientTypeModal, setShowRecipientTypeModal] = useState(false)
-  const [showBankAccountForm, setShowBankAccountForm] = useState(false)
+function seedRecipientFormState(
+  initialType: RecipientFormType,
+  editingRecipient?: Recipient | null,
+): FormSeed {
+  if (editingRecipient) {
+    const hydrated = hydrateRecipientFormValues(editingRecipient)
+    return {
+      selectedRecipientType: hydrated.inferredType,
+      selectedCountryCurrency: hydrated.countryCurrency,
+      transferType: hydrated.transferType,
+      easenetProfile: hydrated.easenetProfile,
+      newRecipient: hydrated.values,
+      editingRecipient,
+    }
+  }
+
+  if (initialType === 'wallet') {
+    const firstAsset = getWalletAssets()[0] || 'USDT'
+    const firstNetwork = getWalletNetworksForAsset(firstAsset)[0] || ''
+    return {
+      selectedRecipientType: 'wallet',
+      selectedCountryCurrency: null,
+      transferType: null,
+      easenetProfile: null,
+      newRecipient: { ...emptyRecipientFormValues(), currency: firstAsset, network: firstNetwork },
+      editingRecipient: null,
+    }
+  }
+
+  if (initialType === 'mobile') {
+    const firstCurrency = 'KES'
+    const firstProvider = getRecipientProviders(firstCurrency, 'mobile_money', 'KE')[0] || ''
+    return {
+      selectedRecipientType: 'mobile',
+      selectedCountryCurrency: {
+        countryCode: 'KE',
+        countryName: 'Kenya',
+        currencyCode: firstCurrency,
+        currencyName: 'Kenyan Shilling',
+        flagEmoji: '',
+      },
+      transferType: null,
+      easenetProfile: null,
+      newRecipient: { ...emptyRecipientFormValues(), currency: firstCurrency, provider: firstProvider },
+      editingRecipient: null,
+    }
+  }
+
+  if (initialType === 'easenet') {
+    return {
+      selectedRecipientType: 'easenet',
+      selectedCountryCurrency: US_COUNTRY_CURRENCY,
+      transferType: null,
+      easenetProfile: null,
+      newRecipient: {
+        ...emptyRecipientFormValues(),
+        currency: 'USD',
+        payeeEasetag: '',
+        fullName: '',
+        bankName: '',
+        accountNumber: '',
+      },
+      editingRecipient: null,
+    }
+  }
+
+  return {
+    selectedRecipientType: 'bank',
+    selectedCountryCurrency: US_COUNTRY_CURRENCY,
+    transferType: null,
+    easenetProfile: null,
+    newRecipient: { ...emptyRecipientFormValues(), currency: 'USD' },
+    editingRecipient: null,
+  }
+}
+
+export type UseRecipientFormStateOptions = {
+  initialType: RecipientFormType
+  editingRecipient?: Recipient | null
+  scannedWalletAddress?: string
+  onScannedWalletAddressConsumed?: () => void
+  onWalletScanPress?: () => void
+}
+
+export function useRecipientFormState(options: UseRecipientFormStateOptions) {
+  const {
+    initialType,
+    editingRecipient: editingRecipientProp = null,
+    scannedWalletAddress,
+    onScannedWalletAddressConsumed,
+    onWalletScanPress,
+  } = options
+
+  const seed = useMemo(
+    () => seedRecipientFormState(initialType, editingRecipientProp),
+    // Seed once for this screen instance; route params are stable for the visit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  )
+
   const [showBankDropdown, setShowBankDropdown] = useState(false)
   const [bankSearchTerm, setBankSearchTerm] = useState('')
   const [showSubdivisionDropdown, setShowSubdivisionDropdown] = useState(false)
   const [subdivisionSearchTerm, setSubdivisionSearchTerm] = useState('')
-  const [selectedRecipientType, setSelectedRecipientType] = useState<RecipientFormType | null>(null)
+  const selectedRecipientType = seed.selectedRecipientType
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false)
   const [showProviderDropdown, setShowProviderDropdown] = useState(false)
   const [showWalletAssetDropdown, setShowWalletAssetDropdown] = useState(false)
@@ -63,19 +166,19 @@ export function useRecipientFormState(options: UseRecipientFormStateOptions = {}
   const [providerSearchTerm, setProviderSearchTerm] = useState('')
   const [walletAssetSearchTerm, setWalletAssetSearchTerm] = useState('')
   const [walletNetworkSearchTerm, setWalletNetworkSearchTerm] = useState('')
-  const [showWalletAddressScanner, setShowWalletAddressScanner] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [selectedCountryCurrency, setSelectedCountryCurrency] = useState<CountryCurrency | null>(null)
-  const [transferType, setTransferType] = useState<string | null>(null)
-  const [easenetProfile, setEasenetProfile] = useState<EasenetProfilePreview | null>(null)
+  const [selectedCountryCurrency, setSelectedCountryCurrency] = useState<CountryCurrency | null>(
+    seed.selectedCountryCurrency,
+  )
+  const [transferType, setTransferType] = useState<string | null>(seed.transferType)
+  const [easenetProfile, setEasenetProfile] = useState<EasenetProfilePreview | null>(seed.easenetProfile)
   const [easenetLookupLoading, setEasenetLookupLoading] = useState(false)
   const [easenetLookupError, setEasenetLookupError] = useState<string | null>(null)
-  const [newRecipient, setNewRecipient] = useState<RecipientFormValues>(emptyRecipientFormValues())
-  const [editingRecipient, setEditingRecipient] = useState<Recipient | null>(null)
+  const [newRecipient, setNewRecipient] = useState<RecipientFormValues>(seed.newRecipient)
+  const editingRecipient = seed.editingRecipient
 
-  const formScrollRef = useRef<React.ComponentRef<typeof KeyboardAwareScrollView>>(null)
-  const autoOpenAddRef = useRef(false)
+  const formScrollRef = useRef<ComponentRef<typeof KeyboardAwareScrollView>>(null)
 
   const {
     bankCorridors,
@@ -110,23 +213,27 @@ export function useRecipientFormState(options: UseRecipientFormStateOptions = {}
 
   const usTransferMethods = useMemo(
     () =>
-      usTransferMethodsForForm({
-        selectedRecipientType,
-        countryCurrency: selectedCountryCurrency,
-        payoutProvider,
-        hasSelectedBankCorridor: Boolean(selectedBankCorridor),
-      }),
+      selectedRecipientType === 'bank'
+        ? usTransferMethodsForForm({
+            selectedRecipientType,
+            countryCurrency: selectedCountryCurrency,
+            payoutProvider,
+            hasSelectedBankCorridor: Boolean(selectedBankCorridor),
+          })
+        : [],
     [selectedRecipientType, selectedCountryCurrency, selectedBankCorridor, payoutProvider],
   )
 
   const eurTransferMethods = useMemo(
     () =>
-      eurTransferMethodsForForm({
-        selectedRecipientType,
-        currency: newRecipient.currency,
-        payoutProvider,
-        hasSelectedBankCorridor: Boolean(selectedBankCorridor),
-      }),
+      selectedRecipientType === 'bank'
+        ? eurTransferMethodsForForm({
+            selectedRecipientType,
+            currency: newRecipient.currency,
+            payoutProvider,
+            hasSelectedBankCorridor: Boolean(selectedBankCorridor),
+          })
+        : [],
     [selectedRecipientType, newRecipient.currency, selectedBankCorridor, payoutProvider],
   )
 
@@ -246,13 +353,7 @@ export function useRecipientFormState(options: UseRecipientFormStateOptions = {}
   }, [scannedWalletAddress, applyWalletAddressInference, onScannedWalletAddressConsumed])
 
   useEffect(() => {
-    if (!autoOpenAdd || autoOpenAddRef.current) return
-    autoOpenAddRef.current = true
-    setShowRecipientTypeModal(true)
-  }, [autoOpenAdd])
-
-  useEffect(() => {
-    if (selectedRecipientType !== 'easenet' || !showBankAccountForm) return
+    if (selectedRecipientType !== 'easenet') return
     const raw = newRecipient.payeeEasetag.trim().replace(/^@+/, '')
     if (raw.length < 4) {
       setEasenetProfile(null)
@@ -288,7 +389,7 @@ export function useRecipientFormState(options: UseRecipientFormStateOptions = {}
       cancelled = true
       clearTimeout(t)
     }
-  }, [selectedRecipientType, showBankAccountForm, newRecipient.payeeEasetag])
+  }, [selectedRecipientType, newRecipient.payeeEasetag])
 
   const recipientTypeKey = recipientTypeKeyForForm(selectedRecipientType)
 
@@ -373,120 +474,12 @@ export function useRecipientFormState(options: UseRecipientFormStateOptions = {}
     setSubdivisionSearchTerm('')
   }, [])
 
-  const resetForm = useCallback(() => {
-    setNewRecipient(emptyRecipientFormValues())
-    setEasenetProfile(null)
-    setEasenetLookupError(null)
-    setEasenetLookupLoading(false)
-    setSelectedRecipientType(null)
-    setEditingRecipient(null)
-    setError('')
-    setSelectedCountryCurrency(null)
-    setTransferType(null)
-    setShowCurrencyDropdown(false)
-    setShowProviderDropdown(false)
-    setShowWalletAssetDropdown(false)
-    setShowWalletNetworkDropdown(false)
-    setShowBankDropdown(false)
-    setBankSearchTerm('')
-    setShowSubdivisionDropdown(false)
-    setSubdivisionSearchTerm('')
-    setProviderSearchTerm('')
-    setWalletAssetSearchTerm('')
-    setWalletNetworkSearchTerm('')
-    setShowWalletAddressScanner(false)
-  }, [])
-
-  const openAdd = useCallback(() => {
-    resetForm()
-    setShowRecipientTypeModal(true)
-  }, [resetForm])
-
-  const openEdit = useCallback((recipient: Recipient) => {
-    resetForm()
-    setEditingRecipient(recipient)
-    const hydrated = hydrateRecipientFormValues(recipient)
-    setSelectedRecipientType(hydrated.inferredType)
-    setSelectedCountryCurrency(hydrated.countryCurrency)
-    setTransferType(hydrated.transferType)
-    setEasenetProfile(hydrated.easenetProfile)
-    setNewRecipient(hydrated.values)
-    setShowBankAccountForm(true)
-  }, [resetForm])
-
-  const setField = useCallback((patch: Partial<RecipientFormValues>) => {
-    setNewRecipient((prev) => ({ ...prev, ...patch }))
-  }, [])
-
-  const selectRecipientType = useCallback(
-    (type: RecipientFormType) => {
-      haptics.tap()
-      if (type === 'wallet') {
-        const firstAsset = getWalletAssets()[0] || 'USDT'
-        const firstNetwork = getWalletNetworksForAsset(firstAsset)[0] || ''
-        setSelectedRecipientType('wallet')
-        setNewRecipient((prev) => ({ ...prev, currency: firstAsset, network: firstNetwork }))
-      } else if (type === 'bank') {
-        setSelectedRecipientType('bank')
-        setSelectedCountryCurrency({
-          countryCode: 'US',
-          countryName: 'United States',
-          currencyCode: 'USD',
-          currencyName: 'US Dollar',
-          flagEmoji: '',
-        })
-        setNewRecipient((prev) => ({ ...prev, currency: 'USD' }))
-      } else if (type === 'mobile') {
-        const firstMobile = recipientCatalogFor('mobile_money')[0]
-        const firstCurrency = firstMobile?.currencyCode || 'KES'
-        const firstProvider =
-          getRecipientProviders(firstCurrency, 'mobile_money', firstMobile?.countryCode)[0] || ''
-        setSelectedRecipientType('mobile')
-        setSelectedCountryCurrency({
-          countryCode: firstMobile?.countryCode || 'KE',
-          countryName: firstMobile?.countryName || 'Kenya',
-          currencyCode: firstCurrency,
-          currencyName: firstMobile?.currencyName || 'Kenyan Shilling',
-          flagEmoji: '',
-        })
-        setNewRecipient((prev) => ({ ...prev, currency: firstCurrency, provider: firstProvider }))
-      } else if (type === 'easenet') {
-        setSelectedRecipientType('easenet')
-        setEasenetProfile(null)
-        setEasenetLookupError(null)
-        setSelectedCountryCurrency({
-          countryCode: 'US',
-          countryName: 'United States',
-          currencyCode: 'USD',
-          currencyName: 'US Dollar',
-          flagEmoji: '',
-        })
-        setNewRecipient((prev) => ({
-          ...prev,
-          currency: 'USD',
-          payeeEasetag: '',
-          fullName: '',
-          bankName: '',
-          accountNumber: '',
-        }))
-      }
-      setShowRecipientTypeModal(false)
-      setShowBankAccountForm(true)
-    },
-    [recipientCatalogFor],
-  )
-
   const handleWalletScanPress = useCallback(() => {
     closeAllDropdowns()
-    setShowWalletAddressScanner(true)
-  }, [closeAllDropdowns])
+    onWalletScanPress?.()
+  }, [closeAllDropdowns, onWalletScanPress])
 
   return {
-    hideEasenet,
-    showRecipientTypeModal,
-    setShowRecipientTypeModal,
-    showBankAccountForm,
-    setShowBankAccountForm,
     showBankDropdown,
     setShowBankDropdown,
     bankSearchTerm,
@@ -496,7 +489,6 @@ export function useRecipientFormState(options: UseRecipientFormStateOptions = {}
     subdivisionSearchTerm,
     setSubdivisionSearchTerm,
     selectedRecipientType,
-    setSelectedRecipientType,
     showCurrencyDropdown,
     setShowCurrencyDropdown,
     showProviderDropdown,
@@ -513,8 +505,6 @@ export function useRecipientFormState(options: UseRecipientFormStateOptions = {}
     setWalletAssetSearchTerm,
     walletNetworkSearchTerm,
     setWalletNetworkSearchTerm,
-    showWalletAddressScanner,
-    setShowWalletAddressScanner,
     isSubmitting,
     setIsSubmitting,
     error,
@@ -551,11 +541,6 @@ export function useRecipientFormState(options: UseRecipientFormStateOptions = {}
     selectedCatalogEntry,
     isAnyDropdownOpen,
     closeAllDropdowns,
-    resetForm,
-    openAdd,
-    openEdit,
-    setField,
-    selectRecipientType,
     handleWalletScanPress,
     refreshCatalog,
   }

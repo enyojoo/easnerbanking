@@ -1,7 +1,5 @@
 // First import on purpose: captures the JS-start timestamp for the
 // `mobile_cold_start` metric (see src/lib/coldStartMetrics.ts).
-// First import on purpose: captures the JS-start timestamp for the
-// `mobile_cold_start` metric (see src/lib/coldStartMetrics.ts).
 import './src/lib/coldStartMetrics';
 import './src/lib/backgroundTasks';
 // PostHog init: PostHogProvider → getPostHog() (native) / posthog.web.ts (web).

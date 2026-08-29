@@ -42,6 +42,21 @@ export const ReceiveLocalMomoSetupScreen = webLazy(() => import('../screens/rece
 export const ReceiveTransactionDetailsScreen = webLazy(() => import('../screens/receive/ReceiveTransactionDetailsScreen'))
 export const AccountVerificationScreen = webLazy(() => import('../screens/verification/AccountVerificationScreen'))
 export const RecipientsScreen = webLazy(() => import('../screens/main/RecipientsScreen'))
+export const AddRecipientTypeScreen = webLazy(
+  () => import('../screens/recipients/AddRecipientTypeScreen'),
+)
+export const AddBankRecipientScreen = webLazy(
+  () => import('../screens/recipients/AddBankRecipientScreen'),
+)
+export const AddMobileRecipientScreen = webLazy(
+  () => import('../screens/recipients/AddMobileRecipientScreen'),
+)
+export const AddWalletRecipientScreen = webLazy(
+  () => import('../screens/recipients/AddWalletRecipientScreen'),
+)
+export const AddEasenetRecipientScreen = webLazy(
+  () => import('../screens/recipients/AddEasenetRecipientScreen'),
+)
 
 const styles = StyleSheet.create({
   fallback: {

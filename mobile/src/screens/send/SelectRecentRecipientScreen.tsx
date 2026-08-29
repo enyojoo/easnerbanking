@@ -28,7 +28,6 @@ import {
   filterRecipientsBySearch,
 } from '../../lib/recentSendRecipients'
 import { buildDraftEasenetRecipient, isDraftEasenetRecipient } from '../../lib/draftEasenetRecipient'
-import { buildDraftRecipient } from '../../lib/draftRecipient'
 import type { RecipientData } from '../../lib/recipientService'
 import { NavigationProps, Recipient } from '../../types'
 import {
@@ -54,14 +53,11 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useRecipientsList, useTransactionsList, mapLedgerRowToTransaction, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
 import { prefetchSendRatesForRecipient } from '../../lib/warmSendRateCaches'
 import { useFocusRefresh } from '../../hooks/useFocusRefresh'
-import { useFocusEffect } from '@react-navigation/native'
 import { haptics } from '../../lib/haptics'
 import { analytics } from '../../lib/analytics'
 import { exitSendFlowFromHub } from '../../navigation/stackBackNavigation'
-import { useToast } from '../../components/ToastProvider'
-import { useRecipientFormState } from '../../hooks/useRecipientFormState'
-import { RecipientFormFlow } from '../../components/recipients/RecipientFormFlow'
-import { buildEasenetPersistPayload, buildRecipientPersistPayload } from '../../lib/recipientForm'
+import { navigateToAddRecipient } from '../../lib/navigateRecipientForm'
+import { preloadRecipientTypeScreen } from '../../lib/preloadRecipientFormScreens'
 
 const getInitials = (name: string): string => {
   const parts = name.trim().split(' ')
@@ -75,7 +71,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const listBottomPadding = useScrollPaddingAboveFooter()
   const footerPadding = useFixedFooterPadding(spacing[4])
   const { user, userProfile } = useAuth()
-  const { showError } = useToast()
   const preferredBalanceCurrency = String((route.params as any)?.preferredBalanceCurrency || '').toUpperCase()
   const routePaymentMethod = (route.params as any)?.selectedPaymentMethod as
     | 'balance'
@@ -98,19 +93,6 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   }, [txHubQuery.data, user?.id])
   const [searchTerm, setSearchTerm] = useState('')
   const [lastSentAtByRecipient, setLastSentAtByRecipient] = useState<Record<string, number>>({})
-
-  const scannedWalletAddress = (route.params as { scannedWalletAddress?: string } | undefined)
-    ?.scannedWalletAddress
-  const recipientForm = useRecipientFormState({
-    scannedWalletAddress,
-    onScannedWalletAddressConsumed: () => navigation.setParams({ scannedWalletAddress: undefined } as never),
-  })
-
-  useFocusEffect(
-    useCallback(() => {
-      void recipientForm.refreshCatalog()
-    }, [recipientForm.refreshCatalog]),
-  )
 
   const headerAnim = useRef(new Animated.Value(0)).current
   const contentAnim = useRef(new Animated.Value(0)).current
@@ -269,78 +251,16 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
 
   const handleAddNewRecipient = () => {
     haptics.tap()
-    recipientForm.openAdd()
-  }
-
-  const handleAddRecipient = async () => {
-    if (!userProfile?.id) {
-      showError('User not authenticated')
-      return
-    }
-
-    if (!recipientForm.isValid) {
-      showError('Please fill in all required fields')
-      return
-    }
-
-    const {
-      selectedRecipientType,
-      easenetProfile,
-      newRecipient,
-      transferType,
-      selectedCountryCurrency,
-      validationContext,
-    } = recipientForm
-
-    try {
-      recipientForm.setIsSubmitting(true)
-      recipientForm.setError('')
-
-      if (selectedRecipientType === 'easenet') {
-        if (!easenetProfile) {
-          showError('Enter a valid Easetag and wait for the profile to load')
-          return
-        }
-        const persistPayload = buildEasenetPersistPayload(easenetProfile)
-        const draftRecipient = buildDraftRecipient(userProfile.id, persistPayload, 'easenet')
-        recipientForm.resetForm()
-        recipientForm.setShowBankAccountForm(false)
-        recipientForm.setShowRecipientTypeModal(false)
-        navigateToSendAmount(draftRecipient, persistPayload)
-        return
-      }
-
-      if (!selectedRecipientType) {
-        showError('Please select a recipient type')
-        return
-      }
-
-      const persistPayload = buildRecipientPersistPayload({
-        values: newRecipient,
-        selectedRecipientType,
-        selectedCountryCurrency,
-        transferType,
-        validationContext,
-      })
-      const draftKind =
-        selectedRecipientType === 'wallet'
-          ? 'wallet'
-          : selectedRecipientType === 'mobile'
-            ? 'mobile'
-            : 'bank'
-      const draftRecipient = buildDraftRecipient(userProfile.id, persistPayload, draftKind)
-
-      recipientForm.resetForm()
-      recipientForm.setShowBankAccountForm(false)
-      recipientForm.setShowRecipientTypeModal(false)
-      navigateToSendAmount(draftRecipient, persistPayload)
-    } catch (error) {
-      console.error('Error adding recipient:', error)
-      recipientForm.setError('Failed to add recipient')
-      showError('Failed to add recipient')
-    } finally {
-      recipientForm.setIsSubmitting(false)
-    }
+    navigateToAddRecipient(navigation, {
+      mode: 'draft',
+      preferredBalanceCurrency:
+        preferredBalanceCurrency === 'USD' || preferredBalanceCurrency === 'EUR'
+          ? preferredBalanceCurrency
+          : undefined,
+      selectedPaymentMethod: routePaymentMethod,
+      selectedOtherCurrency: routeOtherCurrency ?? null,
+      selectedOtherPaymentMethod: routeOtherPaymentMethod ?? null,
+    })
   }
 
   const renderRecipient = ({ item, index }: { item: Recipient; index: number }) => {
@@ -508,14 +428,13 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           <Pressable
             android_ripple={ripple.neutral}
             style={styles.addRecipientButton}
+            onPressIn={preloadRecipientTypeScreen}
             onPress={handleAddNewRecipient}
           >
             <Text style={styles.addRecipientButtonText}>Add a recipient</Text>
           </Pressable>
         </View>
       </View>
-
-      <RecipientFormFlow form={recipientForm} footerPadding={footerPadding} onSubmit={handleAddRecipient} />
     </>
   )
 

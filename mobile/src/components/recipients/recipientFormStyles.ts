@@ -8,6 +8,7 @@ import {
   fontFamily,
   shadows,
   spacing,
+  surfaceChromeCircleStyle,
   surfaceFrameStyle,
   textStyles,
 } from '../../theme'
@@ -39,6 +40,13 @@ export const recipientFormStyles = StyleSheet.create({
     backgroundColor: colors.background.secondary,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  flowBackButton: {
+    ...surfaceChromeCircleStyle(colors, 40),
+    marginRight: spacing[3],
+  },
+  flowHeaderTitle: {
+    flex: 1,
   },
   modalScrollView: {
     flex: 1,
@@ -281,4 +289,12 @@ export function recipientFormModalTitle(type: string | null, showScanner: boolea
   if (type === 'mobile') return 'Add Mobile Money'
   if (type === 'easenet') return 'Add Easetag recipient'
   return 'Add Bank Account'
+}
+
+export function recipientFormScreenTitle(type: string | null, editing: boolean): string {
+  if (!editing) return recipientFormModalTitle(type, false)
+  if (type === 'wallet') return 'Edit Wallet Address'
+  if (type === 'mobile') return 'Edit Mobile Money'
+  if (type === 'easenet') return 'Edit Easetag recipient'
+  return 'Edit Bank Account'
 }

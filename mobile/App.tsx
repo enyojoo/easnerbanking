@@ -65,7 +65,6 @@ import { hydrateWarmImageUrls } from './src/lib/imageCache'
 import { prefetchIntercomModule } from './src/lib/intercom'
 import { USE_NATIVE_DRIVER } from './src/lib/animation'
 import { ExpressStripeProvider } from './src/components/ExpressStripeProvider'
-import { preloadMainStackScreens } from './src/lib/preloadMainStackScreens'
 
 // Keep the splash screen visible while we load fonts
 SplashScreen.preventAutoHideAsync()
@@ -168,16 +167,6 @@ function AppContent() {
       cancelled = true
     }
   }, [authLoading, navReady, splashFinished])
-
-  // Warm Send/Recipients modules after splash (require-only — no navigation.preload).
-  useEffect(() => {
-    if (Platform.OS === 'web') return
-    if (!navReady || authLoading) return
-    const task = InteractionManager.runAfterInteractions(() => {
-      preloadMainStackScreens()
-    })
-    return () => task.cancel()
-  }, [navReady, authLoading])
 
   // Cold-open from notification: stash intent + flush when main stack is ready (PIN may still be showing).
   useEffect(() => {

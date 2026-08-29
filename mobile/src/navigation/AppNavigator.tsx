@@ -55,6 +55,11 @@ import {
   ReceiveStablecoinDetailsScreen,
   ReceiveTransactionDetailsScreen,
   RecipientsScreen,
+  AddRecipientTypeScreen,
+  AddBankRecipientScreen,
+  AddMobileRecipientScreen,
+  AddWalletRecipientScreen,
+  AddEasenetRecipientScreen,
   ScanWalletAddressScreen,
   SelectRecentRecipientScreen,
   SelectRecipientScreen,
@@ -419,6 +424,31 @@ function MainStack() {
           options={transitionOptions('TransactionDetails')}
         />
         <Stack.Screen name="Recipients" component={RecipientsScreen} options={transitionOptions('Recipients')} />
+        <Stack.Screen
+          name="AddRecipientType"
+          component={AddRecipientTypeScreen}
+          options={transitionOptions('AddRecipientType')}
+        />
+        <Stack.Screen
+          name="AddBankRecipient"
+          component={AddBankRecipientScreen}
+          options={transitionOptions('AddBankRecipient')}
+        />
+        <Stack.Screen
+          name="AddMobileRecipient"
+          component={AddMobileRecipientScreen}
+          options={transitionOptions('AddMobileRecipient')}
+        />
+        <Stack.Screen
+          name="AddWalletRecipient"
+          component={AddWalletRecipientScreen}
+          options={transitionOptions('AddWalletRecipient')}
+        />
+        <Stack.Screen
+          name="AddEasenetRecipient"
+          component={AddEasenetRecipientScreen}
+          options={transitionOptions('AddEasenetRecipient')}
+        />
         <Stack.Screen name="Card" component={CardScreen} options={transitionOptions('Card')} />
         <Stack.Screen
           name="TransactionCard"

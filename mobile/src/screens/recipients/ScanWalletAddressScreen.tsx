@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect } from 'react'
 import { ActivityIndicator, StatusBar, StyleSheet, View } from 'react-native'
 import { useCameraPermissions } from 'expo-camera'
-import { CommonActions } from '@react-navigation/native'
 import { WalletAddressQrScannerContent } from '../../components/recipients/WalletAddressQrScanner'
 import { NavigationProps } from '../../types'
 import { colors } from '../../theme'
 import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
+import { applyScannedWalletAddressToForm } from '../../lib/navigateRecipientForm'
 
 /**
  * Full-screen stack route for QR scan. Camera preview must live on this screen
@@ -40,20 +40,7 @@ export default function ScanWalletAddressScreen({ navigation }: NavigationProps)
   const handleScan = useCallback(
     (address: string) => {
       haptics.success()
-      const state = navigation.getState()
-      const routes = state?.routes
-      if (!routes || routes.length < 2) {
-        navigation.goBack()
-        return
-      }
-      const prevRoute = routes[routes.length - 2]
-      navigation.dispatch(
-        CommonActions.setParams({
-          key: prevRoute.key,
-          params: { scannedWalletAddress: address },
-        }),
-      )
-      navigation.goBack()
+      applyScannedWalletAddressToForm(navigation, address)
     },
     [navigation],
   )
