@@ -430,6 +430,7 @@ export {
   RECIPIENT_HOLDER_ADDRESS_REQUIRED_BACK_CTA,
   recipientFormNeedsPhone,
   recipientFormNeedsBankCode,
+  recipientFormRequiresSwiftBic,
   formatPayoutArrivalHint,
   isWithinMinutesBankPayoutCorridor,
   resolveSendConfirmArrivalHint,

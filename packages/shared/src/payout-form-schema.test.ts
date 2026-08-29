@@ -12,6 +12,7 @@ import {
   deriveSendBudgetFromReceiveAmount,
   validateSendAmountFields,
   recipientFormNeedsBankCode,
+  recipientFormRequiresSwiftBic,
   recipientFormNeedsAddress,
   recipientFormShowsAddress,
   recipientNeedsHolderAddressBeforeSend,
@@ -315,6 +316,13 @@ describe("recipientFormNeedsBankCode", () => {
     expect(recipientFormNeedsBankCode({ amount_field_mode: "note_optional_only", needs_bank_code: true })).toBe(true)
     expect(recipientFormNeedsBankCode({ amount_field_mode: "note_optional_only" })).toBe(false)
     expect(recipientFormNeedsBankCode(null)).toBe(false)
+  })
+
+  it("does not require SWIFT for USD or EUR even when Noah BankCode is present", () => {
+    const hints = { amount_field_mode: "note_optional_only" as const, needs_bank_code: true }
+    expect(recipientFormRequiresSwiftBic({ currencyCode: "USD", hints })).toBe(false)
+    expect(recipientFormRequiresSwiftBic({ currencyCode: "EUR", hints })).toBe(false)
+    expect(recipientFormRequiresSwiftBic({ currencyCode: "IDR", hints })).toBe(true)
   })
 })
 

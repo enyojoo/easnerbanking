@@ -1,12 +1,12 @@
 import {
   isBankNameAllowedForCorridor,
   isMomoProviderAllowedForCorridor,
-  recipientFormNeedsBankCode,
   recipientFormNeedsEmail,
   recipientFormNeedsPhone,
   recipientFormShowsAddress,
   validateGridRecipientForCorridor,
   validateYcRecipientForCorridor,
+  recipientFormRequiresSwiftBic,
   type PayoutProviderId,
 } from '@easner/shared'
 import { validateRecipientHolderAddress } from '@easner/shared/postal-address-form'
@@ -124,7 +124,7 @@ export function isRecipientFormValid(ctx: RecipientFormValidationContext): boole
       : null
   if (recipientFormNeedsEmail(schemaHints) && !values.email.trim()) return false
   if (recipientFormNeedsPhone(schemaHints) && !values.phoneNumber.trim()) return false
-  if (values.currency !== 'EUR' && recipientFormNeedsBankCode(schemaHints)) {
+  if (recipientFormRequiresSwiftBic({ currencyCode: values.currency, hints: schemaHints })) {
     const swift = values.swiftBic.trim()
     if (!swift || !/^[A-Z0-9]{8}([A-Z0-9]{3})?$/i.test(swift)) return false
   }

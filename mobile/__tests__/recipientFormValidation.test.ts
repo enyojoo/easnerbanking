@@ -1,7 +1,7 @@
 import { describe, expect, it, jest } from '@jest/globals'
 
 jest.mock('../src/lib/recipientCatalog', () => ({
-  getPayoutFieldsSchemaForCorridor: () => null,
+  getPayoutFieldsSchemaForCorridor: jest.fn(() => null),
   getCorridorRecipientOptions: () => ({
     bankOptions: [],
     momoOptions: [],
@@ -9,6 +9,8 @@ jest.mock('../src/lib/recipientCatalog', () => ({
     extraFields: [],
   }),
 }))
+
+import { getPayoutFieldsSchemaForCorridor } from '../src/lib/recipientCatalog'
 
 import { buildRecipientYcMetadata } from '../src/lib/recipientForm/buildRecipientYcMetadata'
 import { isRecipientFormValid } from '../src/lib/recipientForm/isRecipientFormValid'
@@ -79,6 +81,32 @@ describe('recipientFormValidation', () => {
         transferType: 'ACH',
       }),
     ).toBe(true)
+  })
+
+  it('does not require SWIFT on US ACH when Noah BankCode is present', () => {
+    const mocked = getPayoutFieldsSchemaForCorridor as jest.MockedFunction<
+      typeof getPayoutFieldsSchemaForCorridor
+    >
+    mocked.mockReturnValue({ needs_bank_code: true } as never)
+    const values = {
+      ...emptyRecipientFormValues(),
+      fullName: 'Jane Doe',
+      bankName: 'Chase',
+      routingNumber: '021000021',
+      accountNumber: '123456789',
+      addressLine1: '1 Main St',
+      city: 'New York',
+      state: 'NY',
+      postalCode: '10001',
+    }
+    expect(
+      isRecipientFormValid({
+        ...baseValidationCtx,
+        values,
+        transferType: 'ACH',
+      }),
+    ).toBe(true)
+    mocked.mockReturnValue(null)
   })
 
   it('validates wallet requires network and address', () => {

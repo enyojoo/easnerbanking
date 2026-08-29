@@ -246,6 +246,20 @@ export function recipientFormNeedsBankCode(hints: PayoutFieldsSchemaHint | null 
   return Boolean(hints?.needs_bank_code)
 }
 
+/**
+ * Noah US ACH puts the routing number in `BankCode`, so `needs_bank_code` is
+ * true even though the form never collects SWIFT. EUR uses IBAN. Only generic
+ * corridors (ID, …) should require a SWIFT/BIC field.
+ */
+export function recipientFormRequiresSwiftBic(input: {
+  currencyCode: string
+  hints: PayoutFieldsSchemaHint | null | undefined
+}): boolean {
+  const cur = input.currencyCode.trim().toUpperCase()
+  if (cur === "EUR" || cur === "USD") return false
+  return recipientFormNeedsBankCode(input.hints)
+}
+
 /** Persist ISO2 country on recipient rows (picker value or currency default). */
 export function countryCodeForRecipientSave(input: {
   countryCode?: string | null

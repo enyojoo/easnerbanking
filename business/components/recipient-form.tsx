@@ -9,7 +9,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Loader2, User, Phone, CreditCard, MapPin, ChevronDown } from "lucide-react"
 import {
   recipientFormShowsAddress,
-  recipientFormNeedsBankCode,
+  recipientFormRequiresSwiftBic,
   recipientFormNeedsEmail,
   normalizeRecipientYcMetadata,
   isBankNameAllowedForCorridor,
@@ -677,7 +677,10 @@ export function RecipientForm({
       newErrors.routingNumber = "Routing number is required for CAD (CPA format)"
     }
 
-    if (formData.recipientType === "bank" && currency !== "EUR" && recipientFormNeedsBankCode(payoutFormHints)) {
+    if (
+      formData.recipientType === "bank" &&
+      recipientFormRequiresSwiftBic({ currencyCode: currency, hints: payoutFormHints })
+    ) {
       const swift = formData.bic?.trim() || ""
       if (!swift) {
         newErrors.bic = "SWIFT/BIC is required for this corridor"
@@ -1638,7 +1641,7 @@ export function RecipientForm({
                   />
                 )
               })()}
-              {currency !== "EUR" && recipientFormNeedsBankCode(payoutFormHints) ? (
+              {recipientFormRequiresSwiftBic({ currencyCode: currency, hints: payoutFormHints }) ? (
                 <div className="space-y-2">
                   <label className="text-xs text-muted-foreground">SWIFT/BIC</label>
                   <Input

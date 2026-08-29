@@ -1,7 +1,7 @@
 import React from 'react'
 import { View, Text, TextInput, Keyboard } from 'react-native'
 import {
-  recipientFormNeedsBankCode,
+  recipientFormRequiresSwiftBic,
   ycAccountNumberLabel,
 } from '@easner/shared'
 import { getAccountTypeConfigFromCurrency } from '../../lib/currencyAccountTypes'
@@ -345,13 +345,14 @@ export function BankRecipientFields({ form }: { form: FormSlice }) {
           })()}
           {form.selectedCountryCurrency &&
           form.selectedRecipientType === 'bank' &&
-          recipientFormNeedsBankCode(
-            getPayoutFieldsSchemaForCorridor({
+          recipientFormRequiresSwiftBic({
+            currencyCode: form.newRecipient.currency,
+            hints: getPayoutFieldsSchemaForCorridor({
               countryCode: form.selectedCountryCurrency.countryCode,
               currencyCode: form.selectedCountryCurrency.currencyCode,
               rail: 'bank_transfer',
             }),
-          ) ? (
+          }) ? (
             <TextInput
               style={styles.modalInput}
               value={form.newRecipient.swiftBic}

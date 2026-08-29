@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { Suspense, useEffect, useRef, useState } from 'react'
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native'
 import Constants from 'expo-constants'
 import { StatusBar } from 'expo-status-bar'
-import { View, Text, StyleSheet, Animated, Platform, InteractionManager } from 'react-native'
+import { View, Text, StyleSheet, Platform, InteractionManager } from 'react-native'
 import * as BackgroundTask from 'expo-background-task'
 import * as TaskManager from 'expo-task-manager'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -10,7 +10,6 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
 import { PressablesConfig } from 'pressto'
 import { useFonts } from 'expo-font'
-import * as SplashScreen from 'expo-splash-screen'
 import * as SystemUI from 'expo-system-ui'
 import { AuthProvider, useAuth } from './src/contexts/AuthContext'
 import { NotificationsProvider } from './src/contexts/NotificationsContext'
@@ -37,7 +36,7 @@ import {
 } from './src/query/refresh-money-feeds'
 import { warmTransactionDetailForNavigation } from './src/hooks/queries/use-transactions'
 import { getMobileQueryClient } from './src/query/client'
-import AppNavigator from './src/navigation/AppNavigator'
+const AppNavigator = React.lazy(() => import('./src/navigation/AppNavigator'))
 import { webLinking } from './src/navigation/linking'
 import { setPreserveUserPathOverAuth } from './src/navigation/webLinkingGuard'
 import { formatWebDocumentTitle, setWebDocumentTitle } from './src/navigation/webDocumentTitle'
@@ -63,11 +62,8 @@ import { supabaseConfigError } from './src/lib/supabase'
 import { warmBundledFlagCache } from './src/lib/warmBundledFlagCache'
 import { hydrateWarmImageUrls } from './src/lib/imageCache'
 import { prefetchIntercomModule } from './src/lib/intercom'
-import { USE_NATIVE_DRIVER } from './src/lib/animation'
 import { ExpressStripeProvider } from './src/components/ExpressStripeProvider'
-
-// Keep the splash screen visible while we load fonts
-SplashScreen.preventAutoHideAsync()
+import { hideNativeSplash, NATIVE_SPLASH_BACKGROUND } from './src/lib/splashGate'
 
 // Inner app component that has access to AuthContext
 function AppContent() {
@@ -93,23 +89,9 @@ function AppContent() {
     })
   }
 
-  const [splashFinished, setSplashFinished] = useState(Platform.OS === 'web')
   const [navReady, setNavReady] = useState(false)
   /** Leaf route name – used so status bar stays light on dark chrome (e.g. onboarding) after splash hides. */
   const [activeRouteName, setActiveRouteName] = useState('')
-  const appFadeAnim = useRef(new Animated.Value(0)).current
-
-  useEffect(() => {
-    if (Platform.OS === 'web') return
-    const timeout = setTimeout(() => {
-      console.warn('[App] Splash failsafe: revealing UI')
-      void SplashScreen.hideAsync().catch((e) => {
-        console.warn('SplashScreen.hideAsync', e)
-      })
-      setSplashFinished(true)
-    }, 8_000)
-    return () => clearTimeout(timeout)
-  }, [])
 
   // Expose navigation ref globally for logout navigation
   useEffect(() => {
@@ -138,9 +120,7 @@ function AppContent() {
       root.style.minHeight = '100%'
       root.style.backgroundColor = canvas
     }
-    void SplashScreen.hideAsync().catch((e) => {
-      console.warn('SplashScreen.hideAsync', e)
-    })
+    hideNativeSplash()
     const onPageShow = (event: PageTransitionEvent) => {
       if (event.persisted) markWebBfcacheRestore()
     }
@@ -153,47 +133,11 @@ function AppContent() {
     setPreserveUserPathOverAuth(authLoading && !authUser)
   }, [authLoading, authUser])
 
-  // Native splash stays up until React Navigation has mounted. Do not wait for
-  // Supabase session restore — if getSession / INITIAL_SESSION stall, gating on
-  // `authLoading` leaves the tree at opacity 0 (looks like a frozen splash).
-  // AppNavigator already shows AuthFlowLoadingShell while auth is restoring.
-  useEffect(() => {
-    if (Platform.OS === 'web') return
-    if (splashFinished) return
-    if (!navReady) return
-    let cancelled = false
-    void (async () => {
-      if (cancelled) return
-      try {
-        await SplashScreen.hideAsync()
-      } catch (e) {
-        console.warn('SplashScreen.hideAsync', e)
-      }
-      if (!cancelled) {
-        setSplashFinished(true)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [navReady, splashFinished])
-
   // Cold-open from notification: stash intent + flush when main stack is ready (PIN may still be showing).
   useEffect(() => {
     if (!navReady || Platform.OS === 'web') return
     void bootstrapPushNotificationDeepLink()
   }, [navReady])
-
-  // Fade in app content when splash finishes
-  useEffect(() => {
-    if (splashFinished) {
-      Animated.timing(appFadeAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: USE_NATIVE_DRIVER,
-      }).start()
-    }
-  }, [splashFinished, appFadeAnim])
 
   const nav = (
     <NavigationContainer
@@ -258,24 +202,23 @@ function AppContent() {
         // Native splash (#007ACC): light icons. Main chrome is light: dark icons.
         // Onboarding keeps light icons on dark background after splash is dismissed.
         style={
-          !splashFinished || activeRouteName === 'Onboarding' ? 'light' : 'dark'
+          !activeRouteName || activeRouteName === 'Onboarding' ? 'light' : 'dark'
         }
         backgroundColor={Platform.OS === 'android' ? palette.background.primary : undefined}
       />
       <WebIdleSessionBridge />
-      <AppNavigator />
+      <Suspense
+        fallback={
+          <View style={[styles.appRoot, { backgroundColor: NATIVE_SPLASH_BACKGROUND }]} />
+        }
+      >
+        <AppNavigator />
+      </Suspense>
     </NavigationContainer>
   )
 
   return (
-    <Animated.View
-      style={[
-        styles.appRoot,
-        {
-          opacity: Platform.OS === 'web' ? 1 : splashFinished ? appFadeAnim : 0,
-        },
-      ]}
-    >
+    <View style={styles.appRoot}>
       {isIosOnMac() ? (
         <View style={[styles.macFrameOuter, { backgroundColor: palette.background.primary }]}>
           <View
@@ -295,7 +238,7 @@ function AppContent() {
       ) : (
         nav
       )}
-    </Animated.View>
+    </View>
   )
 }
 
@@ -357,9 +300,7 @@ export default function App() {
 
   useEffect(() => {
     if (!fontsLoaded || !supabaseConfigError) return
-    void SplashScreen.hideAsync().catch((e) => {
-      console.warn('SplashScreen.hideAsync', e)
-    })
+    hideNativeSplash()
   }, [fontsLoaded, supabaseConfigError])
 
   // Foreground/tap listeners only; token registration is gated on user prefs in PushNotificationBootstrap
@@ -464,14 +405,12 @@ export default function App() {
     const timeout = setTimeout(() => {
       console.warn('[App] Font load timed out; continuing startup')
       setFontLoadTimedOut(true)
-    }, 8_000)
+    }, 2_000)
     return () => clearTimeout(timeout)
   }, [fontsLoaded])
 
-  // Block first paint until fonts load on native; web paints with system fallback.
-  if (!fontsLoaded && !fontLoadTimedOut && Platform.OS !== 'web') {
-    return null
-  }
+  // Do not return null: native splash is already held, and AppContent
+  // (hide + failsafe) never mounts while this tree is empty.
 
   if (supabaseConfigError) {
     return (

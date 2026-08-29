@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react'
 import { View, Platform, AppState, AppStateStatus, StyleSheet, ActivityIndicator } from 'react-native'
 import { createStackNavigator } from '@react-navigation/stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
@@ -38,6 +38,7 @@ import { useResponsiveLayout } from '../contexts/ResponsiveLayoutContext'
 import { ResponsiveAppShell } from '../components/layout/ResponsiveAppShell'
 import { MobileAppLockShell } from '../components/MobileAppLockShell'
 import { enterMainAppOnWeb } from './webMainEntry'
+import { hideNativeSplash, NATIVE_SPLASH_BACKGROUND } from '../lib/splashGate'
 import { webStackScreenListeners } from './webStackScreenListeners'
 import { staticScreenTransitionOptions, useMainStackTransitionOptionsFactory } from './useScreenTransitionOptions'
 import { OnboardingStack } from './onboardingStack'
@@ -542,8 +543,21 @@ function PinGateEntryStack() {
   )
 }
 
-/** Same canvas as PIN screens – avoids blank frames during auth / PIN / main handoffs. */
+/** Matches native splash while we decide onboarding vs auth vs PIN. No spinner. */
+function NativeBootHold() {
+  return (
+    <View
+      style={[StyleSheet.absoluteFill, { backgroundColor: NATIVE_SPLASH_BACKGROUND }]}
+      accessibilityLabel="Opening app"
+    />
+  )
+}
+
+/** Web-only: themed canvas during session restore. Native uses NativeBootHold (splash). */
 function AuthFlowLoadingShell({ palette, testId }: { palette: ReturnType<typeof useThemeColors>; testId?: string }) {
+  if (Platform.OS !== 'web') {
+    return <NativeBootHold />
+  }
   return (
     <View
       style={[
@@ -877,14 +891,29 @@ export default function AppNavigator() {
   //   }
   // }, [pinSetup])
 
-  // Onboarding key read – match app background so the chain onboarding → auth → PIN → main never flashes empty.
+  const skipOnboarding = Platform.OS === 'web'
+  const waitingOnboarding = onboardingCompleted === null || checkingAuth
+  const showingOnboarding = !skipOnboarding && onboardingCompleted === false
+  const waitingSession = !showingOnboarding && loading && !user
+  const waitingMfa = Boolean(user && !mfaGateResolved && !mfaPending)
+  const waitingPinGate = Boolean(user && mfaGateResolved && !mfaPending && pinGate === 'loading')
+  const bootHold =
+    Platform.OS !== 'web' &&
+    (waitingOnboarding || waitingSession || waitingMfa || waitingPinGate)
+
+  useLayoutEffect(() => {
+    if (Platform.OS === 'web') return
+    if (bootHold) return
+    hideNativeSplash()
+  }, [bootHold])
+
+  // Onboarding key read – native splash stays up (no spinner).
   if (onboardingCompleted === null || checkingAuth) {
     return <AuthFlowLoadingShell palette={palette} testId="Bootstrapping app" />
   }
 
   // If onboarding not completed, show onboarding screen FIRST (before checking user)
   // This ensures new users see onboarding even if they're not logged in
-  const skipOnboarding = Platform.OS === 'web'
   if (!skipOnboarding && !onboardingCompleted) {
     return <OnboardingStack key="onboarding-stack" />
   }
