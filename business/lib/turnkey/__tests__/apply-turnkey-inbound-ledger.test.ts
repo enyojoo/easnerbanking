@@ -34,6 +34,10 @@ vi.mock("@/lib/noah/credit-bank-onramp-wallet", () => ({
 vi.mock("@/lib/ledger/easetag-settlement", () => ({
   findEasetagSettlementForChainSuppression: mocks.findEasetag,
   updateEasetagSettlementSettled: mocks.updateEasetag,
+  patchEasetagP2pChainSettlement: vi.fn().mockResolvedValue(undefined),
+}))
+vi.mock("@/lib/ledger/easetag-turnkey-mirror", () => ({
+  suppressTurnkeyEasetagChainMirrorRow: vi.fn().mockResolvedValue({ suppressed: 0, reversedBalance: 0 }),
 }))
 vi.mock("@/lib/ledger/transactions", () => ({
   upsertLedgerTransaction: mocks.upsertLedger,
@@ -281,7 +285,11 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     const admin = { from: vi.fn() }
 
     const result = await applyTurnkeyInboundLedgerEvent(admin as never, baseInput)
-    expect(result.kind).toBe("suppressed_easetag")
+    expect(result).toEqual({
+      kind: "suppressed_easetag",
+      allowOrganicFallback: false,
+      easetagTransferGroupId: "tg-1",
+    })
     expect(mocks.upsertLedger).not.toHaveBeenCalled()
     expect(mocks.updateEasetag).toHaveBeenCalled()
   })

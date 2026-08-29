@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { applyTurnkeyInboundLedgerEvent } from "@/lib/turnkey/apply-turnkey-inbound-ledger"
 import { isTurnkeyBalanceWebhooksIngestEnabled } from "@/lib/turnkey/config"
 import { inboundHashHasVisibleLedgerCredit } from "@/lib/turnkey/inbound-hash-visible-ledger"
+import { easetagP2pCreditVisibleForTransferGroup } from "@/lib/ledger/easetag-settlement"
 import { turnkeyInboundLedgerRowExists } from "@/lib/turnkey/ledger-inbound-exists"
 import type { NormalizedTurnkeyBalanceDeposit } from "@/lib/turnkey/turnkey-balance-webhook-payload"
 import { turnkeyBalanceDepositProviderTransactionId } from "@/lib/turnkey/turnkey-balance-webhook-payload"
@@ -159,11 +160,18 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
     (result.kind === "suppressed_noah" || result.kind === "suppressed_easetag") &&
     deposit.txHash
   ) {
-    const visible = await inboundHashHasVisibleLedgerCredit(admin, {
+    let visible = await inboundHashHasVisibleLedgerCredit(admin, {
       txHash: deposit.txHash,
       userId: scope.userId,
       businessId: scope.businessId,
     })
+    if (
+      !visible &&
+      result.kind === "suppressed_easetag" &&
+      result.easetagTransferGroupId
+    ) {
+      visible = await easetagP2pCreditVisibleForTransferGroup(admin, result.easetagTransferGroupId)
+    }
     if (!visible) {
       if (result.allowOrganicFallback === true) {
         console.warn("turnkey_balance_webhook_suppressed_without_ledger_retry_organic", {

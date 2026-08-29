@@ -168,7 +168,37 @@ export async function findEasetagSettlementForChainSuppression(
     if (viaDebit) return viaDebit
   }
 
+  const payeeUserId = String(input.payeeUserId || "").trim()
+  if (payeeUserId && input.amount != null && input.currency) {
+    return findEasetagSettlementByPayeeInbound(admin, {
+      payeeUserId,
+      payeeBusinessId: input.payeeBusinessId ?? null,
+      amount: Number(input.amount),
+      currency: String(input.currency),
+    })
+  }
+
   return null
+}
+
+/** True when Easetag P2P payee credit leg is already visible (ledger applied before chain hash linked). */
+export async function easetagP2pCreditVisibleForTransferGroup(
+  admin: SupabaseClient,
+  transferGroupId: string,
+): Promise<boolean> {
+  const id = String(transferGroupId || "").trim()
+  if (!id) return false
+
+  const creditPtid = `easetag_p2p:${id}:credit`
+  const { data: row } = await admin
+    .from("transactions")
+    .select("id,hidden_from_feed,metadata")
+    .eq("provider", "easner_internal")
+    .eq("provider_transaction_id", creditPtid)
+    .maybeSingle()
+  if (!row?.id || row.hidden_from_feed === true) return false
+  const meta = (row.metadata as Record<string, unknown> | undefined) ?? {}
+  return String(meta.source ?? "").toLowerCase() === "easetag_p2p"
 }
 
 function normalizeRow(data: Record<string, unknown>): EasetagSettlementRow {

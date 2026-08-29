@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
-import { findEasetagSettlementForChainSuppression, updateEasetagSettlementSettled } from "@/lib/ledger/easetag-settlement"
+import { findEasetagSettlementForChainSuppression, updateEasetagSettlementSettled, patchEasetagP2pChainSettlement } from "@/lib/ledger/easetag-settlement"
+import { suppressTurnkeyEasetagChainMirrorRow } from "@/lib/ledger/easetag-turnkey-mirror"
 import {
   findGlobalPayoutRefundForInboundSuppression,
   findGlobalPayoutSettlementForChainSuppression,
@@ -57,7 +58,7 @@ export type TurnkeyInboundLedgerInput = {
 
 export type TurnkeyInboundLedgerResult =
   | { kind: "suppressed_noah"; allowOrganicFallback?: boolean }
-  | { kind: "suppressed_easetag"; allowOrganicFallback?: boolean }
+  | { kind: "suppressed_easetag"; allowOrganicFallback?: boolean; easetagTransferGroupId?: string }
   | { kind: "applied"; transactionId: string | null }
   | { kind: "skipped" }
 
@@ -65,8 +66,11 @@ function suppressedNoah(allowOrganicFallback = false): TurnkeyInboundLedgerResul
   return { kind: "suppressed_noah", allowOrganicFallback }
 }
 
-function suppressedEasetag(allowOrganicFallback = false): TurnkeyInboundLedgerResult {
-  return { kind: "suppressed_easetag", allowOrganicFallback }
+function suppressedEasetag(
+  allowOrganicFallback = false,
+  easetagTransferGroupId?: string,
+): TurnkeyInboundLedgerResult {
+  return { kind: "suppressed_easetag", allowOrganicFallback, easetagTransferGroupId }
 }
 
 async function settleMatchingGridVaTurnkeySweep(
@@ -265,12 +269,22 @@ export async function applyTurnkeyInboundLedgerEvent(
         : {}),
     })
     if (easetagSuppressed) {
+      const transferGroupId = easetagSuppressed.transfer_group_id
       if (status === "settled" && txHash) {
-        await updateEasetagSettlementSettled(admin, easetagSuppressed.transfer_group_id, txHash).catch(
-          () => {},
-        )
+        await updateEasetagSettlementSettled(admin, transferGroupId, txHash).catch(() => {})
+        await patchEasetagP2pChainSettlement(admin, {
+          transferGroupId,
+          turnkeySendId: input.providerTransactionId,
+          txHash,
+        }).catch(() => {})
+        await suppressTurnkeyEasetagChainMirrorRow(admin, {
+          txHash,
+          userId,
+          businessId,
+          transferGroupId,
+        }).catch(() => {})
       }
-      return suppressedEasetag(false)
+      return suppressedEasetag(false, transferGroupId)
     }
 
     const globalPayoutSuppressed = await findGlobalPayoutSettlementForChainSuppression(admin, {

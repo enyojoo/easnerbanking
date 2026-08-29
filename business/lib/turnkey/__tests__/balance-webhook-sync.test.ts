@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest"
 const mocks = vi.hoisted(() => ({
   applyInbound: vi.fn(),
   inboundVisible: vi.fn(),
+  easetagCreditVisible: vi.fn(),
   resolveScope: vi.fn(),
   isEnabled: vi.fn(),
   isOmnibus: vi.fn(),
@@ -34,6 +35,9 @@ vi.mock("@/lib/turnkey/ledger-inbound-exists", () => ({
 }))
 vi.mock("@/lib/turnkey/inbound-hash-visible-ledger", () => ({
   inboundHashHasVisibleLedgerCredit: mocks.inboundVisible,
+}))
+vi.mock("@/lib/ledger/easetag-settlement", () => ({
+  easetagP2pCreditVisibleForTransferGroup: mocks.easetagCreditVisible,
 }))
 vi.mock("@/lib/turnkey/apply-turnkey-inbound-ledger", () => ({
   applyTurnkeyInboundLedgerEvent: mocks.applyInbound,
@@ -69,6 +73,7 @@ describe("applyTurnkeyBalanceWebhookSideEffects", () => {
     mocks.feeRefund.mockResolvedValue(null)
     mocks.ledgerExists.mockResolvedValue(false)
     mocks.inboundVisible.mockResolvedValue(false)
+    mocks.easetagCreditVisible.mockResolvedValue(false)
     mocks.resolveScope.mockResolvedValue({
       userId: "user-1",
       businessId: "biz-1",
@@ -106,6 +111,21 @@ describe("applyTurnkeyBalanceWebhookSideEffects", () => {
     await expect(
       applyTurnkeyBalanceWebhookSideEffects({ from: vi.fn() } as never, deposit, "ev-2b"),
     ).rejects.toThrow("turnkey_balance_webhook_no_ledger")
+  })
+
+  it("accepts easetag suppression when payee credit exists without chain tx_hash yet", async () => {
+    mocks.applyInbound.mockResolvedValueOnce({
+      kind: "suppressed_easetag",
+      allowOrganicFallback: false,
+      easetagTransferGroupId: "tg-easetag",
+    })
+    mocks.inboundVisible.mockResolvedValueOnce(false)
+    mocks.easetagCreditVisible.mockResolvedValueOnce(true)
+
+    const ok = await applyTurnkeyBalanceWebhookSideEffects({ from: vi.fn() } as never, deposit, "ev-4")
+    expect(ok).toBe(true)
+    expect(mocks.applyInbound).toHaveBeenCalledTimes(1)
+    expect(mocks.easetagCreditVisible).toHaveBeenCalledWith(expect.anything(), "tg-easetag")
   })
 
   it("accepts suppression when another visible ledger credit exists for the hash", async () => {
