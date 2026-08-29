@@ -614,8 +614,10 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
           <View style={styles.headerTopRow}>
             <Pressable
              android_ripple={ripple.neutral}
-              onPressIn={() => haptics.tap()}
-              onPress={handleBack}
+              onPress={() => {
+                haptics.tap()
+                handleBack()
+              }}
               style={styles.backButton}
             >
               <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />

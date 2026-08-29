@@ -140,7 +140,10 @@ export default function ReceiveStablecoinDetailsScreen({ navigation, route }: Na
           <View style={styles.headerTopRow}>
             <Pressable
               android_ripple={ripple.neutral}
-              onPress={handleBack}
+              onPress={() => {
+                haptics.tap()
+                handleBack()
+              }}
               style={styles.backButton}
             >
               <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />

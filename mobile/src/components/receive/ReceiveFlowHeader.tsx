@@ -30,8 +30,10 @@ export function ReceiveFlowHeader({ title, onBack, right, style }: ReceiveFlowHe
       <View style={styles.headerTopRow}>
         <Pressable
           android_ripple={ripple.neutral}
-          onPressIn={() => haptics.tap()}
-          onPress={handleBack}
+          onPress={() => {
+            haptics.tap()
+            handleBack()
+          }}
           style={styles.backButton}
         >
           <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />

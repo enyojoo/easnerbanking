@@ -437,7 +437,10 @@ export default function ReceiveBankDetailsScreen({ navigation, route }: Navigati
           <View style={styles.headerTopRow}>
             <Pressable
               android_ripple={ripple.neutral}
-              onPress={() => navigation.goBack()}
+              onPress={() => {
+                haptics.tap()
+                navigation.goBack()
+              }}
               style={styles.backButton}
             >
               <ArrowLeft size={24} color={colors.primary.main} strokeWidth={2} />
