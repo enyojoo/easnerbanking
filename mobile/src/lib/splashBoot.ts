@@ -1,18 +1,30 @@
 /**
- * First import from index.ts so the native splash cannot stay up if a later
- * module hangs (PostHog, AppNavigator). Build 206 hid from App.tsx only;
- * that never runs if App returns null or auth never finishes.
+ * Expo SDK 57: call preventAutoHideAsync in global scope (no await).
+ * https://docs.expo.dev/versions/v57.0.0/sdk/splash-screen/
+ *
+ * iOS release can ignore the first hideAsync (returns undefined). Retry hide().
+ * https://github.com/expo/expo/discussions/28175
  */
 import { Platform } from 'react-native'
 import * as SplashScreen from 'expo-splash-screen'
 
-if (Platform.OS !== 'web') {
+function dismissNativeSplash() {
   try {
-    void SplashScreen.preventAutoHideAsync().catch(() => {})
+    SplashScreen.hide()
   } catch {
-    // Native module may not be ready yet.
+    // hide() may throw if the native module is not ready yet.
   }
-  setTimeout(() => {
+  try {
     void SplashScreen.hideAsync().catch(() => {})
-  }, 2_500)
+  } catch {
+    // ignore
+  }
+}
+
+if (Platform.OS !== 'web') {
+  SplashScreen.preventAutoHideAsync()
+  dismissNativeSplash()
+  for (const ms of [100, 400, 800, 1_500, 2_000, 2_500, 4_000, 6_000]) {
+    setTimeout(dismissNativeSplash, ms)
+  }
 }

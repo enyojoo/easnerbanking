@@ -1,24 +1,43 @@
 // Must be first: native splash failsafe before PostHog / AppNavigator evaluate.
 import './src/lib/splashBoot';
-// First import on purpose: captures the JS-start timestamp for the
-// `mobile_cold_start` metric (see src/lib/coldStartMetrics.ts).
 import './src/lib/coldStartMetrics';
 import './src/lib/backgroundTasks';
-import './src/lib/posthog';
 import { installStaleWebBundleReload } from './src/lib/reloadStaleWebBundle';
 
 installStaleWebBundleReload();
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { View } from 'react-native';
 import { registerRootComponent } from 'expo';
 
-import App from './App';
-import { PostHogProvider } from './src/components/PostHogProvider';
-
+/**
+ * Load App on the next tick so splashBoot timers can run. A static import of
+ * App pulls AppNavigator (and PostHog eager init) onto the same turn and
+ * can block hideAsync forever.
+ */
 function Root() {
-  return React.createElement(PostHogProvider, null, React.createElement(App));
+  const [tree, setTree] = useState<{
+    PostHogProvider: React.ComponentType<{ children: React.ReactNode }>
+    App: React.ComponentType
+  } | null>(null)
+
+  useEffect(() => {
+    const id = setTimeout(() => {
+      const { PostHogProvider } = require('./src/components/PostHogProvider')
+      const App = require('./App').default
+      setTree({ PostHogProvider, App })
+    }, 0)
+    return () => clearTimeout(id)
+  }, [])
+
+  if (!tree) {
+    return <View style={{ flex: 1, backgroundColor: '#007ACC' }} />
+  }
+
+  return React.createElement(
+    tree.PostHogProvider,
+    null,
+    React.createElement(tree.App),
+  )
 }
 
-// registerRootComponent calls AppRegistry.registerComponent('main', () => App);
-// It also ensures that whether you load the app in Expo Go or in a native build,
-// the environment is set up appropriately
 registerRootComponent(Root);

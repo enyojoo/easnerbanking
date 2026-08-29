@@ -66,8 +66,8 @@ import { prefetchIntercomModule } from './src/lib/intercom'
 import { USE_NATIVE_DRIVER } from './src/lib/animation'
 import { ExpressStripeProvider } from './src/components/ExpressStripeProvider'
 
-// Keep the splash screen visible while we load fonts (build 206).
-SplashScreen.preventAutoHideAsync()
+// Do not call preventAutoHideAsync here. splashBoot already holds/hides.
+// A second prevent after hideAsync re-shows the native splash forever.
 
 // Inner app component that has access to AuthContext
 function AppContent() {
@@ -126,6 +126,7 @@ function AppContent() {
       root.style.minHeight = '100%'
       root.style.backgroundColor = canvas
     }
+    SplashScreen.hide()
     void SplashScreen.hideAsync().catch((e) => {
       console.warn('SplashScreen.hideAsync', e)
     })
@@ -147,10 +148,10 @@ function AppContent() {
     if (Platform.OS === 'web') return
     if (splashFinished) return
     if (!navReady) return
+    SplashScreen.hide()
     void SplashScreen.hideAsync().catch((e) => {
       console.warn('SplashScreen.hideAsync', e)
     })
-    setSplashFinished(true)
   }, [navReady, splashFinished])
 
   useEffect(() => {
@@ -166,6 +167,7 @@ function AppContent() {
   useEffect(() => {
     if (Platform.OS === 'web') return
     const timeout = setTimeout(() => {
+      SplashScreen.hide()
       void SplashScreen.hideAsync().catch(() => {})
       setSplashFinished(true)
     }, 2_000)
@@ -339,6 +341,7 @@ export default function App() {
 
   useEffect(() => {
     if (!fontsLoaded || !supabaseConfigError) return
+    SplashScreen.hide()
     void SplashScreen.hideAsync().catch((e) => {
       console.warn('SplashScreen.hideAsync', e)
     })
