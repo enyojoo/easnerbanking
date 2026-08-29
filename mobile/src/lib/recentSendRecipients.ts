@@ -1,5 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import {
+  isDraftRecipientId,
+  recipientIdFromLedgerMetadata,
+  type GlobalPayoutRecipientSnapshot,
+} from '@easner/shared'
 import type { Recipient, Transaction } from '../types'
+import { resolveSendAgainRecipient } from './resolveSendAgainRecipient'
 
 const STORAGE_PREFIX = 'send_last_recipient_touch_'
 
@@ -10,16 +16,36 @@ function txTimestamp(tx: Transaction): number {
 }
 
 /**
- * Build last-send timestamps from ledger rows that include `recipient_id`.
+ * Build last-send timestamps from completed outbound ledger rows.
+ * Recipient id may live on the row, in metadata, or only on a snapshot we match to a saved recipient.
  */
-export function lastSentMapFromTransactions(transactions: Transaction[]): Record<string, number> {
+export function lastSentMapFromTransactions(
+  transactions: Transaction[],
+  recipients: Recipient[] = [],
+  userId = '',
+): Record<string, number> {
   const map: Record<string, number> = {}
   for (const tx of transactions) {
-    const rid = tx.recipient_id?.trim()
-    if (!rid) continue
     if (tx.status !== 'completed') continue
+    if (tx.transaction_type === 'receive') continue
     const ts = txTimestamp(tx)
     if (!ts) continue
+
+    const resolved = resolveSendAgainRecipient(
+      {
+        transaction_type: 'send',
+        recipient_id: tx.recipient_id || recipientIdFromLedgerMetadata(tx.metadata) || undefined,
+        metadata: tx.metadata ?? null,
+        recipient_snapshot:
+          tx.metadata?.recipient_snapshot && typeof tx.metadata.recipient_snapshot === 'object'
+            ? (tx.metadata.recipient_snapshot as GlobalPayoutRecipientSnapshot)
+            : null,
+      },
+      recipients,
+      userId,
+    )
+    const rid = resolved?.id?.trim() || tx.recipient_id?.trim() || recipientIdFromLedgerMetadata(tx.metadata) || ''
+    if (!rid || isDraftRecipientId(rid)) continue
     map[rid] = Math.max(map[rid] || 0, ts)
   }
   return map
@@ -44,8 +70,9 @@ export async function loadStoredLastTouches(userId: string): Promise<Record<stri
 export async function mergeLastSentMaps(
   userId: string,
   transactions: Transaction[],
+  recipients: Recipient[] = [],
 ): Promise<Record<string, number>> {
-  const fromTx = lastSentMapFromTransactions(transactions)
+  const fromTx = lastSentMapFromTransactions(transactions, recipients, userId)
   const fromStorage = await loadStoredLastTouches(userId)
   const merged: Record<string, number> = { ...fromStorage }
   for (const [id, ts] of Object.entries(fromTx)) {

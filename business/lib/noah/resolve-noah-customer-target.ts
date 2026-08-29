@@ -13,7 +13,7 @@ function compactUuidToUuid(hex32: string): string | null {
 
 /**
  * Map a Noah `CustomerID` (and optional webhook `Data`) to an Easner user or business.
- * Used when IDs are not `eind_*` / `ebiz_*` shaped or Noah returns a stored id we already mirrored.
+ * Stored `users.noah_customer_id` is checked first so reminted `eind_*` ids attach to the real user.
  */
 export async function resolveNoahCustomerTarget(
   admin: SupabaseClient,
@@ -25,9 +25,7 @@ export async function resolveNoahCustomerTarget(
   const customerId = opts.customerId.trim()
   if (!customerId) return null
 
-  const parsed = parseEasnerNoahCustomerId(customerId)
-  if (parsed) return parsed
-
+  /** Reminted `eind_*` ids are not `users.id` — stored column wins over hex decode. */
   const { data: userByNoahId } = await admin
     .from("users")
     .select("id")
@@ -36,6 +34,9 @@ export async function resolveNoahCustomerTarget(
   if (userByNoahId?.id) {
     return { kind: "individual", userId: String(userByNoahId.id) }
   }
+
+  const parsed = parseEasnerNoahCustomerId(customerId)
+  if (parsed) return parsed
 
   const asUuid = compactUuidToUuid(customerId)
   if (asUuid) {

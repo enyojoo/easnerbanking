@@ -12,6 +12,7 @@
  * are derived from `metadata` which is denormalized at write time.
  */
 
+import { recipientIdFromLedgerMetadata } from "./ledger-recipient-id"
 import { deriveBankDepositInboundDisplayLabel } from "./bank-deposit-inbound-label"
 import { isBankOnrampDepositFlow } from "./bank-deposit-lifecycle"
 import { isGlobalPayoutOffRampOutRow } from "./global-payout-flow"
@@ -401,6 +402,7 @@ export function mapLedgerRowToMobileListItem(row: Record<string, unknown>): Reco
     !isVerification && bankLabel && !isEasnerProductReceiveTitle(bankLabel) ? bankLabel : undefined
 
   const sourceType = inferLedgerListSourceType(meta)
+  const recipientId = recipientIdFromLedgerMetadata(meta)
 
   return {
     id: idForUi,
@@ -444,5 +446,6 @@ export function mapLedgerRowToMobileListItem(row: Record<string, unknown>): Reco
     direction: dirRaw === "in" ? "credit" : "debit",
     source_type: sourceType,
     metadata: row.metadata,
+    ...(recipientId ? { recipient_id: recipientId } : {}),
   }
 }

@@ -92,6 +92,7 @@ import {
   useDebouncedValue,
   SEND_AMOUNT_CONTINUE_CTA,
   mapResidenceToLocalPayInCurrency,
+  sendAmountOffersThroughLocalCurrency,
 } from '@easner/shared'
 import { usePayoutMinEnforcement } from '../../hooks/usePayoutMinEnforcement'
 import { useYcPayoutMinEnforcement } from '../../hooks/useYcPayoutMinEnforcement'
@@ -393,19 +394,32 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
   const enteredAmount = sendAmount ? Number.parseFloat(sendAmount.replace(/,/g, '')) || 0 : 0
 
+  const residenceCountry = String(userProfile?.residence_country ?? '').trim().toUpperCase() || null
   const residenceLocalPayInCurrency = useMemo(() => {
-    const cc = String(userProfile?.residence_country ?? '').trim().toUpperCase()
-    return cc ? mapResidenceToLocalPayInCurrency(cc) : null
-  }, [userProfile?.residence_country])
+    return residenceCountry ? mapResidenceToLocalPayInCurrency(residenceCountry) : null
+  }, [residenceCountry])
 
   const recipientReceiveCurrency = recipient?.currency?.trim().toUpperCase() ?? ''
+
+  const officeOffersThroughLocalCurrency = sendAmountOffersThroughLocalCurrency({
+    sourceCorridors: [
+      ...(sendDestinations?.fiat.bank_transfer ?? []),
+      ...(sendDestinations?.fiat.mobile_money ?? []),
+    ],
+    sourceCountry: residenceCountry,
+    sourceCurrency: residenceLocalPayInCurrency,
+    destinationCountry: payoutCountryCode,
+    destinationCurrency: recipientReceiveCurrency,
+    destinationCorridor: payoutCorridorRow,
+  })
 
   // TLC is cross-border only – hide when pay-in currency matches recipient (use balance instead).
   const expectTlcCorridor =
     !isEasetagRecipient &&
     !isWalletRecipient &&
     Boolean(residenceLocalPayInCurrency) &&
-    residenceLocalPayInCurrency !== recipientReceiveCurrency
+    residenceLocalPayInCurrency !== recipientReceiveCurrency &&
+    officeOffersThroughLocalCurrency
 
   const tlcPayInCountry =
     expectTlcCorridor && residenceLocalPayInCurrency

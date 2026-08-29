@@ -5,7 +5,7 @@ import {
   type UseQueryOptions,
 } from '@tanstack/react-query'
 import { Platform } from 'react-native'
-import { qk, type Scope, type TxFilters, pollingIntervalFor } from '@easner/shared'
+import { qk, type Scope, type TxFilters, pollingIntervalFor, recipientIdFromLedgerMetadata } from '@easner/shared'
 import { apiFetch } from '../../query/api-client'
 import { useScope } from '../../query/scope'
 import { useRealtimeHealth } from '../../query/realtime-health-context'
@@ -53,10 +53,14 @@ export type MobileTransactionRow = {
 /** Maps unified `/api/transactions` list rows to legacy `Transaction` for stats / send hub. */
 export function mapLedgerRowToTransaction(userId: string, row: Record<string, unknown>): Transaction {
   const amount = Number(row.amount ?? 0)
+  const fromRow =
+    typeof row.recipient_id === 'string' && row.recipient_id.trim() ? row.recipient_id.trim() : ''
+  const fromMeta = recipientIdFromLedgerMetadata(row.metadata)
+  const transactionTypeRaw = String(row.transaction_type ?? row.type ?? '').trim().toLowerCase()
   return {
     id: String(row.id ?? row.transaction_id ?? ''),
     user_id: userId,
-    recipient_id: typeof row.recipient_id === 'string' ? row.recipient_id : undefined,
+    recipient_id: fromRow || fromMeta || undefined,
     send_amount: amount,
     send_currency: String(row.currency ?? 'USD'),
     receive_amount: Number(row.final_amount ?? row.amount ?? 0),
@@ -71,6 +75,7 @@ export function mapLedgerRowToTransaction(userId: string, row: Record<string, un
     created_at: String(row.created_at ?? new Date().toISOString()),
     updated_at: String(row.updated_at ?? new Date().toISOString()),
     metadata: (row.metadata as Record<string, unknown> | undefined) ?? undefined,
+    transaction_type: transactionTypeRaw === 'receive' || transactionTypeRaw === 'send' ? transactionTypeRaw : undefined,
   }
 }
 

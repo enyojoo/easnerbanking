@@ -3,6 +3,7 @@ import {
   defaultCrossBorderProvider,
   parseCrossBorderProvider,
   corridorOffersCrossBorder,
+  corridorOfficeCrossBorderEnabled,
   type CrossBorderProviderId,
 } from "@easner/shared"
 import { corridorHasGridPayout } from "@/lib/payout-providers/grid-provider"
@@ -66,8 +67,7 @@ export async function resolveCrossBorderProviderForDestination(
   let officeChoice: CrossBorderProviderId | null = null
 
   for (const row of rows) {
-    const meta = (row.metadata ?? {}) as Record<string, unknown>
-    if (meta.cross_border_enabled === false) continue
+    if (!corridorOfficeCrossBorderEnabled(row.metadata)) continue
     supportYellowcard =
       supportYellowcard || rowSupportsYcPayout(row.metadata, row.provider_routing)
     supportGrid = supportGrid || rowSupportsGridPayout(row.metadata, row.provider_routing)
@@ -120,6 +120,18 @@ export async function resolveCrossBorderSourcePayInEnabled(
   const currency = input.sourceCurrency.trim().toUpperCase()
   if (!country || !currency) return false
   if (!corridorOffersCrossBorder(country, currency)) return false
+
+  let sourceQ = admin
+    .from("payout_corridors")
+    .select("metadata")
+    .eq("country_code", country)
+    .eq("currency_code", currency)
+    .eq("enabled", true)
+  if (input.rail) sourceQ = sourceQ.eq("rail", input.rail)
+  const { data: sourceRows } = await sourceQ.limit(20)
+  if (!(sourceRows ?? []).some((row) => corridorOfficeCrossBorderEnabled(row.metadata))) {
+    return false
+  }
 
   if (input.provider === "grid") {
     const { isGridLocalPayInEnabledForCorridor } = await import("@/lib/grid/grid-receive-gate")

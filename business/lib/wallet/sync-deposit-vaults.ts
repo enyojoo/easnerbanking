@@ -9,6 +9,8 @@ import { enqueueVaultProvisioningJobs } from "@/lib/wallet/turnkey-wallet-db"
 import { getTurnkeyDepositAddressesForContext } from "@/lib/wallet/turnkey-deposit-addresses"
 import { processNextWalletProvisioningJob } from "@/lib/wallet/turnkey-provisioning"
 import { DEFAULT_INDIVIDUAL_VAULTS } from "@/lib/wallet/vault-spec"
+import { enqueueRelayDepositProvisionJob, processRelayDepositProvisionJobs } from "@/lib/relay-deposit/provision-jobs"
+import { isRelayTronInboundEnabled } from "@/lib/relay/config"
 
 const MAX_DRAIN_PASSES = 16
 
@@ -16,6 +18,22 @@ function depositAddressesComplete(
   body: Awaited<ReturnType<typeof getTurnkeyDepositAddressesForContext>>,
 ): boolean {
   return Boolean(String(body.USD.address ?? "").trim() && String(body.EUR.address ?? "").trim())
+}
+
+/** Relay Tron USDT deposit address after the USD vault exists (same path for KYC and KYB). */
+async function provisionRelayTronUsdtIfNeeded(
+  admin: SupabaseClient,
+  ownerId: string,
+  usdVaultPubkey: string,
+): Promise<void> {
+  if (!isRelayTronInboundEnabled()) return
+  const vault = String(usdVaultPubkey ?? "").trim()
+  if (!ownerId || !vault) return
+  await enqueueRelayDepositProvisionJob(admin, {
+    walletOwnerId: ownerId,
+    recipientVaultAddress: vault,
+  })
+  await processRelayDepositProvisionJobs(admin, 5)
 }
 
 /**
@@ -30,10 +48,13 @@ export async function trySyncTurnkeyDepositVaultsIfNeeded(
   if (!isTurnkeyConfigured() || !isTurnkeyWalletAutoprovisionEnabled()) return
 
   let body = await getTurnkeyDepositAddressesForContext(admin, ctx)
-  if (depositAddressesComplete(body)) return
-
   const ownerId = await resolveWalletOwnerIdForEasnerContext(admin, ctx)
   if (!ownerId) return
+
+  if (depositAddressesComplete(body)) {
+    await provisionRelayTronUsdtIfNeeded(admin, ownerId, body.USD.ownerAddress)
+    return
+  }
 
   const { data: wo } = await admin
     .from("wallet_owners")
@@ -61,9 +82,15 @@ export async function trySyncTurnkeyDepositVaultsIfNeeded(
 
   for (let i = 0; i < MAX_DRAIN_PASSES; i++) {
     body = await getTurnkeyDepositAddressesForContext(admin, ctx)
-    if (depositAddressesComplete(body)) return
+    if (depositAddressesComplete(body)) {
+      await provisionRelayTronUsdtIfNeeded(admin, ownerId, body.USD.ownerAddress)
+      return
+    }
 
     const r = await processNextWalletProvisioningJob({ walletOwnerId: ownerId })
     if (!r.processed || r.detail === "no_jobs") break
   }
+
+  body = await getTurnkeyDepositAddressesForContext(admin, ctx)
+  await provisionRelayTronUsdtIfNeeded(admin, ownerId, body.USD.ownerAddress)
 }

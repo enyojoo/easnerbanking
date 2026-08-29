@@ -154,7 +154,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const recipientsLoading = recipientsQuery.isPending && recipients.length === 0
   const transactions = useMemo(() => {
     if (!user?.id) return []
-    const rows = txHubQuery.data?.pages?.[0]?.transactions ?? []
+    const rows =
+      txHubQuery.data?.pages?.flatMap((page) => page.transactions ?? []) ?? []
     return (rows as Record<string, unknown>[]).map((r) => mapLedgerRowToTransaction(user.id, r))
   }, [txHubQuery.data, user?.id])
   const [searchTerm, setSearchTerm] = useState('')
@@ -324,13 +325,13 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       return
     }
     let cancelled = false
-    void mergeLastSentMaps(user.id, transactions).then((merged) => {
+    void mergeLastSentMaps(user.id, transactions, recipients).then((merged) => {
       if (!cancelled) setLastSentAtByRecipient(merged)
     })
     return () => {
       cancelled = true
     }
-  }, [user?.id, transactions])
+  }, [user?.id, transactions, recipients])
 
   const { sorted: hubSorted } = useMemo(
     () => sortRecipientsForSendHub(recipients, lastSentAtByRecipient),

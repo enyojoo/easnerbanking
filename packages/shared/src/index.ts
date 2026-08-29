@@ -306,10 +306,13 @@ export {
   mapProviderBalancePayoutRateRows,
   providerSendRatesQueryPath,
 } from "./provider-send-rates"
-export type { CrossBorderProviderId } from "./cross-border-routing"
+export type { CorridorOfficeCrossBorderRow, CrossBorderProviderId } from "./cross-border-routing"
 export {
+  catalogCorridorHasOfficeCrossBorder,
+  corridorOfficeCrossBorderEnabled,
   defaultCrossBorderProvider,
   parseCrossBorderProvider,
+  sendAmountOffersThroughLocalCurrency,
 } from "./cross-border-routing"
 export {
   buildYcSendMappingFromRecipient,
@@ -796,6 +799,9 @@ export {
   isGlobalPayoutOffRampFlow,
   isGlobalPayoutOffRampOutRow,
 } from "./transactions/global-payout-flow"
+export {
+  recipientIdFromLedgerMetadata,
+} from "./transactions/ledger-recipient-id"
 export {
   displayEasnerTransactionIdForList,
   readEasnerTransactionIdFromMetadata,

@@ -358,4 +358,19 @@ describe("mapLedgerRowToMobileListItem", () => {
     expect(item.display_description).toBe("Ama Mensah")
     expect(item.display_hero_title).toBe("Ama Mensah")
   })
+
+  it("exposes recipient_id from send metadata for the send hub", () => {
+    const item = mapLedgerRowToMobileListItem(
+      baseRow({
+        direction: "out",
+        metadata: {
+          recipient_id: "rec-ke-1",
+          destination_ref: "recipient:rec-ke-1",
+          recipient_snapshot: { full_name: "Ama Mensah" },
+        },
+      }),
+    )
+    expect(item.recipient_id).toBe("rec-ke-1")
+    expect(item.transaction_type).toBe("send")
+  })
 })

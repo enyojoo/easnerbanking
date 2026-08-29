@@ -132,6 +132,7 @@ import {
   mapResidenceToLocalPayInCurrency,
   resolvePayInProvider,
   corridorMatchesCountryCurrency,
+  sendAmountOffersThroughLocalCurrency,
   isYcBalancePayoutCorridor,
   isGridBalancePayoutCorridor,
   resolveEffectiveYcBalancePayoutMinReceive,
@@ -315,18 +316,54 @@ export default function SendPage() {
     [residenceCountry],
   )
 
+  const { bankCorridors, mobileCorridors, catalogVersion } = useSendDestinations()
+
+  const payoutRail = recipient
+    ? resolveRecipientPayoutRail({
+        bankName: recipient.bankName,
+        mobileProvider: recipient.mobileProvider,
+      })
+    : "bank_transfer"
+  const payoutCountryCode = recipient
+    ? resolvePayoutCountryCode({
+        countryCode: recipient.countryCode,
+        currencyCode: recipient.currency || "",
+      })
+    : ""
+  const payoutCorridorRow = useMemo(() => {
+    if (!recipient || !payoutCountryCode) return null
+    const corridors = payoutRail === "mobile_money" ? mobileCorridors : bankCorridors
+    return (
+      corridors.find((c) =>
+        corridorMatchesCountryCurrency(c, {
+          countryCode: payoutCountryCode,
+          currencyCode: recipient.currency || "",
+          rail: payoutRail,
+        }),
+      ) ?? null
+    )
+  }, [recipient, payoutCountryCode, payoutRail, bankCorridors, mobileCorridors])
+
+  const officeOffersThroughLocalCurrency = sendAmountOffersThroughLocalCurrency({
+    sourceCorridors: [...bankCorridors, ...mobileCorridors],
+    sourceCountry: residenceCountry,
+    sourceCurrency: residenceLocalPayInCurrency,
+    destinationCountry: payoutCountryCode,
+    destinationCurrency: recipientReceiveCurrency,
+    destinationCorridor: payoutCorridorRow,
+  })
+
   const expectTlcCorridor =
     !isEasetagRecipient &&
     !isWalletRecipient &&
     Boolean(residenceLocalPayInCurrency) &&
-    residenceLocalPayInCurrency !== recipientReceiveCurrency
+    residenceLocalPayInCurrency !== recipientReceiveCurrency &&
+    officeOffersThroughLocalCurrency
 
   const tlcPayInCountry =
     expectTlcCorridor && residenceLocalPayInCurrency
       ? residenceCountryFromPayInCurrency(residenceLocalPayInCurrency)
       : null
-
-  const { bankCorridors, mobileCorridors, catalogVersion } = useSendDestinations()
 
   const payInProvider = useMemo((): "yellowcard" | "grid" => {
     if (!tlcPayInCountry || !residenceLocalPayInCurrency) return "yellowcard"
@@ -686,23 +723,11 @@ export default function SendPage() {
     paymentMethod === "otherCurrency" &&
     Boolean(otherPaymentMethod)
 
-  const payoutRail = recipient
-    ? resolveRecipientPayoutRail({
-        bankName: recipient.bankName,
-        mobileProvider: recipient.mobileProvider,
-      })
-    : "bank_transfer"
   const { hints: payoutHints } = usePayoutFormSchema({
     countryCode: recipient?.countryCode,
     currencyCode: recipient?.currency,
     rail: payoutRail,
   })
-  const payoutCountryCode = recipient
-    ? resolvePayoutCountryCode({
-        countryCode: recipient.countryCode,
-        currencyCode: recipient.currency || "",
-      })
-    : ""
   const amountFieldMode = payoutHints?.amount_field_mode ?? "note_optional_only"
   const noteFieldUi = getSendAmountNoteFieldUi({
     hints: payoutHints,
@@ -721,20 +746,6 @@ export default function SendPage() {
         : null,
     [recipient, isEasetagRecipient, payoutHints, receiveCurrency, payoutRail],
   )
-
-  const payoutCorridorRow = useMemo(() => {
-    if (!recipient || !payoutCountryCode) return null
-    const corridors = payoutRail === "mobile_money" ? mobileCorridors : bankCorridors
-    return (
-      corridors.find((c) =>
-        corridorMatchesCountryCurrency(c, {
-          countryCode: payoutCountryCode,
-          currencyCode: recipient.currency || "",
-          rail: payoutRail,
-        }),
-      ) ?? null
-    )
-  }, [recipient, payoutCountryCode, payoutRail, bankCorridors, mobileCorridors])
 
   const isYcBalancePayout =
     isBalanceSource &&

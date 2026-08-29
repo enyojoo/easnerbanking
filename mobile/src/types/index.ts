@@ -75,6 +75,8 @@ export interface Transaction {
   fee_type: string
   total_amount: number
   status: "pending" | "processing" | "completed" | "failed" | "cancelled"
+  /** Present when mapped from the unified ledger list. */
+  transaction_type?: "send" | "receive" | string
   reference?: string
   receipt_url?: string
   receipt_filename?: string

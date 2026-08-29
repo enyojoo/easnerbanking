@@ -4,7 +4,11 @@
  *
  * - `eind_` – consumer KYC (`CustomerType: Individual`) keyed to `users.id`.
  * - `ebiz_` – business KYB (`CustomerType: Business`) keyed to `businesses.id`.
+ * - Recreate ids stay `eind_` + 32 hex (Noah length budget) but are not the user's uuid;
+ *   store them on `users.noah_customer_id` and resolve via that column before decoding `eind_`.
  */
+import { createHash } from "crypto"
+
 export type NoahCustomerScope = "individual" | "business"
 
 /** B2B – `ebiz_` (5) + UUID hex (32) = 37 (Noah ID length budget). */
@@ -26,6 +30,22 @@ export function noahCustomerIdFromUserId(userId: string): string {
 
 export function noahCustomerIdFromBusinessId(businessId: string): string {
   return `${EASNER_NOAH_BUSINESS_CUSTOMER_PREFIX}${compactUuidForNoahCustomerId(businessId)}`
+}
+
+/** UUID derived from a seed so remints for the same generation stay stable. */
+export function uuidFromStableSeed(seed: string): string {
+  const h = createHash("sha256").update(seed).digest("hex")
+  const variant = ((parseInt(h.slice(16, 18), 16) & 0x3f) | 0x80).toString(16).padStart(2, "0")
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-${variant}${h.slice(18, 20)}-${h.slice(20, 32)}`
+}
+
+/**
+ * Replacement individual CustomerID when the canonical `eind_{userId}` cannot be reused.
+ * Generation 1+; same user + generation always yields the same id.
+ */
+export function noahCustomerIdForIndividualRecreate(userId: string, generation = 1): string {
+  const gen = Math.max(1, Math.floor(generation))
+  return noahCustomerIdFromUserId(uuidFromStableSeed(`easner-noah-recreate:${gen}:${userId.trim()}`))
 }
 
 export type ParsedEasnerNoahCustomer =
