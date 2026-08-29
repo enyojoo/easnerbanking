@@ -28,6 +28,10 @@ type NativeOnramp = {
   isAuthError?: (error?: { message?: string; stripeErrorCode?: string }) => boolean
   attachKycInfo: (kycInfo: Record<string, unknown>) => Promise<{ error?: { message?: string } }>
   verifyIdentity: () => Promise<{ error?: { message?: string; code?: string; stripeErrorCode?: string } }>
+  registerWalletAddress?: (
+    address: string,
+    network: string,
+  ) => Promise<{ error?: { message?: string } }>
   collectPaymentMethod: (
     paymentMethod: 'Card' | 'BankAccount' | 'CardAndBankAccount' | 'PlatformPay',
     platformPayParams?: Record<string, unknown>,
@@ -169,16 +173,27 @@ export function adaptNativeOnramp(onramp: NativeOnramp): ExpressOnrampSdk {
     },
     submitKycInfo: async (info) => {
       const dob = info.date_of_birth as { day?: number; month?: number; year?: number } | undefined
+      const idNumber = info.id_number ?? info.idNumber
       const result = await onramp.attachKycInfo({
         firstName: info.given_name,
         lastName: info.surname,
         dateOfBirth: dob,
         address: info.address,
+        ...(idNumber ? { idNumber, id_number: idNumber } : {}),
+        nationalities: info.nationalities,
+        birthCity: info.birth_city,
+        birthCountry: info.birth_country,
       })
       throwIf(result.error)
     },
     verifyDocuments: async (cb) => presentIdentity(onramp, cb),
     verifyIdentity: async (cb) => presentIdentity(onramp, cb),
+    registerWalletAddress: async (address, network) => {
+      const fn = onramp.registerWalletAddress
+      if (!fn) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
+      const result = await fn(address, network)
+      throwIf(result.error)
+    },
     collectPaymentMethod: async (opts, cb) => {
       const types = (opts.payment_method_types as string[] | undefined) || []
       const wallets = (opts.wallets as { applePay?: string; googlePay?: string } | undefined) || {}

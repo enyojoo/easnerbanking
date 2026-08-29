@@ -4,12 +4,15 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   EXPRESS_DEPOSITS_COPY,
+  buildExpressKycSubmitInfo,
   expressIdentityOutcome,
   expressSetupUserMessage,
   isExpressIdentitySuccess,
   isExpressIdentitySetupStep,
   isExpressKycAlreadyVerified,
+  isExpressReviewSetupStep,
   isExpressSetupDismissed,
+  isUsSsnComplete,
   qk,
   toExpressLinkE164Phone,
   type ExpressDepositsNextStep,
@@ -58,7 +61,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
   const [busy, setBusy] = useState(false)
   const [openingIdentity, setOpeningIdentity] = useState(() => {
     const peeked = peekBusinessExpressOnrampStatus()
-    return isExpressIdentitySetupStep(peeked?.nextStep, peeked?.cryptoCustomerId)
+    return isExpressIdentitySetupStep(peeked?.nextStep)
   })
   const [message, setMessage] = useState<string | null>(null)
   const [slot, setSlot] = useState<HTMLElement | null>(null)
@@ -94,6 +97,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
       birth_city: prev.birth_city || "",
       birth_country: prev.birth_country || String(address.country || data.payerCountry || ""),
       identifier: prev.identifier || "",
+      ssn: prev.ssn || "",
     }))
     return data
   }, [queryClient, scope, user?.id])
@@ -104,6 +108,15 @@ export function ExpressDepositsSetup({ onClose }: Props) {
     else prefetchExpressOnramp()
     void refresh()
   }, [refresh])
+
+  const pollUntilNotReview = async () => {
+    let data = await refresh()
+    for (let i = 0; i < 12 && isExpressReviewSetupStep(data.nextStep); i += 1) {
+      await new Promise((r) => setTimeout(r, 2500))
+      data = await refresh()
+    }
+    return data
+  }
 
   const persistLink = async (
     cryptoCustomerId: string,
@@ -251,13 +264,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
     }
   }
 
-  const rawStep = status?.nextStep ?? "link"
-  const step =
-    (rawStep === "us_kyc" || rawStep === "eu_kyc") && status?.cryptoCustomerId
-      ? rawStep === "eu_kyc"
-        ? "eu_l2"
-        : "us_l2"
-      : rawStep
+  const step = status?.nextStep ?? "link"
 
   const startLink = () =>
     void run(async () => {
@@ -305,33 +312,28 @@ export function ExpressDepositsSetup({ onClose }: Props) {
 
   const submitKyc = () =>
     void run(async () => {
-      const sdk = await ensureSdk()
-      const payload: Record<string, unknown> = {
-        given_name: form.given_name,
-        surname: form.surname,
-        date_of_birth: {
-          day: Number(form.dob_day) || undefined,
-          month: Number(form.dob_month) || undefined,
-          year: Number(form.dob_year) || undefined,
-        },
-        address: {
-          line1: form.line1,
-          city: form.city,
-          state: form.state || undefined,
-          postal_code: form.postal_code,
-          country: status?.payerCountry || form.country,
-        },
+      if (step === "us_kyc" && !isUsSsnComplete(form.ssn)) {
+        throw new Error(EXPRESS_DEPOSITS_COPY.ssnHint)
       }
-      if (step.startsWith("eu")) {
-        payload.nationalities = form.nationalities.split(/[\s,]+/).filter(Boolean)
-        payload.birth_city = form.birth_city
-        payload.birth_country = form.birth_country
+      const sdk = await ensureSdk()
+      const authed = await ensureLinkSession(sdk)
+      if (!authed) {
+        closeHost(EXPRESS_DEPOSITS_COPY.setupDismissed)
+        return true
       }
       try {
-        await sdk.submitKycInfo(payload)
+        await sdk.submitKycInfo(
+          buildExpressKycSubmitInfo({
+            form,
+            country: status?.payerCountry || form.country,
+            includeUsSsn: step === "us_kyc",
+            eu: step.startsWith("eu"),
+          }),
+        )
       } catch (e) {
         if (!isExpressKycAlreadyVerified(e instanceof Error ? e.message : String(e))) throw e
       }
+      await pollUntilNotReview()
     })
 
   const submitIdentifiers = () =>
@@ -380,11 +382,10 @@ export function ExpressDepositsSetup({ onClose }: Props) {
         if (settled) return
         settled = true
         const outcome = expressIdentityOutcome(raw)
-        l2StartedRef.current = false
         setOpeningIdentity(false)
-        if (isExpressIdentitySuccess(outcome)) {
+        if (isExpressIdentitySuccess(outcome) || isExpressKycAlreadyVerified(outcome)) {
           closeHost(null)
-          void refresh()
+          void pollUntilNotReview()
           return
         }
         closeHost(EXPRESS_DEPOSITS_COPY.setupDismissed)
@@ -402,20 +403,50 @@ export function ExpressDepositsSetup({ onClose }: Props) {
   }
 
   useEffect(() => {
+    if (step !== "us_l2" && step !== "eu_l2") {
+      l2StartedRef.current = false
+      return
+    }
     if (l2StartedRef.current) return
-    if (step !== "us_l2" && step !== "eu_l2") return
     l2StartedRef.current = true
     setOpeningIdentity(true)
     startL2()
   }, [step])
 
+  useEffect(() => {
+    if (isExpressReviewSetupStep(step) || step === "wallet" || step === "ready") {
+      setOpeningIdentity(false)
+    }
+    if (!isExpressReviewSetupStep(step) && step !== "us_l2" && step !== "eu_l2") return
+    if (!isExpressReviewSetupStep(step) && !openingIdentity && !l2StartedRef.current) return
+    const id = window.setInterval(() => {
+      void refresh()
+    }, 2500)
+    return () => window.clearInterval(id)
+  }, [step, openingIdentity, refresh])
+
   const registerWallet = () =>
     void run(async () => {
+      const client = await ensureSdk()
       const res = await fetchWithSession("/api/stripe/onramp/wallets/register", { method: "POST", headers: SCOPE })
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string; code?: string }
-        throw new Error(mapStripeOnrampError(j.code, j.error))
+      const j = (await res.json().catch(() => ({}))) as {
+        error?: string
+        code?: string
+        walletAddress?: string
+        registered?: boolean
       }
+      if (!res.ok) throw new Error(mapStripeOnrampError(j.code, j.error))
+      if (j.registered) return
+      const walletAddress = String(j.walletAddress || "").trim()
+      if (!walletAddress || !client.registerWalletAddress) {
+        throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
+      }
+      const authed = await ensureLinkSession(client)
+      if (!authed) {
+        closeHost(EXPRESS_DEPOSITS_COPY.setupDismissed)
+        return true
+      }
+      await client.registerWalletAddress(walletAddress, "solana")
     })
 
   const field = (key: string, label: string, type = "text") => (
@@ -450,6 +481,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
 
       {(step === "us_kyc" || step === "eu_kyc") && status && !slot ? (
         <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">{EXPRESS_DEPOSITS_COPY.kycHint}</p>
           {field("given_name", "First name")}
           {field("surname", "Last name")}
           {field("line1", "Address")}
@@ -459,6 +491,12 @@ export function ExpressDepositsSetup({ onClose }: Props) {
           {field("dob_day", "Birth day")}
           {field("dob_month", "Birth month")}
           {field("dob_year", "Birth year")}
+          {step === "us_kyc" ? (
+            <>
+              {field("ssn", EXPRESS_DEPOSITS_COPY.ssnLabel, "password")}
+              <p className="text-sm text-muted-foreground">{EXPRESS_DEPOSITS_COPY.ssnHint}</p>
+            </>
+          ) : null}
           {step === "eu_kyc" ? (
             <>
               {field("nationalities", EXPRESS_DEPOSITS_COPY.nationalitiesLabel)}
@@ -492,6 +530,16 @@ export function ExpressDepositsSetup({ onClose }: Props) {
         </div>
       ) : null}
 
+      {isExpressReviewSetupStep(step) && !slot ? (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">{EXPRESS_DEPOSITS_COPY.reviewHint}</p>
+          <Button disabled>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            {EXPRESS_DEPOSITS_COPY.openingCta}
+          </Button>
+        </div>
+      ) : null}
+
       {(step === "us_l2" || step === "eu_l2") && !slot ? (
         <div className="space-y-3">
           <p className="text-sm font-medium">{EXPRESS_DEPOSITS_COPY.identityTitle}</p>
@@ -505,7 +553,7 @@ export function ExpressDepositsSetup({ onClose }: Props) {
 
       {step === "wallet" && !slot ? (
         <Button disabled={busy} onClick={registerWallet}>
-          Finish setup
+          {EXPRESS_DEPOSITS_COPY.finishSetupCta}
         </Button>
       ) : null}
 

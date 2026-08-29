@@ -102,7 +102,7 @@ function expressVerificationStatus(data: { ready?: boolean; status?: string } | 
   if (data?.ready) return 'approved'
   const status = String(data?.status || '').toLowerCase()
   if (status === 'ready') return 'approved'
-  if (status === 'in_progress') return 'in_progress'
+  if (status === 'in_progress' || status === 'in_review') return 'in_progress'
   return 'not_started'
 }
 
@@ -943,7 +943,11 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                       ]}
                       android_ripple={{ color: 'rgba(0, 122, 204, 0.12)', borderless: false }}
                     >
-                      <Text style={styles.startBadgeText}>{EXPRESS_DEPOSITS_COPY.setupCta}</Text>
+                      <Text style={styles.startBadgeText}>
+                        {expressStatus === 'in_progress'
+                          ? EXPRESS_DEPOSITS_COPY.continueCta
+                          : EXPRESS_DEPOSITS_COPY.setupCta}
+                      </Text>
                       <ChevronRight size={12} color={colors.neutral.white} strokeWidth={2} />
                     </Pressable>
                   </View>

@@ -24,6 +24,11 @@ export const EXPRESS_DEPOSITS_COPY = {
   completeTitle: "Deposit started",
   identityTitle: "Verify identity",
   identityHint: "We need a photo of your ID and a selfie to finish setup.",
+  kycHint: "Confirm your details. We only need this once.",
+  ssnLabel: "Social Security number",
+  ssnHint: "Required once to finish verification for card and bank deposits.",
+  reviewHint: "We're reviewing your details. This usually takes a moment.",
+  finishSetupCta: "Finish setup",
   savePaymentTitle: "Save a payment method",
   savePaymentHint: "Add a card or bank account to finish this deposit. Details stay in this window.",
   acceptTermsTitle: "Accept terms to continue",
@@ -77,8 +82,59 @@ export function isExpressIdentitySuccess(result?: string | null): boolean {
     value === "completed" ||
     value === "complete" ||
     value === "accepted" ||
-    value === "done"
+    value === "done" ||
+    value === "submitted" ||
+    value === "pending"
   )
+}
+
+export function normalizeUsSsn(raw?: string | null): string {
+  return String(raw || "").replace(/\D/g, "").slice(0, 9)
+}
+
+export function isUsSsnComplete(raw?: string | null): boolean {
+  return normalizeUsSsn(raw).length === 9
+}
+
+/** Web Crypto Onramp `submitKycInfo` IdNumber. Native attachKycInfo uses the same shape. */
+export const EXPRESS_US_SSN_ID_TYPE = "us_ssn" as const
+
+export function buildExpressKycSubmitInfo(input: {
+  form: Record<string, string>
+  country: string
+  includeUsSsn?: boolean
+  eu?: boolean
+}): Record<string, unknown> {
+  const form = input.form
+  const country = String(input.country || form.country || "").toUpperCase()
+  const payload: Record<string, unknown> = {
+    given_name: form.given_name,
+    surname: form.surname,
+    date_of_birth: {
+      day: Number(form.dob_day) || undefined,
+      month: Number(form.dob_month) || undefined,
+      year: Number(form.dob_year) || undefined,
+    },
+    address: {
+      line1: form.line1,
+      city: form.city,
+      state: form.state || undefined,
+      postal_code: form.postal_code,
+      country,
+    },
+  }
+  if (input.includeUsSsn) {
+    payload.id_number = {
+      type: EXPRESS_US_SSN_ID_TYPE,
+      value: normalizeUsSsn(form.ssn),
+    }
+  }
+  if (input.eu) {
+    payload.nationalities = form.nationalities.split(/[\s,]+/).filter(Boolean)
+    payload.birth_city = form.birth_city
+    payload.birth_country = form.birth_country
+  }
+  return payload
 }
 
 /** Drop vendor/scope strings so setup never shows crypto / OAuth errors. */

@@ -82,6 +82,7 @@ function bindClient(client: StripeClient): ExpressOnrampSdk {
     promptUserAttestation: bindMethod(client, client.promptUserAttestation),
     verifyDocuments: bindMethod(client, client.verifyDocuments),
     verifyIdentity: bindMethod(client, client.verifyIdentity),
+    registerWalletAddress: bindMethod(client, client.registerWalletAddress),
     collectPaymentMethod: bindMethod(client, client.collectPaymentMethod),
     performCheckout: bindMethod(client, client.performCheckout),
   }

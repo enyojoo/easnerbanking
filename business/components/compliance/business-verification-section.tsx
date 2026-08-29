@@ -104,7 +104,7 @@ export function BusinessVerificationSection({
   const expressStatus = expressReady
     ? "approved"
     : expressQuery.data?.status || "not_started"
-  const expressInProgress = expressStatus === "in_progress"
+  const expressInProgress = expressStatus === "in_progress" || expressStatus === "in_review"
   const expressSetupCta = expressInProgress
     ? EXPRESS_DEPOSITS_COPY.continueCta
     : EXPRESS_DEPOSITS_COPY.setupCta

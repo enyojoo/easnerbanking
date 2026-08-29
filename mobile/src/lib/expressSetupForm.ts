@@ -56,6 +56,7 @@ export function expressFormFromProfile(userProfile: ProfileLike): Record<string,
     birth_city: '',
     birth_country: country,
     identifier: '',
+    ssn: '',
   }
 }
 
@@ -84,6 +85,7 @@ export function expressFormFromStatusPrefill(
     birth_city: '',
     birth_country: country,
     identifier: '',
+    ssn: '',
   }
 }
 
@@ -93,6 +95,7 @@ export function mergeExpressForm(
 ): Record<string, string> {
   const next = { ...prev }
   for (const [key, value] of Object.entries(incoming)) {
+    if (key === 'ssn') continue
     if (!String(next[key] || '').trim() && value) next[key] = value
   }
   return next

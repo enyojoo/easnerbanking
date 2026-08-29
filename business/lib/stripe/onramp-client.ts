@@ -2,6 +2,7 @@ import { getStripeSecretKey } from "./config"
 import {
   getStripeLinkDataSharingMerchant,
   getStripeLinkOAuthClientId,
+  getStripeLinkOAuthClientSecret,
   getStripeLinkOAuthScopes,
   getStripeOnrampBetaVersion,
 } from "./onramp-config"
@@ -168,6 +169,7 @@ export async function retrieveLinkAuthTokens(authIntentId: string): Promise<{
   const res = await stripeOnrampRequest<{
     access_token?: string
     refresh?: { refresh_token?: string }
+    refresh_token?: string
   }>("POST", `/v1/link_auth_intent/${encodeURIComponent(id)}/tokens`, undefined, {
     absoluteUrl: `https://login.link.com/v1/link_auth_intent/${encodeURIComponent(id)}/tokens`,
     json: true,
@@ -175,7 +177,40 @@ export async function retrieveLinkAuthTokens(authIntentId: string): Promise<{
   })
   return {
     access_token: res.access_token,
-    refresh_token: res.refresh?.refresh_token,
+    refresh_token: res.refresh?.refresh_token || res.refresh_token,
+  }
+}
+
+export async function refreshLinkAccessToken(refreshToken: string): Promise<{
+  access_token: string
+  refresh_token?: string
+}> {
+  const token = String(refreshToken || "").trim()
+  if (!token) throw new StripeOnrampApiError("refresh_token required", 400, null)
+  const clientId = getStripeLinkOAuthClientId()
+  const clientSecret = getStripeLinkOAuthClientSecret()
+  if (!clientId || !clientSecret) {
+    throw new StripeOnrampApiError("Link OAuth client is not configured", 503, null)
+  }
+  const res = await stripeOnrampRequest<{
+    access_token?: string
+    refresh_token?: string
+  }>(
+    "POST",
+    "/auth/token",
+    {
+      grant_type: "refresh_token",
+      refresh_token: token,
+      client_id: clientId,
+      client_secret: clientSecret,
+    },
+    { absoluteUrl: "https://login.link.com/auth/token", omitStripeVersion: true },
+  )
+  const access = String(res.access_token || "").trim()
+  if (!access) throw new StripeOnrampApiError("Could not refresh sign-in", 401, res)
+  return {
+    access_token: access,
+    refresh_token: String(res.refresh_token || "").trim() || undefined,
   }
 }
 

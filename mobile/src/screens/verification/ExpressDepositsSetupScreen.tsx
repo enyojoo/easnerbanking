@@ -13,12 +13,15 @@ import {
 import { ArrowLeft } from 'lucide-react-native'
 import {
   EXPRESS_DEPOSITS_COPY,
+  buildExpressKycSubmitInfo,
   expressIdentityOutcome,
   expressSetupUserMessage,
   isExpressIdentitySuccess,
   isExpressKycAlreadyVerified,
   isExpressIdentitySetupStep,
+  isExpressReviewSetupStep,
   isExpressSetupDismissed,
+  isUsSsnComplete,
   toExpressLinkE164Phone,
   type ExpressDepositsNextStep,
 } from '@easner/shared'
@@ -72,7 +75,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
   const [busy, setBusy] = useState(false)
   const [openingIdentity, setOpeningIdentity] = useState(() => {
     const peeked = peekExpressOnrampStatus()
-    return isExpressIdentitySetupStep(peeked?.nextStep, peeked?.cryptoCustomerId)
+    return isExpressIdentitySetupStep(peeked?.nextStep)
   })
   const [message, setMessage] = useState<string | null>(null)
   const [form, setForm] = useState<Record<string, string>>(() =>
@@ -85,7 +88,6 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
       expressFormFromStatusPrefill(peekExpressOnrampStatus()?.prefill, peekExpressOnrampStatus()?.payerCountry),
     ),
   )
-  const [sdk, setSdk] = useState<ExpressOnrampSdk | null>(null)
   const [stripeEl, setStripeEl] = useState<unknown>(null)
   const l2StartedRef = useRef(false)
   const identitySucceededRef = useRef(false)
@@ -119,13 +121,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
   }, [refresh])
 
   const lockedCountry = expressLockedCountry(form, status?.payerCountry)
-  const rawStep: ExpressDepositsNextStep = status?.nextStep ?? 'link'
-  const step: ExpressDepositsNextStep =
-    (rawStep === 'us_kyc' || rawStep === 'eu_kyc') && status?.cryptoCustomerId
-      ? rawStep === 'eu_kyc'
-        ? 'eu_l2'
-        : 'us_l2'
-      : rawStep
+  const step: ExpressDepositsNextStep = status?.nextStep ?? 'link'
 
   const run = async (fn: () => Promise<boolean | void>) => {
     setBusy(true)
@@ -148,7 +144,6 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
     if (!key) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
     const customerId = status?.cryptoCustomerId ?? data?.cryptoCustomerId ?? null
     const client = await loadMobileExpressOnramp(key, customerId)
-    setSdk(client)
     return client
   }
 
@@ -161,10 +156,19 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
     await configureExpressOnrampLinkSession(client, cryptoCustomerId)
   }
 
+  const pollUntilNotReview = async () => {
+    let data = await refresh(true)
+    for (let i = 0; i < 12 && isExpressReviewSetupStep(data.nextStep); i += 1) {
+      await new Promise((r) => setTimeout(r, 2500))
+      data = await refresh(true)
+    }
+    return data
+  }
+
   const field = (
     key: string,
     label: string,
-    opts?: { keyboard?: 'email' | 'phone' | 'number'; autoCapitalize?: 'none' | 'words' },
+    opts?: { keyboard?: 'email' | 'phone' | 'number'; autoCapitalize?: 'none' | 'words'; secure?: boolean },
   ) => (
     <View style={styles.fieldContainer}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -188,6 +192,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
                     : 'default'
             }
             returnKeyType="done"
+            secureTextEntry={opts?.secure}
             onSubmitEditing={() => Keyboard.dismiss()}
           />
         </View>
@@ -196,10 +201,10 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
   )
 
   const cta =
-    step === 'ready'
+    step === 'ready' || isExpressReviewSetupStep(step)
       ? null
       : step === 'wallet'
-        ? 'Finish setup'
+        ? EXPRESS_DEPOSITS_COPY.finishSetupCta
         : step === 'us_l2' || step === 'eu_l2'
           ? EXPRESS_DEPOSITS_COPY.verifyCta
           : step === 'link'
@@ -274,11 +279,10 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           const outcome = expressIdentityOutcome(raw)
           setStripeEl(null)
           setOpeningIdentity(false)
-          l2StartedRef.current = false
           if (isExpressIdentitySuccess(outcome)) {
             identitySucceededRef.current = true
             setMessage(null)
-            void refresh(true)
+            void pollUntilNotReview()
             return
           }
           if (identityNoticeRef.current) return
@@ -286,7 +290,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           setMessage(null)
           showInfo(EXPRESS_DEPOSITS_COPY.setupDismissed, 5000)
         }
-        dismissL2Ref.current = () => finish({ result: 'canceled' })
+        dismissL2Ref.current = () => finish({ result: 'submitted' })
 
         const authorizeLink = async (): Promise<boolean> => {
           if (!client.authenticate) return true
@@ -386,6 +390,10 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           }
           if (first !== undefined) finish(first)
         } catch (e) {
+          if (isExpressKycAlreadyVerified(e instanceof Error ? e.message : String(e))) {
+            finish({ result: 'submitted' })
+            return true
+          }
           if (!(e instanceof Error) || e.message !== EXPRESS_NATIVE_AUTH_REQUIRED) throw e
           const againAuthed = await authorizeLink()
           if (!againAuthed || settled) return true
@@ -399,33 +407,96 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
         return true
       }
       if (step === 'us_kyc' || step === 'eu_kyc') {
+        if (step === 'us_kyc' && !isUsSsnComplete(form.ssn)) {
+          throw new Error(EXPRESS_DEPOSITS_COPY.ssnHint)
+        }
+        if (client.authenticate) {
+          const authed = await (async (): Promise<boolean> => {
+            const auth = await apiFetch<{ authIntentId?: string | null; needsRegister?: boolean }>(
+              '/api/stripe/onramp/link-auth',
+              { method: 'POST', body: linkAuthBody() },
+            )
+            let intentId = auth.authIntentId
+            if (!intentId && auth.needsRegister && !status?.cryptoCustomerId) {
+              await client.registerLinkUser?.(
+                form.email.trim(),
+                toExpressLinkE164Phone(form.phone, lockedCountry),
+                lockedCountry,
+                `${form.given_name} ${form.surname}`.trim(),
+              )
+              const again = await apiFetch<{ authIntentId?: string | null }>(
+                '/api/stripe/onramp/link-auth',
+                { method: 'POST', body: linkAuthBody() },
+              )
+              intentId = again.authIntentId
+            }
+            if (!intentId) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
+            if (Platform.OS === 'web') {
+              return new Promise((resolve, reject) => {
+                void client
+                  .authenticate!(intentId!, async (result) => {
+                    const outcome = String(result.result || '')
+                    if (outcome === 'success') {
+                      if (result.crypto_customer_id) {
+                        await bindLinkSession(client, String(result.crypto_customer_id))
+                        await apiFetch('/api/stripe/onramp/link-complete', {
+                          method: 'POST',
+                          body: {
+                            cryptoCustomerId: result.crypto_customer_id,
+                            accessToken: result.access_token || result.oauth_token,
+                            authIntentId: intentId,
+                          },
+                        })
+                      }
+                      setStripeEl(null)
+                      resolve(true)
+                      return
+                    }
+                    if (isExpressSetupDismissed(outcome)) {
+                      setStripeEl(null)
+                      resolve(false)
+                      return
+                    }
+                    setStripeEl(null)
+                    resolve(false)
+                  })
+                  .then((el) => {
+                    if (isStripeHostElement(el)) setStripeEl(el)
+                  })
+                  .catch(reject)
+              })
+            }
+            await client.authenticate(intentId, async (result) => {
+              const outcome = String(result.result || '')
+              if (outcome === 'success' && result.crypto_customer_id) {
+                await bindLinkSession(client, String(result.crypto_customer_id))
+                await apiFetch('/api/stripe/onramp/link-complete', {
+                  method: 'POST',
+                  body: {
+                    cryptoCustomerId: result.crypto_customer_id,
+                    accessToken: result.access_token || result.oauth_token,
+                    authIntentId: intentId,
+                  },
+                })
+              }
+            })
+            return true
+          })()
+          if (!authed) return true
+        }
         try {
-          await client.submitKycInfo?.({
-            given_name: form.given_name,
-            surname: form.surname,
-            date_of_birth: {
-              day: Number(form.dob_day) || undefined,
-              month: Number(form.dob_month) || undefined,
-              year: Number(form.dob_year) || undefined,
-            },
-            address: {
-              line1: form.line1,
-              city: form.city,
-              state: form.state,
-              postal_code: form.postal_code,
+          await client.submitKycInfo?.(
+            buildExpressKycSubmitInfo({
+              form,
               country: lockedCountry,
-            },
-            ...(step === 'eu_kyc'
-              ? {
-                  nationalities: form.nationalities.split(/[\s,]+/).filter(Boolean),
-                  birth_city: form.birth_city,
-                  birth_country: form.birth_country,
-                }
-              : {}),
-          })
+              includeUsSsn: step === 'us_kyc',
+              eu: step === 'eu_kyc',
+            }),
+          )
         } catch (e) {
           if (!isExpressKycAlreadyVerified(e instanceof Error ? e.message : String(e))) throw e
         }
+        await pollUntilNotReview()
         return
       }
       if (step === 'eu_identifiers') {
@@ -456,18 +527,78 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
         return
       }
       if (step === 'wallet') {
-        await apiFetch('/api/stripe/onramp/wallets/register', { method: 'POST' })
+        const registered = await apiFetch<{ walletAddress?: string; registered?: boolean }>(
+          '/api/stripe/onramp/wallets/register',
+          { method: 'POST' },
+        )
+        if (!registered.registered) {
+          const walletAddress = String(registered.walletAddress || '').trim()
+          if (!walletAddress || !client.registerWalletAddress) {
+            throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
+          }
+          if (client.authenticate) {
+            const auth = await apiFetch<{ authIntentId?: string | null }>(
+              '/api/stripe/onramp/link-auth',
+              { method: 'POST', body: linkAuthBody() },
+            )
+            const intentId = auth.authIntentId
+            if (intentId) {
+              if (Platform.OS === 'web') {
+                const ok = await new Promise<boolean>((resolve, reject) => {
+                  void client
+                    .authenticate!(intentId, async (result) => {
+                      const outcome = String(result.result || '')
+                      if (outcome === 'success') {
+                        if (result.crypto_customer_id) {
+                          await bindLinkSession(client, String(result.crypto_customer_id))
+                        }
+                        setStripeEl(null)
+                        resolve(true)
+                        return
+                      }
+                      setStripeEl(null)
+                      resolve(false)
+                    })
+                    .then((el) => {
+                      if (isStripeHostElement(el)) setStripeEl(el)
+                    })
+                    .catch(reject)
+                })
+                if (!ok) return true
+              } else {
+                await client.authenticate(intentId, async (result) => {
+                  if (String(result.result || '') === 'success' && result.crypto_customer_id) {
+                    await bindLinkSession(client, String(result.crypto_customer_id))
+                  }
+                })
+              }
+            }
+          }
+          await client.registerWalletAddress(walletAddress, 'solana')
+        }
       }
     })
   }
 
   useEffect(() => {
+    if (step !== 'us_l2' && step !== 'eu_l2') {
+      l2StartedRef.current = false
+      return
+    }
     if (l2StartedRef.current) return
-    if (step !== 'us_l2' && step !== 'eu_l2') return
     l2StartedRef.current = true
     setOpeningIdentity(true)
     onCta()
   }, [step])
+
+  useEffect(() => {
+    if (!isExpressReviewSetupStep(step)) return
+    setOpeningIdentity(false)
+    const id = setInterval(() => {
+      void refresh(true).catch(() => undefined)
+    }, 2500)
+    return () => clearInterval(id)
+  }, [step, refresh])
 
   useEffect(() => {
     if (step !== 'us_l2' && step !== 'eu_l2') return
@@ -527,14 +658,26 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
               ) : null}
               {step === 'us_kyc' || step === 'eu_kyc' ? (
                 <View style={styles.profileCard}>
+                  <Text style={styles.bodyText}>{EXPRESS_DEPOSITS_COPY.kycHint}</Text>
                   {field('given_name', 'First name')}
                   {field('surname', 'Last name')}
                   {field('line1', 'Address')}
                   {field('city', 'City')}
+                  {step === 'us_kyc' ? field('state', 'State') : null}
                   {field('postal_code', 'Postal code')}
                   {field('dob_day', 'Birth day', { keyboard: 'number' })}
                   {field('dob_month', 'Birth month', { keyboard: 'number' })}
                   {field('dob_year', 'Birth year', { keyboard: 'number' })}
+                  {step === 'us_kyc' ? (
+                    <>
+                      {field('ssn', EXPRESS_DEPOSITS_COPY.ssnLabel, {
+                        keyboard: 'number',
+                        autoCapitalize: 'none',
+                        secure: true,
+                      })}
+                      <Text style={styles.bodyText}>{EXPRESS_DEPOSITS_COPY.ssnHint}</Text>
+                    </>
+                  ) : null}
                   {step === 'eu_kyc' ? (
                     <>
                       {field('nationalities', EXPRESS_DEPOSITS_COPY.nationalitiesLabel)}
@@ -550,6 +693,10 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
 
               {step === 'eu_attestation' ? (
                 <Text style={styles.bodyText}>{EXPRESS_DEPOSITS_COPY.acceptTermsHint}</Text>
+              ) : null}
+
+              {isExpressReviewSetupStep(step) ? (
+                <Text style={styles.bodyText}>{EXPRESS_DEPOSITS_COPY.reviewHint}</Text>
               ) : null}
 
               {step === 'us_l2' || step === 'eu_l2' ? (
@@ -571,6 +718,10 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
                 ) : (
                   <GlossyPrimaryButton title={cta} onPress={onCta} />
                 )
+              ) : isExpressReviewSetupStep(step) ? (
+                <View style={styles.ctaBusy}>
+                  <ActivityIndicator color={colors.neutral.white} />
+                </View>
               ) : null}
               {message ? <Text style={styles.error}>{message}</Text> : null}
             </ScrollView>

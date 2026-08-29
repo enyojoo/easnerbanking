@@ -1,17 +1,25 @@
 import { NextResponse } from "next/server"
 import {
   EXPRESS_DEPOSITS_COPY,
+  expressDepositsHighestVerifiedTier,
   expressDepositsLimits,
   expressDepositsNextStep,
+  expressDepositsPersistStatus,
   expressDepositsSourceCurrency,
   normalizeExpressDepositsCustomer,
   resolveCashPayInMethods,
   usPayInAllowsExpress,
+  type ExpressDepositsCustomerSnapshot,
 } from "@easner/shared"
 import { getApplePayMerchantId } from "@/lib/stripe/onramp-config"
 import { getStripePublishableKey } from "@/lib/stripe/config"
 import { stripeOnrampOfficeFlags } from "@/lib/stripe/onramp-gate"
-import { kycPrefillFromPayer, resolveExpressDepositsContext } from "@/lib/stripe/onramp-context"
+import {
+  kycPrefillFromPayer,
+  persistExpressDepositsKyc,
+  resolveExpressDepositsContext,
+  retrieveExpressCustomerWithOAuth,
+} from "@/lib/stripe/onramp-context"
 import { stripeOnramp } from "@/lib/stripe/onramp-client"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { loadUsUsdBankPayInMode } from "@/lib/stripe/us-pay-in-corridor"
@@ -21,28 +29,39 @@ export const runtime = "nodejs"
 export async function GET(request: Request) {
   const resolved = await resolveExpressDepositsContext(request, { requireEligible: false })
   if ("error" in resolved) return resolved.error
-  const { payer, businessId, eligible, payerCountry, oauthToken } = resolved.ctx
+  const { admin, payer, payerUserId, businessId, eligible, payerCountry, oauthToken, oauthRefreshToken } =
+    resolved.ctx
   const usPayInMode = await loadUsUsdBankPayInMode(createSupabaseAdmin())
   const office = stripeOnrampOfficeFlags({
     usPayInAllowsExpress: usPayInAllowsExpress(usPayInMode),
   })
-  let customer = payer.stripe_crypto_customer_id
+  let customer: ExpressDepositsCustomerSnapshot | null = payer.stripe_crypto_customer_id
     ? { id: payer.stripe_crypto_customer_id }
     : null
   let walletRegistered = false
+  let retrievedOk = false
+  let liveOAuth = oauthToken
   if (payer.stripe_crypto_customer_id) {
     try {
-      customer =
-        normalizeExpressDepositsCustomer(
-          await stripeOnramp.retrieveCustomer(payer.stripe_crypto_customer_id, oauthToken || undefined),
-        ) ?? { id: payer.stripe_crypto_customer_id }
+      const retrieved = await retrieveExpressCustomerWithOAuth({
+        admin,
+        payerUserId,
+        customerId: payer.stripe_crypto_customer_id,
+        oauthToken,
+        oauthRefreshToken,
+      })
+      liveOAuth = retrieved.oauthToken
+      customer = normalizeExpressDepositsCustomer(retrieved.customer) ?? {
+        id: payer.stripe_crypto_customer_id,
+      }
+      retrievedOk = Boolean(customer.kyc_tiers && customer.kyc_tiers.length > 0)
     } catch {
       customer = { id: payer.stripe_crypto_customer_id }
     }
     try {
       const wallets = (await stripeOnramp.listWallets(
         payer.stripe_crypto_customer_id,
-        oauthToken || undefined,
+        liveOAuth || undefined,
       )) as { data?: unknown[] }
       walletRegistered = Array.isArray(wallets.data) && wallets.data.length > 0
     } catch {
@@ -57,6 +76,13 @@ export async function GET(request: Request) {
     walletRegistered,
   })
   const ready = nextStep === "ready"
+  const kycTier = expressDepositsHighestVerifiedTier(customer)
+  if (retrievedOk) {
+    await persistExpressDepositsKyc(admin, payerUserId, payer, {
+      nextStep,
+      kycTier,
+    })
+  }
   const sourceCurrency = expressDepositsSourceCurrency(payerCountry)
   const methods = resolveCashPayInMethods({
     product: businessId ? "business" : "mobile",
@@ -72,10 +98,6 @@ export async function GET(request: Request) {
   })
     .filter((m) => m.kind.startsWith("express_"))
     .map((m) => m.kind)
-
-  const kycTier =
-    (customer?.kyc_tiers ?? []).find((t) => String(t.verification_status).toLowerCase() === "verified")
-      ?.tier ?? null
 
   return NextResponse.json({
     copy: EXPRESS_DEPOSITS_COPY,
@@ -93,7 +115,7 @@ export async function GET(request: Request) {
     kycRegion: customer?.kyc_region ?? null,
     kycTiers: customer?.kyc_tiers ?? [],
     providedFields: customer?.provided_fields ?? [],
-    status: ready ? "ready" : payer.stripe_crypto_customer_id ? "in_progress" : "not_started",
+    status: expressDepositsPersistStatus(nextStep),
     kycTier,
     paymentTokenId: payer.stripe_express_payment_token_id ?? null,
     ready,

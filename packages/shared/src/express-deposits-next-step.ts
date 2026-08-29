@@ -6,18 +6,19 @@ export type ExpressDepositsNextStep =
   | "eu_identifiers"
   | "eu_attestation"
   | "eu_l2"
+  | "review"
   | "wallet"
   | "payment"
   | "ready"
 
-/** Link already done — identity popup is the remaining setup step. */
-export function isExpressIdentitySetupStep(
-  nextStep?: string | null,
-  cryptoCustomerId?: string | null,
-): boolean {
-  const raw = String(nextStep || "link")
-  if ((raw === "us_kyc" || raw === "eu_kyc") && cryptoCustomerId) return true
+/** Stripe-hosted ID + selfie. Not the L0/L1 details form. */
+export function isExpressIdentitySetupStep(nextStep?: string | null): boolean {
+  const raw = String(nextStep || "")
   return raw === "us_l2" || raw === "eu_l2"
+}
+
+export function isExpressReviewSetupStep(nextStep?: string | null): boolean {
+  return String(nextStep || "") === "review"
 }
 
 export type ExpressDepositsKycTier = {
@@ -92,64 +93,52 @@ function isVerifiedStatus(status: string): boolean {
   return status === "verified" || status === "approved" || status === "success"
 }
 
+function isPendingStatus(status: string): boolean {
+  return status === "pending" || status === "in_review" || status === "processing" || status === "under_review"
+}
+
+function isRejectedStatus(status: string): boolean {
+  return status === "rejected" || status === "failed" || status === "canceled" || status === "cancelled"
+}
+
 function tierStatus(customer: ExpressDepositsCustomerSnapshot, tier: string): string {
   const row = (customer.kyc_tiers ?? []).find((t) => String(t.tier || "").toLowerCase() === tier)
   return String(row?.verification_status || "").toLowerCase()
-}
-
-function verificationStatus(customer: ExpressDepositsCustomerSnapshot, name: string): string {
-  const row = (customer.verifications ?? []).find(
-    (v) => String(v.name || v.type || "").toLowerCase() === name,
-  )
-  return String(row?.status || "").toLowerCase()
 }
 
 function provided(customer: ExpressDepositsCustomerSnapshot, field: string): boolean {
   return (customer.provided_fields ?? []).map((f) => String(f).toLowerCase()).includes(field)
 }
 
-function inFlightOrDone(status: string): boolean {
-  return Boolean(status) && status !== "not_started" && status !== "not_available"
-}
-
-function hasSubmittedIdentityFields(customer: ExpressDepositsCustomerSnapshot): boolean {
+function hasNameAndAddress(customer: ExpressDepositsCustomerSnapshot): boolean {
   const hasName =
     (provided(customer, "first_name") || provided(customer, "given_name")) &&
     (provided(customer, "last_name") || provided(customer, "surname"))
+  return hasName && provided(customer, "address_line_1")
+}
+
+function hasUsL1Fields(customer: ExpressDepositsCustomerSnapshot): boolean {
   return (
-    hasName &&
-    (provided(customer, "address_line_1") ||
-      provided(customer, "dob") ||
-      provided(customer, "date_of_birth"))
+    (provided(customer, "dob") || provided(customer, "date_of_birth")) &&
+    (provided(customer, "id_number") || provided(customer, "id_type"))
   )
 }
 
-function identityVerified(customer: ExpressDepositsCustomerSnapshot): boolean {
-  if (
-    isVerifiedStatus(tierStatus(customer, "l1")) ||
-    isVerifiedStatus(tierStatus(customer, "l0")) ||
-    isVerifiedStatus(verificationStatus(customer, "kyc_verified"))
-  ) {
-    return true
-  }
-  if (
-    inFlightOrDone(tierStatus(customer, "l2")) ||
-    inFlightOrDone(verificationStatus(customer, "id_document_verified"))
-  ) {
-    return true
-  }
-  if (hasSubmittedIdentityFields(customer)) return true
-  const kyc = verificationStatus(customer, "kyc_verified")
-  if (kyc === "not_started" || kyc === "rejected" || kyc === "not_available") return false
-  // Link already created the customer; retrieve often omits tiers. Do not collect name/address again.
-  return Boolean(customer.id) && !(customer.kyc_tiers?.length) && !(customer.verifications?.length)
+export function expressDepositsHighestVerifiedTier(
+  customer: ExpressDepositsCustomerSnapshot | null | undefined,
+): "l0" | "l1" | "l2" | null {
+  if (!customer) return null
+  if (isVerifiedStatus(tierStatus(customer, "l2"))) return "l2"
+  if (isVerifiedStatus(tierStatus(customer, "l1"))) return "l1"
+  if (isVerifiedStatus(tierStatus(customer, "l0"))) return "l0"
+  return null
 }
 
-function documentsVerified(customer: ExpressDepositsCustomerSnapshot): boolean {
-  return (
-    isVerifiedStatus(tierStatus(customer, "l2")) ||
-    isVerifiedStatus(verificationStatus(customer, "id_document_verified"))
-  )
+export function expressDepositsPersistStatus(nextStep: ExpressDepositsNextStep): string {
+  if (nextStep === "ready") return "ready"
+  if (nextStep === "review") return "in_review"
+  if (nextStep === "link") return "not_started"
+  return "in_progress"
 }
 
 function hasIdentifier(customer: ExpressDepositsCustomerSnapshot): boolean {
@@ -160,6 +149,11 @@ function hasAttestation(customer: ExpressDepositsCustomerSnapshot): boolean {
   return provided(customer, "attestation")
 }
 
+/**
+ * US: one setup should finish L0 + L1 (details + SSN) then L2 (ID + selfie).
+ * Drive off `kyc_tiers`. Do not treat deprecated `id_document_verified` as L2 —
+ * Stripe can mark that while `kyc_tiers.l2` is still `not_started`.
+ */
 export function expressDepositsNextStep(input: {
   cryptoCustomerId?: string | null
   customer?: ExpressDepositsCustomerSnapshot | null
@@ -173,14 +167,33 @@ export function expressDepositsNextStep(input: {
   const country = String(input.payerCountry || "").toUpperCase()
   const isEu = region === "eu" || (!region && country !== "US" && country !== "")
 
+  const l0 = tierStatus(customer, "l0")
+  const l1 = tierStatus(customer, "l1")
+  const l2 = tierStatus(customer, "l2")
+  const l0Verified = isVerifiedStatus(l0)
+  const l1Verified = isVerifiedStatus(l1)
+  const l2Verified = isVerifiedStatus(l2)
+
+  if (l2Verified) {
+    if (!input.walletRegistered) return "wallet"
+    return "ready"
+  }
+
   if (isEu) {
-    if (!identityVerified(customer)) return "eu_kyc"
+    if (isPendingStatus(l0) || isPendingStatus(l1)) return "review"
+    if (!l0Verified && !l1Verified && !hasNameAndAddress(customer)) return "eu_kyc"
     if (!hasIdentifier(customer)) return "eu_identifiers"
     if (!hasAttestation(customer)) return "eu_attestation"
-    if (!documentsVerified(customer)) return "eu_l2"
+    if (isPendingStatus(l2)) return "review"
+    if (!l2Verified) return "eu_l2"
   } else {
-    if (!identityVerified(customer)) return "us_kyc"
-    if (!documentsVerified(customer)) return "us_l2"
+    if (isPendingStatus(l0) || isPendingStatus(l1)) return "review"
+    if (!l1Verified) {
+      if (hasUsL1Fields(customer) && !isRejectedStatus(l1)) return "review"
+      return "us_kyc"
+    }
+    if (isPendingStatus(l2)) return "review"
+    if (!l2Verified) return "us_l2"
   }
 
   if (!input.walletRegistered) return "wallet"

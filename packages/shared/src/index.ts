@@ -539,6 +539,8 @@ export type {
 } from "./cash-pay-in-methods"
 export {
   EXPRESS_DEPOSITS_COPY,
+  EXPRESS_US_SSN_ID_TYPE,
+  buildExpressKycSubmitInfo,
   expressDepositActivityLabel,
   expressDepositMethodTitle,
   expressIdentityOutcome,
@@ -548,6 +550,8 @@ export {
   isExpressIdentitySuccess,
   isExpressKycAlreadyVerified,
   isExpressSetupDismissed,
+  isUsSsnComplete,
+  normalizeUsSsn,
   toExpressLinkE164Phone,
 } from "./express-deposits-copy"
 export {
@@ -590,8 +594,11 @@ export { useExpressDepositsAmountLimits } from "./hooks/use-express-deposits-amo
 export type { ExpressDepositsAmountValidation } from "./express-deposits-limits"
 export {
   expressDepositsKycReady,
+  expressDepositsHighestVerifiedTier,
   expressDepositsNextStep,
+  expressDepositsPersistStatus,
   isExpressIdentitySetupStep,
+  isExpressReviewSetupStep,
   normalizeExpressDepositsCustomer,
 } from "./express-deposits-next-step"
 export type {

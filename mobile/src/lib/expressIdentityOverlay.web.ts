@@ -20,7 +20,8 @@ function stripeOverlayOpen(): boolean {
   return Array.from(document.querySelectorAll('iframe')).some(isStripePopupIframe)
 }
 
-/** Stripe Link / Identity sets aria-hidden on #root and injects popup iframes into the live document. */
+/** Identity iframe close means the user submitted or finished — not a cancel.
+ *  Only the SDK `abandoned` callback should dismiss setup. */
 export function watchExpressIdentityOverlay(handlers: OverlayHandlers): () => void {
   if (typeof document === 'undefined') return () => {}
   const onClosed = typeof handlers === 'function' ? handlers : handlers.onClosed

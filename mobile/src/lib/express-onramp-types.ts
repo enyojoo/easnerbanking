@@ -14,6 +14,7 @@ export type ExpressOnrampSdk = {
   promptUserAttestation?: (cb: (r: Record<string, unknown>) => void) => Promise<unknown>
   verifyDocuments?: (cb?: (r: unknown) => void) => Promise<unknown>
   verifyIdentity?: (cb?: (r: unknown) => void) => Promise<unknown>
+  registerWalletAddress?: (address: string, network: string) => Promise<unknown>
   collectPaymentMethod?: (
     opts: Record<string, unknown>,
     cb: (r: { cryptoPaymentToken?: string; paymentMethodDetails?: Record<string, unknown> }) => void,

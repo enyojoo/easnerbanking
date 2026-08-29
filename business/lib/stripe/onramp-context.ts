@@ -2,11 +2,16 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
-import { expressDepositsPayerCountry } from "@easner/shared"
+import {
+  expressDepositsPayerCountry,
+  expressDepositsPersistStatus,
+  type ExpressDepositsNextStep,
+} from "@easner/shared"
 import { isStripeOnrampEnabled } from "@/lib/stripe/onramp-config"
 import { isExpressDepositsPayerEligible } from "@/lib/stripe/onramp-gate"
-import { decryptLinkOAuthToken } from "@/lib/stripe/onramp-oauth"
+import { decryptLinkOAuthSecrets, encryptLinkOAuthSecrets } from "@/lib/stripe/onramp-oauth"
 import { NextResponse } from "next/server"
+import { refreshLinkAccessToken, StripeOnrampApiError, stripeOnramp } from "@/lib/stripe/onramp-client"
 
 export const EXPRESS_USER_COLUMNS =
   "id,email,full_name,phone,date_of_birth,residence_country,kyc_id_type,kyc_id_number,kyc_id_issuing_country,kyc_address_street,kyc_address_city,kyc_address_state,kyc_address_post_code,kyc_address_country,stripe_crypto_customer_id,stripe_express_deposits_status,stripe_express_kyc_tier,stripe_express_payment_token_id,stripe_link_oauth_token_ciphertext"
@@ -89,6 +94,7 @@ export async function resolveExpressDepositsContext(
   }
 
   const row = payer as ExpressUserRow
+  const secrets = decryptLinkOAuthSecrets(row.stripe_link_oauth_token_ciphertext)
   return {
     ctx: {
       admin,
@@ -99,7 +105,8 @@ export async function resolveExpressDepositsContext(
       payer: row,
       payerCountry: country,
       eligible,
-      oauthToken: decryptLinkOAuthToken(row.stripe_link_oauth_token_ciphertext),
+      oauthToken: secrets?.access_token || "",
+      oauthRefreshToken: secrets?.refresh_token || "",
     },
   } as const
 }
@@ -110,6 +117,59 @@ export async function patchExpressPayer(
   patch: Record<string, unknown>,
 ): Promise<void> {
   await admin.from("users").update(patch).eq("id", userId)
+}
+
+export async function persistExpressDepositsKyc(
+  admin: SupabaseClient,
+  userId: string,
+  current: ExpressUserRow,
+  input: {
+    nextStep: ExpressDepositsNextStep
+    kycTier: string | null
+  },
+): Promise<void> {
+  const status = expressDepositsPersistStatus(input.nextStep)
+  const tier = input.kycTier || null
+  if (
+    current.stripe_express_deposits_status === status &&
+    (current.stripe_express_kyc_tier || null) === tier
+  ) {
+    return
+  }
+  await patchExpressPayer(admin, userId, {
+    stripe_express_deposits_status: status,
+    stripe_express_kyc_tier: tier,
+  })
+}
+
+function isOAuthAuthFailure(e: unknown): boolean {
+  return e instanceof StripeOnrampApiError && (e.status === 400 || e.status === 401)
+}
+
+/** Retrieve CryptoCustomer with a live Link token; refresh + persist if the access token expired. */
+export async function retrieveExpressCustomerWithOAuth(input: {
+  admin: SupabaseClient
+  payerUserId: string
+  customerId: string
+  oauthToken: string
+  oauthRefreshToken: string
+}): Promise<{ customer: unknown; oauthToken: string }> {
+  const retrieve = (token: string) => stripeOnramp.retrieveCustomer(input.customerId, token || undefined)
+  try {
+    return { customer: await retrieve(input.oauthToken), oauthToken: input.oauthToken }
+  } catch (e) {
+    if (!isOAuthAuthFailure(e) || !input.oauthRefreshToken) throw e
+    const refreshed = await refreshLinkAccessToken(input.oauthRefreshToken)
+    const access = refreshed.access_token
+    const refresh = refreshed.refresh_token || input.oauthRefreshToken
+    await patchExpressPayer(input.admin, input.payerUserId, {
+      stripe_link_oauth_token_ciphertext: encryptLinkOAuthSecrets({
+        access_token: access,
+        refresh_token: refresh,
+      }),
+    })
+    return { customer: await retrieve(access), oauthToken: access }
+  }
 }
 
 function dobParts(raw: string | null | undefined): { day?: number; month?: number; year?: number } {
@@ -142,8 +202,5 @@ export function kycPrefillFromPayer(payer: ExpressUserRow): Record<string, unkno
       country,
     },
     nationalities: country ? [String(country).toUpperCase()] : undefined,
-    id_number: payer.kyc_id_number || undefined,
-    id_type: payer.kyc_id_type || undefined,
-    id_country: payer.kyc_id_issuing_country || undefined,
   }
 }
