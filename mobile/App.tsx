@@ -209,7 +209,15 @@ function AppContent() {
       <WebIdleSessionBridge />
       <Suspense
         fallback={
-          <View style={[styles.appRoot, { backgroundColor: NATIVE_SPLASH_BACKGROUND }]} />
+          <View
+            style={[
+              styles.appRoot,
+              {
+                backgroundColor:
+                  Platform.OS === 'web' ? palette.background.primary : NATIVE_SPLASH_BACKGROUND,
+              },
+            ]}
+          />
         }
       >
         <AppNavigator />

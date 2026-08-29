@@ -1,7 +1,7 @@
 // First import on purpose: captures the JS-start timestamp for the
 // `mobile_cold_start` metric (see src/lib/coldStartMetrics.ts).
 import './src/lib/coldStartMetrics';
-// Native splash failsafe — must run before `App` (see splashGate.ts).
+// Native splash hold + failsafe. On web this only dismisses any splash overlay.
 import './src/lib/splashGate';
 import './src/lib/backgroundTasks';
 // PostHog init: PostHogProvider → getPostHog() (native) / posthog.web.ts (web).

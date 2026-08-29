@@ -1,19 +1,19 @@
 /**
- * Must be imported from index.ts *before* `App` so this module evaluates
- * (and the failsafe timer is scheduled) even if App.tsx / AppNavigator
- * hang during static import. ES module import order is depth-first of
- * index.ts's import list — keep this file free of App / navigator imports.
+ * Native splash only. Do not hold a splash overlay on Expo web.
  */
 import { Platform } from 'react-native'
 import * as SplashScreen from 'expo-splash-screen'
 
-/** Matches `app.json` / expo-splash-screen backgroundColor. */
+/** Matches `app.json` / expo-splash-screen backgroundColor (iOS / Android). */
 export const NATIVE_SPLASH_BACKGROUND = '#007ACC'
 
-SplashScreen.preventAutoHideAsync().catch(() => {})
+if (Platform.OS === 'web') {
+  void SplashScreen.hideAsync().catch(() => {})
+} else {
+  SplashScreen.preventAutoHideAsync().catch(() => {})
+}
 
 export function hideNativeSplash() {
-  if (Platform.OS === 'web') return
   void SplashScreen.hideAsync().catch(() => {})
 }
 
