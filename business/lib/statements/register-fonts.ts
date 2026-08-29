@@ -7,9 +7,12 @@ import { Font } from "@react-pdf/renderer"
  * Literal `import.meta.url` targets so the bundler copies these into the
  * serverless function. Avoid `fileURLToPath` at module scope — webpack can
  * emit asset URLs that break during Next.js page-data collection.
+ *
+ * Noto Sans (not Geist) — Geist lacks several currency glyphs used on
+ * statements (e.g. ₦ U+20A6, ₣, ₩).
  */
-const FONT_REGULAR = new URL("../../assets/statement-fonts/Geist-Regular.ttf", import.meta.url)
-const FONT_BOLD = new URL("../../assets/statement-fonts/Geist-Bold.ttf", import.meta.url)
+const FONT_REGULAR = new URL("../../assets/statement-fonts/NotoSans-Regular.ttf", import.meta.url)
+const FONT_BOLD = new URL("../../assets/statement-fonts/NotoSans-Bold.ttf", import.meta.url)
 
 let registered = false
 let registerPromise: Promise<void> | null = null
@@ -39,14 +42,14 @@ function fontDataUrl(buffer: Buffer): string {
   return `data:font/truetype;base64,${buffer.toString("base64")}`
 }
 
-/** Geist includes ₦ and other local-currency glyphs Helvetica drops. */
+/** Registers Noto Sans for full statement text including local-currency symbols. */
 export async function registerStatementFonts(): Promise<void> {
   if (registered) return
   if (!registerPromise) {
     registerPromise = (async () => {
       const [regular, bold] = await Promise.all([
-        loadFont(FONT_REGULAR, "assets/statement-fonts/Geist-Regular.ttf"),
-        loadFont(FONT_BOLD, "assets/statement-fonts/Geist-Bold.ttf"),
+        loadFont(FONT_REGULAR, "assets/statement-fonts/NotoSans-Regular.ttf"),
+        loadFont(FONT_BOLD, "assets/statement-fonts/NotoSans-Bold.ttf"),
       ])
       Font.register({
         family: "StatementSans",
