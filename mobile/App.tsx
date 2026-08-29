@@ -136,23 +136,16 @@ function AppContent() {
     setPreserveUserPathOverAuth(authLoading && !authUser)
   }, [authLoading, authUser])
 
-  // Build 206: keep native splash until session restore and navigation are ready.
-  // Opacity stays 0 so ivory loading shells never flash under the splash.
+  // Hide native splash as soon as navigation has mounted. Do not wait on
+  // auth restore: if GoTrue stalls, waiting here is a stuck splash. Session
+  // restore still uses the ivory shell in AppNavigator (same as 206).
   useEffect(() => {
     if (Platform.OS === 'web') return
     if (splashFinished) return
-    if (authLoading) return
     if (!navReady) return
-    let cancelled = false
-    void (async () => {
-      if (cancelled) return
-      hideNativeSplash()
-      if (!cancelled) setSplashFinished(true)
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [authLoading, navReady, splashFinished])
+    hideNativeSplash()
+    setSplashFinished(true)
+  }, [navReady, splashFinished])
 
   useEffect(() => {
     if (splashFinished) {
@@ -163,6 +156,15 @@ function AppContent() {
       }).start()
     }
   }, [splashFinished, appFadeAnim])
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return
+    const timeout = setTimeout(() => {
+      hideNativeSplash()
+      setSplashFinished(true)
+    }, 2_000)
+    return () => clearTimeout(timeout)
+  }, [])
 
   // Cold-open from notification: stash intent + flush when main stack is ready (PIN may still be showing).
   useEffect(() => {
@@ -275,7 +277,6 @@ function AppContent() {
 }
 
 export default function App() {
-  const [fontLoadTimedOut, setFontLoadTimedOut] = useState(false)
   const [fontsLoaded] = useFonts(
     Platform.OS === 'web'
       ? {
@@ -430,23 +431,6 @@ export default function App() {
       cancelled = true
     }
   }, [])
-
-  useEffect(() => {
-    if (Platform.OS === 'web') return
-    if (fontsLoaded) return
-    const timeout = setTimeout(() => {
-      console.warn('[App] Font load timed out; continuing startup')
-      setFontLoadTimedOut(true)
-    }, 2_000)
-    return () => clearTimeout(timeout)
-  }, [fontsLoaded])
-
-  // Block first paint until fonts load on native; web paints with system fallback.
-  // If fonts stall, continue so AppContent can hide splash (build 206 returned null
-  // here with no timeout and could never dismiss splash).
-  if (!fontsLoaded && !fontLoadTimedOut && Platform.OS !== 'web') {
-    return null
-  }
 
   if (supabaseConfigError) {
     return (

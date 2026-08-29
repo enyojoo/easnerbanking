@@ -3,8 +3,8 @@
  * Must stay free of App / navigator imports so preventAutoHide is scheduled
  * even if those modules throw during evaluation.
  *
- * Build 206 hid splash from App.tsx after session restore + nav ready.
- * Do not auto-hide after a few seconds — that reveals login under splash.
+ * hideAsync must not wait forever on preventAutoHideAsync. If that promise
+ * never settles, the native splash never dismisses (stuck on launch).
  */
 import { Platform } from 'react-native'
 import * as SplashScreen from 'expo-splash-screen'
@@ -21,6 +21,13 @@ function safeHide() {
   } catch {
     // Native module may not be ready yet.
   }
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | void> {
+  return Promise.race([
+    promise,
+    new Promise<void>((resolve) => setTimeout(resolve, ms)),
+  ])
 }
 
 if (Platform.OS === 'web') {
@@ -44,7 +51,7 @@ export function hideNativeSplash() {
   hideRequested = true
   void (async () => {
     try {
-      await preventPromise
+      if (preventPromise) await withTimeout(preventPromise, 400)
     } catch {
       // ignore
     }
@@ -52,4 +59,10 @@ export function hideNativeSplash() {
     setTimeout(() => safeHide(), 50)
     setTimeout(() => safeHide(), 400)
   })()
+}
+
+if (Platform.OS !== 'web') {
+  setTimeout(() => {
+    hideNativeSplash()
+  }, 2_000)
 }
