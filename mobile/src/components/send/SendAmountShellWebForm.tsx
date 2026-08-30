@@ -202,7 +202,12 @@ export function SendAmountShellWebForm({
           <ArrowUpDown size={14} color={colors.primary.main} strokeWidth={2.5} />
           <Text style={styles.exchangeInfoText} numberOfLines={1}>
             {amountEntryMode === 'receive'
-              ? `Sending: ${formatMoneyDisplay(sendingAmount, sendCurrency)}`
+              ? `Sending: ${formatMoneyDisplay(
+                  sendingAmount,
+                  selectedPaymentMethod === 'otherCurrency' && selectedOtherCurrency
+                    ? selectedOtherCurrency
+                    : sendCurrency,
+                )}`
               : `Receiving: ${formatMoneyDisplay(receiveAmount, receiveCurrency)}`}
             {' • '}
             {`Rate: ${formatSendRateLabel(sendCurrency, receiveCurrency, exchangeRate)}`}

@@ -19,6 +19,7 @@ import {
   resolveYcPayInYcSellRate,
   resolvePayInProvider,
   computeYcFundBalanceAmountPreview,
+  resolveAmountScreenPayInPreview,
   ycFundBalanceQuoteErrorMessage,
   YC_PAY_IN_SEND_EXACTLY_LABEL,
   YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE,
@@ -243,26 +244,24 @@ export function LocalDepositWizard({
   const previewLocalPayInForLimits =
     preview.estimatedTotalLocalPayIn > 0 ? preview.estimatedTotalLocalPayIn : preview.localPayIn
 
-  const quoteMatchesAmount = useMemo(() => {
-    if (!quote?.ok || !(quote.localPayIn > 0)) return false
-    const credit = quote.usdCredit ?? quote.creditOrReceiveAmount ?? 0
-    if (amountMode === "usd") {
-      return Math.abs(credit - enteredAmount) < 0.01
-    }
-    return Math.abs(credit - preview.usdCredit) < 0.01
-  }, [quote, amountMode, enteredAmount, preview.usdCredit])
-
-  const displayPreview = useMemo(() => {
-    if (quoteMatchesAmount && quote) {
-      return {
-        usdCredit: quote.usdCredit ?? quote.creditOrReceiveAmount ?? preview.usdCredit,
-        localPayIn: quote.localPayIn,
-        estimatedTotalLocalPayIn: quote.localPayIn,
-        feeInclusive: true,
-      }
-    }
-    return preview
-  }, [quote, quoteMatchesAmount, preview])
+  const displayPreview = useMemo(
+    () =>
+      resolveAmountScreenPayInPreview({
+        amountEntryMode: amountMode,
+        enteredAmount,
+        customerRate,
+        ratePreview: preview,
+        quote:
+          quote && quote.ok
+            ? {
+                localPayIn: quote.localPayIn,
+                usdCredit: quote.usdCredit ?? quote.creditOrReceiveAmount ?? 0,
+                customerRate: quote.customerRate,
+              }
+            : null,
+      }),
+    [amountMode, enteredAmount, customerRate, preview, quote],
+  )
 
   const payInLimits = useMemo(() => {
     const fromRails = {
@@ -687,10 +686,7 @@ export function LocalDepositWizard({
         ? payInProvider === "grid"
           ? validatePayInAmountForProvider({
               provider: "grid",
-              localPayIn:
-                displayPreview.estimatedTotalLocalPayIn > 0
-                  ? displayPreview.estimatedTotalLocalPayIn
-                  : displayPreview.localPayIn,
+              localPayIn: displayPreview.localPayIn,
               currency: localPayInCurrency,
               rail,
               gridLimits: payInLimits,
@@ -698,10 +694,7 @@ export function LocalDepositWizard({
           : payInProvider === "noah"
             ? validatePayInAmountForProvider({
                 provider: "noah",
-                localPayIn:
-                  displayPreview.estimatedTotalLocalPayIn > 0
-                    ? displayPreview.estimatedTotalLocalPayIn
-                    : displayPreview.localPayIn,
+                localPayIn: displayPreview.localPayIn,
                 currency: localPayInCurrency,
                 rail,
                 noahHints: unwrapNoahFieldsSchema(payInCorridorSchema),
@@ -709,10 +702,7 @@ export function LocalDepositWizard({
             : validateYcFundBalancePayInAmount({
               amountEntryMode: amountMode,
               enteredAmount,
-              previewLocalPayIn:
-                displayPreview.estimatedTotalLocalPayIn > 0
-                  ? displayPreview.estimatedTotalLocalPayIn
-                  : displayPreview.localPayIn,
+              previewLocalPayIn: displayPreview.localPayIn,
               currency: localPayInCurrency,
               limits: payInLimits,
             })
@@ -723,10 +713,8 @@ export function LocalDepositWizard({
     const inboundReceivePreview =
       enteredAmount > 0 && customerRate
         ? amountMode === "usd"
-          ? displayPreview.feeInclusive
-            ? `${REVIEW_ROW_LABELS.totalToPay}: ${formatMoneyDisplay(displayPreview.localPayIn, localPayInCurrency)}`
-            : `Pay ≈ ${formatMoneyDisplay(displayPreview.localPayIn, localPayInCurrency)}`
-          : `Receive ≈ ${formatMoneyDisplay(displayPreview.usdCredit, "USD")}`
+          ? `${REVIEW_ROW_LABELS.totalToPay}: ${formatMoneyDisplay(displayPreview.localPayIn, localPayInCurrency)}`
+          : `Receiving: ${formatMoneyDisplay(displayPreview.usdCredit, "USD")}`
         : null
     const destUsdAccount = {
       id: "usd-balance",
@@ -916,9 +904,9 @@ export function LocalDepositWizard({
           payInRail={rail}
           amountEntryMode={amountMode}
           enteredAmount={enteredAmount}
-          previewUsdCredit={preview.usdCredit}
-          previewLocalPayIn={preview.localPayIn}
-          previewCustomerRate={customerRate ?? 0}
+          previewUsdCredit={displayPreview.usdCredit}
+          previewLocalPayIn={displayPreview.localPayIn}
+          previewCustomerRate={displayPreview.customerRate || (customerRate ?? 0)}
           copiedField={copiedField}
           onCopy={onCopy}
           attest={{

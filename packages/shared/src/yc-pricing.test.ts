@@ -166,7 +166,7 @@ describe("YC direct-settlement fee gross-up and adaptive precision sizing", () =
 })
 
 describe("computeYcFundBalanceAmountPreview", () => {
-  it("returns principal at customer rate for USD entry (fees on review)", () => {
+  it("returns principal at customer rate and a larger fee-inclusive estimate", () => {
     const preview = computeYcFundBalanceAmountPreview({
       amountEntryMode: "usd",
       enteredAmount: 1.79,

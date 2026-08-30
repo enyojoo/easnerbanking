@@ -741,16 +741,17 @@ export function computeYcCrossBorderRequiredOmnibus(input: {
 }
 
 /**
- * Fund balance amount-screen preview (Noah payout parity).
- * Shows principal at customer rate; fees appear on review/confirm.
+ * Fund balance rate-layer preview.
+ * `localPayIn` is principal at the customer rate; `estimatedTotalLocalPayIn` is
+ * the fee-inclusive counterpart shown on the amount screen (quote may overlay).
  */
 export type YcFundBalanceAmountPreview = {
   usdCredit: number
-  /** Principal local at easner_sell (amount-screen display). */
+  /** Principal local at easner_sell. */
   localPayIn: number
-  /** Estimated all-in local pay-in for corridor min checks (fees, no flat USDC buffer). */
+  /** Estimated all-in local pay-in for amount-screen display and corridor min checks. */
   estimatedTotalLocalPayIn: number
-  feeInclusive: false
+  feeInclusive: boolean
 }
 
 function computeYcFundBalanceEstimatedTotalLocalPayIn(input: {
@@ -796,7 +797,7 @@ function computeYcFundBalanceEstimatedTotalLocalPayIn(input: {
   })
 }
 
-/** Client/server amount-screen preview – principal at DB customer rate. */
+/** Client/server amount-screen rate layer – principal + estimated all-in local. */
 export function computeYcFundBalanceAmountPreview(input: {
   amountEntryMode: "usd" | "local"
   enteredAmount: number

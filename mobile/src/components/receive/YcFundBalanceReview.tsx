@@ -40,6 +40,7 @@ import {
   ensureFundBalanceOrderConfirmed,
   isCompleteFundBalanceQuote,
   isStashedFundBalanceQuoteFresh,
+  isUsableFundBalanceQuotePreview,
   peekFundBalanceQuote,
   peekLastFundBalanceQuoteError,
   type FundBalanceQuoteStashMeta,
@@ -160,6 +161,11 @@ export function YcFundBalanceReview({
   }, [quoteMeta])
 
   const stashedLocked = getCachedLocked()
+  const stashedPreview = useMemo(() => {
+    if (!isStashedFundBalanceQuoteFresh(quoteMeta)) return null
+    const cached = peekFundBalanceQuote()
+    return cached && isUsableFundBalanceQuotePreview(cached) ? cached : null
+  }, [quoteMeta])
 
   const { quote: lockedQuote, isLocked, isLoading, error: lockError } = useYcFundBalancePayInLock<YcFundBalanceQuote>({
     enabled: Boolean(lockKey),
@@ -175,11 +181,11 @@ export function YcFundBalanceReview({
   const reviewPhase: YcLocalPayInReviewPhase = displayLocked ? 'locked' : 'preview'
   const displayQuote = activeLockedQuote
   const quoteCountdown = useQuoteCountdown(displayQuote?.expiresAt)
-  const customerRate = displayQuote?.customerRate ?? previewCustomerRate
+  const customerRate = displayQuote?.customerRate ?? stashedPreview?.customerRate ?? previewCustomerRate
   const displayTransactionId =
     activeLockedQuote?.easnerTransactionId ?? activeLockedQuote?.transactionId ?? ''
-  const resolvedLocalPayIn = displayQuote?.localPayIn ?? localPayIn
-  const resolvedUsdCredit = displayQuote?.usdCredit ?? usdCredit
+  const resolvedLocalPayIn = displayQuote?.localPayIn ?? stashedPreview?.localPayIn ?? localPayIn
+  const resolvedUsdCredit = displayQuote?.usdCredit ?? stashedPreview?.usdCredit ?? usdCredit
 
   const reviewBreakdown =
     resolvedLocalPayIn > 0
@@ -188,9 +194,14 @@ export function YcFundBalanceReview({
           localCurrency: localPayInCurrency,
           usdCredit: resolvedUsdCredit,
           exchangeRate: customerRate,
-          displayProcessingFeeLocal: displayQuote?.displayProcessingFeeLocal,
-          processingFee: displayQuote?.processingFee,
-          exchangeFee: displayQuote?.ycChannelFeeUsd ?? displayQuote?.ycLegFeesUsd,
+          displayProcessingFeeLocal:
+            displayQuote?.displayProcessingFeeLocal ?? stashedPreview?.displayProcessingFeeLocal,
+          processingFee: displayQuote?.processingFee ?? stashedPreview?.processingFee,
+          exchangeFee:
+            displayQuote?.ycChannelFeeUsd ??
+            displayQuote?.ycLegFeesUsd ??
+            stashedPreview?.ycChannelFeeUsd ??
+            stashedPreview?.ycLegFeesUsd,
         })
       : null
   const reviewPrincipalLocal =
@@ -211,8 +222,12 @@ export function YcFundBalanceReview({
     localPayIn: resolvedLocalPayIn,
     receiveAmount: resolvedUsdCredit,
     processingFeeLocal: reviewFeeLocal,
-    processingFeeUsd: displayQuote?.processingFee,
-    exchangeFeeUsd: displayQuote?.ycChannelFeeUsd ?? displayQuote?.ycLegFeesUsd,
+    processingFeeUsd: displayQuote?.processingFee ?? stashedPreview?.processingFee,
+    exchangeFeeUsd:
+      displayQuote?.ycChannelFeeUsd ??
+      displayQuote?.ycLegFeesUsd ??
+      stashedPreview?.ycChannelFeeUsd ??
+      stashedPreview?.ycLegFeesUsd,
     principalLocal: reviewPrincipalLocal,
     usdCredit: resolvedUsdCredit,
     transactionId: displayTransactionId || undefined,

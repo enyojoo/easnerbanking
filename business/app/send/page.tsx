@@ -29,6 +29,8 @@ import {
   scaleSendAmountPrefixFontSize,
   scaleSendAmountPrefixLineHeight,
   useDebouncedValue,
+  resolveAmountScreenPayoutPreview,
+  resolveAmountScreenTlcPreview,
   isNoahBalancePayoutCorridor,
   isBalancePayoutCorridorExecutable,
   resolveBalancePayoutProvider,
@@ -100,6 +102,7 @@ import {
   crossBorderQuoteToFlowState,
   ensureCrossBorderQuoteStashed,
   isUsableCrossBorderQuotePreview,
+  peekCrossBorderQuote,
   prefetchCrossBorderQuotePipeline,
   peekLastCrossBorderQuoteError,
 } from "@/lib/yc-cross-border-quote-cache"
@@ -217,6 +220,11 @@ export default function SendPage() {
   const [sourceSheetOpen, setSourceSheetOpen] = useState(false)
   const [addressRequiredOpen, setAddressRequiredOpen] = useState(false)
   const [payoutQuotePreview, setPayoutQuotePreview] = useState<PayoutQuoteResult | null>(null)
+  const [crossBorderQuotePreview, setCrossBorderQuotePreview] = useState<{
+    localPayIn: number
+    receiveAmount?: number
+    customerRate: number
+  } | null>(null)
   const walletQuoteCacheRef = useRef<{ key: string; quote: WalletSendQuoteResult } | null>(null)
   const walletQuoteInflightRef = useRef<Promise<WalletSendQuoteResult | null> | null>(null)
   const walletQuoteInflightKeyRef = useRef("")
@@ -603,12 +611,39 @@ export default function SendPage() {
 
   useEffect(() => {
     clearCrossBorderQuote()
+    setCrossBorderQuotePreview(null)
   }, [recipient?.id, otherCurrency, tlcPayInRail])
 
-  const tlcSendingDisplayAmount = useMemo(() => {
-    if (!showThroughLocalCurrency || amountEntryMode !== "receive") return sendAmount
-    return sendAmount
-  }, [showThroughLocalCurrency, amountEntryMode, sendAmount])
+  const tlcFxDisplay = useMemo(() => {
+    if (!showThroughLocalCurrency || receiveAmount <= 0) return null
+    const customerRate = tlcFlow.customerRate
+    if (!customerRate || customerRate <= 0) return null
+    const quote = crossBorderQuotePreview
+    return resolveAmountScreenTlcPreview({
+      receiveAmount,
+      principalLocal: sendAmount,
+      customerRate,
+      quote:
+        quote && quote.localPayIn > 0
+          ? {
+              localPayIn: quote.localPayIn,
+              receiveAmount: quote.receiveAmount ?? receiveAmount,
+              customerRate: quote.customerRate,
+            }
+          : null,
+    })
+  }, [
+    showThroughLocalCurrency,
+    receiveAmount,
+    sendAmount,
+    tlcFlow.customerRate,
+    crossBorderQuotePreview,
+  ])
+
+  const tlcSendingDisplayAmount =
+    amountEntryMode === "receive" && tlcFxDisplay && tlcFxDisplay.localPayIn > 0
+      ? tlcFxDisplay.localPayIn
+      : sendAmount
 
   const tlcReceivingDisplayAmount = receiveAmount
 
@@ -920,14 +955,66 @@ export default function SendPage() {
   const displaySendAmount = providerSendPreviewAmounts?.sendAmount ?? sendAmount
   const displayReceiveAmount = providerSendPreviewAmounts?.receiveAmount ?? receiveAmount
   const displayForwardRate = providerSendPreviewAmounts?.forwardRate ?? forwardRate
+
+  const payoutFxDisplay = useMemo(() => {
+    if (!isBalanceSource || isWalletRecipient || isEasetagRecipient || !hasFx || enteredAmount <= 0) {
+      return null
+    }
+    const quote = payoutQuotePreview
+    return resolveAmountScreenPayoutPreview({
+      amountEntryMode,
+      principalSend: displaySendAmount,
+      principalReceive: displayReceiveAmount,
+      customerRate: displayForwardRate,
+      quote:
+        quote && quote.totalDebited > 0
+          ? {
+              totalDebited: quote.totalDebited,
+              youSendAmount:
+                quote.customerPrincipal > 0 ? quote.customerPrincipal : quote.sendAmount,
+              recipientGetsAmount:
+                quote.displayReceiveAmount ?? quote.requestedReceiveAmount ?? quote.receiveAmount,
+              customerRate: quote.easner?.providerRate ?? displayForwardRate,
+            }
+          : null,
+    })
+  }, [
+    isBalanceSource,
+    isWalletRecipient,
+    isEasetagRecipient,
+    hasFx,
+    enteredAmount,
+    amountEntryMode,
+    displaySendAmount,
+    displayReceiveAmount,
+    displayForwardRate,
+    payoutQuotePreview,
+  ])
+
+  const exchangeDisplaySendAmount =
+    otherCurrency && showThroughLocalCurrency && amountEntryMode === "receive"
+      ? tlcSendingDisplayAmount
+      : amountEntryMode === "receive" && payoutFxDisplay && payoutFxDisplay.totalDebited > 0
+        ? payoutFxDisplay.totalDebited
+        : displaySendAmount
+  const exchangeDisplayReceiveAmount =
+    amountEntryMode === "send" && payoutFxDisplay && payoutFxDisplay.receiveAmount > 0
+      ? payoutFxDisplay.receiveAmount
+      : displayReceiveAmount
+  const exchangeDisplayRate =
+    payoutFxDisplay && payoutFxDisplay.customerRate > 0
+      ? payoutFxDisplay.customerRate
+      : displayForwardRate
   const displayRateLabel = hasFx
-    ? formatSendRateLabel(sendCurrency, receiveCurrency, displayForwardRate)
+    ? formatSendRateLabel(sendCurrency, receiveCurrency, exchangeDisplayRate)
     : null
 
   const previewBalanceDebitAmount =
     quotedTotalDebited != null && quotedTotalDebited > 0
       ? quotedTotalDebited
-      : displaySendAmount
+      : payoutFxDisplay && payoutFxDisplay.totalDebited > 0
+        ? payoutFxDisplay.totalDebited
+        : displaySendAmount
 
   const hasValidSendRateForPair =
     !needsNoahRateForSend ||
@@ -1412,14 +1499,30 @@ export default function SendPage() {
       return
     const payInCountry = residenceCountryFromPayInCurrency(otherCurrency)
     if (!payInCountry) return
-    prefetchCrossBorderQuotePipeline({
+    const meta = {
       recipientId: recipient.id,
       payInCurrency: otherCurrency,
       payInCountry,
-      payInRail: "bank_transfer",
+      payInRail: "bank_transfer" as const,
       receiveAmount,
       crossBorderProvider: tlcFlow.crossBorderProvider,
+    }
+    let cancelled = false
+    void ensureCrossBorderQuoteStashed(meta).then((quote) => {
+      if (cancelled) return
+      if (quote && isUsableCrossBorderQuotePreview(quote)) {
+        setCrossBorderQuotePreview(quote)
+        return
+      }
+      const stashed = peekCrossBorderQuote()
+      if (stashed && isUsableCrossBorderQuotePreview(stashed)) {
+        setCrossBorderQuotePreview(stashed)
+      }
     })
+    prefetchCrossBorderQuotePipeline(meta)
+    return () => {
+      cancelled = true
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedCrossBorderBankQuotePrefetchKey, recipient?.id, otherCurrency])
 
@@ -1769,9 +1872,9 @@ export default function SendPage() {
                           {getSendAmountFieldSymbol(
                             amountEntryMode === "receive" ? sendCurrency : receiveCurrency,
                           )}
-                          {(amountEntryMode === "receive" ? displaySendAmount : receiveAmount).toLocaleString("en-US", {
+                          {(amountEntryMode === "receive" ? exchangeDisplaySendAmount : exchangeDisplayReceiveAmount).toLocaleString("en-US", {
                             minimumFractionDigits:
-                              Math.abs((amountEntryMode === "receive" ? displaySendAmount : receiveAmount) % 1) >= 0.01 ? 2 : 0,
+                              Math.abs((amountEntryMode === "receive" ? exchangeDisplaySendAmount : exchangeDisplayReceiveAmount) % 1) >= 0.01 ? 2 : 0,
                             maximumFractionDigits: 2,
                           })}
                           </>}

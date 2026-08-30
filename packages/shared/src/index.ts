@@ -114,6 +114,21 @@ export {
   type PayoutProcessingFeeOpts,
 } from "./payout-processing-fee"
 export {
+  amountsMatchForAmountScreen,
+  payInQuoteMatchesEntered,
+  payoutQuoteMatchesEntered,
+  resolveAmountScreenPayInPreview,
+  resolveAmountScreenPayoutPreview,
+  resolveAmountScreenTlcPreview,
+  type AmountScreenFxSource,
+  type AmountScreenPayInDisplay,
+  type AmountScreenPayInQuoteSlice,
+  type AmountScreenPayoutDisplay,
+  type AmountScreenPayoutQuoteSlice,
+  type AmountScreenTlcDisplay,
+  type AmountScreenTlcQuoteSlice,
+} from "./amount-screen-fx-preview"
+export {
   buildLegacyNoahSettlementFromLeg,
   computePayoutQuoteDisplayProcessingFee,
   payoutReviewFeesFromQuote,
@@ -544,6 +559,8 @@ export {
   expressDepositActivityLabel,
   expressDepositMethodSubtitle,
   expressDepositMethodTitle,
+  expressDepositSavePaymentHint,
+  expressDepositSavePaymentTitle,
   expressDepositsVerificationCta,
   expressIdentityOutcome,
   expressSetupUserMessage,

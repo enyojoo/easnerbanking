@@ -25,6 +25,7 @@ import {
   SEND_LOCAL_PAY_IN_BANK_CHIP,
   SEND_LOCAL_PAY_IN_MOMO_CHIP,
   corridorMatchesCountryCurrency,
+  resolveAmountScreenPayInPreview,
 } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
@@ -65,7 +66,11 @@ import {
   ensureFundBalanceQuoteStashed,
   ensurePayInNetworksCached,
   isCompleteFundBalanceQuote,
+  isStashedFundBalanceQuoteFresh,
+  isUsableFundBalanceQuotePreview,
+  peekFundBalanceQuote,
   peekLastFundBalanceQuoteError,
+  type YcFundBalanceQuote,
 } from '../../lib/sendFlowFundBalanceQuote'
 import { warmYcLocalDepositCaches, ensureYcLocalDepositCachesReady } from '../../lib/warmYcLocalDepositCaches'
 import { getPayoutCorridorCache } from '../../lib/sendDestinations'
@@ -120,6 +125,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
 
   const [amountEntryMode, setAmountEntryMode] = useState<'usd' | 'local'>('usd')
   const [amountStr, setAmountStr] = useState('0')
+  const [fundBalanceQuotePreview, setFundBalanceQuotePreview] = useState<YcFundBalanceQuote | null>(null)
   const [isContinuePending, setIsContinuePending] = useState(false)
   const [isContinueLoading, setIsContinueLoading] = useState(false)
   const continueSpinnerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -182,12 +188,22 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     metadata: payInCorridorRow?.metadata as Record<string, unknown> | undefined,
   })
 
-  const displayPreview = useMemo(() => ycFlow.preview, [ycFlow.preview])
+  const displayPreview = useMemo(
+    () =>
+      resolveAmountScreenPayInPreview({
+        amountEntryMode,
+        enteredAmount,
+        customerRate: ycFlow.customerRate,
+        ratePreview: ycFlow.preview,
+        quote: fundBalanceQuotePreview,
+      }),
+    [amountEntryMode, enteredAmount, ycFlow.customerRate, ycFlow.preview, fundBalanceQuotePreview],
+  )
 
   const previewLocalPayInForLimits =
-    displayPreview.estimatedTotalLocalPayIn > 0
-      ? displayPreview.estimatedTotalLocalPayIn
-      : displayPreview.localPayIn
+    ycFlow.preview.estimatedTotalLocalPayIn > 0
+      ? ycFlow.preview.estimatedTotalLocalPayIn
+      : ycFlow.preview.localPayIn
 
   const { rails: receiveRails } = useYcReceiveRails({
     country: residenceCountry,
@@ -294,7 +310,23 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     if (receiveRails?.optimistic) return
     if (!ycFlow.customerRate || ycFlow.ratesLoading) return
     if (!amountLimitCheck.ok) return
-    void ensureFundBalanceQuoteStashed(fundBalanceQuoteMeta)
+    let cancelled = false
+    void ensureFundBalanceQuoteStashed(fundBalanceQuoteMeta).then((quote) => {
+      if (cancelled) return
+      if (quote && isUsableFundBalanceQuotePreview(quote)) {
+        setFundBalanceQuotePreview(quote)
+        return
+      }
+      if (isStashedFundBalanceQuoteFresh(fundBalanceQuoteMeta)) {
+        const stashed = peekFundBalanceQuote()
+        if (stashed && isUsableFundBalanceQuotePreview(stashed)) {
+          setFundBalanceQuotePreview(stashed)
+        }
+      }
+    })
+    return () => {
+      cancelled = true
+    }
   }, [
     debouncedFundBalanceQuotePrefetchKey,
     fundBalanceQuoteMeta,
@@ -335,6 +367,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
 
   useEffect(() => {
     clearFundBalanceQuote()
+    setFundBalanceQuotePreview(null)
   }, [localPayInCurrency, residenceCountry, payInRail])
 
   useEffect(() => {
@@ -491,8 +524,8 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
               amountLimitMessage={!amountLimitCheck.ok ? amountLimitCheck.message : null}
               previewLocalPayIn={displayPreview.localPayIn}
               previewUsdCredit={displayPreview.usdCredit}
-              displayRate={ycFlow.customerRate}
-              feeInclusive={false}
+              displayRate={displayPreview.customerRate || ycFlow.customerRate}
+              feeInclusive={displayPreview.feeInclusive}
               bankAvailable={bankAvailable}
               momoAvailable={momoAvailable}
               canContinue={canContinue}
@@ -557,11 +590,18 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
                       <ArrowUpDown size={13} color={colors.primary.main} strokeWidth={2.5} />
                       <Text style={styles.exchangeInfoText}>
                         {amountEntryMode === 'usd'
-                          ? `Paying: ${formatMoneyDisplay(displayPreview.localPayIn, localPayInCurrency)}`
+                          ? displayPreview.feeInclusive
+                            ? `${REVIEW_ROW_LABELS.totalToPay}: ${formatMoneyDisplay(displayPreview.localPayIn, localPayInCurrency)}`
+                            : `Paying: ${formatMoneyDisplay(displayPreview.localPayIn, localPayInCurrency)}`
                           : `Receiving: ${formatMoneyDisplay(displayPreview.usdCredit, 'USD')}`}
                       </Text>
                     </Pressable>
-                    {ycFlow.customerRate ? (
+                    {displayPreview.customerRate > 0 ? (
+                      <Text style={styles.exchangeInfoText}>
+                        {' • '}
+                        {`Rate: ${formatSendRateLabel('USD', localPayInCurrency, displayPreview.customerRate)}`}
+                      </Text>
+                    ) : ycFlow.customerRate ? (
                       <Text style={styles.exchangeInfoText}>
                         {' • '}
                         {`Rate: ${formatSendRateLabel('USD', localPayInCurrency, ycFlow.customerRate)}`}

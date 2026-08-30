@@ -43,7 +43,7 @@ import { ripple } from '../../lib/androidRipple'
 import { useToast } from '../../components/ToastProvider'
 import { useNoahSendExchangeRates, prefetchNoahSendExchangeRates } from '../../hooks/queries'
 import { useQueryClient } from '@tanstack/react-query'
-import { useYcCrossBorderFlow, type YcPayInRail, residenceCountryFromPayInCurrency } from '../../hooks/useYcCrossBorderFlow'
+import { useYcCrossBorderFlow, type YcPayInRail, type YcCrossBorderQuoteResult, residenceCountryFromPayInCurrency } from '../../hooks/useYcCrossBorderFlow'
 import { useYcReceiveRails } from '../../hooks/useYcFundBalanceFlow'
 import { warmYcPayInCorridor, resolveReceiveRailsForDisplay } from '../../lib/warmYcLocalDepositCaches'
 import { useSendDestinations } from '../../hooks/useSendDestinations'
@@ -90,6 +90,8 @@ import {
   SEND_LOCAL_PAY_IN_MOMO_CHIP,
   validateYcCrossBorderSendAmount,
   useDebouncedValue,
+  resolveAmountScreenPayoutPreview,
+  resolveAmountScreenTlcPreview,
   SEND_AMOUNT_CONTINUE_CTA,
   mapResidenceToLocalPayInCurrency,
   sendAmountOffersThroughLocalCurrency,
@@ -99,7 +101,7 @@ import { useYcPayoutMinEnforcement } from '../../hooks/useYcPayoutMinEnforcement
 import { useYcCrossBorderSendMinEnforcement } from '../../hooks/useYcCrossBorderSendMinEnforcement'
 import { useProviderSendExchangeRates, prefetchProviderSendExchangeRates } from '../../hooks/queries/use-provider-send-exchange-rates'
 import { resolveRecipientBalancePayoutProvider } from '../../lib/resolveRecipientBalancePayoutProvider'
-import { noahService, type WalletSendQuote } from '../../lib/noahService'
+import { noahService, type PayoutQuote, type WalletSendQuote } from '../../lib/noahService'
 import {
   ensureSendPayoutQuoteStashed,
   ensureSendPayoutQuoteLocked,
@@ -107,6 +109,7 @@ import {
   isStashedPayoutQuoteFresh,
   peekLastPayoutQuoteError,
   peekSendPayoutQuote,
+  peekSendPayoutQuotePreview,
   clearSendPayoutQuote,
   payoutRequestedReceiveAmount,
   payoutDisplayAmountsFromQuote,
@@ -125,7 +128,9 @@ import {
 } from '../../lib/sendFlowFundBalanceQuote'
 import {
   clearCrossBorderQuote,
+  ensureCrossBorderQuoteStashed,
   isUsableCrossBorderQuotePreview,
+  peekCrossBorderQuote,
   prefetchCrossBorderQuotePipeline,
   peekLastCrossBorderQuoteError,
   warmCrossBorderQuotePipeline,
@@ -207,6 +212,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const didInitializeBalanceCurrency = useRef(false)
   const sendAgainPrefillAppliedRef = useRef(false)
   const [walletQuotePreview, setWalletQuotePreview] = useState<WalletSendQuote | null>(null)
+  const [payoutQuotePreview, setPayoutQuotePreview] = useState<PayoutQuote | null>(null)
+  const [crossBorderQuotePreview, setCrossBorderQuotePreview] = useState<YcCrossBorderQuoteResult | null>(null)
   const [isContinuePending, setIsContinuePending] = useState(false)
   const [isContinueLoading, setIsContinueLoading] = useState(false)
   const continueSpinnerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -915,13 +922,88 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const sendingAmount = flowAmounts.sendAmount
   const exchangeRate = flowAmounts.forwardRate
 
-  const tlcSendingDisplayAmount = useMemo(() => {
-    if (!showThroughLocalCurrency || amountEntryMode !== 'receive') return sendingAmount
-    return sendingAmount
-  }, [showThroughLocalCurrency, amountEntryMode, sendingAmount])
+  const payoutFxDisplay = useMemo(() => {
+    if (selectedPaymentMethod !== 'balance' || isWalletRecipient || isEasetagRecipient) return null
+    if (!showCrossCurrencyExchangeUi || enteredAmount <= 0) return null
+    const quoted = payoutQuotePreview ? payoutDisplayAmountsFromQuote(payoutQuotePreview) : null
+    return resolveAmountScreenPayoutPreview({
+      amountEntryMode,
+      principalSend: sendingAmount,
+      principalReceive: receiveAmount,
+      customerRate: exchangeRate,
+      quote:
+        quoted && quoted.totalDebited > 0
+          ? {
+              totalDebited: quoted.totalDebited,
+              youSendAmount: quoted.youSendAmount,
+              recipientGetsAmount: quoted.recipientGetsAmount,
+              customerRate: quoted.customerRate,
+            }
+          : null,
+    })
+  }, [
+    selectedPaymentMethod,
+    isWalletRecipient,
+    isEasetagRecipient,
+    showCrossCurrencyExchangeUi,
+    enteredAmount,
+    amountEntryMode,
+    sendingAmount,
+    receiveAmount,
+    exchangeRate,
+    payoutQuotePreview,
+  ])
+
+  const tlcFxDisplay = useMemo(() => {
+    if (!showThroughLocalCurrency || !selectedOtherCurrency || receiveAmount <= 0) return null
+    const customerRate = ycFlow.customerRate ?? 0
+    if (!(customerRate > 0)) return null
+    const quote = crossBorderQuotePreview
+    return resolveAmountScreenTlcPreview({
+      receiveAmount,
+      principalLocal: sendingAmount,
+      customerRate,
+      quote:
+        quote && quote.localPayIn > 0
+          ? {
+              localPayIn: quote.localPayIn,
+              receiveAmount: quote.receiveAmount ?? receiveAmount,
+              customerRate: quote.customerRate,
+            }
+          : null,
+    })
+  }, [
+    showThroughLocalCurrency,
+    selectedOtherCurrency,
+    receiveAmount,
+    sendingAmount,
+    ycFlow.customerRate,
+    crossBorderQuotePreview,
+  ])
+
+  const tlcSendingDisplayAmount =
+    amountEntryMode === 'receive' && tlcFxDisplay && tlcFxDisplay.localPayIn > 0
+      ? tlcFxDisplay.localPayIn
+      : sendingAmount
+
+  const exchangeDisplaySendAmount =
+    selectedPaymentMethod === 'otherCurrency' && showThroughLocalCurrency
+      ? tlcSendingDisplayAmount
+      : amountEntryMode === 'receive' && payoutFxDisplay && payoutFxDisplay.totalDebited > 0
+        ? payoutFxDisplay.totalDebited
+        : sendingAmount
+  const exchangeDisplayReceiveAmount =
+    amountEntryMode === 'send' && payoutFxDisplay && payoutFxDisplay.receiveAmount > 0
+      ? payoutFxDisplay.receiveAmount
+      : receiveAmount
+  const exchangeDisplayRate =
+    payoutFxDisplay && payoutFxDisplay.customerRate > 0
+      ? payoutFxDisplay.customerRate
+      : exchangeRate
 
   useEffect(() => {
     clearCrossBorderQuote()
+    setCrossBorderQuotePreview(null)
   }, [recipient?.id, selectedOtherCurrency, tlcPayInRail])
 
   const ycPayoutLimits = useMemo(() => {
@@ -1102,12 +1184,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     ycPayoutLimits,
   ])
 
-  const feeAmount = 0
-  const totalAmount =
-    selectedPaymentMethod === 'otherCurrency' && showThroughLocalCurrency
-      ? sendingAmount
-      : sendingAmount
-
   const walletQuoteStashMeta = useMemo(
     () => ({
       recipientId: recipient?.id ?? '',
@@ -1128,8 +1204,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         walletQuoteFresh &&
         walletQuotePreview.totalDebited > 0
         ? walletQuotePreview.totalDebited
-        : totalAmount > 0
-          ? totalAmount
+        : payoutFxDisplay && payoutFxDisplay.totalDebited > 0
+          ? payoutFxDisplay.totalDebited
           : sendingAmount > 0
             ? sendingAmount
             : 0
@@ -1147,14 +1223,25 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const toggleAmountDirection = () => {
     if (!recipient || isWalletRecipient) return
     if (amountEntryMode === 'receive') {
-      if (!sendingAmount || sendingAmount <= 0) return
+      const seedSend =
+        selectedPaymentMethod === 'otherCurrency' && showThroughLocalCurrency
+          ? tlcFxDisplay && tlcFxDisplay.principalLocal > 0
+            ? tlcFxDisplay.principalLocal
+            : sendingAmount
+          : payoutFxDisplay && payoutFxDisplay.youSendAmount > 0
+            ? payoutFxDisplay.youSendAmount
+            : sendingAmount
+      if (!seedSend || seedSend <= 0) return
       setAmountEntryMode('send')
-      setSendAmount(formatAmount(toSwitchInputAmount(sendingAmount)))
+      setSendAmount(formatAmount(toSwitchInputAmount(seedSend)))
       return
     }
-    if (!receiveAmount || receiveAmount <= 0) return
+    const seedReceive = payoutFxDisplay && payoutFxDisplay.receiveAmount > 0
+      ? payoutFxDisplay.receiveAmount
+      : receiveAmount
+    if (!seedReceive || seedReceive <= 0) return
     setAmountEntryMode('receive')
-    setSendAmount(formatAmount(toSwitchInputAmount(receiveAmount)))
+    setSendAmount(formatAmount(toSwitchInputAmount(seedReceive)))
   }
 
   const globalBankingOk = isGlobalBankingVerified(userProfile)
@@ -1209,6 +1296,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       entryAmount: amountEntryMode === 'send' ? sendingAmount : receiveAmount,
       receiveCurrency,
     }
+    let cancelled = false
     void ensureSendPayoutQuoteStashed(
       () =>
         noahService.createPayoutQuote({
@@ -1221,7 +1309,17 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
         }),
       meta,
-    )
+    ).then((quote) => {
+      if (cancelled) return
+      if (quote) {
+        setPayoutQuotePreview(quote)
+        return
+      }
+      setPayoutQuotePreview(peekSendPayoutQuotePreview() ?? peekSendPayoutQuote())
+    })
+    return () => {
+      cancelled = true
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedPayoutQuotePrefetchKey, recipient?.id, payoutQuotePrefetchReady])
 
@@ -1291,14 +1389,30 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     if (!debouncedCrossBorderQuotePrefetchKey || !recipient?.id || !selectedOtherCurrency || isDraftRecipientId(recipient.id)) return
     const payInCountry = residenceCountryFromPayInCurrency(selectedOtherCurrency)
     if (!payInCountry) return
-    void prefetchCrossBorderQuotePipeline({
+    const meta = {
       recipientId: recipient.id,
       payInCurrency: selectedOtherCurrency,
       payInCountry,
       payInRail: tlcPayInRail,
       receiveAmount,
       crossBorderProvider: ycFlow.crossBorderProvider,
+    }
+    let cancelled = false
+    void ensureCrossBorderQuoteStashed(meta).then((quote) => {
+      if (cancelled) return
+      if (quote && isUsableCrossBorderQuotePreview(quote)) {
+        setCrossBorderQuotePreview(quote)
+      } else {
+        const stashed = peekCrossBorderQuote()
+        if (stashed && isUsableCrossBorderQuotePreview(stashed)) {
+          setCrossBorderQuotePreview(stashed)
+        }
+      }
     })
+    prefetchCrossBorderQuotePipeline(meta)
+    return () => {
+      cancelled = true
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedCrossBorderQuotePrefetchKey, recipient?.id])
 
@@ -1306,6 +1420,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     clearSendPayoutQuote()
     clearSendWalletQuote()
     setWalletQuotePreview(null)
+    setPayoutQuotePreview(null)
   }, [recipient?.id])
 
   const exchangeInfoAmountPositive =
@@ -1881,9 +1996,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       sendAmount={sendAmount}
       sendCurrency={sendCurrency}
       receiveCurrency={receiveCurrency}
-      sendingAmount={sendingAmount}
-      receiveAmount={receiveAmount}
-      exchangeRate={exchangeRate}
+      sendingAmount={exchangeDisplaySendAmount}
+      receiveAmount={exchangeDisplayReceiveAmount}
+      exchangeRate={exchangeDisplayRate}
       showCrossCurrencyExchangeUi={showCrossCurrencyExchangeUi}
       exchangePreviewReady={exchangePreviewReady}
       showExchangePreviewSkeleton={showExchangePreviewSkeleton}
@@ -2066,19 +2181,17 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                           <Text style={styles.exchangeInfoText}>
                             {amountEntryMode === 'receive'
                               ? `Sending: ${formatMoneyDisplay(
-                                  showThroughLocalCurrency && selectedOtherCurrency
-                                    ? tlcSendingDisplayAmount
-                                    : sendingAmount,
+                                  exchangeDisplaySendAmount,
                                   showThroughLocalCurrency && selectedOtherCurrency
                                     ? selectedOtherCurrency
                                     : sendCurrency,
                                 )}`
-                              : `Receiving: ${formatMoneyDisplay(receiveAmount, receiveCurrency)}`}
+                              : `Receiving: ${formatMoneyDisplay(exchangeDisplayReceiveAmount, receiveCurrency)}`}
                           </Text>
                         </Pressable>
                         <Text style={styles.exchangeInfoText}>
                           {' • '}
-                          {`Rate: ${formatSendRateLabel(sendCurrency, receiveCurrency, exchangeRate)}`}
+                          {`Rate: ${formatSendRateLabel(sendCurrency, receiveCurrency, exchangeDisplayRate)}`}
                         </Text>
                       </View>
                     </View>
