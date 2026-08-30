@@ -26,7 +26,7 @@ import { cacheExpressOnrampStatus, peekExpressOnrampStatus } from './expressOnra
 import { loadMobileExpressOnramp } from './express-onramp'
 import { ensureExpressOnrampAuthenticated } from './expressOnrampAuth'
 import { isStripeHostElement } from './expressStripeElement'
-import { mobileCheckoutUserAgent, resolveMobileCustomerIp } from './customerIp'
+import { resolveMobileCustomerIp } from './customerIp'
 
 export type ExpressDepositCheckoutResult =
   | { ok: true; easnerTransactionId: string | null; pricing: ExpressDepositsPricingBreakdown }
@@ -284,7 +284,6 @@ export async function checkoutExpressDeposit(input: {
     }
     const paymentMethod = expressCashKindToPaymentMethod(input.method)
     const customerIpAddress = await resolveMobileCustomerIp()
-    const userAgent = mobileCheckoutUserAgent()
     const created = await apiFetch<{
       session?: { id?: string }
       easnerTransactionId?: string | null
@@ -299,7 +298,6 @@ export async function checkoutExpressDeposit(input: {
         paymentMethod,
         paymentTokenId: token,
         customerIpAddress,
-        userAgent,
       },
     })
     const sessionId = String(created.session?.id || '')
@@ -321,10 +319,7 @@ export async function checkoutExpressDeposit(input: {
         method: 'POST',
         body: {
           action: 'checkout',
-          paymentTokenId: token,
           mandateData: expressDepositCheckoutMandateData(input.method),
-          customerIpAddress,
-          userAgent,
         },
       })
       if (!paid.client_secret) throw new Error(EXPRESS_DEPOSITS_COPY.paymentFailed)

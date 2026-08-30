@@ -322,7 +322,6 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
           headers: { ...SCOPE, "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "checkout",
-            paymentTokenId,
             mandateData: method === "express_ach" ? { customer_acceptance: { type: "online" } } : undefined,
           }),
         })

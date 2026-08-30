@@ -41,17 +41,23 @@ describe("onramp client context", () => {
     process.env.NODE_ENV = prev
   })
 
-  it("builds checkout params with payment token and client context", () => {
-    const params = buildStripeOnrampCheckoutParams(requestWith({}), {
-      customerIpAddress: "203.0.113.10",
-      paymentTokenId: "cpt_123",
-      userAgent: "EasnerMobile/1.0",
-    })
-    expect(params).toEqual({
-      payment_token: "cpt_123",
-      mandate_data: undefined,
-      customer_ip_address: "203.0.113.10",
-      user_agent: "EasnerMobile/1.0",
+  it("builds empty checkout params for card when token is on the session", () => {
+    expect(
+      buildStripeOnrampCheckoutParams({
+        customerIpAddress: "203.0.113.10",
+        paymentTokenId: "cpt_123",
+        userAgent: "EasnerMobile/1.0",
+      }),
+    ).toEqual({})
+  })
+
+  it("passes mandate_data for ACH checkout", () => {
+    expect(
+      buildStripeOnrampCheckoutParams({
+        mandateData: { customer_acceptance: { type: "online" } },
+      }),
+    ).toEqual({
+      mandate_data: { customer_acceptance: { type: "online" } },
     })
   })
 })

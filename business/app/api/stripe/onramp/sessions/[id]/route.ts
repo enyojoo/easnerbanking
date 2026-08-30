@@ -71,13 +71,7 @@ export async function POST(
       })
       return NextResponse.json({ ok: true })
     }
-    const checkoutParams = buildStripeOnrampCheckoutParams(request, body)
-    if ("error" in checkoutParams) {
-      return NextResponse.json(
-        { error: checkoutParams.error, code: checkoutParams.code },
-        { status: 400 },
-      )
-    }
+    const checkoutParams = buildStripeOnrampCheckoutParams(body)
     const checked = await stripeOnramp.checkoutSession(id, checkoutParams, liveOAuth)
     const clientSecret = String(
       (checked as { client_secret?: string; clientSecret?: string }).client_secret ||

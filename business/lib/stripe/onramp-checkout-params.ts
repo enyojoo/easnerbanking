@@ -19,17 +19,6 @@ export function resolveStripeOnrampCustomerIpContext(
   return { customer_ip_address: customerIpAddress }
 }
 
-function resolveStripeOnrampUserAgent(
-  request: Request,
-  body: Record<string, unknown>,
-): string | undefined {
-  return (
-    String(body.userAgent ?? body.user_agent ?? "").trim() ||
-    request.headers.get("user-agent")?.trim() ||
-    undefined
-  )
-}
-
 export function withStripeOnrampClientContext(
   request: Request,
   body: Record<string, unknown>,
@@ -40,17 +29,14 @@ export function withStripeOnrampClientContext(
   return { ...params, ...client }
 }
 
-/** Checkout accepts customer_ip_address and user_agent; session create accepts IP only. */
-export function buildStripeOnrampCheckoutParams(
-  request: Request,
-  body: Record<string, unknown>,
-): Record<string, unknown> | { error: string; code: string } {
-  const client = resolveStripeOnrampCustomerIpContext(request, body)
-  if ("error" in client) return client
-  return {
-    payment_token: body.paymentTokenId || undefined,
-    mandate_data: body.mandateData || undefined,
-    ...client,
-    user_agent: resolveStripeOnrampUserAgent(request, body),
+/**
+ * Embedded Components v2 checkout only accepts optional mandate_data (ACH).
+ * payment_token and customer_ip_address belong on session create.
+ */
+export function buildStripeOnrampCheckoutParams(body: Record<string, unknown>): Record<string, unknown> {
+  const mandateData = body.mandateData ?? body.mandate_data
+  if (mandateData && typeof mandateData === "object") {
+    return { mandate_data: mandateData }
   }
+  return {}
 }

@@ -15,7 +15,7 @@ function ipFromForwardedHeader(raw: string | null | undefined): string | null {
   return normalizeIp(raw.split(",")[0]?.trim())
 }
 
-/** Best-effort client IP for Stripe onramp checkout / mandates. */
+/** Best-effort client IP for Stripe onramp session create. */
 export function resolveRequestClientIp(
   request: Request,
   body?: Record<string, unknown> | null,
@@ -43,7 +43,7 @@ export function resolveRequestClientIp(
   return null
 }
 
-/** Stripe requires customer_ip_address on onramp session create and checkout; allow local dev fallback. */
+/** Stripe requires customer_ip_address on headless onramp session create; allow local dev fallback. */
 export function resolveStripeOnrampCustomerIp(
   request: Request,
   body?: Record<string, unknown> | null,
