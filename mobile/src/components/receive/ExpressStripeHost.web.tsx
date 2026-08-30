@@ -3,14 +3,35 @@ import { isStripeHostElement } from '../../lib/expressStripeElement'
 
 export function ExpressStripeHost({ element }: { element: unknown }) {
   const ref = useRef<HTMLDivElement>(null)
+  const mountedElementRef = useRef<unknown>(null)
 
   useEffect(() => {
     const host = ref.current
     if (!host) return
+
+    if (!isStripeHostElement(element)) {
+      if (mountedElementRef.current && host.contains(mountedElementRef.current as Node)) {
+        host.removeChild(mountedElementRef.current as Node)
+      }
+      mountedElementRef.current = null
+      return
+    }
+
+    if (mountedElementRef.current === element && host.contains(element)) {
+      return
+    }
+
     host.replaceChildren()
-    if (isStripeHostElement(element)) host.appendChild(element)
+    host.appendChild(element)
+    mountedElementRef.current = element
+
     return () => {
-      host.replaceChildren()
+      if (mountedElementRef.current === element && host.contains(element)) {
+        host.removeChild(element)
+      }
+      if (mountedElementRef.current === element) {
+        mountedElementRef.current = null
+      }
     }
   }, [element])
 
@@ -19,9 +40,8 @@ export function ExpressStripeHost({ element }: { element: unknown }) {
       ref={ref}
       style={{
         width: '100%',
-        height: '100%',
         minHeight: 280,
-        overflow: 'auto',
+        overflow: 'visible',
       }}
     />
   )

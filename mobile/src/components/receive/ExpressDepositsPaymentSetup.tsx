@@ -139,10 +139,6 @@ const styles = StyleSheet.create({
   hostWrap: {
     width: '100%',
     minHeight: 280,
-    ...Platform.select({
-      web: { overflow: 'hidden' as const },
-      default: {},
-    }),
   },
   hostHidden: {
     ...Platform.select({

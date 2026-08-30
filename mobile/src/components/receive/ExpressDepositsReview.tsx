@@ -81,6 +81,7 @@ export function ExpressDepositsReview({
       usdCredit: params.usdCredit,
       pricing,
       paymentMethods,
+      paymentTokenId: params.paymentTokenId,
       onHostElement: setStripeEl,
     })
     if (!result.ok) {

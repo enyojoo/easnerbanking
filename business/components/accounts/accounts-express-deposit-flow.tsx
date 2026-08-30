@@ -197,6 +197,7 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
       const sdk = await loadExpressOnramp(publishableKey, cryptoCustomerId)
       await ensureExpressOnrampAuthenticated(sdk, cryptoCustomerId, (el) => setSlot(el))
       const types = method === "express_ach" ? ["us_bank_account"] : ["card"]
+      let collectSettled = false
       const el = await sdk.collectPaymentMethod(
         {
           payment_method_types: types,
@@ -207,15 +208,26 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
         },
         async (result) => {
           const token = result.cryptoPaymentToken
-          if (!token) return
+          // Bank link / mandate steps can invoke onCompletion before the token is ready.
+          if (!token || collectSettled) return
+          collectSettled = true
+          const rail = method === "express_ach" ? "ach" : "card"
+          const card = result.paymentMethodDetails?.card as { last4?: string; brand?: string } | undefined
+          const bank = result.paymentMethodDetails?.us_bank_account as
+            | { last4?: string; bank_name?: string }
+            | undefined
           await fetchWithSession("/api/stripe/onramp/payment-tokens", {
             method: "POST",
             headers: { ...SCOPE, "Content-Type": "application/json" },
-            body: JSON.stringify({ paymentTokenId: token }),
+            body: JSON.stringify({
+              paymentTokenId: token,
+              rail,
+              last4: card?.last4 || bank?.last4 || null,
+              brand: card?.brand || null,
+              bankName: bank?.bank_name || null,
+            }),
           })
           setPaymentTokenId(token)
-          const card = result.paymentMethodDetails?.card as { last4?: string } | undefined
-          const bank = result.paymentMethodDetails?.us_bank_account as { last4?: string } | undefined
           setLast4(card?.last4 || bank?.last4 || null)
           setSlot(null)
           setStep("review")

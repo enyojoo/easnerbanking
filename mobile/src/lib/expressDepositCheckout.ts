@@ -156,6 +156,12 @@ export async function collectExpressPaymentToken(input: {
       paymentTokenId: string
       paymentMethods: ExpressSavedPaymentMethods
     }>((resolve, reject) => {
+      let settled = false
+      const finish = (fn: () => void) => {
+        if (settled) return
+        settled = true
+        fn()
+      }
       void sdk
         .collectPaymentMethod?.(
           expressDepositCollectPaymentOpts({
@@ -164,11 +170,8 @@ export async function collectExpressPaymentToken(input: {
             currency: input.currency,
           }),
           async (result) => {
-            if (!result.cryptoPaymentToken) {
-              input.onHostElement?.(null)
-              reject(new Error(EXPRESS_DEPOSITS_COPY.savePaymentFailed))
-              return
-            }
+            // Stripe can invoke onCompletion before CVC / 3DS finishes. Wait for a token.
+            if (!result.cryptoPaymentToken) return
             try {
               const rail = expressSavedPaymentRail(input.method)
               const display = expressInstrumentFromCollectDetails(result.paymentMethodDetails)
@@ -198,17 +201,17 @@ export async function collectExpressPaymentToken(input: {
               const cached = peekExpressOnrampStatus()
               if (cached) cacheExpressOnrampStatus({ ...cached, paymentMethods })
               input.onHostElement?.(null)
-              resolve({ paymentTokenId: result.cryptoPaymentToken, paymentMethods })
+              finish(() => resolve({ paymentTokenId: result.cryptoPaymentToken!, paymentMethods }))
             } catch (error) {
               input.onHostElement?.(null)
-              reject(error)
+              finish(() => reject(error))
             }
           },
         )
         .then((el) => {
           if (isStripeHostElement(el)) input.onHostElement?.(el)
         })
-        .catch(reject)
+        .catch((error) => finish(() => reject(error)))
     })
     return { ok: true, ...collected }
   } catch (error) {
@@ -227,6 +230,7 @@ export async function checkoutExpressDeposit(input: {
   usdCredit: number
   pricing: ExpressDepositsPricingBreakdown
   paymentMethods?: ExpressSavedPaymentMethods | null
+  paymentTokenId?: string | null
   onHostElement?: (el: unknown | null) => void
 }): Promise<ExpressDepositCheckoutResult> {
   try {
@@ -238,7 +242,9 @@ export async function checkoutExpressDeposit(input: {
 
     const paymentMethods = parseExpressSavedPaymentMethods(input.paymentMethods)
     let token =
-      expressSavedInstrumentForMethod(paymentMethods, input.method)?.paymentTokenId || null
+      String(input.paymentTokenId || "").trim() ||
+      expressSavedInstrumentForMethod(paymentMethods, input.method)?.paymentTokenId ||
+      null
     if (expressDepositPayNeedsCollect({ method: input.method, paymentMethods })) {
       const collected = await collectExpressPaymentToken({
         publishableKey: input.publishableKey,
