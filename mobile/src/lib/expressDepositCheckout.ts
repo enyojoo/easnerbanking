@@ -166,7 +166,7 @@ export async function collectExpressPaymentToken(input: {
           async (result) => {
             if (!result.cryptoPaymentToken) {
               input.onHostElement?.(null)
-              reject(new Error(EXPRESS_DEPOSITS_COPY.savePaymentHint))
+              reject(new Error(EXPRESS_DEPOSITS_COPY.savePaymentFailed))
               return
             }
             try {
@@ -255,7 +255,7 @@ export async function checkoutExpressDeposit(input: {
       token = collected.paymentTokenId
     }
     if (!token) {
-      return { ok: false, reason: 'wrong_token', message: EXPRESS_DEPOSITS_COPY.savePaymentHint }
+      return { ok: false, reason: 'wrong_token', message: EXPRESS_DEPOSITS_COPY.savePaymentFailed }
     }
 
     const sdk = await loadMobileExpressOnramp(input.publishableKey, input.cryptoCustomerId)

@@ -1,16 +1,18 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native'
-import { LinearGradient } from 'expo-linear-gradient'
+import { View, Text, StyleSheet, Platform } from 'react-native'
 import {
   EXPRESS_DEPOSITS_COPY,
+  expressDepositSavePaymentHint,
+  expressDepositSavePaymentTitle,
   isExpressWalletKind,
   type ExpressDepositFlowParams,
 } from '@easner/shared'
 import { colors, textStyles, borderRadius, spacing } from '../../theme'
-import { ripple } from '../../lib/androidRipple'
 import { haptics } from '../../lib/haptics'
+import SecondaryOutlineButton from '../premium/SecondaryOutlineButton'
 import { ReceiveFlowHeader } from './ReceiveFlowHeader'
 import { ExpressStripeHost } from './ExpressStripeHost'
+import { ExpressPaymentFormSkeleton } from './ExpressPaymentFormSkeleton'
 import { collectExpressPaymentToken } from '../../lib/expressDepositCheckout'
 import { useExpressOnrampStatus } from '../../hooks/useExpressOnrampStatus'
 
@@ -54,6 +56,7 @@ export function ExpressDepositsPaymentSetup({ navigation, params, footerPadding 
     })
     if (!result.ok) {
       setBusy(false)
+      setStripeEl(null)
       if (result.reason !== 'canceled') setError(result.message)
       return
     }
@@ -81,38 +84,41 @@ export function ExpressDepositsPaymentSetup({ navigation, params, footerPadding 
     void collect()
   }, [collect, params.forceCollect, params.method, publishableKey])
 
+  const stripeReady = Boolean(stripeEl)
+  const showSkeleton =
+    !error &&
+    (Platform.OS === 'web' ? !stripeReady : busy)
+
   return (
     <View style={[styles.container, { paddingBottom: footerPadding }]}>
-      <ReceiveFlowHeader title={EXPRESS_DEPOSITS_COPY.savePaymentTitle} />
+      <ReceiveFlowHeader title={expressDepositSavePaymentTitle(params.method)} />
       <View style={styles.body}>
         <View style={styles.card}>
-          <Text style={styles.hint}>{EXPRESS_DEPOSITS_COPY.savePaymentHint}</Text>
-          <ExpressStripeHost element={stripeEl} />
+          <Text style={styles.hint}>{expressDepositSavePaymentHint(params.method)}</Text>
+          <View style={styles.collectSurface}>
+            {showSkeleton ? <ExpressPaymentFormSkeleton /> : null}
+            <View style={[styles.hostWrap, !stripeReady && styles.hostHidden]}>
+              <ExpressStripeHost element={stripeEl} />
+            </View>
+          </View>
         </View>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {!stripeEl ? (
-          <Pressable
-            android_ripple={ripple.neutral}
-            style={[styles.cta, busy && styles.ctaDisabled]}
-            onPress={() => {
-              haptics.medium()
-              void collect()
-            }}
-            disabled={busy || !publishableKey}
-          >
-            <LinearGradient
-              colors={busy || !publishableKey ? [colors.neutral[400], colors.neutral[400]] : colors.primary.gradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.ctaGradient}
-            >
-              {busy ? (
-                <ActivityIndicator color={colors.text.inverse} size="small" />
-              ) : (
-                <Text style={styles.ctaText}>{EXPRESS_DEPOSITS_COPY.continueCta}</Text>
-              )}
-            </LinearGradient>
-          </Pressable>
+        {error ? (
+          <View style={styles.errorBlock}>
+            <Text style={styles.error} accessibilityRole="alert">
+              {error}
+            </Text>
+            {!busy ? (
+              <SecondaryOutlineButton
+                title={EXPRESS_DEPOSITS_COPY.tryAgainCta}
+                onPress={() => {
+                  haptics.medium()
+                  startedRef.current = false
+                  void collect()
+                }}
+                style={styles.retryButton}
+              />
+            ) : null}
+          </View>
         ) : null}
       </View>
     </View>
@@ -129,9 +135,29 @@ const styles = StyleSheet.create({
     gap: spacing[3],
   },
   hint: { ...textStyles.body, color: colors.text.secondary },
-  error: { ...textStyles.caption, color: colors.semantic.destructive, marginTop: spacing[2] },
-  cta: { borderRadius: borderRadius.lg, overflow: 'hidden', marginTop: spacing[3] },
-  ctaDisabled: { opacity: 0.7 },
-  ctaGradient: { paddingVertical: spacing[4], alignItems: 'center' },
-  ctaText: { ...textStyles.button, color: colors.text.inverse },
+  collectSurface: { position: 'relative' },
+  hostWrap: {
+    width: '100%',
+    minHeight: 280,
+    ...Platform.select({
+      web: { overflow: 'hidden' as const },
+      default: {},
+    }),
+  },
+  hostHidden: {
+    ...Platform.select({
+      web: {
+        position: 'absolute' as const,
+        width: 1,
+        height: 1,
+        overflow: 'hidden' as const,
+        opacity: 0,
+        pointerEvents: 'none' as const,
+      },
+      default: {},
+    }),
+  },
+  errorBlock: { gap: spacing[3], marginTop: spacing[2] },
+  error: { ...textStyles.caption, color: colors.semantic.destructive },
+  retryButton: { flexGrow: 0, flexBasis: 'auto', width: '100%' },
 })

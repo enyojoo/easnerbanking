@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 import {
   EXPRESS_DEPOSITS_COPY,
   expressDepositMethodTitle,
+  expressDepositSavePaymentHint,
+  expressDepositSavePaymentTitle,
   expressDepositsQuoteIsStale,
   expressDepositsQuoteMatchesEntered,
   expressDepositsShowAmountToggle,
@@ -21,7 +23,7 @@ import { fetchWithSession } from "@/lib/fetch-with-session"
 import type { CashPayInMethodKind } from "@easner/shared"
 import { loadExpressOnramp } from "@/lib/stripe/load-crypto-onramp"
 import { ensureExpressOnrampAuthenticated } from "@/lib/stripe/ensure-express-onramp-auth"
-import { ExpressDepositsStripeSlot } from "@/components/compliance/express-deposits-stripe-slot"
+import { ExpressDepositsPaymentCollectPanel } from "@/components/compliance/express-deposits-payment-collect-panel"
 import { mapStripeOnrampError } from "@/lib/stripe/onramp-sdk-map"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
 import { ExpressDepositsReviewSection } from "@/components/accounts/express-deposits-review-section"
@@ -220,7 +222,6 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
         },
       )
       setSlot(el)
-      setStep("collect")
     } catch (e) {
       setConfirmError(e instanceof Error ? e.message : EXPRESS_DEPOSITS_COPY.somethingWentWrong)
     } finally {
@@ -243,10 +244,12 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
       return
     }
     if (!paymentTokenId && method !== "express_apple_pay" && method !== "express_google_pay") {
+      setStep("collect")
       await collectMethod()
       return
     }
     if ((method === "express_apple_pay" || method === "express_google_pay") && !paymentTokenId) {
+      setStep("collect")
       await collectMethod()
       return
     }
@@ -437,13 +440,27 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
   if (step === "collect") {
     return (
       <div className="space-y-4">
-        <Button type="button" variant="ghost" size="sm" className="-ml-2 w-fit" onClick={() => setStep("amount")}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="-ml-2 w-fit"
+          onClick={() => {
+            setSlot(null)
+            setConfirmError(null)
+            setStep("amount")
+          }}
+        >
           Back
         </Button>
-        <p className="text-sm font-medium">{EXPRESS_DEPOSITS_COPY.savePaymentTitle}</p>
-        <p className="text-sm text-muted-foreground">{EXPRESS_DEPOSITS_COPY.savePaymentHint}</p>
-        <ExpressDepositsStripeSlot element={slot} />
-        {confirmError ? <p className="text-sm text-destructive">{confirmError}</p> : null}
+        <ExpressDepositsPaymentCollectPanel
+          title={expressDepositSavePaymentTitle(method)}
+          hint={expressDepositSavePaymentHint(method)}
+          element={slot}
+          loading={loading}
+          error={confirmError}
+          onRetry={() => void collectMethod()}
+        />
       </div>
     )
   }

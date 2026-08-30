@@ -5,6 +5,7 @@ export const EXPRESS_DEPOSITS_COPY = {
   description: "Card, Apple Pay, Google Pay, and ACH Direct.",
   setupCta: "Set up",
   continueCta: "Continue",
+  tryAgainCta: "Try again",
   verifyCta: "Verify identity",
   openingCta: "Opening...",
   readyBadge: "Ready",
@@ -37,8 +38,11 @@ export const EXPRESS_DEPOSITS_COPY = {
   ssnHint: "Required once to finish verification for card and bank deposits.",
   reviewHint: "We're reviewing your details. This usually takes a moment.",
   finishSetupCta: "Finish setup",
-  savePaymentTitle: "Save a payment method",
-  savePaymentHint: "Add a card or bank account to finish this deposit. Details stay in this window.",
+  saveCardTitle: "Add your card",
+  saveCardHint: "Enter your card details to finish this deposit.",
+  saveAchTitle: "Link your bank",
+  saveAchHint: "Connect your bank account to finish this deposit.",
+  savePaymentFailed: "Could not save your payment method. Try again.",
   acceptTermsTitle: "Accept terms to continue",
   acceptTermsHint: "Review and accept the terms to finish setup.",
   nationalitiesLabel: "Nationalities",
@@ -212,6 +216,20 @@ export function expressDepositMethodSubtitle(
   if (kind === "express_google_pay") return EXPRESS_DEPOSITS_COPY.googlePayHint
   if (kind === "express_ach") return EXPRESS_DEPOSITS_COPY.achHint
   return EXPRESS_DEPOSITS_COPY.cardHint
+}
+
+export function expressDepositSavePaymentTitle(
+  kind: "express_card" | "express_apple_pay" | "express_google_pay" | "express_ach",
+): string {
+  if (kind === "express_ach") return EXPRESS_DEPOSITS_COPY.saveAchTitle
+  return EXPRESS_DEPOSITS_COPY.saveCardTitle
+}
+
+export function expressDepositSavePaymentHint(
+  kind: "express_card" | "express_apple_pay" | "express_google_pay" | "express_ach",
+): string {
+  if (kind === "express_ach") return EXPRESS_DEPOSITS_COPY.saveAchHint
+  return EXPRESS_DEPOSITS_COPY.saveCardHint
 }
 
 /** Verification hub CTA. Verified matches Global banking: badge only, no button. */

@@ -4,6 +4,8 @@ import {
   EXPRESS_US_SSN_ID_TYPE,
   buildExpressKycSubmitInfo,
   expressDepositMethodSubtitle,
+  expressDepositSavePaymentHint,
+  expressDepositSavePaymentTitle,
   expressDepositsVerificationCta,
   expressSetupUserMessage,
   isUsSsnComplete,
@@ -93,6 +95,20 @@ describe("express deposit method copy", () => {
     expect(expressDepositMethodSubtitle("express_card", { ready: undefined })).toBe(
       EXPRESS_DEPOSITS_COPY.cardHint,
     )
+  })
+})
+
+describe("expressDepositSavePaymentCopy", () => {
+  it("uses rail-specific titles and hints without window jargon", () => {
+    expect(expressDepositSavePaymentTitle("express_card")).toBe("Add your card")
+    expect(expressDepositSavePaymentHint("express_card")).toBe(
+      "Enter your card details to finish this deposit.",
+    )
+    expect(expressDepositSavePaymentTitle("express_ach")).toBe("Link your bank")
+    expect(expressDepositSavePaymentHint("express_ach")).toBe(
+      "Connect your bank account to finish this deposit.",
+    )
+    expect(expressDepositSavePaymentHint("express_card")).not.toMatch(/window/i)
   })
 })
 
