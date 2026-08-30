@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { expressDepositsStatusIsReady } from "@easner/shared"
 import { encryptLinkOAuthSecrets } from "@/lib/stripe/onramp-oauth"
 import { StripeOnrampApiError, retrieveLinkAuthTokens } from "@/lib/stripe/onramp-client"
 import { patchExpressPayer, resolveExpressDepositsContext } from "@/lib/stripe/onramp-context"
@@ -37,7 +38,13 @@ export async function POST(request: Request) {
   }
   const patch: Record<string, unknown> = {
     stripe_crypto_customer_id: cryptoCustomerId,
-    stripe_express_deposits_status: "in_progress",
+  }
+  if (
+    !expressDepositsStatusIsReady({
+      status: resolved.ctx.payer.stripe_express_deposits_status,
+    })
+  ) {
+    patch.stripe_express_deposits_status = "in_progress"
   }
   if (accessToken) {
     patch.stripe_link_oauth_token_ciphertext = encryptLinkOAuthSecrets({

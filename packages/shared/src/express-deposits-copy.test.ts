@@ -5,6 +5,7 @@ import {
   buildExpressKycSubmitInfo,
   expressDepositMethodSubtitle,
   expressDepositsVerificationCta,
+  expressSetupUserMessage,
   isUsSsnComplete,
   normalizeUsSsn,
 } from "./express-deposits-copy"
@@ -91,6 +92,14 @@ describe("express deposit method copy", () => {
     expect(expressDepositMethodSubtitle("express_card")).toBe(EXPRESS_DEPOSITS_COPY.cardHint)
     expect(expressDepositMethodSubtitle("express_card", { ready: undefined })).toBe(
       EXPRESS_DEPOSITS_COPY.cardHint,
+    )
+  })
+})
+
+describe("expressSetupUserMessage", () => {
+  it("hides Stripe Link session errors", () => {
+    expect(expressSetupUserMessage("User is not authenticated")).toBe(
+      EXPRESS_DEPOSITS_COPY.somethingWentWrong,
     )
   })
 })

@@ -23,6 +23,7 @@ import {
 import { apiFetch, ApiError } from '../query/api-client'
 import { cacheExpressOnrampStatus, peekExpressOnrampStatus } from './expressOnrampStatusCache'
 import { loadMobileExpressOnramp } from './express-onramp'
+import { ensureExpressOnrampAuthenticated } from './expressOnrampAuth'
 import { isStripeHostElement } from './expressStripeElement'
 
 export type ExpressDepositCheckoutResult =
@@ -142,6 +143,12 @@ export async function collectExpressPaymentToken(input: {
 > {
   try {
     const sdk = await loadMobileExpressOnramp(input.publishableKey, input.cryptoCustomerId)
+    const authed = await ensureExpressOnrampAuthenticated({
+      sdk,
+      cryptoCustomerId: input.cryptoCustomerId,
+      onHostElement: input.onHostElement,
+    })
+    if (!authed.ok) return authed
     if (!sdk.collectPaymentMethod) {
       return { ok: false, reason: 'failed', message: EXPRESS_DEPOSITS_COPY.somethingWentWrong }
     }
@@ -252,6 +259,14 @@ export async function checkoutExpressDeposit(input: {
     }
 
     const sdk = await loadMobileExpressOnramp(input.publishableKey, input.cryptoCustomerId)
+    const authed = await ensureExpressOnrampAuthenticated({
+      sdk,
+      cryptoCustomerId: input.cryptoCustomerId,
+      onHostElement: input.onHostElement,
+    })
+    if (!authed.ok) {
+      return { ok: false, reason: authed.reason === 'canceled' ? 'canceled' : 'failed', message: authed.message }
+    }
     const paymentMethod = expressCashKindToPaymentMethod(input.method)
     const created = await apiFetch<{
       session?: { id?: string }

@@ -20,6 +20,7 @@ import { MoveAmountStep } from "@/components/accounts/move-amount-step"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import type { CashPayInMethodKind } from "@easner/shared"
 import { loadExpressOnramp } from "@/lib/stripe/load-crypto-onramp"
+import { ensureExpressOnrampAuthenticated } from "@/lib/stripe/ensure-express-onramp-auth"
 import { ExpressDepositsStripeSlot } from "@/components/compliance/express-deposits-stripe-slot"
 import { mapStripeOnrampError } from "@/lib/stripe/onramp-sdk-map"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
@@ -192,6 +193,7 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
     setConfirmError(null)
     try {
       const sdk = await loadExpressOnramp(publishableKey, cryptoCustomerId)
+      await ensureExpressOnrampAuthenticated(sdk, cryptoCustomerId, (el) => setSlot(el))
       const types = method === "express_ach" ? ["us_bank_account"] : ["card"]
       const el = await sdk.collectPaymentMethod(
         {
@@ -298,6 +300,7 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
       }
       const sessionId = createdJson.session.id
       const sdk = await loadExpressOnramp(publishableKey, cryptoCustomerId)
+      await ensureExpressOnrampAuthenticated(sdk, cryptoCustomerId, (el) => setSlot(el))
       const result = await sdk.performCheckout(sessionId, async (id) => {
         const paid = await fetchWithSession(`/api/stripe/onramp/sessions/${id}`, {
           method: "POST",

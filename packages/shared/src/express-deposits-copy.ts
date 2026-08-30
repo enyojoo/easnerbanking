@@ -161,6 +161,9 @@ export function expressSetupUserMessage(raw?: string | null): string {
   if (/attestation|native link|devicecheck|app attest|play integrity/i.test(text)) {
     return EXPRESS_DEPOSITS_COPY.nativeTrustedInstall
   }
+  if (/not authenticated|missing consumer secret|missing crypto customer/i.test(text)) {
+    return EXPRESS_DEPOSITS_COPY.somethingWentWrong
+  }
   if (/crypto|onramp|oauth|scope|stripe|link\.com|link\b|authintent/i.test(text)) {
     return EXPRESS_DEPOSITS_COPY.somethingWentWrong
   }
