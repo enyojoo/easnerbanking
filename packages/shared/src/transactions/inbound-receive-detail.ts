@@ -583,10 +583,23 @@ function pushSenderRow(rows: InboundReceiveDetailRow[], snapshot: InboundReceive
   })
 }
 
-/** Amount credited is already in the hero for VA/crypto without a fee delta; local pay-in always shows it. */
+function isExpressDepositsCrossCurrencyPayIn(snapshot: InboundReceiveDetailSnapshot): boolean {
+  if (snapshot.kind !== "express_deposits") return false
+  const paid = snapshot.amountPaid
+  const credited = snapshot.amountCredited
+  if (!paid || !credited) return false
+  return (
+    paid.currency.trim().toUpperCase() !== credited.currency.trim().toUpperCase() &&
+    paid.amount > 0 &&
+    credited.amount > 0
+  )
+}
+
+/** Same-currency express deposits show credited amount in the hero; cross-currency pay-in shows it in rows like YC. */
 function shouldShowAmountCreditedRow(snapshot: InboundReceiveDetailSnapshot): boolean {
-  if (snapshot.kind === "yc_fund_balance" || snapshot.kind === "express_deposits") return true
   if (snapshot.kind === "bank_verification" || snapshot.kind === "easetag_receive") return false
+  if (snapshot.kind === "express_deposits") return isExpressDepositsCrossCurrencyPayIn(snapshot)
+  if (snapshot.kind === "yc_fund_balance") return true
   return Boolean(snapshot.processingFee && snapshot.processingFee.amount > 0)
 }
 
@@ -767,8 +780,7 @@ export function buildInboundReceiveDetailRows(
           ),
         )
       }
-      pushAmountCreditedIfNeeded(rows, snapshot)
-      if (snapshot.amountPaid) {
+      if (isExpressDepositsCrossCurrencyPayIn(snapshot) && snapshot.amountPaid) {
         pushIf(
           rows,
           REVIEW_ROW_LABELS.amountPaid,
@@ -779,6 +791,7 @@ export function buildInboundReceiveDetailRows(
           ),
         )
       }
+      pushAmountCreditedIfNeeded(rows, snapshot)
       pushCreditDestination(rows, snapshot.creditDestination)
       break
     }

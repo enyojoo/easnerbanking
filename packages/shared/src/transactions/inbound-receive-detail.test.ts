@@ -550,4 +550,36 @@ describe("Express deposits inbound receive", () => {
       "You've received $50 via Card deposit",
     )
   })
+
+  it("hides amount paid and amount credited for same-currency USD card deposits", () => {
+    const snapshot = resolveInboundReceiveDetail({
+      direction: "in",
+      provider: "stripe",
+      metadata: {
+        flow: "express_deposits",
+        payment_method: "card",
+        usd_credit: 100,
+        deposit_review: {
+          you_get: 100,
+          you_get_currency: "USD",
+          you_pay: 104.04,
+          you_pay_currency: "USD",
+          processing_fee: 4.04,
+          processing_fee_currency: "USD",
+          payment_method: "card",
+          payment_method_brand: "visa",
+          payment_method_last4: "9082",
+        },
+      },
+      amount: 100,
+      currency: "USD",
+      ledger_created_at: "2026-01-15T12:00:00.000Z",
+    })
+    expect(snapshot?.kind).toBe("express_deposits")
+    const map = rowMap(buildInboundReceiveDetailRows(snapshot!, { surface: "detail" }))
+    expect(map[REVIEW_ROW_LABELS.processingFee]).toBe("$4.04")
+    expect(map[REVIEW_ROW_LABELS.amountPaid]).toBeUndefined()
+    expect(map[REVIEW_ROW_LABELS.amountCredited]).toBeUndefined()
+    expect(map[REVIEW_ROW_LABELS.creditTo]).toBe("USD Balance")
+  })
 })
