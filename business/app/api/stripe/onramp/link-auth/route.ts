@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server"
 import { EXPRESS_DEPOSITS_COPY, expressSetupUserMessage } from "@easner/shared"
 import { StripeOnrampApiError, createLinkAuthIntent } from "@/lib/stripe/onramp-client"
+import { logStripeOnrampRouteContext } from "@/lib/stripe/log-onramp-api-error"
 import { resolveExpressDepositsContext } from "@/lib/stripe/onramp-context"
 import { mapStripeOnrampError } from "@/lib/stripe/onramp-sdk-map"
 
 export const runtime = "nodejs"
 
-function mapError(e: unknown) {
+function mapError(e: unknown, meta?: Record<string, unknown>) {
+  logStripeOnrampRouteContext("route:link_auth", e, meta)
   if (e instanceof StripeOnrampApiError) {
     return NextResponse.json(
       {
@@ -58,6 +60,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ authIntentId: null, needsRegister: true })
     }
     if (e instanceof StripeOnrampApiError && e.status === 409) {
+      logStripeOnrampRouteContext("route:link_auth", e, {
+        payerUserId: resolved.ctx.payerUserId,
+        outcome: "link_revoked",
+      })
       return NextResponse.json(
         {
           error: expressSetupUserMessage("Link connection was revoked. Sign in again."),
@@ -67,6 +73,6 @@ export async function POST(request: Request) {
         { status: 409 },
       )
     }
-    return mapError(e)
+    return mapError(e, { payerUserId: resolved.ctx.payerUserId })
   }
 }

@@ -8,7 +8,8 @@ import {
   parseExpressSavedPaymentMethods,
   validateExpressDepositsAmount,
 } from "@easner/shared"
-import { StripeOnrampApiError, stripeOnramp } from "@/lib/stripe/onramp-client"
+import { stripeOnramp } from "@/lib/stripe/onramp-client"
+import { mapStripeOnrampRouteError } from "@/lib/stripe/log-onramp-api-error"
 import { ensureExpressDepositsLiveOAuth, resolveExpressDepositsContext } from "@/lib/stripe/onramp-context"
 import { getTurnkeyDepositAddressesForBusiness, getTurnkeyDepositAddressesForContext } from "@/lib/wallet/turnkey-deposit-addresses"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
@@ -16,13 +17,6 @@ import { insertPendingOnrampSession } from "@/lib/stripe/onramp-ledger"
 import { quoteExpressDepositsPricing } from "@/lib/stripe/express-deposits-pricing-server"
 
 export const runtime = "nodejs"
-
-function mapError(e: unknown) {
-  if (e instanceof StripeOnrampApiError) {
-    return NextResponse.json({ error: e.message, code: e.code }, { status: e.status >= 400 ? e.status : 400 })
-  }
-  return NextResponse.json({ error: e instanceof Error ? e.message : "Request failed" }, { status: 400 })
-}
 
 export async function POST(request: Request) {
   const resolved = await resolveExpressDepositsContext(request)
@@ -166,6 +160,10 @@ export async function POST(request: Request) {
       pricing: quoted.pricing,
     })
   } catch (e) {
-    return mapError(e)
+    return mapStripeOnrampRouteError("sessions.create", e, {
+      payerUserId: resolved.ctx.payerUserId,
+      cryptoCustomerId: customerId,
+      paymentMethod,
+    })
   }
 }

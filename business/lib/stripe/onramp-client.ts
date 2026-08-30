@@ -1,4 +1,5 @@
 import { getStripeSecretKey } from "./config"
+import { logStripeOnrampApiError } from "./log-onramp-api-error"
 import {
   getStripeLinkDataSharingMerchant,
   getStripeLinkOAuthClientId,
@@ -19,13 +20,24 @@ export class StripeOnrampApiError extends Error {
   readonly status: number
   readonly code: string | null
   readonly body: unknown
+  readonly method?: string
+  readonly path?: string
+  readonly hasOAuthToken?: boolean
 
-  constructor(message: string, status: number, body: unknown) {
+  constructor(
+    message: string,
+    status: number,
+    body: unknown,
+    ctx?: { method?: string; path?: string; hasOAuthToken?: boolean },
+  ) {
     super(message)
     this.name = "StripeOnrampApiError"
     this.status = status
     this.code = readErrorCode(body)
     this.body = body
+    this.method = ctx?.method
+    this.path = ctx?.path
+    this.hasOAuthToken = ctx?.hasOAuthToken
   }
 }
 
@@ -109,7 +121,13 @@ export async function stripeOnrampRequest<T = Record<string, unknown>>(
   const res = await fetch(url.toString(), { method, headers, body })
   const json = (await res.json().catch(() => null)) as T | { error?: { message?: string } }
   if (!res.ok) {
-    throw new StripeOnrampApiError(readErrorMessage(json), res.status, json)
+    const err = new StripeOnrampApiError(readErrorMessage(json), res.status, json, {
+      method,
+      path: opts?.absoluteUrl ? new URL(opts.absoluteUrl).pathname : path,
+      hasOAuthToken: Boolean(opts?.oauthToken),
+    })
+    logStripeOnrampApiError("api", err)
+    throw err
   }
   return json as T
 }

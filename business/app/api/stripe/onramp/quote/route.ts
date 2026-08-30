@@ -4,20 +4,13 @@ import {
   parseExpressDepositsAmountEntryMode,
   validateExpressDepositsAmount,
 } from "@easner/shared"
-import { StripeOnrampApiError } from "@/lib/stripe/onramp-client"
+import { mapStripeOnrampRouteError } from "@/lib/stripe/log-onramp-api-error"
 import { resolveExpressDepositsContext } from "@/lib/stripe/onramp-context"
 import { getTurnkeyDepositAddressesForBusiness, getTurnkeyDepositAddressesForContext } from "@/lib/wallet/turnkey-deposit-addresses"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { quoteExpressDepositsPricing } from "@/lib/stripe/express-deposits-pricing-server"
 
 export const runtime = "nodejs"
-
-function mapError(e: unknown) {
-  if (e instanceof StripeOnrampApiError) {
-    return NextResponse.json({ error: e.message, code: e.code }, { status: e.status >= 400 ? e.status : 400 })
-  }
-  return NextResponse.json({ error: e instanceof Error ? e.message : "Request failed" }, { status: 400 })
-}
 
 export async function POST(request: Request) {
   const resolved = await resolveExpressDepositsContext(request)
@@ -83,6 +76,10 @@ export async function POST(request: Request) {
       rateFetchedAt: quoted.pricing.rateFetchedAt ?? null,
     })
   } catch (e) {
-    return mapError(e)
+    return mapStripeOnrampRouteError("quote", e, {
+      payerUserId: resolved.ctx.payerUserId,
+      cryptoCustomerId: resolved.ctx.payer.stripe_crypto_customer_id,
+      paymentMethod,
+    })
   }
 }

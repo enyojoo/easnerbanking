@@ -1,15 +1,9 @@
 import { NextResponse } from "next/server"
-import { StripeOnrampApiError, stripeOnramp } from "@/lib/stripe/onramp-client"
+import { stripeOnramp } from "@/lib/stripe/onramp-client"
+import { mapStripeOnrampRouteError } from "@/lib/stripe/log-onramp-api-error"
 import { ensureExpressDepositsLiveOAuth, kycPrefillFromPayer, patchExpressPayer, resolveExpressDepositsContext } from "@/lib/stripe/onramp-context"
 
 export const runtime = "nodejs"
-
-function mapError(e: unknown) {
-  if (e instanceof StripeOnrampApiError) {
-    return NextResponse.json({ error: e.message, code: e.code }, { status: e.status >= 400 ? e.status : 400 })
-  }
-  return NextResponse.json({ error: e instanceof Error ? e.message : "Request failed" }, { status: 400 })
-}
 
 export async function GET(request: Request) {
   const resolved = await resolveExpressDepositsContext(request)
@@ -27,7 +21,10 @@ export async function GET(request: Request) {
     const customer = await stripeOnramp.retrieveCustomer(id, liveOAuth || undefined)
     return NextResponse.json({ customer })
   } catch (e) {
-    return mapError(e)
+    return mapStripeOnrampRouteError("customer.get", e, {
+      payerUserId: resolved.ctx.payerUserId,
+      cryptoCustomerId: id,
+    })
   }
 }
 
@@ -68,6 +65,9 @@ export async function POST(request: Request) {
       prefill: kycPrefillFromPayer(resolved.ctx.payer),
     })
   } catch (e) {
-    return mapError(e)
+    return mapStripeOnrampRouteError("customer.upsert", e, {
+      payerUserId: resolved.ctx.payerUserId,
+      cryptoCustomerId: resolved.ctx.payer.stripe_crypto_customer_id,
+    })
   }
 }

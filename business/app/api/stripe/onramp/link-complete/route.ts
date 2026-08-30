@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 import { expressDepositsStatusIsReady } from "@easner/shared"
 import { encryptLinkOAuthSecrets } from "@/lib/stripe/onramp-oauth"
-import { StripeOnrampApiError, retrieveLinkAuthTokens } from "@/lib/stripe/onramp-client"
+import { retrieveLinkAuthTokens } from "@/lib/stripe/onramp-client"
+import { mapStripeOnrampRouteError } from "@/lib/stripe/log-onramp-api-error"
 import { patchExpressPayer, resolveExpressDepositsContext } from "@/lib/stripe/onramp-context"
 
 export const runtime = "nodejs"
@@ -29,10 +30,11 @@ export async function POST(request: Request) {
       refreshToken = String(tokens.refresh_token || "").trim()
     } catch (e) {
       if (!accessToken) {
-        if (e instanceof StripeOnrampApiError) {
-          return NextResponse.json({ error: e.message, code: e.code }, { status: e.status >= 400 ? e.status : 400 })
-        }
-        throw e
+        return mapStripeOnrampRouteError("link_complete.tokens", e, {
+          payerUserId: resolved.ctx.payerUserId,
+          cryptoCustomerId,
+          authIntentId,
+        })
       }
     }
   }

@@ -23,6 +23,7 @@ import {
   retrieveExpressCustomerWithOAuth,
 } from "@/lib/stripe/onramp-context"
 import { stripeOnramp } from "@/lib/stripe/onramp-client"
+import { logStripeOnrampRouteContext } from "@/lib/stripe/log-onramp-api-error"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { loadUsUsdBankPayInMode } from "@/lib/stripe/us-pay-in-corridor"
 
@@ -57,7 +58,12 @@ export async function GET(request: Request) {
         id: payer.stripe_crypto_customer_id,
       }
       retrievedOk = Boolean(customer.kyc_tiers && customer.kyc_tiers.length > 0)
-    } catch {
+    } catch (e) {
+      logStripeOnrampRouteContext("status.retrieve_customer", e, {
+        payerUserId,
+        cryptoCustomerId: payer.stripe_crypto_customer_id,
+        swallowed: true,
+      })
       customer = { id: payer.stripe_crypto_customer_id }
     }
     try {
@@ -68,7 +74,12 @@ export async function GET(request: Request) {
         )) as { data?: unknown[] }
         walletRegistered = Array.isArray(wallets.data) && wallets.data.length > 0
       }
-    } catch {
+    } catch (e) {
+      logStripeOnrampRouteContext("status.list_wallets", e, {
+        payerUserId,
+        cryptoCustomerId: payer.stripe_crypto_customer_id,
+        swallowed: true,
+      })
       walletRegistered = false
     }
   }

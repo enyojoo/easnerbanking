@@ -1,16 +1,11 @@
 import { NextResponse } from "next/server"
-import { StripeOnrampApiError, stripeOnramp } from "@/lib/stripe/onramp-client"
+import { stripeOnramp } from "@/lib/stripe/onramp-client"
+import { mapStripeOnrampRouteError } from "@/lib/stripe/log-onramp-api-error"
+import { buildStripeOnrampCheckoutParams } from "@/lib/stripe/onramp-checkout-params"
 import { ensureExpressDepositsLiveOAuth, resolveExpressDepositsContext } from "@/lib/stripe/onramp-context"
 import { markOnrampSessionFailed } from "@/lib/stripe/onramp-ledger"
 
 export const runtime = "nodejs"
-
-function mapError(e: unknown) {
-  if (e instanceof StripeOnrampApiError) {
-    return NextResponse.json({ error: e.message, code: e.code }, { status: e.status >= 400 ? e.status : 400 })
-  }
-  return NextResponse.json({ error: e instanceof Error ? e.message : "Request failed" }, { status: 400 })
-}
 
 export async function GET(
   request: Request,
@@ -33,7 +28,11 @@ export async function GET(
     const session = await stripeOnramp.retrieveSession(id, liveOAuth)
     return NextResponse.json(session)
   } catch (e) {
-    return mapError(e)
+    return mapStripeOnrampRouteError("sessions.get", e, {
+      payerUserId: resolved.ctx.payerUserId,
+      cryptoCustomerId: resolved.ctx.payer.stripe_crypto_customer_id,
+      sessionId: id,
+    })
   }
 }
 
@@ -72,18 +71,14 @@ export async function POST(
       })
       return NextResponse.json({ ok: true })
     }
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-    const userAgent = request.headers.get("user-agent") || undefined
-    const checked = await stripeOnramp.checkoutSession(
-      id,
-      {
-        payment_token: body.paymentTokenId || undefined,
-        mandate_data: body.mandateData || undefined,
-        customer_ip_address: ip || undefined,
-        user_agent: userAgent,
-      },
-      liveOAuth,
-    )
+    const checkoutParams = buildStripeOnrampCheckoutParams(request, body)
+    if ("error" in checkoutParams) {
+      return NextResponse.json(
+        { error: checkoutParams.error, code: checkoutParams.code },
+        { status: 400 },
+      )
+    }
+    const checked = await stripeOnramp.checkoutSession(id, checkoutParams, liveOAuth)
     const clientSecret = String(
       (checked as { client_secret?: string; clientSecret?: string }).client_secret ||
         (checked as { clientSecret?: string }).clientSecret ||
@@ -91,6 +86,11 @@ export async function POST(
     )
     return NextResponse.json({ client_secret: clientSecret || undefined, session: checked })
   } catch (e) {
-    return mapError(e)
+    return mapStripeOnrampRouteError("sessions.action", e, {
+      payerUserId: resolved.ctx.payerUserId,
+      cryptoCustomerId: resolved.ctx.payer.stripe_crypto_customer_id,
+      sessionId: id,
+      action,
+    })
   }
 }

@@ -5,17 +5,11 @@ import {
   parseExpressSavedPaymentMethods,
   type ExpressSavedPaymentRail,
 } from "@easner/shared"
-import { StripeOnrampApiError, stripeOnramp } from "@/lib/stripe/onramp-client"
+import { stripeOnramp } from "@/lib/stripe/onramp-client"
+import { mapStripeOnrampRouteError } from "@/lib/stripe/log-onramp-api-error"
 import { patchExpressPayer, resolveExpressDepositsContext, ensureExpressDepositsLiveOAuth } from "@/lib/stripe/onramp-context"
 
 export const runtime = "nodejs"
-
-function mapError(e: unknown) {
-  if (e instanceof StripeOnrampApiError) {
-    return NextResponse.json({ error: e.message, code: e.code }, { status: e.status >= 400 ? e.status : 400 })
-  }
-  return NextResponse.json({ error: e instanceof Error ? e.message : "Request failed" }, { status: 400 })
-}
 
 function readRail(value: unknown): ExpressSavedPaymentRail | null {
   const rail = String(value || "").trim()
@@ -40,7 +34,10 @@ export async function GET(request: Request) {
     const tokens = await stripeOnramp.listPaymentTokens(customerId, liveOAuth)
     return NextResponse.json(tokens)
   } catch (e) {
-    return mapError(e)
+    return mapStripeOnrampRouteError("payment_tokens.list", e, {
+      payerUserId: resolved.ctx.payerUserId,
+      cryptoCustomerId: customerId,
+    })
   }
 }
 

@@ -1,17 +1,11 @@
 import { NextResponse } from "next/server"
-import { StripeOnrampApiError, stripeOnramp } from "@/lib/stripe/onramp-client"
+import { stripeOnramp } from "@/lib/stripe/onramp-client"
+import { mapStripeOnrampRouteError } from "@/lib/stripe/log-onramp-api-error"
 import { ensureExpressDepositsLiveOAuth, resolveExpressDepositsContext } from "@/lib/stripe/onramp-context"
 import { getTurnkeyDepositAddressesForBusiness, getTurnkeyDepositAddressesForContext } from "@/lib/wallet/turnkey-deposit-addresses"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 
 export const runtime = "nodejs"
-
-function mapError(e: unknown) {
-  if (e instanceof StripeOnrampApiError) {
-    return NextResponse.json({ error: e.message, code: e.code }, { status: e.status >= 400 ? e.status : 400 })
-  }
-  return NextResponse.json({ error: e instanceof Error ? e.message : "Request failed" }, { status: 400 })
-}
 
 function walletAddressOf(row: unknown): string {
   if (!row || typeof row !== "object") return ""
@@ -58,6 +52,9 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ walletAddress: wallet, network: "solana", registered })
   } catch (e) {
-    return mapError(e)
+    return mapStripeOnrampRouteError("wallets.register", e, {
+      payerUserId,
+      cryptoCustomerId: customerId,
+    })
   }
 }
