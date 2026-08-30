@@ -23,6 +23,7 @@ describe("onramp client context", () => {
       destination_amount: "1",
       customer_ip_address: "203.0.113.10",
     })
+    expect(params).not.toHaveProperty("user_agent")
   })
 
   it("returns customer_ip_required when IP is unavailable in production", () => {

@@ -1,14 +1,14 @@
 import { resolveStripeOnrampCustomerIp } from "@/lib/stripe/request-client-ip"
 
-export type StripeOnrampClientContext =
-  | { customer_ip_address: string; user_agent?: string }
+export type StripeOnrampCustomerIpContext =
+  | { customer_ip_address: string }
   | { error: string; code: string }
 
-/** IP + user agent required by Stripe on onramp session create and checkout. */
-export function resolveStripeOnrampClientContext(
+/** IP required by Stripe on headless onramp session create. */
+export function resolveStripeOnrampCustomerIpContext(
   request: Request,
   body: Record<string, unknown>,
-): StripeOnrampClientContext {
+): StripeOnrampCustomerIpContext {
   const customerIpAddress = resolveStripeOnrampCustomerIp(request, body)
   if (!customerIpAddress) {
     return {
@@ -16,16 +16,18 @@ export function resolveStripeOnrampClientContext(
       code: "customer_ip_required",
     }
   }
+  return { customer_ip_address: customerIpAddress }
+}
 
-  const userAgent =
+function resolveStripeOnrampUserAgent(
+  request: Request,
+  body: Record<string, unknown>,
+): string | undefined {
+  return (
     String(body.userAgent ?? body.user_agent ?? "").trim() ||
     request.headers.get("user-agent")?.trim() ||
     undefined
-
-  return {
-    customer_ip_address: customerIpAddress,
-    user_agent: userAgent,
-  }
+  )
 }
 
 export function withStripeOnrampClientContext(
@@ -33,20 +35,22 @@ export function withStripeOnrampClientContext(
   body: Record<string, unknown>,
   params: Record<string, unknown>,
 ): Record<string, unknown> | { error: string; code: string } {
-  const client = resolveStripeOnrampClientContext(request, body)
+  const client = resolveStripeOnrampCustomerIpContext(request, body)
   if ("error" in client) return client
   return { ...params, ...client }
 }
 
+/** Checkout accepts customer_ip_address and user_agent; session create accepts IP only. */
 export function buildStripeOnrampCheckoutParams(
   request: Request,
   body: Record<string, unknown>,
 ): Record<string, unknown> | { error: string; code: string } {
-  const client = resolveStripeOnrampClientContext(request, body)
+  const client = resolveStripeOnrampCustomerIpContext(request, body)
   if ("error" in client) return client
   return {
     payment_token: body.paymentTokenId || undefined,
     mandate_data: body.mandateData || undefined,
     ...client,
+    user_agent: resolveStripeOnrampUserAgent(request, body),
   }
 }
