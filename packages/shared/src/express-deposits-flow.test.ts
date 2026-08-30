@@ -233,6 +233,29 @@ describe("expressPaymentMethodDisplay", () => {
       accessibilityLabel: "Visa ····9082",
     })
   })
+
+  it("uses Apple and Google brand marks for wallet express deposits", () => {
+    expect(
+      expressPaymentMethodDisplayForMethod({ method: "express_apple_pay" }),
+    ).toEqual({
+      iconKey: "apple",
+      text: "Apple Pay",
+      accessibilityLabel: "Apple Pay",
+    })
+    expect(
+      expressPaymentMethodDisplayForMethod({ method: "express_google_pay" }),
+    ).toEqual({
+      iconKey: "google",
+      text: "Google Pay",
+      accessibilityLabel: "Google Pay",
+    })
+    expect(
+      expressPaymentMethodDisplayFromReview({ paymentMethod: "apple_pay" }),
+    ).toMatchObject({ iconKey: "apple" })
+    expect(
+      expressPaymentMethodDisplayFromReview({ paymentMethod: "google_pay" }),
+    ).toMatchObject({ iconKey: "google" })
+  })
 })
 
 describe("parseExpressSavedPaymentMethods", () => {

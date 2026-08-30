@@ -69,12 +69,10 @@ export function InboundReceiveDetailRows({ snapshot, copiedStates, onCopy }: Pro
 
         if (row.paymentMethodDisplay) {
           return (
-            <TransactionDetailSummaryRow
-              key={`${row.label}-${index}`}
-              label={row.label}
-              value={row.value}
-            >
-              <ExpressPaymentMethodRow display={row.paymentMethodDisplay} />
+            <TransactionDetailSummaryRow key={`${row.label}-${index}`} label={row.label}>
+              <View style={styles.paymentMethodValue}>
+                <ExpressPaymentMethodRow display={row.paymentMethodDisplay} />
+              </View>
             </TransactionDetailSummaryRow>
           )
         }
@@ -100,5 +98,10 @@ const styles = StyleSheet.create({
     ...textStyles.caption,
     color: colors.text.secondary,
     paddingVertical: spacing[2],
+  },
+  paymentMethodValue: {
+    flexShrink: 1,
+    minWidth: 0,
+    alignItems: 'flex-end',
   },
 })

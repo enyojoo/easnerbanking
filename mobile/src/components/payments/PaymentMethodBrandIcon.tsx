@@ -3,6 +3,7 @@ import { Image, StyleSheet, View } from 'react-native'
 import { CreditCard } from 'lucide-react-native'
 import type { ExpressPaymentBrandIconKey } from '@easner/shared'
 import { colors } from '../../theme'
+import { AppleBrandMark, GoogleBrandMark } from './WalletBrandMarks'
 
 const BRAND_SOURCES: Partial<Record<ExpressPaymentBrandIconKey, number>> = {
   visa: require('../../../assets/payment-brands/visa.png'),
@@ -12,8 +13,6 @@ const BRAND_SOURCES: Partial<Record<ExpressPaymentBrandIconKey, number>> = {
   link: require('../../../assets/payment-brands/link.png'),
   bank: require('../../../assets/payment-brands/bank.png'),
   card: require('../../../assets/payment-brands/card.png'),
-  apple_pay: require('../../../assets/payment-brands/apple_pay.png'),
-  google_pay: require('../../../assets/payment-brands/google_pay.png'),
 }
 
 type Props = {
@@ -21,7 +20,30 @@ type Props = {
   height?: number
 }
 
+function isAppleBrand(iconKey: ExpressPaymentBrandIconKey): boolean {
+  return iconKey === 'apple' || iconKey === 'apple_pay'
+}
+
+function isGoogleBrand(iconKey: ExpressPaymentBrandIconKey): boolean {
+  return iconKey === 'google' || iconKey === 'google_pay'
+}
+
 export function PaymentMethodBrandIcon({ iconKey, height = 24 }: Props) {
+  if (isAppleBrand(iconKey)) {
+    return (
+      <View style={[styles.markWrap, { height, width: height }]} accessibilityElementsHidden>
+        <AppleBrandMark size={Math.round(height * 0.92)} />
+      </View>
+    )
+  }
+  if (isGoogleBrand(iconKey)) {
+    return (
+      <View style={[styles.markWrap, { height, width: height }]} accessibilityElementsHidden>
+        <GoogleBrandMark size={Math.round(height * 0.92)} />
+      </View>
+    )
+  }
+
   const source = BRAND_SOURCES[iconKey] ?? BRAND_SOURCES.card
   if (!source) {
     return (
@@ -42,6 +64,11 @@ export function PaymentMethodBrandIcon({ iconKey, height = 24 }: Props) {
 
 const styles = StyleSheet.create({
   icon: {
+    flexShrink: 0,
+  },
+  markWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
     flexShrink: 0,
   },
   fallback: {

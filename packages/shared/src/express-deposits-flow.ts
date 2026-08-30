@@ -147,6 +147,8 @@ export type ExpressPaymentBrandIconKey =
   | "amex"
   | "discover"
   | "link"
+  | "apple"
+  | "google"
   | "apple_pay"
   | "google_pay"
   | "bank"
@@ -181,14 +183,14 @@ export function expressPaymentMethodDisplayForMethod(input: {
 }): ExpressPaymentMethodDisplay {
   if (input.method === "express_apple_pay") {
     return {
-      iconKey: "apple_pay",
+      iconKey: "apple",
       text: EXPRESS_DEPOSITS_COPY.applePayTitle,
       accessibilityLabel: EXPRESS_DEPOSITS_COPY.applePayTitle,
     }
   }
   if (input.method === "express_google_pay") {
     return {
-      iconKey: "google_pay",
+      iconKey: "google",
       text: EXPRESS_DEPOSITS_COPY.googlePayTitle,
       accessibilityLabel: EXPRESS_DEPOSITS_COPY.googlePayTitle,
     }
@@ -230,14 +232,14 @@ export function expressPaymentMethodDisplayFromReview(input: {
   if (!method) return null
   if (method === "apple_pay") {
     return {
-      iconKey: "apple_pay",
+      iconKey: "apple",
       text: EXPRESS_DEPOSITS_COPY.applePayTitle,
       accessibilityLabel: EXPRESS_DEPOSITS_COPY.applePayTitle,
     }
   }
   if (method === "google_pay") {
     return {
-      iconKey: "google_pay",
+      iconKey: "google",
       text: EXPRESS_DEPOSITS_COPY.googlePayTitle,
       accessibilityLabel: EXPRESS_DEPOSITS_COPY.googlePayTitle,
     }
