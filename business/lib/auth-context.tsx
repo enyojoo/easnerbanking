@@ -9,7 +9,7 @@ import { clearLegacySupabaseAuthCookiesOnce } from "@/lib/supabase/clear-legacy-
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { getOnboarding } from "@/lib/onboarding-store"
 import { removePin } from "@/lib/login-pin"
-import { resetSessionActivity } from "@/lib/session-activity"
+import { resetSessionActivity, shouldResetIdleOnAuthEvent } from "@/lib/session-activity"
 import { IdleSessionBridge } from "@/components/idle-session-bridge"
 import { analytics } from "@/lib/analytics"
 import {
@@ -83,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [storedProbe, setStoredProbe] = useState(() =>
     typeof window !== "undefined" ? probeStoredSupabaseSession() : EMPTY_STORED_SUPABASE_SESSION_PROBE,
   )
+  const idleAuthUserIdRef = useRef<string | null>(null)
   const canBootstrapWorkspace = storedProbe.likelyAuthenticated
   const sessionUserId = user?.id ?? (canBootstrapWorkspace ? storedProbe.userId : null)
   const bootstrapFullName = useMemo(() => {
@@ -181,9 +182,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })()
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
+      // SIGNED_IN also fires on tab-visible session recovery. Resetting idle
+      // there treats "coming back" as activity, so PIN never returns. Only a
+      // real user change (login / first hydrate) starts the idle clock.
+      const nextUserId = session?.user?.id ?? null
+      if (shouldResetIdleOnAuthEvent(event, idleAuthUserIdRef.current, nextUserId)) {
         resetSessionActivity()
       }
+      idleAuthUserIdRef.current = nextUserId
       if (event === "SIGNED_IN" && session?.user) {
         analytics.identify(session.user.id, personPropertiesFromUser(session.user))
         const oauthProvider = (session.user.identities ?? []).find(

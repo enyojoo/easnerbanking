@@ -5,6 +5,7 @@ import {
   beginIdleLockSuspend,
   endIdleLockSuspend,
   isIdleLockSuspended,
+  shouldResetIdleOnAuthEvent,
 } from "@/lib/session-activity"
 
 vi.mock("@/lib/login-pin", () => ({
@@ -43,5 +44,20 @@ describe("idle lock suspend", () => {
     beginIdleLockSuspend()
     expect(evaluateIdlePolicy("user-1")).toBe("ok")
     endIdleLockSuspend()
+  })
+})
+
+describe("shouldResetIdleOnAuthEvent", () => {
+  it("resets on first hydrate and on a different user signing in", () => {
+    expect(shouldResetIdleOnAuthEvent("INITIAL_SESSION", null, "user-1")).toBe(true)
+    expect(shouldResetIdleOnAuthEvent("SIGNED_IN", null, "user-1")).toBe(true)
+    expect(shouldResetIdleOnAuthEvent("SIGNED_IN", "user-1", "user-2")).toBe(true)
+  })
+
+  it("does not reset when the same session recovers on tab visible", () => {
+    expect(shouldResetIdleOnAuthEvent("SIGNED_IN", "user-1", "user-1")).toBe(false)
+    expect(shouldResetIdleOnAuthEvent("INITIAL_SESSION", "user-1", "user-1")).toBe(false)
+    expect(shouldResetIdleOnAuthEvent("TOKEN_REFRESHED", "user-1", "user-1")).toBe(false)
+    expect(shouldResetIdleOnAuthEvent("SIGNED_IN", "user-1", null)).toBe(false)
   })
 })

@@ -76,6 +76,20 @@ export function touchSessionActivity(): void {
   resetSessionActivity()
 }
 
+/**
+ * Idle clock starts on a real login / first hydrate, not on tab-visible
+ * session recovery (Supabase also emits SIGNED_IN for that).
+ */
+export function shouldResetIdleOnAuthEvent(
+  event: string,
+  previousUserId: string | null,
+  nextUserId: string | null,
+): boolean {
+  if (event !== "SIGNED_IN" && event !== "INITIAL_SESSION") return false
+  if (!nextUserId) return false
+  return previousUserId !== nextUserId
+}
+
 export function isIdleLockSuspended(): boolean {
   return suspendCount > 0
 }
