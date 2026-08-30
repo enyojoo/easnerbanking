@@ -8,6 +8,8 @@ import {
   expressDepositCollectPaymentOpts,
   expressDepositPayNeedsCollect,
   expressInstrumentFromCollectDetails,
+  expressPaymentMethodDisplayForMethod,
+  expressPaymentMethodDisplayFromReview,
   expressReviewDepositMethodLabel,
   expressSavedInstrumentForMethod,
   formatExpressSavedInstrumentLabel,
@@ -148,6 +150,12 @@ describe("expressDepositPayNeedsCollect", () => {
     ).toBe(false)
     expect(
       expressDepositPayNeedsCollect({
+        method: "express_card",
+        paymentTokenId: "tok_card",
+      }),
+    ).toBe(false)
+    expect(
+      expressDepositPayNeedsCollect({
         method: "express_ach",
         paymentMethods: { card: cardInstrument },
       }),
@@ -195,6 +203,35 @@ describe("expressReviewDepositMethodLabel", () => {
     ).toBe("Chase ····6789")
     expect(expressReviewDepositMethodLabel({ method: "express_card" })).toBe("Card")
     expect(expressReviewDepositMethodLabel({ method: "express_apple_pay" })).toBe("Apple Pay")
+  })
+})
+
+describe("expressPaymentMethodDisplay", () => {
+  it("maps card brand to icon key and last4 mask beside chip", () => {
+    expect(
+      expressPaymentMethodDisplayForMethod({
+        method: "express_card",
+        paymentMethods: { card: cardInstrument },
+      }),
+    ).toEqual({
+      iconKey: "visa",
+      text: "•••• 4242",
+      accessibilityLabel: "Visa ····4242",
+    })
+  })
+
+  it("rehydrates display from persisted deposit review fields", () => {
+    expect(
+      expressPaymentMethodDisplayFromReview({
+        paymentMethod: "card",
+        brand: "visa",
+        last4: "9082",
+      }),
+    ).toEqual({
+      iconKey: "visa",
+      text: "•••• 9082",
+      accessibilityLabel: "Visa ····9082",
+    })
   })
 })
 
@@ -296,11 +333,16 @@ describe("classifyExpressDepositPayError", () => {
   it("routes identity gaps to KYC and token mismatches to setup", () => {
     expect(classifyExpressDepositPayError("missing_document")).toBe("kyc")
     expect(classifyExpressDepositPayError("payment_method_invalid")).toBe("wrong_token")
-    expect(classifyExpressDepositPayError(null, "invalid_token for us_bank_account")).toBe(
-      "wrong_token",
-    )
+    expect(classifyExpressDepositPayError(null, "invalid_token for us_bank_account")).toBe("failed")
+    expect(classifyExpressDepositPayError("crypto_onramp_invalid_payment_token")).toBe("wrong_token")
     expect(classifyExpressDepositPayError("card_declined", "Payment could not be completed")).toBe(
       "failed",
     )
+    expect(
+      classifyExpressDepositPayError(
+        "card_declined",
+        "Your payment method could not be charged for this purchase",
+      ),
+    ).toBe("failed")
   })
 })

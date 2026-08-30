@@ -6,7 +6,7 @@ import {
   type ExpressSavedPaymentRail,
 } from "@easner/shared"
 import { StripeOnrampApiError, stripeOnramp } from "@/lib/stripe/onramp-client"
-import { patchExpressPayer, resolveExpressDepositsContext } from "@/lib/stripe/onramp-context"
+import { patchExpressPayer, resolveExpressDepositsContext, ensureExpressDepositsLiveOAuth } from "@/lib/stripe/onramp-context"
 
 export const runtime = "nodejs"
 
@@ -29,7 +29,15 @@ export async function GET(request: Request) {
   const customerId = resolved.ctx.payer.stripe_crypto_customer_id
   if (!customerId) return NextResponse.json({ data: [] })
   try {
-    const tokens = await stripeOnramp.listPaymentTokens(customerId, resolved.ctx.oauthToken || undefined)
+    const liveOAuth = await ensureExpressDepositsLiveOAuth({
+      admin: resolved.ctx.admin,
+      payerUserId: resolved.ctx.payerUserId,
+      customerId,
+      oauthToken: resolved.ctx.oauthToken,
+      oauthRefreshToken: resolved.ctx.oauthRefreshToken,
+    })
+    if (!liveOAuth) return NextResponse.json({ data: [] })
+    const tokens = await stripeOnramp.listPaymentTokens(customerId, liveOAuth)
     return NextResponse.json(tokens)
   } catch (e) {
     return mapError(e)

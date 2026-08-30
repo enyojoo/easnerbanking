@@ -144,7 +144,62 @@ export async function persistExpressDepositsKyc(
 }
 
 function isOAuthAuthFailure(e: unknown): boolean {
-  return e instanceof StripeOnrampApiError && (e.status === 400 || e.status === 401)
+  if (!(e instanceof StripeOnrampApiError)) return false
+  if (e.status === 401) return true
+  const code = String(e.code || "").toLowerCase()
+  if (code === "parameter_missing" && /oauth/i.test(e.message)) return true
+  return e.status === 400 && /oauth/i.test(e.message)
+}
+
+async function persistRefreshedLinkOAuth(input: {
+  admin: SupabaseClient
+  payerUserId: string
+  oauthRefreshToken: string
+}): Promise<string> {
+  const refreshed = await refreshLinkAccessToken(input.oauthRefreshToken)
+  const access = refreshed.access_token
+  const refresh = refreshed.refresh_token || input.oauthRefreshToken
+  await patchExpressPayer(input.admin, input.payerUserId, {
+    stripe_link_oauth_token_ciphertext: encryptLinkOAuthSecrets({
+      access_token: access,
+      refresh_token: refresh,
+    }),
+  })
+  return access
+}
+
+function requireOAuthToken(token: string): string {
+  const access = String(token || "").trim()
+  if (!access) {
+    throw new StripeOnrampApiError("Link sign-in required", 401, {
+      error: { code: "parameter_missing", message: "Missing required param: HTTP_HEADER[Stripe-OAuth-Token]." },
+    })
+  }
+  return access
+}
+
+/** Ensure Link OAuth is fresh before onramp session / checkout API calls. */
+export async function ensureExpressDepositsLiveOAuth(input: {
+  admin: SupabaseClient
+  payerUserId: string
+  customerId?: string | null
+  oauthToken: string
+  oauthRefreshToken: string
+}): Promise<string> {
+  const customerId = String(input.customerId || "").trim()
+  if (!customerId) return input.oauthToken
+  try {
+    const retrieved = await retrieveExpressCustomerWithOAuth({
+      admin: input.admin,
+      payerUserId: input.payerUserId,
+      customerId,
+      oauthToken: input.oauthToken,
+      oauthRefreshToken: input.oauthRefreshToken,
+    })
+    return retrieved.oauthToken
+  } catch {
+    return input.oauthToken
+  }
 }
 
 /** Retrieve CryptoCustomer with a live Link token; refresh + persist if the access token expired. */
@@ -155,19 +210,24 @@ export async function retrieveExpressCustomerWithOAuth(input: {
   oauthToken: string
   oauthRefreshToken: string
 }): Promise<{ customer: unknown; oauthToken: string }> {
-  const retrieve = (token: string) => stripeOnramp.retrieveCustomer(input.customerId, token || undefined)
+  const retrieve = (token: string) =>
+    stripeOnramp.retrieveCustomer(input.customerId, requireOAuthToken(token))
+  let token = String(input.oauthToken || "").trim()
+  if (!token && input.oauthRefreshToken) {
+    token = await persistRefreshedLinkOAuth({
+      admin: input.admin,
+      payerUserId: input.payerUserId,
+      oauthRefreshToken: input.oauthRefreshToken,
+    })
+  }
   try {
-    return { customer: await retrieve(input.oauthToken), oauthToken: input.oauthToken }
+    return { customer: await retrieve(token), oauthToken: token }
   } catch (e) {
     if (!isOAuthAuthFailure(e) || !input.oauthRefreshToken) throw e
-    const refreshed = await refreshLinkAccessToken(input.oauthRefreshToken)
-    const access = refreshed.access_token
-    const refresh = refreshed.refresh_token || input.oauthRefreshToken
-    await patchExpressPayer(input.admin, input.payerUserId, {
-      stripe_link_oauth_token_ciphertext: encryptLinkOAuthSecrets({
-        access_token: access,
-        refresh_token: refresh,
-      }),
+    const access = await persistRefreshedLinkOAuth({
+      admin: input.admin,
+      payerUserId: input.payerUserId,
+      oauthRefreshToken: input.oauthRefreshToken,
     })
     return { customer: await retrieve(access), oauthToken: access }
   }

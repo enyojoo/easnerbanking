@@ -9,7 +9,7 @@ import {
   validateExpressDepositsAmount,
 } from "@easner/shared"
 import { StripeOnrampApiError, stripeOnramp } from "@/lib/stripe/onramp-client"
-import { resolveExpressDepositsContext } from "@/lib/stripe/onramp-context"
+import { ensureExpressDepositsLiveOAuth, resolveExpressDepositsContext } from "@/lib/stripe/onramp-context"
 import { getTurnkeyDepositAddressesForBusiness, getTurnkeyDepositAddressesForContext } from "@/lib/wallet/turnkey-deposit-addresses"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { insertPendingOnrampSession } from "@/lib/stripe/onramp-ledger"
@@ -44,6 +44,9 @@ export async function POST(request: Request) {
   const paymentToken = String(
     body.paymentTokenId ?? railToken ?? resolved.ctx.payer.stripe_express_payment_token_id ?? "",
   )
+  if (!paymentToken && paymentMethod !== "apple_pay" && paymentMethod !== "google_pay") {
+    return NextResponse.json({ error: "Save a payment method first.", code: "payment_token_required" }, { status: 400 })
+  }
   const sourceCurrency = expressDepositsSourceCurrency(resolved.ctx.payerCountry) ?? "usd"
   const beforeQuote = validateExpressDepositsAmount({
     usdCredit,
@@ -96,6 +99,20 @@ export async function POST(request: Request) {
     const depositReview = buildExpressDepositsDepositReview({
       pricing: quoted.pricing,
       paymentMethod,
+      paymentMethodBrand:
+        paymentMethod === "card"
+          ? expressSavedInstrumentForMethod(savedMethods, "express_card")?.brand
+          : null,
+      paymentMethodLast4:
+        paymentMethod === "card"
+          ? expressSavedInstrumentForMethod(savedMethods, "express_card")?.last4
+          : paymentMethod === "ach"
+            ? expressSavedInstrumentForMethod(savedMethods, "express_ach")?.last4
+            : null,
+      paymentMethodBankName:
+        paymentMethod === "ach"
+          ? expressSavedInstrumentForMethod(savedMethods, "express_ach")?.bankName
+          : null,
     })
 
     const baseSessionParams = {
@@ -106,14 +123,6 @@ export async function POST(request: Request) {
       source_currency: sourceCurrency,
       wallet_address: wallet,
       lock_wallet_address: true,
-      payment_method:
-        paymentMethod === "ach"
-          ? "ach"
-          : paymentMethod === "apple_pay"
-            ? "apple_pay"
-            : paymentMethod === "google_pay"
-              ? "google_pay"
-              : "card",
       payment_token: paymentToken || undefined,
     }
 
@@ -122,7 +131,17 @@ export async function POST(request: Request) {
       baseParams: baseSessionParams,
     })
 
-    const session = await stripeOnramp.createSession(sessionParams, resolved.ctx.oauthToken || undefined)
+    const liveOAuth = await ensureExpressDepositsLiveOAuth({
+      admin: resolved.ctx.admin,
+      payerUserId: resolved.ctx.payerUserId,
+      customerId,
+      oauthToken: resolved.ctx.oauthToken,
+      oauthRefreshToken: resolved.ctx.oauthRefreshToken,
+    })
+    if (!liveOAuth) {
+      return NextResponse.json({ error: "Complete Link sign-in first.", code: "link_auth_required" }, { status: 401 })
+    }
+    const session = await stripeOnramp.createSession(sessionParams, liveOAuth)
     const stripeSessionId = String((session as { id?: string }).id || "")
     let easnerTransactionId: string | null = null
     if (stripeSessionId) {

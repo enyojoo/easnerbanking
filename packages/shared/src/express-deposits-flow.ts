@@ -112,16 +112,13 @@ export function expressReviewDepositMethodLabel(input: {
   method: ExpressCashKind
   paymentMethods?: ExpressSavedPaymentMethods | null
 }): string {
-  if (isExpressWalletKind(input.method)) return expressDepositMethodTitle(input.method)
-  const rail = expressSavedPaymentRail(input.method)
-  if (!rail) return expressDepositMethodTitle(input.method)
-  const instrument = expressSavedInstrumentForMethod(input.paymentMethods, input.method)
-  return formatExpressSavedInstrumentLabel({
-    rail,
-    last4: instrument?.last4,
-    brand: instrument?.brand,
-    bankName: instrument?.bankName,
-  })
+  return expressPaymentMethodDisplayForMethod(input).accessibilityLabel
+}
+
+function titleCaseInstrumentName(value?: string | null): string {
+  const raw = String(value || "").trim().replace(/[_-]+/g, " ")
+  if (!raw) return ""
+  return raw.replace(/\b\w/g, (ch) => ch.toUpperCase())
 }
 
 export function formatExpressSavedInstrumentLabel(input: {
@@ -144,10 +141,133 @@ export function formatExpressSavedInstrumentLabel(input: {
   return "US bank"
 }
 
-function titleCaseInstrumentName(value?: string | null): string {
-  const raw = String(value || "").trim().replace(/[_-]+/g, " ")
-  if (!raw) return ""
-  return raw.replace(/\b\w/g, (ch) => ch.toUpperCase())
+export type ExpressPaymentBrandIconKey =
+  | "visa"
+  | "mastercard"
+  | "amex"
+  | "discover"
+  | "link"
+  | "apple_pay"
+  | "google_pay"
+  | "bank"
+  | "card"
+
+export type ExpressPaymentMethodDisplay = {
+  iconKey: ExpressPaymentBrandIconKey
+  /** Visible text beside the brand chip (last4 mask or wallet name). */
+  text: string
+  /** Full label for accessibility and plain-text fallbacks. */
+  accessibilityLabel: string
+}
+
+function expressCardBrandIconKey(brand?: string | null): ExpressPaymentBrandIconKey {
+  const normalized = String(brand || "").trim().toLowerCase()
+  if (normalized === "visa") return "visa"
+  if (normalized === "mastercard" || normalized === "master_card") return "mastercard"
+  if (normalized === "amex" || normalized === "american_express") return "amex"
+  if (normalized === "discover") return "discover"
+  if (normalized === "link") return "link"
+  return "card"
+}
+
+function expressPaymentLast4Mask(last4?: string | null): string | null {
+  const digits = readLast4(last4)
+  return digits ? `•••• ${digits}` : null
+}
+
+export function expressPaymentMethodDisplayForMethod(input: {
+  method: ExpressCashKind
+  paymentMethods?: ExpressSavedPaymentMethods | null
+}): ExpressPaymentMethodDisplay {
+  if (input.method === "express_apple_pay") {
+    return {
+      iconKey: "apple_pay",
+      text: EXPRESS_DEPOSITS_COPY.applePayTitle,
+      accessibilityLabel: EXPRESS_DEPOSITS_COPY.applePayTitle,
+    }
+  }
+  if (input.method === "express_google_pay") {
+    return {
+      iconKey: "google_pay",
+      text: EXPRESS_DEPOSITS_COPY.googlePayTitle,
+      accessibilityLabel: EXPRESS_DEPOSITS_COPY.googlePayTitle,
+    }
+  }
+  const rail = expressSavedPaymentRail(input.method)
+  const instrument = expressSavedInstrumentForMethod(input.paymentMethods, input.method)
+  if (rail === "ach") {
+    const mask = expressPaymentLast4Mask(instrument?.last4)
+    const bank = String(instrument?.bankName || "").trim()
+    return {
+      iconKey: "bank",
+      text: mask ?? bank ?? EXPRESS_DEPOSITS_COPY.achTitle,
+      accessibilityLabel: formatExpressSavedInstrumentLabel({
+        rail: "ach",
+        last4: instrument?.last4,
+        bankName: instrument?.bankName,
+      }),
+    }
+  }
+  const mask = expressPaymentLast4Mask(instrument?.last4)
+  return {
+    iconKey: expressCardBrandIconKey(instrument?.brand),
+    text: mask ?? EXPRESS_DEPOSITS_COPY.cardTitle,
+    accessibilityLabel: formatExpressSavedInstrumentLabel({
+      rail: "card",
+      last4: instrument?.last4,
+      brand: instrument?.brand,
+    }),
+  }
+}
+
+export function expressPaymentMethodDisplayFromReview(input: {
+  paymentMethod?: string | null
+  brand?: string | null
+  last4?: string | null
+  bankName?: string | null
+}): ExpressPaymentMethodDisplay | null {
+  const method = String(input.paymentMethod || "").trim().toLowerCase()
+  if (!method) return null
+  if (method === "apple_pay") {
+    return {
+      iconKey: "apple_pay",
+      text: EXPRESS_DEPOSITS_COPY.applePayTitle,
+      accessibilityLabel: EXPRESS_DEPOSITS_COPY.applePayTitle,
+    }
+  }
+  if (method === "google_pay") {
+    return {
+      iconKey: "google_pay",
+      text: EXPRESS_DEPOSITS_COPY.googlePayTitle,
+      accessibilityLabel: EXPRESS_DEPOSITS_COPY.googlePayTitle,
+    }
+  }
+  if (method === "ach") {
+    const mask = expressPaymentLast4Mask(input.last4)
+    const bank = String(input.bankName || "").trim()
+    return {
+      iconKey: "bank",
+      text: mask ?? bank ?? EXPRESS_DEPOSITS_COPY.achTitle,
+      accessibilityLabel: formatExpressSavedInstrumentLabel({
+        rail: "ach",
+        last4: input.last4,
+        bankName: input.bankName,
+      }),
+    }
+  }
+  if (method === "card") {
+    const mask = expressPaymentLast4Mask(input.last4)
+    return {
+      iconKey: expressCardBrandIconKey(input.brand),
+      text: mask ?? EXPRESS_DEPOSITS_COPY.cardTitle,
+      accessibilityLabel: formatExpressSavedInstrumentLabel({
+        rail: "card",
+        last4: input.last4,
+        brand: input.brand,
+      }),
+    }
+  }
+  return null
 }
 
 export function expressInstrumentFromCollectDetails(
@@ -180,12 +300,23 @@ export function nextExpressDepositStep(input: {
   return "setup"
 }
 
+export function expressSavedPaymentTokenForMethod(input: {
+  method: ExpressCashKind
+  paymentMethods?: ExpressSavedPaymentMethods | null
+  paymentTokenId?: string | null
+}): string | null {
+  const direct = String(input.paymentTokenId || "").trim()
+  if (direct) return direct
+  return expressSavedInstrumentForMethod(input.paymentMethods, input.method)?.paymentTokenId ?? null
+}
+
 export function expressDepositPayNeedsCollect(input: {
   method: ExpressCashKind
   paymentMethods?: ExpressSavedPaymentMethods | null
+  paymentTokenId?: string | null
 }): boolean {
   if (isExpressWalletKind(input.method)) return true
-  return !expressSavedInstrumentForMethod(input.paymentMethods, input.method)?.paymentTokenId
+  return !expressSavedPaymentTokenForMethod(input)
 }
 
 export function expressDepositCollectPaymentOpts(input: {
@@ -278,11 +409,21 @@ export function parseExpressDepositFlowParams(raw: unknown): ExpressDepositFlowP
   }
 }
 
+const EXPRESS_DEPOSIT_WRONG_TOKEN_CODES = [
+  "crypto_onramp_invalid_payment_token",
+  "crypto_onramp_invalid_payment_method",
+  "payment_token_invalid",
+  "invalid_payment_token",
+  "payment_method_invalid",
+] as const
+
 export function classifyExpressDepositPayError(
   code?: string | null,
   message?: string | null,
 ): ExpressDepositPayErrorKind {
-  const hay = `${code || ""} ${message || ""}`.toLowerCase()
+  const codeHay = String(code || "").toLowerCase()
+  const messageHay = String(message || "").toLowerCase()
+  const hay = `${codeHay} ${messageHay}`
   if (
     hay.includes("missing_document") ||
     hay.includes("missing_minimum_identity") ||
@@ -291,14 +432,13 @@ export function classifyExpressDepositPayError(
   ) {
     return "kyc"
   }
-  if (
-    hay.includes("payment_method") ||
-    hay.includes("payment_token") ||
-    hay.includes("invalid_token") ||
-    hay.includes("wrong type") ||
-    hay.includes("us_bank_account") ||
-    hay.includes("bank_account")
-  ) {
+  if (EXPRESS_DEPOSIT_WRONG_TOKEN_CODES.some((tokenCode) => codeHay.includes(tokenCode))) {
+    return "wrong_token"
+  }
+  if (/invalid.*payment_token/.test(hay) || /payment_token.*invalid/.test(hay)) {
+    return "wrong_token"
+  }
+  if (/wrong type.*us_bank_account/.test(hay) || /expected.*us_bank_account/.test(hay)) {
     return "wrong_token"
   }
   return "failed"

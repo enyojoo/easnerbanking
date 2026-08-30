@@ -8,6 +8,9 @@ export type ExpressDepositsReview = {
   youPay: number
   youPayCurrency: string
   paymentMethod: string
+  paymentMethodBrand?: string | null
+  paymentMethodLast4?: string | null
+  paymentMethodBankName?: string | null
   processingFee?: number
   processingFeeCurrency?: string
   easnerProcessingFeeUsd?: number
@@ -51,8 +54,14 @@ function readStripeFees(raw: unknown): ExpressDepositsReview["stripeFees"] {
 export function buildExpressDepositsDepositReview(input: {
   pricing: ExpressDepositsPricingBreakdown
   paymentMethod: string
+  paymentMethodBrand?: string | null
+  paymentMethodLast4?: string | null
+  paymentMethodBankName?: string | null
 }): Record<string, unknown> {
   const { pricing, paymentMethod } = input
+  const brand = String(input.paymentMethodBrand || "").trim()
+  const last4 = String(input.paymentMethodLast4 || "").replace(/\D/g, "").slice(-4)
+  const bankName = String(input.paymentMethodBankName || "").trim()
   return {
     you_get: pricing.usdCredit,
     you_get_currency: "USD",
@@ -64,6 +73,9 @@ export function buildExpressDepositsDepositReview(input: {
     stripe_fees: pricing.stripeFees,
     exchange_rate: pricing.exchangeRate,
     payment_method: paymentMethod,
+    ...(brand ? { payment_method_brand: brand } : {}),
+    ...(last4 ? { payment_method_last4: last4 } : {}),
+    ...(bankName ? { payment_method_bank_name: bankName } : {}),
   }
 }
 
@@ -88,6 +100,9 @@ export function normalizeExpressDepositsReview(
     youPay,
     youPayCurrency: String(review.you_pay_currency || "USD").trim().toUpperCase() || "USD",
     paymentMethod: String(review.payment_method || meta.payment_method || "").trim(),
+    paymentMethodBrand: String(review.payment_method_brand || "").trim() || null,
+    paymentMethodLast4: String(review.payment_method_last4 || "").trim() || null,
+    paymentMethodBankName: String(review.payment_method_bank_name || "").trim() || null,
     ...(processingFee != null
       ? {
           processingFee,

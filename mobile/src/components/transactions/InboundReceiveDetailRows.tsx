@@ -11,6 +11,7 @@ import {
   TransactionDetailSummaryRow,
   TransactionDetailCopyableValue,
 } from './TransactionDetailSummaryRow'
+import { ExpressPaymentMethodRow } from '../payments/ExpressPaymentMethodRow'
 import { colors, spacing, textStyles } from '../../theme'
 
 type Props = {
@@ -62,6 +63,18 @@ export function InboundReceiveDetailRows({ snapshot, copiedStates, onCopy }: Pro
                 copied={Boolean(copiedStates?.[copyKey])}
                 onPress={() => onCopy(row.copyValue!, copyKey)}
               />
+            </TransactionDetailSummaryRow>
+          )
+        }
+
+        if (row.paymentMethodDisplay) {
+          return (
+            <TransactionDetailSummaryRow
+              key={`${row.label}-${index}`}
+              label={row.label}
+              value={row.value}
+            >
+              <ExpressPaymentMethodRow display={row.paymentMethodDisplay} />
             </TransactionDetailSummaryRow>
           )
         }

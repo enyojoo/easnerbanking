@@ -6,7 +6,8 @@ import {
   REVIEW_ROW_LABELS,
   buildExpressDepositsReviewRows,
   coalesceExpressSavedPaymentMethods,
-  expressReviewDepositMethodLabel,
+  expressPaymentMethodDisplayForMethod,
+  expressSavedPaymentTokenForMethod,
   isExpressWalletKind,
   type ExpressDepositFlowParams,
 } from '@easner/shared'
@@ -20,6 +21,7 @@ import {
 } from '../transactions/TransactionDetailSummaryRow'
 import { ReceiveFlowHeader } from './ReceiveFlowHeader'
 import { ExpressStripeHost } from './ExpressStripeHost'
+import { ExpressPaymentMethodRow } from '../payments/ExpressPaymentMethodRow'
 import { navigateToTransactionDetailAfterPayIn } from '../../navigation/transactionDetailNavigation'
 
 type ReviewNavigation = Parameters<typeof navigateToTransactionDetailAfterPayIn>[0] & {
@@ -59,6 +61,11 @@ export function ExpressDepositsReview({
     setPricing(params.pricing)
   }, [params.pricing])
 
+  const paymentMethodDisplay = useMemo(
+    () => expressPaymentMethodDisplayForMethod({ method: params.method, paymentMethods }),
+    [params.method, paymentMethods],
+  )
+
   const rows = useMemo(
     () => buildExpressDepositsReviewRows({ pricing, method: params.method, surface: 'review' }),
     [params.method, pricing],
@@ -92,6 +99,18 @@ export function ExpressDepositsReview({
       }
       if (result.reason === 'wrong_token') {
         if (isExpressWalletKind(params.method)) {
+          setError(result.message)
+          showError(result.message)
+          return
+        }
+        const hasSavedToken = Boolean(
+          expressSavedPaymentTokenForMethod({
+            method: params.method,
+            paymentMethods,
+            paymentTokenId: params.paymentTokenId,
+          }),
+        )
+        if (hasSavedToken) {
           setError(result.message)
           showError(result.message)
           return
@@ -143,16 +162,12 @@ export function ExpressDepositsReview({
                 )
               }
               if (row.id === 'deposit-method') {
-                const methodLabel = expressReviewDepositMethodLabel({
-                  method: params.method,
-                  paymentMethods,
-                })
                 const canChange = !isExpressWalletKind(params.method)
                 return (
                   <TransactionDetailSummaryRow
                     key={row.id}
                     label={row.label}
-                    value={methodLabel}
+                    value={paymentMethodDisplay.accessibilityLabel}
                     last={index === rows.length - 1}
                   >
                     {canChange ? (
@@ -171,12 +186,12 @@ export function ExpressDepositsReview({
                         accessibilityRole="button"
                         accessibilityLabel={EXPRESS_DEPOSITS_COPY.changePaymentCta}
                       >
-                        <Text style={transactionDetailRowStyles.value} numberOfLines={1}>
-                          {methodLabel}
-                        </Text>
+                        <ExpressPaymentMethodRow display={paymentMethodDisplay} />
                         <Text style={styles.changeCta}>{EXPRESS_DEPOSITS_COPY.changePaymentCta}</Text>
                       </Pressable>
-                    ) : undefined}
+                    ) : (
+                      <ExpressPaymentMethodRow display={paymentMethodDisplay} />
+                    )}
                   </TransactionDetailSummaryRow>
                 )
               }

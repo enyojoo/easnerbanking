@@ -511,6 +511,8 @@ describe("Express deposits inbound receive", () => {
         processing_fee: 2.5,
         processing_fee_currency: "EUR",
         stripe_fees: { transaction: 2, network: 0.5, total: 2.5 },
+        payment_method_brand: "visa",
+        payment_method_last4: "9082",
       },
     }
     const snapshot = resolveInboundReceiveDetail({
@@ -531,7 +533,15 @@ describe("Express deposits inbound receive", () => {
     expect(map[REVIEW_ROW_LABELS.amountPaid]).toBe("€46.20")
     expect(map[REVIEW_ROW_LABELS.amountCredited]).toBe("+$50")
     expect(map[REVIEW_ROW_LABELS.creditTo]).toBe("USD Balance")
-    expect(map[REVIEW_ROW_LABELS.depositMethod]).toBe("Card deposit")
+    expect(map[REVIEW_ROW_LABELS.depositMethod]).toBe("Visa ····9082")
+    expect(snapshot?.paymentMethodDisplay).toEqual({
+      iconKey: "visa",
+      text: "•••• 9082",
+      accessibilityLabel: "Visa ····9082",
+    })
+    const detailRows = buildInboundReceiveDetailRows(snapshot!, { surface: "detail" })
+    const depositRow = detailRows.find((row) => row.label === REVIEW_ROW_LABELS.depositMethod)
+    expect(depositRow?.paymentMethodDisplay?.iconKey).toBe("visa")
     expect(map[REVIEW_ROW_LABELS.exchangeRate]).toBeTruthy()
     const email = rowMap(buildInboundReceiveEmailDetailRows(snapshot!))
     expect(email[REVIEW_ROW_LABELS.processingFee]).toBe("€2.50")

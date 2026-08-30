@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { StripeOnrampApiError, stripeOnramp } from "@/lib/stripe/onramp-client"
-import { resolveExpressDepositsContext } from "@/lib/stripe/onramp-context"
+import { ensureExpressDepositsLiveOAuth, resolveExpressDepositsContext } from "@/lib/stripe/onramp-context"
 import { getTurnkeyDepositAddressesForBusiness, getTurnkeyDepositAddressesForContext } from "@/lib/wallet/turnkey-deposit-addresses"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 
@@ -22,7 +22,7 @@ function walletAddressOf(row: unknown): string {
 export async function POST(request: Request) {
   const resolved = await resolveExpressDepositsContext(request)
   if ("error" in resolved) return resolved.error
-  const { admin, businessId, actorUserId, payer, oauthToken } = resolved.ctx
+  const { admin, businessId, actorUserId, payer, oauthToken, oauthRefreshToken, payerUserId } = resolved.ctx
   const customerId = payer.stripe_crypto_customer_id
   if (!customerId) {
     return NextResponse.json({ error: "Complete sign-in first." }, { status: 400 })
@@ -40,10 +40,19 @@ export async function POST(request: Request) {
     }
     let registered = false
     try {
-      const wallets = (await stripeOnramp.listWallets(customerId, oauthToken || undefined)) as {
-        data?: unknown[]
+      const liveOAuth = await ensureExpressDepositsLiveOAuth({
+        admin,
+        payerUserId,
+        customerId,
+        oauthToken,
+        oauthRefreshToken,
+      })
+      if (liveOAuth) {
+        const wallets = (await stripeOnramp.listWallets(customerId, liveOAuth)) as {
+          data?: unknown[]
+        }
+        registered = (wallets.data ?? []).some((row) => walletAddressOf(row) === wallet)
       }
-      registered = (wallets.data ?? []).some((row) => walletAddressOf(row) === wallet)
     } catch {
       registered = false
     }

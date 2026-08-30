@@ -9,6 +9,7 @@ import {
   coalesceExpressSavedPaymentMethods,
   expressInstrumentFromCollectDetails,
   expressSavedInstrumentForMethod,
+  expressSavedPaymentTokenForMethod,
   expressSavedPaymentRail,
   isExpressSetupDismissed,
   mergeExpressSavedPaymentMethods,
@@ -241,11 +242,18 @@ export async function checkoutExpressDeposit(input: {
     })
 
     const paymentMethods = parseExpressSavedPaymentMethods(input.paymentMethods)
-    let token =
-      String(input.paymentTokenId || "").trim() ||
-      expressSavedInstrumentForMethod(paymentMethods, input.method)?.paymentTokenId ||
-      null
-    if (expressDepositPayNeedsCollect({ method: input.method, paymentMethods })) {
+    let token = expressSavedPaymentTokenForMethod({
+      method: input.method,
+      paymentMethods,
+      paymentTokenId: input.paymentTokenId,
+    })
+    if (
+      expressDepositPayNeedsCollect({
+        method: input.method,
+        paymentMethods,
+        paymentTokenId: token,
+      })
+    ) {
       const collected = await collectExpressPaymentToken({
         publishableKey: input.publishableKey,
         cryptoCustomerId: input.cryptoCustomerId,

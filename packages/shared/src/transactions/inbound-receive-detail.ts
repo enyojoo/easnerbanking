@@ -35,6 +35,10 @@ import {
 import { isStripeCollectionSettlementMetadata } from "./stripe-invoice-settlement-lifecycle"
 import { expressDepositActivityLabel, isExpressDepositsMetadata } from "../express-deposits-copy"
 import { normalizeExpressDepositsReview } from "../express-deposits-detail"
+import {
+  expressPaymentMethodDisplayFromReview,
+  type ExpressPaymentMethodDisplay,
+} from "../express-deposits-flow"
 
 export type InboundReceiveKind =
   | "yc_fund_balance"
@@ -70,11 +74,15 @@ export type InboundReceiveDetailSnapshot = {
   note?: string
   /** Push/email activity label (may differ from displayTitle casing). */
   notificationActivityLabel?: string
+  /** Brand chip + mask for Express deposit method rows. */
+  paymentMethodDisplay?: ExpressPaymentMethodDisplay
 }
 
 export type InboundReceiveDetailRow = {
   label: string
   value: string
+  /** Brand chip + mask when deposit method has a saved card/bank/wallet. */
+  paymentMethodDisplay?: ExpressPaymentMethodDisplay
   /** When set, UI renders currency flag + balance label instead of plain text. */
   creditCurrency?: string
   /** Verification explainer – detail surface only. */
@@ -353,6 +361,13 @@ export function resolveInboundReceiveDetail(
     const payCurrency = review?.youPayCurrency ?? "USD"
     const getCurrency = review?.youGetCurrency ?? "USD"
     const scheme = expressDepositActivityLabel(review?.paymentMethod ?? String(meta.payment_method ?? ""))
+    const paymentMethodDisplay =
+      expressPaymentMethodDisplayFromReview({
+        paymentMethod: review?.paymentMethod ?? String(meta.payment_method ?? ""),
+        brand: review?.paymentMethodBrand,
+        last4: review?.paymentMethodLast4,
+        bankName: review?.paymentMethodBankName,
+      }) ?? undefined
     const crossCurrency = payCurrency !== getCurrency && paid > 0 && credited > 0
     const exchangeRate =
       review?.exchangeRate ??
@@ -374,6 +389,7 @@ export function resolveInboundReceiveDetail(
       ...(processingFee ? { processingFee } : {}),
       ...(exchangeRate && exchangeRate.rate > 0 ? { exchangeRate } : {}),
       ...(note ? { note } : {}),
+      ...(paymentMethodDisplay ? { paymentMethodDisplay } : {}),
     }
   }
 
@@ -769,7 +785,15 @@ export function buildInboundReceiveDetailRows(
   }
 
   // Deposit method sits with Transfer method on payouts – last content row before When.
-  pushIf(rows, REVIEW_ROW_LABELS.depositMethod, snapshot.scheme)
+  if (snapshot.paymentMethodDisplay) {
+    rows.push({
+      label: REVIEW_ROW_LABELS.depositMethod,
+      value: snapshot.paymentMethodDisplay.accessibilityLabel,
+      paymentMethodDisplay: snapshot.paymentMethodDisplay,
+    })
+  } else {
+    pushIf(rows, REVIEW_ROW_LABELS.depositMethod, snapshot.scheme)
+  }
 
   // Keep the timestamp as the final transaction-detail row for every deposit type.
   if (includeWhen) {

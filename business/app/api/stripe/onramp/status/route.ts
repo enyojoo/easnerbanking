@@ -61,11 +61,13 @@ export async function GET(request: Request) {
       customer = { id: payer.stripe_crypto_customer_id }
     }
     try {
-      const wallets = (await stripeOnramp.listWallets(
-        payer.stripe_crypto_customer_id,
-        liveOAuth || undefined,
-      )) as { data?: unknown[] }
-      walletRegistered = Array.isArray(wallets.data) && wallets.data.length > 0
+      if (liveOAuth) {
+        const wallets = (await stripeOnramp.listWallets(
+          payer.stripe_crypto_customer_id,
+          liveOAuth,
+        )) as { data?: unknown[] }
+        walletRegistered = Array.isArray(wallets.data) && wallets.data.length > 0
+      }
     } catch {
       walletRegistered = false
     }

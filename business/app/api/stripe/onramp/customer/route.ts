@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { StripeOnrampApiError, stripeOnramp } from "@/lib/stripe/onramp-client"
-import { kycPrefillFromPayer, patchExpressPayer, resolveExpressDepositsContext } from "@/lib/stripe/onramp-context"
+import { ensureExpressDepositsLiveOAuth, kycPrefillFromPayer, patchExpressPayer, resolveExpressDepositsContext } from "@/lib/stripe/onramp-context"
 
 export const runtime = "nodejs"
 
@@ -17,7 +17,14 @@ export async function GET(request: Request) {
   const id = resolved.ctx.payer.stripe_crypto_customer_id
   if (!id) return NextResponse.json({ customer: null, ready: false })
   try {
-    const customer = await stripeOnramp.retrieveCustomer(id, resolved.ctx.oauthToken || undefined)
+    const liveOAuth = await ensureExpressDepositsLiveOAuth({
+      admin: resolved.ctx.admin,
+      payerUserId: resolved.ctx.payerUserId,
+      customerId: id,
+      oauthToken: resolved.ctx.oauthToken,
+      oauthRefreshToken: resolved.ctx.oauthRefreshToken,
+    })
+    const customer = await stripeOnramp.retrieveCustomer(id, liveOAuth || undefined)
     return NextResponse.json({ customer })
   } catch (e) {
     return mapError(e)
@@ -31,15 +38,22 @@ export async function POST(request: Request) {
   try {
     let customerId = resolved.ctx.payer.stripe_crypto_customer_id
     let customer: Record<string, unknown>
+    const liveOAuth = await ensureExpressDepositsLiveOAuth({
+      admin: resolved.ctx.admin,
+      payerUserId: resolved.ctx.payerUserId,
+      customerId,
+      oauthToken: resolved.ctx.oauthToken,
+      oauthRefreshToken: resolved.ctx.oauthRefreshToken,
+    })
     if (customerId) {
-      customer = await stripeOnramp.retrieveCustomer(customerId, resolved.ctx.oauthToken || undefined)
+      customer = await stripeOnramp.retrieveCustomer(customerId, liveOAuth || undefined)
     } else {
       customer = await stripeOnramp.createCustomer(
         {
           email: resolved.ctx.payer.email || undefined,
           ...body,
         },
-        resolved.ctx.oauthToken || undefined,
+        liveOAuth || undefined,
       )
       customerId = String(customer.id || "")
       if (customerId) {
