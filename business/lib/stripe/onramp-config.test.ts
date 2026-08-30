@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest"
-import { getStripeLinkOAuthScopes } from "./onramp-config"
+import { getStripeLinkOAuthScopes, stripeOnrampQuotesPath } from "./onramp-config"
 
 describe("getStripeLinkOAuthScopes", () => {
   const prev = process.env.STRIPE_LINK_OAUTH_SCOPES
@@ -20,6 +20,20 @@ describe("getStripeLinkOAuthScopes", () => {
     process.env.STRIPE_LINK_OAUTH_SCOPES = "crypto_onramp auth.persist_login:read"
     expect(getStripeLinkOAuthScopes()).toBe(
       "crypto:ramp,auth.persist_login:read,kyc.status:read",
+    )
+  })
+})
+
+describe("stripeOnrampQuotesPath", () => {
+  it("uses the v2 quotes path with the default beta header", () => {
+    expect(stripeOnrampQuotesPath("2026-07-29.dahlia;crypto_onramp_beta=v2")).toBe(
+      "/v1/crypto/onramp_quotes",
+    )
+  })
+
+  it("keeps the legacy quotes path for beta v1", () => {
+    expect(stripeOnrampQuotesPath("2026-07-29.dahlia;crypto_onramp_beta=v1")).toBe(
+      "/v1/crypto/onramp/quotes",
     )
   })
 })

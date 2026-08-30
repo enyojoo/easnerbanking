@@ -30,6 +30,13 @@ export function getStripeOnrampBetaVersion(): string {
   )
 }
 
+/** v2 uses `/v1/crypto/onramp_quotes`. The old `/v1/crypto/onramp/quotes` path 400s with that header. */
+export function stripeOnrampQuotesPath(version = getStripeOnrampBetaVersion()): string {
+  return /crypto_onramp_beta=v2/i.test(version)
+    ? "/v1/crypto/onramp_quotes"
+    : "/v1/crypto/onramp/quotes"
+}
+
 export function getStripeLinkOAuthClientId(): string {
   return process.env.STRIPE_LINK_OAUTH_CLIENT_ID?.trim() || ""
 }

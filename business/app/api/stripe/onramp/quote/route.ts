@@ -56,7 +56,6 @@ export async function POST(request: Request) {
       sourceCurrency,
       paymentMethod,
       walletAddress: wallet,
-      oauthToken: resolved.ctx.oauthToken,
       userId: resolved.ctx.payerUserId,
       businessId: resolved.ctx.businessId,
     })

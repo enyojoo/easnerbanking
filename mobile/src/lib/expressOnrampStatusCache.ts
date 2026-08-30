@@ -10,7 +10,7 @@ import {
   type ExpressSavedPaymentMethods,
 } from '@easner/shared'
 import { apiFetch } from '../query/api-client'
-import { loadMobileExpressOnramp, prefetchMobileExpressOnramp } from './express-onramp'
+import { prefetchMobileExpressOnramp } from './express-onramp'
 
 export type ExpressOnrampStatus = {
   ready?: boolean
@@ -149,9 +149,8 @@ function loadStatus(): Promise<ExpressOnrampStatus> {
   inflight = apiFetch<ExpressOnrampStatus>('/api/stripe/onramp/status')
     .then((data) => {
       const next = applyCache(data)
-      if (next.publishableKey) {
-        void loadMobileExpressOnramp(next.publishableKey, next.cryptoCustomerId).catch(() => undefined)
-      } else prefetchMobileExpressOnramp()
+      // Script only — initializing the SDK here posts to controller.html and 403s on Add money.
+      prefetchMobileExpressOnramp()
       return next
     })
     .finally(() => {

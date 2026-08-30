@@ -18,7 +18,6 @@ export async function quoteExpressDepositsPricing(input: {
   sourceCurrency: string
   paymentMethod: string
   walletAddress: string
-  oauthToken?: string | null
   userId: string
   businessId: string | null
 }): Promise<{ pricing: ExpressDepositsPricingBreakdown; rawQuote: unknown } | null> {
@@ -36,11 +35,10 @@ export async function quoteExpressDepositsPricing(input: {
       destination_currencies: ["usdc"],
       destination_networks: ["solana"],
       ...lock,
-      source_currency: input.sourceCurrency,
+      source_currency: String(input.sourceCurrency || "usd").toLowerCase(),
       payment_method: input.paymentMethod === "ach" ? "ach" : "debit_card",
       wallet_addresses: input.walletAddress ? { solana: input.walletAddress } : undefined,
     },
-    input.oauthToken || undefined,
   )
 
   const raw = quote as {

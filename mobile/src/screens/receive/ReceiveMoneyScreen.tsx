@@ -46,7 +46,6 @@ import {
   subscribeExpressOnrampStatus,
   warmExpressOnrampStatus,
 } from '../../lib/expressOnrampStatusCache'
-import { loadMobileExpressOnramp } from '../../lib/express-onramp'
 import { fetchExpressDepositQuote } from '../../lib/expressDepositCheckout'
 import {
   resolveWarmYcLocalDepositCorridor,
@@ -742,12 +741,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                   expressReady={expressReady}
                   onExpressPress={(kind) => {
                     haptics.medium()
-                    const peeked = peekExpressOnrampStatus()
-                    if (peeked?.publishableKey) {
-                      void loadMobileExpressOnramp(peeked.publishableKey, peeked.cryptoCustomerId).catch(
-                        () => undefined,
-                      )
-                    }
                     if (!expressReady) {
                       navigation.navigate('ExpressDepositsSetup' as never)
                       return

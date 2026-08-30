@@ -5,6 +5,7 @@ import {
   getStripeLinkOAuthClientSecret,
   getStripeLinkOAuthScopes,
   getStripeOnrampBetaVersion,
+  stripeOnrampQuotesPath,
 } from "./onramp-config"
 
 /**
@@ -231,7 +232,7 @@ export const stripeOnramp = {
   listPaymentTokens: (customerId: string, oauthToken?: string) =>
     stripeOnrampRequest("GET", `/v1/crypto/customers/${customerId}/payment_tokens`, undefined, { oauthToken }),
   quotes: (params: Record<string, unknown>, oauthToken?: string) =>
-    stripeOnrampRequest("GET", "/v1/crypto/onramp/quotes", { ui_mode: "headless", ...params }, { oauthToken }),
+    stripeOnrampRequest("GET", stripeOnrampQuotesPath(), { ui_mode: "headless", ...params }, { oauthToken }),
   createSession: (params: Record<string, unknown>, oauthToken?: string) =>
     stripeOnrampRequest("POST", "/v1/crypto/onramp_sessions", { ui_mode: "headless", ...params }, { oauthToken }),
   retrieveSession: (id: string, oauthToken?: string) =>
