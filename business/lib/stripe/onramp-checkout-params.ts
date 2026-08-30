@@ -1,9 +1,14 @@
 import { resolveStripeOnrampCustomerIp } from "@/lib/stripe/request-client-ip"
 
-export function buildStripeOnrampCheckoutParams(
+export type StripeOnrampClientContext =
+  | { customer_ip_address: string; user_agent?: string }
+  | { error: string; code: string }
+
+/** IP + user agent required by Stripe on onramp session create and checkout. */
+export function resolveStripeOnrampClientContext(
   request: Request,
   body: Record<string, unknown>,
-): Record<string, unknown> | { error: string; code: string } {
+): StripeOnrampClientContext {
   const customerIpAddress = resolveStripeOnrampCustomerIp(request, body)
   if (!customerIpAddress) {
     return {
@@ -18,9 +23,30 @@ export function buildStripeOnrampCheckoutParams(
     undefined
 
   return {
-    payment_token: body.paymentTokenId || undefined,
-    mandate_data: body.mandateData || undefined,
     customer_ip_address: customerIpAddress,
     user_agent: userAgent,
+  }
+}
+
+export function withStripeOnrampClientContext(
+  request: Request,
+  body: Record<string, unknown>,
+  params: Record<string, unknown>,
+): Record<string, unknown> | { error: string; code: string } {
+  const client = resolveStripeOnrampClientContext(request, body)
+  if ("error" in client) return client
+  return { ...params, ...client }
+}
+
+export function buildStripeOnrampCheckoutParams(
+  request: Request,
+  body: Record<string, unknown>,
+): Record<string, unknown> | { error: string; code: string } {
+  const client = resolveStripeOnrampClientContext(request, body)
+  if ("error" in client) return client
+  return {
+    payment_token: body.paymentTokenId || undefined,
+    mandate_data: body.mandateData || undefined,
+    ...client,
   }
 }

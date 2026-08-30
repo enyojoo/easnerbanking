@@ -43,7 +43,7 @@ export function resolveRequestClientIp(
   return null
 }
 
-/** Stripe requires customer_ip_address on onramp checkout; allow local dev fallback. */
+/** Stripe requires customer_ip_address on onramp session create and checkout; allow local dev fallback. */
 export function resolveStripeOnrampCustomerIp(
   request: Request,
   body?: Record<string, unknown> | null,

@@ -10,6 +10,7 @@ import {
 } from "@easner/shared"
 import { stripeOnramp } from "@/lib/stripe/onramp-client"
 import { mapStripeOnrampRouteError } from "@/lib/stripe/log-onramp-api-error"
+import { withStripeOnrampClientContext } from "@/lib/stripe/onramp-checkout-params"
 import { ensureExpressDepositsLiveOAuth, resolveExpressDepositsContext } from "@/lib/stripe/onramp-context"
 import { getTurnkeyDepositAddressesForBusiness, getTurnkeyDepositAddressesForContext } from "@/lib/wallet/turnkey-deposit-addresses"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
@@ -124,6 +125,13 @@ export async function POST(request: Request) {
       pricing: quoted.pricing,
       baseParams: baseSessionParams,
     })
+    const sessionParamsWithClient = withStripeOnrampClientContext(request, body, sessionParams)
+    if ("error" in sessionParamsWithClient) {
+      return NextResponse.json(
+        { error: sessionParamsWithClient.error, code: sessionParamsWithClient.code },
+        { status: 400 },
+      )
+    }
 
     const liveOAuth = await ensureExpressDepositsLiveOAuth({
       admin: resolved.ctx.admin,
@@ -135,7 +143,7 @@ export async function POST(request: Request) {
     if (!liveOAuth) {
       return NextResponse.json({ error: "Complete Link sign-in first.", code: "link_auth_required" }, { status: 401 })
     }
-    const session = await stripeOnramp.createSession(sessionParams, liveOAuth)
+    const session = await stripeOnramp.createSession(sessionParamsWithClient, liveOAuth)
     const stripeSessionId = String((session as { id?: string }).id || "")
     let easnerTransactionId: string | null = null
     if (stripeSessionId) {

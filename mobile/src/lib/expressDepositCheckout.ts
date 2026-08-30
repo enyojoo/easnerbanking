@@ -283,6 +283,8 @@ export async function checkoutExpressDeposit(input: {
       return { ok: false, reason: authed.reason === 'canceled' ? 'canceled' : 'failed', message: authed.message }
     }
     const paymentMethod = expressCashKindToPaymentMethod(input.method)
+    const customerIpAddress = await resolveMobileCustomerIp()
+    const userAgent = mobileCheckoutUserAgent()
     const created = await apiFetch<{
       session?: { id?: string }
       easnerTransactionId?: string | null
@@ -296,6 +298,8 @@ export async function checkoutExpressDeposit(input: {
         amountEntryMode: parseExpressDepositsAmountEntryMode(pricing.amountEntryMode),
         paymentMethod,
         paymentTokenId: token,
+        customerIpAddress,
+        userAgent,
       },
     })
     const sessionId = String(created.session?.id || '')
@@ -319,8 +323,8 @@ export async function checkoutExpressDeposit(input: {
           action: 'checkout',
           paymentTokenId: token,
           mandateData: expressDepositCheckoutMandateData(input.method),
-          customerIpAddress: await resolveMobileCustomerIp(),
-          userAgent: mobileCheckoutUserAgent(),
+          customerIpAddress,
+          userAgent,
         },
       })
       if (!paid.client_secret) throw new Error(EXPRESS_DEPOSITS_COPY.paymentFailed)
