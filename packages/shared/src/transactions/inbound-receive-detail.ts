@@ -780,7 +780,7 @@ export function buildInboundReceiveDetailRows(
           ),
         )
       }
-      if (isExpressDepositsCrossCurrencyPayIn(snapshot) && snapshot.amountPaid) {
+      if (snapshot.amountPaid) {
         pushIf(
           rows,
           REVIEW_ROW_LABELS.amountPaid,

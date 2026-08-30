@@ -551,7 +551,7 @@ describe("Express deposits inbound receive", () => {
     )
   })
 
-  it("hides amount paid and amount credited for same-currency USD card deposits", () => {
+  it("hides amount credited but keeps fee and amount paid for same-currency USD card deposits", () => {
     const snapshot = resolveInboundReceiveDetail({
       direction: "in",
       provider: "stripe",
@@ -578,7 +578,7 @@ describe("Express deposits inbound receive", () => {
     expect(snapshot?.kind).toBe("express_deposits")
     const map = rowMap(buildInboundReceiveDetailRows(snapshot!, { surface: "detail" }))
     expect(map[REVIEW_ROW_LABELS.processingFee]).toBe("$4.04")
-    expect(map[REVIEW_ROW_LABELS.amountPaid]).toBeUndefined()
+    expect(map[REVIEW_ROW_LABELS.amountPaid]).toBe("$104.04")
     expect(map[REVIEW_ROW_LABELS.amountCredited]).toBeUndefined()
     expect(map[REVIEW_ROW_LABELS.creditTo]).toBe("USD Balance")
   })
