@@ -323,8 +323,8 @@ export async function applyStripeWebhookSideEffects(
           typeof event.data.object === "object" &&
           String((event.data.object as { object?: string }).object || "").includes("onramp"))
       ) {
-        const { creditOnrampSessionIfFulfilled } = await import("./onramp-ledger")
-        await creditOnrampSessionIfFulfilled(admin, {
+        const { syncExpressDepositLedgerFromOnrampWebhook } = await import("./onramp-ledger")
+        await syncExpressDepositLedgerFromOnrampWebhook(admin, {
           stripeSession: event.data.object as unknown as Record<string, unknown>,
         })
       }

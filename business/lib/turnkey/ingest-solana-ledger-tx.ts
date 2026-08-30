@@ -86,16 +86,6 @@ export async function ingestTurnkeySolanaTxForOwnerVault(
     return { upserts: 0, kind: "noop", reason: "yc_fund_balance" }
   }
 
-  const { findStripeOnrampChainSettlementForSuppression } = await import("@/lib/stripe/onramp-ledger")
-  const stripeOnrampMirror = await findStripeOnrampChainSettlementForSuppression(admin, {
-    txHash: params.signature,
-    userId: params.ctx.userId,
-    businessId: params.ctx.businessId,
-  })
-  if (stripeOnrampMirror) {
-    return { upserts: 0, kind: "noop", reason: "stripe_onramp" }
-  }
-
   if (params.skipIfLedgerRowExists) {
     let existsQ = admin
       .from("transactions")
@@ -145,6 +135,18 @@ export async function ingestTurnkeySolanaTxForOwnerVault(
   })
   if (easetagSuppressed) {
     return { upserts: 0, kind: "noop", reason: "easetag_settlement" }
+  }
+
+  const { findStripeOnrampChainSettlementForSuppression } = await import("@/lib/stripe/onramp-ledger")
+  const stripeOnrampMirror = await findStripeOnrampChainSettlementForSuppression(admin, {
+    txHash: params.signature,
+    userId: params.ctx.userId,
+    businessId: params.ctx.businessId,
+    walletAddress: params.ownerAddress,
+    amount,
+  })
+  if (stripeOnrampMirror) {
+    return { upserts: 0, kind: "noop", reason: "stripe_onramp" }
   }
 
   const counterpartyAddress = resolveSplTransferSenderForVaultInbound(

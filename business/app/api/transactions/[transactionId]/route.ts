@@ -29,6 +29,10 @@ import {
   attachStablecoinDepositDetailFields,
   isStablecoinDepositPayInRow,
 } from "@/lib/transactions/stablecoin-deposit-detail"
+import {
+  attachExpressDepositsDetailFields,
+  isExpressDepositsPayInRow,
+} from "@/lib/transactions/express-deposit-detail"
 import { resolveStablecoinDepositPayInDetail } from "@/lib/transactions/resolve-stablecoin-deposit-pay-in"
 import { isWalletSendOutRow } from "@/lib/wallet-send/build-wallet-send-payout-review"
 import {
@@ -546,7 +550,9 @@ export async function GET(request: Request, routeCtx: Props) {
   transaction = await attachGlobalPayoutDetailFieldsAsync(admin, ledgerRec, transaction)
   transaction = attachBalanceMoveDetailFields(ledgerRec, transaction)
   transaction = attachWalletSendDetailFields(ledgerRec, transaction)
-  transaction = attachStablecoinDepositDetailFields(ledgerRec, transaction)
+  transaction = isExpressDepositsPayInRow(ledgerRec)
+    ? attachExpressDepositsDetailFields(ledgerRec, transaction)
+    : attachStablecoinDepositDetailFields(ledgerRec, transaction)
 
   transaction = restoreInboundLedgerPresentation(ledgerRec, transaction)
 

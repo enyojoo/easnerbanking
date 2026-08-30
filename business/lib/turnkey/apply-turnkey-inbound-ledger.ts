@@ -10,6 +10,11 @@ import {
 import { reconcileNoahBankOnrampCreditForSolanaTx } from "@/lib/noah/credit-bank-onramp-wallet"
 import { findYcFundBalanceChainSettlementForSuppression } from "@/lib/yellowcard/yc-ledger"
 import { findStripeOnrampChainSettlementForSuppression } from "@/lib/stripe/onramp-ledger"
+import {
+  findPendingStripeOnrampSessionForInbound,
+  markStripeOnrampSessionChainTxHash,
+  suppressTurnkeyStripeOnrampChainMirrorRow,
+} from "@/lib/stripe/stripe-onramp-turnkey-mirror"
 import { findNoahBankOnrampChainSettlementForSuppression } from "@/lib/noah/noah-bank-onramp-chain-suppression"
 import { findRelayDepositChainSettlementForSuppression } from "@/lib/relay-deposit/relay-deposit-suppression"
 import { reconcileRelayDepositCreditForSolanaTx } from "@/lib/relay-deposit/settle-relay-deposit"
@@ -225,8 +230,31 @@ export async function applyTurnkeyInboundLedgerEvent(
         txHash,
         userId,
         businessId,
+        walletAddress: input.walletAddress,
+        amount: input.amount,
       })
       if (stripeOnrampSuppressed) {
+        if (txHash) {
+          const pending = await findPendingStripeOnrampSessionForInbound(admin, {
+            userId,
+            businessId,
+            walletAddress: input.walletAddress,
+            amount: input.amount,
+            txHash,
+          })
+          if (pending?.stripeSessionId) {
+            await markStripeOnrampSessionChainTxHash(admin, {
+              stripeSessionId: pending.stripeSessionId,
+              txHash,
+            })
+          }
+          await suppressTurnkeyStripeOnrampChainMirrorRow(admin, {
+            txHash,
+            userId,
+            businessId,
+            stripeSessionId: pending?.stripeSessionId ?? null,
+          }).catch(() => {})
+        }
         return suppressedNoah(false)
       }
     }
