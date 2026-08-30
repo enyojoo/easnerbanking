@@ -266,7 +266,6 @@ export async function assembleStatement(
 
   let moneyIn = 0
   let moneyOut = 0
-  let netFromPeriodStart = 0
   const linesNewestFirst: AssembledStatement["lines"] = []
 
   for (const row of ledger) {
@@ -278,7 +277,6 @@ export async function assembleStatement(
     const signed =
       (String(row.direction ?? "").toLowerCase() === "in" ? 1 : -1) *
       impactInStatementCurrency(row, input.currency)
-    netFromPeriodStart += signed
 
     if (ms > periodEndMs) continue
 
@@ -299,7 +297,10 @@ export async function assembleStatement(
   }
 
   linesNewestFirst.reverse()
-  const opening = Math.round((available - netFromPeriodStart) * 100) / 100
+  moneyIn = Math.round(moneyIn * 100) / 100
+  moneyOut = Math.round(moneyOut * 100) / 100
+  // Tie summary to current Available and period Money in/out only (exclude post-period activity).
+  const opening = Math.round((available - moneyIn + moneyOut) * 100) / 100
 
   const va = await getVirtualAccountDisplayFromDb(admin, {
     currency: input.currency.toLowerCase() as "usd" | "eur",
@@ -324,8 +325,8 @@ export async function assembleStatement(
     address,
     bank: bankFieldsFromVa(input.currency, va),
     opening,
-    moneyIn: Math.round(moneyIn * 100) / 100,
-    moneyOut: Math.round(moneyOut * 100) / 100,
+    moneyIn,
+    moneyOut,
     available,
     openingLabel: formatStatementMoney(opening, input.currency),
     moneyInLabel: formatStatementMoney(moneyIn, input.currency),

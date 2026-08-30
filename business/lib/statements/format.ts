@@ -73,6 +73,9 @@ export function formatAvailableAsOf(at: Date, timeZone: string): string {
 }
 
 export function formatStatementMoney(amount: number, currency: string): string {
+  if (amount < 0) {
+    return `-${formatMoneyDisplay(Math.abs(amount), currency)}`
+  }
   return formatMoneyDisplay(amount, currency)
 }
 

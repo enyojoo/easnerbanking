@@ -27,6 +27,10 @@ describe("statement format", () => {
     expect(formatStatementMoney(2575, "NGN")).toBe("₦2,575")
   })
 
+  it("places the minus sign before the currency symbol", () => {
+    expect(formatStatementMoney(-2.06, "USD")).toBe("-$2.06")
+  })
+
   it("clips the period to account open and today", () => {
     expect(
       clipPeriodToAccountOpen({
