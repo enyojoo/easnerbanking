@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest"
 import {
+  expressDepositsAdvanceAfter,
   expressDepositsHighestVerifiedTier,
   expressDepositsNextStep,
   expressDepositsPersistStatus,
+  expressDepositsStatusIsReady,
   isExpressIdentitySetupStep,
   isExpressReviewSetupStep,
+  keepExpressDepositsCachedNextStep,
+  keepExpressDepositsCachedReady,
+  resolveExpressDepositsSetupStep,
 } from "./express-deposits-next-step"
 
 const christian = {
@@ -176,11 +181,34 @@ describe("expressDepositsNextStep", () => {
           id: "crc_1",
           kyc_region: "eu",
           kyc_tiers: [{ tier: "l2", verification_status: "pending" }],
+          provided_fields: ["first_name", "last_name", "address_line_1"],
+        },
+      }),
+    ).toBe("eu_identifiers")
+    expect(
+      expressDepositsNextStep({
+        cryptoCustomerId: "crc_1",
+        customer: {
+          id: "crc_1",
+          kyc_region: "eu",
+          kyc_tiers: [{ tier: "l0", verification_status: "pending" }],
+          provided_fields: ["first_name", "last_name", "address_line_1"],
+        },
+        payerCountry: "DE",
+      }),
+    ).toBe("eu_identifiers")
+    expect(
+      expressDepositsNextStep({
+        cryptoCustomerId: "crc_1",
+        customer: {
+          id: "crc_1",
+          kyc_region: "eu",
+          kyc_tiers: [{ tier: "l2", verification_status: "pending" }],
           provided_fields: ["identifiers", "attestation", "first_name", "last_name", "address_line_1"],
         },
         walletRegistered: true,
       }),
-    ).toBe("review")
+    ).toBe("eu_l2")
     expect(
       expressDepositsNextStep({
         cryptoCustomerId: "crc_1",
@@ -205,6 +233,31 @@ describe("expressDepositsNextStep", () => {
         walletRegistered: true,
       }),
     ).toBe("ready")
+    expect(
+      expressDepositsNextStep({
+        cryptoCustomerId: "crc_1",
+        customer: {
+          id: "crc_1",
+          kyc_region: "eu",
+          kyc_tiers: [{ tier: "l2", verification_status: "verified" }],
+        },
+        walletRegistered: true,
+      }),
+    ).toBe("eu_identifiers")
+    expect(
+      expressDepositsNextStep({
+        cryptoCustomerId: "crc_1",
+        customer: { id: "crc_1", kyc_tiers: [{ tier: "l2", verification_status: "not_started" }] },
+        payerCountry: "DE",
+      }),
+    ).toBe("eu_kyc")
+    expect(
+      expressDepositsNextStep({
+        cryptoCustomerId: "crc_1",
+        customer: { id: "crc_1", kyc_tiers: [{ tier: "l2", verification_status: "not_started" }] },
+        payerCountry: "GB",
+      }),
+    ).toBe("us_kyc")
   })
 })
 
@@ -233,5 +286,101 @@ describe("expressDeposits persist helpers", () => {
         ],
       }),
     ).toBe("l2")
+  })
+})
+
+describe("keepExpressDepositsCachedReady", () => {
+  it("keeps a verified cache when live retrieve returns an empty customer", () => {
+    expect(expressDepositsStatusIsReady({ status: "ready" })).toBe(true)
+    expect(
+      keepExpressDepositsCachedReady({
+        cachedReady: true,
+        incoming: { ready: false, status: "in_progress", cryptoCustomerId: "crc_1", kycTiers: [] },
+      }),
+    ).toBe(true)
+    expect(
+      keepExpressDepositsCachedReady({
+        cachedReady: true,
+        incoming: {
+          ready: false,
+          status: "in_progress",
+          cryptoCustomerId: "crc_1",
+          kycTiers: [{ tier: "l1", verification_status: "not_started" }],
+        },
+      }),
+    ).toBe(false)
+    expect(
+      keepExpressDepositsCachedReady({
+        cachedReady: true,
+        incoming: { ready: false, eligible: false, kycTiers: [] },
+      }),
+    ).toBe(false)
+  })
+})
+
+describe("resolveExpressDepositsSetupStep", () => {
+  it("resumes KYC instead of flashing link when a customer already exists", () => {
+    expect(resolveExpressDepositsSetupStep(null)).toBe("link")
+    expect(resolveExpressDepositsSetupStep({ nextStep: "us_l2" })).toBe("us_l2")
+    expect(resolveExpressDepositsSetupStep({ ready: true })).toBe("ready")
+    expect(resolveExpressDepositsSetupStep({ cryptoCustomerId: "crc_1", payerCountry: "US" })).toBe(
+      "us_kyc",
+    )
+    expect(resolveExpressDepositsSetupStep({ cryptoCustomerId: "crc_1", payerCountry: "DE" })).toBe(
+      "eu_kyc",
+    )
+    expect(resolveExpressDepositsSetupStep({ cryptoCustomerId: "crc_1", payerCountry: "GB" })).toBe(
+      "us_kyc",
+    )
+  })
+})
+
+describe("expressDepositsAdvanceAfter", () => {
+  it("moves a new US user from link to details, then review", () => {
+    expect(expressDepositsAdvanceAfter({ completed: "link", payerCountry: "US" })).toBe("us_kyc")
+    expect(expressDepositsAdvanceAfter({ completed: "us_kyc" })).toBe("review")
+    expect(expressDepositsAdvanceAfter({ completed: "us_l2" })).toBe("review")
+    expect(expressDepositsAdvanceAfter({ completed: "wallet" })).toBe("ready")
+  })
+
+  it("walks EU-27 from link through identity, not review", () => {
+    expect(expressDepositsAdvanceAfter({ completed: "link", payerCountry: "DE" })).toBe("eu_kyc")
+    expect(expressDepositsAdvanceAfter({ completed: "eu_kyc", payerCountry: "DE" })).toBe(
+      "eu_identifiers",
+    )
+    expect(expressDepositsAdvanceAfter({ completed: "eu_identifiers", payerCountry: "DE" })).toBe(
+      "eu_attestation",
+    )
+    expect(expressDepositsAdvanceAfter({ completed: "eu_attestation", payerCountry: "DE" })).toBe(
+      "eu_l2",
+    )
+    expect(expressDepositsAdvanceAfter({ completed: "eu_l2", payerCountry: "DE" })).toBe("review")
+    expect(expressDepositsAdvanceAfter({ completed: "link", payerCountry: "GB" })).toBe("us_kyc")
+  })
+})
+
+describe("keepExpressDepositsCachedNextStep", () => {
+  it("does not regress an in-progress step when live tiers are empty", () => {
+    expect(
+      keepExpressDepositsCachedNextStep({
+        cached: "us_kyc",
+        incoming: "link",
+        incomingKycTiers: [],
+      }),
+    ).toBe("us_kyc")
+    expect(
+      keepExpressDepositsCachedNextStep({
+        cached: "us_l2",
+        incoming: "us_kyc",
+        incomingKycTiers: [{ tier: "l1", verification_status: "verified" }],
+      }),
+    ).toBe("us_kyc")
+    expect(
+      keepExpressDepositsCachedNextStep({
+        cached: "review",
+        incoming: "eu_l2",
+        incomingKycTiers: [{ tier: "l2", verification_status: "pending" }],
+      }),
+    ).toBe("review")
   })
 })

@@ -1,4 +1,6 @@
+import { CommonActions } from '@react-navigation/native'
 import {
+  exitExpressSetupToAddMoney,
   exitSendFlowFromHub,
   exitToMainTabs,
   hasDuplicateStackTop,
@@ -69,6 +71,20 @@ describe('stackBackNavigation', () => {
     }
     exitSendFlowFromHub(navigation)
     expect(dispatch).toHaveBeenCalled()
+  })
+
+  it('exitExpressSetupToAddMoney resets to Dashboard then ReceiveMoney', () => {
+    const dispatch = jest.fn()
+    exitExpressSetupToAddMoney({ dispatch })
+    expect(dispatch).toHaveBeenCalledWith(
+      CommonActions.reset({
+        index: 1,
+        routes: [
+          { name: 'MainTabs', params: { screen: 'Dashboard' } },
+          { name: 'ReceiveMoney' },
+        ],
+      }),
+    )
   })
 
   it('exitToMainTabs resets stack', () => {

@@ -74,6 +74,7 @@ type Props = {
   destTitle?: string
   onInboundToggle?: () => void
   inboundReceivePreview?: string | null
+  inboundToggleLabel?: string | null
   inboundRateDisplay?: string | null
   continueLabel?: string
   /** Inbound pay-in min/max (same treatment as send amount screens). */
@@ -106,6 +107,7 @@ export function MoveAmountStep({
   destTitle,
   onInboundToggle,
   inboundReceivePreview,
+  inboundToggleLabel,
   inboundRateDisplay,
   continueLabel,
   limitError,
@@ -218,10 +220,17 @@ export function MoveAmountStep({
                         ? onInboundToggle?.()
                         : onDirectionChange(oppositeMoveDirection(direction))
                     }
-                    className="inline-flex min-w-0 max-w-full items-center gap-1 hover:text-foreground"
+                    disabled={inbound && !onInboundToggle}
+                    className="inline-flex min-w-0 max-w-full items-center gap-1 hover:text-foreground disabled:pointer-events-none"
                   >
-                    <ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={2} aria-hidden />
-                    <span className="min-w-0 truncate">Receiving: {receivingPreview}</span>
+                    {inbound && onInboundToggle ? (
+                      <ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={2} aria-hidden />
+                    ) : !inbound ? (
+                      <ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={2} aria-hidden />
+                    ) : null}
+                    <span className="min-w-0 truncate">
+                      {inboundToggleLabel ?? `Receiving: ${receivingPreview}`}
+                    </span>
                   </button>
                   <span className="shrink-0">• Rate: {rateDisplay}</span>
                 </div>

@@ -11,6 +11,10 @@
  */
 
 import { expressDepositMethodTitle } from "./express-deposits-copy"
+import {
+  parseExpressDepositsAmountEntryMode,
+  type ExpressDepositsAmountEntryMode,
+} from "./express-deposits-limits"
 import { formatReviewRowMoneyDisplay } from "./format-review-row-money"
 import { formatSendRateLabel } from "./format-exchange-rate"
 import {
@@ -48,6 +52,9 @@ export type ExpressDepositsPricingBreakdown = {
   totalToPay: number
   exchangeRate?: { from: string; to: string; rate: number }
   rateFetchedAt?: number | null
+  amountEntryMode?: ExpressDepositsAmountEntryMode
+  quotedAmount?: number
+  stripeSourceAmount?: number
 }
 
 export type ExpressDepositsReviewRow = {
@@ -119,14 +126,47 @@ function convertUsdFeeToPayCurrency(
   return roundMoney(feeUsd * (stripeSourceTotal / usdCredit))
 }
 
+export function expressDepositsOnrampQuoteLock(input: {
+  amountEntryMode?: ExpressDepositsAmountEntryMode | string | null
+  usdCredit?: number | null
+  youPay?: number | null
+}): { destination_amount: string } | { source_amount: string } | null {
+  const mode = parseExpressDepositsAmountEntryMode(input.amountEntryMode)
+  const youPay = Number(input.youPay)
+  const usdCredit = Number(input.usdCredit)
+  if (mode === "pay") {
+    return Number.isFinite(youPay) && youPay > 0 ? { source_amount: String(youPay) } : null
+  }
+  return Number.isFinite(usdCredit) && usdCredit > 0 ? { destination_amount: String(usdCredit) } : null
+}
+
+export function expressDepositsQuoteMatchesEntered(input: {
+  pricing?: ExpressDepositsPricingBreakdown | null
+  amountEntryMode?: ExpressDepositsAmountEntryMode | string | null
+  enteredAmount: number
+}): boolean {
+  const pricing = input.pricing
+  const entered = Number(input.enteredAmount)
+  if (!pricing || !(entered > 0)) return false
+  const mode = parseExpressDepositsAmountEntryMode(input.amountEntryMode)
+  if (parseExpressDepositsAmountEntryMode(pricing.amountEntryMode) !== mode) return false
+  const quoted = Number(pricing.quotedAmount)
+  const fallback = mode === "pay" ? pricing.totalToPay : pricing.usdCredit
+  const target = Number.isFinite(quoted) && quoted > 0 ? quoted : fallback
+  return Math.round(target * 100) === Math.round(entered * 100)
+}
+
 export function buildExpressDepositsPricing(input: {
   usdCredit: number
   sourceCurrency: string
   stripeQuote: ExpressSolanaUsdcQuote | null
   payInBps: number
   rateFetchedAt?: number | null
+  amountEntryMode?: ExpressDepositsAmountEntryMode | string | null
+  quotedAmount?: number | null
 }): ExpressDepositsPricingBreakdown | null {
-  const usdCredit = roundMoney(input.usdCredit)
+  const quotedDestination = positive(input.stripeQuote?.destination_amount)
+  const usdCredit = quotedDestination ?? roundMoney(input.usdCredit)
   if (!(usdCredit > 0)) return null
 
   const sourceCurrency = String(input.sourceCurrency || "USD").trim().toUpperCase() || "USD"
@@ -166,6 +206,10 @@ export function buildExpressDepositsPricing(input: {
     }
   }
 
+  const amountEntryMode = parseExpressDepositsAmountEntryMode(input.amountEntryMode)
+  const stripeSourceAmount = positive(input.stripeQuote?.source_amount)
+  const quotedAmount = positive(input.quotedAmount) ?? (amountEntryMode === "pay" ? stripeSourceAmount : usdCredit)
+
   return {
     usdCredit,
     sourceCurrency,
@@ -177,6 +221,9 @@ export function buildExpressDepositsPricing(input: {
     totalToPay,
     exchangeRate,
     rateFetchedAt: input.rateFetchedAt ?? null,
+    amountEntryMode,
+    quotedAmount: quotedAmount ?? usdCredit,
+    stripeSourceAmount: stripeSourceAmount ?? undefined,
   }
 }
 
@@ -254,6 +301,14 @@ export function expressDepositsSessionCreateParams(input: {
   pricing: ExpressDepositsPricingBreakdown
   baseParams: Record<string, unknown>
 }): Record<string, unknown> {
+  const mode = parseExpressDepositsAmountEntryMode(input.pricing.amountEntryMode)
+  if (mode === "pay") {
+    const source =
+      positive(input.pricing.quotedAmount) ??
+      positive(input.pricing.stripeSourceAmount) ??
+      positive(input.pricing.stripeSourceTotal)
+    if (source) return { ...input.baseParams, source_amount: String(source) }
+  }
   const params = { ...input.baseParams, destination_amount: String(input.pricing.usdCredit) }
   if (input.pricing.easnerProcessingFeeDisplay > 0) {
     return {

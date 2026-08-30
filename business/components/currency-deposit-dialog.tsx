@@ -29,7 +29,7 @@ import {
   type StablecoinReceiveMethod,
 } from "@/components/receive/ReceiveStablecoinMethodList"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import { resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, resolvePayInProvider, type NgLocalIdType, resolveReceiveCountryName, receiveInternationalBankTitle, receiveInternationalDepositSubtitle, receiveLocalBankTitle, receiveLocalMomoTitle, receiveLocalDepositSubtitle, localPayInCountries, expressDepositMethodTitle, EXPRESS_DEPOSITS_COPY, isExpressCashKind, listExpressCashKinds, type CashPayInMethodKind } from "@easner/shared"
+import { resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, resolvePayInProvider, type NgLocalIdType, resolveReceiveCountryName, receiveInternationalBankTitle, receiveInternationalDepositSubtitle, receiveLocalBankTitle, receiveLocalMomoTitle, receiveLocalDepositSubtitle, localPayInCountries, expressDepositMethodTitle, expressDepositMethodSubtitle, expressDepositsStatusIsReady, isExpressCashKind, listExpressCashKinds, type CashPayInMethodKind } from "@easner/shared"
 import { LocalDepositWizard } from "@/components/local-deposit-wizard"
 import { AccountsExpressDepositFlow } from "@/components/accounts/accounts-express-deposit-flow"
 import { NgLocalVerificationNotice } from "@/components/compliance/ng-local-verification-notice"
@@ -168,7 +168,7 @@ function instantExpressStatus(
       })
   return {
     eligible: true,
-    ready: Boolean(cached?.ready),
+    ready: expressDepositsStatusIsReady(cached),
     officeOn: cached?.office?.stripeOnrampEnabled !== false,
     payerCountry,
     methods: methods.length ? methods : ["express_card", "express_apple_pay", "express_google_pay"],
@@ -524,9 +524,9 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
           return
         }
         const methods = (Array.isArray(data.methods) ? data.methods : []).filter(isExpressCashKind)
-        setExpressStatus({
+        setExpressStatus((prev) => ({
           eligible: true,
-          ready: Boolean(data.ready),
+          ready: expressDepositsStatusIsReady(data) || Boolean(prev?.ready && data.eligible !== false),
           officeOn: data.office?.stripeOnrampEnabled !== false,
           payerCountry: data.payerCountry ?? countryCode,
           methods: methods.length
@@ -536,7 +536,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                 officeEnabled: true,
                 euEnabled: data.office?.stripeOnrampEuEnabled !== false,
               }),
-        })
+        }))
       } catch {
         // Keep the optimistic rows already on screen.
       }
@@ -773,9 +773,9 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
             <div className="min-w-0 flex-1">
               <p className="font-medium">{expressDepositMethodTitle(kind)}</p>
               <p className="text-sm text-muted-foreground mt-0.5">
-                {expressStatus?.ready
-                  ? EXPRESS_DEPOSITS_COPY.description
-                  : EXPRESS_DEPOSITS_COPY.setupRequiredHint}
+                {expressDepositMethodSubtitle(kind, {
+                  ready: expressDepositsStatusIsReady(expressStatus) ? true : expressStatus?.ready,
+                })}
               </p>
             </div>
             <ArrowRight className="h-5 w-5 text-muted-foreground shrink-0" />

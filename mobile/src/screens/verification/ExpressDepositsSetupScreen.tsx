@@ -14,6 +14,8 @@ import { ArrowLeft } from 'lucide-react-native'
 import {
   EXPRESS_DEPOSITS_COPY,
   buildExpressKycSubmitInfo,
+  expressDepositsAdvanceAfter,
+  expressDepositsPersistStatus,
   expressIdentityOutcome,
   expressSetupUserMessage,
   isExpressIdentitySuccess,
@@ -22,6 +24,7 @@ import {
   isExpressReviewSetupStep,
   isExpressSetupDismissed,
   isUsSsnComplete,
+  resolveExpressDepositsSetupStep,
   toExpressLinkE164Phone,
   type ExpressDepositsNextStep,
 } from '@easner/shared'
@@ -39,7 +42,11 @@ import {
 } from '../../theme'
 import { haptics } from '../../lib/haptics'
 import { useStackHardwareBack } from '../../hooks/useStackHardwareBack'
-import { navigateStackBack } from '../../navigation/stackBackNavigation'
+import {
+  exitExpressSetupToAddMoney,
+  exitToMainTabs,
+  navigateStackBack,
+} from '../../navigation/stackBackNavigation'
 import { apiFetch } from '../../query/api-client'
 import { WEB_FLOW_MAX_WIDTH } from '../../components/layout/CenteredWebFlowPage'
 import {
@@ -57,35 +64,47 @@ import { useToast } from '../../components/ToastProvider'
 import {
   cacheExpressOnrampStatus,
   fetchExpressOnrampStatus,
+  patchExpressOnrampStatus,
   peekExpressOnrampStatus,
   type ExpressOnrampStatus,
 } from '../../lib/expressOnrampStatusCache'
+import { useExpressOnrampStatus } from '../../hooks/useExpressOnrampStatus'
 import {
+  applyExpressFormDraft,
   expressFormFromProfile,
   expressFormFromStatusPrefill,
   expressLockedCountry,
   mergeExpressForm,
 } from '../../lib/expressSetupForm'
+import {
+  clearExpressSetupFormDraft,
+  hydrateExpressSetupFormDraft,
+  persistExpressSetupFormDraft,
+  seedExpressSetupForm,
+} from '../../lib/expressSetupFormDraft'
 import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
 
 export default function ExpressDepositsSetupScreen({ navigation }: NavigationProps) {
   const { userProfile } = useAuth()
   const { showInfo } = useToast()
-  const [status, setStatus] = useState<ExpressOnrampStatus | null>(() => peekExpressOnrampStatus())
+  const express = useExpressOnrampStatus({ refreshOnFocus: true })
+  const status = express.status
   const [busy, setBusy] = useState(false)
   const [openingIdentity, setOpeningIdentity] = useState(() => {
     const peeked = peekExpressOnrampStatus()
-    return isExpressIdentitySetupStep(peeked?.nextStep)
+    return isExpressIdentitySetupStep(resolveExpressDepositsSetupStep(peeked))
   })
   const [message, setMessage] = useState<string | null>(null)
   const [form, setForm] = useState<Record<string, string>>(() =>
-    mergeExpressForm(
-      expressFormFromProfile({
-        ...userProfile?.profile,
-        email: userProfile?.email ?? userProfile?.profile?.email,
-        phone: userProfile?.profile?.phone,
-      }),
-      expressFormFromStatusPrefill(peekExpressOnrampStatus()?.prefill, peekExpressOnrampStatus()?.payerCountry),
+    seedExpressSetupForm(
+      mergeExpressForm(
+        expressFormFromProfile({
+          ...userProfile?.profile,
+          email: userProfile?.email ?? userProfile?.profile?.email,
+          phone: userProfile?.profile?.phone,
+        }),
+        expressFormFromStatusPrefill(peekExpressOnrampStatus()?.prefill, peekExpressOnrampStatus()?.payerCountry),
+      ),
     ),
   )
   const [stripeEl, setStripeEl] = useState<unknown>(null)
@@ -95,12 +114,17 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
   const watchIdentityOverlayRef = useRef(false)
   const dismissL2Ref = useRef<() => void>(() => {})
 
-  const handleBack = useCallback(() => navigateStackBack(navigation), [navigation])
+  const handleBack = useCallback(() => {
+    if (resolveExpressDepositsSetupStep(status) === 'ready') {
+      exitToMainTabs(navigation, 'Dashboard')
+      return
+    }
+    navigateStackBack(navigation)
+  }, [navigation, status])
   useStackHardwareBack(handleBack)
 
   const applyStatus = useCallback((data: ExpressOnrampStatus) => {
     cacheExpressOnrampStatus(data)
-    setStatus(data)
     if (!data.eligible) setMessage(EXPRESS_DEPOSITS_COPY.geoUnavailable)
     setForm((prev) => mergeExpressForm(prev, expressFormFromStatusPrefill(data.prefill, data.payerCountry)))
   }, [])
@@ -111,24 +135,47 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
     return data
   }, [applyStatus])
 
+  const advanceLocal = useCallback((nextStep: ExpressDepositsNextStep, extra?: Partial<ExpressOnrampStatus>) => {
+    patchExpressOnrampStatus({
+      ...extra,
+      nextStep,
+      status: expressDepositsPersistStatus(nextStep),
+      ready: nextStep === 'ready',
+    })
+    if (nextStep === 'ready') clearExpressSetupFormDraft()
+  }, [])
+
   useEffect(() => {
     const peeked = peekExpressOnrampStatus()
-    if (peeked?.publishableKey) void loadMobileExpressOnramp(peeked.publishableKey).catch(() => undefined)
-    else prefetchMobileExpressOnramp()
+    if (peeked?.publishableKey) {
+      void loadMobileExpressOnramp(peeked.publishableKey, peeked.cryptoCustomerId).catch(() => undefined)
+    } else prefetchMobileExpressOnramp()
+    void hydrateExpressSetupFormDraft().then((draft) => {
+      if (draft) setForm((prev) => applyExpressFormDraft(prev, draft))
+    })
     void refresh(false).catch((e) =>
       setMessage(e instanceof Error ? e.message : EXPRESS_DEPOSITS_COPY.geoUnavailable),
     )
   }, [refresh])
 
   const lockedCountry = expressLockedCountry(form, status?.payerCountry)
-  const step: ExpressDepositsNextStep = status?.nextStep ?? 'link'
+  const step: ExpressDepositsNextStep = resolveExpressDepositsSetupStep(status)
+
+  useEffect(() => {
+    if (step === 'ready') {
+      clearExpressSetupFormDraft()
+      return
+    }
+    const timer = setTimeout(() => persistExpressSetupFormDraft(form), 250)
+    return () => clearTimeout(timer)
+  }, [form, step])
 
   const run = async (fn: () => Promise<boolean | void>) => {
     setBusy(true)
     setMessage(null)
     try {
       const keepOpen = await fn()
-      if (!keepOpen) await refresh(true)
+      if (!keepOpen) void refresh(true).catch(() => undefined)
     } catch (e) {
       setOpeningIdentity(false)
       setMessage(expressSetupUserMessage(e instanceof Error ? e.message : null))
@@ -250,7 +297,11 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
               })
               setStripeEl(null)
               setMessage(null)
-              await refresh(true)
+              advanceLocal(
+                expressDepositsAdvanceAfter({ completed: 'link', payerCountry: lockedCountry }),
+                { cryptoCustomerId: String(result.crypto_customer_id) },
+              )
+              void refresh(true)
             } else if (isExpressSetupDismissed(outcome)) {
               setStripeEl(null)
               setMessage(null)
@@ -282,6 +333,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           if (isExpressIdentitySuccess(outcome)) {
             identitySucceededRef.current = true
             setMessage(null)
+            advanceLocal(expressDepositsAdvanceAfter({ completed: step }))
             void pollUntilNotReview()
             return
           }
@@ -496,15 +548,20 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
         } catch (e) {
           if (!isExpressKycAlreadyVerified(e instanceof Error ? e.message : String(e))) throw e
         }
-        await pollUntilNotReview()
-        return
+        advanceLocal(expressDepositsAdvanceAfter({ completed: step, payerCountry: lockedCountry }))
+        if (step === 'us_kyc') void pollUntilNotReview()
+        else void refresh(true)
+        return true
       }
       if (step === 'eu_identifiers') {
         const missing = await client.getMissingIdentifiers?.()
         const type = missing?.identifiers?.[0]?.type
-        await client.updateKycInfo?.({
-          identifiers: type ? [{ type, value: form.identifier }] : [],
-        })
+        if (type) {
+          await client.updateKycInfo?.({
+            identifiers: [{ type, value: form.identifier }],
+          })
+        }
+        advanceLocal(expressDepositsAdvanceAfter({ completed: 'eu_identifiers', payerCountry: lockedCountry }))
         return
       }
       if (step === 'eu_attestation') {
@@ -513,6 +570,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           if (outcome === 'success' || outcome === 'accepted') {
             setStripeEl(null)
             setMessage(null)
+            advanceLocal(expressDepositsAdvanceAfter({ completed: 'eu_attestation', payerCountry: lockedCountry }))
             void refresh(true)
           } else if (isExpressSetupDismissed(outcome)) {
             setStripeEl(null)
@@ -576,6 +634,7 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           }
           await client.registerWalletAddress(walletAddress, 'solana')
         }
+        advanceLocal('ready')
       }
     })
   }
@@ -663,7 +722,11 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
                   {field('surname', 'Last name')}
                   {field('line1', 'Address')}
                   {field('city', 'City')}
-                  {step === 'us_kyc' ? field('state', 'State') : null}
+                  {step === 'us_kyc'
+                    ? field('state', 'State')
+                    : lockedCountry === 'IE'
+                      ? field('state', 'County')
+                      : null}
                   {field('postal_code', 'Postal code')}
                   {field('dob_day', 'Birth day', { keyboard: 'number' })}
                   {field('dob_month', 'Birth month', { keyboard: 'number' })}
@@ -688,7 +751,10 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
                 </View>
               ) : null}
               {step === 'eu_identifiers' ? (
-                <View style={styles.profileCard}>{field('identifier', 'ID number')}</View>
+                <View style={styles.profileCard}>
+                  <Text style={styles.bodyText}>{EXPRESS_DEPOSITS_COPY.identifierHint}</Text>
+                  {field('identifier', 'ID number')}
+                </View>
               ) : null}
 
               {step === 'eu_attestation' ? (
@@ -703,7 +769,19 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
                 <Text style={styles.bodyText}>{EXPRESS_DEPOSITS_COPY.identityHint}</Text>
               ) : null}
 
-              {step === 'ready' ? <Text style={styles.ready}>{EXPRESS_DEPOSITS_COPY.readyBadge}</Text> : null}
+              {step === 'ready' ? (
+                <View style={styles.readyBlock}>
+                  <Text style={styles.readyTitle}>{EXPRESS_DEPOSITS_COPY.readyTitle}</Text>
+                  <Text style={styles.bodyText}>{EXPRESS_DEPOSITS_COPY.readyBody}</Text>
+                  <GlossyPrimaryButton
+                    title={EXPRESS_DEPOSITS_COPY.addMoneyCta}
+                    onPress={() => {
+                      haptics.medium()
+                      exitExpressSetupToAddMoney(navigation)
+                    }}
+                  />
+                </View>
+              ) : null}
 
               {cta ? (
                 openingIdentity || (busy && (step === 'us_l2' || step === 'eu_l2')) ? (
@@ -875,9 +953,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     letterSpacing: -0.1,
   },
-  ready: {
-    ...textStyles.bodyMedium,
-    color: colors.success.dark,
+  readyBlock: {
+    gap: spacing[3],
+  },
+  readyTitle: {
+    ...textStyles.headlineSmall,
+    color: colors.text.primary,
   },
   error: {
     ...textStyles.bodySmall,

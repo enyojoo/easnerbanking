@@ -21,6 +21,7 @@ const ROUTE_TITLES: Record<string, string> = {
   Support: 'Support',
   TransactionDetails: 'Transaction',
   ReceiveMoney: 'Add money',
+  ExpressDepositAmount: 'Add money',
   ReceiveBankDetails: 'Bank Account',
   ReceiveStablecoinDetails: 'Stablecoin',
   ReceiveTransactionDetails: 'Add money',

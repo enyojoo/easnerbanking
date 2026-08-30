@@ -7,8 +7,8 @@ import {
   receiveLocalMomoTitle,
   receiveLocalDepositSubtitle,
   mapResidenceToLocalPayInCurrency,
-  EXPRESS_DEPOSITS_COPY,
   expressDepositMethodTitle,
+  expressDepositMethodSubtitle,
   type CashPayInMethodKind,
 } from '@easner/shared'
 import { colors, spacing, textStyles } from '../../theme'
@@ -35,7 +35,7 @@ type Props = {
   localDepositBlocked: boolean
   extraLocalCountries?: string[]
   expressMethods?: ExpressCashKind[]
-  expressReady?: boolean
+  expressReady?: boolean | null
   onBankPress: () => void
   onLocalBankPress: (country?: string) => void
   onLocalMomoPress: () => void
@@ -64,7 +64,7 @@ export function ReceiveCashMethodList({
   localDepositBlocked,
   extraLocalCountries = [],
   expressMethods = [],
-  expressReady = false,
+  expressReady,
   onBankPress,
   onLocalBankPress,
   onLocalMomoPress,
@@ -143,9 +143,9 @@ export function ReceiveCashMethodList({
     <ReceiveLocalRailCard
       key={kind}
       title={expressDepositMethodTitle(kind)}
-      subtitle={
-        expressReady ? EXPRESS_DEPOSITS_COPY.description : EXPRESS_DEPOSITS_COPY.setupRequiredHint
-      }
+      subtitle={expressDepositMethodSubtitle(kind, {
+        ready: expressReady === false ? false : expressReady ? true : undefined,
+      })}
       leading={<ExpressMethodLogo kind={kind} />}
       frameLeading={false}
       onPress={() => onExpressPress?.(kind)}

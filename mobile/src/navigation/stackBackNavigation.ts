@@ -34,6 +34,19 @@ export function exitToMainTabs(
   )
 }
 
+/** Leave Express setup after it is ready – Add money cannot sit on top of setup. */
+export function exitExpressSetupToAddMoney(navigation: { dispatch: (action: unknown) => void }): void {
+  navigation.dispatch(
+    CommonActions.reset({
+      index: 1,
+      routes: [
+        { name: 'MainTabs', params: { screen: 'Dashboard' } },
+        { name: 'ReceiveMoney' },
+      ],
+    }),
+  )
+}
+
 /**
  * Safe stack back – pops duplicate consecutive routes, then goBack, else exits to MainTabs.
  */

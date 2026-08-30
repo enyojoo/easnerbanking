@@ -6,10 +6,13 @@ import {
   EXPRESS_DEPOSITS_COPY,
   expressDepositMethodTitle,
   expressDepositsQuoteIsStale,
+  expressDepositsQuoteMatchesEntered,
+  expressDepositsShowAmountToggle,
   formatMoneyDisplay,
   formatSendRateLabel,
   useExpressDepositsAmountLimits,
   validateExpressDepositsAmount,
+  type ExpressDepositsAmountEntryMode,
   type ExpressDepositsPricingBreakdown,
 } from "@easner/shared"
 import { Button } from "@/components/ui/button"
@@ -48,6 +51,7 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
   const router = useRouter()
   const [step, setStep] = useState<Step>("amount")
   const [amountStr, setAmountStr] = useState("")
+  const [amountEntryMode, setAmountEntryMode] = useState<ExpressDepositsAmountEntryMode>("usd")
   const [pricing, setPricing] = useState<ExpressDepositsPricingBreakdown | null>(null)
   const [sourceCurrency, setSourceCurrency] = useState("USD")
   const [quoteError, setQuoteError] = useState<string | null>(null)
@@ -60,21 +64,37 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
   const [confirmError, setConfirmError] = useState<string | null>(null)
   const [slot, setSlot] = useState<HTMLElement | null>(null)
 
-  const usdCredit = Number.parseFloat(amountStr.replace(/,/g, "")) || 0
-  const youPay = pricing?.totalToPay ?? null
+  const enteredAmount = Number.parseFloat(amountStr.replace(/,/g, "")) || 0
+  const showAmountToggle = expressDepositsShowAmountToggle(sourceCurrency)
+  const livePricing = expressDepositsQuoteMatchesEntered({
+    pricing,
+    amountEntryMode,
+    enteredAmount,
+  })
+    ? pricing
+    : null
+  const usdCredit = amountEntryMode === "usd" ? enteredAmount : livePricing?.usdCredit ?? 0
+  const youPay = amountEntryMode === "pay" ? enteredAmount : livePricing?.totalToPay ?? null
   const amountLimit = validateExpressDepositsAmount({
     usdCredit,
     youPay,
     sourceCurrency,
+    amountEntryMode,
   })
-  const amountLimitError = usdCredit > 0 && !amountLimit.ok ? amountLimit.message : null
+  const amountLimitError = enteredAmount > 0 && !amountLimit.ok ? amountLimit.message : null
+
+  useEffect(() => {
+    if (!showAmountToggle && amountEntryMode !== "usd") setAmountEntryMode("usd")
+  }, [amountEntryMode, showAmountToggle])
 
   useExpressDepositsAmountLimits({
     enabled: step === "amount" && ready !== false,
+    amountEntryMode,
+    enteredAmount,
     usdCredit,
     youPay,
     sourceCurrency,
-    onApplyUsdCredit: (amount) => {
+    onApplyEnteredAmount: (amount) => {
       const rounded = Math.round(amount * 100) / 100
       setAmountStr(rounded.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
     },
@@ -85,7 +105,9 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
       method: "POST",
       headers: { ...SCOPE, "Content-Type": "application/json" },
       body: JSON.stringify({
-        usdCredit,
+        usdCredit: amountEntryMode === "usd" ? enteredAmount : undefined,
+        youPay: amountEntryMode === "pay" ? enteredAmount : undefined,
+        amountEntryMode,
         paymentMethod: paymentMethodParam(method),
       }),
     })
@@ -93,8 +115,15 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
       pricing?: ExpressDepositsPricingBreakdown
       sourceCurrency?: string
       error?: string
+      code?: string
     }
     if (!res.ok) {
+      if (data.code === "max_amount_exceeded" && data.pricing) {
+        setQuoteError(data.error || null)
+        setPricing(data.pricing)
+        if (data.pricing.sourceCurrency) setSourceCurrency(data.pricing.sourceCurrency.toUpperCase())
+        return data.pricing
+      }
       setQuoteError(data.error || "Quote unavailable")
       setPricing(null)
       return null
@@ -107,7 +136,7 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
     }
     setPricing(null)
     return null
-  }, [method, usdCredit])
+  }, [amountEntryMode, enteredAmount, method])
 
   useEffect(() => {
     let cancelled = false
@@ -137,7 +166,7 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
   }, [])
 
   useEffect(() => {
-    if (!(usdCredit > 0) || ready === false || !amountLimit.ok) {
+    if (!(enteredAmount > 0) || ready === false || !amountLimit.ok) {
       setPricing(null)
       return
     }
@@ -152,7 +181,7 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
       cancelled = true
       clearTimeout(t)
     }
-  }, [amountLimit.ok, fetchQuote, ready, usdCredit])
+  }, [amountLimit.ok, enteredAmount, fetchQuote, ready])
 
   const collectMethod = useCallback(async () => {
     if (!publishableKey) {
@@ -198,7 +227,7 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
   }, [cryptoCustomerId, method, onNeedSetup, publishableKey])
 
   const handleContinue = useCallback(async () => {
-    if (!(usdCredit > 0)) return
+    if (!(enteredAmount > 0)) return
     if (ready === false) {
       onNeedSetup()
       return
@@ -207,7 +236,7 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
       setConfirmError(amountLimit.message)
       return
     }
-    if (!pricing) {
+    if (!livePricing) {
       setConfirmError(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
       return
     }
@@ -220,20 +249,21 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
       return
     }
     setStep("review")
-  }, [amountLimit, collectMethod, method, onNeedSetup, paymentTokenId, pricing, ready, usdCredit])
+  }, [amountLimit, collectMethod, enteredAmount, livePricing, method, onNeedSetup, paymentTokenId, ready])
 
   const ensureFreshPricing = useCallback(async (): Promise<ExpressDepositsPricingBreakdown> => {
     if (pricing && !expressDepositsQuoteIsStale(pricing.rateFetchedAt)) return pricing
     const next = await fetchQuote()
     if (!next) throw new Error(EXPRESS_DEPOSITS_COPY.somethingWentWrong)
     const limit = validateExpressDepositsAmount({
-      usdCredit,
+      usdCredit: next.usdCredit,
       youPay: next.totalToPay,
       sourceCurrency: next.sourceCurrency,
+      amountEntryMode,
     })
     if (!limit.ok) throw new Error(limit.message)
     return next
-  }, [fetchQuote, pricing, usdCredit])
+  }, [amountEntryMode, fetchQuote, pricing])
 
   const handlePay = useCallback(async () => {
     setConfirmError(null)
@@ -245,7 +275,9 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
         method: "POST",
         headers: { ...SCOPE, "Content-Type": "application/json" },
         body: JSON.stringify({
-          usdCredit,
+          usdCredit: pricing?.usdCredit ?? usdCredit,
+          youPay: pricing?.quotedAmount ?? pricing?.totalToPay,
+          amountEntryMode,
           paymentMethod: paymentMethodParam(method),
           paymentTokenId,
         }),
@@ -314,23 +346,52 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
     paymentTokenId,
     publishableKey,
     router,
+    amountEntryMode,
+    pricing,
     usdCredit,
   ])
 
-  const inboundPreview = pricing
-    ? [
-        pricing.exchangeRate && pricing.exchangeRate.rate > 0
-          ? formatSendRateLabel(
-              pricing.exchangeRate.from,
-              pricing.exchangeRate.to,
-              pricing.exchangeRate.rate,
-            )
-          : null,
-        `${EXPRESS_DEPOSITS_COPY.estimatedTotalToPay}: ${formatMoneyDisplay(pricing.totalToPay, pricing.sourceCurrency)}`,
-      ]
-        .filter(Boolean)
-        .join(" · ")
+  const inboundPreview = livePricing
+    ? amountEntryMode === "usd"
+      ? formatMoneyDisplay(livePricing.totalToPay, livePricing.sourceCurrency)
+      : formatMoneyDisplay(livePricing.usdCredit, "USD")
     : null
+  const inboundToggleLabel = livePricing
+    ? amountEntryMode === "usd"
+      ? `Paying: ${formatMoneyDisplay(livePricing.totalToPay, livePricing.sourceCurrency)}`
+      : `Receiving: ${formatMoneyDisplay(livePricing.usdCredit, "USD")}`
+    : null
+  const inboundRateDisplay =
+    livePricing?.exchangeRate && livePricing.exchangeRate.rate > 0
+      ? formatSendRateLabel(
+          livePricing.exchangeRate.from,
+          livePricing.exchangeRate.to,
+          livePricing.exchangeRate.rate,
+        )
+      : null
+
+  const toggleAmountDirection = () => {
+    if (!showAmountToggle || !livePricing) return
+    if (amountEntryMode === "usd" && livePricing.totalToPay > 0) {
+      setAmountEntryMode("pay")
+      setAmountStr(
+        livePricing.totalToPay.toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }),
+      )
+      return
+    }
+    if (amountEntryMode === "pay" && livePricing.usdCredit > 0) {
+      setAmountEntryMode("usd")
+      setAmountStr(
+        livePricing.usdCredit.toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }),
+      )
+    }
+  }
 
   if (step === "amount") {
     return (
@@ -350,12 +411,18 @@ export function AccountsExpressDepositFlow({ method, onBack, onNeedSetup }: Prop
           quoteLoading={false}
           quoteError={quoteError}
           onContinue={() => void handleContinue()}
-          continueDisabled={!(usdCredit > 0) || ready === false || Boolean(amountLimitError) || !pricing}
-          inboundSourceCurrency="USD"
+          continueDisabled={
+            !(enteredAmount > 0) || ready === false || Boolean(amountLimitError) || !livePricing
+          }
+          inboundSourceCurrency={amountEntryMode === "pay" ? sourceCurrency : "USD"}
           inboundDestCurrency="USD"
           sourceTitle={expressDepositMethodTitle(method)}
           destTitle="USD Balance"
           inboundReceivePreview={inboundPreview}
+          inboundToggleLabel={inboundToggleLabel}
+          inboundRateDisplay={inboundRateDisplay}
+          onInboundToggle={showAmountToggle ? toggleAmountDirection : undefined}
+          limitError={amountLimitError}
         />
         {ready === false ? (
           <p className="text-sm text-muted-foreground">{EXPRESS_DEPOSITS_COPY.setupRequiredHint}</p>

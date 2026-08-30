@@ -36,6 +36,8 @@ export const ReceiveStablecoinDetailsScreen = webLazy(() => import('../screens/r
 export const ReceiveLocalRailScreen = webLazy(() => import('../screens/receive/ReceiveLocalRailScreen'))
 export const ReceiveLocalAmountScreen = webLazy(() => import('../screens/receive/ReceiveLocalAmountScreen'))
 export const ExpressDepositAmountScreen = webLazy(() => import('../screens/receive/ExpressDepositAmountScreen'))
+export const ExpressDepositPaymentSetupScreen = webLazy(() => import('../screens/receive/ExpressDepositPaymentSetupScreen'))
+export const ExpressDepositReviewScreen = webLazy(() => import('../screens/receive/ExpressDepositReviewScreen'))
 export const ExpressDepositsSetupScreen = webLazy(() => import('../screens/verification/ExpressDepositsSetupScreen'))
 export const ReceiveLocalReviewScreen = webLazy(() => import('../screens/receive/ReceiveLocalReviewScreen'))
 export const ReceiveLocalMomoSetupScreen = webLazy(() => import('../screens/receive/ReceiveLocalMomoSetupScreen'))

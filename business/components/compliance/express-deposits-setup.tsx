@@ -333,7 +333,8 @@ export function ExpressDepositsSetup({ onClose }: Props) {
       } catch (e) {
         if (!isExpressKycAlreadyVerified(e instanceof Error ? e.message : String(e))) throw e
       }
-      await pollUntilNotReview()
+      if (step === "us_kyc") await pollUntilNotReview()
+      else await refresh()
     })
 
   const submitIdentifiers = () =>
@@ -344,9 +345,11 @@ export function ExpressDepositsSetup({ onClose }: Props) {
       }
       const missing = await sdk.getMissingIdentifiers()
       const type = missing.identifiers?.[0]?.type
-      await sdk.updateKycInfo({
-        identifiers: type ? [{ type, value: form.identifier }] : [],
-      })
+      if (type) {
+        await sdk.updateKycInfo({
+          identifiers: [{ type, value: form.identifier }],
+        })
+      }
     })
 
   const startAttestation = () =>

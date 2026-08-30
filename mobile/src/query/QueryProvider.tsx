@@ -18,6 +18,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { registerAppLockListener } from '../lib/app-lock-bus'
 import { prefetchReceiveDepositQueries } from '../hooks/queries/use-receive-deposit-queries'
 import { hydrateReceiveRailsFromDisk } from '../lib/warmYcLocalDepositCaches'
+import { hydrateExpressOnrampStatus } from '../lib/expressOnrampStatusCache'
+import { hydrateExpressSetupFormDraft } from '../lib/expressSetupFormDraft'
 import { warmOperationalRecipientCaches } from '../lib/warmOperationalRecipientCaches'
 import { refreshLiveOperationalData } from './refresh-money-feeds'
 import { refreshSendDestinations } from '../lib/sendDestinations'
@@ -76,6 +78,8 @@ function AuthGatedCacheReset({ children }: { children: React.ReactNode }) {
 function WarmYcLocalDepositCachesOnScope({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     void hydrateReceiveRailsFromDisk()
+    void hydrateExpressOnrampStatus()
+    void hydrateExpressSetupFormDraft()
   }, [])
   return <>{children}</>
 }

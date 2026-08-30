@@ -14,7 +14,7 @@ import { NextResponse } from "next/server"
 import { refreshLinkAccessToken, StripeOnrampApiError, stripeOnramp } from "@/lib/stripe/onramp-client"
 
 export const EXPRESS_USER_COLUMNS =
-  "id,email,full_name,phone,date_of_birth,residence_country,kyc_id_type,kyc_id_number,kyc_id_issuing_country,kyc_address_street,kyc_address_city,kyc_address_state,kyc_address_post_code,kyc_address_country,stripe_crypto_customer_id,stripe_express_deposits_status,stripe_express_kyc_tier,stripe_express_payment_token_id,stripe_link_oauth_token_ciphertext"
+  "id,email,full_name,phone,date_of_birth,residence_country,kyc_id_type,kyc_id_number,kyc_id_issuing_country,kyc_address_street,kyc_address_city,kyc_address_state,kyc_address_post_code,kyc_address_country,stripe_crypto_customer_id,stripe_express_deposits_status,stripe_express_kyc_tier,stripe_express_payment_token_id,stripe_express_payment_methods,stripe_link_oauth_token_ciphertext"
 
 export type ExpressUserRow = {
   id: string
@@ -35,6 +35,7 @@ export type ExpressUserRow = {
   stripe_express_deposits_status?: string | null
   stripe_express_kyc_tier?: string | null
   stripe_express_payment_token_id?: string | null
+  stripe_express_payment_methods?: unknown
   stripe_link_oauth_token_ciphertext?: string | null
 }
 

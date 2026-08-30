@@ -46,6 +46,8 @@ import {
   ReceiveBankDetailsScreen,
   ReceiveLocalAmountScreen,
   ExpressDepositAmountScreen,
+  ExpressDepositPaymentSetupScreen,
+  ExpressDepositReviewScreen,
   ExpressDepositsSetupScreen,
   ReceiveLocalMomoSetupScreen,
   ReceiveLocalRailScreen,
@@ -345,6 +347,16 @@ function MainStack() {
           name="ExpressDepositAmount"
           component={ExpressDepositAmountScreen}
           options={transitionOptions('ExpressDepositAmount')}
+        />
+        <Stack.Screen
+          name="ExpressDepositPaymentSetup"
+          component={ExpressDepositPaymentSetupScreen}
+          options={transitionOptions('ExpressDepositPaymentSetup')}
+        />
+        <Stack.Screen
+          name="ExpressDepositReview"
+          component={ExpressDepositReviewScreen}
+          options={transitionOptions('ExpressDepositReview')}
         />
         <Stack.Screen
           name="ExpressDepositsSetup"

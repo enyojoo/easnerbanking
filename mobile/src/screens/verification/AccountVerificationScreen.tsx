@@ -23,7 +23,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
-import { qk, canResubmitNoahVerification, getNoahRejectionDisplay, NOAH_FINAL_REJECTION_USER_MESSAGE, NOAH_VERIFICATION_IN_REVIEW_COPY, VERIFICATION_STATUS_COPY, verificationStatusLabel, EXPRESS_DEPOSITS_COPY, expressDepositsPayerCountry, isStripeOnrampPayerEligible } from '@easner/shared'
+import { qk, canResubmitNoahVerification, getNoahRejectionDisplay, NOAH_FINAL_REJECTION_USER_MESSAGE, NOAH_VERIFICATION_IN_REVIEW_COPY, VERIFICATION_STATUS_COPY, verificationStatusLabel, EXPRESS_DEPOSITS_COPY, expressDepositsPayerCountry, expressDepositsVerificationCta, isStripeOnrampPayerEligible } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
 import ExternalLinkModal from '../../components/ExternalLinkModal'
@@ -52,6 +52,7 @@ const GLOBAL_BANKING_PRODUCT = CONSUMER_VERIFICATION_PRODUCTS.find((p) => p.id =
 import {
   fetchExpressOnrampStatus,
   peekExpressOnrampStatus,
+  subscribeExpressOnrampStatus,
   warmExpressOnrampStatus,
 } from '../../lib/expressOnrampStatusCache'
 import { isGlobalBankingVerified } from '../../lib/compliance'
@@ -354,6 +355,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   const localExpressEligible = isStripeOnrampPayerEligible({ country: localExpressCountry })
   const showExpressCard =
     isGlobalBankingVerified(userProfile) && (expressEligible ?? localExpressEligible)
+  const expressCta = expressDepositsVerificationCta(expressStatus)
 
   const applyExpressStatus = useCallback((data: { eligible?: boolean; ready?: boolean; status?: string } | null) => {
     setExpressEligible(typeof data?.eligible === 'boolean' ? data.eligible : null)
@@ -361,13 +363,17 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   }, [])
   useEffect(() => {
     warmExpressOnrampStatus()
-    void fetchExpressOnrampStatus()
+    applyExpressStatus(peekExpressOnrampStatus())
+    const unsub = subscribeExpressOnrampStatus(() => applyExpressStatus(peekExpressOnrampStatus()))
+    void fetchExpressOnrampStatus(false)
       .then((data) => applyExpressStatus(data))
       .catch(() => undefined)
+    return unsub
   }, [applyExpressStatus, userProfile?.id])
   useFocusEffect(
     useCallback(() => {
-      void fetchExpressOnrampStatus(true)
+      applyExpressStatus(peekExpressOnrampStatus())
+      void fetchExpressOnrampStatus(false)
         .then((data) => applyExpressStatus(data))
         .catch(() => undefined)
     }, [applyExpressStatus]),
@@ -917,8 +923,43 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
 
               {showExpressCard ? (
                 <View style={styles.card}>
-                  <View style={styles.cardInner}>
-                    <View style={[styles.cardContent, styles.cardContentWithCta]}>
+                  {expressCta ? (
+                    <View style={styles.cardInner}>
+                      <View style={[styles.cardContent, styles.cardContentWithCta]}>
+                        <View style={styles.cardLeft}>
+                          <View style={styles.iconContainer}>
+                            <Zap size={24} color={colors.primary.main} strokeWidth={2} />
+                          </View>
+                          <Text style={styles.cardTitle}>{EXPRESS_DEPOSITS_COPY.title}</Text>
+                          <Text style={styles.cardDescription}>
+                            {EXPRESS_DEPOSITS_COPY.description}
+                          </Text>
+                        </View>
+                        <View style={styles.cardRight}>{getStatusBadge(expressStatus)}</View>
+                      </View>
+                      <Pressable
+                        onPress={() => {
+                          haptics.tap()
+                          const peeked = peekExpressOnrampStatus()
+                          if (peeked?.publishableKey) {
+                            void loadMobileExpressOnramp(peeked.publishableKey, peeked.cryptoCustomerId).catch(
+                              () => undefined,
+                            )
+                          }
+                          navigation.navigate('ExpressDepositsSetup' as never)
+                        }}
+                        style={({ pressed }) => [
+                          styles.startBadge,
+                          pressed && Platform.OS === 'ios' && styles.cardPressed,
+                        ]}
+                        android_ripple={{ color: 'rgba(0, 122, 204, 0.12)', borderless: false }}
+                      >
+                        <Text style={styles.startBadgeText}>{expressCta}</Text>
+                        <ChevronRight size={12} color={colors.neutral.white} strokeWidth={2} />
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View style={styles.cardContent}>
                       <View style={styles.cardLeft}>
                         <View style={styles.iconContainer}>
                           <Zap size={24} color={colors.primary.main} strokeWidth={2} />
@@ -930,27 +971,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                       </View>
                       <View style={styles.cardRight}>{getStatusBadge(expressStatus)}</View>
                     </View>
-                    <Pressable
-                      onPress={() => {
-                        haptics.tap()
-                        const pk = peekExpressOnrampStatus()?.publishableKey
-                        if (pk) void loadMobileExpressOnramp(pk).catch(() => undefined)
-                        navigation.navigate('ExpressDepositsSetup' as never)
-                      }}
-                      style={({ pressed }) => [
-                        styles.startBadge,
-                        pressed && Platform.OS === 'ios' && styles.cardPressed,
-                      ]}
-                      android_ripple={{ color: 'rgba(0, 122, 204, 0.12)', borderless: false }}
-                    >
-                      <Text style={styles.startBadgeText}>
-                        {expressStatus === 'in_progress'
-                          ? EXPRESS_DEPOSITS_COPY.continueCta
-                          : EXPRESS_DEPOSITS_COPY.setupCta}
-                      </Text>
-                      <ChevronRight size={12} color={colors.neutral.white} strokeWidth={2} />
-                    </Pressable>
-                  </View>
+                  )}
                 </View>
               ) : null}
 

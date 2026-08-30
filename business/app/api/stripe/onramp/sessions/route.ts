@@ -3,6 +3,9 @@ import {
   buildExpressDepositsDepositReview,
   expressDepositsSessionCreateParams,
   expressDepositsSourceCurrency,
+  expressSavedInstrumentForMethod,
+  parseExpressDepositsAmountEntryMode,
+  parseExpressSavedPaymentMethods,
   validateExpressDepositsAmount,
 } from "@easner/shared"
 import { StripeOnrampApiError, stripeOnramp } from "@/lib/stripe/onramp-client"
@@ -30,9 +33,27 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
   const customerId = resolved.ctx.payer.stripe_crypto_customer_id
   const usdCredit = Number(body.usdCredit ?? body.destinationAmount ?? 0)
+  const youPay = Number(body.youPay ?? body.sourceAmount ?? 0)
+  const amountEntryMode = parseExpressDepositsAmountEntryMode(String(body.amountEntryMode ?? ""))
   const paymentMethod = String(body.paymentMethod ?? "card")
-  const paymentToken = String(body.paymentTokenId ?? resolved.ctx.payer.stripe_express_payment_token_id ?? "")
+  const savedMethods = parseExpressSavedPaymentMethods(resolved.ctx.payer.stripe_express_payment_methods)
+  const railKind = paymentMethod === "ach" ? "express_ach" : paymentMethod === "card" ? "express_card" : null
+  const railToken = railKind
+    ? expressSavedInstrumentForMethod(savedMethods, railKind)?.paymentTokenId
+    : null
+  const paymentToken = String(
+    body.paymentTokenId ?? railToken ?? resolved.ctx.payer.stripe_express_payment_token_id ?? "",
+  )
   const sourceCurrency = expressDepositsSourceCurrency(resolved.ctx.payerCountry) ?? "usd"
+  const beforeQuote = validateExpressDepositsAmount({
+    usdCredit,
+    youPay,
+    sourceCurrency,
+    amountEntryMode,
+  })
+  if (!beforeQuote.ok) {
+    return NextResponse.json({ error: beforeQuote.message, code: beforeQuote.code }, { status: 400 })
+  }
 
   try {
     const accountCtx = await resolveNoahAccountContext(request, resolved.ctx.actorUserId)
@@ -50,6 +71,8 @@ export async function POST(request: Request) {
     const quoted = await quoteExpressDepositsPricing({
       admin: resolved.ctx.admin,
       usdCredit,
+      youPay,
+      amountEntryMode,
       sourceCurrency,
       paymentMethod,
       walletAddress: wallet,
@@ -62,9 +85,10 @@ export async function POST(request: Request) {
     }
 
     const limit = validateExpressDepositsAmount({
-      usdCredit,
+      usdCredit: quoted.pricing.usdCredit,
       youPay: quoted.pricing.totalToPay,
       sourceCurrency,
+      amountEntryMode,
     })
     if (!limit.ok) {
       return NextResponse.json({ error: limit.message, code: limit.code }, { status: 400 })
@@ -108,7 +132,7 @@ export async function POST(request: Request) {
         businessId: resolved.ctx.businessId,
         stripeSessionId,
         cryptoCustomerId: customerId,
-        usdCredit: usdCredit > 0 ? usdCredit : null,
+        usdCredit: quoted.pricing.usdCredit > 0 ? quoted.pricing.usdCredit : null,
         sourceAmount: quoted.pricing.totalToPay,
         sourceCurrency,
         paymentMethod,

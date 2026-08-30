@@ -39,7 +39,7 @@ import {
   type SettingsVerificationEmbeddedFlow,
 } from "@/lib/compliance/cutover-comms"
 import { ExpressDepositsSetup } from "@/components/compliance/express-deposits-setup"
-import { EXPRESS_DEPOSITS_COPY } from "@easner/shared"
+import { EXPRESS_DEPOSITS_COPY, expressDepositsVerificationCta } from "@easner/shared"
 import { peekBusinessExpressOnrampStatus } from "@/lib/express-onramp-status-cache"
 import { loadExpressOnramp, prefetchExpressOnramp } from "@/lib/stripe/load-crypto-onramp"
 import { useBusinessExpressOnrampStatus } from "@/hooks/queries/use-express-onramp-status-query"
@@ -104,10 +104,7 @@ export function BusinessVerificationSection({
   const expressStatus = expressReady
     ? "approved"
     : expressQuery.data?.status || "not_started"
-  const expressInProgress = expressStatus === "in_progress" || expressStatus === "in_review"
-  const expressSetupCta = expressInProgress
-    ? EXPRESS_DEPOSITS_COPY.continueCta
-    : EXPRESS_DEPOSITS_COPY.setupCta
+  const expressSetupCta = expressDepositsVerificationCta(expressStatus)
 
   const openExpressSetup = useCallback(() => {
     analytics.trackKybStarted({ provider: "express_deposits" })
@@ -500,7 +497,7 @@ export function BusinessVerificationSection({
                         {EXPRESS_DEPOSITS_COPY.description}
                       </CardDescription>
                     </CardHeader>
-                    {!expressReady ? (
+                    {!expressReady && expressSetupCta ? (
                       <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
                         {!tier1Complete ? (
                           <div className="flex flex-wrap gap-2">

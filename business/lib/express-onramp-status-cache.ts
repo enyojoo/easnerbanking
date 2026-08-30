@@ -1,6 +1,7 @@
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { CACHE_KEYS, dataCache } from "@/lib/cache"
 import { loadExpressOnramp, prefetchExpressOnramp } from "@/lib/stripe/load-crypto-onramp"
+import { expressDepositsStatusIsReady, keepExpressDepositsCachedReady } from "@easner/shared"
 
 export type BusinessExpressOnrampStatus = {
   eligible?: boolean
@@ -10,6 +11,8 @@ export type BusinessExpressOnrampStatus = {
   publishableKey?: string
   cryptoCustomerId?: string | null
   nextStep?: string
+  status?: string
+  kycTiers?: unknown[]
   office?: { stripeOnrampEnabled?: boolean; stripeOnrampEuEnabled?: boolean }
   prefill?: Record<string, unknown>
   error?: string
@@ -68,9 +71,21 @@ export function cacheBusinessExpressOnrampStatus(
   data: BusinessExpressOnrampStatus,
   userId?: string | null,
 ) {
-  cached = data
+  const next = keepExpressDepositsCachedReady({
+    cachedReady: expressDepositsStatusIsReady(cached),
+    incoming: {
+      ready: data.ready,
+      status: data.status,
+      eligible: data.eligible,
+      kycTiers: data.kycTiers,
+      cryptoCustomerId: data.cryptoCustomerId,
+    },
+  })
+    ? { ...data, ready: true, status: data.status === "ready" ? data.status : "ready" }
+    : data
+  cached = next
   cachedUserId = userId ?? cachedUserId
-  writePersisted(data, userId ?? cachedUserId)
+  writePersisted(next, userId ?? cachedUserId)
 }
 
 export function peekBusinessExpressOnrampStatus(userId?: string | null): BusinessExpressOnrampStatus | null {

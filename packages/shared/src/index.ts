@@ -542,7 +542,9 @@ export {
   EXPRESS_US_SSN_ID_TYPE,
   buildExpressKycSubmitInfo,
   expressDepositActivityLabel,
+  expressDepositMethodSubtitle,
   expressDepositMethodTitle,
+  expressDepositsVerificationCta,
   expressIdentityOutcome,
   expressSetupUserMessage,
   expressNativeTrustedInstallMessage,
@@ -571,11 +573,42 @@ export type { ExpressDepositsLifecycleStep, ExpressDepositsReview } from "./expr
 export {
   buildExpressDepositsPricing,
   buildExpressDepositsReviewRows,
+  expressDepositsOnrampQuoteLock,
   expressDepositsQuoteIsStale,
+  expressDepositsQuoteMatchesEntered,
   expressDepositsSessionCreateParams,
   parseExpressStripeQuoteFees,
   pickExpressSolanaUsdcQuote,
 } from "./express-deposits-pricing"
+export {
+  classifyExpressDepositPayError,
+  coalesceExpressSavedPaymentMethods,
+  expressCashKindToPaymentMethod,
+  expressDepositCheckoutMandateData,
+  expressDepositCollectPaymentOpts,
+  expressDepositPayNeedsCollect,
+  expressInstrumentFromCollectDetails,
+  expressReviewDepositMethodLabel,
+  expressSavedInstrumentForMethod,
+  expressSavedPaymentRail,
+  formatExpressSavedInstrumentLabel,
+  isExpressWalletKind,
+  mergeExpressSavedPaymentMethods,
+  nextExpressDepositStep,
+  parseExpressDepositFlowParams,
+  parseExpressDepositsPricing,
+  parseExpressSavedInstrument,
+  parseExpressSavedPaymentMethods,
+} from "./express-deposits-flow"
+export type {
+  ExpressDepositFlowParams,
+  ExpressDepositFlowStep,
+  ExpressDepositPayErrorKind,
+  ExpressDepositsPaymentMethod,
+  ExpressSavedInstrument,
+  ExpressSavedPaymentMethods,
+  ExpressSavedPaymentRail,
+} from "./express-deposits-flow"
 export type {
   ExpressDepositsPricingBreakdown,
   ExpressDepositsReviewRow,
@@ -587,16 +620,28 @@ export {
   EXPRESS_DEPOSITS_EU_TRAVEL_RULE_EUR,
   EXPRESS_DEPOSITS_MIN_USD_CREDIT,
   expressDepositsLimits,
+  expressDepositsShowAmountToggle,
+  nextExpressDepositsEnteredAmount,
   nextExpressDepositsUsdCredit,
+  parseExpressDepositsAmountEntryMode,
+  resolveExpressDepositsPayCurrency,
   validateExpressDepositsAmount,
 } from "./express-deposits-limits"
 export { useExpressDepositsAmountLimits } from "./hooks/use-express-deposits-amount-limits"
-export type { ExpressDepositsAmountValidation } from "./express-deposits-limits"
+export type {
+  ExpressDepositsAmountEntryMode,
+  ExpressDepositsAmountValidation,
+} from "./express-deposits-limits"
 export {
   expressDepositsKycReady,
   expressDepositsHighestVerifiedTier,
   expressDepositsNextStep,
+  expressDepositsAdvanceAfter,
   expressDepositsPersistStatus,
+  expressDepositsStatusIsReady,
+  keepExpressDepositsCachedNextStep,
+  keepExpressDepositsCachedReady,
+  resolveExpressDepositsSetupStep,
   isExpressIdentitySetupStep,
   isExpressReviewSetupStep,
   normalizeExpressDepositsCustomer,

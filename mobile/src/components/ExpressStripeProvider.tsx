@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { getApplePayMerchantId } from '../lib/apple-pay-merchant'
 import {
   fetchExpressOnrampStatus,
+  hydrateExpressOnrampStatus,
   peekExpressOnrampStatus,
   subscribeExpressOnrampStatus,
 } from '../lib/expressOnrampStatusCache'
@@ -32,7 +33,8 @@ export function ExpressStripeProvider({ children, publishableKey }: Props) {
 
   useEffect(() => {
     if (!user?.id) return
-    void fetchExpressOnrampStatus(true)
+    void hydrateExpressOnrampStatus()
+      .then(() => fetchExpressOnrampStatus(false))
       .then((data) => {
         if (data.publishableKey) setPk(data.publishableKey)
       })

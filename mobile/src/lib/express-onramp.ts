@@ -35,11 +35,13 @@ type NativeOnramp = {
   collectPaymentMethod: (
     paymentMethod: 'Card' | 'BankAccount' | 'CardAndBankAccount' | 'PlatformPay',
     platformPayParams?: Record<string, unknown>,
-  ) => Promise<{ error?: { message?: string } }>
-  createCryptoPaymentToken: () => Promise<{
-    cryptoPaymentToken?: string
-    error?: { message?: string }
-  }>
+  ) => Promise<Record<string, unknown> & { error?: { message?: string } }>
+  createCryptoPaymentToken: () => Promise<
+    Record<string, unknown> & {
+      cryptoPaymentToken?: string
+      error?: { message?: string }
+    }
+  >
   performCheckout: (
     onrampSessionId: string,
     provideCheckoutClientSecret: () => Promise<string | null>,
@@ -133,6 +135,21 @@ function platformPayParams(
   }
 }
 
+function nativePaymentMethodDetails(...sources: unknown[]): Record<string, unknown> {
+  const merged: Record<string, unknown> = {}
+  for (const source of sources) {
+    if (!source || typeof source !== 'object') continue
+    const row = source as Record<string, unknown>
+    Object.assign(merged, row)
+    if (row.paymentMethodDetails && typeof row.paymentMethodDetails === 'object') {
+      Object.assign(merged, row.paymentMethodDetails)
+    }
+  }
+  delete merged.error
+  delete merged.cryptoPaymentToken
+  return merged
+}
+
 function isAttestationError(error?: { message?: string; stripeErrorCode?: string; code?: string }) {
   return /attestation|native link|devicecheck|app attest|play integrity/i.test(
     `${error?.message || ''} ${error?.stripeErrorCode || ''} ${error?.code || ''}`,
@@ -205,7 +222,10 @@ export function adaptNativeOnramp(onramp: NativeOnramp): ExpressOnrampSdk {
       const token = await onramp.createCryptoPaymentToken()
       throwIf(token.error)
       if (!token.cryptoPaymentToken) throw new Error('Could not save payment method')
-      await cb({ cryptoPaymentToken: token.cryptoPaymentToken, paymentMethodDetails: {} })
+      await cb({
+        cryptoPaymentToken: token.cryptoPaymentToken,
+        paymentMethodDetails: nativePaymentMethodDetails(collected, token),
+      })
     },
     performCheckout: async (sessionId, provideSecret) => {
       const result = await onramp.performCheckout(sessionId, async () => {

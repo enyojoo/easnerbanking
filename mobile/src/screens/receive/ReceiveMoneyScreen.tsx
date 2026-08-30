@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
-import { qk, isVaAnswerSettled, shouldShowBankDepositTab, mapResidenceToLocalPayInCurrency, expressDepositsPayerCountry, isExpressCashKind, listExpressCashKinds, type NgLocalIdType } from '@easner/shared'
+import { qk, isVaAnswerSettled, shouldShowBankDepositTab, mapResidenceToLocalPayInCurrency, expressDepositsPayerCountry, expressDepositsStatusIsReady, isExpressCashKind, listExpressCashKinds, EXPRESS_DEPOSITS_MIN_USD_CREDIT, type NgLocalIdType } from '@easner/shared'
 import {
   View,
   Text,
@@ -41,10 +41,13 @@ import { resolveMobilePayInProvider } from '../../lib/resolveMobilePayInProvider
 import { ReceiveCashMethodList, type ExpressCashKind } from '../../components/receive/ReceiveCashMethodList'
 import {
   fetchExpressOnrampStatus,
+  hydrateExpressOnrampStatus,
   peekExpressOnrampStatus,
+  subscribeExpressOnrampStatus,
   warmExpressOnrampStatus,
 } from '../../lib/expressOnrampStatusCache'
 import { loadMobileExpressOnramp } from '../../lib/express-onramp'
+import { fetchExpressDepositQuote } from '../../lib/expressDepositCheckout'
 import {
   resolveWarmYcLocalDepositCorridor,
   ensureYcLocalDepositCachesReady,
@@ -82,7 +85,9 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     kycAddressCountry: userProfile?.profile?.kyc_address_country,
   })
 
-  const [expressReady, setExpressReady] = useState(() => Boolean(peekExpressOnrampStatus()?.ready))
+  const [expressReady, setExpressReady] = useState(() =>
+    expressDepositsStatusIsReady(peekExpressOnrampStatus()),
+  )
   const [expressMethods, setExpressMethods] = useState<ExpressCashKind[]>(() => {
     const kycApproved =
       String(userProfile?.noah_kyc_status || userProfile?.profile?.noah_kyc_status || '').toLowerCase() ===
@@ -296,6 +301,21 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   }, [localPayInCurrency, verificationComplete, currency, residenceCountry])
 
   useEffect(() => {
+    void hydrateExpressOnrampStatus().then((hit) => {
+      if (expressDepositsStatusIsReady(hit)) setExpressReady(true)
+    })
+    return subscribeExpressOnrampStatus(() => {
+      const hit = peekExpressOnrampStatus()
+      if (hit?.eligible === false) {
+        setExpressReady(false)
+        setExpressMethods([])
+        return
+      }
+      if (expressDepositsStatusIsReady(hit)) setExpressReady(true)
+    })
+  }, [])
+
+  useEffect(() => {
     if (currency !== 'USD' || !verificationComplete) {
       setExpressMethods([])
       return
@@ -311,7 +331,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
           setExpressMethods([])
           return
         }
-        setExpressReady(Boolean(data.ready))
+        setExpressReady((prev) => expressDepositsStatusIsReady(data) || prev)
         const fromApi = (Array.isArray(data.methods) ? data.methods : []).filter(isExpressCashKind)
         const methods = (fromApi.length
           ? fromApi
@@ -335,6 +355,29 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
       cancelled = true
     }
   }, [currency, verificationComplete, instantExpressPayerCountry, expressDeviceWallets])
+
+  useEffect(() => {
+    if (!expressReady || !expressMethods.length) return
+    for (const kind of expressMethods) {
+      void fetchExpressDepositQuote({
+        usdCredit: EXPRESS_DEPOSITS_MIN_USD_CREDIT,
+        method: kind,
+      }).catch(() => undefined)
+    }
+  }, [expressReady, expressMethods])
+
+  useFocusEffect(
+    React.useCallback(() => {
+      const hit = peekExpressOnrampStatus()
+      if (expressDepositsStatusIsReady(hit)) setExpressReady(true)
+      void fetchExpressOnrampStatus(false)
+        .then((data) => {
+          if (data.eligible === false || data.office?.stripeOnrampEnabled === false) return
+          if (expressDepositsStatusIsReady(data)) setExpressReady(true)
+        })
+        .catch(() => undefined)
+    }, []),
+  )
 
   const accountReady = hasAccountData
 
@@ -699,12 +742,21 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                   expressReady={expressReady}
                   onExpressPress={(kind) => {
                     haptics.medium()
+                    const peeked = peekExpressOnrampStatus()
+                    if (peeked?.publishableKey) {
+                      void loadMobileExpressOnramp(peeked.publishableKey, peeked.cryptoCustomerId).catch(
+                        () => undefined,
+                      )
+                    }
                     if (!expressReady) {
-                      const pk = peekExpressOnrampStatus()?.publishableKey
-                      if (pk) void loadMobileExpressOnramp(pk).catch(() => undefined)
                       navigation.navigate('ExpressDepositsSetup' as never)
                       return
                     }
+                    void fetchExpressDepositQuote({
+                      usdCredit: EXPRESS_DEPOSITS_MIN_USD_CREDIT,
+                      method: kind,
+                    }).catch(() => undefined)
+                    void fetchExpressOnrampStatus(false).catch(() => undefined)
                     navigation.navigate('ExpressDepositAmount' as never, { method: kind } as never)
                   }}
                 />

@@ -2,11 +2,13 @@ import { NextResponse } from "next/server"
 import {
   EXPRESS_DEPOSITS_COPY,
   expressDepositsHighestVerifiedTier,
+  expressDepositsKycReady,
   expressDepositsLimits,
   expressDepositsNextStep,
   expressDepositsPersistStatus,
   expressDepositsSourceCurrency,
   normalizeExpressDepositsCustomer,
+  parseExpressSavedPaymentMethods,
   resolveCashPayInMethods,
   usPayInAllowsExpress,
   type ExpressDepositsCustomerSnapshot,
@@ -69,12 +71,18 @@ export async function GET(request: Request) {
     }
   }
 
-  const nextStep = expressDepositsNextStep({
+  const storedReady = payer.stripe_express_deposits_status === "ready"
+  if (storedReady && !walletRegistered && (!retrievedOk || expressDepositsKycReady(customer))) {
+    walletRegistered = true
+  }
+
+  const liveNextStep = expressDepositsNextStep({
     cryptoCustomerId: payer.stripe_crypto_customer_id,
     customer,
     payerCountry,
     walletRegistered,
   })
+  const nextStep = !retrievedOk && storedReady ? "ready" : liveNextStep
   const ready = nextStep === "ready"
   const kycTier = expressDepositsHighestVerifiedTier(customer)
   if (retrievedOk) {
@@ -118,6 +126,7 @@ export async function GET(request: Request) {
     status: expressDepositsPersistStatus(nextStep),
     kycTier,
     paymentTokenId: payer.stripe_express_payment_token_id ?? null,
+    paymentMethods: parseExpressSavedPaymentMethods(payer.stripe_express_payment_methods),
     ready,
     walletRegistered,
     prefill: kycPrefillFromPayer(payer),

@@ -2,17 +2,25 @@
 
 export const EXPRESS_DEPOSITS_COPY = {
   title: "Express deposits",
-  description: "Add money from a card, Apple Pay, Google Pay, or an ACH Direct.",
+  description: "Card, Apple Pay, Google Pay, and ACH Direct.",
   setupCta: "Set up",
   continueCta: "Continue",
   verifyCta: "Verify identity",
   openingCta: "Opening...",
   readyBadge: "Ready",
+  readyTitle: "You're set up",
+  readyBody: "You can add money with Card, Apple Pay, Google Pay, and ACH Direct.",
+  addMoneyCta: "Add money",
+  changePaymentCta: "Change",
   payCta: "Pay",
   cardTitle: "Card",
   applePayTitle: "Apple Pay",
   googlePayTitle: "Google Pay",
   achTitle: "ACH Direct",
+  cardHint: "Deposit USD from a debit or credit card",
+  applePayHint: "Deposit USD with Apple Pay",
+  googlePayHint: "Deposit USD with Google Pay",
+  achHint: "Deposit USD from your US bank",
   setupRequiredHint: "Set up Express deposits to use this method.",
   geoUnavailable: "Express deposits is not available in your region.",
   ownerOnly: "Only the account owner can set up Express deposits.",
@@ -130,7 +138,10 @@ export function buildExpressKycSubmitInfo(input: {
     }
   }
   if (input.eu) {
-    payload.nationalities = form.nationalities.split(/[\s,]+/).filter(Boolean)
+    payload.nationalities = String(form.nationalities || "")
+      .split(/[\s,]+/)
+      .filter(Boolean)
+      .map((code) => code.toUpperCase())
     payload.birth_city = form.birth_city
     payload.birth_country = form.birth_country
   }
@@ -187,6 +198,27 @@ export function expressDepositMethodTitle(
   if (kind === "express_google_pay") return EXPRESS_DEPOSITS_COPY.googlePayTitle
   if (kind === "express_ach") return EXPRESS_DEPOSITS_COPY.achTitle
   return EXPRESS_DEPOSITS_COPY.cardTitle
+}
+
+export function expressDepositMethodSubtitle(
+  kind: "express_card" | "express_apple_pay" | "express_google_pay" | "express_ach",
+  opts?: { ready?: boolean | null },
+): string {
+  if (opts?.ready === false) return EXPRESS_DEPOSITS_COPY.setupRequiredHint
+  if (kind === "express_apple_pay") return EXPRESS_DEPOSITS_COPY.applePayHint
+  if (kind === "express_google_pay") return EXPRESS_DEPOSITS_COPY.googlePayHint
+  if (kind === "express_ach") return EXPRESS_DEPOSITS_COPY.achHint
+  return EXPRESS_DEPOSITS_COPY.cardHint
+}
+
+/** Verification hub CTA. Verified matches Global banking: badge only, no button. */
+export function expressDepositsVerificationCta(
+  status?: string | null,
+): (typeof EXPRESS_DEPOSITS_COPY)["setupCta"] | (typeof EXPRESS_DEPOSITS_COPY)["continueCta"] | null {
+  const s = String(status || "").toLowerCase()
+  if (s === "approved" || s === "ready" || s === "verified") return null
+  if (s === "in_progress" || s === "in_review") return EXPRESS_DEPOSITS_COPY.continueCta
+  return EXPRESS_DEPOSITS_COPY.setupCta
 }
 
 /** Link registerLinkUser wants E.164, e.g. +12025551234. */

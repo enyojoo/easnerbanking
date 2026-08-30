@@ -48,6 +48,8 @@ export type ScreenRouteName =
   | 'ReceiveLocalRail'
   | 'ReceiveLocalAmount'
   | 'ExpressDepositAmount'
+  | 'ExpressDepositPaymentSetup'
+  | 'ExpressDepositReview'
   | 'ExpressDepositsSetup'
   | 'ReceiveLocalMomoSetup'
   | 'ReceiveLocalReview'
@@ -112,6 +114,8 @@ export const SCREEN_TRANSITION_MAP: Record<ScreenRouteName, ScreenTransitionEntr
   ReceiveLocalRail: { intent: 'flowHub', hubGroup: 'receiveLocalHub' },
   ReceiveLocalAmount: { intent: 'flowStep' },
   ExpressDepositAmount: { intent: 'flowStep' },
+  ExpressDepositPaymentSetup: { intent: 'flowStep' },
+  ExpressDepositReview: { intent: 'flowStep', flowStepTerminal: true },
   ExpressDepositsSetup: { intent: 'flowStep' },
   ReceiveLocalMomoSetup: { intent: 'flowStep' },
   ReceiveLocalReview: { intent: 'flowStep', flowStepTerminal: true },

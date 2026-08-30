@@ -14,6 +14,8 @@ import ReceiveStablecoinDetailsScreenNative from '../screens/receive/ReceiveStab
 import ReceiveLocalRailScreenNative from '../screens/receive/ReceiveLocalRailScreen'
 import ReceiveLocalAmountScreenNative from '../screens/receive/ReceiveLocalAmountScreen'
 import ExpressDepositAmountScreenNative from '../screens/receive/ExpressDepositAmountScreen'
+import ExpressDepositPaymentSetupScreenNative from '../screens/receive/ExpressDepositPaymentSetupScreen'
+import ExpressDepositReviewScreenNative from '../screens/receive/ExpressDepositReviewScreen'
 import ExpressDepositsSetupScreenNative from '../screens/verification/ExpressDepositsSetupScreen'
 import ReceiveLocalReviewScreenNative from '../screens/receive/ReceiveLocalReviewScreen'
 import ReceiveLocalMomoSetupScreenNative from '../screens/receive/ReceiveLocalMomoSetupScreen'
@@ -76,6 +78,14 @@ export const ReceiveLocalAmountScreen = createWebLazyScreen(
 export const ExpressDepositAmountScreen = createWebLazyScreen(
   () => import('../screens/receive/ExpressDepositAmountScreen'),
   ExpressDepositAmountScreenNative,
+)
+export const ExpressDepositPaymentSetupScreen = createWebLazyScreen(
+  () => import('../screens/receive/ExpressDepositPaymentSetupScreen'),
+  ExpressDepositPaymentSetupScreenNative,
+)
+export const ExpressDepositReviewScreen = createWebLazyScreen(
+  () => import('../screens/receive/ExpressDepositReviewScreen'),
+  ExpressDepositReviewScreenNative,
 )
 export const ExpressDepositsSetupScreen = createWebLazyScreen(
   () => import('../screens/verification/ExpressDepositsSetupScreen'),

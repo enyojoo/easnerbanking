@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server"
-import { expressDepositsSourceCurrency, validateExpressDepositsAmount } from "@easner/shared"
+import {
+  expressDepositsSourceCurrency,
+  parseExpressDepositsAmountEntryMode,
+  validateExpressDepositsAmount,
+} from "@easner/shared"
 import { StripeOnrampApiError } from "@/lib/stripe/onramp-client"
 import { resolveExpressDepositsContext } from "@/lib/stripe/onramp-context"
 import { getTurnkeyDepositAddressesForBusiness, getTurnkeyDepositAddressesForContext } from "@/lib/wallet/turnkey-deposit-addresses"
@@ -19,12 +23,19 @@ export async function POST(request: Request) {
   const resolved = await resolveExpressDepositsContext(request)
   if ("error" in resolved) return resolved.error
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
-  const destinationAmount = String(body.destinationAmount ?? body.usdCredit ?? "").trim()
   const paymentMethod = String(body.paymentMethod ?? "card").trim()
   const sourceCurrency = expressDepositsSourceCurrency(resolved.ctx.payerCountry) ?? "usd"
-  const usdCredit = Number(destinationAmount || 0)
-  if (!(usdCredit > 0)) {
-    return NextResponse.json({ error: "Enter a valid amount", code: "invalid_amount" }, { status: 400 })
+  const amountEntryMode = parseExpressDepositsAmountEntryMode(String(body.amountEntryMode ?? ""))
+  const usdCredit = Number(body.destinationAmount ?? body.usdCredit ?? 0)
+  const youPay = Number(body.youPay ?? body.sourceAmount ?? 0)
+  const beforeQuote = validateExpressDepositsAmount({
+    usdCredit,
+    youPay,
+    sourceCurrency,
+    amountEntryMode,
+  })
+  if (!beforeQuote.ok) {
+    return NextResponse.json({ error: beforeQuote.message, code: beforeQuote.code }, { status: 400 })
   }
 
   try {
@@ -40,6 +51,8 @@ export async function POST(request: Request) {
     const quoted = await quoteExpressDepositsPricing({
       admin: resolved.ctx.admin,
       usdCredit,
+      youPay,
+      amountEntryMode,
       sourceCurrency,
       paymentMethod,
       walletAddress: wallet,
@@ -52,12 +65,16 @@ export async function POST(request: Request) {
     }
 
     const afterQuote = validateExpressDepositsAmount({
-      usdCredit,
+      usdCredit: quoted.pricing.usdCredit,
       youPay: quoted.pricing.totalToPay,
       sourceCurrency,
+      amountEntryMode,
     })
     if (!afterQuote.ok) {
-      return NextResponse.json({ error: afterQuote.message, code: afterQuote.code }, { status: 400 })
+      return NextResponse.json(
+        { error: afterQuote.message, code: afterQuote.code, pricing: quoted.pricing },
+        { status: 400 },
+      )
     }
 
     return NextResponse.json({

@@ -101,6 +101,21 @@ export function mergeExpressForm(
   return next
 }
 
+/** Draft values win so a returning user sees what they already typed. */
+export function applyExpressFormDraft(
+  base: Record<string, string>,
+  draft?: Record<string, string> | null,
+): Record<string, string> {
+  if (!draft) return base
+  const next = { ...base }
+  for (const [key, value] of Object.entries(draft)) {
+    if (key === 'ssn') continue
+    const trimmed = String(value || '').trim()
+    if (trimmed) next[key] = trimmed
+  }
+  return next
+}
+
 export function expressLockedCountry(
   form: Record<string, string>,
   payerCountry?: string | null,
