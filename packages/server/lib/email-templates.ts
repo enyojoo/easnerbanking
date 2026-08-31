@@ -18,6 +18,7 @@ import type {
   EmailTemplate,
   SecurityAlertEmailData,
   TeamInviteEmailData,
+  TeamMemberJoinedEmailData,
   PayrollEasetagInviteEmailData,
   PayrollPaidEmailData,
   PayrollFundingNeededEmailData,
@@ -435,6 +436,32 @@ ${data.dashboardUrl || profile.dashboardUrl}${profile.signatureText ?? ""}`
     },
     text: (data: TeamInviteEmailData) =>
       `${formatEasnerUserGreetingPlain(undefined)}\n\n${data.inviterName} invited you to ${data.businessName} as ${data.role}.\n\nUse ${data.inviteeEmail} when you create an account or sign in.\n\nAccept: ${data.acceptUrl}`,
+  },
+
+  teamMemberJoined: {
+    subject: (data: TeamMemberJoinedEmailData) =>
+      `${data.memberName} joined ${data.businessName} on Easner Business`,
+    html: (data: TeamMemberJoinedEmailData) => {
+      const greetingName = data.recipientFirstName?.trim() || undefined
+      const content = `
+        ${easnerUserGreetingParagraphHtml(greetingName)}
+        <p class="confirmation-text">
+          <strong>${data.memberName}</strong> (${data.memberEmail}) joined <strong>${data.businessName}</strong> as <strong>${data.role}</strong>.
+        </p>
+        <p class="confirmation-text">
+          You can review team members and roles in Settings.
+        </p>
+      `
+      return generateBaseEmailTemplate(
+        "Team member joined",
+        "",
+        content,
+        { text: "View team", url: data.settingsTeamUrl },
+        { audience: "business", showPreferencesLink: false },
+      )
+    },
+    text: (data: TeamMemberJoinedEmailData) =>
+      `${formatEasnerUserGreetingPlain(data.recipientFirstName)}\n\n${data.memberName} (${data.memberEmail}) joined ${data.businessName} as ${data.role}.\n\nView team: ${data.settingsTeamUrl}`,
   },
 
   payrollEasetagInvite: {

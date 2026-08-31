@@ -12,6 +12,7 @@ import { useCachedData } from "@/lib/use-cached-data"
 import { normalizeBusinessLogoUrl } from "@/lib/image-cache"
 import type { InvoiceReplyEmailSource } from "@/lib/invoices/invoice-reply-email"
 import type { InvoicePaymentDefaults } from "@/lib/b2b/types"
+import type { BusinessRole } from "@/lib/b2b/require-role"
 import { isChannelHealthy, pollingIntervalFor } from "@easner/shared"
 import { useDocumentVisibility } from "@/lib/query/use-document-visibility"
 import { useRealtimeHealth } from "@/lib/query/realtime-health-context"
@@ -61,6 +62,8 @@ export type BusinessProfile = {
   noahKybCustomerId: string | null
   /** Whether the signed-in user may start or refresh hosted business verification. */
   canManageBusinessVerification: boolean
+  /** Team role within the organization (Owner, Admin, Member, Viewer). */
+  businessRole: BusinessRole
   /** Resolved Reply-To for invoice emails (support → owner → sender). */
   invoiceReplyEmail: string | null
   invoiceReplyEmailSource: InvoiceReplyEmailSource | null
@@ -107,6 +110,7 @@ const DEFAULT_PROFILE: BusinessProfile = {
   tier1RetryGuidance: [],
   noahKybCustomerId: null,
   canManageBusinessVerification: true,
+  businessRole: "Owner",
   invoiceReplyEmail: null,
   invoiceReplyEmailSource: null,
   invoiceSettings: undefined,

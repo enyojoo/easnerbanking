@@ -27,7 +27,7 @@ export async function POST(request: Request) {
 
   const [noahCtxResult, acc] = await Promise.all([
     resolveNoahContextAsync(user.id, request),
-    resolveNoahAccountContext(request, user.id),
+    resolveNoahAccountContext(request, user.id, undefined, "write"),
   ])
   if (!noahCtxResult.ok) return noahCtxResult.response
   if (!acc.ok) return acc.response

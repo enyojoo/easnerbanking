@@ -120,6 +120,15 @@ export interface TeamInviteEmailData {
   recipientHasEasnerAccount?: boolean
 }
 
+export interface TeamMemberJoinedEmailData {
+  recipientFirstName?: string
+  businessName: string
+  memberName: string
+  memberEmail: string
+  role: string
+  settingsTeamUrl: string
+}
+
 export interface PayrollEasetagInviteEmailData {
   recipientName: string
   businessName: string

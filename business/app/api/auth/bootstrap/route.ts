@@ -15,6 +15,7 @@ import { getEmailAudienceProfile } from "@easner/server"
 import { claimTeamInvite } from "@/lib/business/claim-team-invite"
 import { ensureBusinessOrganizationId, firstNameFromFullName } from "@/lib/business/ensure-business-organization"
 import { ensureDefaultCommunicationPreferences } from "@/lib/notifications/ensure-communication-preferences"
+import { notifyTeamMemberJoined } from "@/lib/notifications/team-join-notify"
 import { cancelAccountDeletion } from "@/lib/settings/account-deletion"
 import { isGridConfigured } from "@/lib/grid/config"
 import {
@@ -299,6 +300,15 @@ export async function POST(request: Request) {
       }
 
       await ensureDefaultCommunicationPreferences(admin, user.id)
+
+      await notifyTeamMemberJoined({
+        admin,
+        businessId: claim.businessId,
+        joinerUserId: user.id,
+        joinerEmail: user.email ?? "",
+        joinerName: resolvedBootstrapFullName ?? "Team Member",
+        role: claim.role,
+      }).catch((e) => console.warn("[bootstrap] team join notify (non-fatal):", e))
 
       return NextResponse.json({
         ok: true,

@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "USD and EUR are default accounts – use accounts page directly." }, { status: 400 })
   }
 
-  const acc = await resolveNoahAccountContext(request, user.id)
+  const acc = await resolveNoahAccountContext(request, user.id, undefined, "write")
   if (!acc.ok) return acc.response
 
   const guard = await requireNoahVerificationApproved(

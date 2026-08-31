@@ -31,6 +31,7 @@ const TEMPLATE_PREFERENCE: Record<string, EmailPreferenceCategory> = {
   onlinePaymentsActionRequired: "transactional",
   onlinePaymentsReady: "transactional",
   teamInvitation: "transactional",
+  teamMemberJoined: "transactional",
   payrollEasetagInvite: "transactional",
   payrollPaid: "transactional",
   payrollConnectionApproved: "transactional",

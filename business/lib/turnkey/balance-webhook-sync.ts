@@ -3,7 +3,10 @@ import { applyTurnkeyInboundLedgerEvent } from "@/lib/turnkey/apply-turnkey-inbo
 import { isTurnkeyBalanceWebhooksIngestEnabled } from "@/lib/turnkey/config"
 import { inboundHashHasVisibleLedgerCredit } from "@/lib/turnkey/inbound-hash-visible-ledger"
 import { easetagP2pCreditVisibleForTransferGroup } from "@/lib/ledger/easetag-settlement"
-import { turnkeyInboundLedgerRowExists } from "@/lib/turnkey/ledger-inbound-exists"
+import {
+  turnkeyInboundLedgerRowExists,
+  turnkeyVisibleInboundLedgerRowExists,
+} from "@/lib/turnkey/ledger-inbound-exists"
 import type { NormalizedTurnkeyBalanceDeposit } from "@/lib/turnkey/turnkey-balance-webhook-payload"
 import { turnkeyBalanceDepositProviderTransactionId } from "@/lib/turnkey/turnkey-balance-webhook-payload"
 import { resolveTurnkeyWalletScopeFromEvent } from "@/lib/turnkey/resolve-turnkey-wallet-scope"
@@ -14,6 +17,7 @@ import { mintForStablecoinAsset } from "@/lib/solana/spl-mints"
 import { resolveSolanaInboundSenderFromTxHash } from "@/lib/turnkey/solana-inbound-sender"
 import { resolveWalletSendFeeSolanaAddress } from "@/lib/wallet-send/fee-address"
 import { findYcCrossBorderFeeWalletRefundSuppression } from "@/lib/yellowcard/yc-ledger"
+import { withOrganicStablecoinDepositMetadata } from "@/lib/turnkey/organic-stablecoin-deposit-metadata"
 
 function mapAssetToCurrency(asset: string): string {
   const a = asset.trim().toUpperCase()
@@ -24,8 +28,106 @@ function mapAssetToCurrency(asset: string): string {
 /**
  * Ingest Turnkey balance deposit webhooks (`balances:confirmed` / `balances:finalized`)
  * as organic Stablecoin Deposit rows. Confirmed and finalized for the same tx dedupe
- * via tx-hash `provider_transaction_id` and `turnkeyInboundLedgerRowExists`.
+ * via tx-hash dedupe and a final visible-ledger guarantee.
  */
+async function ensureVisibleStablecoinDepositForBalanceWebhook(
+  admin: SupabaseClient,
+  input: {
+    deposit: NormalizedTurnkeyBalanceDeposit
+    scope: NonNullable<Awaited<ReturnType<typeof resolveTurnkeyWalletScopeFromEvent>>>
+    eventId: string
+    providerTransactionId: string
+    asset: string
+    chain: string
+    currency: string
+    counterpartyAddress: string | null
+  },
+): Promise<void> {
+  const { deposit, scope, eventId, providerTransactionId, asset, chain, currency, counterpartyAddress } =
+    input
+  const txHash = String(deposit.txHash || "").trim()
+  if (!txHash) return
+
+  const visible = await inboundHashHasVisibleLedgerCredit(admin, {
+    txHash,
+    userId: scope.userId,
+    businessId: scope.businessId,
+  })
+  if (visible) return
+
+  const hiddenOnly =
+    (await turnkeyInboundLedgerRowExists(admin, {
+      signature: txHash,
+      userId: scope.userId,
+      businessId: scope.businessId,
+    })) &&
+    !(await turnkeyVisibleInboundLedgerRowExists(admin, {
+      signature: txHash,
+      userId: scope.userId,
+      businessId: scope.businessId,
+    }))
+
+  console.warn("turnkey_balance_webhook_ensure_visible_deposit", {
+    txHash,
+    amount: deposit.amount,
+    address: deposit.address,
+    hiddenOnly,
+  })
+
+  const result = await applyTurnkeyInboundLedgerEvent(
+    admin,
+    {
+      userId: scope.userId,
+      businessId: scope.businessId,
+      walletAccount: {
+        id: String(scope.walletAccount.id),
+        address: scope.walletAddress,
+        asset,
+        chain,
+        associated_token_account_address: scope.tokenAccountAddress || null,
+      },
+      providerTransactionId,
+      providerEventId: eventId,
+      status: "settled",
+      amount: deposit.amount,
+      currency,
+      direction: "in",
+      payload: deposit.raw,
+      metadata: withOrganicStablecoinDepositMetadata({
+        source: "turnkey_balance_webhook",
+        operation: "deposit",
+        source_payment_rail: chain,
+        source_currency: asset,
+        organic_deposit_fallback: true,
+        ensure_visible_deposit: true,
+        ...(counterpartyAddress ? { from_address: counterpartyAddress } : {}),
+      }),
+      txHash: deposit.txHash,
+      walletAddress: scope.walletAddress,
+      counterpartyAddress,
+      occurredAt: deposit.occurredAt,
+      settledAt: deposit.settledAt,
+      asset,
+      chain,
+      amountMinor: deposit.amountMinor,
+    },
+    { forceOrganicStablecoinDeposit: true, skipBalanceDelta: hiddenOnly },
+  )
+
+  if (result.kind !== "applied" && result.kind !== "skipped") {
+    throw new Error(`turnkey_balance_webhook_ensure_no_ledger:${result.kind}:${txHash}`)
+  }
+
+  const visibleAfter = await inboundHashHasVisibleLedgerCredit(admin, {
+    txHash,
+    userId: scope.userId,
+    businessId: scope.businessId,
+  })
+  if (!visibleAfter) {
+    throw new Error(`turnkey_balance_webhook_no_visible_deposit:${txHash}`)
+  }
+}
+
 export async function applyTurnkeyBalanceWebhookSideEffects(
   admin: SupabaseClient,
   deposit: NormalizedTurnkeyBalanceDeposit,
@@ -98,8 +200,8 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
   const addressForId = scope.tokenAccountAddress || scope.walletAddress
   if (
     deposit.txHash &&
-    (await turnkeyInboundLedgerRowExists(admin, {
-      signature: deposit.txHash,
+    (await inboundHashHasVisibleLedgerCredit(admin, {
+      txHash: deposit.txHash,
       userId: scope.userId,
       businessId: scope.businessId,
     }))
@@ -199,14 +301,14 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
             currency,
             direction: "in",
             payload: deposit.raw,
-            metadata: {
+            metadata: withOrganicStablecoinDepositMetadata({
               source: "turnkey_balance_webhook",
               operation: "deposit",
               source_payment_rail: chain,
               source_currency: asset,
               organic_deposit_fallback: true,
               ...(counterpartyAddress ? { from_address: counterpartyAddress } : {}),
-            },
+            }),
             txHash: deposit.txHash,
             walletAddress: scope.walletAddress,
             counterpartyAddress,
@@ -238,5 +340,16 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
     throw new Error(`turnkey_balance_webhook_no_ledger:${result.kind}:${deposit.txHash}`)
   }
 
-  return result.kind === "applied" || result.kind === "skipped"
+  await ensureVisibleStablecoinDepositForBalanceWebhook(admin, {
+    deposit,
+    scope,
+    eventId,
+    providerTransactionId,
+    asset,
+    chain,
+    currency,
+    counterpartyAddress: counterpartyAddress ?? null,
+  })
+
+  return true
 }

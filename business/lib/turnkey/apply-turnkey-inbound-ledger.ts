@@ -28,7 +28,8 @@ import {
 import { tryCompleteDepositSplitFromUserVaultInbound } from "@/lib/deposit-omnibus/execute-deposit-split"
 import { tryCompleteYcFundBalanceFromUserVaultInbound } from "@/lib/yellowcard/execute-yc-fund-balance-split"
 import { isDepositSplitEnabled } from "@/lib/deposit-omnibus/config"
-import { turnkeyInboundLedgerRowExists } from "@/lib/turnkey/ledger-inbound-exists"
+import { withOrganicStablecoinDepositMetadata } from "@/lib/turnkey/organic-stablecoin-deposit-metadata"
+import { turnkeyVisibleInboundLedgerRowExists } from "@/lib/turnkey/ledger-inbound-exists"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { enqueueLiquiditySweepJob } from "@/lib/liquidity/sweep-jobs"
 import { resolvePooledSolanaSourceAddress, ledgerCurrencyForStablecoinAsset } from "@/lib/liquidity/platform-pool"
@@ -226,14 +227,14 @@ export async function applyTurnkeyInboundLedgerEvent(
         return suppressedNoah(false)
       }
 
-      const stripeOnrampSuppressed = await findStripeOnrampChainSettlementForSuppression(admin, {
+      const stripeOnrampMatch = await findStripeOnrampChainSettlementForSuppression(admin, {
         txHash,
         userId,
         businessId,
         walletAddress: input.walletAddress,
         amount: input.amount,
       })
-      if (stripeOnrampSuppressed) {
+      if (stripeOnrampMatch) {
         if (txHash) {
           const pending = await findPendingStripeOnrampSessionForInbound(admin, {
             userId,
@@ -255,7 +256,7 @@ export async function applyTurnkeyInboundLedgerEvent(
             stripeSessionId: pending?.stripeSessionId ?? null,
           }).catch(() => {})
         }
-        return suppressedNoah(false)
+        return suppressedNoah(stripeOnrampMatch.kind === "amount")
       }
     }
 
@@ -339,13 +340,13 @@ export async function applyTurnkeyInboundLedgerEvent(
     }
   }
 
-  if (direction === "in" && status === "settled" && txHash) {
-    const alreadyInLedger = await turnkeyInboundLedgerRowExists(admin, {
+  if (direction === "in" && status === "settled" && txHash && !skipProductSuppressors) {
+    const visibleInLedger = await turnkeyVisibleInboundLedgerRowExists(admin, {
       signature: txHash,
       userId,
       businessId,
     })
-    if (alreadyInLedger) {
+    if (visibleInLedger) {
       return { kind: "skipped" }
     }
   }
@@ -361,7 +362,9 @@ export async function applyTurnkeyInboundLedgerEvent(
     currency: input.currency,
     direction,
     payload: input.payload,
-    metadata: input.metadata,
+    metadata: skipProductSuppressors
+      ? withOrganicStablecoinDepositMetadata(input.metadata)
+      : input.metadata,
     txHash,
     walletAddress: input.walletAddress,
     counterpartyAddress: input.counterpartyAddress,

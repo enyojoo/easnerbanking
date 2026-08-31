@@ -39,7 +39,7 @@ export async function createAutopayoutConfig(
   const mis = requireNoahEnv()
   if (mis) return { ok: false, response: mis }
 
-  const acc = await resolveNoahAccountContext(request, user.id)
+  const acc = await resolveNoahAccountContext(request, user.id, undefined, "write")
   if (!acc.ok) return { ok: false, response: acc.response }
   const guard = await requireNoahVerificationApproved(
     acc.ctx.subjectUserId,

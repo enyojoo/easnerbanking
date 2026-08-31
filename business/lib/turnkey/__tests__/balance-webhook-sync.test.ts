@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   handleOmnibus: vi.fn(),
   feeRefund: vi.fn(),
   ledgerExists: vi.fn(),
+  visibleLedgerExists: vi.fn(),
 }))
 
 vi.mock("@/lib/turnkey/config", () => ({
@@ -32,6 +33,7 @@ vi.mock("@/lib/turnkey/resolve-turnkey-wallet-scope", () => ({
 }))
 vi.mock("@/lib/turnkey/ledger-inbound-exists", () => ({
   turnkeyInboundLedgerRowExists: mocks.ledgerExists,
+  turnkeyVisibleInboundLedgerRowExists: mocks.visibleLedgerExists,
 }))
 vi.mock("@/lib/turnkey/inbound-hash-visible-ledger", () => ({
   inboundHashHasVisibleLedgerCredit: mocks.inboundVisible,
@@ -72,6 +74,7 @@ describe("applyTurnkeyBalanceWebhookSideEffects", () => {
     mocks.isOmnibus.mockReturnValue(false)
     mocks.feeRefund.mockResolvedValue(null)
     mocks.ledgerExists.mockResolvedValue(false)
+    mocks.visibleLedgerExists.mockResolvedValue(false)
     mocks.inboundVisible.mockResolvedValue(false)
     mocks.easetagCreditVisible.mockResolvedValue(false)
     mocks.resolveScope.mockResolvedValue({
@@ -87,6 +90,10 @@ describe("applyTurnkeyBalanceWebhookSideEffects", () => {
     mocks.applyInbound
       .mockResolvedValueOnce({ kind: "suppressed_noah", allowOrganicFallback: true })
       .mockResolvedValueOnce({ kind: "applied", transactionId: "tx-organic" })
+    mocks.inboundVisible
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true)
 
     const ok = await applyTurnkeyBalanceWebhookSideEffects({ from: vi.fn() } as never, deposit, "ev-1")
     expect(ok).toBe(true)
@@ -94,8 +101,27 @@ describe("applyTurnkeyBalanceWebhookSideEffects", () => {
     expect(mocks.applyInbound.mock.calls[1]?.[2]).toEqual({ forceOrganicStablecoinDeposit: true })
   })
 
+  it("forces visible stablecoin deposit when apply returns skipped without feed credit", async () => {
+    mocks.applyInbound
+      .mockResolvedValueOnce({ kind: "skipped" })
+      .mockResolvedValueOnce({ kind: "applied", transactionId: "tx-ensure" })
+    mocks.inboundVisible
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true)
+
+    const ok = await applyTurnkeyBalanceWebhookSideEffects({ from: vi.fn() } as never, deposit, "ev-1b")
+    expect(ok).toBe(true)
+    expect(mocks.applyInbound).toHaveBeenCalledTimes(2)
+    expect(mocks.applyInbound.mock.calls[1]?.[2]).toEqual({
+      forceOrganicStablecoinDeposit: true,
+      skipBalanceDelta: false,
+    })
+  })
+
   it("throws when hash-proven suppressors leave no visible ledger row", async () => {
     mocks.applyInbound.mockResolvedValueOnce({ kind: "suppressed_noah", allowOrganicFallback: false })
+    mocks.inboundVisible.mockResolvedValue(false)
 
     await expect(
       applyTurnkeyBalanceWebhookSideEffects({ from: vi.fn() } as never, deposit, "ev-2"),
@@ -105,8 +131,10 @@ describe("applyTurnkeyBalanceWebhookSideEffects", () => {
 
   it("throws when weak suppressors leave no visible ledger and organic retry still fails", async () => {
     mocks.applyInbound
-      .mockResolvedValueOnce({ kind: "suppressed_easetag", allowOrganicFallback: true })
-      .mockResolvedValueOnce({ kind: "suppressed_easetag", allowOrganicFallback: true })
+      .mockResolvedValueOnce({ kind: "suppressed_easetag", allowOrganicFallback: true, easetagTransferGroupId: "tg-x" })
+      .mockResolvedValueOnce({ kind: "suppressed_easetag", allowOrganicFallback: true, easetagTransferGroupId: "tg-x" })
+    mocks.inboundVisible.mockResolvedValue(false)
+    mocks.easetagCreditVisible.mockResolvedValue(false)
 
     await expect(
       applyTurnkeyBalanceWebhookSideEffects({ from: vi.fn() } as never, deposit, "ev-2b"),
@@ -119,7 +147,7 @@ describe("applyTurnkeyBalanceWebhookSideEffects", () => {
       allowOrganicFallback: false,
       easetagTransferGroupId: "tg-easetag",
     })
-    mocks.inboundVisible.mockResolvedValueOnce(false)
+    mocks.inboundVisible.mockResolvedValue(false)
     mocks.easetagCreditVisible.mockResolvedValueOnce(true)
 
     const ok = await applyTurnkeyBalanceWebhookSideEffects({ from: vi.fn() } as never, deposit, "ev-4")
@@ -129,11 +157,10 @@ describe("applyTurnkeyBalanceWebhookSideEffects", () => {
   })
 
   it("accepts suppression when another visible ledger credit exists for the hash", async () => {
-    mocks.applyInbound.mockResolvedValueOnce({ kind: "suppressed_noah" })
     mocks.inboundVisible.mockResolvedValueOnce(true)
 
     const ok = await applyTurnkeyBalanceWebhookSideEffects({ from: vi.fn() } as never, deposit, "ev-3")
     expect(ok).toBe(true)
-    expect(mocks.applyInbound).toHaveBeenCalledTimes(1)
+    expect(mocks.applyInbound).not.toHaveBeenCalled()
   })
 })

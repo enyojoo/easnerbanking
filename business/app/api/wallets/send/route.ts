@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
 
-  const accountCtx = await resolveNoahAccountContext(request, auth.user.id)
+  const accountCtx = await resolveNoahAccountContext(request, auth.user.id, undefined, "write")
   if (!accountCtx.ok) return accountCtx.response
 
   const body = (await request.json().catch(() => null)) as Body | null

@@ -16,6 +16,7 @@ import { SettingsCardHeader } from "@/components/settings/settings-card-header"
 import { SETTINGS_CARD_COPY } from "@/lib/copy/business-ui-copy"
 import { SETTINGS_INPUT_CLASS, SETTINGS_SELECT_TRIGGER_BASE, SETTINGS_SELECT_TRIGGER_CLASS } from "@/lib/settings-control-surface"
 import { cn } from "@/lib/utils"
+import { useDocumentVisibility } from "@/lib/query/use-document-visibility"
 
 type TeamMember = {
   id: string
@@ -34,7 +35,8 @@ type InviteDraft = {
   role: "Admin" | "Member" | "Viewer"
 }
 
-const TEAM_MEMBERS_CACHE_TTL_MS = 60 * 60 * 1000
+const TEAM_MEMBERS_CACHE_TTL_MS = 15_000
+const TEAM_INVITE_POLL_MS = 15_000
 
 /** Membership row id for API calls; invited rows may omit `membershipId` in cached payloads but `id` is the row id when `user_id` is null. */
 function membershipIdForRow(member: TeamMember): string | undefined {
@@ -45,6 +47,7 @@ function membershipIdForRow(member: TeamMember): string | undefined {
 
 export function SettingsTeamTab() {
   const { isLoading, user } = useAuth()
+  const tabVisible = useDocumentVisibility()
   const supabase = useMemo(() => createSupabaseBrowser(), [])
   const [loadingMembers, setLoadingMembers] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
@@ -63,6 +66,14 @@ export function SettingsTeamTab() {
     persistKey: user?.id ? `settings_team_${user.id}` : undefined,
     initialData: { members: [], canManageMembers: false },
     ttlMs: TEAM_MEMBERS_CACHE_TTL_MS,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
+    refetchInterval: (query) => {
+      if (!tabVisible) return false
+      const rows = query.state.data?.members ?? []
+      if (rows.some((member) => member.status === "invited")) return TEAM_INVITE_POLL_MS
+      return false
+    },
     fetcher: async () => {
       const res = await fetchWithSession("/api/settings/team")
       if (!res.ok) {
@@ -124,7 +135,7 @@ export function SettingsTeamTab() {
       return
     }
     if (!canManageMembers) {
-      setInviteError("Only organization owner can invite members.")
+      setInviteError("Only organization owners and admins can invite members.")
       setSubmittingInvites(false)
       return
     }

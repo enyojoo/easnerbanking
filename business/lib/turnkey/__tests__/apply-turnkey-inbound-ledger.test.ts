@@ -101,10 +101,11 @@ vi.mock("@/lib/grid/payout-refund-sweep", () => ({
 }))
 vi.mock("@/lib/turnkey/ledger-inbound-exists", () => ({
   turnkeyInboundLedgerRowExists: vi.fn().mockResolvedValue(false),
+  turnkeyVisibleInboundLedgerRowExists: vi.fn().mockResolvedValue(false),
 }))
 
 import { applyTurnkeyInboundLedgerEvent } from "@/lib/turnkey/apply-turnkey-inbound-ledger"
-import { turnkeyInboundLedgerRowExists } from "@/lib/turnkey/ledger-inbound-exists"
+import { turnkeyVisibleInboundLedgerRowExists } from "@/lib/turnkey/ledger-inbound-exists"
 import { findGridVaTurnkeySweepForSolanaTx } from "@/lib/grid/va-turnkey-sweep"
 import { findYcFundBalanceChainSettlementForSuppression } from "@/lib/yellowcard/yc-ledger"
 import { tryCompleteYcFundBalanceFromUserVaultInbound } from "@/lib/yellowcard/execute-yc-fund-balance-split"
@@ -267,8 +268,8 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     expect(mocks.applyDelta).not.toHaveBeenCalled()
   })
 
-  it("skips duplicate settled inbound when tx_hash already in ledger", async () => {
-    vi.mocked(turnkeyInboundLedgerRowExists).mockResolvedValueOnce(true)
+  it("skips duplicate settled inbound when tx_hash already has a visible ledger row", async () => {
+    vi.mocked(turnkeyVisibleInboundLedgerRowExists).mockResolvedValueOnce(true)
     const admin = { from: vi.fn() }
 
     const result = await applyTurnkeyInboundLedgerEvent(admin as never, baseInput)

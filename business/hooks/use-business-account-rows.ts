@@ -51,7 +51,7 @@ export function useBusinessAccountRows() {
   const queryClient = useQueryClient()
   const { scope } = useScope()
   const isRestoring = useIsRestoring()
-  const { tier1Complete, isLoading: profileLoading, name, baseCurrency } = useBusinessProfile()
+  const { tier1Complete, isLoading: profileLoading, name, baseCurrency, businessRole } = useBusinessProfile()
   const { bankCorridors, data: sendDestinations } = useSendDestinations()
   const usPayInMode = resolveUsPayInModeFromCatalog(bankCorridors, sendDestinations != null)
   const walletQuery = useWalletBalances()
@@ -138,7 +138,8 @@ export function useBusinessAccountRows() {
   }, [hasProvisionedVirtualAccounts, hasStablecoinDeposits, isAuthoritativeBalanceRead])
 
   const canDisplayFinancialData = canDisplayProvisionedFinancialData(tier1Complete, hasAnyProvisionedData)
-  const canMoveMoney = canPerformNoahMoneyMovement(tier1Complete)
+  const canMoveMoney =
+    canPerformNoahMoneyMovement(tier1Complete) && businessRole !== "Viewer"
 
   // Balances always reflect wallet state (KYB only gates deposit rails, not amounts).
   const balances = useMemo(

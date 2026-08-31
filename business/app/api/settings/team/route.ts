@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { emailService } from "@easner/server"
 import { isEmailOwnerOfAnotherBusiness, normalizeInviteEmail, recipientHasEasnerAccount } from "@/lib/business/claim-team-invite"
+import { canManageTeamMembers } from "@/lib/b2b/require-role"
 import { buildTeamInvitePath } from "@/lib/team-invite-storage"
 
 type TeamMember = {
@@ -49,7 +50,7 @@ async function getMeAndOrg(admin: ReturnType<typeof createSupabaseAdmin>, userId
   return { me, meError }
 }
 
-async function requireOwner(admin: ReturnType<typeof createSupabaseAdmin>, userId: string) {
+async function requireTeamManager(admin: ReturnType<typeof createSupabaseAdmin>, userId: string) {
   const { me, meError } = await getMeAndOrg(admin, userId)
   if (meError) return { error: NextResponse.json({ error: meError.message }, { status: 500 }) }
   if (!me?.easner_business_id) return { error: NextResponse.json({ error: "Business not found for user" }, { status: 400 }) }
@@ -62,8 +63,11 @@ async function requireOwner(admin: ReturnType<typeof createSupabaseAdmin>, userI
     .maybeSingle()
 
   if (membershipError) return { error: NextResponse.json({ error: membershipError.message }, { status: 500 }) }
-  if (!myMembership || normalizeRole(myMembership.role) !== "Owner") {
-    return { error: NextResponse.json({ error: "Only business owners can manage team members" }, { status: 403 }) }
+  const myRole = normalizeRole(myMembership?.role)
+  if (!myMembership || (myRole !== "Owner" && myRole !== "Admin")) {
+    return {
+      error: NextResponse.json({ error: "Only business owners and admins can manage team members" }, { status: 403 }),
+    }
   }
 
   return { orgId: me.easner_business_id }
@@ -103,7 +107,7 @@ export async function GET(request: Request) {
 
   if (!membershipError && membershipRows) {
     const myMembership = membershipRows.find((row) => row.user_id === user.id)
-    const canManageMembers = normalizeRole(myMembership?.role) === "Owner"
+    const canManageMembers = canManageTeamMembers(normalizeRole(myMembership?.role))
     const members: TeamMember[] = membershipRows.map((row) => ({
       id: row.user_id ?? row.id,
       membershipId: row.id,
@@ -175,7 +179,7 @@ export async function POST(request: Request) {
   }
 
   const admin = createSupabaseAdmin()
-  const ownerCheck = await requireOwner(admin, user.id)
+  const ownerCheck = await requireTeamManager(admin, user.id)
   if ("error" in ownerCheck) return ownerCheck.error
 
   const ownerEmail = normalizeInviteEmail(user.email ?? "")
@@ -291,7 +295,7 @@ export async function PATCH(request: Request) {
   }
 
   const admin = createSupabaseAdmin()
-  const ownerCheck = await requireOwner(admin, user.id)
+  const ownerCheck = await requireTeamManager(admin, user.id)
   if ("error" in ownerCheck) return ownerCheck.error
 
   const { data: existing, error: existingError } = await admin
@@ -325,7 +329,7 @@ export async function DELETE(request: Request) {
   if (!membershipId) return NextResponse.json({ error: "membershipId is required" }, { status: 400 })
 
   const admin = createSupabaseAdmin()
-  const ownerCheck = await requireOwner(admin, user.id)
+  const ownerCheck = await requireTeamManager(admin, user.id)
   if ("error" in ownerCheck) return ownerCheck.error
 
   const { data: existing, error: existingError } = await admin

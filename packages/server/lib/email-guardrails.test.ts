@@ -29,7 +29,8 @@ function allRenderedCopy(templateKey: string): string {
   const audiences: EmailAudience[] =
     templateKey.startsWith("kyb") ||
     templateKey.startsWith("onlinePayments") ||
-    templateKey === "teamInvitation"
+    templateKey === "teamInvitation" ||
+    templateKey === "teamMemberJoined"
       ? ["business"]
       : templateKey.startsWith("kyc")
         ? ["personal"]

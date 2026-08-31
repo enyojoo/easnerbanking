@@ -401,5 +401,5 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
 }
 
 export async function resolveWalletSendAccountContext(request: Request, userId: string) {
-  return resolveNoahAccountContext(request, userId)
+  return resolveNoahAccountContext(request, userId, undefined, "write")
 }

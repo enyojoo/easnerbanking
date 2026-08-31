@@ -4,7 +4,7 @@ import { PublicKey } from "@solana/web3.js"
 import { deriveStablecoinAssociatedTokenAddress } from "@/lib/solana/ata"
 import { createSolanaRpcConnection, isSolanaRpcRateLimitedError } from "@/lib/solana/rpc-connection"
 import { collectNoahBankOnrampOnChainTxHashesForScope } from "@/lib/noah/noah-bank-onramp-chain-suppression"
-import { turnkeyInboundLedgerRowExists } from "@/lib/turnkey/ledger-inbound-exists"
+import { turnkeyVisibleInboundLedgerRowExists } from "@/lib/turnkey/ledger-inbound-exists"
 import { ingestTurnkeySolanaTxForOwnerVault } from "@/lib/turnkey/ingest-solana-ledger-tx"
 
 type LedgerScope = { userId: string; businessId: string | null }
@@ -137,7 +137,7 @@ export async function syncOrganicInboundDepositsForOwner(
     for (const sig of sigs) {
       if (rateLimited || ingested >= maxIngestPerRun || parsedThisAccount >= maxParsePerAccount) break
 
-      const exists = await turnkeyInboundLedgerRowExists(admin, {
+      const exists = await turnkeyVisibleInboundLedgerRowExists(admin, {
         signature: sig.signature,
         userId: ctx.userId,
         businessId: ctx.businessId,

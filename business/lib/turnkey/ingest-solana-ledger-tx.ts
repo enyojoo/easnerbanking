@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { Connection } from "@solana/web3.js"
 import { applyTurnkeyInboundLedgerEvent } from "@/lib/turnkey/apply-turnkey-inbound-ledger"
+import { withOrganicStablecoinDepositMetadata } from "@/lib/turnkey/organic-stablecoin-deposit-metadata"
 import {
   resolveSplTransferSenderForVaultInbound,
   tokenBalanceDeltaForVault,
@@ -157,47 +158,64 @@ export async function ingestTurnkeySolanaTxForOwnerVault(
   )
 
   try {
-    const result = await applyTurnkeyInboundLedgerEvent(
-      admin,
-      {
-        userId: params.ctx.userId,
-        businessId: params.ctx.businessId,
-        walletAccount: {
-          id: params.walletAccountId ?? "sync",
-          address: params.ownerAddress,
-          asset: params.asset,
-          chain: "solana",
-          associated_token_account_address: params.tokenAccountAddress ?? null,
-        },
-        providerTransactionId: `${params.signature}:${params.ownerAddress}:${params.asset}`,
-        providerEventId: params.signature,
-        status: "settled",
-        amount,
-        currency,
-        direction,
-        payload: {
-          signature: params.signature,
-          mint,
-          source: "solana_rpc_sync",
-          accountKeys: resolvedAccountKeys(tx).length,
-        },
-        metadata: {
-          source: "turnkey_chain_sync",
-          source_payment_rail: "solana",
-          source_currency: params.asset,
-          ...(counterpartyAddress ? { from_address: counterpartyAddress } : {}),
-        },
-        txHash: params.signature,
-        walletAddress: params.ownerAddress,
-        counterpartyAddress,
-        occurredAt,
-        settledAt: occurredAt,
+    const ledgerInput = {
+      userId: params.ctx.userId,
+      businessId: params.ctx.businessId,
+      walletAccount: {
+        id: params.walletAccountId ?? "sync",
+        address: params.ownerAddress,
         asset: params.asset,
         chain: "solana",
-        amountMinor: absAtomic.toString(),
+        associated_token_account_address: params.tokenAccountAddress ?? null,
       },
-      { skipBalanceDelta: params.skipBalanceDelta ?? true },
-    )
+      providerTransactionId: `${params.signature}:${params.ownerAddress}:${params.asset}`,
+      providerEventId: params.signature,
+      status: "settled" as const,
+      amount,
+      currency,
+      direction,
+      payload: {
+        signature: params.signature,
+        mint,
+        source: "solana_rpc_sync",
+        accountKeys: resolvedAccountKeys(tx).length,
+      },
+      metadata: {
+        source: "turnkey_chain_sync",
+        source_payment_rail: "solana",
+        source_currency: params.asset,
+        ...(counterpartyAddress ? { from_address: counterpartyAddress } : {}),
+      },
+      txHash: params.signature,
+      walletAddress: params.ownerAddress,
+      counterpartyAddress,
+      occurredAt,
+      settledAt: occurredAt,
+      asset: params.asset,
+      chain: "solana",
+      amountMinor: absAtomic.toString(),
+    }
+
+    let result = await applyTurnkeyInboundLedgerEvent(admin, ledgerInput, {
+      skipBalanceDelta: params.skipBalanceDelta ?? true,
+    })
+
+    if (result.kind === "skipped") {
+      result = await applyTurnkeyInboundLedgerEvent(
+        admin,
+        {
+          ...ledgerInput,
+          metadata: withOrganicStablecoinDepositMetadata({
+            ...ledgerInput.metadata,
+            organic_deposit_fallback: true,
+          }),
+        },
+        {
+          skipBalanceDelta: params.skipBalanceDelta ?? true,
+          forceOrganicStablecoinDeposit: true,
+        },
+      )
+    }
 
     if (result.kind === "suppressed_noah") {
       return { upserts: 0, kind: "noop", reason: "noah_bank_onramp" }

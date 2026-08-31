@@ -51,6 +51,10 @@ export function roleMeetsMinimum(role: BusinessRole, allowed: BusinessRole[]): b
   return allowed.includes(role)
 }
 
+export function canManageTeamMembers(role: BusinessRole): boolean {
+  return role === "Owner" || role === "Admin"
+}
+
 export async function requireBusinessRole(
   request: Request,
   allowed: BusinessRole[],

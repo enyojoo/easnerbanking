@@ -62,7 +62,7 @@ export async function POST(request: Request) {
 
   const noahContext = await resolveNoahContextAsync(user.id, request)
   if (!noahContext.ok) return noahContext.response
-  const account = await resolveNoahAccountContext(request, user.id)
+  const account = await resolveNoahAccountContext(request, user.id, undefined, "write")
   if (!account.ok) return account.response
 
   const guard = await requireNoahVerificationApproved(

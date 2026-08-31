@@ -3,6 +3,7 @@ import { removeAllOrganizationLogoObjects } from "@/lib/organization-logo-storag
 import { countries, displayCountryFromBusinessSetting } from "@/lib/countries"
 import { ensureBusinessOperationalAddressCountriesRegistered } from "@/lib/address/register-lib-address-countries"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
+import { getBusinessRoleForUser, type BusinessRole } from "@/lib/b2b/require-role"
 import {
   defaultBusinessOrgName,
   ensureBusinessOrganizationId,
@@ -227,6 +228,7 @@ async function getBusinessProfileResponse(request: Request) {
   let invoiceReplyEmailSource: "support" | "owner" | "sender" | null = null
   let invoiceSettings: BusinessInvoiceSettings = parseBusinessInvoiceSettings(null)
   let onlinePaymentsEnabled = true
+  let businessRole: BusinessRole = "Owner"
 
   if (orgId) {
     /**
@@ -256,6 +258,7 @@ async function getBusinessProfileResponse(request: Request) {
 
     org = orgData as typeof org
     canManageBusinessVerification = await resolveCanManageBusinessVerification(admin, orgId, user.id, orgOwnerUserId)
+    businessRole = await getBusinessRoleForUser(admin, user.id, orgId)
 
     orgKyb = (orgKybResult.data as Record<string, unknown> | null) ?? null
 
@@ -339,6 +342,7 @@ async function getBusinessProfileResponse(request: Request) {
       tier1RetryGuidance,
       noahKybCustomerId,
       canManageBusinessVerification,
+      businessRole,
       profileLocked,
       invoiceReplyEmail,
       invoiceReplyEmailSource,

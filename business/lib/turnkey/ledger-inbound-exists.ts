@@ -1,20 +1,19 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-/** Settled inbound Turnkey row already in ledger for this scope + Solana signature. */
-export async function turnkeyInboundLedgerRowExists(
-  admin: SupabaseClient,
-  opts: {
-    signature: string
-    userId: string
-    businessId: string | null
-  },
-): Promise<boolean> {
-  const sig = String(opts.signature || "").trim()
-  if (!sig) return false
+type TurnkeyInboundScope = {
+  signature: string
+  userId: string
+  businessId: string | null
+}
 
+function scopedTurnkeyInboundQuery(
+  admin: SupabaseClient,
+  opts: TurnkeyInboundScope,
+) {
+  const sig = String(opts.signature || "").trim()
   let q = admin
     .from("transactions")
-    .select("id")
+    .select("id,hidden_from_feed")
     .eq("provider", "turnkey")
     .eq("tx_hash", sig)
     .eq("direction", "in")
@@ -24,6 +23,27 @@ export async function turnkeyInboundLedgerRowExists(
   } else {
     q = q.eq("user_id", opts.userId).is("business_id", null)
   }
-  const { data } = await q.maybeSingle()
+  return q
+}
+
+/** Any settled inbound Turnkey row for this scope + Solana signature (including feed-hidden mirrors). */
+export async function turnkeyInboundLedgerRowExists(
+  admin: SupabaseClient,
+  opts: TurnkeyInboundScope,
+): Promise<boolean> {
+  const sig = String(opts.signature || "").trim()
+  if (!sig) return false
+  const { data } = await scopedTurnkeyInboundQuery(admin, opts).maybeSingle()
   return Boolean(data?.id)
+}
+
+/** User-visible settled inbound Turnkey row for this scope + Solana signature. */
+export async function turnkeyVisibleInboundLedgerRowExists(
+  admin: SupabaseClient,
+  opts: TurnkeyInboundScope,
+): Promise<boolean> {
+  const sig = String(opts.signature || "").trim()
+  if (!sig) return false
+  const { data: rows } = await scopedTurnkeyInboundQuery(admin, opts).limit(4)
+  return (rows ?? []).some((row) => row.hidden_from_feed !== true)
 }

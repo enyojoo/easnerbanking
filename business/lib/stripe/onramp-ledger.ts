@@ -195,6 +195,8 @@ export async function markOnrampSessionFailed(
   })
 }
 
+export type StripeOnrampChainSuppressionMatch = { kind: "hash" } | { kind: "amount" }
+
 export async function findStripeOnrampChainSettlementForSuppression(
   admin: SupabaseClient,
   input: {
@@ -204,14 +206,14 @@ export async function findStripeOnrampChainSettlementForSuppression(
     walletAddress?: string | null
     amount?: number | null
   },
-): Promise<boolean> {
+): Promise<StripeOnrampChainSuppressionMatch | null> {
   const txHash = String(input.txHash || "").trim()
   if (txHash) {
     let q = admin.from("stripe_onramp_sessions").select("id").eq("chain_tx_hash", txHash)
     if (input.businessId) q = q.eq("business_id", input.businessId)
     else q = q.eq("user_id", input.userId).is("business_id", null)
     const { data } = await q.maybeSingle()
-    if (data?.id) return true
+    if (data?.id) return { kind: "hash" }
 
     let txQ = admin
       .from("transactions")
@@ -224,7 +226,7 @@ export async function findStripeOnrampChainSettlementForSuppression(
     const { data: txRow } = await txQ.maybeSingle()
     if (txRow?.id) {
       const meta = asMeta(txRow.metadata)
-      if (meta.flow === "express_deposits" || meta.flow === "bank_onramp") return true
+      if (meta.flow === "express_deposits" || meta.flow === "bank_onramp") return { kind: "hash" }
     }
   }
 
@@ -238,10 +240,10 @@ export async function findStripeOnrampChainSettlementForSuppression(
       amount,
       txHash,
     })
-    if (pending) return true
+    if (pending) return { kind: "amount" }
   }
 
-  return false
+  return null
 }
 
 async function deleteStaleExpressDepositProcessingSessions(

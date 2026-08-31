@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { getBusinessRoleForUser, type BusinessRole } from "@/lib/b2b/require-role"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { noahCustomerIdFromBusinessId, noahCustomerIdFromUserId, type NoahCustomerScope } from "./customer-id"
 import { readNoahScopeFromRequest } from "./resolve-noah-context"
+
+export type NoahAccountContextAccess = "read" | "write"
 
 export type NoahAccountContext = {
   scope: NoahCustomerScope
@@ -14,14 +17,19 @@ export type NoahAccountContext = {
   subjectUserId: string
 }
 
+const READ_ROLES: BusinessRole[] = ["Owner", "Admin", "Member", "Viewer"]
+const WRITE_ROLES: BusinessRole[] = ["Owner", "Admin", "Member"]
+
 /**
- * For **business** scope: only the organization owner may call; Noah `CustomerID` is `ebiz_{businesses.id}`.
+ * For **business** scope: active org members may read; Owner/Admin/Member may write.
+ * Noah `CustomerID` is `ebiz_{businesses.id}`; `subjectUserId` is always the org owner.
  * For **individual**: subject is the session user.
  */
 export async function resolveNoahAccountContext(
   request: Request,
   sessionUserId: string,
   bodyTypeHint?: string,
+  access: NoahAccountContextAccess = "read",
 ): Promise<{ ok: true; ctx: NoahAccountContext } | { ok: false; response: NextResponse }> {
   const scope = readNoahScopeFromRequest(request, bodyTypeHint)
 
@@ -67,16 +75,36 @@ export async function resolveNoahAccountContext(
     }
   }
 
-  const ownerUserId = await resolveOrgOwnerUserId(admin, orgId, sessionUserId)
-  if (ownerUserId !== sessionUserId) {
+  const { data: membership } = await admin
+    .from("business_memberships")
+    .select("role,status")
+    .eq("business_id", orgId)
+    .eq("user_id", sessionUserId)
+    .maybeSingle()
+
+  if (membership?.status === "invited") {
     return {
       ok: false,
       response: NextResponse.json(
-        { error: "Only the organization owner can access business accounts.", code: "OWNER_ONLY" },
+        { error: "Accept your team invitation to access business accounts.", code: "INVITE_PENDING" },
         { status: 403 },
       ),
     }
   }
+
+  const role = await getBusinessRoleForUser(admin, sessionUserId, orgId)
+  const allowedRoles = access === "write" ? WRITE_ROLES : READ_ROLES
+  if (!allowedRoles.includes(role)) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "You do not have permission to perform this action.", code: "ROLE_DENIED" },
+        { status: 403 },
+      ),
+    }
+  }
+
+  const ownerUserId = await resolveOrgOwnerUserId(admin, orgId, sessionUserId)
 
   return {
     ok: true,

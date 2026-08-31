@@ -78,7 +78,7 @@ Output: [`packages/server/supabase-auth-templates/`](supabase-auth-templates/) �
 
 ## Business team invites
 
-Flow: owner invites via **Settings → Team** → `POST /api/settings/team` upserts `business_memberships` (`status: invited`) → SendGrid **`teamInvitation`** email → invitee opens **`/auth/join/{membershipId}`** → signup or login → **`POST /api/auth/bootstrap`** with `membershipId` claims the invite (links `users.easner_business_id`, activates membership). New invitees still receive Supabase **Confirm signup** OTP mail; that is separate from the team invite email. Legacy query links (`/auth/join?membership=…`) redirect to the path form.
+Flow: owner invites via **Settings → Team** → `POST /api/settings/team` upserts `business_memberships` (`status: invited`) → SendGrid **`teamInvitation`** email → invitee opens **`/auth/join/{membershipId}`** → signup or login → **`POST /api/auth/bootstrap`** with `membershipId` claims the invite (links `users.easner_business_id`, activates membership) → SendGrid **`teamMemberJoined`** email to org owner and admins. New invitees still receive Supabase **Confirm signup** OTP mail; that is separate from the team invite email. Legacy query links (`/auth/join?membership=…`) redirect to the path form.
 
 | Route | Purpose |
 |-------|---------|

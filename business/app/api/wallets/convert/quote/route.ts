@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "relay_not_configured" }, { status: 503 })
   }
 
-  const acc = await resolveNoahAccountContext(request, auth.user.id)
+  const acc = await resolveNoahAccountContext(request, auth.user.id, undefined, "write")
   if (!acc.ok) return acc.response
 
   const body = (await request.json().catch(() => null)) as {

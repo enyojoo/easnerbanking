@@ -4,6 +4,7 @@ import type {
   PayrollRunSummaryEmailData,
   SecurityAlertEmailData,
   TeamInviteEmailData,
+  TeamMemberJoinedEmailData,
   TransactionEmailData,
   VerificationEmailData,
   WelcomeEmailData,
@@ -171,6 +172,15 @@ export const teamInviteFixture: TeamInviteEmailData = {
   recipientHasEasnerAccount: false,
 }
 
+export const teamMemberJoinedFixture: TeamMemberJoinedEmailData = {
+  recipientFirstName: "Alex",
+  businessName: "Acme LLC",
+  memberName: "Jamie Admin",
+  memberEmail: "jamie@example.com",
+  role: "Admin",
+  settingsTeamUrl: "https://business.easner.com/settings?tab=team",
+}
+
 export const securityPasswordChangedFixture: SecurityAlertEmailData = {
   email: "user@example.com",
   firstName: "Sam",
@@ -234,6 +244,7 @@ export const templateFixtures: Record<string, unknown> = {
   },
   onlinePaymentsReady: onlinePaymentsReadyFixture,
   teamInvitation: teamInviteFixture,
+  teamMemberJoined: teamMemberJoinedFixture,
   payrollRunSummary: payrollRunSummaryFixture,
   payrollFundingNeeded: payrollFundingNeededFixture,
   passwordChanged: securityPasswordChangedFixture,
@@ -265,4 +276,5 @@ export const templateDefaultAudience: Record<string, "business" | "personal"> = 
   onlinePaymentsActionRequired: "business",
   onlinePaymentsReady: "business",
   teamInvitation: "business",
+  teamMemberJoined: "business",
 }

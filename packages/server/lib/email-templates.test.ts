@@ -26,7 +26,7 @@ describe("emailTemplates", () => {
 
       const defaultAudience = templateDefaultAudience[templateKey] ?? "personal"
       const audiences: EmailAudience[] =
-        templateKey.startsWith("kyb") || templateKey === "teamInvitation"
+        templateKey.startsWith("kyb") || templateKey === "teamInvitation" || templateKey === "teamMemberJoined"
           ? ["business"]
           : templateKey.startsWith("kyc")
             ? ["personal"]
@@ -239,6 +239,14 @@ describe("emailTemplates", () => {
     expect(html).not.toContain('class="email-subtitle">Acme LLC')
     expect(html).not.toContain('class="email-subtitle">')
     expect(html).toContain("Acme LLC")
+  })
+
+  it("team member joined includes member details and settings link", () => {
+    const html = emailTemplates.teamMemberJoined.html(templateFixtures.teamMemberJoined, "business")
+    expect(html).toContain("Jamie Admin")
+    expect(html).toContain("jamie@example.com")
+    expect(html).toContain("Acme LLC")
+    expect(html).toContain("/settings?tab=team")
   })
 
   it("business KYB subjects use org name when businessName is set", () => {

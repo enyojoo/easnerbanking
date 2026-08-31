@@ -54,7 +54,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const accountCtx = await resolveNoahAccountContext(request, resolved.ctx.actorUserId)
+    const accountCtx = await resolveNoahAccountContext(request, resolved.ctx.actorUserId, undefined, "write")
     if (!accountCtx.ok) return accountCtx.response
     const lines = resolved.ctx.businessId
       ? await getTurnkeyDepositAddressesForBusiness(resolved.ctx.admin, resolved.ctx.businessId, {

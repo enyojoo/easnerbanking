@@ -74,7 +74,7 @@ export async function POST(request: Request) {
   const ledgerAmount = Math.round(amount * 100) / 100
   const sendNote = typeof body?.note === "string" ? body.note.trim() : ""
 
-  const acc = await resolveNoahAccountContext(request, auth.user.id)
+  const acc = await resolveNoahAccountContext(request, auth.user.id, undefined, "write")
   if (!acc.ok) return acc.response
 
   const guard = await requireNoahVerificationApproved(
