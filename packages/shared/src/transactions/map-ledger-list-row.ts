@@ -37,6 +37,7 @@ import {
   normalizeYcFundBalanceDepositReview,
   reconstructYcFundBalanceDepositReview,
   resolveYcFundBalanceDepositDisplayTitle,
+  resolveYcFundBalanceUsdCreditAmount,
 } from "./yc-deposit-display"
 import {
   isVerificationDepositMetadata,
@@ -309,25 +310,18 @@ export function resolveYcFundBalanceUsdCreditListDisplay(
     typeof row.amount === "number" ? row.amount : Number(row.amount) || 0
   const ledgerCurrency = String(row.currency ?? "USD").toUpperCase()
   const title = resolveYcFundBalanceDepositDisplayTitle(meta)
-  const review =
-    normalizeYcFundBalanceDepositReview(meta.deposit_review) ??
-    reconstructYcFundBalanceDepositReview(meta)
-
-  const usdCredit = Number(
-    review?.usd_credit ??
-      meta.usd_credit ??
-      meta.settled_amount ??
-      meta.posted_amount ??
-      (ledgerCurrency === "USD" ? ledgerAmount : 0),
-  )
-
-  if (!Number.isFinite(usdCredit) || usdCredit <= 0) return null
+  const credit = resolveYcFundBalanceUsdCreditAmount({
+    meta,
+    ledgerAmount,
+    ledgerCurrency,
+  })
+  if (!credit) return null
 
   return {
-    displayAmount: usdCredit,
-    displayCurrency: "USD",
-    ledgerAmount: usdCredit,
-    ledgerCurrency: "USD",
+    displayAmount: credit.amount,
+    displayCurrency: credit.currency,
+    ledgerAmount: credit.amount,
+    ledgerCurrency: credit.currency,
     displayDescription: title,
     displayHeroTitle: title,
     transactionProduct: title,

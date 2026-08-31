@@ -84,6 +84,7 @@ import {
   REVIEW_ROW_LABELS,
   isRelayTronDepositMetadata,
   resolveInboundReceiveDetail,
+  resolveYcFundBalanceUsdCreditAmount,
   resolvePayoutReviewFlow,
   type GlobalPayoutReviewSnapshot,
   type GlobalPayoutRecipientSnapshot,
@@ -434,15 +435,29 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
   const heroAmountLabel = useMemo(() => {
     if (!transaction) return ''
+    const received =
+      transaction.transaction_type === 'receive' ||
+      transaction.direction === 'credit' ||
+      inboundReceive != null
+    const depositReview = transaction.deposit_review as
+      | YcFundBalanceDepositReviewSnapshot
+      | undefined
+    const ycCredit =
+      depositReview || inboundReceive?.kind === 'yc_fund_balance'
+        ? resolveYcFundBalanceUsdCreditAmount({
+            depositReview,
+            ledgerAmount: Number(transaction.amount ?? 0),
+            ledgerCurrency: String(transaction.display_currency ?? transaction.currency ?? 'USD'),
+          })
+        : null
+    if (ycCredit) {
+      return formatSignedCurrency(ycCredit.amount, ycCredit.currency, received)
+    }
     if (
       inboundReceive?.kind === 'yc_fund_balance' &&
       inboundReceive.amountCredited.amount > 0 &&
       inboundReceive.amountCredited.currency
     ) {
-      const received =
-        transaction.transaction_type === 'receive' ||
-        transaction.direction === 'credit' ||
-        inboundReceive != null
       return formatSignedCurrency(
         inboundReceive.amountCredited.amount,
         inboundReceive.amountCredited.currency,

@@ -29,6 +29,23 @@ vi.mock("@easner/shared", () => ({
     String(meta?.yc_mode ?? "") === "fund_balance",
   isVaFundingDeposit: () => false,
   resolveYcFundBalanceDepositDisplayTitle: () => undefined,
+  reconstructYcFundBalanceDepositReview: (meta: Record<string, unknown>) => {
+    const usdCredit = Number(meta.usd_credit)
+    const localPayIn = Number(meta.local_pay_in)
+    if (!Number.isFinite(usdCredit) || usdCredit <= 0) return null
+    if (!Number.isFinite(localPayIn) || localPayIn <= 0) return null
+    return {
+      local_pay_in: localPayIn,
+      local_currency: String(meta.local_currency ?? "NGN"),
+      usd_credit: usdCredit,
+      processing_fee: 0,
+      exchange_rate: 0,
+      transfer_method: "Bank Transfer",
+      credit_to: "USD Balance",
+      residence_country: "NG",
+      pay_in_rail: "bank_transfer",
+    }
+  },
   resolveVaFundingDepositTitleFromMeta: () => undefined,
   resolveInboundReceiveDetail: () => null,
   isExpressDepositsMetadata: (meta?: Record<string, unknown> | null) =>
@@ -345,6 +362,27 @@ describe("mapRowToBusinessTransaction", () => {
       status: "settled",
       amount: 100000,
       currency: "NGN",
+      direction: "in",
+      metadata: {
+        yc_mode: "fund_balance",
+        local_pay_in: 100000,
+        local_currency: "NGN",
+        usd_credit: 65,
+      },
+      created_at: "2025-01-15T12:00:00.000Z",
+    })
+
+    expect(item.amount).toBe(65)
+    expect(item.displayCurrency).toBe("USD")
+  })
+
+  it("presents mis-posted USD ledger magnitude as USD credited", () => {
+    const item = mapRowToBusinessTransaction({
+      id: "db-uuid",
+      provider: "yellowcard",
+      status: "settled",
+      amount: 100000,
+      currency: "USD",
       direction: "in",
       metadata: {
         yc_mode: "fund_balance",

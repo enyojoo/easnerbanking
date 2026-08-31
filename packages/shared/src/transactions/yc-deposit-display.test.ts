@@ -14,6 +14,7 @@ import {
   resolveYcFundBalanceDepositTitle,
   resolveYcFundBalanceLocalPayInBreakdown,
   resolveYcFundBalanceNotificationActivityLabel,
+  resolveYcFundBalanceUsdCreditAmount,
 } from "./yc-deposit-display"
 
 describe("computeYcCrossBorderPrincipalLocalPayIn", () => {
@@ -264,5 +265,32 @@ describe("deposit review snapshot", () => {
     )
     expect(review?.transfer_method).toBe("Mobile Money")
     expect(review?.pay_in_rail).toBe("mobile_money")
+  })
+})
+
+describe("resolveYcFundBalanceUsdCreditAmount", () => {
+  it("uses usd_credit when ledger amount matches local pay-in under USD", () => {
+    expect(
+      resolveYcFundBalanceUsdCreditAmount({
+        meta: {
+          yc_mode: "fund_balance",
+          local_pay_in: 100_000,
+          local_currency: "NGN",
+          usd_credit: 65,
+        },
+        ledgerAmount: 100_000,
+        ledgerCurrency: "USD",
+      }),
+    ).toEqual({ amount: 65, currency: "USD" })
+  })
+
+  it("uses ledger USD amount when it is a normal credit magnitude", () => {
+    expect(
+      resolveYcFundBalanceUsdCreditAmount({
+        meta: { yc_mode: "fund_balance", local_pay_in: 100_000, usd_credit: 65 },
+        ledgerAmount: 65,
+        ledgerCurrency: "USD",
+      }),
+    ).toEqual({ amount: 65, currency: "USD" })
   })
 })

@@ -17,6 +17,7 @@ import {
   toEasnerTransactionPrimaryLabel,
   isYcFundBalanceDepositMetadata,
   resolveYcFundBalanceDepositDisplayTitle,
+  reconstructYcFundBalanceDepositReview,
   isVaFundingDeposit,
   resolveVaFundingDepositTitleFromMeta,
   resolveInboundReceiveDetail,
@@ -139,6 +140,9 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
       : null
   const isVerification = isVerificationDepositMetadata(meta)
   const isYcFundBalance = isYcFundBalanceDepositMetadata(meta)
+  const ycFundBalanceDepositReview = isYcFundBalance
+    ? reconstructYcFundBalanceDepositReview(meta ?? {})
+    : null
   const isExpressDeposits = isExpressDepositsMetadata(meta)
   const ycDepositTitle = isYcFundBalance ? resolveYcFundBalanceDepositDisplayTitle(meta ?? {}) : undefined
   const noahVaDepositTitle =
@@ -597,5 +601,6 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     ledgerCreatedAt,
     ...(sendNote ? { sendNote } : {}),
     ...(inboundReceive ? { inboundReceive } : {}),
+    ...(ycFundBalanceDepositReview ? { depositReview: ycFundBalanceDepositReview } : {}),
   }
 }

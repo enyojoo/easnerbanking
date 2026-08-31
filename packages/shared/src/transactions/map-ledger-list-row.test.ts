@@ -352,6 +352,24 @@ describe("mapLedgerRowToMobileListItem", () => {
     expect(item.display_currency).toBe("USD")
   })
 
+  it("maps mis-posted USD ledger magnitude to usd_credit", () => {
+    const item = mapLedgerRowToMobileListItem(
+      baseRow({
+        provider: "yellowcard",
+        amount: 100000,
+        currency: "USD",
+        metadata: {
+          yc_mode: "fund_balance",
+          local_pay_in: 100000,
+          local_currency: "NGN",
+          usd_credit: 65,
+        },
+      }),
+    )
+    expect(item.amount).toBe(65)
+    expect(item.currency).toBe("USD")
+  })
+
   it("presents the destination amount for a YC cross-border send", () => {
     const item = mapLedgerRowToMobileListItem(
       baseRow({

@@ -1074,6 +1074,7 @@ export {
   resolveNoahVaFundingNotificationActivityLabel,
   resolveYcFundBalanceDepositDisplayTitle,
   resolveYcFundBalanceDepositTitle,
+  resolveYcFundBalanceUsdCreditAmount,
   resolveYcFundBalanceNotificationActivityLabel,
   resolveYcFundBalanceTransferMethod,
 } from "./transactions/yc-deposit-display"

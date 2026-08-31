@@ -413,6 +413,52 @@ export function reconstructYcFundBalanceDepositReview(
   })
 }
 
+/** USD credited to the org wallet for YC fund-balance pay-in (never local pay-in magnitude). */
+export function resolveYcFundBalanceUsdCreditAmount(input: {
+  meta?: Record<string, unknown> | null
+  depositReview?: YcFundBalanceDepositReviewSnapshot | null
+  ledgerAmount?: number
+  ledgerCurrency?: string
+}): { amount: number; currency: string } | null {
+  const meta = input.meta ?? {}
+  const isFundBalance =
+    isYcFundBalanceDepositMetadata(meta) ||
+    Boolean(
+      input.depositReview?.usd_credit != null && input.depositReview?.local_pay_in != null,
+    )
+  if (!isFundBalance) return null
+
+  const review =
+    input.depositReview ??
+    normalizeYcFundBalanceDepositReview(meta.deposit_review) ??
+    reconstructYcFundBalanceDepositReview(meta)
+
+  const localPayIn = Number(review?.local_pay_in ?? meta.local_pay_in ?? 0)
+  const usdCredit = Number(
+    review?.usd_credit ??
+      meta.usd_credit ??
+      meta.usd_credit_applied ??
+      meta.settled_amount ??
+      meta.posted_amount ??
+      0,
+  )
+  const ledgerAmount = Number(input.ledgerAmount ?? 0)
+  const ledgerCurrency = String(input.ledgerCurrency ?? "USD").trim().toUpperCase()
+
+  const ledgerMatchesLocalPayIn =
+    localPayIn > 0 && ledgerAmount > 0 && Math.abs(ledgerAmount - localPayIn) < 1
+
+  if (Number.isFinite(usdCredit) && usdCredit > 0) {
+    return { amount: usdCredit, currency: "USD" }
+  }
+
+  if (ledgerCurrency === "USD" && ledgerAmount > 0 && !ledgerMatchesLocalPayIn) {
+    return { amount: ledgerAmount, currency: "USD" }
+  }
+
+  return null
+}
+
 export function resolveYcFundBalanceDepositDisplayTitle(
   meta: Record<string, unknown> | null | undefined,
 ): string {

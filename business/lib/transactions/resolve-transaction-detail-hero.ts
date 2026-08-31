@@ -4,6 +4,7 @@ import {
   isEasnerProductReceiveTitle,
   isEasnerProductSendTitle,
   isEasetagReceiveTitle,
+  resolveYcFundBalanceUsdCreditAmount,
 } from "@easner/shared"
 
 export function resolveTransactionDetailHeroTitle(transaction: Transaction): string {
@@ -49,16 +50,22 @@ export function resolveTransactionDetailHeroAmount(transaction: Transaction): {
   currency: string
 } {
   const isCredit = transaction.direction === "credit"
+  if (
+    isCredit &&
+    (transaction.depositReview != null ||
+      transaction.inboundReceive?.kind === "yc_fund_balance")
+  ) {
+    const ycCredit = resolveYcFundBalanceUsdCreditAmount({
+      depositReview: transaction.depositReview,
+      ledgerAmount: transaction.amount,
+      ledgerCurrency: transaction.displayCurrency,
+    })
+    if (ycCredit) return ycCredit
+  }
   if (isCredit && transaction.inboundReceive?.kind === "yc_fund_balance") {
     const credited = transaction.inboundReceive.amountCredited
     if (credited.amount > 0 && credited.currency) {
       return { amount: credited.amount, currency: credited.currency }
-    }
-  }
-  if (isCredit && transaction.depositReview?.usd_credit != null) {
-    const credited = Number(transaction.depositReview.usd_credit)
-    if (Number.isFinite(credited) && credited > 0) {
-      return { amount: credited, currency: "USD" }
     }
   }
   if (
