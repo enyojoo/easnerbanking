@@ -39,35 +39,6 @@ describe("restoreInboundLedgerPresentation", () => {
     expect((restored.metadata as Record<string, unknown>).noah).toBeUndefined()
   })
 
-  it("shows local amount paid in display fields when metadata includes local pay-in", () => {
-    const row = {
-      provider: "yellowcard",
-      direction: "in",
-      status: "settled",
-      amount: 65,
-      currency: "USD",
-      metadata: {
-        yc_mode: "fund_balance",
-        local_pay_in: 100000,
-        local_currency: "NGN",
-        usd_credit: 65,
-      },
-    }
-    const broken = {
-      type: "send",
-      direction: "debit",
-      amount: 65,
-      currency: "USD",
-      status: "unknown",
-      metadata: {},
-    }
-
-    const restored = restoreInboundLedgerPresentation(row, broken)
-
-    expect(restored.display_amount).toBe(100000)
-    expect(restored.display_currency).toBe("NGN")
-  })
-
   it("uses usd_credit when ledger amount is zero after Noah mis-map", () => {
     const row = {
       provider: "yellowcard",

@@ -19,11 +19,11 @@ describe("resolveTransactionDetailHeroAmount", () => {
     })
   })
 
-  it("shows local amount paid for a YC fund-balance pay-in", () => {
+  it("shows the credited balance amount for a YC fund-balance pay-in", () => {
     const transaction = {
       direction: "credit",
       amount: 100_000,
-      displayCurrency: "USD",
+      displayCurrency: "NGN",
       postedAmount: 65,
       postedCurrency: "USD",
       depositReview: {
@@ -34,8 +34,8 @@ describe("resolveTransactionDetailHeroAmount", () => {
     } as unknown as Transaction
 
     expect(resolveTransactionDetailHeroAmount(transaction)).toEqual({
-      amount: 100_000,
-      currency: "NGN",
+      amount: 65,
+      currency: "USD",
     })
   })
 

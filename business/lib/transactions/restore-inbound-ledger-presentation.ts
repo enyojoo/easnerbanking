@@ -46,14 +46,6 @@ export function restoreInboundLedgerPresentation(
         Number(meta?.posted_amount) ||
         amount
 
-  const localPayIn = Number(meta?.local_pay_in)
-  const localCurrency = String(meta?.local_currency ?? "").trim().toUpperCase()
-  const showLocalPaidHero =
-    isYcFundBalanceDepositMetadata(meta) &&
-    Number.isFinite(localPayIn) &&
-    localPayIn > 0 &&
-    Boolean(localCurrency)
-
   const resolvedAmount =
     amount > 0
       ? amount
@@ -69,8 +61,8 @@ export function restoreInboundLedgerPresentation(
     amount: resolvedAmount,
     currency,
     status,
-    display_amount: showLocalPaidHero ? localPayIn : usdCredit > 0 ? usdCredit : resolvedAmount,
-    display_currency: showLocalPaidHero ? localCurrency : currency,
+    display_amount: usdCredit > 0 ? usdCredit : resolvedAmount,
+    display_currency: currency,
     metadata: txMeta,
   }
 }

@@ -4,7 +4,6 @@ import {
   isEasnerProductReceiveTitle,
   isEasnerProductSendTitle,
   isEasetagReceiveTitle,
-  resolveInboundDepositReceivedAmount,
 } from "@easner/shared"
 
 export function resolveTransactionDetailHeroTitle(transaction: Transaction): string {
@@ -50,33 +49,14 @@ export function resolveTransactionDetailHeroAmount(transaction: Transaction): {
   currency: string
 } {
   const isCredit = transaction.direction === "credit"
-  if (isCredit && transaction.inboundReceive) {
-    const paid = resolveInboundDepositReceivedAmount(transaction.inboundReceive)
-    if (paid.amount > 0 && paid.currency) {
-      return paid
-    }
-  }
-  if (isCredit && transaction.depositReview) {
-    const paid = transaction.depositReview.local_pay_in
-    const currency = String(transaction.depositReview.local_currency ?? "").trim().toUpperCase()
-    if (Number.isFinite(paid) && paid > 0 && currency) {
-      return { amount: paid, currency }
-    }
-  }
   if (
     isCredit &&
     transaction.depositAmount != null &&
     transaction.depositAmount > 0
   ) {
-    const reviewCurrency = transaction.depositReview?.local_currency
-    const currency =
-      (reviewCurrency ? String(reviewCurrency).trim().toUpperCase() : null) ||
-      transaction.displayCurrency ||
-      transaction.postedCurrency ||
-      "USD"
     return {
       amount: transaction.depositAmount,
-      currency,
+      currency: transaction.displayCurrency || transaction.postedCurrency || "USD",
     }
   }
   if (

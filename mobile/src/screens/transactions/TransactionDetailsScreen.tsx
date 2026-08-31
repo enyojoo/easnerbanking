@@ -84,7 +84,6 @@ import {
   REVIEW_ROW_LABELS,
   isRelayTronDepositMetadata,
   resolveInboundReceiveDetail,
-  resolveInboundDepositReceivedAmount,
   resolvePayoutReviewFlow,
   type GlobalPayoutReviewSnapshot,
   type GlobalPayoutRecipientSnapshot,
@@ -435,16 +434,6 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
   const heroAmountLabel = useMemo(() => {
     if (!transaction) return ''
-    const received =
-      transaction.transaction_type === 'receive' ||
-      transaction.direction === 'credit' ||
-      inboundReceive != null
-    if (inboundReceive) {
-      const paid = resolveInboundDepositReceivedAmount(inboundReceive)
-      if (paid.amount > 0 && paid.currency) {
-        return formatSignedCurrency(paid.amount, paid.currency, received)
-      }
-    }
     const amount = Number(
       transaction.deposit_amount ??
         transaction.display_amount ??
@@ -454,15 +443,17 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
         transaction.receipt_final_amount ??
         transaction.amount,
     )
-    const review = transaction.deposit_review as YcFundBalanceDepositReviewSnapshot | undefined
     const currency = String(
-      (review?.local_currency ? String(review.local_currency).toUpperCase() : null) ??
-        transaction.display_currency ??
+      transaction.display_currency ??
         transaction.posted_currency ??
         transaction.settled_currency ??
         transaction.currency ??
         'USD',
     )
+    const received =
+      transaction.transaction_type === 'receive' ||
+      transaction.direction === 'credit' ||
+      inboundReceive != null
     return formatSignedCurrency(amount, currency, received)
   }, [transaction, inboundReceive])
 
