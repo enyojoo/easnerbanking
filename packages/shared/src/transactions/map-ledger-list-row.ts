@@ -44,6 +44,7 @@ import { resolveAccountImpactAmount } from "./account-impact-reporting"
 import { formatOutboundTransferTitle } from "./transaction-detail-hero-title"
 import { isRelayTronDepositMetadata, resolveRelayTronDepositListDisplay } from "./relay-tron-deposit"
 import { resolveStripeCollectionListDisplay } from "./stripe-invoice-settlement-lifecycle"
+import { resolveInboundReceiveDetail } from "./inbound-receive-detail"
 
 // ---------------------------------------------------------------------------
 // Display id helpers (pure – no generation dependency)
@@ -291,6 +292,76 @@ export function resolveYcCrossBorderListDisplay(
   }
 }
 
+/** Local Amount paid primary for YC fund-balance pay-in (USD credit as ledger leg). */
+export function resolveYcFundBalanceListDisplay(
+  row: Record<string, unknown>,
+): GlobalPayoutListDisplay | null {
+  const meta = (row.metadata as Record<string, unknown> | null | undefined) ?? {}
+  if (
+    String(row.direction ?? "").toLowerCase() !== "in" ||
+    !isYcFundBalanceDepositMetadata(meta)
+  ) {
+    return null
+  }
+
+  const ledgerAmount =
+    typeof row.amount === "number" ? row.amount : Number(row.amount) || 0
+  const ledgerCurrency = String(row.currency ?? "USD").toUpperCase()
+  const title = resolveYcFundBalanceDepositDisplayTitle(meta)
+
+  const inbound = resolveInboundReceiveDetail({
+    provider: row.provider != null ? String(row.provider) : null,
+    direction: row.direction != null ? String(row.direction) : null,
+    metadata: meta,
+    amount: ledgerAmount,
+    currency: ledgerCurrency,
+    occurred_at: row.occurred_at != null ? String(row.occurred_at) : null,
+    created_at: row.created_at != null ? String(row.created_at) : null,
+    easner_transaction_id:
+      row.easner_transaction_id != null ? String(row.easner_transaction_id) : null,
+  })
+
+  if (inbound?.kind === "yc_fund_balance") {
+    const amountPaid = inbound.amountPaid ?? inbound.depositAmount
+    if (
+      amountPaid &&
+      Number.isFinite(amountPaid.amount) &&
+      amountPaid.amount > 0 &&
+      amountPaid.currency
+    ) {
+      return {
+        displayAmount: amountPaid.amount,
+        displayCurrency: String(amountPaid.currency).toUpperCase(),
+        ledgerAmount: inbound.amountCredited.amount,
+        ledgerCurrency: String(inbound.amountCredited.currency).toUpperCase(),
+        displayDescription: title,
+        displayHeroTitle: title,
+        transactionProduct: title,
+      }
+    }
+  }
+
+  const localPayIn = Number(meta.local_pay_in ?? meta.fiat_deposit_amount)
+  const localCurrency = String(meta.local_currency ?? meta.pay_in_currency ?? "")
+    .trim()
+    .toUpperCase()
+  const usdCredit = Number(meta.usd_credit ?? meta.settled_amount ?? ledgerAmount)
+
+  if (Number.isFinite(localPayIn) && localPayIn > 0 && localCurrency) {
+    return {
+      displayAmount: localPayIn,
+      displayCurrency: localCurrency,
+      ledgerAmount: Number.isFinite(usdCredit) && usdCredit > 0 ? usdCredit : ledgerAmount,
+      ledgerCurrency,
+      displayDescription: title,
+      displayHeroTitle: title,
+      transactionProduct: title,
+    }
+  }
+
+  return null
+}
+
 function firstTruthy(values: unknown[]): string | undefined {
   for (const v of values) {
     if (v != null && typeof v === "string" && v.trim()) return v.trim()
@@ -386,14 +457,18 @@ export function mapLedgerRowToMobileListItem(row: Record<string, unknown>): Reco
   const walletSend = globalPayout ? null : resolveWalletSendListDisplay(row)
   const ycCrossBorder =
     globalPayout || walletSend ? null : resolveYcCrossBorderListDisplay(row)
+  const ycFundBalance =
+    globalPayout || walletSend || ycCrossBorder ? null : resolveYcFundBalanceListDisplay(row)
   const relayDeposit =
-    globalPayout || walletSend || ycCrossBorder ? null : resolveRelayTronDepositListDisplay(row)
+    globalPayout || walletSend || ycCrossBorder || ycFundBalance
+      ? null
+      : resolveRelayTronDepositListDisplay(row)
   const stripeCollection =
-    globalPayout || walletSend || ycCrossBorder || relayDeposit
+    globalPayout || walletSend || ycCrossBorder || ycFundBalance || relayDeposit
       ? null
       : resolveStripeCollectionListDisplay(row)
   const payoutDisplay =
-    globalPayout ?? walletSend ?? ycCrossBorder ?? relayDeposit ?? stripeCollection
+    globalPayout ?? walletSend ?? ycCrossBorder ?? ycFundBalance ?? relayDeposit ?? stripeCollection
   const displayAmount = payoutDisplay?.displayAmount ?? amount
   const displayCurrency = payoutDisplay?.displayCurrency ?? currency
   const displayName = payoutDisplay?.displayDescription ?? name

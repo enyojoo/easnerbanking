@@ -105,6 +105,21 @@ vi.mock("@easner/shared", () => ({
       displayHeroTitle: title,
     }
   },
+  resolveYcFundBalanceListDisplay: (row: Record<string, unknown>) => {
+    const meta = (row.metadata as Record<string, unknown> | null | undefined) ?? {}
+    if (String(meta.yc_mode ?? "") !== "fund_balance") return null
+    const localPayIn = Number(meta.local_pay_in)
+    const localCurrency = String(meta.local_currency ?? "").toUpperCase()
+    if (!Number.isFinite(localPayIn) || localPayIn <= 0 || !localCurrency) return null
+    return {
+      displayAmount: localPayIn,
+      displayCurrency: localCurrency,
+      ledgerAmount: Number(meta.usd_credit ?? row.amount ?? 0),
+      ledgerCurrency: String(row.currency ?? "USD"),
+      displayDescription: "Nigeria Bank Deposit",
+      displayHeroTitle: "Nigeria Bank Deposit",
+    }
+  },
   isRelayTronDepositMetadata: () => false,
   resolveRelayTronDepositListDisplay: () => null,
   walletSendUserFacingDisplayCurrency: (input: {
@@ -297,7 +312,7 @@ describe("mapRowToBusinessTransaction", () => {
     expect(item.payoutReview?.transfer_method).toBe("USDC on SOL")
   })
 
-  it("presents a YC balance pay-in as the amount credited", () => {
+  it("presents a YC balance pay-in as local amount paid", () => {
     const item = mapRowToBusinessTransaction({
       id: "db-uuid",
       provider: "yellowcard",
@@ -314,8 +329,8 @@ describe("mapRowToBusinessTransaction", () => {
       created_at: "2025-01-15T12:00:00.000Z",
     })
 
-    expect(item.amount).toBe(65)
-    expect(item.displayCurrency).toBe("USD")
+    expect(item.amount).toBe(100000)
+    expect(item.displayCurrency).toBe("NGN")
     expect(item.accountImpactAmount).toBe(65)
     expect(item.accountImpactCurrency).toBe("USD")
   })

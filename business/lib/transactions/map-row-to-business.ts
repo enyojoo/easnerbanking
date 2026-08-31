@@ -13,6 +13,7 @@ import {
   resolveGlobalPayoutListDisplay,
   resolveWalletSendListDisplay,
   resolveYcCrossBorderListDisplay,
+  resolveYcFundBalanceListDisplay,
   toEasnerTransactionPrimaryLabel,
   isYcFundBalanceDepositMetadata,
   resolveYcFundBalanceDepositDisplayTitle,
@@ -186,6 +187,10 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
     globalPayoutDetail || walletSendPayoutReview || walletSendList
       ? null
       : resolveYcCrossBorderListDisplay(row)
+  const ycFundBalanceList =
+    globalPayoutDetail || walletSendPayoutReview || walletSendList || ycCrossBorderList
+      ? null
+      : resolveYcFundBalanceListDisplay(row)
   const relayList = resolveRelayTronDepositListDisplay(row)
   const globalPayout = globalPayoutDetail ?? globalPayoutList
   const bankLabel =
@@ -222,7 +227,12 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
       }
     : null
   const displaySource =
-    globalPayout ?? walletSendDisplay ?? walletSendListDisplay ?? relayList ?? ycCrossBorderList
+    globalPayout ??
+    walletSendDisplay ??
+    walletSendListDisplay ??
+    relayList ??
+    ycCrossBorderList ??
+    ycFundBalanceList
   const accountImpact = resolveAccountImpactAmount({
     ...row,
     ...(displaySource
