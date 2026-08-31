@@ -887,6 +887,7 @@ export {
   resolveGlobalPayoutListDisplay,
   resolveWalletSendListDisplay,
   resolveYcCrossBorderListDisplay,
+  resolveYcFundBalanceUsdCreditListDisplay,
   shouldIncludeRowInUserFeed,
 } from "./transactions/map-ledger-list-row"
 export {

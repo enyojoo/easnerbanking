@@ -332,6 +332,26 @@ describe("mapLedgerRowToMobileListItem", () => {
     expect(item.transaction_product).toBe("Nigeria Bank Deposit")
   })
 
+  it("maps legacy NGN ledger fund_balance rows to USD credited in the list", () => {
+    const item = mapLedgerRowToMobileListItem(
+      baseRow({
+        provider: "yellowcard",
+        amount: 100000,
+        currency: "NGN",
+        metadata: {
+          yc_mode: "fund_balance",
+          local_pay_in: 100000,
+          local_currency: "NGN",
+          usd_credit: 65,
+        },
+      }),
+    )
+    expect(item.amount).toBe(65)
+    expect(item.currency).toBe("USD")
+    expect(item.display_amount).toBe(65)
+    expect(item.display_currency).toBe("USD")
+  })
+
   it("presents the destination amount for a YC cross-border send", () => {
     const item = mapLedgerRowToMobileListItem(
       baseRow({

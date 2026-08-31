@@ -63,6 +63,7 @@ import { LEDGER_DETAIL_SELECT } from "@/lib/ledger/ledger-select"
 import { restoreInboundLedgerPresentation } from "@/lib/transactions/restore-inbound-ledger-presentation"
 import { enrichYcPayInMetadataFromTransfer } from "@/lib/yellowcard/enrich-yc-pay-in-metadata"
 import { reconcileExpiredYcPayInOnDetail } from "@/lib/yellowcard/reconcile-expired-yc-pay-in"
+import { enrichYcFundBalanceOfficeRows } from "@/lib/admin/enrich-yc-fund-balance-office-rows"
 import {
   easnerPayoutIdFromLedgerRow,
   pickCanonicalLedgerDetailRow,
@@ -527,6 +528,11 @@ export async function GET(request: Request, routeCtx: Props) {
         }
       }
     }
+  }
+
+  if (ledgerRec.id) {
+    const [ycEnriched] = await enrichYcFundBalanceOfficeRows(admin, [ledgerRec])
+    if (ycEnriched) ledgerRec = ycEnriched
   }
 
   const meta = ledgerRec.metadata as Record<string, unknown> | null | undefined

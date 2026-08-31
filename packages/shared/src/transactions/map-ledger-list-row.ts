@@ -34,6 +34,8 @@ import {
 } from "./yc-pay-in-display"
 import {
   isYcFundBalanceDepositMetadata,
+  normalizeYcFundBalanceDepositReview,
+  reconstructYcFundBalanceDepositReview,
   resolveYcFundBalanceDepositDisplayTitle,
 } from "./yc-deposit-display"
 import {
@@ -291,6 +293,47 @@ export function resolveYcCrossBorderListDisplay(
   }
 }
 
+/** USD credited to balance for YC fund-balance pay-in (list/hero), even when ledger row is NGN-local. */
+export function resolveYcFundBalanceUsdCreditListDisplay(
+  row: Record<string, unknown>,
+): GlobalPayoutListDisplay | null {
+  const meta = (row.metadata as Record<string, unknown> | null | undefined) ?? {}
+  if (
+    String(row.direction ?? "").toLowerCase() !== "in" ||
+    !isYcFundBalanceDepositMetadata(meta)
+  ) {
+    return null
+  }
+
+  const ledgerAmount =
+    typeof row.amount === "number" ? row.amount : Number(row.amount) || 0
+  const ledgerCurrency = String(row.currency ?? "USD").toUpperCase()
+  const title = resolveYcFundBalanceDepositDisplayTitle(meta)
+  const review =
+    normalizeYcFundBalanceDepositReview(meta.deposit_review) ??
+    reconstructYcFundBalanceDepositReview(meta)
+
+  const usdCredit = Number(
+    review?.usd_credit ??
+      meta.usd_credit ??
+      meta.settled_amount ??
+      meta.posted_amount ??
+      (ledgerCurrency === "USD" ? ledgerAmount : 0),
+  )
+
+  if (!Number.isFinite(usdCredit) || usdCredit <= 0) return null
+
+  return {
+    displayAmount: usdCredit,
+    displayCurrency: "USD",
+    ledgerAmount: usdCredit,
+    ledgerCurrency: "USD",
+    displayDescription: title,
+    displayHeroTitle: title,
+    transactionProduct: title,
+  }
+}
+
 function firstTruthy(values: unknown[]): string | undefined {
   for (const v of values) {
     if (v != null && typeof v === "string" && v.trim()) return v.trim()
@@ -386,14 +429,25 @@ export function mapLedgerRowToMobileListItem(row: Record<string, unknown>): Reco
   const walletSend = globalPayout ? null : resolveWalletSendListDisplay(row)
   const ycCrossBorder =
     globalPayout || walletSend ? null : resolveYcCrossBorderListDisplay(row)
+  const ycFundBalanceUsdCredit =
+    globalPayout || walletSend || ycCrossBorder
+      ? null
+      : resolveYcFundBalanceUsdCreditListDisplay(row)
   const relayDeposit =
-    globalPayout || walletSend || ycCrossBorder ? null : resolveRelayTronDepositListDisplay(row)
+    globalPayout || walletSend || ycCrossBorder || ycFundBalanceUsdCredit
+      ? null
+      : resolveRelayTronDepositListDisplay(row)
   const stripeCollection =
-    globalPayout || walletSend || ycCrossBorder || relayDeposit
+    globalPayout || walletSend || ycCrossBorder || ycFundBalanceUsdCredit || relayDeposit
       ? null
       : resolveStripeCollectionListDisplay(row)
   const payoutDisplay =
-    globalPayout ?? walletSend ?? ycCrossBorder ?? relayDeposit ?? stripeCollection
+    globalPayout ??
+    walletSend ??
+    ycCrossBorder ??
+    ycFundBalanceUsdCredit ??
+    relayDeposit ??
+    stripeCollection
   const displayAmount = payoutDisplay?.displayAmount ?? amount
   const displayCurrency = payoutDisplay?.displayCurrency ?? currency
   const displayName = payoutDisplay?.displayDescription ?? name

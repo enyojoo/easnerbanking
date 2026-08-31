@@ -24,12 +24,10 @@ describe("resolveTransactionDetailHeroAmount", () => {
       direction: "credit",
       amount: 100_000,
       displayCurrency: "NGN",
-      postedAmount: 65,
-      postedCurrency: "USD",
-      depositReview: {
-        local_pay_in: 100_000,
-        local_currency: "NGN",
-        usd_credit: 65,
+      inboundReceive: {
+        kind: "yc_fund_balance",
+        amountCredited: { amount: 65, currency: "USD" },
+        amountPaid: { amount: 100_000, currency: "NGN" },
       },
     } as unknown as Transaction
 

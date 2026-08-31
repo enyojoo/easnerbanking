@@ -105,6 +105,24 @@ vi.mock("@easner/shared", () => ({
       displayHeroTitle: title,
     }
   },
+  resolveYcFundBalanceUsdCreditListDisplay: (row: Record<string, unknown>) => {
+    const meta = (row.metadata as Record<string, unknown> | null | undefined) ?? {}
+    if (String(meta.yc_mode ?? "") !== "fund_balance") return null
+    const usdCredit = Number(meta.usd_credit ?? 0)
+    const ledgerAmount = Number(row.amount ?? 0)
+    const ledgerCurrency = String(row.currency ?? "USD").toUpperCase()
+    const credit =
+      usdCredit > 0 ? usdCredit : ledgerCurrency === "USD" && ledgerAmount > 0 ? ledgerAmount : 0
+    if (credit <= 0) return null
+    return {
+      displayAmount: credit,
+      displayCurrency: "USD",
+      ledgerAmount: credit,
+      ledgerCurrency: "USD",
+      displayDescription: "Nigeria Bank Deposit",
+      displayHeroTitle: "Nigeria Bank Deposit",
+    }
+  },
   isRelayTronDepositMetadata: () => false,
   resolveRelayTronDepositListDisplay: () => null,
   walletSendUserFacingDisplayCurrency: (input: {
@@ -318,6 +336,27 @@ describe("mapRowToBusinessTransaction", () => {
     expect(item.displayCurrency).toBe("USD")
     expect(item.accountImpactAmount).toBe(65)
     expect(item.accountImpactCurrency).toBe("USD")
+  })
+
+  it("presents legacy NGN ledger rows as USD credited", () => {
+    const item = mapRowToBusinessTransaction({
+      id: "db-uuid",
+      provider: "yellowcard",
+      status: "settled",
+      amount: 100000,
+      currency: "NGN",
+      direction: "in",
+      metadata: {
+        yc_mode: "fund_balance",
+        local_pay_in: 100000,
+        local_currency: "NGN",
+        usd_credit: 65,
+      },
+      created_at: "2025-01-15T12:00:00.000Z",
+    })
+
+    expect(item.amount).toBe(65)
+    expect(item.displayCurrency).toBe("USD")
   })
 
   it("presents the destination amount for a YC cross-border send", () => {

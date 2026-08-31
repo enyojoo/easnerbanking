@@ -11,6 +11,7 @@ import {
   decodeLedgerListCursor,
 } from "@/lib/transactions/ledger-list-cursor"
 import { expireStaleYcPayInTransfers } from "@/lib/yellowcard/quote-key"
+import { enrichYcFundBalanceOfficeRows } from "@/lib/admin/enrich-yc-fund-balance-office-rows"
 
 const DEFAULT_LIST_LIMIT = 50
 const MAX_LIST_LIMIT = 100
@@ -82,11 +83,13 @@ export async function GET(request: Request) {
   ) as Record<string, unknown>[]
   const { visible, nextCursor } = buildNextLedgerListCursor(dedupedRows, limit)
 
+  const rowsForMapping = await enrichYcFundBalanceOfficeRows(admin, visible)
+
   let transactions: TransactionWithSource[] | Record<string, unknown>[]
   if (scope === "business") {
-    transactions = visible.map((r) => mapRowToBusinessTransaction(r))
+    transactions = rowsForMapping.map((r) => mapRowToBusinessTransaction(r))
   } else {
-    transactions = visible.map((r) => mapLedgerRowToMobileListItem(r))
+    transactions = rowsForMapping.map((r) => mapLedgerRowToMobileListItem(r))
   }
 
   const body = { transactions, nextCursor }

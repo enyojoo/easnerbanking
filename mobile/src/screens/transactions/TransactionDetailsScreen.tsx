@@ -434,6 +434,21 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
   const heroAmountLabel = useMemo(() => {
     if (!transaction) return ''
+    if (
+      inboundReceive?.kind === 'yc_fund_balance' &&
+      inboundReceive.amountCredited.amount > 0 &&
+      inboundReceive.amountCredited.currency
+    ) {
+      const received =
+        transaction.transaction_type === 'receive' ||
+        transaction.direction === 'credit' ||
+        inboundReceive != null
+      return formatSignedCurrency(
+        inboundReceive.amountCredited.amount,
+        inboundReceive.amountCredited.currency,
+        received,
+      )
+    }
     const amount = Number(
       transaction.deposit_amount ??
         transaction.display_amount ??
