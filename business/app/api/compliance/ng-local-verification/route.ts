@@ -5,8 +5,11 @@ import {
   NG_LOCAL_ID_PAIR,
   normalizeNgLocalIdType,
 } from "@easner/shared"
-import { resolveIsOrgOwnerForUser, resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
+import {
+  actorNgLocalEligible,
+  requireGeoPersonalRailAccess,
+} from "@/lib/compliance/geo-personal-rail-access"
 
 export const runtime = "nodejs"
 
@@ -20,8 +23,8 @@ type Body = {
 }
 
 /**
- * Save Nigeria local verification supplement on the subject users row.
- * Business sessions write to the org owner users row (owner/admin only).
+ * Save Nigeria local verification supplement on the signed-in user's row.
+ * Business sessions: Owner/Admin only; actor must be NG-resident.
  */
 export async function PATCH(request: Request) {
   const auth = await getUserFromApiRequest(request)
@@ -67,21 +70,28 @@ export async function PATCH(request: Request) {
   const admin = createSupabaseAdmin()
   const { data: actor } = await admin
     .from("users")
-    .select("id,easner_business_id")
+    .select("id,easner_business_id,residence_country")
     .eq("id", auth.id)
     .maybeSingle()
 
-  let targetUserId = auth.id
   const businessId = (actor?.easner_business_id as string | null) ?? null
   if (businessId) {
-    const isOwner = await resolveIsOrgOwnerForUser(admin, auth.id, businessId)
-    if (!isOwner) {
-      return NextResponse.json({ error: "Only the organization owner can update local verification" }, { status: 403 })
+    const geo = await requireGeoPersonalRailAccess(request)
+    if (!geo.ok) return geo.response
+    if (!actorNgLocalEligible(geo.userRow)) {
+      return NextResponse.json(
+        { error: "Nigeria local verification is only available for Nigeria-based team members." },
+        { status: 403 },
+      )
     }
-    const ownerId = await resolveOrgOwnerUserId(admin, businessId, auth.id)
-    if (ownerId) targetUserId = ownerId
+  } else if (!actorNgLocalEligible(actor)) {
+    return NextResponse.json(
+      { error: "Nigeria local verification is only available for Nigeria residents." },
+      { status: 403 },
+    )
   }
 
+  const targetUserId = auth.id
   const { error } = await admin
     .from("users")
     .update({
@@ -111,29 +121,13 @@ export async function GET(request: Request) {
   }
 
   const admin = createSupabaseAdmin()
-  const { data: actor } = await admin
+  const { data: row } = await admin
     .from("users")
     .select(
       "id,easner_business_id,residence_country,kyc_id_type,kyc_id_number,ng_local_id_type,ng_local_id_number",
     )
     .eq("id", auth.id)
     .maybeSingle()
-
-  let row = actor
-  const businessId = (actor?.easner_business_id as string | null) ?? null
-  if (businessId) {
-    const ownerId = await resolveOrgOwnerUserId(admin, businessId, auth.id)
-    if (ownerId && ownerId !== auth.id) {
-      const { data: owner } = await admin
-        .from("users")
-        .select(
-          "id,easner_business_id,residence_country,kyc_id_type,kyc_id_number,ng_local_id_type,ng_local_id_number",
-        )
-        .eq("id", ownerId)
-        .maybeSingle()
-      if (owner) row = owner
-    }
-  }
 
   return NextResponse.json({
     residenceCountry: row?.residence_country ?? null,

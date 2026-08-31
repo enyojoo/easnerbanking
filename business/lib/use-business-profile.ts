@@ -64,6 +64,10 @@ export type BusinessProfile = {
   canManageBusinessVerification: boolean
   /** Team role within the organization (Owner, Admin, Member, Viewer). */
   businessRole: BusinessRole
+  /** Actor residence country (ISO-2) for personal geo rails. */
+  residenceCountry: string | null
+  /** Owner/Admin may set up Express, NG local, and local pay-in rails. */
+  canUseGeoPersonalRails: boolean
   /** Resolved Reply-To for invoice emails (support → owner → sender). */
   invoiceReplyEmail: string | null
   invoiceReplyEmailSource: InvoiceReplyEmailSource | null
@@ -111,6 +115,8 @@ const DEFAULT_PROFILE: BusinessProfile = {
   noahKybCustomerId: null,
   canManageBusinessVerification: true,
   businessRole: "Owner",
+  residenceCountry: null,
+  canUseGeoPersonalRails: true,
   invoiceReplyEmail: null,
   invoiceReplyEmailSource: null,
   invoiceSettings: undefined,

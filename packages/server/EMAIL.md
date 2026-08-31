@@ -80,6 +80,17 @@ Output: [`packages/server/supabase-auth-templates/`](supabase-auth-templates/) �
 
 Flow: owner invites via **Settings → Team** → `POST /api/settings/team` upserts `business_memberships` (`status: invited`) → SendGrid **`teamInvitation`** email → invitee opens **`/auth/join/{membershipId}`** → signup or login → **`POST /api/auth/bootstrap`** with `membershipId` claims the invite (links `users.easner_business_id`, activates membership) → SendGrid **`teamMemberJoined`** email to org owner and admins. New invitees still receive Supabase **Confirm signup** OTP mail; that is separate from the team invite email. Legacy query links (`/auth/join?membership=…`) redirect to the path form.
 
+## Business geo personal rails (Express / local pay-in)
+
+Express deposit (US/EU), NG local ID supplement, and Yellowcard/Grid **local pay-in** use each **signed-in user's** residence and personal KYC — not the org owner's. Only **Owner** and **Admin** may set up or use these rails; **Member** and **Viewer** see shared org balances and org bank/stablecoin deposit paths only. Funds from personal geo rails still credit the **shared org wallet** (`business_id`). Org-level Grid KYB remains owner-gated separately.
+
+| Route / surface | Actor rule |
+|-----------------|------------|
+| `/api/stripe/onramp/*` | Actor payer KYC + Owner/Admin on business scope |
+| `/api/compliance/ng-local-verification` | Actor `users` row; PATCH requires NG residence |
+| `/api/yellowcard/fund-balance/*`, `/api/grid/fund-balance/*` | Actor `kycUserId` + Owner/Admin |
+| Cross-border **pay-in** legs (`lock-leg2`, YC confirm) | Actor KYC; outbound payout sender KYC may still use org owner where required |
+
 | Route | Purpose |
 |-------|---------|
 | `GET /api/auth/invite-preview` | Public org name + role for join landing |

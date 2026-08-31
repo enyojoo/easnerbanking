@@ -1,7 +1,7 @@
 import { NextResponse, after } from "next/server"
 import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
+import { resolvePayInActorKycUserId } from "@/lib/compliance/geo-personal-rail-access"
 import { previewCrossBorderQuote } from "@/lib/yellowcard/cross-border-orchestrator"
 import { expireStaleYcPayInTransfers } from "@/lib/yellowcard/quote-key"
 import {
@@ -40,11 +40,10 @@ export async function POST(request: Request) {
 
   const admin = createSupabaseAdmin()
   const businessId = noahCtx.scope === "business" ? noahCtx.businessId : null
-  const orgOwnerId =
-    noahCtx.scope === "business" && noahCtx.businessId
-      ? await resolveBusinessOrgOwnerUserId(admin, noahCtx.businessId).catch(() => null)
-      : null
-  const kycUserId = orgOwnerId ?? user.id
+  // Inbound pay-in uses the signed-in actor's personal KYC (Owner/Admin on business scope).
+  const payInActor = await resolvePayInActorKycUserId(request, businessId, user.id)
+  if (!payInActor.ok) return payInActor.response
+  const kycUserId = payInActor.kycUserId
   // Maintenance job AFTER the response: this route is the interactive quote
   // the amount screen waits on; the expiry sweep (select + update + per-row
   // ledger writes) must not compete with it inside the request.

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { requireGeoPersonalRailAccess } from "@/lib/compliance/geo-personal-rail-access"
 import { previewGridFundBalanceQuote } from "@/lib/grid/fund-balance-session"
 
 export const runtime = "nodejs"
@@ -21,12 +22,18 @@ export async function POST(request: Request) {
 
   const rail = body?.rail === "mobile_money" ? "mobile_money" : "bank_transfer"
   const admin = createSupabaseAdmin()
+  const businessId = ctx.scope === "business" ? ctx.businessId : null
+
+  if (businessId) {
+    const geo = await requireGeoPersonalRailAccess(request)
+    if (!geo.ok) return geo.response
+  }
 
   try {
     const preview = await previewGridFundBalanceQuote({
       admin,
       userId: auth.user.id,
-      businessId: ctx.businessId,
+      businessId,
       country,
       currency,
       rail,

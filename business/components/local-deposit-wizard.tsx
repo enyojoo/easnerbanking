@@ -120,7 +120,7 @@ export function LocalDepositWizard({
   onExitToCashList,
 }: Props) {
   const router = useRouter()
-  const { businessId } = useBusinessProfile()
+  const { businessId, canUseGeoPersonalRails } = useBusinessProfile()
   const walletQuery = useWalletBalances()
   const localPayInCurrency = mapResidenceToLocalPayInCurrency(residenceCountry) ?? ""
 
@@ -630,6 +630,14 @@ export function LocalDepositWizard({
     else if (step === "momo_setup") setStep("amount")
     else if (step === "review") setStep(isMomo ? "momo_setup" : "amount")
     else setStep("rail")
+  }
+
+  if (!canUseGeoPersonalRails) {
+    return (
+      <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+        Local pay-in deposits are available to account owners and admins only.
+      </div>
+    )
   }
 
   if (step === "rail") {

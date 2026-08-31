@@ -77,6 +77,7 @@ export function BusinessVerificationSection({
     tier1RejectionType,
     tier1CanResubmit,
     canManageBusinessVerification,
+    canUseGeoPersonalRails,
     isLoading,
     hasData,
     businessId,
@@ -99,7 +100,7 @@ export function BusinessVerificationSection({
 
   const showOnlinePayments = onlinePaymentsEnabled !== false
   const expressQuery = useBusinessExpressOnrampStatus()
-  const showExpressCard = expressQuery.data?.eligible === true
+  const showExpressCard = canUseGeoPersonalRails && expressQuery.data?.eligible === true
   const expressReady = expressQuery.data?.ready === true
   const expressStatus = expressReady
     ? "approved"

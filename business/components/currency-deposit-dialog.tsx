@@ -321,6 +321,8 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
     tier1Complete,
     tier1VerificationStatus,
     countryCode,
+    canUseGeoPersonalRails,
+    residenceCountry: profileResidenceCountry,
   } = useBusinessProfile()
   const usAllowsExpress = account.currency !== "USD" || account.usPayInAllowsExpress !== false
   const stablecoinAccount =
@@ -337,7 +339,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
   const showBankTab = account.showBankDepositTab ?? !tier1Complete
   const showStablecoinTab = hasStablecoin
 
-  const [residenceCountry, setResidenceCountry] = useState<string | null>(null)
+  const [residenceCountry, setResidenceCountry] = useState<string | null>(profileResidenceCountry)
   const [ngMissingTypes, setNgMissingTypes] = useState<NgLocalIdType[]>([])
   const [dialogOpen, setDialogOpen] = useState(false)
   const [cashView, setCashView] = useState<CashView>("list")
@@ -463,7 +465,11 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
   const [receiveRailsLoading, setReceiveRailsLoading] = useState(false)
 
   useEffect(() => {
-    if (account.currency !== "USD") return
+    if (profileResidenceCountry) setResidenceCountry(profileResidenceCountry)
+  }, [profileResidenceCountry])
+
+  useEffect(() => {
+    if (account.currency !== "USD" || !canUseGeoPersonalRails) return
     let cancelled = false
     void (async () => {
       try {
@@ -493,10 +499,20 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
     return () => {
       cancelled = true
     }
-  }, [account.currency])
+  }, [account.currency, canUseGeoPersonalRails])
 
   useEffect(() => {
     if (account.currency !== "USD") return
+    if (!canUseGeoPersonalRails) {
+      setExpressStatus({
+        eligible: false,
+        ready: false,
+        officeOn: false,
+        payerCountry: countryCode,
+        methods: [],
+      })
+      return
+    }
     if (!usAllowsExpress) {
       setExpressStatus({
         eligible: false,
@@ -544,10 +560,10 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
     return () => {
       cancelled = true
     }
-  }, [account.currency, countryCode, usAllowsExpress])
+  }, [account.currency, countryCode, usAllowsExpress, canUseGeoPersonalRails])
 
   useEffect(() => {
-    if (account.currency !== "USD" || !effectiveResidence || !localPayInCurrency) {
+    if (account.currency !== "USD" || !canUseGeoPersonalRails || !effectiveResidence || !localPayInCurrency) {
       setReceiveRails(null)
       setReceiveRailsLoading(false)
       return
@@ -609,7 +625,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
     return () => {
       cancelled = true
     }
-  }, [account.currency, effectiveResidence, localPayInCurrency])
+  }, [account.currency, canUseGeoPersonalRails, effectiveResidence, localPayInCurrency])
 
   const displayRails =
     receiveRails ??
@@ -617,6 +633,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
       ? resolveReceiveRailsForDisplay(effectiveResidence, localPayInCurrency)
       : null)
   const showLocalTab =
+    canUseGeoPersonalRails &&
     account.currency === "USD" &&
     Boolean(localPayInCurrency) &&
     Boolean(displayRails?.anyAvailable)

@@ -4,6 +4,7 @@ import { countries, displayCountryFromBusinessSetting } from "@/lib/countries"
 import { ensureBusinessOperationalAddressCountriesRegistered } from "@/lib/address/register-lib-address-countries"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { getBusinessRoleForUser, type BusinessRole } from "@/lib/b2b/require-role"
+import { canUseGeoPersonalRails } from "@/lib/compliance/geo-personal-rail-access"
 import {
   defaultBusinessOrgName,
   ensureBusinessOrganizationId,
@@ -143,7 +144,7 @@ async function getBusinessProfileResponse(request: Request) {
   const admin = createSupabaseAdmin()
   const { data: userRowWithName, error: userRowErr } = await admin
     .from("users")
-    .select("id,role,easner_business_id,full_name")
+    .select("id,role,easner_business_id,full_name,residence_country")
     .eq("id", user.id)
     .maybeSingle()
   const { data: userRowFallback } = userRowErr
@@ -158,6 +159,7 @@ async function getBusinessProfileResponse(request: Request) {
         role: string | null
         easner_business_id: string | null
         full_name: string | null
+        residence_country: string | null
       }
     | null
 
@@ -229,6 +231,9 @@ async function getBusinessProfileResponse(request: Request) {
   let invoiceSettings: BusinessInvoiceSettings = parseBusinessInvoiceSettings(null)
   let onlinePaymentsEnabled = true
   let businessRole: BusinessRole = "Owner"
+  const actorResidenceCountry =
+    String(userRow?.residence_country ?? "").trim().toUpperCase() || null
+  let actorCanUseGeoPersonalRails = true
 
   if (orgId) {
     /**
@@ -259,6 +264,7 @@ async function getBusinessProfileResponse(request: Request) {
     org = orgData as typeof org
     canManageBusinessVerification = await resolveCanManageBusinessVerification(admin, orgId, user.id, orgOwnerUserId)
     businessRole = await getBusinessRoleForUser(admin, user.id, orgId)
+    actorCanUseGeoPersonalRails = canUseGeoPersonalRails(businessRole)
 
     orgKyb = (orgKybResult.data as Record<string, unknown> | null) ?? null
 
@@ -343,6 +349,8 @@ async function getBusinessProfileResponse(request: Request) {
       noahKybCustomerId,
       canManageBusinessVerification,
       businessRole,
+      residenceCountry: actorResidenceCountry,
+      canUseGeoPersonalRails: actorCanUseGeoPersonalRails,
       profileLocked,
       invoiceReplyEmail,
       invoiceReplyEmailSource,

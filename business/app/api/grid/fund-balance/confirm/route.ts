@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
+import { requireGeoPersonalRailAccess } from "@/lib/compliance/geo-personal-rail-access"
 import { firstGridPaymentInstructionWalletInfo } from "@/lib/grid/external-account"
 import { createGridFundBalanceSession } from "@/lib/grid/fund-balance-session"
 import {
@@ -45,19 +45,24 @@ export async function POST(request: Request) {
 
   const admin = createSupabaseAdmin()
   const businessId = noahCtxResult.scope === "business" ? noahCtxResult.businessId : null
-  const orgOwnerId =
-    noahCtxResult.scope === "business" && noahCtxResult.businessId
-      ? await resolveBusinessOrgOwnerUserId(admin, noahCtxResult.businessId).catch(() => null)
-      : null
-  const kycUserId = orgOwnerId ?? user.id
+  let kycUserId = user.id
+  let userRow: Record<string, unknown> | null = null
 
-  const { data: userRow } = await admin
-    .from("users")
-    .select(
-      "residence_country,kyc_id_type,kyc_id_number,ng_local_id_type,ng_local_id_number,full_name,phone,email,date_of_birth,kyc_address_street,kyc_address_city,kyc_address_country",
-    )
-    .eq("id", kycUserId)
-    .maybeSingle()
+  if (businessId) {
+    const geo = await requireGeoPersonalRailAccess(request)
+    if (!geo.ok) return geo.response
+    kycUserId = geo.actorUserId
+    userRow = geo.userRow
+  } else {
+    const { data } = await admin
+      .from("users")
+      .select(
+        "residence_country,kyc_id_type,kyc_id_number,ng_local_id_type,ng_local_id_number,full_name,phone,email,date_of_birth,kyc_address_street,kyc_address_city,kyc_address_country",
+      )
+      .eq("id", kycUserId)
+      .maybeSingle()
+    userRow = data
+  }
 
   try {
     const session = await createGridFundBalanceSession({
