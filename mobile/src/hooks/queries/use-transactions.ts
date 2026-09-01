@@ -7,6 +7,7 @@ import {
 import { Platform } from 'react-native'
 import { qk, type Scope, type TxFilters, pollingIntervalFor, recipientIdFromLedgerMetadata } from '@easner/shared'
 import { apiFetch } from '../../query/api-client'
+import { useScope } from '../../query/scope'
 import { useDocumentVisibility } from '../useDocumentVisibility'
 import { useRealtimeHealth } from '../../query/realtime-health-context'
 import { ACCOUNT_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
