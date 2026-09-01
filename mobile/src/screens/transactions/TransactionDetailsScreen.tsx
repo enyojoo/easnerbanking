@@ -480,10 +480,6 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
         transaction.currency ??
         'USD',
     )
-    const received =
-      transaction.transaction_type === 'receive' ||
-      transaction.direction === 'credit' ||
-      inboundReceive != null
     return formatSignedCurrency(amount, currency, received)
   }, [transaction, inboundReceive])
 
