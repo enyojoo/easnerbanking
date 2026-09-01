@@ -5,6 +5,12 @@ import { useCallback, useEffect, useRef, useState } from "react"
 /** Pause after typing before background server quote prefetch (Wise/Revolut-style). */
 export const QUOTE_PREFETCH_DEBOUNCE_MS = 450
 
+/**
+ * Extra pause before POST /send (or provider confirm) so keypad typing does not
+ * spawn a lock per digit. Preview can land sooner; Continue still starts lock immediately.
+ */
+export const PAYOUT_LOCK_PREFETCH_DEBOUNCE_MS = 900
+
 export type DebouncedValueControls = {
   /** Apply the latest value immediately (e.g. on Continue). */
   flush: () => void

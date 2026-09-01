@@ -29,6 +29,7 @@ import {
   scaleSendAmountPrefixFontSize,
   scaleSendAmountPrefixLineHeight,
   useDebouncedValue,
+  PAYOUT_LOCK_PREFETCH_DEBOUNCE_MS,
   resolveAmountScreenPayoutPreview,
   resolveAmountScreenTlcPreview,
   resolveAmountScreenWalletPreview,
@@ -1369,6 +1370,10 @@ export default function SendPage() {
   const [debouncedPayoutQuotePrefetchKey, payoutQuotePrefetchControls] = useDebouncedValue(
     payoutQuotePrefetchKey,
   )
+  const [debouncedPayoutLockPrefetchKey] = useDebouncedValue(
+    payoutQuotePrefetchKey,
+    PAYOUT_LOCK_PREFETCH_DEBOUNCE_MS,
+  )
 
   const crossBorderBankQuotePrefetchKey = useMemo(() => {
     if (
@@ -1508,12 +1513,46 @@ export default function SendPage() {
     void (async () => {
       const preview = await ensurePayoutQuoteStashed(meta, businessId)
       if (preview) setPayoutQuotePreview(preview)
-      void ensurePayoutOrderConfirmed(meta, businessId)
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     needsPayoutQuoteBeforeConfirm,
     debouncedPayoutQuotePrefetchKey,
+    recipient?.id,
+    payoutQuotePrefetchReady,
+  ])
+
+  useEffect(() => {
+    if (
+      !needsPayoutQuoteBeforeConfirm ||
+      !debouncedPayoutLockPrefetchKey ||
+      !recipient?.id ||
+      isDraftRecipientId(recipient.id)
+    )
+      return
+    if (!payoutQuotePrefetchReady) return
+    if (amountFieldMode === "payment_purpose" && !paymentPurpose.trim()) return
+    if (amountFieldMode === "note" && !payoutHints?.reference_optional && !note.trim()) return
+    const meta: PayoutQuoteStashMeta = {
+      recipientId: recipient.id,
+      amountEntryMode,
+      entryAmount:
+        amountEntryMode === "send" && displaySendAmount > 0
+          ? displaySendAmount
+          : displayReceiveAmount,
+      receiveCurrency,
+      sourceBalanceCurrency: sendCurrency,
+      ...(note.trim() ? { note: note.trim() } : {}),
+      ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+    }
+    void (async () => {
+      const locked = await ensurePayoutOrderConfirmed(meta, businessId)
+      if (locked) setPayoutQuotePreview(locked)
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    needsPayoutQuoteBeforeConfirm,
+    debouncedPayoutLockPrefetchKey,
     recipient?.id,
     payoutQuotePrefetchReady,
   ])

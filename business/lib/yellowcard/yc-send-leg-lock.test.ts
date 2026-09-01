@@ -383,6 +383,28 @@ describe("submitYcSendWithDestinationAmountLock", () => {
     expect(result.discardedSendIds).toEqual(["short"])
   })
 
+  it("locks ₦74,690 when YC converts several naira worse than the customer rate", async () => {
+    const quotedReceive = 74_690
+    const customerRate = 1358
+    const ycSellRate = 1350
+    let calls = 0
+    const result = await submitYcSendWithDestinationAmountLock({
+      receiveAmount: quotedReceive,
+      initialSettlementCryptoUsd: quotedReceive / customerRate,
+      destinationRate: customerRate,
+      ycSellRate,
+      receiveCurrency: "NGN",
+      feeConfig: { minFeeLocal: 0, feePercentage: 1, flatFeeLocal: 0 },
+      singleSafeSurplusLock: true,
+      buildSubmit: async ({ settlementCryptoUsd, attempt }) => {
+        calls += 1
+        return ycLockResponse(settlementCryptoUsd, ycSellRate, `send-${attempt}`)
+      },
+    })
+    expect(result.recipientLocalAmount).toBeGreaterThanOrEqual(quotedReceive)
+    expect(calls).toBeLessThanOrEqual(4)
+  })
+
   it("fails closed when YC returns unsupported settlement precision", async () => {
     await expect(
       submitYcSendWithDestinationAmountLock({

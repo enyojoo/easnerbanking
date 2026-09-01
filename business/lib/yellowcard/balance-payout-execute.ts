@@ -31,6 +31,7 @@ import {
 } from "@/lib/payout/payout-lock-session"
 import { hashRecipientSnapshot } from "@/lib/payout/recipient-snapshot-hash"
 import { lockYcBalancePayoutSend } from "@/lib/yellowcard/payout-quote"
+import { asYcPayoutError, ycPayoutClientError } from "@/lib/yellowcard/payout-errors"
 
 async function readAvailableBalance(
   admin: SupabaseClient,
@@ -241,16 +242,10 @@ export async function executeYcBalancePayout(
     if (!(locked.cryptoAmount > 0) || !locked.walletAddress) {
       return { ok: false, error: "Locked Yellowcard payout is incomplete." }
     }
-    const lockedRecipient = Number(locked.lockedLocalAmount ?? 0)
+    const recipientNet = Number(locked.lockedLocalAmount ?? 0)
     const lockedRequested = Number(locked.requestedLocalAmount ?? fiatAmount)
-    const lockedQuantum = Number(locked.payoutQuantumLocal ?? 0)
-    const lockedSurplus = lockedRecipient - lockedRequested
-    if (
-      !(lockedRecipient >= lockedRequested) ||
-      lockedSurplus < -0.000001 ||
-      (lockedQuantum > 0 && lockedSurplus > lockedQuantum + 0.000001)
-    ) {
-      return { ok: false, error: "YC_SEND_NO_COMPLIANT_QUANTUM" }
+    if (!(recipientNet + 0.000001 >= lockedRequested)) {
+      return { ok: false, error: ycPayoutClientError("YC_SEND_NO_COMPLIANT_QUANTUM") }
     }
     totalDebited = locked.pricing.totalDebited
   } else {
@@ -279,7 +274,11 @@ export async function executeYcBalancePayout(
         },
       })
     } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : "yc_send_lock_failed" }
+      const ycError = asYcPayoutError(e)
+      return {
+        ok: false,
+        error: ycError ? ycError.userMessage : ycPayoutClientError(e instanceof Error ? e.message : "yc_send_lock_failed"),
+      }
     }
     totalDebited = locked.pricing.totalDebited
   }
@@ -287,7 +286,7 @@ export async function executeYcBalancePayout(
   if (available < totalDebited) return { ok: false, error: "insufficient_balance" }
 
   if (!lockId || !(await claimPayoutLockSession(admin, { lockId, userId }))) {
-    return { ok: false, error: "YC_QUOTE_EXPIRED" }
+    return { ok: false, error: ycPayoutClientError("YC_QUOTE_EXPIRED") }
   }
 
   const ctx = await resolveNoahAccountContextFromLedgerScope(admin, { userId, businessId })

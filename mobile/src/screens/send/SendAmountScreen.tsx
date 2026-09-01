@@ -91,6 +91,7 @@ import {
   SEND_LOCAL_PAY_IN_MOMO_CHIP,
   validateYcCrossBorderSendAmount,
   useDebouncedValue,
+  PAYOUT_LOCK_PREFETCH_DEBOUNCE_MS,
   resolveAmountScreenPayoutPreview,
   resolveAmountScreenTlcPreview,
   resolveAmountScreenWalletPreview,
@@ -1311,6 +1312,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
   const [debouncedPayoutQuotePrefetchKey, payoutQuotePrefetchControls] =
     useDebouncedValue(payoutQuotePrefetchKey)
+  const [debouncedPayoutLockPrefetchKey] = useDebouncedValue(
+    payoutQuotePrefetchKey,
+    PAYOUT_LOCK_PREFETCH_DEBOUNCE_MS,
+  )
 
   useEffect(() => {
     if (!debouncedPayoutQuotePrefetchKey || !recipient?.id || isDraftRecipientId(recipient.id)) return
@@ -1347,6 +1352,48 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedPayoutQuotePrefetchKey, recipient?.id, payoutQuotePrefetchReady])
+
+  useEffect(() => {
+    if (!debouncedPayoutLockPrefetchKey || !recipient?.id || isDraftRecipientId(recipient.id)) return
+    if (!payoutQuotePrefetchReady) return
+    const meta = {
+      recipientId: recipient.id,
+      amountEntryMode,
+      entryAmount: amountEntryMode === 'send' ? sendingAmount : receiveAmount,
+      receiveCurrency,
+    }
+    let cancelled = false
+    void ensureSendPayoutQuoteLocked(
+      () =>
+        noahService.createPayoutQuote({
+          recipientId: recipient!.id,
+          receiveAmount,
+          sourceBalanceCurrency: selectedBalanceCurrency,
+          amountEntryMode,
+          ...(amountEntryMode === 'send' && sendingAmount > 0 ? { sendAmount: sendingAmount } : {}),
+          ...(note.trim() ? { note: note.trim() } : {}),
+          ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+        }),
+      () =>
+        noahService.confirmPayoutOrder({
+          recipientId: recipient!.id,
+          receiveAmount,
+          sourceBalanceCurrency: selectedBalanceCurrency,
+          amountEntryMode,
+          ...(amountEntryMode === 'send' && sendingAmount > 0 ? { sendAmount: sendingAmount } : {}),
+          ...(note.trim() ? { note: note.trim() } : {}),
+          ...(paymentPurpose.trim() ? { paymentPurpose: paymentPurpose.trim() } : {}),
+        }),
+      meta,
+    ).then((quote) => {
+      if (cancelled || !quote || !isCompletePayoutQuote(quote)) return
+      setPayoutQuotePreview(quote)
+    })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedPayoutLockPrefetchKey, recipient?.id, payoutQuotePrefetchReady])
 
   const needsBackgroundWalletSendQuote =
     selectedPaymentMethod === 'balance' &&

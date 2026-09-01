@@ -25,6 +25,7 @@ import {
   formatAccountBalanceLabel,
   formatReviewRowMoneyDisplay,
   isDraftRecipientId,
+  customerFacingSendAmountError,
   payoutReviewRailOpsFields,
 } from '@easner/shared'
 import { CreditDestinationRow } from '../../components/transactions/CreditDestinationRow'
@@ -646,7 +647,10 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           setPricing((prev) => ({
             ...prev,
             quoteLoading: false,
-            quoteError: peekLastPayoutQuoteError() || 'Could not lock payout order',
+              quoteError: customerFacingSendAmountError(
+                peekLastPayoutQuoteError(),
+                selectedBalanceCurrency,
+              ) || 'Could not lock payout order',
           }))
           return
         }
@@ -671,7 +675,12 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
       } catch (e) {
         if (cancelled) return
         const msg = e instanceof Error ? e.message : 'Could not lock payout order'
-        setPricing((prev) => ({ ...prev, quoteLoading: false, quoteError: msg }))
+        setPricing((prev) => ({
+          ...prev,
+          quoteLoading: false,
+          quoteError:
+            customerFacingSendAmountError(msg, selectedBalanceCurrency) || msg,
+        }))
       }
     })()
     return () => {
@@ -799,7 +808,9 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
           if (!cancelled) {
             haptics.error()
             const msg = e instanceof Error ? e.message : TRANSFER_FAIL_MESSAGE
-            setTransferError(msg)
+            setTransferError(
+              customerFacingSendAmountError(msg, selectedBalanceCurrency) || msg,
+            )
           }
         } finally {
           if (!cancelled) setSendingAfterPin(false)

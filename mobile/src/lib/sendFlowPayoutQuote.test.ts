@@ -2,10 +2,12 @@ import { describe, expect, it, beforeEach } from 'vitest'
 import type { PayoutQuote } from './noahService'
 import {
   clearSendPayoutQuote,
+  ensureSendPayoutOrderConfirmed,
   isCompletePayoutQuote,
   isPayoutSessionReadyForExecute,
   isStashedPayoutQuoteFresh,
   isStashedPayoutQuotePreviewFresh,
+  peekSendPayoutQuote,
   stashSendPayoutQuote,
   stashSendPayoutQuotePreview,
   payoutCustomerFacingReceiveAmount,
@@ -157,6 +159,47 @@ describe('sendFlowPayoutQuote stash', () => {
         receiveCurrency: 'NGN',
       }),
     ).toBe(false)
+  })
+
+  it('does not let a slower lock for an old amount overwrite a newer stash', async () => {
+    let resolveOld!: (quote: PayoutQuote) => void
+    let resolveNew!: (quote: PayoutQuote) => void
+    const oldPending = new Promise<PayoutQuote>((resolve) => {
+      resolveOld = resolve
+    })
+    const newPending = new Promise<PayoutQuote>((resolve) => {
+      resolveNew = resolve
+    })
+    const metaOld = {
+      recipientId: 'recipient-a',
+      amountEntryMode: 'receive' as const,
+      entryAmount: 2000,
+      receiveCurrency: 'NGN',
+    }
+    const metaNew = { ...metaOld, entryAmount: 5000 }
+    const oldLock = ensureSendPayoutOrderConfirmed(() => oldPending, metaOld)
+    const newLock = ensureSendPayoutOrderConfirmed(() => newPending, metaNew)
+
+    resolveNew(
+      sampleQuote({
+        requestedReceiveAmount: 5000,
+        receiveAmount: 5000,
+        lockId: 'lock-new',
+      }),
+    )
+    await newLock
+    expect(isStashedPayoutQuoteFresh(metaNew)).toBe(true)
+
+    resolveOld(
+      sampleQuote({
+        requestedReceiveAmount: 2000,
+        receiveAmount: 2000,
+        lockId: 'lock-old',
+      }),
+    )
+    await oldLock
+    expect(isStashedPayoutQuoteFresh(metaNew)).toBe(true)
+    expect(peekSendPayoutQuote()?.lockId).toBe('lock-new')
   })
 
   it('requires Yellowcard lockId (or ycSendId) for PIN after lock-on-review', () => {

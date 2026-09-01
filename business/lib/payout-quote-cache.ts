@@ -151,6 +151,7 @@ export async function ensurePayoutQuoteStashed(
         lastQuoteError = data.error || "Could not load payout quote"
         return null
       }
+      if (inflightQuoteKey !== key) return data.quote
       if (isUsablePayoutQuotePreview(data.quote)) {
         if (isCompletePayoutQuoteLocked(data.quote)) {
           stashPayoutQuote(data.quote, meta)
@@ -215,6 +216,7 @@ export async function ensurePayoutOrderConfirmed(
         lastQuoteError = "Incomplete locked payout quote"
         return null
       }
+      if (inflightConfirmKey !== key) return data.quote
       stashPayoutQuote(data.quote, meta)
       if (data.quote.provider === "grid" && data.quote.lockId) {
         // /api/payouts/confirm now attaches the live Grid quote server-side

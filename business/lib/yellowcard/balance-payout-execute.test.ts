@@ -204,4 +204,63 @@ describe("executeYcBalancePayout ledger upserts", () => {
     }
     expect(getPayoutLockSession).not.toHaveBeenCalled()
   })
+
+  it("executes when recipient surplus is larger than one USDC-cent quantum", async () => {
+    vi.mocked(getPayoutLockSession).mockResolvedValue({
+      id: "lock-1",
+      provider: "yellowcard",
+      recipient_id: "rec-1",
+      destination_ref: "recipient:rec-1",
+      recipient_snapshot_hash: "hash",
+      provider_payload_json: {
+        sequenceId: "yc_quote_abc",
+        sendId: "yc-send-123",
+        channelId: "ch-1",
+        cryptoAmount: 55.7,
+        walletAddress: "yc-wallet",
+        lockedLocalAmount: 74720,
+        requestedLocalAmount: 74690,
+        recipientSurplusLocal: 30,
+        payoutQuantumLocal: 13.58,
+      },
+      pricing_json: {
+        totalDebited: 56.11,
+        customerPrincipal: 55.02,
+        marginAmount: 0.28,
+        processingFee: 0.55,
+        channelCost: 0.26,
+        ycLegFeesUsd: 0,
+        settlement: { customerRate: 1358 },
+      },
+    } as never)
+    const admin = mockAdmin()
+    admin.chain.maybeSingle
+      .mockResolvedValueOnce({ data: { available_balance: 100 } })
+      .mockResolvedValueOnce({ data: { residence_country: "NG", full_name: "Test" } })
+      .mockResolvedValueOnce({ data: { address: "user-wallet" } })
+      .mockResolvedValueOnce({ data: { metadata: { yc_send_id: "yc-send-123" } } })
+    admin.chain.insert.mockResolvedValue({ error: null })
+
+    const result = await executeYcBalancePayout({
+      admin: admin as never,
+      userId: "user-1",
+      businessId: null,
+      recipientRow: recipient,
+      recipientId: "rec-1",
+      fiatAmount: 74690,
+      fiatCurrency: "NGN",
+      countryCode: "NG",
+      lockId: "lock-1",
+      yc: { channelId: "ch-1" },
+      pricing: {
+        totalDebited: 56.11,
+        customerPrincipal: 55.02,
+        marginAmount: 0.28,
+        processingFee: 0.55,
+        channelCost: 0.26,
+      },
+    })
+
+    expect(result.ok).toBe(true)
+  })
 })

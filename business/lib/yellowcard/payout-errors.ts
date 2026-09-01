@@ -19,6 +19,16 @@ export function ycPayoutUserMessage(code: string | null | undefined): string {
   return YC_PAYOUT_USER_MESSAGE[key] ?? YC_PAYOUT_USER_MESSAGE.YC_SEND_UNAVAILABLE
 }
 
+/** Map lock/execute failures so clients never render `YC_*` tokens. */
+export function ycPayoutClientError(raw: unknown): string {
+  if (raw instanceof YcPayoutError) return raw.userMessage
+  const s = String(raw ?? "").trim()
+  if (!s) return YC_PAYOUT_USER_MESSAGE.YC_SEND_UNAVAILABLE
+  if (s in YC_PAYOUT_USER_MESSAGE) return ycPayoutUserMessage(s)
+  if (/^YC_[A-Z0-9_]+$/.test(s)) return YC_PAYOUT_USER_MESSAGE.YC_SEND_UNAVAILABLE
+  return s
+}
+
 export class YcPayoutError extends Error {
   readonly code: YcPayoutErrorCode
   readonly status: 409 | 422 | 503

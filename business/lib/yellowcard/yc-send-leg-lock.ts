@@ -256,8 +256,11 @@ export async function submitYcSendWithDestinationAmountLock(input: {
     // boundary; if that bucket still underpays (rate/fee rounding), bump one USDC cent.
     const conversionCent = Math.ceil((nextCrypto - 0.0000001) * 100) / 100
     let candidateCrypto = roundUsdc(conversionCent - YC_SEND_LEG_CRYPTO_CENT / 2)
+    const lockStartCrypto = candidateCrypto
     const discardedSendIds: string[] = []
     const maxCentBumps = 8
+    /** Never chase an unbounded rate gap; $2 covers a large YC vs customer-rate miss. */
+    const maxExtraUsd = 2
 
     for (let bump = 0; bump <= maxCentBumps; bump++) {
       const selected = await observeRaw(candidateCrypto, bump)
@@ -311,9 +314,19 @@ export async function submitYcSendWithDestinationAmountLock(input: {
       }
 
       if (selected.sendId) discardedSendIds.push(selected.sendId)
-      candidateCrypto = roundUsdc(
-        Math.max(candidateCrypto, selected.acceptedCryptoUsd) + YC_SEND_LEG_CRYPTO_CENT,
+      const shortfall = roundLocal(requestedLocal - selected.netLocal)
+      const extraCents = Math.max(1, Math.ceil(shortfall / Math.max(payoutQuantumLocal, 0.01)))
+      const next = roundUsdc(
+        Math.max(candidateCrypto, selected.acceptedCryptoUsd) + extraCents * YC_SEND_LEG_CRYPTO_CENT,
       )
+      if (next - lockStartCrypto > maxExtraUsd + 0.000001) {
+        throw new YcPayoutError(
+          "YC_SEND_NO_COMPLIANT_QUANTUM",
+          `Could not lock a never-underpay ${requestedLocal} ${input.receiveCurrency} payout without exceeding ${maxExtraUsd} USDC of extra settlement.`,
+          422,
+        )
+      }
+      candidateCrypto = next
     }
 
     throw new YcPayoutError(

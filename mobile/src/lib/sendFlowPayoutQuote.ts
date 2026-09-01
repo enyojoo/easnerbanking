@@ -256,6 +256,7 @@ export async function ensureSendPayoutQuoteStashed(
   lastPayoutQuoteError = null
   inflightQuote = fetchQuote()
     .then((quote) => {
+      if (inflightQuoteKey !== key) return quote
       if (!isUsablePayoutQuotePreview(quote)) {
         lastPayoutQuoteError = 'Incomplete payout quote response.'
         return null
@@ -268,12 +269,15 @@ export async function ensureSendPayoutQuoteStashed(
       return quote
     })
     .catch((err) => {
+      if (inflightQuoteKey !== key) return null
       lastPayoutQuoteError = err instanceof Error ? err.message : 'quote_failed'
       return null
     })
     .finally(() => {
-      inflightQuote = null
-      inflightQuoteKey = ''
+      if (inflightQuoteKey === key) {
+        inflightQuote = null
+        inflightQuoteKey = ''
+      }
     })
 
   return inflightQuote
@@ -313,6 +317,7 @@ export async function ensureSendPayoutOrderConfirmed(
   lastPayoutQuoteError = null
   inflightConfirm = fetchConfirm()
     .then((quote) => {
+      if (inflightConfirmKey !== key) return quote
       if (!isCompletePayoutQuote(quote)) {
         lastPayoutQuoteError = 'Incomplete locked payout quote.'
         return null
@@ -321,12 +326,15 @@ export async function ensureSendPayoutOrderConfirmed(
       return quote
     })
     .catch((err) => {
+      if (inflightConfirmKey !== key) return null
       lastPayoutQuoteError = err instanceof Error ? err.message : 'confirm_failed'
       return null
     })
     .finally(() => {
-      inflightConfirm = null
-      inflightConfirmKey = ''
+      if (inflightConfirmKey === key) {
+        inflightConfirm = null
+        inflightConfirmKey = ''
+      }
     })
 
   return inflightConfirm

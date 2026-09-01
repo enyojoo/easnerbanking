@@ -1430,6 +1430,7 @@ export { useYcPayInAttest, type YcPayInAttestResult } from "./hooks/use-yc-pay-i
 export { useYcCrossBorderSendMinEnforcement } from "./hooks/use-yc-cross-border-send-min-enforcement"
 export {
   QUOTE_PREFETCH_DEBOUNCE_MS,
+  PAYOUT_LOCK_PREFETCH_DEBOUNCE_MS,
   useDebouncedValue,
   type DebouncedValueControls,
 } from "./hooks/use-debounced-value"
