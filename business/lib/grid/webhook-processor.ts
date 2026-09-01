@@ -6,6 +6,7 @@ import { isEasnerRevenueAlreadySwept } from "@/lib/processing-fee/fee-wallet-swe
 import { buildGridRefundExpectedPatch, mergeGridPayoutLifecycle } from "./grid-ledger"
 import { gridMoneyToMajor } from "./webhook-amount"
 import type { GridWebhookEvent } from "./types"
+import { maybeApplyGridComplianceRestriction } from "@/lib/account-restriction"
 import {
   gridWebhookQuoteId,
   gridWebhookTransactionId,
@@ -291,6 +292,17 @@ export async function applyGridWebhookSideEffects(
   const quoteId = gridWebhookQuoteId(data)
   const transactionId = gridWebhookTransactionId(data)
   const status = String(data?.status ?? "").trim()
+
+  if (type.includes("CUSTOMER") && data) {
+    const compliance = await maybeApplyGridComplianceRestriction(admin, {
+      customer: data,
+      event,
+      partnerEventId: type,
+    })
+    if (compliance.handled && !type.includes("CUSTOMER.KYB") && !type.startsWith("VERIFICATION.")) {
+      return
+    }
+  }
 
   if (type.includes("CUSTOMER.KYB") || type.startsWith("VERIFICATION.")) {
     const { handleGridKybWebhook } = await import("./kyb-webhook")

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireAuth } from "@/app/api/noah/_helpers"
+import { requireAccountAllowsForUser } from "@/lib/account-restriction"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { getTurnkeyDepositAddressesForContext } from "@/lib/wallet/turnkey-deposit-addresses"
 import { trySyncTurnkeyDepositVaultsIfNeeded } from "@/lib/wallet/sync-deposit-vaults"
@@ -16,6 +17,10 @@ export async function GET(request: Request) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
   const { user } = auth
+
+  const admin = createSupabaseAdmin()
+  const restricted = await requireAccountAllowsForUser(admin, user.id, "deposit")
+  if (restricted instanceof NextResponse) return restricted
 
   const acc = await resolveNoahAccountContext(request, user.id)
   if (!acc.ok) return acc.response

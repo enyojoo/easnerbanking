@@ -9,12 +9,17 @@ import { resolveExpressDepositsContext } from "@/lib/stripe/onramp-context"
 import { getTurnkeyDepositAddressesForBusiness, getTurnkeyDepositAddressesForContext } from "@/lib/wallet/turnkey-deposit-addresses"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { quoteExpressDepositsPricing } from "@/lib/stripe/express-deposits-pricing-server"
+import { requireAccountAllowsForUser } from "@/lib/account-restriction"
 
 export const runtime = "nodejs"
 
 export async function POST(request: Request) {
   const resolved = await resolveExpressDepositsContext(request)
   if ("error" in resolved) return resolved.error
+
+  const restricted = await requireAccountAllowsForUser(resolved.ctx.admin, resolved.ctx.payer.id, "deposit")
+  if (restricted instanceof NextResponse) return restricted
+
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
   const paymentMethod = String(body.paymentMethod ?? "card").trim()
   const sourceCurrency = expressDepositsSourceCurrency(resolved.ctx.payerCountry) ?? "usd"

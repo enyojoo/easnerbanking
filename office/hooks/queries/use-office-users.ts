@@ -39,6 +39,8 @@ export type OfficeUserRow = {
   totalVolume: number
   verificationStatus?: string
   noahKycStatus?: string
+  accountRestrictionPhase?: "wind_down" | "locked" | null
+  accountRestrictionWindDownEndsAt?: string | null
 }
 
 /**

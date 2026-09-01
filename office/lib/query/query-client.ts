@@ -23,7 +23,7 @@ export function getBrowserQueryClient(): QueryClient {
         queries: {
           gcTime: BROWSER_QUERY_CACHE_GC_MS,
           refetchOnWindowFocus: false,
-          refetchOnReconnect: false,
+          refetchOnReconnect: true,
         },
       },
     })

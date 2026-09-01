@@ -5,6 +5,7 @@ import {
 } from "@/lib/yellowcard/fund-balance-quote-service"
 import { ycFundBalanceQuoteError } from "@/lib/yellowcard/fund-balance-quote-errors"
 import { resolveYcFundBalanceContext } from "@/lib/yellowcard/resolve-fund-balance-context"
+import { requireAccountAllowsForUser } from "@/lib/account-restriction"
 
 export const runtime = "nodejs"
 
@@ -12,6 +13,9 @@ export const runtime = "nodejs"
 export async function POST(request: Request) {
   const resolved = await resolveYcFundBalanceContext(request)
   if ("error" in resolved) return resolved.error
+
+  const restricted = await requireAccountAllowsForUser(resolved.ctx.admin, resolved.ctx.kycUserId, "deposit")
+  if (restricted instanceof NextResponse) return restricted
 
   try {
     const quote = await confirmFundBalanceOrder(resolved.ctx)

@@ -415,9 +415,10 @@ describe("mapLedgerRowToMobileListItem", () => {
 })
 
 describe("isSuccessfulFeedTransaction", () => {
-  it("counts settled and deposited ledger rows", () => {
+  it("counts settled, deposited, and confirmed ledger rows", () => {
     expect(isSuccessfulFeedTransaction(baseRow({ status: "settled" }))).toBe(true)
     expect(isSuccessfulFeedTransaction(baseRow({ status: "deposited" }))).toBe(true)
+    expect(isSuccessfulFeedTransaction(baseRow({ status: "confirmed" }))).toBe(true)
   })
 
   it("excludes pending, failed, and cancelled rows", () => {

@@ -14,7 +14,9 @@ import { requestHostedKybPrime } from "@/lib/compliance/prime-business-verificat
 import { requestWorkspaceWarm } from "@/lib/query/prime-workspace-nav"
 import { PinSetupScreen } from "./pin-setup-screen"
 import { PinUnlockScreen } from "./pin-unlock-screen"
+import { AccountSuspendedScreen } from "./account-suspended-screen"
 import { PinLayer } from "./pin-layer"
+import { useAccountRestriction } from "@/hooks/use-account-restriction"
 
 /**
  * Gates the authenticated shell: mandatory PIN setup (when Web Crypto available), then soft-lock UI.
@@ -49,6 +51,8 @@ function PinGateHold() {
 
 export function AppLockProvider({ children }: { children: React.ReactNode }) {
   const { user, logout, isLoading, sessionUserId, canBootstrapWorkspace } = useAuth()
+  const restrictionQuery = useAccountRestriction(Boolean(user?.id || sessionUserId))
+  const restriction = restrictionQuery.data
   const [bump, setBump] = useState(0)
   const [resume, setResume] = useState({ version: 0, until: 0 })
   const [gate, setGate] = useState<PinGate>("pending")
@@ -123,6 +127,18 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
   )
 
   const gatedWithoutUser = (gate === "lock" || gate === "setup") && !gateUserId
+  if (restriction?.active && restriction.phase === "locked") {
+    return wrap(
+      <PinLayer>
+        <AccountSuspendedScreen
+          onLogout={() => {
+            void logout()
+          }}
+        />
+      </PinLayer>,
+    )
+  }
+
   if (gate === "pending" || gatedWithoutUser) {
     return wrap(
       <PinLayer>

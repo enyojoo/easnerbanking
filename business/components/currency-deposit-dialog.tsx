@@ -47,6 +47,8 @@ import {
   warmBusinessExpressOnrampStatus,
 } from "@/lib/express-onramp-status-cache"
 import { loadExpressOnramp, prefetchExpressOnramp } from "@/lib/stripe/load-crypto-onramp"
+import { useAccountRestriction } from "@/hooks/use-account-restriction"
+import { accountRestrictionDepositsBlockedCopy } from "@easner/shared"
 
 function tier1StatusIsInReview(status: string | null | undefined): boolean {
   const s = (status || "").toLowerCase()
@@ -317,6 +319,8 @@ function BankDepositDetailsPanel({
 }
 
 export function CurrencyDepositDialog({ account, copiedField, onCopy }: CurrencyDepositDialogProps) {
+  const restrictionQuery = useAccountRestriction()
+  const depositsBlocked = Boolean(restrictionQuery.data?.active)
   const {
     tier1Complete,
     tier1VerificationStatus,
@@ -803,7 +807,13 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
   return (
     <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="flex-1 bg-transparent gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex-1 bg-transparent gap-2"
+          disabled={depositsBlocked}
+          title={depositsBlocked ? accountRestrictionDepositsBlockedCopy() : undefined}
+        >
           <Plus className="h-4 w-4" />
           Deposit
         </Button>

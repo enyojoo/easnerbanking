@@ -47,6 +47,8 @@ const TEMPLATE_PREFERENCE: Record<string, EmailPreferenceCategory> = {
   adminTransactionNotification: "internal",
   appDownloadLink: "marketing",
   accountStatement: "transactional",
+  accountRestricted: "transactional",
+  accountRestrictionLifted: "transactional",
 }
 
 export function emailTemplatePreferenceCategory(templateKey: string): EmailPreferenceCategory {

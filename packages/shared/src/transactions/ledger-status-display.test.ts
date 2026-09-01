@@ -45,10 +45,12 @@ describe("ledgerStatusMatchesUserFilter", () => {
 })
 
 describe("isSuccessfulTransactionStatus", () => {
-  it("counts settled and deposited as successful", () => {
+  it("counts settled, deposited, and confirmed as successful", () => {
     expect(isSuccessfulTransactionStatus("settled")).toBe(true)
     expect(isSuccessfulTransactionStatus("completed")).toBe(true)
     expect(isSuccessfulTransactionStatus("deposited")).toBe(true)
+    expect(isSuccessfulTransactionStatus("confirmed")).toBe(true)
+    expect(isSuccessfulTransactionStatus("Confirmed")).toBe(true)
   })
 
   it("excludes pending, processing, and failed", () => {

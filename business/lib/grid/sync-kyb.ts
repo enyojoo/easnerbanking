@@ -7,6 +7,7 @@ import {
   type VerificationStatus,
 } from "@/lib/compliance"
 import { persistKybApplicationFromGrid } from "./kyb-application-store"
+import { maybeApplyGridComplianceRestriction } from "@/lib/account-restriction"
 import { notifyBusinessKybStatusChange } from "@/lib/notifications/verification-notify"
 import { extractGridCustomerRejectionReasons } from "@easner/shared"
 import { isGridShellBusinessTaxId } from "./business-kyc-metadata"
@@ -134,6 +135,11 @@ export async function syncGridBusinessKybToSupabase(input: {
     }
     throw e
   })
+
+  await maybeApplyGridComplianceRestriction(input.admin, {
+    customer,
+    partnerEventId: `sync-kyb:${customerId}`,
+  }).catch((e) => console.warn("grid compliance restriction (non-fatal):", e))
 
   const verifications = await fetchGridVerificationsForCustomer(customerId)
   const documents = await fetchGridDocumentsForKyb(customerId, customer)

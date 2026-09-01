@@ -56,6 +56,9 @@ import {
 } from '../../lib/warmYcLocalDepositCaches'
 import { useStackHardwareBack } from '../../hooks/useStackHardwareBack'
 import { navigateStackBack } from '../../navigation/stackBackNavigation'
+import { AccountRestrictionBanner } from '../../components/AccountRestrictionBanner'
+import { useAccountRestrictionData } from '../../hooks/queries/use-account-restriction'
+import { accountRestrictionDepositsBlockedCopy } from '@easner/shared'
 
 type TabType = 'cash' | 'stablecoin'
 
@@ -64,6 +67,8 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const { user, userProfile, refreshUserProfile } = useAuth()
   const queryClient = useQueryClient()
   const { scope } = useScope()
+  const accountRestriction = useAccountRestrictionData(Boolean(user?.id))
+  const depositsRestricted = accountRestriction.active
   const currency = ((route.params as any)?.currency || 'USD') as 'USD' | 'EUR'
   const vaQuery = useConsumerVirtualAccounts()
   const depositQuery = useConsumerDepositAddresses()
@@ -259,11 +264,13 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const localDepositBlocked = Boolean(localPayInCurrency === 'NGN' && ngMissingType)
 
   const navigateToBankDetails = () => {
+    if (depositsRestricted) return
     haptics.medium()
     navigation.navigate('ReceiveBankDetails' as never, { currency } as never)
   }
 
   const navigateToLocalDeposit = (payInRail: YcPayInRail, country?: string) => {
+    if (depositsRestricted) return
     const cc = String(country || residenceCountry || '').trim().toUpperCase()
     const cur = country
       ? mapResidenceToLocalPayInCurrency(cc)
@@ -583,6 +590,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const effectiveTab: TabType = showTabBar ? activeTab : showCashTab ? 'cash' : 'stablecoin'
 
   const navigateToStablecoinDetails = (method: StablecoinReceiveMethod) => {
+    if (depositsRestricted) return
     if (method.status !== 'active' || !method.address) return
     haptics.medium()
     navigation.navigate('ReceiveStablecoinDetails' as never, {
@@ -710,7 +718,16 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
           contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
         >
           <View style={styles.content}>
-            {effectiveTab === 'cash' && showCashTab ? (
+            <AccountRestrictionBanner restriction={accountRestriction} />
+            {depositsRestricted ? (
+              <View style={styles.kycNoticeContainer}>
+                <View style={styles.kycNoticeIconContainer}>
+                  <ShieldCheck size={32} color={colors.primary.main} strokeWidth={2} />
+                </View>
+                <Text style={styles.kycNoticeTitle}>Deposits paused</Text>
+                <Text style={styles.kycNoticeText}>{accountRestrictionDepositsBlockedCopy()}</Text>
+              </View>
+            ) : effectiveTab === 'cash' && showCashTab ? (
               !verificationComplete ? (
                 renderDepositVerificationNotice('cash')
               ) : (

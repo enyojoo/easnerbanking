@@ -213,6 +213,21 @@ export const payrollFundingNeededFixture: PayrollFundingNeededEmailData = {
   runUrl: "https://business.easner.com/payroll/runs/run-123",
 }
 
+export const accountRestrictedFixture = {
+  email: "owner@example.com",
+  firstName: "Alex",
+  businessName: "Acme LLC",
+  windDownDeadline: "Sep 3, 2026, 12:00 PM",
+  dashboardUrl: "https://business.easner.com",
+}
+
+export const accountRestrictionLiftedFixture = {
+  email: "owner@example.com",
+  firstName: "Alex",
+  businessName: "Acme LLC",
+  dashboardUrl: "https://business.easner.com",
+}
+
 /** Template key → fixture data for render tests */
 export const templateFixtures: Record<string, unknown> = {
   appDownloadLink: appDownloadLinkFixture,
@@ -247,6 +262,8 @@ export const templateFixtures: Record<string, unknown> = {
   teamMemberJoined: teamMemberJoinedFixture,
   payrollRunSummary: payrollRunSummaryFixture,
   payrollFundingNeeded: payrollFundingNeededFixture,
+  accountRestricted: accountRestrictedFixture,
+  accountRestrictionLifted: accountRestrictionLiftedFixture,
   passwordChanged: securityPasswordChangedFixture,
   passwordResetCompleted: { ...securityPasswordChangedFixture, alertType: "password_reset_completed" as const },
   mfaEnabled: { ...securityPasswordChangedFixture, alertType: "mfa_enabled" as const },

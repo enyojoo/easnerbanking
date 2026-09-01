@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/app/api/noah/_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
+import { requireAccountAllowsForUser } from "@/lib/account-restriction"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { createTurnkeySend } from "@/lib/turnkey/send"
 
@@ -16,6 +17,10 @@ type Body = {
 export async function POST(request: Request) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
+
+  const admin = createSupabaseAdmin()
+  const restricted = await requireAccountAllowsForUser(admin, auth.user.id, "send")
+  if (restricted instanceof NextResponse) return restricted
 
   const accountCtx = await resolveNoahAccountContext(request, auth.user.id, undefined, "write")
   if (!accountCtx.ok) return accountCtx.response

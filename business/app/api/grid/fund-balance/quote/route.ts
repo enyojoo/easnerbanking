@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
+import { requireAccountAllowsForUser } from "@/lib/account-restriction"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireGeoPersonalRailAccess } from "@/lib/compliance/geo-personal-rail-access"
 import { previewGridFundBalanceQuote } from "@/lib/grid/fund-balance-session"
@@ -9,6 +10,10 @@ export const runtime = "nodejs"
 export async function POST(request: Request) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
+
+  const admin = createSupabaseAdmin()
+  const restricted = await requireAccountAllowsForUser(admin, auth.user.id, "deposit")
+  if (restricted instanceof NextResponse) return restricted
 
   const ctx = await resolveNoahContextAsync(auth.user.id, request)
   if (!ctx.ok) return ctx.response
@@ -21,7 +26,6 @@ export async function POST(request: Request) {
   }
 
   const rail = body?.rail === "mobile_money" ? "mobile_money" : "bank_transfer"
-  const admin = createSupabaseAdmin()
   const businessId = ctx.scope === "business" ? ctx.businessId : null
 
   if (businessId) {

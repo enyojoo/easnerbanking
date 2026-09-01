@@ -16,12 +16,19 @@ import { getTurnkeyDepositAddressesForBusiness, getTurnkeyDepositAddressesForCon
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { insertPendingOnrampSession } from "@/lib/stripe/onramp-ledger"
 import { quoteExpressDepositsPricing } from "@/lib/stripe/express-deposits-pricing-server"
+import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { requireAccountAllowsForUser } from "@/lib/account-restriction"
 
 export const runtime = "nodejs"
 
 export async function POST(request: Request) {
   const resolved = await resolveExpressDepositsContext(request)
   if ("error" in resolved) return resolved.error
+
+  const admin = createSupabaseAdmin()
+  const restricted = await requireAccountAllowsForUser(admin, resolved.ctx.payer.id, "deposit")
+  if (restricted instanceof NextResponse) return restricted
+
   if (!resolved.ctx.payer.stripe_crypto_customer_id) {
     return NextResponse.json({ error: "Set up Express deposits first." }, { status: 403 })
   }

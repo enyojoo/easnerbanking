@@ -1,6 +1,8 @@
 import {
   formatMoneyDisplay,
+  isSuccessfulTransactionStatus,
   isVerificationDepositMetadata,
+  normalizeWalletReportingCurrency,
   normalizeYcFundBalanceDepositReview,
   reconstructYcFundBalanceDepositReview,
   resolveAccountImpactAmount,
@@ -54,6 +56,8 @@ export type TopCurrencyRow = {
   code: string
   count: number
   totalAmount: number
+  /** Wallet-impact USD attributed to this currency’s transactions. Ranking uses this + count. */
+  usdValue: number
   /** Local payout fiat – informational; USD/EUR balance volume lives in volume KPIs. */
   dataOnly?: boolean
 }
@@ -104,9 +108,7 @@ function roundAmount(n: number): number {
 }
 
 function asBalanceCurrency(raw: string | null | undefined): BalanceCurrencyCode | null {
-  const code = String(raw || "").trim().toUpperCase()
-  if (code === "USDC") return "USD"
-  if (code === "EURC") return "EUR"
+  const code = normalizeWalletReportingCurrency(raw)
   return BALANCE_CURRENCIES.has(code as BalanceCurrencyCode) ? (code as BalanceCurrencyCode) : null
 }
 
@@ -487,7 +489,7 @@ function pushBucket(
   amount: number,
   dataOnly = false,
 ) {
-  const normalized = String(code || "").trim().toUpperCase()
+  const normalized = normalizeWalletReportingCurrency(code)
   if (!normalized || normalized === "–" || !Number.isFinite(amount) || amount <= 0) return
   buckets.push({ code: normalized, flow, amount, dataOnly })
 }
@@ -550,14 +552,36 @@ export function createEmptyYcVolumeBreakdown(): YcVolumeBreakdown {
   }
 }
 
+function usdImpactAmount(tx: TxRow): number {
+  let impact = resolveOfficeAccountImpact(tx)
+  if (!impact) {
+    const pres = resolveOfficeTxPresentation(tx)
+    if (pres.balanceCurrency && pres.balanceAmount > 0) {
+      impact = {
+        amount: pres.balanceAmount,
+        currency: pres.balanceCurrency,
+        source: "metadata",
+      }
+    }
+  }
+  if (!impact || !Number.isFinite(impact.amount) || impact.amount <= 0) return 0
+  return asBalanceCurrency(impact.currency) === "USD" ? impact.amount : 0
+}
+
 export function computeProviderLedgerDashboardExtras(transactions: TxRow[]) {
   const volumeBalance = createEmptyVolumeBalance()
   const ycVolumeBreakdown = createEmptyYcVolumeBreakdown()
-  const byCode = new Map<string, { code: string; count: number; totalAmount: number; dataOnly: boolean }>()
+  const byCode = new Map<
+    string,
+    { code: string; count: number; totalAmount: number; usdValue: number; dataOnly: boolean }
+  >()
 
   for (const t of transactions) {
+    if (!isSuccessfulTransactionStatus(String(t.status ?? ""))) continue
+
     const direction = normalizeDirection(t.direction)
     const verificationDeposit = isVerificationDepositTx(t)
+    const usdValue = usdImpactAmount(t)
 
     if (!verificationDeposit) {
       let impact = resolveOfficeAccountImpact(t)
@@ -596,9 +620,11 @@ export function computeProviderLedgerDashboardExtras(transactions: TxRow[]) {
         code: bucket.code,
         count: 0,
         totalAmount: 0,
+        usdValue: 0,
         dataOnly: true,
       }
       cur.count += 1
+      if (!verificationDeposit) cur.usdValue += usdValue
       if (bucket.dataOnly) {
         if (cur.dataOnly) cur.totalAmount += bucket.amount
       } else {
@@ -621,9 +647,10 @@ export function computeProviderLedgerDashboardExtras(transactions: TxRow[]) {
       code: v.code,
       count: v.count,
       totalAmount: roundAmount(v.totalAmount),
+      usdValue: roundAmount(v.usdValue),
       dataOnly: v.dataOnly || undefined,
     }))
-    .sort((a, b) => b.totalAmount - a.totalAmount || b.count - a.count)
+    .sort((a, b) => b.count - a.count || b.usdValue - a.usdValue)
     .slice(0, 20)
 
   const bucketDefs = [
@@ -637,7 +664,7 @@ export function computeProviderLedgerDashboardExtras(transactions: TxRow[]) {
 
   for (const t of transactions) {
     const st = normalizeStatus(t.status)
-    if (st !== "completed" && st !== "settled" && st !== "deposited") continue
+    if (!isSuccessfulTransactionStatus(st)) continue
     const start = t.created_at ? new Date(t.created_at).getTime() : NaN
     const end = t.updated_at ? new Date(t.updated_at).getTime() : NaN
     if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) continue

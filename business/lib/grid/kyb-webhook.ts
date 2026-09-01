@@ -3,6 +3,7 @@ import { parseGridPlatformCustomerId } from "@easner/shared"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { syncGridBusinessKybToSupabase } from "./sync-kyb"
 import { provisionAfterVerificationApproved } from "@/lib/verification/provision-after-approval"
+import { maybeApplyGridComplianceRestriction } from "@/lib/account-restriction"
 import { gridWebhookCustomerId } from "./webhook-event-id"
 import type { GridWebhookEvent } from "./types"
 
@@ -164,6 +165,14 @@ export async function handleGridKybWebhook(
 
   const subject = await resolveBusinessSubject(admin, customerId, data)
   if (!subject) return { handled: false }
+
+  if (data) {
+    await maybeApplyGridComplianceRestriction(admin, {
+      customer: data,
+      event,
+      partnerEventId: type,
+    })
+  }
 
   const occurredAt =
     String(

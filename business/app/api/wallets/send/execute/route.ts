@@ -4,12 +4,18 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { isWalletSendEnabled } from "@/lib/relay/config"
 import { executeWalletSend, resolveWalletSendAccountContext } from "@/lib/wallet-send/wallet-send-orchestration"
 import { validateWalletRecipientForSend, type WalletRecipientRow } from "@/lib/wallet-send/validate-recipient"
+import { requireAccountAllowsForUser } from "@/lib/account-restriction"
 
 export const runtime = "nodejs"
 
 export async function POST(request: Request) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
+
+  const admin = createSupabaseAdmin()
+  const restricted = await requireAccountAllowsForUser(admin, auth.user.id, "send")
+  if (restricted instanceof NextResponse) return restricted
+
   if (!isWalletSendEnabled()) {
     return NextResponse.json({ error: "wallet_send_disabled" }, { status: 503 })
   }

@@ -29,7 +29,9 @@ function shouldInvalidateTransactionUpdate(row: Record<string, unknown>): boolea
   if (row.amount !== undefined) return true
   if (row.currency !== undefined) return true
   const status = String(row.status ?? "").toLowerCase()
-  return ["completed", "settled", "deposited", "failed", "cancelled", "canceled"].includes(status)
+  return ["completed", "settled", "deposited", "confirmed", "failed", "cancelled", "canceled"].includes(
+    status,
+  )
 }
 
 function patchOfficeTransactionInCache(
@@ -68,7 +70,35 @@ function patchOfficeTransactionInCache(
   return infinitePatched || flatPatched
 }
 
-function invalidateOverview(qc: QueryClient, refetchType: "active" | "inactive" = "inactive"): void {
+function upsertOfficeDirectoryRow(
+  qc: QueryClient,
+  queryKey: readonly unknown[],
+  row: Record<string, unknown>,
+  decorate?: (merged: Record<string, unknown>) => Record<string, unknown>,
+): boolean {
+  const id = row.id != null ? String(row.id) : ""
+  if (!id) return false
+  const prev = qc.getQueryData<Record<string, unknown>[]>(queryKey)
+  if (!Array.isArray(prev)) return false
+  const idx = prev.findIndex((r) => String(r?.id ?? "") === id)
+  const base = idx >= 0 ? prev[idx] : {}
+  let merged: Record<string, unknown> = { ...base, ...row, id }
+  if (decorate) merged = decorate(merged)
+  const next = idx >= 0 ? prev.map((r, i) => (i === idx ? merged : r)) : [merged, ...prev]
+  qc.setQueryData(queryKey, next)
+  return true
+}
+
+function decorateOfficeUserRow(merged: Record<string, unknown>): Record<string, unknown> {
+  const noahKycStatus = String(merged.noah_kyc_status ?? merged.noahKycStatus ?? "not_started")
+  return {
+    ...merged,
+    noahKycStatus,
+    verificationStatus: noahKycStatus === "approved" ? "verified" : "pending",
+  }
+}
+
+function invalidateOverview(qc: QueryClient, refetchType: "active" | "inactive" = "active"): void {
   for (const preset of OVERVIEW_PRESETS) {
     qc.invalidateQueries({ queryKey: officeKeys.overview(preset), refetchType })
   }
@@ -79,7 +109,7 @@ function invalidateAllTransactionQueries(qc: QueryClient, refetchType: "active" 
   qc.invalidateQueries({ queryKey: [...officeKeys.root, "user-transactions"], refetchType })
 }
 
-function invalidateMerchantQueries(qc: QueryClient, refetchType: "active" | "inactive" = "inactive"): void {
+function invalidateMerchantQueries(qc: QueryClient, refetchType: "active" | "inactive" = "active"): void {
   qc.invalidateQueries({ queryKey: officeKeys.businesses(), refetchType })
   qc.invalidateQueries({ queryKey: officeKeys.businessCustomers(), refetchType })
   qc.invalidateQueries({ queryKey: officeKeys.businessInvoices(), refetchType })
@@ -103,7 +133,7 @@ export function attachOfficeRealtime({
   const health: RealtimeHealth = { subscribed: false, lastEventAt: null, lastError: null }
   const emit = () => onHealth?.({ ...health })
 
-  const invalidateOverviewLazy = () => invalidateOverview(qc, "inactive")
+  const invalidateOverviewNow = () => invalidateOverview(qc, "active")
 
   const channel = supabase.channel("office:admin", { config: { broadcast: { self: false } } })
 
@@ -129,44 +159,47 @@ export function attachOfficeRealtime({
 
   const scheduleTransactions = (row?: Record<string, unknown>) => {
     schedule(TRANSACTIONS_QUERY_PREFIX, () => {
+      invalidateOverviewNow()
       if (row && shouldInvalidateTransactionUpdate(row)) {
         invalidateAllTransactionQueries(qc, "active")
-        invalidateOverviewLazy()
         return
       }
       if (row && patchOfficeTransactionInCache(qc, row)) {
-        invalidateOverviewLazy()
         return
       }
       invalidateAllTransactionQueries(qc, "active")
-      invalidateOverviewLazy()
     })
   }
 
-  const scheduleUsers = () => {
+  const scheduleUsers = (row?: Record<string, unknown>) => {
     schedule(officeKeys.users(), () => {
+      if (row) upsertOfficeDirectoryRow(qc, officeKeys.users(), row, decorateOfficeUserRow)
       qc.invalidateQueries({ queryKey: officeKeys.users(), refetchType: "active" })
-      invalidateOverviewLazy()
+      invalidateOverviewNow()
     })
   }
 
-  const scheduleMerchant = () => {
+  const scheduleMerchant = (row?: Record<string, unknown>) => {
     schedule(officeKeys.businesses(), () => {
+      if (row?.id != null) upsertOfficeDirectoryRow(qc, officeKeys.businesses(), row)
       invalidateMerchantQueries(qc, "active")
-      invalidateOverviewLazy()
+      // Users directory merges org KYB / linked business name.
+      qc.invalidateQueries({ queryKey: officeKeys.users(), refetchType: "active" })
+      invalidateOverviewNow()
     })
   }
 
   listen("transactions", "INSERT", () => scheduleTransactions())
   listen("transactions", "UPDATE", (row) => scheduleTransactions(row))
-  listen("users", "INSERT", scheduleUsers)
-  listen("users", "UPDATE", scheduleUsers)
+  listen("users", "INSERT", (row) => scheduleUsers(row))
+  listen("users", "UPDATE", (row) => scheduleUsers(row))
   listen("wallet_balances", "*", () => {
-    schedule(officeKeys.overviewRoot(), invalidateOverviewLazy)
+    schedule(officeKeys.overviewRoot(), invalidateOverviewNow)
   })
 
-  for (const table of ["businesses", "business_customers", "invoices", "terminal_sessions"] as const) {
-    listen(table, "*", scheduleMerchant)
+  listen("businesses", "*", (row) => scheduleMerchant(row))
+  for (const table of ["business_customers", "invoices", "terminal_sessions", "business_kyb_applications"] as const) {
+    listen(table, "*", () => scheduleMerchant())
   }
 
   listen("event_inbox", "*", () => {

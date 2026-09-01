@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, requireNoahEnv, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
+import { requireAccountAllowsForUser } from "@/lib/account-restriction"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { isWalletSendEnabled } from "@/lib/relay/config"
 import { confirmWalletSendOrder } from "@/lib/wallet-send/confirm-wallet-send-order"
@@ -17,6 +18,10 @@ export async function POST(request: Request) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
   const { user } = auth
+
+  const admin = createSupabaseAdmin()
+  const restricted = await requireAccountAllowsForUser(admin, user.id, "send")
+  if (restricted instanceof NextResponse) return restricted
 
   const acc = await resolveNoahAccountContext(request, user.id, undefined, "write")
   if (!acc.ok) return acc.response
@@ -34,7 +39,6 @@ export async function POST(request: Request) {
   }
 
   try {
-    const admin = createSupabaseAdmin()
     const { quote } = await confirmWalletSendOrder({
       admin,
       ctx: acc.ctx,

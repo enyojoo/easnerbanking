@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
+import { requireAccountAllowsForUser } from "@/lib/account-restriction"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { getNoahSettlementCryptoCurrency } from "@/lib/noah/config"
@@ -59,6 +60,10 @@ export async function POST(request: Request) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
   const { user } = auth
+
+  const admin = createSupabaseAdmin()
+  const restricted = await requireAccountAllowsForUser(admin, user.id, "send")
+  if (restricted instanceof NextResponse) return restricted
 
   const noahContext = await resolveNoahContextAsync(user.id, request)
   if (!noahContext.ok) return noahContext.response

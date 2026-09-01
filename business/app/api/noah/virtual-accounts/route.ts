@@ -17,6 +17,7 @@ import { ensureCurrencyUsable } from "@/lib/accounts/currency-controls"
 import { businessUsesGridVerification } from "@/lib/compliance/business-tier1"
 import { refreshGridBusinessReceiveRails } from "@/lib/grid/provision-after-approval"
 import { isGridConfigured } from "@/lib/grid/config"
+import { requireAccountAllowsForUser } from "@/lib/account-restriction"
 
 type VaCurrency = "usd" | "eur" | "gbp"
 
@@ -212,6 +213,10 @@ export async function GET(request: Request) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
   const { user } = auth
+
+  const admin = createSupabaseAdmin()
+  const restricted = await requireAccountAllowsForUser(admin, user.id, "deposit")
+  if (restricted instanceof NextResponse) return restricted
 
   const acc = await resolveNoahAccountContext(request, user.id)
   if (!acc.ok) return acc.response

@@ -32,6 +32,8 @@ import {
   primeBusinessVerificationFlow,
 } from "@/lib/compliance/prime-business-verification-flow"
 import { isSettingsVerificationFlowLocation } from "@/lib/compliance/cutover-comms"
+import { AccountRestrictionBanner } from "@/components/account-restriction-banner"
+import { useAccountRestriction } from "@/hooks/use-account-restriction"
 
 function useHostedVerificationFlowOpen() {
   const [open, setOpen] = useState(false)
@@ -124,6 +126,10 @@ export function DashboardShell({ children }: DashboardShellProps) {
     !tier1Complete &&
     !hostedVerificationFlowOpen &&
     !onSettingsPage
+  const restrictionQuery = useAccountRestriction()
+  const showRestrictionBanner = Boolean(
+    restrictionQuery.data?.active && restrictionQuery.data.phase === "wind_down",
+  )
 
   useEffect(() => {
     const prime = () =>
@@ -204,6 +210,11 @@ export function DashboardShell({ children }: DashboardShellProps) {
                   })}
                 </Link>
               ) : null}
+            </div>
+          ) : null}
+          {showRestrictionBanner && restrictionQuery.data ? (
+            <div className="z-20 shrink-0 px-8 pt-2">
+              <AccountRestrictionBanner restriction={restrictionQuery.data} />
             </div>
           ) : null}
           {/*

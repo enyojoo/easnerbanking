@@ -803,6 +803,23 @@ export type {
   CommunicationChannels,
 } from "./communication-preferences"
 export {
+  ACCOUNT_RESTRICTION_WIND_DOWN_MS,
+  ACCOUNT_RESTRICTED_CODE,
+  ACCOUNT_LOCKED_CODE,
+  computeAccountRestrictionPhase,
+  emptyAccountRestriction,
+  formatAccountRestrictionDeadline,
+  accountRestrictionWindDownBannerCopy,
+  accountRestrictionLockedCopy,
+  accountRestrictionDepositsBlockedCopy,
+} from "./account-restriction"
+export type {
+  AccountRestrictionPhase,
+  AccountRestrictionSubjectKind,
+  AccountRestrictionSource,
+  ResolvedAccountRestriction,
+} from "./account-restriction"
+export {
   BUSINESS_INDUSTRY_GROUPS,
   getAllIndustriesFlat,
   getIndustryById,

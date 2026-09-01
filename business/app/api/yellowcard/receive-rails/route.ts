@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/app/api/noah/_helpers"
+import { requireAccountAllowsForUser } from "@/lib/account-restriction"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveYcReceiveRailAvailability } from "@/lib/yellowcard/receive-rails"
 import { resolveYcPayInNetworks } from "@/lib/yellowcard/pay-in-networks"
@@ -15,6 +16,10 @@ export async function GET(request: Request) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
 
+  const admin = createSupabaseAdmin()
+  const restricted = await requireAccountAllowsForUser(admin, auth.user.id, "deposit")
+  if (restricted instanceof NextResponse) return restricted
+
   const url = new URL(request.url)
   const country = String(url.searchParams.get("country") ?? "").trim().toUpperCase()
   let currency = String(url.searchParams.get("currency") ?? "").trim().toUpperCase()
@@ -28,7 +33,6 @@ export async function GET(request: Request) {
     )
   }
 
-  const admin = createSupabaseAdmin()
   const rails = await resolveYcReceiveRailAvailability(admin, {
     countryCode: country,
     currencyCode: currency,

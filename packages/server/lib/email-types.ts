@@ -169,6 +169,18 @@ export interface SecurityAlertEmailData {
   audience?: EmailAudience
 }
 
+/** Customer notice when an account restriction is first applied. */
+export interface AccountRestrictionEmailData {
+  email: string
+  firstName?: string
+  /** Business legal/display name for org-centric copy. */
+  businessName?: string
+  /** Pre-formatted wind-down deadline, e.g. "Sep 3, 2026, 12:00 PM". */
+  windDownDeadline?: string
+  dashboardUrl?: string
+  audience?: EmailAudience
+}
+
 /** easner.com “Get the app” popup – download link email to a non-account visitor. */
 export interface AppDownloadLinkEmailData {
   email: string

@@ -257,7 +257,7 @@ export default function AdminDashboardPage() {
                     <TableRow>
                       <TableHead>Currency</TableHead>
                       <TableHead className="w-[4.5rem]">TXN</TableHead>
-                      <TableHead>Sum of amounts</TableHead>
+                      <TableHead>USD</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -266,7 +266,7 @@ export default function AdminDashboardPage() {
                         <TableCell className="font-medium">{row.code}</TableCell>
                         <TableCell>{row.count}</TableCell>
                         <TableCell className="whitespace-nowrap">
-                          {formatMoneyDisplay(row.totalAmount, row.code)}
+                          {formatMoneyDisplay(row.usdValue ?? 0, "USD")}
                         </TableCell>
                       </TableRow>
                     ))}

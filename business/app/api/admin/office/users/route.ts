@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { parseCommunicationPreferences } from "@easner/shared"
+import { computeAccountRestrictionPhase } from "@easner/shared"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireOfficeAdmin } from "@/lib/api/admin-auth"
 
@@ -126,18 +127,49 @@ export async function GET(request: Request) {
     }
   }
 
+  const restrictionByUser = new Map<string, { phase: string; windDownEndsAt: string | null }>()
+  const restrictionByBusiness = new Map<string, { phase: string; windDownEndsAt: string | null }>()
+  {
+    const { data: activeRestrictions } = await admin
+      .from("account_restrictions")
+      .select("subject_kind,user_id,business_id,phase,restricted_at,wind_down_ends_at,locked_at")
+      .is("lifted_at", null)
+    for (const row of activeRestrictions ?? []) {
+      const phase = computeAccountRestrictionPhase({
+        restrictedAt: String(row.restricted_at),
+        windDownEndsAt: String(row.wind_down_ends_at),
+        lockedAt: row.locked_at as string | null,
+      })
+      const payload = { phase, windDownEndsAt: String(row.wind_down_ends_at) }
+      if (row.subject_kind === "user" && row.user_id) {
+        restrictionByUser.set(String(row.user_id), payload)
+      }
+      if (row.subject_kind === "business" && row.business_id) {
+        restrictionByBusiness.set(String(row.business_id), payload)
+      }
+    }
+  }
+
   const users = (rows ?? []).map((row) => {
     const r = row as UserRow & { communication_preferences?: unknown }
     const org = r.easner_business_id ? orgKybByBusinessId.get(r.easner_business_id) : undefined
     const n = countByUser.get(r.id) ?? 0
     const hasExpoPushToken = n > 0
     const { communication_preferences: commRaw, ...rest } = row as Record<string, unknown>
+    const role = String(r.role ?? "").toLowerCase()
+    const businessId = r.easner_business_id ? String(r.easner_business_id) : null
+    const restriction =
+      (role === "business" || businessId) && businessId
+        ? restrictionByBusiness.get(businessId)
+        : restrictionByUser.get(r.id)
     return {
       ...rest,
       communicationPreferences: parseCommunicationPreferences(commRaw),
       hasExpoPushToken,
       pushDeviceCount: n,
       email_confirmed_at: authById.get(r.id) ?? null,
+      accountRestrictionPhase: restriction?.phase ?? null,
+      accountRestrictionWindDownEndsAt: restriction?.windDownEndsAt ?? null,
       ...(org
         ? {
             grid_customer_id: org.grid_customer_id,

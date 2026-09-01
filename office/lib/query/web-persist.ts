@@ -13,7 +13,7 @@ import type { PersistedClient, Persister } from "@tanstack/react-query-persist-c
  * to idle so persistence never competes with interactions.
  */
 
-export const OFFICE_WEB_QUERY_CACHE_BUSTER = "office-web-query-cache-v2"
+export const OFFICE_WEB_QUERY_CACHE_BUSTER = "office-web-query-cache-v3"
 export const OFFICE_WEB_QUERY_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
 
 const OFFICE_WEB_QUERY_CACHE_KEY_PREFIX_V1 = "easner_office_query_cache_v1_"

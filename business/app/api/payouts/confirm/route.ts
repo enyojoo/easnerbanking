@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, resolveNoahContextAsync } from "@/app/api/noah/_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
+import { requireAccountAllowsForUser } from "@/lib/account-restriction"
 import { mapNoahPayoutUserError } from "@/lib/noah/noah-prepare-errors"
 import { logNoahPayoutFailure } from "@/lib/noah/log-noah-payout-failure"
 import {
@@ -24,6 +25,10 @@ export async function POST(request: Request) {
   const auth = await requireAuth(request)
   if ("error" in auth) return auth.error
   const { user } = auth
+
+  const admin = createSupabaseAdmin()
+  const restricted = await requireAccountAllowsForUser(admin, user.id, "send")
+  if (restricted instanceof NextResponse) return restricted
 
   const [noahCtxResult, acc] = await Promise.all([
     resolveNoahContextAsync(user.id, request),

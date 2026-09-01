@@ -7,6 +7,7 @@ import {
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { resolveNoahCustomerTarget } from "@/lib/noah/resolve-noah-customer-target"
 import { syncNoahCustomerToSupabase } from "@/lib/noah/sync-user"
+import { maybeApplyNoahComplianceRestriction } from "@/lib/account-restriction"
 import { mapNoahVerificationToKycStatus } from "@/lib/noah/map-kyc"
 import { pickTxAmountAndCurrency } from "@/lib/noah/map-transactions"
 import {
@@ -593,6 +594,13 @@ export async function applyNoahWebhookSideEffects(
           { occurredAt },
         )
       }
+      await maybeApplyNoahComplianceRestriction(admin, {
+        customer: customerLike,
+        kind: parsed.kind,
+        userId: parsed.kind === "individual" ? parsed.userId : undefined,
+        businessId: parsed.kind === "business" ? parsed.businessId : undefined,
+        partnerEventId: String(p.EventType ?? p.eventType ?? "Customer"),
+      })
       const mappedStatus = mapNoahVerificationToKycStatus(customerLike)
       if (mappedStatus === "approved") {
         let gridCustomerId: string | null = null

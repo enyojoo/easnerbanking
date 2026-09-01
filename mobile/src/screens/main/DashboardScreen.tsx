@@ -74,6 +74,8 @@ import { useTransactionListFocusRefresh } from '../../hooks/use-transaction-list
 import { invalidateTransactionsFeed } from '../../query/refresh-user-feeds'
 import { getTransactionListName } from '../../lib/transactionListLabel'
 import { ProfileAvatarCircle } from '../../components/ProfileAvatarCircle'
+import { AccountRestrictionBanner } from '../../components/AccountRestrictionBanner'
+import { useAccountRestrictionData } from '../../hooks/queries/use-account-restriction'
 import { avatarImageUri, warmAvatarCache } from '../../lib/avatarCache'
 import { buildGroupedActivityItems } from '../../lib/transactionListGrouping'
 import { haptics } from '../../lib/haptics'
@@ -134,6 +136,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   }, [heroBalanceFontSize])
   const { user, userProfile, refreshUserProfile, loading: authLoading } = useAuth()
   const { scope } = useScope()
+  const accountRestriction = useAccountRestrictionData(Boolean(user?.id))
   const qc = useQueryClient()
   const txQuery = useTransactionsList({}, TRANSACTIONS_LEDGER_PAGE_SIZE)
   const realtimeHealth = useRealtimeHealth()
@@ -709,6 +712,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
           />
         }
       >
+        <AccountRestrictionBanner restriction={accountRestriction} />
         <LinearGradient
           colors={palette.primary.heroGradient as unknown as readonly [string, string]}
           start={{ x: 0, y: 0 }}

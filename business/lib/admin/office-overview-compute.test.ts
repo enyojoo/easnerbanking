@@ -237,6 +237,7 @@ describe("office-overview-compute", () => {
       {
         id: "in-1",
         direction: "in",
+        status: "settled",
         currency: "USD",
         amount: 50,
         metadata: { fiat_deposit_currency: "USD", fiat_deposit_amount: 50 },
@@ -244,6 +245,7 @@ describe("office-overview-compute", () => {
       {
         id: "out-1",
         direction: "out",
+        status: "settled",
         currency: "NGN",
         amount: 80000,
         base_currency: "USD",
@@ -260,7 +262,9 @@ describe("office-overview-compute", () => {
     const ngn = topCurrencies.find((r) => r.code === "NGN")
     expect(usd?.count).toBe(1)
     expect(usd?.totalAmount).toBe(50)
+    expect(usd?.usdValue).toBe(50)
     expect(ngn?.totalAmount).toBe(80000)
+    expect(ngn?.usdValue).toBe(50)
     expect(ngn?.dataOnly).toBe(true)
     expect(volumeBalance.USD.moneyIn).toBe(50)
     expect(volumeBalance.USD.moneyOut).toBe(50)
@@ -272,6 +276,7 @@ describe("office-overview-compute", () => {
       {
         id: "in-usd-1",
         direction: "in",
+        status: "settled",
         currency: "USD",
         amount: 10,
         metadata: { fiat_deposit_currency: "USD", fiat_deposit_amount: 10 },
@@ -279,6 +284,7 @@ describe("office-overview-compute", () => {
       {
         id: "out-ngn-1",
         direction: "out",
+        status: "settled",
         currency: "NGN",
         amount: 80000,
         metadata: {
@@ -291,6 +297,7 @@ describe("office-overview-compute", () => {
       {
         id: "out-ngn-2",
         direction: "out",
+        status: "settled",
         currency: "NGN",
         amount: 40000,
         metadata: {
@@ -305,11 +312,15 @@ describe("office-overview-compute", () => {
     const ngn = topCurrencies.find((r) => r.code === "NGN")
     expect(usd?.count).toBe(1)
     expect(usd?.totalAmount).toBe(10)
+    expect(usd?.usdValue).toBe(10)
     expect(ngn?.count).toBe(2)
     expect(ngn?.totalAmount).toBe(120000)
+    expect(ngn?.usdValue).toBe(75)
     expect(ngn?.dataOnly).toBe(true)
     expect(volumeBalance.USD.moneyOut).toBe(75)
     expect(volumeBalance.USD.total).toBe(85)
+    expect(topCurrencies[0]?.code).toBe("NGN")
+    expect(topCurrencies[1]?.code).toBe("USD")
   })
 
   it("excludes verification deposits from volume KPIs but keeps them informational in top currencies", () => {
@@ -317,6 +328,7 @@ describe("office-overview-compute", () => {
       {
         id: "in-funding",
         direction: "in",
+        status: "settled",
         currency: "USD",
         amount: 100,
         metadata: { fiat_deposit_currency: "USD", fiat_deposit_amount: 100, deposit_kind: "funding" },
@@ -324,6 +336,7 @@ describe("office-overview-compute", () => {
       {
         id: "in-verification",
         direction: "in",
+        status: "settled",
         currency: "USD",
         amount: 0.32,
         metadata: {
@@ -338,6 +351,7 @@ describe("office-overview-compute", () => {
     expect(volumeBalance.USD.total).toBe(100)
     expect(usd?.count).toBe(2)
     expect(usd?.totalAmount).toBe(100)
+    expect(usd?.usdValue).toBe(100)
     expect(usd?.dataOnly).toBeUndefined()
   })
 
@@ -346,6 +360,7 @@ describe("office-overview-compute", () => {
       {
         id: "in-verification",
         direction: "in",
+        status: "settled",
         currency: "USD",
         amount: 0.32,
         metadata: {
@@ -358,6 +373,7 @@ describe("office-overview-compute", () => {
     expect(volumeBalance.USD.total).toBe(0)
     expect(topCurrencies[0]?.code).toBe("USD")
     expect(topCurrencies[0]?.dataOnly).toBe(true)
+    expect(topCurrencies[0]?.usdValue).toBe(0)
   })
 
   it("sums USD volume from balance leg on payout rows", () => {
@@ -397,6 +413,17 @@ describe("office-overview-compute", () => {
       metadata: { fiat_deposit_currency: "EUR", fiat_deposit_amount: 200 },
     })
     expect(buckets).toEqual([{ code: "EUR", flow: "pay_in", amount: 200, dataOnly: false }])
+  })
+
+  it("extractCurrencyBuckets denotes USDC as USD", () => {
+    const buckets = extractCurrencyBuckets({
+      id: "usdc",
+      direction: "in",
+      currency: "USDC",
+      amount: 80,
+      metadata: { fiat_deposit_currency: "USDC", fiat_deposit_amount: 80 },
+    })
+    expect(buckets).toEqual([{ code: "USD", flow: "pay_in", amount: 80, dataOnly: false }])
   })
 
   it("activityStatusSuffix maps settled to Completed", () => {
@@ -446,6 +473,7 @@ describe("office-overview-compute", () => {
       {
         id: "yc-cb-1",
         direction: "out",
+        status: "settled",
         provider: "yellowcard",
         currency: "NGN",
         amount: 500000,
@@ -468,6 +496,7 @@ describe("office-overview-compute", () => {
       {
         id: "yc-fb-1",
         direction: "in",
+        status: "settled",
         provider: "yellowcard",
         currency: "NGN",
         amount: 250000,
@@ -487,6 +516,7 @@ describe("office-overview-compute", () => {
       {
         id: "yc-cb-missing",
         direction: "out",
+        status: "settled",
         provider: "yellowcard",
         currency: "NGN",
         amount: 500000,
@@ -498,5 +528,100 @@ describe("office-overview-compute", () => {
       },
     ])
     expect(volumeBalance.USD.total).toBe(0)
+  })
+
+  it("folds USDC into USD for top currencies and volume", () => {
+    const { topCurrencies, volumeBalance } = computeProviderLedgerDashboardExtras([
+      {
+        id: "usdc-in",
+        direction: "in",
+        status: "confirmed",
+        currency: "USDC",
+        amount: 80,
+        metadata: { fiat_deposit_currency: "USDC", fiat_deposit_amount: 80 },
+      },
+    ])
+    expect(topCurrencies.map((r) => r.code)).toEqual(["USD"])
+    expect(topCurrencies[0]?.count).toBe(1)
+    expect(topCurrencies[0]?.usdValue).toBe(80)
+    expect(volumeBalance.USD.moneyIn).toBe(80)
+  })
+
+  it("counts confirmed money in/out and ignores pending and failed", () => {
+    const { volumeBalance, topCurrencies } = computeProviderLedgerDashboardExtras([
+      {
+        id: "confirmed-in",
+        direction: "in",
+        status: "confirmed",
+        currency: "USD",
+        amount: 40,
+        metadata: { fiat_deposit_currency: "USD", fiat_deposit_amount: 40 },
+      },
+      {
+        id: "pending-in",
+        direction: "in",
+        status: "pending",
+        currency: "USD",
+        amount: 999,
+        metadata: { fiat_deposit_currency: "USD", fiat_deposit_amount: 999 },
+      },
+      {
+        id: "failed-out",
+        direction: "out",
+        status: "failed",
+        currency: "USD",
+        amount: 25,
+        metadata: { send_currency: "USD", total_debited: 25 },
+      },
+    ])
+    expect(volumeBalance.USD.moneyIn).toBe(40)
+    expect(volumeBalance.USD.moneyOut).toBe(0)
+    expect(topCurrencies).toHaveLength(1)
+    expect(topCurrencies[0]?.count).toBe(1)
+    expect(topCurrencies[0]?.usdValue).toBe(40)
+  })
+
+  it("ranks top currencies by txn count then USD value", () => {
+    const { topCurrencies } = computeProviderLedgerDashboardExtras([
+      {
+        id: "usd-large",
+        direction: "in",
+        status: "settled",
+        currency: "USD",
+        amount: 500,
+        metadata: { fiat_deposit_currency: "USD", fiat_deposit_amount: 500 },
+      },
+      {
+        id: "ngn-1",
+        direction: "out",
+        status: "confirmed",
+        currency: "NGN",
+        amount: 80000,
+        metadata: {
+          receive_currency: "NGN",
+          receive_amount: 80000,
+          send_currency: "USD",
+          total_debited: 50,
+        },
+      },
+      {
+        id: "ngn-2",
+        direction: "out",
+        status: "settled",
+        currency: "NGN",
+        amount: 40000,
+        metadata: {
+          receive_currency: "NGN",
+          receive_amount: 40000,
+          send_currency: "USD",
+          total_debited: 25,
+        },
+      },
+    ])
+    expect(topCurrencies.map((r) => r.code)).toEqual(["NGN", "USD"])
+    expect(topCurrencies[0]?.count).toBe(2)
+    expect(topCurrencies[0]?.usdValue).toBe(75)
+    expect(topCurrencies[1]?.count).toBe(1)
+    expect(topCurrencies[1]?.usdValue).toBe(500)
   })
 })

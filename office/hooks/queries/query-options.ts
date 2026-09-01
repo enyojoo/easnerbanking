@@ -14,11 +14,12 @@ export const officeOperationalQueryDefaults = {
   gcTime: OFFICE_OPERATIONAL_GC_MS,
   placeholderData: keepPreviousData,
   retry: 1,
-  refetchOnWindowFocus: false,
+  // Persist paints instantly; always refetch so a normal reload is not stuck
+  // on the last localStorage snapshot (shared default is refetch-on-invalidation only).
+  refetchOnMount: "always" as const,
+  refetchOnWindowFocus: "always" as const,
   refetchOnReconnect: true,
   refetchIntervalInBackground: false,
-  // Persisted (business-app pattern): reloads paint from the on-device
-  // cache instantly and freshen silently. Per-user key, cleared on sign-out.
   meta: { webPersist: "reduced" as const, freshness: "operational" as const },
 }
 
@@ -27,7 +28,8 @@ export const officeAnalyticsQueryDefaults = {
   gcTime: OFFICE_OPERATIONAL_GC_MS,
   placeholderData: keepPreviousData,
   retry: 1,
-  refetchOnWindowFocus: false,
+  refetchOnMount: "always" as const,
+  refetchOnWindowFocus: "always" as const,
   refetchOnReconnect: true,
   refetchIntervalInBackground: false,
   meta: { webPersist: "reduced" as const, freshness: "analytics" as const },

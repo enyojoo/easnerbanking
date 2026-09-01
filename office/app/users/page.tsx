@@ -93,6 +93,23 @@ function NoahVerificationBadge({ rawStatus }: { rawStatus: string }) {
   return <Badge variant={verificationBadgeVariant(rawStatus)}>{label}</Badge>
 }
 
+function AccountRestrictionBadge({ user }: { user: UserData }) {
+  const phase = user.accountRestrictionPhase
+  if (!phase) return null
+  if (phase === "wind_down") {
+    return (
+      <Badge variant="amber" className="ml-1">
+        Wind-down
+      </Badge>
+    )
+  }
+  return (
+    <Badge variant="oxblood" className="ml-1">
+      Suspended
+    </Badge>
+  )
+}
+
 interface TransactionData extends OfficeTransaction {}
 
 function formatProviderLabel(provider: string | null | undefined): string {
@@ -170,6 +187,9 @@ export default function AdminUsersPage() {
   const [mfaResetConfirmOpen, setMfaResetConfirmOpen] = useState(false)
   const [mfaResetLoading, setMfaResetLoading] = useState(false)
   const [mfaResetFeedback, setMfaResetFeedback] = useState<{ ok: boolean; message: string } | null>(null)
+  const [restrictionConfirmOpen, setRestrictionConfirmOpen] = useState(false)
+  const [restrictionLoading, setRestrictionLoading] = useState(false)
+  const [restrictionFeedback, setRestrictionFeedback] = useState<{ ok: boolean; message: string } | null>(null)
 
   const formatAmount = (amount: number | null | undefined, currencyCode: string | null | undefined): string => {
     const amt = Number(amount || 0) || 0
@@ -321,6 +341,7 @@ export default function AdminUsersPage() {
   const handleUserSelect = (user: UserData) => {
     setSelectedUser(user)
     setMfaResetFeedback(null)
+    setRestrictionFeedback(null)
   }
 
   const prefetchUserDetails = (userId: string) => {
@@ -371,6 +392,63 @@ export default function AdminUsersPage() {
       setMfaResetFeedback({ ok: false, message: e instanceof Error ? e.message : "Request failed" })
     } finally {
       setMfaResetLoading(false)
+    }
+  }
+
+  const handleConfirmRestrictAccount = async () => {
+    if (!selectedUser) return
+    setRestrictionLoading(true)
+    try {
+      const r = await officeFetch(`/api/admin/office/users/${selectedUser.id}/restriction`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "Office compliance restriction" }),
+      })
+      const d = (await r.json().catch(() => ({}))) as { error?: string; applied?: boolean }
+      if (!r.ok) {
+        setRestrictionFeedback({
+          ok: false,
+          message: typeof d.error === "string" ? d.error : "Failed to restrict account",
+        })
+        return
+      }
+      setRestrictionFeedback({
+        ok: true,
+        message: d.applied
+          ? "Account restricted. Deposits are blocked; the user has 48 hours to move funds out."
+          : "Account was already restricted.",
+      })
+      setRestrictionConfirmOpen(false)
+      void queryClient.invalidateQueries({ queryKey: officeKeys.users() })
+    } catch (e: unknown) {
+      setRestrictionFeedback({ ok: false, message: e instanceof Error ? e.message : "Request failed" })
+    } finally {
+      setRestrictionLoading(false)
+    }
+  }
+
+  const handleLiftRestriction = async () => {
+    if (!selectedUser) return
+    setRestrictionLoading(true)
+    try {
+      const r = await officeFetch(`/api/admin/office/users/${selectedUser.id}/restriction`, { method: "DELETE" })
+      const d = (await r.json().catch(() => ({}))) as { error?: string; lifted?: boolean }
+      if (!r.ok) {
+        setRestrictionFeedback({
+          ok: false,
+          message: typeof d.error === "string" ? d.error : "Failed to lift restriction",
+        })
+        return
+      }
+      setRestrictionFeedback({
+        ok: true,
+        message: d.lifted ? "Restriction lifted." : "No active restriction found.",
+      })
+      void queryClient.invalidateQueries({ queryKey: officeKeys.users() })
+    } catch (e: unknown) {
+      setRestrictionFeedback({ ok: false, message: e instanceof Error ? e.message : "Request failed" })
+    } finally {
+      setRestrictionLoading(false)
     }
   }
 
@@ -516,7 +594,10 @@ export default function AdminUsersPage() {
                     </TableCell>
                     <TableCell className="text-center">{getAccountTypeBadge(user)}</TableCell>
                     <TableCell className="text-center">
-                      <NoahVerificationBadge rawStatus={resolveOverviewVerificationStatus(user)} />
+                      <div className="flex flex-wrap items-center justify-center gap-1">
+                        <NoahVerificationBadge rawStatus={resolveOverviewVerificationStatus(user)} />
+                        <AccountRestrictionBadge user={user} />
+                      </div>
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-2">
@@ -668,6 +749,42 @@ export default function AdminUsersPage() {
                                           ) : (
                                             <Button type="button" variant="secondary" size="sm" disabled className="font-normal">
                                               Not active
+                                            </Button>
+                                          )}
+                                          {restrictionFeedback ? (
+                                            <p
+                                              className={`text-sm rounded-xl border px-3 py-2 ${
+                                                restrictionFeedback.ok
+                                                  ? "border-primary/20 bg-primary/10 text-primary"
+                                                  : "border-[hsl(var(--destructive)/0.25)] bg-[hsl(var(--destructive)/0.08)] text-destructive"
+                                              }`}
+                                            >
+                                              {restrictionFeedback.message}
+                                            </p>
+                                          ) : null}
+                                          {selectedUser.accountRestrictionPhase ? (
+                                            <Button
+                                              type="button"
+                                              variant="outline"
+                                              size="sm"
+                                              disabled={restrictionLoading}
+                                              onClick={() => void handleLiftRestriction()}
+                                            >
+                                              Lift restriction
+                                            </Button>
+                                          ) : (
+                                            <Button
+                                              type="button"
+                                              variant="outline"
+                                              size="sm"
+                                              className="border-amber-200 text-amber-900 hover:bg-amber-50"
+                                              disabled={restrictionLoading}
+                                              onClick={() => {
+                                                setRestrictionFeedback(null)
+                                                setRestrictionConfirmOpen(true)
+                                              }}
+                                            >
+                                              Restrict account
                                             </Button>
                                           )}
                                         </div>
@@ -896,6 +1013,33 @@ export default function AdminUsersPage() {
                 onClick={() => void handleConfirmResetMfa()}
               >
                 {mfaResetLoading ? "Resetting…" : "Reset MFA"}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={restrictionConfirmOpen} onOpenChange={setRestrictionConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Restrict this account?</AlertDialogTitle>
+              <AlertDialogDescription className="text-left space-y-2">
+                <span className="block">
+                  Deposits will be blocked immediately for{" "}
+                  <span className="font-medium text-foreground">
+                    {selectedUser ? userDisplayName(selectedUser) : "this user"}
+                  </span>
+                  . They will have 48 hours to move funds out before login is suspended.
+                </span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={restrictionLoading}>Cancel</AlertDialogCancel>
+              <Button
+                variant="destructive"
+                disabled={restrictionLoading || !selectedUser}
+                onClick={() => void handleConfirmRestrictAccount()}
+              >
+                {restrictionLoading ? "Restricting…" : "Restrict account"}
               </Button>
             </AlertDialogFooter>
           </AlertDialogContent>

@@ -17,6 +17,7 @@ import { EASNER_CONTACT_URL } from "./email-theme"
 import type {
   EmailTemplate,
   SecurityAlertEmailData,
+  AccountRestrictionEmailData,
   TeamInviteEmailData,
   TeamMemberJoinedEmailData,
   PayrollEasetagInviteEmailData,
@@ -616,6 +617,96 @@ ${data.dashboardUrl || profile.dashboardUrl}${profile.signatureText ?? ""}`
     },
     text: (data: PayrollPaidEmailData) =>
       `You've been paid ${data.amountDisplay} by ${data.businessName}.`,
+  },
+
+  accountRestricted: {
+    subject: "Important: your Easner account has been restricted",
+    preheader: "Contact Easner support for details about this restriction.",
+    html: (data: AccountRestrictionEmailData, audience = "personal") => {
+      const org =
+        audience === "business" && data.businessName?.trim()
+          ? ` (${escapeHtmlText(data.businessName.trim())})`
+          : ""
+      const windDownLine = data.windDownDeadline
+        ? `<p class="confirmation-text">During this review period, you may still move funds out until <strong>${escapeHtmlText(data.windDownDeadline)}</strong>. After that, outgoing transfers will also be paused.</p>`
+        : ""
+      const content = `
+        ${easnerUserGreetingParagraphHtml(data.firstName)}
+        <p class="confirmation-text">Your Easner account${org} has been restricted while we complete a compliance review.</p>
+        <p class="confirmation-text">New deposits are not available at this time.</p>
+        ${windDownLine}
+        <p class="confirmation-text">For details about this restriction, contact Easner support.</p>
+      `
+      return generateBaseEmailTemplate(
+        "Account restricted",
+        "",
+        content,
+        { text: "Contact support", url: EASNER_CONTACT_URL },
+        {
+          audience,
+          showPreferencesLink: false,
+          preheader: "Contact Easner support for details about this restriction.",
+        },
+      )
+    },
+    text: (data: AccountRestrictionEmailData, audience = "personal") => {
+      const org =
+        audience === "business" && data.businessName?.trim() ? ` (${data.businessName.trim()})` : ""
+      const windDownLine = data.windDownDeadline
+        ? `\n\nDuring this review period, you may still move funds out until ${data.windDownDeadline}. After that, outgoing transfers will also be paused.`
+        : ""
+      return `${formatEasnerUserGreetingPlain(data.firstName)}
+
+Your Easner account${org} has been restricted while we complete a compliance review.
+
+New deposits are not available at this time.${windDownLine}
+
+For details about this restriction, contact Easner support: ${EASNER_CONTACT_URL}`
+    },
+  },
+
+  accountRestrictionLifted: {
+    subject: "Your Easner account restriction has been lifted",
+    preheader: "Your account is available for normal use again.",
+    html: (data: AccountRestrictionEmailData, audience = "personal") => {
+      const org =
+        audience === "business" && data.businessName?.trim()
+          ? ` (${escapeHtmlText(data.businessName.trim())})`
+          : ""
+      const profile = getEmailAudienceProfile(audience)
+      const content = `
+        ${easnerUserGreetingParagraphHtml(data.firstName)}
+        <p class="confirmation-text">The restriction on your Easner account${org} has been lifted.</p>
+        <p class="confirmation-text">Deposits and transfers are available again. You can sign in and use Easner as usual.</p>
+        <p class="confirmation-text">If you have questions, contact Easner support.</p>
+      `
+      return generateBaseEmailTemplate(
+        "Account restriction lifted",
+        "",
+        content,
+        { text: "Go to dashboard", url: data.dashboardUrl || profile.dashboardUrl },
+        {
+          audience,
+          showPreferencesLink: false,
+          preheader: "Your account is available for normal use again.",
+        },
+      )
+    },
+    text: (data: AccountRestrictionEmailData, audience = "personal") => {
+      const org =
+        audience === "business" && data.businessName?.trim() ? ` (${data.businessName.trim()})` : ""
+      const dashboardUrl =
+        data.dashboardUrl || getEmailAudienceProfile(audience).dashboardUrl
+      return `${formatEasnerUserGreetingPlain(data.firstName)}
+
+The restriction on your Easner account${org} has been lifted.
+
+Deposits and transfers are available again. You can sign in and use Easner as usual.
+
+Go to dashboard: ${dashboardUrl}
+
+If you have questions, contact Easner support: ${EASNER_CONTACT_URL}`
+    },
   },
 
   passwordChanged: securityTemplate("password_changed"),
