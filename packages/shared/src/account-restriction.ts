@@ -55,12 +55,13 @@ export function formatAccountRestrictionDeadline(iso: string | null | undefined,
   })
 }
 
-export function accountRestrictionWindDownBannerCopy(windDownEndsAt: string | null | undefined): string {
-  const deadline = formatAccountRestrictionDeadline(windDownEndsAt)
-  if (!deadline) {
-    return "Your account is under compliance review. Deposits and transfers are paused. Contact Easner support."
-  }
-  return `Your account is under compliance review. Deposits and transfers are paused. Contact Easner support by ${deadline} or your account may be closed.`
+export const ACCOUNT_RESTRICTION_WIND_DOWN_BANNER =
+  "Your account is under compliance review. Deposits and transfers are paused."
+
+export const ACCOUNT_RESTRICTION_WIND_DOWN_CONTACT_CTA = "Contact Us"
+
+export function accountRestrictionWindDownBannerCopy(): string {
+  return ACCOUNT_RESTRICTION_WIND_DOWN_BANNER
 }
 
 export function accountRestrictionSendBlockedCopy(): string {
@@ -77,4 +78,19 @@ export function accountRestrictionDepositsBlockedCopy(): string {
 
 export function accountRestrictionVerificationBlockedCopy(): string {
   return "Verification actions are unavailable while your account is restricted. Contact Easner support if you have questions."
+}
+
+/** Partner holds (Grid, Noah) cannot be cleared from Office; only office-applied holds can be lifted. */
+export function accountRestrictionOfficeCanLift(source: AccountRestrictionSource | null | undefined): boolean {
+  return source === "office"
+}
+
+export function accountRestrictionOfficeLiftBlockedCopy(source?: AccountRestrictionSource | null): string {
+  if (source === "noah") {
+    return "This restriction was applied by Noah and cannot be lifted from Office. Resolve the hold with Noah first."
+  }
+  if (source === "grid") {
+    return "This restriction was applied by Grid compliance and cannot be lifted from Office. Resolve the hold in Grid first."
+  }
+  return "This restriction cannot be lifted from Office."
 }

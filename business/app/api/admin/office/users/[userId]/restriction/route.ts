@@ -91,6 +91,13 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ u
     easnerBusinessId: userRow.easner_business_id as string | null | undefined,
   })
 
+  if (lifted.blocked) {
+    return NextResponse.json(
+      { error: lifted.error ?? "This restriction cannot be lifted from Office." },
+      { status: 403 },
+    )
+  }
+
   await logAdminAction(auth.ctx.userId, "account.restriction_lift", targetUserId, lifted)
 
   return NextResponse.json({ ok: true, ...lifted })

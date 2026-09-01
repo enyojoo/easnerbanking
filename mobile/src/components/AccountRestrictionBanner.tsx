@@ -1,6 +1,11 @@
 import React from 'react'
-import { View, Text, StyleSheet } from 'react-native'
-import { accountRestrictionWindDownBannerCopy, type ResolvedAccountRestriction } from '@easner/shared'
+import { Pressable, View, Text, StyleSheet } from 'react-native'
+import {
+  ACCOUNT_RESTRICTION_WIND_DOWN_BANNER,
+  ACCOUNT_RESTRICTION_WIND_DOWN_CONTACT_CTA,
+  type ResolvedAccountRestriction,
+} from '@easner/shared'
+import { presentIntercomMessenger } from '../lib/intercom'
 import { borderRadius, fontSize, spacing, useThemeColors } from '../theme'
 
 export function AccountRestrictionBanner({
@@ -23,8 +28,19 @@ export function AccountRestrictionBanner({
       ]}
     >
       <Text style={[styles.text, { color: palette.warning.dark }]}>
-        {accountRestrictionWindDownBannerCopy(restriction.windDownEndsAt)}
+        {ACCOUNT_RESTRICTION_WIND_DOWN_BANNER}
       </Text>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => {
+          void presentIntercomMessenger()
+        }}
+        style={styles.cta}
+      >
+        <Text style={[styles.ctaText, { color: palette.warning.dark }]}>
+          {ACCOUNT_RESTRICTION_WIND_DOWN_CONTACT_CTA}
+        </Text>
+      </Pressable>
     </View>
   )
 }
@@ -35,9 +51,18 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     padding: spacing[4],
     marginBottom: spacing[4],
+    gap: spacing[3],
   },
   text: {
     fontSize: fontSize.sm,
     lineHeight: 20,
+  },
+  cta: {
+    alignSelf: 'flex-start',
+  },
+  ctaText: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 })

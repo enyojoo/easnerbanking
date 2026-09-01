@@ -55,6 +55,7 @@ import {
   type LedgerTransactionStatusTone,
   VERIFICATION_STATUS_COPY,
   verificationStatusLabel,
+  accountRestrictionOfficeLiftBlockedCopy,
 } from "@easner/shared"
 import { OfficeQueryError } from "@/components/data/office-data-status"
 import { OfficePageSkeleton } from "@/components/data/office-page-skeleton"
@@ -98,16 +99,31 @@ function AccountRestrictionBadge({ user }: { user: UserData }) {
   if (!phase) return null
   if (phase === "wind_down") {
     return (
-      <Badge variant="oxblood" className="ml-1">
+      <Badge variant="oxblood">
         Restricted
       </Badge>
     )
   }
   return (
-    <Badge variant="oxblood" className="ml-1">
+    <Badge variant="oxblood">
       Closed
     </Badge>
   )
+}
+
+function UserOverviewStatusBadge({ user }: { user: UserData }) {
+  if (user.accountRestrictionPhase) {
+    return <AccountRestrictionBadge user={user} />
+  }
+  return <NoahVerificationBadge rawStatus={resolveOverviewVerificationStatus(user)} />
+}
+
+function officeCanLiftRestriction(user: UserData): boolean {
+  return Boolean(user.accountRestrictionPhase && user.accountRestrictionSource === "office")
+}
+
+function officeLiftRestrictionLabel(user: UserData): string {
+  return user.accountRestrictionPhase === "locked" ? "Reopen account" : "Lift restriction"
 }
 
 interface TransactionData extends OfficeTransaction {}
@@ -626,10 +642,7 @@ export default function AdminUsersPage() {
                     </TableCell>
                     <TableCell className="text-center">{getAccountTypeBadge(user)}</TableCell>
                     <TableCell className="text-center">
-                      <div className="flex flex-wrap items-center justify-center gap-1">
-                        <NoahVerificationBadge rawStatus={resolveOverviewVerificationStatus(user)} />
-                        <AccountRestrictionBadge user={user} />
-                      </div>
+                      <UserOverviewStatusBadge user={user} />
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-2">
@@ -809,16 +822,25 @@ export default function AdminUsersPage() {
                                                   ? ` · contact support by ${formatTimestamp(selectedUser.accountRestrictionWindDownEndsAt)}`
                                                   : ""}
                                               </p>
-                                              <Button
-                                              type="button"
-                                              variant="outline"
-                                              size="sm"
-                                              disabled={restrictionLoading}
-                                              onClick={() => void handleLiftRestriction()}
-                                            >
-                                              Lift restriction
-                                            </Button>
-                                            {selectedUser.accountRestrictionPhase === "wind_down" ? (
+                                              {officeCanLiftRestriction(selectedUser) ? (
+                                                <Button
+                                                  type="button"
+                                                  variant="outline"
+                                                  size="sm"
+                                                  disabled={restrictionLoading}
+                                                  onClick={() => void handleLiftRestriction()}
+                                                >
+                                                  {officeLiftRestrictionLabel(selectedUser)}
+                                                </Button>
+                                              ) : selectedUser.accountRestrictionSource ? (
+                                                <p className="text-xs text-muted-foreground">
+                                                  {accountRestrictionOfficeLiftBlockedCopy(
+                                                    selectedUser.accountRestrictionSource,
+                                                  )}
+                                                </p>
+                                              ) : null}
+                                              {officeCanLiftRestriction(selectedUser) &&
+                                              selectedUser.accountRestrictionPhase === "wind_down" ? (
                                               <Button
                                                 type="button"
                                                 variant="outline"

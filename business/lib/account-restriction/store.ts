@@ -243,12 +243,24 @@ export async function applyAccountRestriction(
 export async function liftAccountRestriction(
   admin: SupabaseClient,
   input: ResolveAccountRestrictionInput,
-): Promise<{ lifted: boolean; row?: AccountRestrictionRow | null }> {
+): Promise<{ lifted: boolean; row?: AccountRestrictionRow | null; blocked?: boolean; error?: string }> {
   const subject = resolveRestrictionSubject(input)
   if (!subject.userId && !subject.businessId) return { lifted: false }
 
   const existing = await fetchActiveRestriction(admin, subject)
   if (!existing) return { lifted: false }
+
+  if (existing.source === "grid" || existing.source === "noah") {
+    return {
+      lifted: false,
+      blocked: true,
+      row: existing,
+      error:
+        existing.source === "noah"
+          ? "Noah restrictions cannot be lifted from Office."
+          : "Grid compliance restrictions cannot be lifted from Office.",
+    }
+  }
 
   const liftedAt = nowIso()
   const { error } = await admin

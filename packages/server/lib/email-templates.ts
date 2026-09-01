@@ -748,74 +748,7 @@ If you have questions, contact Easner support: ${EASNER_CONTACT_URL}`
     },
   },
 
-  accountRestrictionOpsNotification: {
-    subject: (data: AccountRestrictionOpsEmailData) => {
-      const verb =
-        data.event === "lifted" ? "lifted" : data.event === "closed" ? "closed" : "restricted"
-      return `Account ${verb} – ${data.subjectLabel}`
-    },
-    preheader: (data: AccountRestrictionOpsEmailData) =>
-      data.event === "lifted"
-        ? `${data.subjectLabel} account restriction was lifted.`
-        : data.event === "closed"
-          ? `${data.subjectLabel} account was closed after the review period.`
-          : `${data.subjectLabel} account was restricted (${data.source ?? "unknown"}).`,
-    html: (data: AccountRestrictionOpsEmailData) => {
-      const officeUrl =
-        data.officeUrl ||
-        (data.subjectKind === "business"
-          ? `${process.env.NEXT_PUBLIC_OFFICE_URL || "https://bk.easner.com"}/users?highlight=${encodeURIComponent(data.subjectId)}`
-          : `${process.env.NEXT_PUBLIC_OFFICE_URL || "https://bk.easner.com"}/users?highlight=${encodeURIComponent(data.subjectId)}`)
-      const eventLabel =
-        data.event === "lifted" ? "lifted" : data.event === "closed" ? "closed" : "restricted"
-      const phaseLine =
-        data.event === "applied" && data.phase
-          ? `<p class="confirmation-text">Phase: <strong>${data.phase === "locked" ? "closed" : "restricted (7-day review)"}</strong></p>`
-          : ""
-      const sourceLine = data.source
-        ? `<p class="confirmation-text">Source: <strong>${escapeHtmlText(data.source)}</strong></p>`
-        : ""
-      const reasonLine = data.reason
-        ? `<p class="confirmation-text"><strong>Reason:</strong> ${escapeHtmlText(data.reason)}</p>`
-        : ""
-      const deadlineLine = data.windDownEndsAt
-        ? `<p class="confirmation-text">Review deadline: ${escapeHtmlText(data.windDownEndsAt)}</p>`
-        : ""
-      const content = `
-        <p class="confirmation-text">
-          <strong>${escapeHtmlText(data.subjectLabel)}</strong> (${data.subjectKind}) account restriction was <strong>${eventLabel}</strong>.
-        </p>
-        <p class="confirmation-text">Subject ID: ${escapeHtmlText(data.subjectId)}</p>
-        ${phaseLine}
-        ${sourceLine}
-        ${reasonLine}
-        ${deadlineLine}
-      `
-      return generateBaseEmailTemplate(
-        `Account ${eventLabel}`,
-        "",
-        content,
-        { text: "View in Office", url: officeUrl },
-        { audience: "business", showPreferencesLink: false },
-      )
-    },
-    text: (data: AccountRestrictionOpsEmailData) => {
-      const officeUrl =
-        data.officeUrl ||
-        `${process.env.NEXT_PUBLIC_OFFICE_URL || "https://bk.easner.com"}/users?highlight=${encodeURIComponent(data.subjectId)}`
-      const eventLabel =
-        data.event === "lifted" ? "lifted" : data.event === "closed" ? "closed" : "restricted"
-      let t = `${data.subjectLabel} (${data.subjectKind}) account restriction was ${eventLabel}.\n\nSubject ID: ${data.subjectId}`
-      if (data.event === "applied" && data.phase) {
-        t += `\nPhase: ${data.phase}`
-      }
-      if (data.source) t += `\nSource: ${data.source}`
-      if (data.reason) t += `\nReason: ${data.reason}`
-      if (data.windDownEndsAt) t += `\nReview deadline: ${data.windDownEndsAt}`
-      t += `\n\n${officeUrl}`
-      return t
-    },
-  },
+  accountRestrictionOpsNotification: accountRestrictionOpsNotificationTemplate(),
 
   passwordChanged: securityTemplate("password_changed"),
   passwordResetCompleted: securityTemplate("password_reset_completed"),
@@ -999,6 +932,117 @@ function verificationOpsStatusLabel(status: VerificationEmailData["status"]): st
       return "action needed"
     default:
       return status
+  }
+}
+
+function accountRestrictionOpsEventLabel(data: AccountRestrictionOpsEmailData): string {
+  if (data.event === "lifted") return "lifted"
+  if (data.event === "closed" || data.phase === "locked") return "closed"
+  return "restricted"
+}
+
+function accountRestrictionOpsSummaryHtml(data: AccountRestrictionOpsEmailData): string {
+  const deadline = data.reviewDeadline || data.windDownEndsAt
+  if (data.event === "lifted") {
+    return `<p class="confirmation-text">Deposits and transfers are available again for this account.</p>`
+  }
+  if (data.event === "closed" || data.phase === "locked") {
+    return `<p class="confirmation-text">Deposits, transfers, and sign-in are suspended for this account.</p>`
+  }
+  if (deadline) {
+    return `<p class="confirmation-text">Deposits and transfers are paused. The customer should contact Easner support by <strong>${escapeHtmlText(deadline)}</strong> or the account may be closed.</p>`
+  }
+  return `<p class="confirmation-text">Deposits and transfers are paused while compliance review is in progress.</p>`
+}
+
+function accountRestrictionOpsSummaryText(data: AccountRestrictionOpsEmailData): string {
+  const deadline = data.reviewDeadline || data.windDownEndsAt
+  if (data.event === "lifted") {
+    return "Deposits and transfers are available again for this account."
+  }
+  if (data.event === "closed" || data.phase === "locked") {
+    return "Deposits, transfers, and sign-in are suspended for this account."
+  }
+  if (deadline) {
+    return `Deposits and transfers are paused. The customer should contact Easner support by ${deadline} or the account may be closed.`
+  }
+  return "Deposits and transfers are paused while compliance review is in progress."
+}
+
+function accountRestrictionOpsNotificationTemplate(): EmailTemplate {
+  return {
+    subject: (data: AccountRestrictionOpsEmailData) => {
+      const verb = accountRestrictionOpsEventLabel(data)
+      return `Account ${verb} – ${data.subjectLabel}`
+    },
+    preheader: (data: AccountRestrictionOpsEmailData) => {
+      const verb = accountRestrictionOpsEventLabel(data)
+      const source = data.source ? ` (${data.source})` : ""
+      return `${data.subjectLabel} account was ${verb}${source}.`
+    },
+    html: (data: AccountRestrictionOpsEmailData) => {
+      const officeUrl =
+        data.officeUrl ||
+        `${process.env.NEXT_PUBLIC_OFFICE_URL || "https://bk.easner.com"}/users?highlight=${encodeURIComponent(data.subjectId)}`
+      const verb = accountRestrictionOpsEventLabel(data)
+      const sourceSuffix = data.source ? ` (${escapeHtmlText(data.source)})` : ""
+      const accountKind =
+        data.subjectKind === "business" ? "Business account" : "Personal account"
+      const reasonLine = data.reason
+        ? `<p class="confirmation-text"><strong>Reason:</strong> ${escapeHtmlText(data.reason)}</p>`
+        : ""
+      const idLine =
+        data.subjectKind === "business"
+          ? `<p class="confirmation-text">Business ID: ${escapeHtmlText(data.subjectId)}</p>`
+          : `<p class="confirmation-text">User ID: ${escapeHtmlText(data.subjectId)}</p>`
+      const contactLine = data.accountEmail
+        ? `<p class="confirmation-text">${data.subjectKind === "business" ? "Owner" : "Email"}: ${escapeHtmlText(
+            data.ownerName ? `${data.ownerName} (${data.accountEmail})` : data.accountEmail,
+          )}</p>`
+        : ""
+      const content = `
+        <p class="confirmation-text">
+          <strong>${escapeHtmlText(data.subjectLabel)}</strong> ${accountKind.toLowerCase()} was <strong>${verb}</strong>${sourceSuffix}.
+        </p>
+        ${accountRestrictionOpsSummaryHtml(data)}
+        ${reasonLine}
+        ${idLine}
+        ${contactLine}
+      `
+      return generateBaseEmailTemplate(
+        `Account ${verb}`,
+        "",
+        content,
+        { text: "View in Office", url: officeUrl },
+        {
+          audience: data.subjectKind === "business" ? "business" : "personal",
+          showPreferencesLink: false,
+        },
+      )
+    },
+    text: (data: AccountRestrictionOpsEmailData) => {
+      const officeUrl =
+        data.officeUrl ||
+        `${process.env.NEXT_PUBLIC_OFFICE_URL || "https://bk.easner.com"}/users?highlight=${encodeURIComponent(data.subjectId)}`
+      const verb = accountRestrictionOpsEventLabel(data)
+      const sourceSuffix = data.source ? ` (${data.source})` : ""
+      const accountKind =
+        data.subjectKind === "business" ? "Business account" : "Personal account"
+      let t = `${data.subjectLabel} ${accountKind.toLowerCase()} was ${verb}${sourceSuffix}.\n\n${accountRestrictionOpsSummaryText(data)}`
+      if (data.reason) t += `\n\nReason: ${data.reason}`
+      t +=
+        data.subjectKind === "business"
+          ? `\n\nBusiness ID: ${data.subjectId}`
+          : `\n\nUser ID: ${data.subjectId}`
+      if (data.accountEmail) {
+        t +=
+          data.subjectKind === "business"
+            ? `\nOwner: ${data.ownerName ? `${data.ownerName} (${data.accountEmail})` : data.accountEmail}`
+            : `\nEmail: ${data.accountEmail}`
+      }
+      t += `\n\n${officeUrl}`
+      return t
+    },
   }
 }
 

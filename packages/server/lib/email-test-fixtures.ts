@@ -240,10 +240,13 @@ export const accountRestrictionOpsNotificationFixture = {
   subjectKind: "business" as const,
   subjectLabel: "Acme LLC",
   subjectId: "biz-123",
+  businessName: "Acme LLC",
+  accountEmail: "owner@example.com",
+  ownerName: "Alex",
   phase: "wind_down" as const,
-  source: "grid" as const,
-  reason: "Grid compliance suspended",
-  windDownEndsAt: "Sep 8, 2026, 12:00 PM",
+  source: "office" as const,
+  reason: "Office compliance restriction",
+  reviewDeadline: "Sep 8, 2026, 12:00 PM",
   officeUrl: "https://bk.easner.com/users?highlight=user-123",
 }
 

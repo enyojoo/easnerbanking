@@ -204,6 +204,35 @@ describe("account restriction store", () => {
     expect(resolved.phase).toBe("locked")
   })
 
+  it("blocks lift for partner-sourced restrictions", async () => {
+    for (const source of ["grid", "noah"] as const) {
+      const { admin } = makeAdmin([
+        {
+          id: `r-${source}`,
+          subject_kind: "business",
+          user_id: null,
+          business_id: "biz-1",
+          phase: "locked",
+          source,
+          restricted_at: "2026-09-01T12:00:00.000Z",
+          wind_down_ends_at: "2026-09-01T12:00:00.000Z",
+          locked_at: "2026-09-01T12:00:00.000Z",
+          lifted_at: null,
+          reason: "Partner compliance hold",
+        },
+      ])
+
+      const lifted = await liftAccountRestriction(admin, {
+        businessId: "biz-1",
+        role: "business",
+      })
+      expect(lifted.lifted).toBe(false)
+      expect(lifted.blocked).toBe(true)
+    }
+    await Promise.resolve()
+    expect(mockNotifyLifted).not.toHaveBeenCalled()
+  })
+
   it("lift clears active restriction and notifies once", async () => {
     const { admin } = makeAdmin([
       {

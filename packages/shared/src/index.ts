@@ -809,11 +809,15 @@ export {
   computeAccountRestrictionPhase,
   emptyAccountRestriction,
   formatAccountRestrictionDeadline,
+  ACCOUNT_RESTRICTION_WIND_DOWN_BANNER,
+  ACCOUNT_RESTRICTION_WIND_DOWN_CONTACT_CTA,
   accountRestrictionWindDownBannerCopy,
   accountRestrictionLockedCopy,
   accountRestrictionDepositsBlockedCopy,
   accountRestrictionSendBlockedCopy,
   accountRestrictionVerificationBlockedCopy,
+  accountRestrictionOfficeCanLift,
+  accountRestrictionOfficeLiftBlockedCopy,
 } from "./account-restriction"
 export type {
   AccountRestrictionPhase,

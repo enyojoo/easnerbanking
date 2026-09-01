@@ -187,11 +187,18 @@ export interface AccountRestrictionEmailData {
 export interface AccountRestrictionOpsEmailData {
   event: "applied" | "lifted" | "closed"
   subjectKind: "user" | "business"
+  /** Primary display label – business name or account holder name/email. */
   subjectLabel: string
   subjectId: string
+  businessName?: string
+  accountEmail?: string
+  ownerName?: string
   phase?: "wind_down" | "locked"
   source?: "grid" | "noah" | "office"
   reason?: string | null
+  /** Pre-formatted review deadline shown to the customer. */
+  reviewDeadline?: string | null
+  /** @deprecated Prefer reviewDeadline */
   windDownEndsAt?: string | null
   officeUrl?: string
 }

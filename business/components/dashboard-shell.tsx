@@ -120,6 +120,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
   /** Keep header avatar visible when personal settings are hydrated even if business profile is still loading. */
   const showProfileChromeSkeleton = profileLoading && !profileHasData && !profileImageUrl
   const hostedVerificationFlowOpen = useHostedVerificationFlowOpen()
+  const restrictionQuery = useAccountRestriction()
   const showTier1Banner =
     profileHasData &&
     !profileLoading &&
@@ -127,7 +128,6 @@ export function DashboardShell({ children }: DashboardShellProps) {
     !hostedVerificationFlowOpen &&
     !onSettingsPage &&
     !restrictionQuery.data?.active
-  const restrictionQuery = useAccountRestriction()
   const showRestrictionBanner = Boolean(
     restrictionQuery.data?.active && restrictionQuery.data.phase === "wind_down",
   )

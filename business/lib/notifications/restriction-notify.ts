@@ -33,15 +33,15 @@ async function fetchBusinessDisplayName(
 ): Promise<string | undefined> {
   const { data } = await admin
     .from("businesses")
-    .select("legal_name,display_name,name")
+    .select("name,legal_name,display_name")
     .eq("id", businessId)
     .maybeSingle()
+  const primary = String((data as { name?: string | null } | null)?.name ?? "").trim()
+  if (primary) return primary
   const legal = String((data as { legal_name?: string | null } | null)?.legal_name ?? "").trim()
   if (legal) return legal
   const display = String((data as { display_name?: string | null } | null)?.display_name ?? "").trim()
-  if (display) return display
-  const name = String((data as { name?: string | null } | null)?.name ?? "").trim()
-  return name || undefined
+  return display || undefined
 }
 
 async function resolveRestrictionRecipients(
@@ -102,6 +102,11 @@ async function sendRestrictionOpsEmail(
   if (row.subject_kind === "business" && row.business_id) {
     const businessName = await fetchBusinessDisplayName(admin, row.business_id)
     const ownerUserId = await resolveOrgOwnerUserId(admin, row.business_id, row.business_id)
+    const ownerContact = ownerUserId ? await fetchUserEmailContact(admin, ownerUserId) : null
+    const reviewDeadline = formatAccountRestrictionDeadline(row.wind_down_ends_at) || null
+    const subjectLabel =
+      businessName || ownerContact?.firstName?.trim() || ownerContact?.email?.trim() || row.business_id
+
     await emailService.sendEmail({
       to: opsEmail,
       template: "accountRestrictionOpsNotification",
@@ -109,13 +114,15 @@ async function sendRestrictionOpsEmail(
       data: {
         event,
         subjectKind: "business",
-        subjectLabel: businessName || row.business_id,
+        subjectLabel,
         subjectId: row.business_id,
+        businessName,
+        accountEmail: ownerContact?.email,
+        ownerName: ownerContact?.firstName,
         phase: event === "applied" ? phase : undefined,
         source: row.source,
         reason: row.reason,
-        windDownEndsAt:
-          event === "applied" ? formatAccountRestrictionDeadline(row.wind_down_ends_at) || null : null,
+        reviewDeadline: event === "applied" ? reviewDeadline : null,
         officeUrl: ownerUserId ? kycOfficeUserUrl(ownerUserId) : undefined,
       },
     })
@@ -124,9 +131,10 @@ async function sendRestrictionOpsEmail(
 
   if (row.user_id) {
     const contact = await fetchUserEmailContact(admin, row.user_id)
-    const label =
-      contact.email ||
-      contact.firstName ||
+    const reviewDeadline = formatAccountRestrictionDeadline(row.wind_down_ends_at) || null
+    const subjectLabel =
+      contact.firstName?.trim() ||
+      contact.email?.trim() ||
       String((await admin.from("users").select("full_name").eq("id", row.user_id).maybeSingle()).data
         ?.full_name ?? "") ||
       row.user_id
@@ -137,13 +145,14 @@ async function sendRestrictionOpsEmail(
       data: {
         event,
         subjectKind: "user",
-        subjectLabel: label,
+        subjectLabel,
         subjectId: row.user_id,
+        accountEmail: contact.email,
+        ownerName: contact.firstName,
         phase: event === "applied" ? phase : undefined,
         source: row.source,
         reason: row.reason,
-        windDownEndsAt:
-          event === "applied" ? formatAccountRestrictionDeadline(row.wind_down_ends_at) || null : null,
+        reviewDeadline: event === "applied" ? reviewDeadline : null,
         officeUrl: kycOfficeUserUrl(row.user_id),
       },
     })
