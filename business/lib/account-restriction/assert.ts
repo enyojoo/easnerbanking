@@ -5,6 +5,7 @@ import {
   ACCOUNT_RESTRICTED_CODE,
   accountRestrictionDepositsBlockedCopy,
   accountRestrictionLockedCopy,
+  accountRestrictionSendBlockedCopy,
   type ResolvedAccountRestriction,
 } from "@easner/shared"
 import { resolveAccountRestriction, type ResolveAccountRestrictionInput } from "./store"
@@ -49,12 +50,15 @@ export async function assertAccountAllows(
     }
   }
 
-  if (intent === "send" && restriction.phase === "locked") {
+  if (intent === "send") {
     return {
       ok: false,
-      code: ACCOUNT_LOCKED_CODE,
+      code: restriction.phase === "locked" ? ACCOUNT_LOCKED_CODE : ACCOUNT_RESTRICTED_CODE,
       status: 403,
-      message: accountRestrictionLockedCopy(),
+      message:
+        restriction.phase === "locked"
+          ? accountRestrictionLockedCopy()
+          : accountRestrictionSendBlockedCopy(),
     }
   }
 

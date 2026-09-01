@@ -70,7 +70,7 @@ import {
   type SettingsVerificationEmbeddedFlow,
 } from "@/lib/compliance/cutover-comms"
 import { useSearchParams } from "next/navigation"
-import { verificationStatusLabel } from "@easner/shared"
+import { verificationStatusLabel, accountRestrictionVerificationBlockedCopy } from "@easner/shared"
 import { VERIFICATION_SECTION_COPY } from "@/lib/copy/business-ui-copy"
 import { cn } from "@/lib/utils"
 
@@ -149,11 +149,13 @@ export function SettingsStripeConnectPanel({
   unavailableFallback = null,
   fullPageFlow = false,
   onFlowOpenChange,
+  verificationActionsBlocked = false,
 }: {
   /** Rendered when Connect is not enabled for this business/environment. */
   unavailableFallback?: ReactNode
   fullPageFlow?: boolean
   onFlowOpenChange?: (open: boolean, flow?: SettingsVerificationEmbeddedFlow) => void
+  verificationActionsBlocked?: boolean
 } = {}) {
   const searchParams = useSearchParams()
   const { businessId, tier1Complete } = useBusinessProfile()
@@ -441,6 +443,7 @@ export function SettingsStripeConnectPanel({
   }, [createConnectInstance, failOnboardingLoad, fetchClientSecret, publishableKey, tier1Complete])
 
   const openConnectFlow = useCallback(() => {
+    if (verificationActionsBlocked) return
     if (!tier1Complete) {
       toast.message(VERIFICATION_SECTION_COPY.onlinePaymentsTier1Required)
       return
@@ -455,7 +458,7 @@ export function SettingsStripeConnectPanel({
     }
     pushConnectFlowUrl()
     void startOnboarding()
-  }, [publishableKey, pushConnectFlowUrl, startOnboarding, tier1Complete])
+  }, [publishableKey, pushConnectFlowUrl, startOnboarding, tier1Complete, verificationActionsBlocked])
 
   useEffect(() => {
     if (!onboardingOpen || onboardingFrameReady || onboardingError) return
@@ -532,14 +535,14 @@ export function SettingsStripeConnectPanel({
 
   const runAction = useCallback(
     (action: ConnectPanelAction) => {
-      if (!panelUx) return
+      if (!panelUx || verificationActionsBlocked) return
       if (action.kind === "link_payout") {
         void linkPayoutDestination()
         return
       }
       openConnectFlow()
     },
-    [linkPayoutDestination, openConnectFlow, panelUx],
+    [linkPayoutDestination, openConnectFlow, panelUx, verificationActionsBlocked],
   )
 
   const connectFlowPanel = (
@@ -654,6 +657,9 @@ export function SettingsStripeConnectPanel({
           </CardDescription>
         </CardHeader>
         <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
+          {verificationActionsBlocked ? (
+            <p className="text-xs text-muted-foreground">{accountRestrictionVerificationBlockedCopy()}</p>
+          ) : null}
           {panelUx?.bodyCopyDestructive ? (
             <p className="text-xs text-destructive">{panelUx.bodyCopyDestructive}</p>
           ) : null}
@@ -662,7 +668,7 @@ export function SettingsStripeConnectPanel({
           ) : null}
           {panelUx?.primary || panelUx?.secondary ? (
             <div className="flex flex-wrap gap-2">
-              {panelUx?.primary ? (
+              {!verificationActionsBlocked && panelUx?.primary ? (
                 panelUx.primary.disabled ||
                 (panelUx.primary.kind === "link_payout" && !status.hasGridVa) ? (
                   <TooltipProvider delayDuration={200}>
@@ -713,7 +719,7 @@ export function SettingsStripeConnectPanel({
                   </Button>
                 )
               ) : null}
-              {panelUx?.secondary ? (
+              {!verificationActionsBlocked && panelUx?.secondary ? (
                 <Button
                   type="button"
                   size="sm"

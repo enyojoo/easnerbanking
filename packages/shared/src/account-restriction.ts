@@ -1,4 +1,5 @@
-export const ACCOUNT_RESTRICTION_WIND_DOWN_MS = 48 * 60 * 60 * 1000
+/** Review window before an unrestricted account auto-closes (locks). */
+export const ACCOUNT_RESTRICTION_WIND_DOWN_MS = 7 * 24 * 60 * 60 * 1000
 
 export const ACCOUNT_RESTRICTED_CODE = "ACCOUNT_RESTRICTED" as const
 export const ACCOUNT_LOCKED_CODE = "ACCOUNT_LOCKED" as const
@@ -57,9 +58,13 @@ export function formatAccountRestrictionDeadline(iso: string | null | undefined,
 export function accountRestrictionWindDownBannerCopy(windDownEndsAt: string | null | undefined): string {
   const deadline = formatAccountRestrictionDeadline(windDownEndsAt)
   if (!deadline) {
-    return "Deposits are paused while your account is under review. You can still move funds out during this period."
+    return "Your account is under compliance review. Deposits and transfers are paused. Contact Easner support."
   }
-  return `Deposits are paused while your account is under review. Move funds out by ${deadline}.`
+  return `Your account is under compliance review. Deposits and transfers are paused. Contact Easner support by ${deadline} or your account may be closed.`
+}
+
+export function accountRestrictionSendBlockedCopy(): string {
+  return "Transfers are not available while your account is restricted. Contact Easner support if you have questions."
 }
 
 export function accountRestrictionLockedCopy(): string {
@@ -68,4 +73,8 @@ export function accountRestrictionLockedCopy(): string {
 
 export function accountRestrictionDepositsBlockedCopy(): string {
   return "Deposits are not available while your account is restricted."
+}
+
+export function accountRestrictionVerificationBlockedCopy(): string {
+  return "Verification actions are unavailable while your account is restricted. Contact Easner support if you have questions."
 }

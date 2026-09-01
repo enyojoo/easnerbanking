@@ -30,7 +30,7 @@ describe("account restriction shared", () => {
     expect(formatted).toMatch(/Sep/)
   })
 
-  it("wind-down window is 48 hours", () => {
-    expect(ACCOUNT_RESTRICTION_WIND_DOWN_MS).toBe(48 * 60 * 60 * 1000)
+  it("wind-down window is 7 days", () => {
+    expect(ACCOUNT_RESTRICTION_WIND_DOWN_MS).toBe(7 * 24 * 60 * 60 * 1000)
   })
 })

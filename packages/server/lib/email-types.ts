@@ -175,10 +175,25 @@ export interface AccountRestrictionEmailData {
   firstName?: string
   /** Business legal/display name for org-centric copy. */
   businessName?: string
-  /** Pre-formatted wind-down deadline, e.g. "Sep 3, 2026, 12:00 PM". */
+  /** Pre-formatted response deadline, e.g. "Sep 8, 2026, 12:00 PM". */
+  responseDeadline?: string
+  /** @deprecated Use responseDeadline */
   windDownDeadline?: string
   dashboardUrl?: string
   audience?: EmailAudience
+}
+
+/** Internal compliance alert when an account restriction is applied or lifted. */
+export interface AccountRestrictionOpsEmailData {
+  event: "applied" | "lifted" | "closed"
+  subjectKind: "user" | "business"
+  subjectLabel: string
+  subjectId: string
+  phase?: "wind_down" | "locked"
+  source?: "grid" | "noah" | "office"
+  reason?: string | null
+  windDownEndsAt?: string | null
+  officeUrl?: string
 }
 
 /** easner.com “Get the app” popup – download link email to a non-account visitor. */

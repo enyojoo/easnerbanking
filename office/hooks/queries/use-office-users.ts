@@ -41,6 +41,7 @@ export type OfficeUserRow = {
   noahKycStatus?: string
   accountRestrictionPhase?: "wind_down" | "locked" | null
   accountRestrictionWindDownEndsAt?: string | null
+  accountRestrictionSource?: "grid" | "noah" | "office" | null
 }
 
 /**

@@ -125,7 +125,8 @@ export function DashboardShell({ children }: DashboardShellProps) {
     !profileLoading &&
     !tier1Complete &&
     !hostedVerificationFlowOpen &&
-    !onSettingsPage
+    !onSettingsPage &&
+    !restrictionQuery.data?.active
   const restrictionQuery = useAccountRestriction()
   const showRestrictionBanner = Boolean(
     restrictionQuery.data?.active && restrictionQuery.data.phase === "wind_down",

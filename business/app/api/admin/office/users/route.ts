@@ -127,12 +127,18 @@ export async function GET(request: Request) {
     }
   }
 
-  const restrictionByUser = new Map<string, { phase: string; windDownEndsAt: string | null }>()
-  const restrictionByBusiness = new Map<string, { phase: string; windDownEndsAt: string | null }>()
+  const restrictionByUser = new Map<
+    string,
+    { phase: string; windDownEndsAt: string | null; source: string | null }
+  >()
+  const restrictionByBusiness = new Map<
+    string,
+    { phase: string; windDownEndsAt: string | null; source: string | null }
+  >()
   {
     const { data: activeRestrictions } = await admin
       .from("account_restrictions")
-      .select("subject_kind,user_id,business_id,phase,restricted_at,wind_down_ends_at,locked_at")
+      .select("subject_kind,user_id,business_id,phase,source,restricted_at,wind_down_ends_at,locked_at")
       .is("lifted_at", null)
     for (const row of activeRestrictions ?? []) {
       const phase = computeAccountRestrictionPhase({
@@ -140,7 +146,11 @@ export async function GET(request: Request) {
         windDownEndsAt: String(row.wind_down_ends_at),
         lockedAt: row.locked_at as string | null,
       })
-      const payload = { phase, windDownEndsAt: String(row.wind_down_ends_at) }
+      const payload = {
+        phase,
+        windDownEndsAt: String(row.wind_down_ends_at),
+        source: row.source ? String(row.source) : null,
+      }
       if (row.subject_kind === "user" && row.user_id) {
         restrictionByUser.set(String(row.user_id), payload)
       }
@@ -170,6 +180,8 @@ export async function GET(request: Request) {
       email_confirmed_at: authById.get(r.id) ?? null,
       accountRestrictionPhase: restriction?.phase ?? null,
       accountRestrictionWindDownEndsAt: restriction?.windDownEndsAt ?? null,
+      accountRestrictionSource:
+        (restriction?.source as "grid" | "noah" | "office" | null | undefined) ?? null,
       ...(org
         ? {
             grid_customer_id: org.grid_customer_id,

@@ -812,6 +812,8 @@ export {
   accountRestrictionWindDownBannerCopy,
   accountRestrictionLockedCopy,
   accountRestrictionDepositsBlockedCopy,
+  accountRestrictionSendBlockedCopy,
+  accountRestrictionVerificationBlockedCopy,
 } from "./account-restriction"
 export type {
   AccountRestrictionPhase,

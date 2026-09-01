@@ -98,14 +98,14 @@ function AccountRestrictionBadge({ user }: { user: UserData }) {
   if (!phase) return null
   if (phase === "wind_down") {
     return (
-      <Badge variant="amber" className="ml-1">
-        Wind-down
+      <Badge variant="oxblood" className="ml-1">
+        Restricted
       </Badge>
     )
   }
   return (
     <Badge variant="oxblood" className="ml-1">
-      Suspended
+      Closed
     </Badge>
   )
 }
@@ -187,7 +187,7 @@ export default function AdminUsersPage() {
   const [mfaResetConfirmOpen, setMfaResetConfirmOpen] = useState(false)
   const [mfaResetLoading, setMfaResetLoading] = useState(false)
   const [mfaResetFeedback, setMfaResetFeedback] = useState<{ ok: boolean; message: string } | null>(null)
-  const [restrictionConfirmOpen, setRestrictionConfirmOpen] = useState(false)
+  const [restrictionConfirmOpen, setRestrictionConfirmOpen] = useState<null | "restrict" | "close">(null)
   const [restrictionLoading, setRestrictionLoading] = useState(false)
   const [restrictionFeedback, setRestrictionFeedback] = useState<{ ok: boolean; message: string } | null>(null)
 
@@ -402,7 +402,7 @@ export default function AdminUsersPage() {
       const r = await officeFetch(`/api/admin/office/users/${selectedUser.id}/restriction`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: "Office compliance restriction" }),
+        body: JSON.stringify({ reason: "Office compliance restriction", mode: "wind_down" }),
       })
       const d = (await r.json().catch(() => ({}))) as { error?: string; applied?: boolean }
       if (!r.ok) {
@@ -415,10 +415,42 @@ export default function AdminUsersPage() {
       setRestrictionFeedback({
         ok: true,
         message: d.applied
-          ? "Account restricted. Deposits are blocked; the user has 48 hours to move funds out."
+          ? "Account restricted. Deposits and transfers are blocked. The user has 7 days to contact support before the account is closed."
           : "Account was already restricted.",
       })
-      setRestrictionConfirmOpen(false)
+      setRestrictionConfirmOpen(null)
+      void queryClient.invalidateQueries({ queryKey: officeKeys.users() })
+    } catch (e: unknown) {
+      setRestrictionFeedback({ ok: false, message: e instanceof Error ? e.message : "Request failed" })
+    } finally {
+      setRestrictionLoading(false)
+    }
+  }
+
+  const handleConfirmCloseAccount = async () => {
+    if (!selectedUser) return
+    setRestrictionLoading(true)
+    try {
+      const r = await officeFetch(`/api/admin/office/users/${selectedUser.id}/restriction`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "Office account closed", mode: "closed" }),
+      })
+      const d = (await r.json().catch(() => ({}))) as { error?: string; applied?: boolean }
+      if (!r.ok) {
+        setRestrictionFeedback({
+          ok: false,
+          message: typeof d.error === "string" ? d.error : "Failed to close account",
+        })
+        return
+      }
+      setRestrictionFeedback({
+        ok: true,
+        message: d.applied
+          ? "Account closed. Login will show the suspended screen immediately."
+          : "Account was already closed or restricted.",
+      })
+      setRestrictionConfirmOpen(null)
       void queryClient.invalidateQueries({ queryKey: officeKeys.users() })
     } catch (e: unknown) {
       setRestrictionFeedback({ ok: false, message: e instanceof Error ? e.message : "Request failed" })
@@ -763,7 +795,21 @@ export default function AdminUsersPage() {
                                             </p>
                                           ) : null}
                                           {selectedUser.accountRestrictionPhase ? (
-                                            <Button
+                                            <>
+                                              <p className="text-xs text-muted-foreground">
+                                                Status:{" "}
+                                                {selectedUser.accountRestrictionPhase === "locked"
+                                                  ? "Closed"
+                                                  : "Restricted"}
+                                                {selectedUser.accountRestrictionSource
+                                                  ? ` (${selectedUser.accountRestrictionSource})`
+                                                  : ""}
+                                                {selectedUser.accountRestrictionWindDownEndsAt &&
+                                                selectedUser.accountRestrictionPhase === "wind_down"
+                                                  ? ` · contact support by ${formatTimestamp(selectedUser.accountRestrictionWindDownEndsAt)}`
+                                                  : ""}
+                                              </p>
+                                              <Button
                                               type="button"
                                               variant="outline"
                                               size="sm"
@@ -772,7 +818,24 @@ export default function AdminUsersPage() {
                                             >
                                               Lift restriction
                                             </Button>
+                                            {selectedUser.accountRestrictionPhase === "wind_down" ? (
+                                              <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                className="border-oxblood/30 text-oxblood hover:bg-oxblood/5"
+                                                disabled={restrictionLoading}
+                                                onClick={() => {
+                                                  setRestrictionFeedback(null)
+                                                  setRestrictionConfirmOpen("close")
+                                                }}
+                                              >
+                                                Close now
+                                              </Button>
+                                            ) : null}
+                                            </>
                                           ) : (
+                                            <>
                                             <Button
                                               type="button"
                                               variant="outline"
@@ -781,11 +844,25 @@ export default function AdminUsersPage() {
                                               disabled={restrictionLoading}
                                               onClick={() => {
                                                 setRestrictionFeedback(null)
-                                                setRestrictionConfirmOpen(true)
+                                                setRestrictionConfirmOpen("restrict")
                                               }}
                                             >
                                               Restrict account
                                             </Button>
+                                            <Button
+                                              type="button"
+                                              variant="outline"
+                                              size="sm"
+                                              className="border-oxblood/30 text-oxblood hover:bg-oxblood/5"
+                                              disabled={restrictionLoading}
+                                              onClick={() => {
+                                                setRestrictionFeedback(null)
+                                                setRestrictionConfirmOpen("close")
+                                              }}
+                                            >
+                                              Close account
+                                            </Button>
+                                            </>
                                           )}
                                         </div>
                                       </div>
@@ -1018,17 +1095,20 @@ export default function AdminUsersPage() {
           </AlertDialogContent>
         </AlertDialog>
 
-        <AlertDialog open={restrictionConfirmOpen} onOpenChange={setRestrictionConfirmOpen}>
+        <AlertDialog
+          open={restrictionConfirmOpen === "restrict"}
+          onOpenChange={(open) => setRestrictionConfirmOpen(open ? "restrict" : null)}
+        >
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Restrict this account?</AlertDialogTitle>
               <AlertDialogDescription className="text-left space-y-2">
                 <span className="block">
-                  Deposits will be blocked immediately for{" "}
+                  Deposits and transfers will be blocked immediately for{" "}
                   <span className="font-medium text-foreground">
                     {selectedUser ? userDisplayName(selectedUser) : "this user"}
                   </span>
-                  . They will have 48 hours to move funds out before login is suspended.
+                  . They have 7 days to contact support. After that, the account will be closed automatically.
                 </span>
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -1040,6 +1120,36 @@ export default function AdminUsersPage() {
                 onClick={() => void handleConfirmRestrictAccount()}
               >
                 {restrictionLoading ? "Restricting…" : "Restrict account"}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog
+          open={restrictionConfirmOpen === "close"}
+          onOpenChange={(open) => setRestrictionConfirmOpen(open ? "close" : null)}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Close this account?</AlertDialogTitle>
+              <AlertDialogDescription className="text-left space-y-2">
+                <span className="block">
+                  Deposits and transfers will be blocked and{" "}
+                  <span className="font-medium text-foreground">
+                    {selectedUser ? userDisplayName(selectedUser) : "this user"}
+                  </span>{" "}
+                  will see the suspended screen on their next login. Outbound transfers are blocked immediately.
+                </span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={restrictionLoading}>Cancel</AlertDialogCancel>
+              <Button
+                variant="destructive"
+                disabled={restrictionLoading || !selectedUser}
+                onClick={() => void handleConfirmCloseAccount()}
+              >
+                {restrictionLoading ? "Closing…" : "Close account"}
               </Button>
             </AlertDialogFooter>
           </AlertDialogContent>

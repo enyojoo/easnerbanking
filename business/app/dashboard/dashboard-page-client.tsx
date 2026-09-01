@@ -35,7 +35,8 @@ import {
   hasHistoricalBaseCurrencyMismatch,
   REPORTING_FX_BASE_CHANGE_NOTE,
 } from "@/lib/fx/base-currency-display"
-import { isSuccessfulTransactionStatus, resolveReportingAmountForFeed } from "@easner/shared"
+import { isSuccessfulTransactionStatus, resolveReportingAmountForFeed, accountRestrictionDepositsBlockedCopy, accountRestrictionSendBlockedCopy } from "@easner/shared"
+import { useAccountRestriction } from "@/hooks/use-account-restriction"
 
 export function DashboardPageClient() {
   const {
@@ -54,6 +55,10 @@ export function DashboardPageClient() {
   } = useBusinessAccountRows()
   const { data: fxRates = [] } = useFxRates()
   useTurnkeyLedgerRepair()
+  const restrictionQuery = useAccountRestriction()
+  const accountRestricted = Boolean(restrictionQuery.data?.active)
+  const depositsBlocked = accountRestricted
+  const sendBlocked = accountRestricted
 
   const [timePeriod, setTimePeriod] = useState<TimePeriod>("all")
   const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
@@ -208,18 +213,43 @@ export function DashboardPageClient() {
               </div>
             </div>
             <div className="flex flex-wrap gap-2 justify-end shrink-0">
-              <Button asChild size="sm" className="shadow-sm">
-                <Link href="/send" className="flex items-center gap-2">
+              {sendBlocked ? (
+                <Button
+                  size="sm"
+                  className="shadow-sm flex items-center gap-2"
+                  disabled
+                  title={accountRestrictionSendBlockedCopy()}
+                >
                   <Send className="h-4 w-4" />
                   Send
-                </Link>
-              </Button>
-              <Button variant="outline" asChild size="sm">
-                <Link href="/accounts" className="flex items-center gap-2">
+                </Button>
+              ) : (
+                <Button asChild size="sm" className="shadow-sm">
+                  <Link href="/send" className="flex items-center gap-2">
+                    <Send className="h-4 w-4" />
+                    Send
+                  </Link>
+                </Button>
+              )}
+              {depositsBlocked ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled
+                  title={accountRestrictionDepositsBlockedCopy()}
+                  className="flex items-center gap-2"
+                >
                   <ArrowDownCircle className="h-4 w-4" />
                   Deposit
-                </Link>
-              </Button>
+                </Button>
+              ) : (
+                <Button variant="outline" asChild size="sm">
+                  <Link href="/accounts" className="flex items-center gap-2">
+                    <ArrowDownCircle className="h-4 w-4" />
+                    Deposit
+                  </Link>
+                </Button>
+              )}
               <Button variant="outline" asChild size="sm">
                 <Link href={withReturnTo("/invoices/create", "/dashboard")} className="flex items-center gap-2">
                   <Plus className="h-4 w-4" />

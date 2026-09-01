@@ -8,6 +8,7 @@ export type {
   TeamInviteEmailData,
   SecurityAlertEmailData,
   AccountRestrictionEmailData,
+  AccountRestrictionOpsEmailData,
 } from "./email-types"
 export type { EmailAudience } from "./email-audience"
 export { getEmailAudienceProfile, resolveEmailAudienceFromData } from "./email-audience"

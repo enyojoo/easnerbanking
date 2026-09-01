@@ -9,7 +9,7 @@ import {
   resolveRestrictionSubject,
 } from "@/lib/account-restriction"
 
-type Body = { reason?: string | null }
+type Body = { reason?: string | null; mode?: "wind_down" | "closed" }
 
 export async function POST(request: Request, { params }: { params: Promise<{ userId: string }> }) {
   const auth = await requireOfficeAdmin(request)
@@ -38,13 +38,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ use
     easnerBusinessId: userRow.easner_business_id as string | null | undefined,
   })
 
+  const mode = body.mode === "closed" ? "closed" : "wind_down"
+
   const result = await applyAccountRestriction(admin, {
     subjectKind: subject.subjectKind,
     userId: subject.userId,
     businessId: subject.businessId,
     source: "office",
-    reason: body.reason?.trim() || "Office compliance restriction",
+    reason:
+      body.reason?.trim() ||
+      (mode === "closed" ? "Office account closed" : "Office compliance restriction"),
     createdByAdminId: auth.ctx.userId,
+    mode,
   })
 
   await logAdminAction(auth.ctx.userId, "account.restriction_apply", targetUserId, {

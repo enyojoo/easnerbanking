@@ -18,6 +18,7 @@ import type {
   EmailTemplate,
   SecurityAlertEmailData,
   AccountRestrictionEmailData,
+  AccountRestrictionOpsEmailData,
   TeamInviteEmailData,
   TeamMemberJoinedEmailData,
   PayrollEasetagInviteEmailData,
@@ -627,14 +628,14 @@ ${data.dashboardUrl || profile.dashboardUrl}${profile.signatureText ?? ""}`
         audience === "business" && data.businessName?.trim()
           ? ` (${escapeHtmlText(data.businessName.trim())})`
           : ""
-      const windDownLine = data.windDownDeadline
-        ? `<p class="confirmation-text">During this review period, you may still move funds out until <strong>${escapeHtmlText(data.windDownDeadline)}</strong>. After that, outgoing transfers will also be paused.</p>`
-        : ""
+      const deadline = data.responseDeadline || data.windDownDeadline
+      const deadlineLine = deadline
+        ? `<p class="confirmation-text">Deposits and transfers are paused. Please contact Easner support by <strong>${escapeHtmlText(deadline)}</strong>. If we do not hear from you by then, your account may be closed.</p>`
+        : `<p class="confirmation-text">Deposits and transfers are paused. Please contact Easner support.</p>`
       const content = `
         ${easnerUserGreetingParagraphHtml(data.firstName)}
         <p class="confirmation-text">Your Easner account${org} has been restricted while we complete a compliance review.</p>
-        <p class="confirmation-text">New deposits are not available at this time.</p>
-        ${windDownLine}
+        ${deadlineLine}
         <p class="confirmation-text">For details about this restriction, contact Easner support.</p>
       `
       return generateBaseEmailTemplate(
@@ -652,16 +653,54 @@ ${data.dashboardUrl || profile.dashboardUrl}${profile.signatureText ?? ""}`
     text: (data: AccountRestrictionEmailData, audience = "personal") => {
       const org =
         audience === "business" && data.businessName?.trim() ? ` (${data.businessName.trim()})` : ""
-      const windDownLine = data.windDownDeadline
-        ? `\n\nDuring this review period, you may still move funds out until ${data.windDownDeadline}. After that, outgoing transfers will also be paused.`
-        : ""
+      const deadline = data.responseDeadline || data.windDownDeadline
+      const deadlineLine = deadline
+        ? `\n\nDeposits and transfers are paused. Please contact Easner support by ${deadline}. If we do not hear from you by then, your account may be closed.`
+        : "\n\nDeposits and transfers are paused. Please contact Easner support."
       return `${formatEasnerUserGreetingPlain(data.firstName)}
 
-Your Easner account${org} has been restricted while we complete a compliance review.
-
-New deposits are not available at this time.${windDownLine}
+Your Easner account${org} has been restricted while we complete a compliance review.${deadlineLine}
 
 For details about this restriction, contact Easner support: ${EASNER_CONTACT_URL}`
+    },
+  },
+
+  accountRestrictionClosed: {
+    subject: "Important: your Easner account has been closed",
+    preheader: "Contact Easner support if you have questions.",
+    html: (data: AccountRestrictionEmailData, audience = "personal") => {
+      const org =
+        audience === "business" && data.businessName?.trim()
+          ? ` (${escapeHtmlText(data.businessName.trim())})`
+          : ""
+      const content = `
+        ${easnerUserGreetingParagraphHtml(data.firstName)}
+        <p class="confirmation-text">Your Easner account${org} has been closed following a compliance review.</p>
+        <p class="confirmation-text">Deposits, transfers, and other account activity are no longer available. You will see a suspended notice when you sign in.</p>
+        <p class="confirmation-text">If you believe this is an error or would like to discuss next steps, contact Easner support.</p>
+      `
+      return generateBaseEmailTemplate(
+        "Account closed",
+        "",
+        content,
+        { text: "Contact support", url: EASNER_CONTACT_URL },
+        {
+          audience,
+          showPreferencesLink: false,
+          preheader: "Contact Easner support if you have questions.",
+        },
+      )
+    },
+    text: (data: AccountRestrictionEmailData, audience = "personal") => {
+      const org =
+        audience === "business" && data.businessName?.trim() ? ` (${data.businessName.trim()})` : ""
+      return `${formatEasnerUserGreetingPlain(data.firstName)}
+
+Your Easner account${org} has been closed following a compliance review.
+
+Deposits, transfers, and other account activity are no longer available. You will see a suspended notice when you sign in.
+
+If you believe this is an error or would like to discuss next steps, contact Easner support: ${EASNER_CONTACT_URL}`
     },
   },
 
@@ -706,6 +745,75 @@ Deposits and transfers are available again. You can sign in and use Easner as us
 Go to dashboard: ${dashboardUrl}
 
 If you have questions, contact Easner support: ${EASNER_CONTACT_URL}`
+    },
+  },
+
+  accountRestrictionOpsNotification: {
+    subject: (data: AccountRestrictionOpsEmailData) => {
+      const verb =
+        data.event === "lifted" ? "lifted" : data.event === "closed" ? "closed" : "restricted"
+      return `Account ${verb} – ${data.subjectLabel}`
+    },
+    preheader: (data: AccountRestrictionOpsEmailData) =>
+      data.event === "lifted"
+        ? `${data.subjectLabel} account restriction was lifted.`
+        : data.event === "closed"
+          ? `${data.subjectLabel} account was closed after the review period.`
+          : `${data.subjectLabel} account was restricted (${data.source ?? "unknown"}).`,
+    html: (data: AccountRestrictionOpsEmailData) => {
+      const officeUrl =
+        data.officeUrl ||
+        (data.subjectKind === "business"
+          ? `${process.env.NEXT_PUBLIC_OFFICE_URL || "https://bk.easner.com"}/users?highlight=${encodeURIComponent(data.subjectId)}`
+          : `${process.env.NEXT_PUBLIC_OFFICE_URL || "https://bk.easner.com"}/users?highlight=${encodeURIComponent(data.subjectId)}`)
+      const eventLabel =
+        data.event === "lifted" ? "lifted" : data.event === "closed" ? "closed" : "restricted"
+      const phaseLine =
+        data.event === "applied" && data.phase
+          ? `<p class="confirmation-text">Phase: <strong>${data.phase === "locked" ? "closed" : "restricted (7-day review)"}</strong></p>`
+          : ""
+      const sourceLine = data.source
+        ? `<p class="confirmation-text">Source: <strong>${escapeHtmlText(data.source)}</strong></p>`
+        : ""
+      const reasonLine = data.reason
+        ? `<p class="confirmation-text"><strong>Reason:</strong> ${escapeHtmlText(data.reason)}</p>`
+        : ""
+      const deadlineLine = data.windDownEndsAt
+        ? `<p class="confirmation-text">Review deadline: ${escapeHtmlText(data.windDownEndsAt)}</p>`
+        : ""
+      const content = `
+        <p class="confirmation-text">
+          <strong>${escapeHtmlText(data.subjectLabel)}</strong> (${data.subjectKind}) account restriction was <strong>${eventLabel}</strong>.
+        </p>
+        <p class="confirmation-text">Subject ID: ${escapeHtmlText(data.subjectId)}</p>
+        ${phaseLine}
+        ${sourceLine}
+        ${reasonLine}
+        ${deadlineLine}
+      `
+      return generateBaseEmailTemplate(
+        `Account ${eventLabel}`,
+        "",
+        content,
+        { text: "View in Office", url: officeUrl },
+        { audience: "business", showPreferencesLink: false },
+      )
+    },
+    text: (data: AccountRestrictionOpsEmailData) => {
+      const officeUrl =
+        data.officeUrl ||
+        `${process.env.NEXT_PUBLIC_OFFICE_URL || "https://bk.easner.com"}/users?highlight=${encodeURIComponent(data.subjectId)}`
+      const eventLabel =
+        data.event === "lifted" ? "lifted" : data.event === "closed" ? "closed" : "restricted"
+      let t = `${data.subjectLabel} (${data.subjectKind}) account restriction was ${eventLabel}.\n\nSubject ID: ${data.subjectId}`
+      if (data.event === "applied" && data.phase) {
+        t += `\nPhase: ${data.phase}`
+      }
+      if (data.source) t += `\nSource: ${data.source}`
+      if (data.reason) t += `\nReason: ${data.reason}`
+      if (data.windDownEndsAt) t += `\nReview deadline: ${data.windDownEndsAt}`
+      t += `\n\n${officeUrl}`
+      return t
     },
   },
 

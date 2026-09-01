@@ -9,6 +9,7 @@ import {
 } from "@easner/shared"
 import {
   notifyAccountRestrictionApplied,
+  notifyAccountRestrictionClosed,
   notifyAccountRestrictionLifted,
 } from "@/lib/notifications/restriction-notify"
 
@@ -36,6 +37,8 @@ export type ApplyAccountRestrictionInput = {
   reason?: string | null
   partnerEventId?: string | null
   createdByAdminId?: string | null
+  /** Office: 7-day compliance review. Closed: immediate lock after login. */
+  mode?: "wind_down" | "closed"
 }
 
 export type ResolveAccountRestrictionInput = {
@@ -118,6 +121,7 @@ async function maybePromoteToLocked(
   })
   if (phase !== "locked" || row.phase === "locked") return row
 
+  const wasReviewPeriod = row.phase === "wind_down"
   const lockedAt = nowIso()
   const { data, error } = await admin
     .from("account_restrictions")
@@ -128,7 +132,13 @@ async function maybePromoteToLocked(
     .maybeSingle()
 
   if (error) throw new Error(`maybePromoteToLocked: ${error.message}`)
-  return (data as AccountRestrictionRow | null) ?? { ...row, phase: "locked", locked_at: lockedAt }
+  const promoted = (data as AccountRestrictionRow | null) ?? { ...row, phase: "locked", locked_at: lockedAt }
+  if (promoted.phase === "locked" && wasReviewPeriod) {
+    void notifyAccountRestrictionClosed(admin, promoted).catch((err) =>
+      console.error("[account-restriction] auto-close email failed:", err),
+    )
+  }
+  return promoted
 }
 
 export async function resolveAccountRestriction(
@@ -162,22 +172,53 @@ export async function applyAccountRestriction(
   }
 
   const existing = await fetchActiveRestriction(admin, subject)
+  const mode = input.mode ?? "wind_down"
   if (existing) {
+    if (mode === "closed" && existing.phase === "wind_down" && !existing.locked_at) {
+      const lockedAt = nowIso()
+      const { data, error } = await admin
+        .from("account_restrictions")
+        .update({
+          phase: "locked",
+          locked_at: lockedAt,
+          wind_down_ends_at: lockedAt,
+          updated_at: lockedAt,
+        })
+        .eq("id", existing.id)
+        .is("lifted_at", null)
+        .select("*")
+        .maybeSingle()
+
+      if (error) throw new Error(`applyAccountRestriction: ${error.message}`)
+      const escalated =
+        (data as AccountRestrictionRow | null) ??
+        ({ ...existing, phase: "locked", locked_at: lockedAt, wind_down_ends_at: lockedAt } as AccountRestrictionRow)
+      void notifyAccountRestrictionClosed(admin, escalated).catch((err) =>
+        console.error("[account-restriction] close email failed:", err),
+      )
+      return { applied: true, row: escalated }
+    }
     return { applied: false, row: existing }
   }
 
   const restrictedAt = nowIso()
-  const windDownEndsAt = new Date(Date.now() + ACCOUNT_RESTRICTION_WIND_DOWN_MS).toISOString()
+  const immediateClose = mode === "closed"
+  const windDownEndsAt = immediateClose
+    ? restrictedAt
+    : new Date(Date.now() + ACCOUNT_RESTRICTION_WIND_DOWN_MS).toISOString()
+  const lockedAt = immediateClose ? restrictedAt : null
+  const phase = immediateClose ? "locked" : "wind_down"
   const { data, error } = await admin
     .from("account_restrictions")
     .insert({
       subject_kind: subject.subjectKind,
       user_id: subject.userId,
       business_id: subject.businessId,
-      phase: "wind_down",
+      phase,
       source: input.source,
       restricted_at: restrictedAt,
       wind_down_ends_at: windDownEndsAt,
+      locked_at: lockedAt,
       reason: input.reason?.trim() || null,
       partner_event_id: input.partnerEventId?.trim() || null,
       created_by_admin_id: input.createdByAdminId?.trim() || null,
@@ -187,9 +228,15 @@ export async function applyAccountRestriction(
 
   if (error) throw new Error(`applyAccountRestriction: ${error.message}`)
   const row = data as AccountRestrictionRow
-  void notifyAccountRestrictionApplied(admin, row).catch((err) =>
-    console.error("[account-restriction] restriction email failed:", err),
-  )
+  if (immediateClose) {
+    void notifyAccountRestrictionClosed(admin, row).catch((err) =>
+      console.error("[account-restriction] close email failed:", err),
+    )
+  } else {
+    void notifyAccountRestrictionApplied(admin, row).catch((err) =>
+      console.error("[account-restriction] restriction email failed:", err),
+    )
+  }
   return { applied: true, row }
 }
 

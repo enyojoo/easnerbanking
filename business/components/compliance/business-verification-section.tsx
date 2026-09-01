@@ -31,6 +31,7 @@ import {
   getVerificationRejectionDisplay,
   NOAH_FINAL_REJECTION_USER_MESSAGE,
   NOAH_VERIFICATION_IN_REVIEW_COPY,
+  accountRestrictionVerificationBlockedCopy,
 } from "@easner/shared"
 import {
   SETTINGS_CONNECT_FLOW_PARAM,
@@ -47,6 +48,7 @@ import { useSuspendIdleLock } from "@/hooks/use-suspend-idle-lock"
 import { GridKybWizard } from "@/components/compliance/grid-kyb-wizard"
 import { analytics } from "@/lib/analytics"
 import { useKybPacket } from "@/lib/grid/kyb-packet-query"
+import { useAccountRestriction } from "@/hooks/use-account-restriction"
 
 function tier1StatusIsInReview(status: string | null | undefined): boolean {
   const s = (status || "").toLowerCase()
@@ -98,6 +100,9 @@ export function BusinessVerificationSection({
     registeredAddressPostalCode,
   } = useBusinessProfile()
 
+  const restrictionQuery = useAccountRestriction()
+  const accountRestricted = Boolean(restrictionQuery.data?.active)
+
   const showOnlinePayments = onlinePaymentsEnabled !== false
   const expressQuery = useBusinessExpressOnrampStatus()
   const showExpressCard = canUseGeoPersonalRails && expressQuery.data?.eligible === true
@@ -108,6 +113,7 @@ export function BusinessVerificationSection({
   const expressSetupCta = expressDepositsVerificationCta(expressStatus)
 
   const openExpressSetup = useCallback(() => {
+    if (accountRestricted) return
     analytics.trackKybStarted({ provider: "express_deposits" })
     const peeked = peekBusinessExpressOnrampStatus()
     if (peeked?.publishableKey) {
@@ -120,7 +126,7 @@ export function BusinessVerificationSection({
     next.set("tab", "verification")
     next.set("flow", SETTINGS_EXPRESS_FLOW_PARAM)
     window.history.replaceState(null, "", `/settings?${next.toString()}`)
-  }, [onFlowOpenChange, searchParams])
+  }, [accountRestricted, onFlowOpenChange, searchParams])
 
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
@@ -177,6 +183,7 @@ export function BusinessVerificationSection({
   }, [clearVerificationFlowUrl, syncBusinessTier1FromGrid])
 
   const openHostedVerification = useCallback(async () => {
+    if (accountRestricted) return
     setError(null)
     setInfo(null)
     analytics.trackKybStarted({ provider: "hosted" })
@@ -201,17 +208,25 @@ export function BusinessVerificationSection({
     }
     setHostedOpen(true)
     pushVerificationFlowUrl()
-  }, [businessId, kybPacket, kybPacketQuery, pushVerificationFlowUrl])
+  }, [accountRestricted, businessId, kybPacket, kybPacketQuery, pushVerificationFlowUrl])
 
   useEffect(() => {
-    if (!flowFromUrl) {
+    if (!accountRestricted) return
+    if (!flowFromUrl && !connectFromUrl && !expressFromUrl) return
+    clearVerificationFlowUrl()
+    setHostedOpen(false)
+    onFlowOpenChange?.(false)
+  }, [accountRestricted, clearVerificationFlowUrl, connectFromUrl, expressFromUrl, flowFromUrl, onFlowOpenChange])
+
+  useEffect(() => {
+    if (!flowFromUrl || accountRestricted) {
       flowAutoOpenRef.current = false
       return
     }
     if (flowAutoOpenRef.current || hostedOpen) return
     flowAutoOpenRef.current = true
     openHostedVerification()
-  }, [flowFromUrl, hostedOpen, openHostedVerification])
+  }, [accountRestricted, flowFromUrl, hostedOpen, openHostedVerification])
 
   useEffect(() => {
     if (embeddedFlow === "hosted" || flowFromUrl || !hostedOpen) return
@@ -278,6 +293,7 @@ export function BusinessVerificationSection({
     (tier1InProgress || (tier1VerificationStatus === "not_started" && hasGridCustomer))
   const showTier1HostedCta =
     canManageBusinessVerification &&
+    !accountRestricted &&
     !tier1Complete &&
     !tier1AwaitingReview &&
     tier1CanResubmit &&
@@ -365,6 +381,11 @@ export function BusinessVerificationSection({
             <CardContent
               className={cn(connectFlowActive && "flex min-h-0 flex-1 flex-col p-0")}
             >
+              {accountRestricted ? (
+                <p className="mb-4 rounded-lg border border-[hsl(var(--warning)/0.3)] bg-[hsl(var(--warning)/0.08)] px-3 py-2 text-sm text-[hsl(var(--warning))]">
+                  {accountRestrictionVerificationBlockedCopy()}
+                </p>
+              ) : null}
               <div
                 className={cn(
                   "grid gap-4 md:grid-cols-2",
@@ -473,6 +494,7 @@ export function BusinessVerificationSection({
                           fullPageFlow={connectFlowActive}
                           unavailableFallback={comingLaterCard}
                           onFlowOpenChange={onFlowOpenChange}
+                          verificationActionsBlocked={accountRestricted}
                         />
                       </div>
                     )
@@ -498,7 +520,7 @@ export function BusinessVerificationSection({
                         {EXPRESS_DEPOSITS_COPY.description}
                       </CardDescription>
                     </CardHeader>
-                    {!expressReady && expressSetupCta ? (
+                    {!expressReady && expressSetupCta && !accountRestricted ? (
                       <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
                         {!tier1Complete ? (
                           <div className="flex flex-wrap gap-2">

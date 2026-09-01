@@ -45,7 +45,7 @@ describe("account restriction enforcement", () => {
     if (!result.ok) expect(result.code).toBe("ACCOUNT_RESTRICTED")
   })
 
-  it("allows send during wind-down", async () => {
+  it("blocks send during wind-down", async () => {
     const admin = makeAssertAdmin({
       subject_kind: "business",
       business_id: "biz-1",
@@ -59,7 +59,8 @@ describe("account restriction enforcement", () => {
       reason: null,
     })
     const result = await assertAccountAllows(admin, { businessId: "biz-1", role: "business" }, "send")
-    expect(result.ok).toBe(true)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.code).toBe("ACCOUNT_RESTRICTED")
   })
 
   it("detects grid compliance suspended without touching kyb", () => {

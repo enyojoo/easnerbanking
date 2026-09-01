@@ -217,7 +217,14 @@ export const accountRestrictedFixture = {
   email: "owner@example.com",
   firstName: "Alex",
   businessName: "Acme LLC",
-  windDownDeadline: "Sep 3, 2026, 12:00 PM",
+  responseDeadline: "Sep 8, 2026, 12:00 PM",
+  dashboardUrl: "https://business.easner.com",
+}
+
+export const accountRestrictionClosedFixture = {
+  email: "owner@example.com",
+  firstName: "Alex",
+  businessName: "Acme LLC",
   dashboardUrl: "https://business.easner.com",
 }
 
@@ -226,6 +233,18 @@ export const accountRestrictionLiftedFixture = {
   firstName: "Alex",
   businessName: "Acme LLC",
   dashboardUrl: "https://business.easner.com",
+}
+
+export const accountRestrictionOpsNotificationFixture = {
+  event: "applied" as const,
+  subjectKind: "business" as const,
+  subjectLabel: "Acme LLC",
+  subjectId: "biz-123",
+  phase: "wind_down" as const,
+  source: "grid" as const,
+  reason: "Grid compliance suspended",
+  windDownEndsAt: "Sep 8, 2026, 12:00 PM",
+  officeUrl: "https://bk.easner.com/users?highlight=user-123",
 }
 
 /** Template key → fixture data for render tests */
@@ -263,7 +282,9 @@ export const templateFixtures: Record<string, unknown> = {
   payrollRunSummary: payrollRunSummaryFixture,
   payrollFundingNeeded: payrollFundingNeededFixture,
   accountRestricted: accountRestrictedFixture,
+  accountRestrictionClosed: accountRestrictionClosedFixture,
   accountRestrictionLifted: accountRestrictionLiftedFixture,
+  accountRestrictionOpsNotification: accountRestrictionOpsNotificationFixture,
   passwordChanged: securityPasswordChangedFixture,
   passwordResetCompleted: { ...securityPasswordChangedFixture, alertType: "password_reset_completed" as const },
   mfaEnabled: { ...securityPasswordChangedFixture, alertType: "mfa_enabled" as const },
