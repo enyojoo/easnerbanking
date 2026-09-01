@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { OtpCodeInput } from "@/components/otp-code-input"
 import {
   User,
   Mail,
@@ -43,10 +44,9 @@ import { ChangePasswordDialog } from "@/components/settings/change-password-dial
 import { MfaSettingsDialog } from "@/components/settings/mfa-settings-dialog"
 import {
   beginTotpEnrollment,
-  getVerifiedTotpFactorId,
+  disableVerifiedTotpWithCode,
   hasEmailPasswordIdentity,
   type TotpEnrollSetup,
-  totpFactorsFromListResponse,
 } from "@/lib/auth-mfa"
 import { useMfaStatus } from "@/hooks/use-mfa-status"
 import { hasPin } from "@/lib/login-pin"
@@ -99,12 +99,20 @@ export function SettingsPersonalTab() {
   const [mfaAutoStartEnroll, setMfaAutoStartEnroll] = useState(false)
   const [turnOffMfaOpen, setTurnOffMfaOpen] = useState(false)
   const [turnOffMfaSubmitting, setTurnOffMfaSubmitting] = useState(false)
+  const [turnOffMfaCode, setTurnOffMfaCode] = useState("")
+  const [turnOffMfaError, setTurnOffMfaError] = useState<string | null>(null)
+  const turnOffMfaSubmittingRef = useRef(false)
   const [mfaSetupPreparing, setMfaSetupPreparing] = useState(false)
   const [initialMfaEnrollSetup, setInitialMfaEnrollSetup] = useState<TotpEnrollSetup | null>(null)
   const setupMfaHandledRef = useRef(false)
-  const mfaStatus = useMfaStatus({ enrollDialogOpen: mfaDialogOpen })
-  const { statusLine: mfaStatusLine, statusKnown: mfaStatusKnown, verified: mfaVerifiedOn, refresh: refreshMfaStatus } =
-    mfaStatus
+  const mfaStatus = useMfaStatus({ enrollDialogOpen: mfaDialogOpen || mfaSetupPreparing })
+  const {
+    statusLine: mfaStatusLine,
+    statusKnown: mfaStatusKnown,
+    verified: mfaVerifiedOn,
+    refresh: refreshMfaStatus,
+    applyLocalStatus: applyMfaStatus,
+  } = mfaStatus
   const [pinSettingsOpen, setPinSettingsOpen] = useState(false)
   const [pinStatusVersion, setPinStatusVersion] = useState(0)
   const [hasAppPin, setHasAppPin] = useState(false)
@@ -184,33 +192,39 @@ export function SettingsPersonalTab() {
     }
   }, [mfaStatusKnown, mfaVerifiedOn, openMfaSetupFlow, searchParams])
 
-  const confirmTurnOffMfa = async () => {
+  const confirmTurnOffMfa = async (codeRaw: string) => {
+    if (turnOffMfaSubmittingRef.current) return
+    const digits = codeRaw.replace(/\D/g, "")
+    if (digits.length !== 6) {
+      setTurnOffMfaError("Enter the 6-digit code from your authenticator app.")
+      return
+    }
+    turnOffMfaSubmittingRef.current = true
     setTurnOffMfaSubmitting(true)
+    setTurnOffMfaError(null)
     try {
-      const { data, error } = await supabase.auth.mfa.listFactors()
-      if (error) {
-        setTurnOffMfaOpen(false)
-        void refreshMfaStatus({ force: true })
+      const result = await disableVerifiedTotpWithCode(supabase, digits)
+      if (!result.ok) {
+        setTurnOffMfaError(
+          result.invalidCode
+            ? "You entered an invalid code, try again"
+            : result.message,
+        )
+        if (result.invalidCode) setTurnOffMfaCode("")
         return
       }
-      const totp = totpFactorsFromListResponse(data)
-      const id = getVerifiedTotpFactorId(totp)
-      if (!id) {
-        setTurnOffMfaOpen(false)
-        void refreshMfaStatus({ force: true })
-        return
-      }
-      const { error: uErr } = await supabase.auth.mfa.unenroll({ factorId: id })
-      if (!uErr) {
-        void fetch("/api/notifications/security-alert", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ alertType: "mfa_disabled" }),
-        }).catch(() => {})
-        setTurnOffMfaOpen(false)
-        void refreshMfaStatus({ force: true })
-      }
+      applyMfaStatus("Off")
+      setTurnOffMfaOpen(false)
+      setTurnOffMfaCode("")
+      setTurnOffMfaError(null)
+      void fetch("/api/notifications/security-alert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ alertType: "mfa_disabled" }),
+      }).catch(() => {})
+      void refreshMfaStatus({ force: true })
     } finally {
+      turnOffMfaSubmittingRef.current = false
       setTurnOffMfaSubmitting(false)
     }
   }
@@ -512,6 +526,8 @@ export function SettingsPersonalTab() {
               disabled={mfaRowLoading || mfaSetupPreparing}
               onClick={() => {
                 if (mfaVerifiedOn) {
+                  setTurnOffMfaCode("")
+                  setTurnOffMfaError(null)
                   setTurnOffMfaOpen(true)
                   return
                 }
@@ -569,31 +585,63 @@ export function SettingsPersonalTab() {
             setInitialMfaEnrollSetup(null)
           }
         }}
-        onFactorsChanged={() => void refreshMfaStatus({ force: true })}
+        onFactorsChanged={(change) => {
+          if (change?.verified) applyMfaStatus("On")
+          void refreshMfaStatus({ force: true })
+        }}
         initialTotpVerified={mfaStatusLine === "On"}
         mfaStatusKnown={!mfaRowLoading}
         autoStartEnroll={mfaAutoStartEnroll}
         initialEnrollSetup={initialMfaEnrollSetup}
       />
 
-      <AlertDialog open={turnOffMfaOpen} onOpenChange={setTurnOffMfaOpen}>
+      <AlertDialog
+        open={turnOffMfaOpen}
+        onOpenChange={(open) => {
+          if (turnOffMfaSubmitting) return
+          setTurnOffMfaOpen(open)
+          if (!open) {
+            setTurnOffMfaCode("")
+            setTurnOffMfaError(null)
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Disable two-factor authentication?</AlertDialogTitle>
             <AlertDialogDescription>
-              You will only need your password to sign in. You can turn 2FA back on anytime.
+              You will only need your password to sign in. Enter the 6-digit code from your
+              authenticator app to confirm.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {turnOffMfaError ? (
+            <div className="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+              {turnOffMfaError}
+            </div>
+          ) : null}
+          <OtpCodeInput
+            id="mfa-disable-code"
+            value={turnOffMfaCode}
+            onChange={setTurnOffMfaCode}
+            onComplete={(digits) => {
+              window.setTimeout(() => {
+                void confirmTurnOffMfa(digits)
+              }, 80)
+            }}
+            autoFocus
+            disabled={turnOffMfaSubmitting}
+          />
           <AlertDialogFooter>
             <AlertDialogCancel disabled={turnOffMfaSubmitting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault()
-                void confirmTurnOffMfa()
+                void confirmTurnOffMfa(turnOffMfaCode)
               }}
+              disabled={turnOffMfaSubmitting || turnOffMfaCode.replace(/\D/g, "").length !== 6}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Yes, Disable
+              {turnOffMfaSubmitting ? "Disabling…" : "Disable"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

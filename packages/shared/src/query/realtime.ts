@@ -487,7 +487,7 @@ export function attachRealtime({
 
           const currencyRaw = (row as any).currency ?? (row as any).code
           const currency = typeof currencyRaw === "string" ? currencyRaw.toUpperCase() : null
-          if (currency !== "USD" && currency !== "EUR") return prev
+          if (!currency || !/^[A-Z]{3}$/.test(currency)) return prev
 
           const nextVal =
             (row as any).available_balance ??
@@ -512,7 +512,8 @@ export function attachRealtime({
             }
           }
 
-          // Mobile personal scope: flat `{ USD, EUR, source }` envelope.
+          // Mobile personal scope: flat `{ USD, EUR, … }` envelope.
+          if (!(currency in base) && currency !== "USD" && currency !== "EUR") return prev
           return {
             ...base,
             [currency]: String(n),

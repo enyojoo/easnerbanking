@@ -1,5 +1,5 @@
 /**
- * Amount-screen counterparts (pay-in / payout / TLC).
+ * Amount-screen counterparts (pay-in / payout / TLC / wallet send-out).
  *
  * Layer 1: cached Easner rate + estimated fees (instant).
  * Layer 2: matching provider quote overlay (already-prefetched).
@@ -8,6 +8,7 @@
  */
 
 import { computePayoutProcessingFeeBps } from "./payout-processing-fee"
+import { estimateWalletSendTotalDebited } from "./direct-turnkey-wallet-send-pricing"
 import type { YcFundBalanceAmountPreview } from "./yc-pricing"
 
 export type AmountScreenFxSource = "rate" | "quote"
@@ -229,6 +230,43 @@ export function resolveAmountScreenTlcPreview(input: {
     receiveAmount: receive > 0 ? receive : 0,
     customerRate: input.customerRate,
     feeInclusive: estimatedLocal > principal,
+    source: "rate",
+  }
+}
+
+/**
+ * Wallet send-out (USDC/EURC): same two layers as pay-in / fiat payout.
+ * Instant 1% processing estimate, then the matching provider quote.
+ */
+export function resolveAmountScreenWalletPreview(input: {
+  receiveAmount: number
+  quote?: { totalDebited: number; receiveAmount: number; youSendAmount?: number } | null
+}): AmountScreenPayoutDisplay {
+  const receive = Number(input.receiveAmount)
+  const quote = input.quote
+  if (
+    quote &&
+    quote.totalDebited > 0 &&
+    quote.receiveAmount > 0 &&
+    receive > 0 &&
+    amountsMatchForAmountScreen(quote.receiveAmount, receive)
+  ) {
+    return {
+      totalDebited: quote.totalDebited,
+      youSendAmount: quote.youSendAmount && quote.youSendAmount > 0 ? quote.youSendAmount : quote.totalDebited,
+      receiveAmount: quote.receiveAmount,
+      customerRate: 1,
+      feeInclusive: true,
+      source: "quote",
+    }
+  }
+  const estimated = estimateWalletSendTotalDebited(receive)
+  return {
+    totalDebited: estimated,
+    youSendAmount: receive > 0 ? receive : 0,
+    receiveAmount: receive > 0 ? receive : 0,
+    customerRate: 1,
+    feeInclusive: estimated > receive,
     source: "rate",
   }
 }

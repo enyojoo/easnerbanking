@@ -5,6 +5,7 @@ import type { Recipient, User } from '../types'
 import { recipientService, type RecipientData } from '../lib/recipientService'
 import { invalidateRecipientsFeed } from '../query/refresh-user-feeds'
 import { recordRecipientSentTouch } from '../lib/recentSendRecipients'
+import { upsertRecipientInListCache } from './queries/use-recipients'
 import { resolveRecipientEasetagForUi } from '../lib/easenetRecipientUi'
 import type { MobileTransactionRow } from './queries/use-transactions'
 
@@ -277,6 +278,7 @@ export async function executeBalanceSend(
           : undefined)
       if (persist) {
         const created = await recipientService.findOrCreate(ctx.userProfile.id, persist)
+        upsertRecipientInListCache(ctx.qc, ctx.scope, ctx.userProfile.id, created)
         if (ctx.scope && ctx.userId) await invalidateRecipientsFeed(ctx.qc, ctx.scope, ctx.userId)
         recipientForDetails = created
         void recordRecipientSentTouch(ctx.userId, created.id)

@@ -15,17 +15,18 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import {
   beginTotpEnrollment,
+  discardUnverifiedTotpEnrollment,
   getVerifiedTotpFactorId,
+  isMfaFactorGoneError,
   type TotpEnrollSetup,
   type TotpFactorLike,
   totpFactorsFromListResponse,
-  unenrollUnverifiedTotpFactors,
 } from "@/lib/auth-mfa"
 
 interface MfaSettingsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onFactorsChanged?: () => void
+  onFactorsChanged?: (change?: { verified: boolean }) => void
   /** From the settings card (last listFactors result) so the dialog can render CTAs without waiting. */
   initialTotpVerified?: boolean
   /** False while the parent is still fetching MFA status for the card. */
@@ -247,7 +248,7 @@ export function MfaSettingsDialog({
       onOpenChange(false)
       const supabase = createSupabaseBrowser()
       void (async () => {
-        await unenrollUnverifiedTotpFactors(supabase)
+        await discardUnverifiedTotpEnrollment(supabase)
         await loadFactors()
         onFactorsChanged?.()
       })()
@@ -257,14 +258,16 @@ export function MfaSettingsDialog({
     onOpenChange(next)
   }
 
-  const completeEnroll = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!enrollFactorId) return
-    const code = verifyCode.replace(/\D/g, "")
+  const verifySubmittingRef = useRef(false)
+
+  const submitEnrollCode = async (codeRaw: string) => {
+    if (!enrollFactorId || verifySubmittingRef.current || enrollFetching) return
+    const code = codeRaw.replace(/\D/g, "")
     if (code.length !== 6) {
       setError("Enter the 6-digit code from your authenticator app.")
       return
     }
+    verifySubmittingRef.current = true
     setError(null)
     setVerifySubmitting(true)
     try {
@@ -273,6 +276,13 @@ export function MfaSettingsDialog({
         factorId: enrollFactorId,
       })
       if (chErr || !ch?.id) {
+        if (isMfaFactorGoneError(chErr)) {
+          setVerifyCode("")
+          setError("This setup expired. Scan the new QR code and enter a fresh code.")
+          enrollGenRef.current += 1
+          void startEnroll(enrollGenRef.current)
+          return
+        }
         setError(chErr?.message || "Could not verify the code.")
         return
       }
@@ -282,6 +292,13 @@ export function MfaSettingsDialog({
         code,
       })
       if (vErr) {
+        if (isMfaFactorGoneError(vErr)) {
+          setVerifyCode("")
+          setError("This setup expired. Scan the new QR code and enter a fresh code.")
+          enrollGenRef.current += 1
+          void startEnroll(enrollGenRef.current)
+          return
+        }
         setError(vErr.message || "Invalid code.")
         return
       }
@@ -290,13 +307,18 @@ export function MfaSettingsDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ alertType: "mfa_enabled" }),
       }).catch(() => {})
-      await loadFactors()
-      onFactorsChanged?.()
+      onFactorsChanged?.({ verified: true })
       onOpenChange(false)
       scheduleDeferredUiReset()
     } finally {
+      verifySubmittingRef.current = false
       setVerifySubmitting(false)
     }
+  }
+
+  const completeEnroll = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await submitEnrollCode(verifyCode)
   }
 
   return (
@@ -403,6 +425,11 @@ export function MfaSettingsDialog({
                   label="Enter 6-digit code shown to you"
                   value={verifyCode}
                   onChange={setVerifyCode}
+                  onComplete={(digits) => {
+                    window.setTimeout(() => {
+                      void submitEnrollCode(digits)
+                    }, 80)
+                  }}
                   autoFocus
                   disabled={verifySubmitting || enrollFetching || !enrollFactorId}
                 />

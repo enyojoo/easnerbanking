@@ -40,16 +40,19 @@ function getWalletListStorageKey(scope: Scope): string {
  * `initialDataUpdatedAt` stamps the data as fetched-just-now, which defeats
  * staleTime, prefetch staleness checks, and the stale-query sweeps — an
  * arbitrarily old balance would render as authoritative and never revalidate.
- * Snapshots past the ceiling (and legacy ones without `savedAt`) are discarded.
+ * Snapshots past the ceiling (and legacy ones without `savedAt`) are discarded
+ * as query `initialData`. A longer display ceiling still seeds last-known
+ * amounts so a stale tab does not flash $0.00 before the refetch lands.
  */
-const WALLET_SNAPSHOT_MAX_AGE_MS = 15 * 60 * 1000
+const WALLET_SNAPSHOT_FRESH_MS = 15 * 60 * 1000
+const WALLET_SNAPSHOT_DISPLAY_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 export type WalletListSnapshot = {
   data: WalletBalancesData
   savedAt: number
 }
 
-export function readWalletListSnapshot(scope: Scope): WalletListSnapshot | undefined {
+function parseStoredWalletList(scope: Scope): WalletListSnapshot | undefined {
   if (typeof window === "undefined") return undefined
   const storageKey = getWalletListStorageKey(scope)
   try {
@@ -69,9 +72,7 @@ export function readWalletListSnapshot(scope: Scope): WalletListSnapshot | undef
     ) {
       return undefined
     }
-    if (typeof parsed.savedAt !== "number" || Date.now() - parsed.savedAt > WALLET_SNAPSHOT_MAX_AGE_MS) {
-      return undefined
-    }
+    if (typeof parsed.savedAt !== "number") return undefined
     return {
       data: {
         balances: parsed.balances ?? {},
@@ -85,8 +86,68 @@ export function readWalletListSnapshot(scope: Scope): WalletListSnapshot | undef
   }
 }
 
+function snapshotWithinAge(snapshot: WalletListSnapshot | undefined, maxAgeMs: number): WalletListSnapshot | undefined {
+  if (!snapshot) return undefined
+  if (Date.now() - snapshot.savedAt > maxAgeMs) return undefined
+  return snapshot
+}
+
+/** Fresh enough to seed TanStack `initialData` without hiding staleness. */
+export function readWalletListSnapshot(scope: Scope): WalletListSnapshot | undefined {
+  return snapshotWithinAge(parseStoredWalletList(scope), WALLET_SNAPSHOT_FRESH_MS)
+}
+
+/** Last-known amounts for display while a stale/in-flight refetch completes. */
+export function readWalletListDisplaySnapshot(scope: Scope): WalletListSnapshot | undefined {
+  return snapshotWithinAge(parseStoredWalletList(scope), WALLET_SNAPSHOT_DISPLAY_MAX_AGE_MS)
+}
+
+export function extractFiatBalanceMap(
+  balances: Record<string, unknown> | null | undefined,
+): Record<string, string> | null {
+  if (!balances) return null
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(balances)) {
+    if (!/^[A-Z]{3}$/.test(key)) continue
+    if (typeof value !== "string" && typeof value !== "number") continue
+    out[key] = String(value)
+  }
+  if (Object.keys(out).length === 0) return null
+  if (out.USD == null) out.USD = "0"
+  if (out.EUR == null) out.EUR = "0"
+  return out
+}
+
+function previousBalancesForRegression(scope: Scope, queryClient: QueryClient): OnChainBalances | undefined {
+  const cached = queryClient.getQueryData<WalletBalancesData>(qk.wallets.list(scope))?.balances
+  const snap = readWalletListDisplaySnapshot(scope)?.data.balances
+  // Prefer whichever side already has a non-zero USD/EUR so a persisted $0
+  // envelope cannot hide a last-known snapshot (or vice versa).
+  if (isSuspiciousAuthoritativeZeroRegression("db", "0", "0", cached)) return cached
+  if (isSuspiciousAuthoritativeZeroRegression("db", "0", "0", snap)) return snap
+  return cached ?? snap
+}
+
 export function writeWalletListSnapshot(scope: Scope, data: WalletBalancesData): void {
   if (typeof window === "undefined") return
+  if (
+    data.balances?.source !== "turnkey" &&
+    data.balances?.source !== "db" &&
+    data.balances?.source !== "realtime"
+  ) {
+    return
+  }
+  const existing = parseStoredWalletList(scope)?.data.balances
+  if (
+    isSuspiciousAuthoritativeZeroRegression(
+      data.balances?.source,
+      data.balances?.USD,
+      data.balances?.EUR,
+      existing,
+    )
+  ) {
+    return
+  }
   try {
     window.localStorage.setItem(
       getWalletListStorageKey(scope),
@@ -119,17 +180,25 @@ export async function fetchWalletBalances(
   if (isTransientTurnkeyFailure) {
     const prev = queryClient.getQueryData<WalletBalancesData>(queryKey)
     if (prev) return prev
+    const snap = readWalletListDisplaySnapshot(scope)
+    if (snap) return snap.data
     throw new Error("Transient Turnkey balance lookup failure")
   }
   const prev = queryClient.getQueryData<WalletBalancesData>(queryKey)
+  const prevBalances = previousBalancesForRegression(scope, queryClient)
   if (
     isSuspiciousAuthoritativeZeroRegression(
       balances?.source,
       balances?.USD,
       balances?.EUR,
-      prev?.balances,
+      prevBalances,
     )
   ) {
+    if (prev?.balances && !isSuspiciousAuthoritativeZeroRegression("db", "0", "0", prev.balances)) {
+      return prev
+    }
+    const snap = readWalletListDisplaySnapshot(scope)
+    if (snap) return snap.data
     if (prev) return prev
     throw new Error("Suspicious authoritative zero balance regression")
   }

@@ -13,15 +13,19 @@ import {
 import { RecipientForm } from "@/components/recipient-form"
 import type { Beneficiary } from "@/lib/recipient-types"
 import type { RecipientUpsertInput } from "@/lib/recipients-store"
-import { buildDraftBeneficiary } from "@/lib/draft-recipient"
+import { coerceBeneficiaryEasenetDisplay, createRecipient } from "@/lib/recipients-store"
+import { isDraftRecipientId, recipientUpsertFromBeneficiary } from "@/lib/draft-recipient"
+import { toast } from "sonner"
 import { Label } from "@/components/ui/label"
 import { Search, Plus, ChevronDown, Loader2 } from "lucide-react"
 import { SendSelectedRecipientSummary } from "@/components/send/send-selected-recipient-summary"
-import { useRecipientsCached } from "@/hooks/use-recipients-cached"
+import { useRecipientsCached, rememberSavedRecipient } from "@/hooks/use-recipients-cached"
 import { fetchEasenetProfileByTag } from "@/lib/easenet-profile"
 import { buildDraftEasetagBeneficiary } from "@/lib/draft-easetag-beneficiary"
 import { filterBeneficiariesBySearch } from "@/lib/send-hub-recipient-search"
-import { coerceBeneficiaryEasenetDisplay } from "@/lib/recipients-store"
+import { useAuth } from "@/lib/auth-context"
+import { useQueryClient } from "@tanstack/react-query"
+
 interface SendRecipientPickerProps {
   selected: Beneficiary | null
   onSelect: (
@@ -38,6 +42,9 @@ export function SendRecipientPicker({
   beneficiaries: initialBeneficiaries,
   label = "Recipient",
 }: SendRecipientPickerProps) {
+  const { user, sessionUserId } = useAuth()
+  const queryClient = useQueryClient()
+  const ownerUserId = sessionUserId ?? user?.id
   const explicitRecipientList = initialBeneficiaries !== undefined
   const {
     data: cachedBeneficiaries,
@@ -142,7 +149,7 @@ export function SendRecipientPicker({
   const handleAddSuccess = (newBeneficiary?: Beneficiary, draftPersist?: RecipientUpsertInput) => {
     if (newBeneficiary) {
       if (!draftPersist) {
-        setBeneficiaries((prev) => [...prev, newBeneficiary])
+        setBeneficiaries((prev) => [newBeneficiary, ...prev.filter((row) => row.id !== newBeneficiary.id)])
       }
       onSelect(newBeneficiary, draftPersist ? { draftRecipientPersist: draftPersist } : undefined)
     }
@@ -150,9 +157,32 @@ export function SendRecipientPicker({
     setIsPickerOpen(false)
   }
 
+  const persistAndSelect = async (payload: RecipientUpsertInput, fallbackDraft?: Beneficiary) => {
+    try {
+      const saved = await createRecipient(payload)
+      if (ownerUserId) rememberSavedRecipient(queryClient, ownerUserId, saved)
+      handleAddSuccess(saved)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not save recipient"
+      toast.error(message)
+      if (fallbackDraft) {
+        handleAddSuccess(fallbackDraft, payload)
+      }
+    }
+  }
+
   const handleSelect = (b: Beneficiary) => {
-    onSelect(coerceBeneficiaryEasenetDisplay(b))
-    setIsPickerOpen(false)
+    void (async () => {
+      if (isDraftRecipientId(b.id)) {
+        const payload = recipientUpsertFromBeneficiary(b)
+        if (payload) {
+          await persistAndSelect(payload, b)
+          return
+        }
+      }
+      onSelect(coerceBeneficiaryEasenetDisplay(b))
+      setIsPickerOpen(false)
+    })()
   }
 
   return (
@@ -255,8 +285,7 @@ export function SendRecipientPicker({
           </DialogHeader>
           <RecipientForm
             onValidatedSubmit={async (payload) => {
-              const draft = buildDraftBeneficiary(payload)
-              handleAddSuccess(draft, payload)
+              await persistAndSelect(payload)
             }}
             onSuccess={() => handleAddSuccess()}
           />

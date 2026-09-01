@@ -41,8 +41,9 @@ export function OtpCodeInput({
 
   const applyDigits = (raw: string) => {
     const next = raw.replace(/\D/g, "").slice(0, length)
+    const wasComplete = digits.length === length
     onChange(next)
-    if (next.length === length) onComplete?.(next)
+    if (next.length === length && !wasComplete) onComplete?.(next)
     return next
   }
 

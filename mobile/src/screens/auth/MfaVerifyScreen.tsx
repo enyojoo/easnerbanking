@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import {
   View,
   Text,
@@ -26,14 +26,17 @@ export default function MfaVerifyScreen() {
   const { showError, showWarning } = useToast()
   const [code, setCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const submittingRef = useRef(false)
   const [cancelSheetVisible, setCancelSheetVisible] = useState(false)
 
-  const handleSubmit = async () => {
-    const digits = code.replace(/\D/g, '')
+  const handleSubmit = async (overrideCode?: string) => {
+    if (submittingRef.current) return
+    const digits = (overrideCode ?? code).replace(/\D/g, '')
     if (digits.length !== 6) {
       showWarning('Enter the 6-digit code from your authenticator app.')
       return
     }
+    submittingRef.current = true
     setSubmitting(true)
     try {
       const { error } = await verifyMfa(digits)
@@ -41,6 +44,7 @@ export default function MfaVerifyScreen() {
         showError(error.message)
       }
     } finally {
+      submittingRef.current = false
       setSubmitting(false)
     }
   }
@@ -76,8 +80,14 @@ export default function MfaVerifyScreen() {
                 label="6-digit code"
                 value={code}
                 onChange={setCode}
+                onComplete={(digits) => {
+                  setTimeout(() => {
+                    void handleSubmit(digits)
+                  }, 80)
+                }}
                 autoFocus
                 disabled={submitting}
+                loading={submitting}
               />
             </View>
 

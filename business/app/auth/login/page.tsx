@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -58,6 +58,7 @@ export default function LoginPage() {
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null)
   const [mfaCode, setMfaCode] = useState("")
   const [mfaSubmitting, setMfaSubmitting] = useState(false)
+  const mfaSubmittingRef = useRef(false)
   const [passwordSigningIn, setPasswordSigningIn] = useState(false)
   const [oauthSigningIn, setOauthSigningIn] = useState(false)
 
@@ -122,15 +123,15 @@ export default function LoginPage() {
     }
   }
 
-  const handleMfaSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const submitMfaCode = async (codeRaw: string) => {
     setError("")
-    if (!mfaFactorId) return
-    const code = mfaCode.replace(/\D/g, "")
+    if (!mfaFactorId || mfaSubmittingRef.current) return
+    const code = codeRaw.replace(/\D/g, "")
     if (code.length !== 6) {
       setError("Enter the 6-digit code from your authenticator app.")
       return
     }
+    mfaSubmittingRef.current = true
     setMfaSubmitting(true)
     try {
       const supabase = createSupabaseBrowser()
@@ -162,8 +163,14 @@ export default function LoginPage() {
       }
       router.push(nextPath || "/dashboard")
     } finally {
+      mfaSubmittingRef.current = false
       setMfaSubmitting(false)
     }
+  }
+
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await submitMfaCode(mfaCode)
   }
 
   const backToPassword = async () => {
@@ -394,7 +401,13 @@ export default function LoginPage() {
                 id="mfa-code"
                 value={mfaCode}
                 onChange={setMfaCode}
+                onComplete={(digits) => {
+                  window.setTimeout(() => {
+                    void submitMfaCode(digits)
+                  }, 80)
+                }}
                 autoFocus
+                disabled={mfaSubmitting}
               />
               <Button
                 type="submit"

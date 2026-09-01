@@ -184,8 +184,8 @@ function MoreContent({ navigation }: NavigationProps) {
     }
     if (getMfaRefreshGeneration() !== genAtStart) return
 
-    if (cached === true && !shouldListFactorsForMfaRow(uid)) {
-      setMfaStatusLine('On')
+    if (cached !== null && !shouldListFactorsForMfaRow(uid)) {
+      setMfaStatusLine(cached ? 'On' : 'Off')
       setMfaStatusResolved(true)
       return
     }
@@ -227,8 +227,8 @@ function MoreContent({ navigation }: NavigationProps) {
       let active = true
       const userId = user.id
       const mem = peekMfaVerified(user.id)
-      if (mem === true) {
-        setMfaStatusLine('On')
+      if (mem !== null) {
+        setMfaStatusLine(mem ? 'On' : 'Off')
         setMfaStatusResolved(true)
       }
       const up = userProfileRef.current

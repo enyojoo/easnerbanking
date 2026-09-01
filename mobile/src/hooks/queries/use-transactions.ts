@@ -7,7 +7,7 @@ import {
 import { Platform } from 'react-native'
 import { qk, type Scope, type TxFilters, pollingIntervalFor, recipientIdFromLedgerMetadata } from '@easner/shared'
 import { apiFetch } from '../../query/api-client'
-import { useScope } from '../../query/scope'
+import { useDocumentVisibility } from '../useDocumentVisibility'
 import { useRealtimeHealth } from '../../query/realtime-health-context'
 import { useDocumentVisibility } from '../useDocumentVisibility'
 import { ACCOUNT_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
@@ -268,8 +268,20 @@ export function useTransactionsList(filters: TxFilters = {}, pageSize = TRANSACT
   })
 }
 
+const TERMINAL_TRANSACTION_STATUSES = new Set([
+  'completed',
+  'settled',
+  'failed',
+  'cancelled',
+  'canceled',
+  'refunded',
+  'reversed',
+  'expired',
+])
+
 export function useTransactionDetail(txId: string | null) {
   const { scope } = useScope()
+  const tabVisible = useDocumentVisibility()
   return useQuery({
     ...(scope && txId
       ? transactionDetailQueryOptions(scope, txId)
@@ -278,5 +290,13 @@ export function useTransactionDetail(txId: string | null) {
           queryFn: async () => ({}) as TransactionDetailResponse,
         }),
     enabled: Boolean(scope) && Boolean(txId),
+    refetchInterval: (query) => {
+      if (!tabVisible) return false
+      const row = unwrapTransactionDetailPayload(query.state.data)
+      const status = String(row?.status ?? '').toLowerCase()
+      if (!status || TERMINAL_TRANSACTION_STATUSES.has(status)) return false
+      return 7_000
+    },
+    refetchIntervalInBackground: false,
   })
 }

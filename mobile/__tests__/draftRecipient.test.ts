@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@jest/globals'
 import { isDraftRecipientId } from '@easner/shared'
 import { buildDraftRecipient } from '../src/lib/draftRecipient'
+import { recipientDataFromDraft } from '../src/lib/resolveDraftRecipient'
 
 describe('buildDraftRecipient', () => {
   it('builds stable draft id for bank recipients', () => {
@@ -34,5 +35,26 @@ describe('buildDraftRecipient', () => {
     )
     expect(draft.id).toMatch(/^draft_easenet:/)
     expect(isDraftRecipientId(draft.id)).toBe(true)
+  })
+
+  it('rebuilds an easenet save payload from a hub draft', () => {
+    const draft = buildDraftRecipient(
+      'user-1',
+      {
+        fullName: 'Alice',
+        accountNumber: 'alice',
+        bankName: 'Easetag (@alice)',
+        currency: 'USD',
+        payeeAvatarUrl: 'https://example.com/a.png',
+        payeeAccountKind: 'personal',
+      },
+      'easenet',
+    )
+    expect(recipientDataFromDraft(draft)).toMatchObject({
+      fullName: 'Alice',
+      accountNumber: 'alice',
+      currency: 'USD',
+      countryCode: 'US',
+    })
   })
 })

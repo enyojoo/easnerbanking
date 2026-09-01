@@ -120,6 +120,7 @@ export {
   resolveAmountScreenPayInPreview,
   resolveAmountScreenPayoutPreview,
   resolveAmountScreenTlcPreview,
+  resolveAmountScreenWalletPreview,
   type AmountScreenFxSource,
   type AmountScreenPayInDisplay,
   type AmountScreenPayInQuoteSlice,
@@ -189,6 +190,7 @@ export {
 export {
   computeDirectTurnkeyWalletSendPricing,
   computeWalletSendProcessingFee,
+  estimateWalletSendTotalDebited,
   DEFAULT_WALLET_SEND_PROCESSING_FEE_BPS,
   DEFAULT_WALLET_SEND_PROCESSING_FEE_CAP,
   normalizeDirectTurnkeyWalletSendReceiveAmount,
@@ -896,6 +898,12 @@ export {
   type PushTransactionSnapshotRow,
 } from "./transactions/push-transaction-snapshot"
 export { sanitizeCustomerFacingFailureReason } from "./transactions/sanitize-customer-facing-failure-reason"
+export {
+  customerFacingSendAmountError,
+  insufficientSourceBalanceCopy,
+  insufficientSourceBalanceDetail,
+  isInsufficientBalanceError,
+} from "./send/insufficient-balance-copy"
 export {
   deriveTransactionNotification,
   descriptorToPushContent,

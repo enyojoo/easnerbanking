@@ -43,6 +43,15 @@ export function computeWalletSendProcessingFee(
   return roundStablecoin(Math.min(R * rate, cap))
 }
 
+export function estimateWalletSendTotalDebited(
+  principal: number,
+  opts?: WalletSendProcessingFeeOpts,
+): number {
+  const R = roundStablecoin(principal)
+  if (!Number.isFinite(R) || R <= 0) return 0
+  return roundStablecoin(R + computeWalletSendProcessingFee(R, opts))
+}
+
 export function computeDirectTurnkeyWalletSendPricing(input: {
   receiveAmount: number
   feeBps?: number

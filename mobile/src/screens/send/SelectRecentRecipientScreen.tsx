@@ -77,12 +77,13 @@ import { useCurrenciesCatalog, useRecipientsList, useTransactionsList, mapLedger
 import { prefetchSendRatesForRecipient } from '../../lib/warmSendRateCaches'
 import { useScope } from '../../query/scope'
 import { invalidateRecipientsFeed } from '../../query/refresh-user-feeds'
-import { recipientService } from '../../lib/recipientService'
+import { resolveDraftRecipient } from '../../lib/resolveDraftRecipient'
 import { getAccountTypeConfigFromCurrency } from '../../lib/currencyAccountTypes'
 import { formatIBAN, formatSortCode, formatRoutingNumber, formatAccountNumber } from '../../utils/formatters'
 import { CountryCurrency } from '../../lib/countryCurrencyMapping'
 import {
   isBankNameAllowedForCorridor,
+  isDraftRecipientId,
   isMomoProviderAllowedForCorridor,
   recipientFormNeedsEmail,
   recipientFormNeedsPhone,
@@ -462,11 +463,19 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
 
   const handleSelectRecipient = async (recipient: Recipient) => {
     haptics.tap()
-    prefetchSendRatesForRecipient(qc, recipient)
-    // Use navigate (not push) so re-entering amount after "Change recipient" does not stack duplicate
-    // SendAmount screens ? back should be hub once, then dashboard.
+    let selected = recipient
+    if (userProfile?.id && isDraftRecipientId(recipient.id)) {
+      try {
+        selected = await resolveDraftRecipient(userProfile.id, recipient, undefined, { qc, scope })
+        if (scope && user?.id) void invalidateRecipientsFeed(qc, scope, user.id)
+      } catch (err) {
+        showError(err instanceof Error ? err.message : 'Could not save recipient')
+        return
+      }
+    }
+    prefetchSendRatesForRecipient(qc, selected)
     navigation.navigate('SendAmount' as never, {
-      recipient,
+      recipient: selected,
       fromSelectRecentRecipient: true,
       preferredBalanceCurrency: preferredBalanceCurrency === 'USD' || preferredBalanceCurrency === 'EUR'
         ? preferredBalanceCurrency
@@ -638,13 +647,14 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
           payeeAccountKind: easenetProfile.accountKind,
         }
         const draftRecipient = buildDraftRecipient(userProfile.id, persistPayload, 'easenet')
+        const saved = await resolveDraftRecipient(userProfile.id, draftRecipient, persistPayload, { qc, scope })
+        if (scope && user?.id) void invalidateRecipientsFeed(qc, scope, user.id)
         setError('')
         resetForm()
         setShowBankAccountForm(false)
         setShowRecipientTypeModal(false)
         navigation.navigate('SendAmount' as never, {
-          recipient: draftRecipient,
-          draftRecipientPersist: persistPayload,
+          recipient: saved,
           fromSelectRecentRecipient: true,
           preferredBalanceCurrency: preferredBalanceCurrency === 'USD' || preferredBalanceCurrency === 'EUR'
             ? preferredBalanceCurrency
@@ -716,6 +726,8 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
             ? 'mobile'
             : 'bank'
       const draftRecipient = buildDraftRecipient(userProfile.id, persistPayload, draftKind)
+      const saved = await resolveDraftRecipient(userProfile.id, draftRecipient, persistPayload, { qc, scope })
+      if (scope && user?.id) void invalidateRecipientsFeed(qc, scope, user.id)
 
       setError('')
       resetForm()
@@ -723,8 +735,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
       setShowRecipientTypeModal(false)
 
       navigation.navigate('SendAmount' as never, {
-        recipient: draftRecipient,
-        draftRecipientPersist: persistPayload,
+        recipient: saved,
         fromSelectRecentRecipient: true,
         preferredBalanceCurrency: preferredBalanceCurrency === 'USD' || preferredBalanceCurrency === 'EUR'
           ? preferredBalanceCurrency

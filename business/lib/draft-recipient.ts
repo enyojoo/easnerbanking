@@ -13,6 +13,9 @@ import {
   type RecipientRow,
   type RecipientUpsertInput,
 } from "@/lib/recipients-store"
+import { getBrowserQueryClient } from "@/lib/query/query-client"
+import { rememberSavedRecipient } from "@/hooks/use-recipients-cached"
+import { probeStoredSupabaseSession } from "@/lib/query/web-persist"
 import { getCountryCodeForCurrency } from "@easner/shared"
 
 const countryByCurrency: Record<string, string> = {
@@ -114,15 +117,36 @@ export async function resolveDraftRecipient(
   if (!isDraftRecipientId(beneficiary.id)) {
     return coerceBeneficiaryEasenetDisplay(beneficiary)
   }
-  if (!draftUpsert) {
+  const payload = draftUpsert ?? recipientUpsertFromBeneficiary(beneficiary)
+  if (!payload) {
     throw new Error("Draft recipient is missing save payload.")
   }
-  const saved = await createRecipient(draftUpsert)
+  const saved = await createRecipient(payload)
+  const ownerUserId = probeStoredSupabaseSession().userId
+  if (ownerUserId) {
+    rememberSavedRecipient(getBrowserQueryClient(), ownerUserId, saved)
+  }
   return coerceBeneficiaryEasenetDisplay(saved)
 }
 
 export function beneficiaryFromRecipientRow(row: RecipientRow): Beneficiary {
   return coerceBeneficiaryEasenetDisplay(toBeneficiary(row))
+}
+
+export function recipientUpsertFromBeneficiary(beneficiary: Beneficiary): RecipientUpsertInput | null {
+  const tag = String(beneficiary.payeeEasetag || "").trim().replace(/^@+/, "").toLowerCase()
+  if (tag) {
+    return {
+      recipientType: "easenet",
+      countryCode: "US",
+      fullName: beneficiary.name.trim() || tag,
+      accountNumber: tag,
+      bankName: "",
+      currency: "USD",
+      payeeEasetag: tag,
+    }
+  }
+  return null
 }
 
 export { isDraftRecipientId }

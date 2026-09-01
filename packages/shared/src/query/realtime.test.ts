@@ -280,6 +280,30 @@ describe("attachRealtime INSERT prepend path", () => {
     ).toBe(false)
   })
 
+  it("patches extra fiat (e.g. GBP) on wallet_balances ticks", async () => {
+    qc.setQueryData(qk.wallets.list(SCOPE), {
+      balances: { USD: "1", EUR: "2", GBP: "3", source: "db" },
+    })
+    const mock = buildMockSupabase()
+    detach()
+    detach = attachRealtime({
+      qc,
+      scope: SCOPE,
+      supabase: mock.supabase,
+      batchMs: 0,
+    })
+
+    mock.triggerBalanceChange({
+      wallet_id: "wallet-gbp",
+      currency: "GBP",
+      available_balance: "9.50",
+    })
+    await flushBatcher()
+
+    const data = qc.getQueryData<{ balances: { GBP?: string } }>(qk.wallets.list(SCOPE))
+    expect(data?.balances?.GBP).toBe("9.5")
+  })
+
   it("partial-patches business-style rows by ETID when full remap is unavailable", async () => {
     seedListCache(qc, [{ id: "ETID00001234", status: "pending" }])
     mapper.mockImplementationOnce(() => {

@@ -15,7 +15,6 @@ import {
   ChevronDown,
   Link,
   ArrowUpDown,
-  AlertCircle,
   User,
   RotateCcw,
 } from 'lucide-react-native'
@@ -33,7 +32,7 @@ import { ripple } from '../../lib/androidRipple'
 import { CurrencyFlag } from '../flags/CurrencyFlag'
 import { getCurrencySymbol } from '../../utils/formatters'
 import { getSendAmountFieldSymbol } from '../../lib/sendAmountFieldSymbol'
-import { formatMoneyDisplay, formatSendRateLabel, isWideSendAmountSymbol, scaleSendAmountPrefixFontSize, scaleSendAmountPrefixLineHeight, SEND_AMOUNT_CONTINUE_CTA } from '@easner/shared'
+import { formatMoneyDisplay, formatSendRateLabel, isWideSendAmountSymbol, scaleSendAmountPrefixFontSize, scaleSendAmountPrefixLineHeight, SEND_AMOUNT_CONTINUE_CTA, customerFacingSendAmountError, insufficientSourceBalanceDetail } from '@easner/shared'
 import type { Recipient } from '../../types'
 import type { HydratedEasenetProfile } from '../../hooks/useEasenetRecipientHydration'
 import { SendSelectedRecipientSummary } from './SendSelectedRecipientSummary'
@@ -64,6 +63,7 @@ export type SendAmountShellWebFormProps = {
   receiveAmount: number
   exchangeRate: number
   showCrossCurrencyExchangeUi: boolean
+  showFeeInclusiveSendingUi?: boolean
   exchangePreviewReady: boolean
   showExchangePreviewSkeleton: boolean
   needsNoahRateForSend: boolean
@@ -117,6 +117,7 @@ export function SendAmountShellWebForm({
   receiveAmount,
   exchangeRate,
   showCrossCurrencyExchangeUi,
+  showFeeInclusiveSendingUi = false,
   exchangePreviewReady,
   showExchangePreviewSkeleton,
   needsNoahRateForSend,
@@ -167,6 +168,15 @@ export function SendAmountShellWebForm({
 
   const renderExchangeHeader = () => {
     if (!showExchangeHeader) {
+      if (showFeeInclusiveSendingUi && sendingAmount > 0) {
+        return (
+          <Text style={styles.exchangeInfoText} numberOfLines={1}>
+            {amountEntryMode === 'receive'
+              ? `Sending: ${formatMoneyDisplay(sendingAmount, sendCurrency)}`
+              : `Receiving: ${formatMoneyDisplay(receiveAmount, receiveCurrency)}`}
+          </Text>
+        )
+      }
       return <View style={styles.exchangeHeaderSpacer} />
     }
     if (showExchangePreviewSkeleton || manualQuoteLoading) {
@@ -287,18 +297,20 @@ export function SendAmountShellWebForm({
         </View>
 
         {hasInsufficientBalance ? (
-          <View style={styles.insufficientBanner}>
-            <AlertCircle size={16} color={colors.error.main} strokeWidth={2} />
-            <Text style={styles.insufficientText}>
-              Insufficient {selectedBalanceCurrency} balance. You need{' '}
-              {getCurrencySymbol(selectedBalanceCurrency)}
-              {shortfallAmount.toLocaleString('en-US', {
+          <Text style={styles.insufficientText}>
+            {insufficientSourceBalanceDetail(
+              selectedBalanceCurrency,
+              shortfallAmount,
+              `${getCurrencySymbol(selectedBalanceCurrency)}${shortfallAmount.toLocaleString('en-US', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
-              })}{' '}
-              more, or choose another source.
-            </Text>
-          </View>
+              })}`,
+            )}
+          </Text>
+        ) : amountFieldError ? (
+          <Text style={styles.insufficientText}>
+            {customerFacingSendAmountError(amountFieldError, selectedBalanceCurrency) ?? amountFieldError}
+          </Text>
         ) : null}
       </View>
 
@@ -360,7 +372,6 @@ export function SendAmountShellWebForm({
             </Text>
             <ChevronDown size={16} color={colors.text.secondary} strokeWidth={2} />
           </Pressable>
-          {amountFieldError ? <Text style={styles.fieldError}>{amountFieldError}</Text> : null}
         </View>
       ) : !isWalletRecipient ? (
         <View style={styles.section}>
@@ -377,7 +388,6 @@ export function SendAmountShellWebForm({
               onSubmitEditing={() => Keyboard.dismiss()}
             />
           </View>
-          {amountFieldError ? <Text style={styles.fieldError}>{amountFieldError}</Text> : null}
         </View>
       ) : null}
 

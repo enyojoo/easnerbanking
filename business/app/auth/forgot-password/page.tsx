@@ -56,13 +56,13 @@ export default function ForgotPasswordPage() {
     }
   }
 
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleVerifyOtp = async (e?: React.FormEvent, overrideCode?: string) => {
+    e?.preventDefault()
     setIsLoading(true)
     setError("")
     setMessage("")
     try {
-      const digits = otp.replace(/\D/g, "")
+      const digits = (overrideCode ?? otp).replace(/\D/g, "")
       if (digits.length !== 6) {
         setError("Enter the 6-digit code from your email.")
         return
@@ -162,6 +162,11 @@ export default function ForgotPasswordPage() {
                 id="reset-otp"
                 value={otp}
                 onChange={setOtp}
+                onComplete={(digits) => {
+                  window.setTimeout(() => {
+                    void handleVerifyOtp(undefined, digits)
+                  }, 80)
+                }}
                 autoFocus
                 disabled={isLoading}
               />

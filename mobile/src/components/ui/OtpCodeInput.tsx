@@ -23,6 +23,8 @@ export interface OtpCodeInputProps {
   length?: number
   value: string
   onChange: (digits: string) => void
+  /** Fired once when `length` digits are entered (typing, paste, or clipboard autofill). */
+  onComplete?: (digits: string) => void
   autoFocus?: boolean
   disabled?: boolean
   onFocus?: () => void
@@ -50,6 +52,7 @@ export function OtpCodeInput({
   length = 6,
   value,
   onChange,
+  onComplete,
   autoFocus,
   disabled,
   onFocus,
@@ -64,9 +67,15 @@ export function OtpCodeInput({
   const digits = value.replace(/\D/g, '').slice(0, length)
   const activeIndex = Math.min(digits.length, length - 1)
 
-  const handleChange = (t: string) => {
-    onChange(t.replace(/\D/g, '').slice(0, length))
-  }
+  const applyDigits = useCallback(
+    (raw: string) => {
+      const next = raw.replace(/\D/g, '').slice(0, length)
+      const wasComplete = value.replace(/\D/g, '').slice(0, length).length === length
+      onChange(next)
+      if (next.length === length && !wasComplete) onComplete?.(next)
+    },
+    [length, onChange, onComplete, value],
+  )
 
   const focusInput = useCallback(() => {
     if (disabled) return
@@ -90,7 +99,7 @@ export function OtpCodeInput({
   const { checkClipboard } = useOtpClipboardAutofill({
     enabled: clipboardAutofill && !disabled && !loading,
     value: digits,
-    onAutofill: onChange,
+    onAutofill: applyDigits,
     length,
   })
 
@@ -150,7 +159,7 @@ export function OtpCodeInput({
           ref={inputRef}
           nativeID={id}
           value={digits}
-          onChangeText={handleChange}
+          onChangeText={applyDigits}
           keyboardType={Platform.OS === 'ios' ? 'default' : 'numeric'}
           inputMode="numeric"
           maxLength={length}

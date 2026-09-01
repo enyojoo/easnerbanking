@@ -24,7 +24,10 @@ import { Button, OtpCodeInput } from '../../components/ui'
 import { supabase } from '../../lib/supabase'
 import {
   beginTotpEnrollment,
+  disableVerifiedTotpWithCode,
+  discardUnverifiedTotpEnrollment,
   getVerifiedTotpFactorId,
+  isMfaFactorGoneError,
   listFactorsForMfaStatus,
   totpFactorsFromListResponse,
   totpKeyUriForEnroll,
@@ -73,6 +76,7 @@ const MFA_COPY = {
   digitCodeLabel: 'Enter 6-digit code shown to you',
   digitCodeError: 'Enter the 6-digit code from your authenticator app.',
   invalidCodeError: 'You entered an invalid code, try again',
+  setupExpiredError: 'This setup expired. Scan the new QR code and enter a fresh code.',
   continueSetup: 'Continue Setup',
   enable: 'Enable',
   enabling: 'Enabling…',
@@ -112,6 +116,8 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   const allowRemoveRef = useRef(false)
   const scrollRef = useRef<ScrollView>(null)
   const secretCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const verifySubmittingRef = useRef(false)
+  const turnOffSubmittingRef = useRef(false)
 
   const [mfaList, setMfaList] = useState<MfaListSnapshot>({ factors: [], loaded: false })
   const factors = mfaList.factors
@@ -126,7 +132,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
   const [enrollFetching, setEnrollFetching] = useState(false)
   const [verifySubmitting, setVerifySubmitting] = useState(false)
   const [turnOffSubmitting, setTurnOffSubmitting] = useState(false)
-  /** When session is AAL1, Supabase requires a TOTP challenge before `unenroll` (AAL2). */
+  /** Always collect a fresh TOTP code before unenroll (including AAL2 sessions). */
   const [showDisableOtp, setShowDisableOtp] = useState(false)
   const [disableOtpCode, setDisableOtpCode] = useState('')
   const [secretJustCopied, setSecretJustCopied] = useState(false)
@@ -262,13 +268,14 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
     }
   }, [autoStartEnroll, verifiedFactorId, navigation])
 
-  const completeEnroll = async () => {
-    if (!enrollFactorId) return
-    const code = verifyCode.replace(/\D/g, '')
+  const completeEnroll = async (overrideCode?: string) => {
+    if (!enrollFactorId || verifySubmittingRef.current) return
+    const code = (overrideCode ?? verifyCode).replace(/\D/g, '')
     if (code.length !== 6) {
       setError(MFA_COPY.digitCodeError)
       return
     }
+    verifySubmittingRef.current = true
     setError(null)
     setVerifySubmitting(true)
     try {
@@ -276,6 +283,14 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
         factorId: enrollFactorId,
       })
       if (chErr || !ch?.id) {
+        if (isMfaFactorGoneError(chErr)) {
+          setVerifyCode('')
+          setShowVerifyInput(false)
+          setError(MFA_COPY.setupExpiredError)
+          enrollGenRef.current += 1
+          void startEnroll(enrollGenRef.current)
+          return
+        }
         setError(chErr?.message || 'Could not verify the code.')
         return
       }
@@ -285,6 +300,14 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
         code,
       })
       if (vErr) {
+        if (isMfaFactorGoneError(vErr)) {
+          setVerifyCode('')
+          setShowVerifyInput(false)
+          setError(MFA_COPY.setupExpiredError)
+          enrollGenRef.current += 1
+          void startEnroll(enrollGenRef.current)
+          return
+        }
         const raw = String(vErr.message || '').toLowerCase()
         if (raw.includes('invalid') || raw.includes('code')) {
           setError(MFA_COPY.invalidCodeError)
@@ -304,13 +327,15 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
       allowRemoveRef.current = true
       navigation.goBack()
     } finally {
+      verifySubmittingRef.current = false
       setVerifySubmitting(false)
     }
   }
 
   const backFromEnroll = useCallback(() => {
-    /** Enrollment only runs with `autoStartEnroll`; pop – `useFocusEffect` cleanup drops unverified factors. */
+    /** Enrollment only runs with `autoStartEnroll`; drop the unverified factor on leave. */
     allowRemoveRef.current = true
+    void discardUnverifiedTotpEnrollment(supabase)
     navigation.goBack()
   }, [navigation])
 
@@ -339,97 +364,29 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
     setDisableMfaSheetVisible(true)
   }
 
-  const turnOffMfa = async () => {
+  const turnOffMfa = () => {
     setError(null)
-    setTurnOffSubmitting(true)
-    try {
-      const { data, error: listErr } = await supabase.auth.mfa.listFactors()
-      if (listErr) {
-        setError(listErr.message || 'Could not load MFA factors.')
-        await loadFactors()
-        return
-      }
-      const totp = totpFactorsFromListResponse(data)
-      const id = getVerifiedTotpFactorId(totp)
-      if (!id) {
-        setError('No verified authenticator found. Pull to refresh or try again.')
-        await loadFactors()
-        return
-      }
-      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-      const aal2 = aal?.currentLevel === 'aal2'
-      if (!aal2) {
-        setShowDisableOtp(true)
-        return
-      }
-      const { error: uErr } = await supabase.auth.mfa.unenroll({ factorId: id })
-      if (uErr) {
-        const msg = (uErr.message || '').toLowerCase()
-        if (
-          msg.includes('aal') ||
-          msg.includes('assurance') ||
-          msg.includes('mfa') ||
-          msg.includes('factor')
-        ) {
-          setShowDisableOtp(true)
-          return
-        }
-        setError(uErr.message || 'Could not disable two-factor authentication.')
-        return
-      }
-      void notifySecurityAlert('mfa_disabled')
-      const {
-        data: { session: s2 },
-      } = await supabase.auth.getSession()
-      if (s2?.user?.id) await saveMfaVerified(s2.user.id, false)
-      await loadFactors()
-    } finally {
-      setTurnOffSubmitting(false)
-    }
+    setDisableOtpCode('')
+    setShowDisableOtp(true)
   }
 
-  const confirmDisableWithCode = async () => {
-    const code = disableOtpCode.replace(/\D/g, '')
+  const confirmDisableWithCode = async (overrideCode?: string) => {
+    if (turnOffSubmittingRef.current) return
+    const code = (overrideCode ?? disableOtpCode).replace(/\D/g, '')
     if (code.length !== 6) {
       setError(MFA_COPY.digitCodeError)
       return
     }
+    turnOffSubmittingRef.current = true
     setError(null)
     setTurnOffSubmitting(true)
     try {
-      const { data, error: listErr } = await supabase.auth.mfa.listFactors()
-      if (listErr) {
-        setError(listErr.message || 'Could not load MFA factors.')
-        return
-      }
-      const totp = totpFactorsFromListResponse(data)
-      const id = getVerifiedTotpFactorId(totp)
-      if (!id) {
-        setError('No verified authenticator found.')
-        return
-      }
-      const { data: ch, error: chErr } = await supabase.auth.mfa.challenge({ factorId: id })
-      if (chErr || !ch?.id) {
-        setError(chErr?.message || 'Could not verify the code.')
-        return
-      }
-      const { error: vErr } = await supabase.auth.mfa.verify({
-        factorId: id,
-        challengeId: ch.id,
-        code,
-      })
-      if (vErr) {
-        const raw = String(vErr.message || '').toLowerCase()
-        if (raw.includes('invalid') || raw.includes('code')) {
-          setError(MFA_COPY.invalidCodeError)
-        } else {
-          setError(vErr.message || MFA_COPY.invalidCodeError)
-        }
-        return
-      }
-      const { error: uErr } = await supabase.auth.mfa.unenroll({ factorId: id })
-      if (uErr) {
-        setError(uErr.message || 'Could not disable two-factor authentication.')
+      const result = await disableVerifiedTotpWithCode(supabase, code)
+      if (!result.ok) {
+        setError(
+          result.invalidCode ? MFA_COPY.invalidCodeError : result.message,
+        )
+        if (result.invalidCode) setDisableOtpCode('')
         return
       }
       void notifySecurityAlert('mfa_disabled')
@@ -439,8 +396,10 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
         data: { session: s2 },
       } = await supabase.auth.getSession()
       if (s2?.user?.id) await saveMfaVerified(s2.user.id, false)
-      await loadFactors()
+      allowRemoveRef.current = true
+      navigation.goBack()
     } finally {
+      turnOffSubmittingRef.current = false
       setTurnOffSubmitting(false)
     }
   }
@@ -561,6 +520,11 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                           label={MFA_COPY.digitCodeLabel}
                           value={disableOtpCode}
                           onChange={setDisableOtpCode}
+                          onComplete={(digits) => {
+                            setTimeout(() => {
+                              void confirmDisableWithCode(digits)
+                            }, 80)
+                          }}
                           autoFocus
                           onFocus={() => {
                             requestAnimationFrame(() => {
@@ -568,6 +532,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                             })
                           }}
                           disabled={turnOffSubmitting}
+                          loading={turnOffSubmitting}
                         />
                         <Button
                           title="Confirm disable"
@@ -701,6 +666,11 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                       labelStyle={styles.verifyCodeLabel}
                       value={verifyCode}
                       onChange={setVerifyCode}
+                      onComplete={(digits) => {
+                        setTimeout(() => {
+                          void completeEnroll(digits)
+                        }, 80)
+                      }}
                       autoFocus={!!enrollFactorId && !enrollFetching}
                       onFocus={() => {
                         requestAnimationFrame(() => {
@@ -755,15 +725,14 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
         visible={disableMfaSheetVisible}
         onDismiss={() => setDisableMfaSheetVisible(false)}
         title="Disable two-factor authentication?"
-        message="You will only need your password to sign in. You can turn 2FA back on anytime."
+        message="You will only need your password to sign in. Next you will enter a code from your authenticator app."
         primaryLabel="Yes, disable"
         onPrimary={() => {
           setDisableMfaSheetVisible(false)
-          void turnOffMfa()
+          turnOffMfa()
         }}
         secondaryLabel="Cancel"
         onSecondary={() => setDisableMfaSheetVisible(false)}
-        primaryLoading={turnOffSubmitting}
       />
     </ScreenWrapper>
   )

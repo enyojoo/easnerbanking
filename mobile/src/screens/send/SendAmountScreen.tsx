@@ -50,6 +50,7 @@ import { useSendDestinations } from '../../hooks/useSendDestinations'
 import { resolveMobilePayInProvider } from '../../lib/resolveMobilePayInProvider'
 import { CountryFlag } from '../../components/flags/CountryFlag'
 import { useAuth } from '../../contexts/AuthContext'
+import { useScope } from '../../query/scope'
 import { isGlobalBankingVerified } from '../../lib/compliance'
 import { generateTransactionId } from '../../lib/transactionId'
 import { useBalance } from '../../contexts/BalanceContext'
@@ -92,9 +93,12 @@ import {
   useDebouncedValue,
   resolveAmountScreenPayoutPreview,
   resolveAmountScreenTlcPreview,
+  resolveAmountScreenWalletPreview,
   SEND_AMOUNT_CONTINUE_CTA,
   mapResidenceToLocalPayInCurrency,
   sendAmountOffersThroughLocalCurrency,
+  customerFacingSendAmountError,
+  insufficientSourceBalanceDetail,
 } from '@easner/shared'
 import { usePayoutMinEnforcement } from '../../hooks/usePayoutMinEnforcement'
 import { useYcPayoutMinEnforcement } from '../../hooks/useYcPayoutMinEnforcement'
@@ -190,6 +194,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const { userProfile, refreshUserProfile } = useAuth()
   const { showError, showInfo } = useToast()
   const qc = useQueryClient()
+  const { scope } = useScope()
   const noahKycStatus =
     userProfile?.noah_kyc_status ??
     (userProfile as { noah_kyc_status?: string; profile?: { noah_kyc_status?: string } })?.profile?.noah_kyc_status
@@ -924,7 +929,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
 
   const payoutFxDisplay = useMemo(() => {
     if (selectedPaymentMethod !== 'balance' || isWalletRecipient || isEasetagRecipient) return null
-    if (!showCrossCurrencyExchangeUi || enteredAmount <= 0) return null
+    if (enteredAmount <= 0) return null
     const quoted = payoutQuotePreview ? payoutDisplayAmountsFromQuote(payoutQuotePreview) : null
     return resolveAmountScreenPayoutPreview({
       amountEntryMode,
@@ -945,7 +950,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     selectedPaymentMethod,
     isWalletRecipient,
     isEasetagRecipient,
-    showCrossCurrencyExchangeUi,
     enteredAmount,
     amountEntryMode,
     sendingAmount,
@@ -953,6 +957,22 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     exchangeRate,
     payoutQuotePreview,
   ])
+
+  const walletFxDisplay = useMemo(() => {
+    if (!isWalletRecipient || enteredAmount <= 0) return null
+    const quote = walletQuotePreview
+    return resolveAmountScreenWalletPreview({
+      receiveAmount,
+      quote:
+        quote && quote.totalDebited > 0 && quote.receiveAmount > 0
+          ? {
+              totalDebited: quote.totalDebited,
+              receiveAmount: quote.receiveAmount,
+              youSendAmount: quote.sendAmount,
+            }
+          : null,
+    })
+  }, [isWalletRecipient, enteredAmount, receiveAmount, walletQuotePreview])
 
   const tlcFxDisplay = useMemo(() => {
     if (!showThroughLocalCurrency || !selectedOtherCurrency || receiveAmount <= 0) return null
@@ -989,6 +1009,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const exchangeDisplaySendAmount =
     selectedPaymentMethod === 'otherCurrency' && showThroughLocalCurrency
       ? tlcSendingDisplayAmount
+      : amountEntryMode === 'receive' && walletFxDisplay && walletFxDisplay.totalDebited > 0
+        ? walletFxDisplay.totalDebited
       : amountEntryMode === 'receive' && payoutFxDisplay && payoutFxDisplay.totalDebited > 0
         ? payoutFxDisplay.totalDebited
         : sendingAmount
@@ -1000,6 +1022,14 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     payoutFxDisplay && payoutFxDisplay.customerRate > 0
       ? payoutFxDisplay.customerRate
       : exchangeRate
+
+  const showFeeInclusiveSendingLine =
+    enteredAmount > 0 &&
+    Boolean(
+      walletFxDisplay ||
+        (payoutFxDisplay &&
+          String(sendCurrency || '').toUpperCase() === String(receiveCurrency || '').toUpperCase()),
+    )
 
   useEffect(() => {
     clearCrossBorderQuote()
@@ -1194,16 +1224,11 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     [recipient?.id, receiveAmount, receiveCurrency],
   )
 
-  const walletQuoteFresh = isStashedWalletQuoteFresh(walletQuoteStashMeta)
-
   /** Debit from wallet when paying from balance (includes fees when FX order amounts are available). */
   const balanceDebitEstimate =
     selectedPaymentMethod === 'balance' && recipient && receiveAmount > 0
-      ? isWalletRecipient &&
-        walletQuotePreview &&
-        walletQuoteFresh &&
-        walletQuotePreview.totalDebited > 0
-        ? walletQuotePreview.totalDebited
+      ? walletFxDisplay && walletFxDisplay.totalDebited > 0
+        ? walletFxDisplay.totalDebited
         : payoutFxDisplay && payoutFxDisplay.totalDebited > 0
           ? payoutFxDisplay.totalDebited
           : sendingAmount > 0
@@ -1462,6 +1487,20 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       ? Math.max(0, balanceDebitEstimate - currentBalance)
       : 0
 
+  const insufficientBalanceMessage =
+    hasInsufficientBalance && selectedPaymentMethod === 'balance'
+      ? insufficientSourceBalanceDetail(
+          selectedBalanceCurrency,
+          shortfallAmount,
+          `${getCurrencySymbol(selectedBalanceCurrency)}${shortfallAmount.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`,
+        )
+      : amountFieldError
+        ? customerFacingSendAmountError(amountFieldError, selectedBalanceCurrency) ?? amountFieldError
+        : null
+
   const sourceDisplayLabel = (() => {
     if (selectedPaymentMethod === 'balance') {
       const fig = displayBalanceForSource.toLocaleString('en-US', {
@@ -1488,13 +1527,13 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       if (!sendAmount || sendAmount === '0' || enteredAmountValue <= 0 || !recipient || !selectedPaymentMethod) return
 
       let activeRecipient = recipient
-      if (
-        userProfile?.id &&
-        isDraftRecipientId(recipient.id) &&
-        draftRecipientPersist &&
-        !isEasetagRecipient
-      ) {
-        activeRecipient = await resolveDraftRecipient(userProfile.id, recipient, draftRecipientPersist)
+      if (userProfile?.id && isDraftRecipientId(recipient.id)) {
+        activeRecipient = await resolveDraftRecipient(
+          userProfile.id,
+          recipient,
+          draftRecipientPersist,
+          { qc, scope },
+        )
         setRecipient(activeRecipient)
         setDraftRecipientPersist(undefined)
       }
@@ -1695,7 +1734,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         receiveAmountValue > 0 &&
         !isCompletePayoutQuote(stashedQuote)
       ) {
-        showError(peekLastPayoutQuoteError() || 'Could not load payout quote. Try again.')
+        showError(
+          customerFacingSendAmountError(peekLastPayoutQuoteError(), selectedBalanceCurrency) ||
+            'Could not load payout quote. Try again.',
+        )
         return
       }
 
@@ -1705,7 +1747,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
         receiveAmountValue > 0 &&
         !stashedWalletQuote?.formSessionId
       ) {
-        showError(peekLastWalletQuoteError() || 'Could not load wallet send quote. Try again.')
+        showError(
+          customerFacingSendAmountError(peekLastWalletQuoteError(), selectedBalanceCurrency) ||
+            'Could not load wallet send quote. Try again.',
+        )
         return
       }
 
@@ -2000,6 +2045,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       receiveAmount={exchangeDisplayReceiveAmount}
       exchangeRate={exchangeDisplayRate}
       showCrossCurrencyExchangeUi={showCrossCurrencyExchangeUi}
+      showFeeInclusiveSendingUi={showFeeInclusiveSendingLine}
       exchangePreviewReady={exchangePreviewReady}
       showExchangePreviewSkeleton={showExchangePreviewSkeleton}
       needsNoahRateForSend={needsNoahRateForSend}
@@ -2164,7 +2210,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   </View>
           </View>
 
-                {/* Reserved height: keeps method + note positions stable (same-currency hides copy but not space). */}
+                {/* Reserved height: counterpart (FX or fee-inclusive sending) stays in this slot. */}
                 <View style={styles.exchangeInfoSlot}>
                   {!exchangeInfoAmountPositive ? (
                     <Text style={[styles.exchangeInfoText, styles.exchangeInfoPlaceholder]}> </Text>
@@ -2195,6 +2241,12 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                         </Text>
                       </View>
                     </View>
+                  ) : showFeeInclusiveSendingLine ? (
+                    <Text style={styles.exchangeInfoText}>
+                      {amountEntryMode === 'receive'
+                        ? `Sending: ${formatMoneyDisplay(exchangeDisplaySendAmount, sendCurrency)}`
+                        : `Receiving: ${formatMoneyDisplay(exchangeDisplayReceiveAmount, receiveCurrency)}`}
+                    </Text>
                   ) : needsNoahRateForSend && !noahRatesLoading && !providerPayoutRateLoading && !hasSendPreviewRateForPair ? (
                     <Text style={[styles.exchangeInfoText, styles.exchangeInfoUnavailable]}>
                       Exchange rate unavailable. Try again shortly.
@@ -2281,8 +2333,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     />
                   </View>
                 ) : null}
-                {!isWalletRecipient && amountFieldError ? (
-                  <Text style={styles.amountFieldError}>{amountFieldError}</Text>
+                {insufficientBalanceMessage ? (
+                  <Text style={styles.amountFieldError}>{insufficientBalanceMessage}</Text>
                 ) : null}
 
                 {/* Numeric Keypad - 3x4 grid */}

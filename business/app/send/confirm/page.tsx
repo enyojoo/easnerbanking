@@ -309,8 +309,9 @@ export default function SendConfirmPage() {
   }, [state, isYcMomo, router])
 
   useEffect(() => {
-    if (!state || isEasenetRecipient(state.recipient)) return
-    if (!isDraftRecipientId(state.recipient.id) || !state.draftRecipientPersist) return
+    if (!state || !isDraftRecipientId(state.recipient.id)) return
+    const persist = state.draftRecipientPersist
+    if (!persist && !isEasenetRecipient(state.recipient) && !state.recipient.payeeEasetag) return
     let cancelled = false
     void (async () => {
       try {
@@ -623,7 +624,7 @@ export default function SendConfirmPage() {
     })
 
     let flowRecipient = state.recipient
-    if (isDraftRecipientId(flowRecipient.id) && state.draftRecipientPersist) {
+    if (isDraftRecipientId(flowRecipient.id)) {
       try {
         flowRecipient = await resolveDraftRecipient(flowRecipient, state.draftRecipientPersist)
         setState({

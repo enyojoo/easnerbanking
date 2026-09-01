@@ -4,6 +4,7 @@ import {
   resolveAmountScreenPayInPreview,
   resolveAmountScreenPayoutPreview,
   resolveAmountScreenTlcPreview,
+  resolveAmountScreenWalletPreview,
 } from "./index"
 
 describe("resolveAmountScreenPayInPreview", () => {
@@ -118,6 +119,18 @@ describe("resolveAmountScreenPayoutPreview", () => {
     expect(display.youSendAmount).toBe(99.5)
     expect(display.youSendAmount).not.toBe(display.totalDebited)
   })
+
+  it("same-currency bank/momo still applies processing bps before a quote", () => {
+    const display = resolveAmountScreenPayoutPreview({
+      amountEntryMode: "receive",
+      principalSend: 50,
+      principalReceive: 50,
+      customerRate: 1,
+    })
+    expect(display.totalDebited).toBeCloseTo(50.5, 2)
+    expect(display.youSendAmount).toBe(50)
+    expect(display.source).toBe("rate")
+  })
 })
 
 describe("resolveAmountScreenTlcPreview", () => {
@@ -146,5 +159,24 @@ describe("resolveAmountScreenTlcPreview", () => {
     expect(display.localPayIn).toBe(850_123)
     expect(display.source).toBe("quote")
     expect(display.feeInclusive).toBe(true)
+  })
+})
+
+describe("resolveAmountScreenWalletPreview", () => {
+  it("applies the 1% processing estimate before a quote", () => {
+    const display = resolveAmountScreenWalletPreview({ receiveAmount: 100 })
+    expect(display.receiveAmount).toBe(100)
+    expect(display.totalDebited).toBeCloseTo(101, 6)
+    expect(display.feeInclusive).toBe(true)
+    expect(display.source).toBe("rate")
+  })
+
+  it("overlays a matching wallet quote", () => {
+    const display = resolveAmountScreenWalletPreview({
+      receiveAmount: 100,
+      quote: { receiveAmount: 100, totalDebited: 101.4, youSendAmount: 100 },
+    })
+    expect(display.totalDebited).toBe(101.4)
+    expect(display.source).toBe("quote")
   })
 })

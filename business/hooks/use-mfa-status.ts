@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { useAuth } from "@/lib/auth-context"
 import { CACHE_KEYS, dataCache } from "@/lib/cache"
@@ -63,6 +63,21 @@ export function useMfaStatus(options?: UseMfaStatusOptions) {
   const [statusLine, setStatusLine] = useState("")
   const [statusKnown, setStatusKnown] = useState(false)
   const enrollDialogOpen = options?.enrollDialogOpen ?? false
+  const enrollDialogOpenRef = useRef(enrollDialogOpen)
+  enrollDialogOpenRef.current = enrollDialogOpen
+
+  const applyLocalStatus = useCallback(
+    (line: "On" | "Off") => {
+      if (!user?.id) return
+      const key = CACHE_KEYS.MFA_SECURITY(user.id)
+      const snapshot = { statusLine: line }
+      dataCache.set(key, snapshot, MFA_STATUS_CACHE_TTL_MS)
+      saveMfaStatusToLocalStorage(user.id, snapshot)
+      setStatusLine(line)
+      setStatusKnown(true)
+    },
+    [user?.id],
+  )
 
   const refresh = useCallback(
     (refreshOptions?: { force?: boolean }) => {
@@ -89,6 +104,12 @@ export function useMfaStatus(options?: UseMfaStatusOptions) {
         let nextLine: string
         if (error) {
           console.warn("MFA status:", error.message)
+          const current = dataCache.get<{ statusLine: string }>(key)
+          if (current != null && isSuccessfulMfaStatusLine(current.statusLine)) {
+            setStatusLine(current.statusLine)
+            setStatusKnown(true)
+            return
+          }
           nextLine = MFA_STATUS_ERROR_LINE
           dataCache.invalidate(key)
           try {
@@ -102,7 +123,7 @@ export function useMfaStatus(options?: UseMfaStatusOptions) {
           if (id) {
             nextLine = "On"
           } else {
-            if (totp.some((f) => f.status === "unverified") && !enrollDialogOpen) {
+            if (totp.some((f) => f.status === "unverified") && !enrollDialogOpenRef.current) {
               await unenrollUnverifiedTotpFactors(supabase)
             }
             nextLine = "Off"
@@ -115,7 +136,7 @@ export function useMfaStatus(options?: UseMfaStatusOptions) {
         setStatusKnown(true)
       })()
     },
-    [enrollDialogOpen, supabase, user?.id],
+    [supabase, user?.id],
   )
 
   useLayoutEffect(() => {
@@ -167,5 +188,6 @@ export function useMfaStatus(options?: UseMfaStatusOptions) {
     verified: statusLine === "On",
     loading: !statusKnown,
     refresh,
+    applyLocalStatus,
   }
 }

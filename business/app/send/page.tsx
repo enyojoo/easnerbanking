@@ -31,6 +31,7 @@ import {
   useDebouncedValue,
   resolveAmountScreenPayoutPreview,
   resolveAmountScreenTlcPreview,
+  resolveAmountScreenWalletPreview,
   isNoahBalancePayoutCorridor,
   isBalancePayoutCorridorExecutable,
   resolveBalancePayoutProvider,
@@ -144,6 +145,9 @@ import {
   getYcBusinessPayoutMin,
   resolvePayoutCountryCode,
   YC_DIRECT_SETTLEMENT_MIN_SEND_USDC_EXCLUSIVE,
+  customerFacingSendAmountError,
+  insufficientSourceBalanceDetail,
+  isInsufficientBalanceError,
 } from "@easner/shared"
 import type { PayoutQuoteResult } from "@/lib/noah/payout-quote"
 import type { WalletSendQuoteResult } from "@/lib/wallet-send/wallet-send-quote"
@@ -957,7 +961,7 @@ export default function SendPage() {
   const displayForwardRate = providerSendPreviewAmounts?.forwardRate ?? forwardRate
 
   const payoutFxDisplay = useMemo(() => {
-    if (!isBalanceSource || isWalletRecipient || isEasetagRecipient || !hasFx || enteredAmount <= 0) {
+    if (!isBalanceSource || isWalletRecipient || isEasetagRecipient || enteredAmount <= 0) {
       return null
     }
     const quote = payoutQuotePreview
@@ -982,7 +986,6 @@ export default function SendPage() {
     isBalanceSource,
     isWalletRecipient,
     isEasetagRecipient,
-    hasFx,
     enteredAmount,
     amountEntryMode,
     displaySendAmount,
@@ -991,9 +994,27 @@ export default function SendPage() {
     payoutQuotePreview,
   ])
 
+  const walletFxDisplay = useMemo(() => {
+    if (!isWalletRecipient || enteredAmount <= 0) return null
+    const quote = walletQuotePreview
+    return resolveAmountScreenWalletPreview({
+      receiveAmount: displayReceiveAmount,
+      quote:
+        quote && quote.totalDebited > 0 && quote.receiveAmount > 0
+          ? {
+              totalDebited: quote.totalDebited,
+              receiveAmount: quote.receiveAmount,
+              youSendAmount: quote.sendAmount,
+            }
+          : null,
+    })
+  }, [isWalletRecipient, enteredAmount, displayReceiveAmount, walletQuotePreview])
+
   const exchangeDisplaySendAmount =
     otherCurrency && showThroughLocalCurrency && amountEntryMode === "receive"
       ? tlcSendingDisplayAmount
+      : amountEntryMode === "receive" && walletFxDisplay && walletFxDisplay.totalDebited > 0
+        ? walletFxDisplay.totalDebited
       : amountEntryMode === "receive" && payoutFxDisplay && payoutFxDisplay.totalDebited > 0
         ? payoutFxDisplay.totalDebited
         : displaySendAmount
@@ -1009,12 +1030,15 @@ export default function SendPage() {
     ? formatSendRateLabel(sendCurrency, receiveCurrency, exchangeDisplayRate)
     : null
 
-  const previewBalanceDebitAmount =
-    quotedTotalDebited != null && quotedTotalDebited > 0
-      ? quotedTotalDebited
-      : payoutFxDisplay && payoutFxDisplay.totalDebited > 0
-        ? payoutFxDisplay.totalDebited
-        : displaySendAmount
+  const previewBalanceDebitAmount = (() => {
+    if (walletFxDisplay && walletFxDisplay.totalDebited > 0) return walletFxDisplay.totalDebited
+    if (payoutFxDisplay && payoutFxDisplay.totalDebited > 0) return payoutFxDisplay.totalDebited
+    return displaySendAmount
+  })()
+
+  const showFeeInclusiveSendingLine =
+    enteredAmount > 0 &&
+    Boolean(walletFxDisplay || (payoutFxDisplay && receiveCurrency === sendCurrency))
 
   const hasValidSendRateForPair =
     !needsNoahRateForSend ||
@@ -1411,7 +1435,12 @@ export default function SendPage() {
           quote?: WalletSendQuoteResult
           error?: string
         }
-        if (!res.ok || !data.ok || !data.quote) return null
+        if (!res.ok || !data.ok || !data.quote) {
+          const mapped = customerFacingSendAmountError(data.error, sendCurrency)
+          if (mapped) setAmountFieldError(mapped)
+          return null
+        }
+        setAmountFieldError((prev) => (isInsufficientBalanceError(prev) ? null : prev))
         walletQuoteCacheRef.current = { key: walletQuoteCacheKey, quote: data.quote }
         setWalletQuotePreview(data.quote)
         return data.quote
@@ -1769,7 +1798,10 @@ export default function SendPage() {
         } else {
           const quote = await ensurePayoutOrderConfirmed(payoutQuoteMeta, businessId)
           if (!isCompletePayoutQuoteLocked(quote)) {
-            setAmountFieldError(peekLastPayoutQuoteError() || "Could not lock payout order. Try again.")
+            setAmountFieldError(
+              customerFacingSendAmountError(peekLastPayoutQuoteError(), sendCurrency) ||
+                "Could not lock payout order. Try again.",
+            )
             return
           }
           flowState = payoutQuoteToFlowState(flowState, quote)
@@ -1777,7 +1809,10 @@ export default function SendPage() {
       } else if (needsWalletQuoteBeforeConfirm && walletQuoteMeta) {
         const walletQuote = await ensureWalletSendOrderConfirmed(walletQuoteMeta, businessId)
         if (!walletQuote) {
-          setAmountFieldError(peekLastWalletQuoteError() || "Could not lock wallet send. Try again.")
+          setAmountFieldError(
+            customerFacingSendAmountError(peekLastWalletQuoteError(), sendCurrency) ||
+              "Could not lock wallet send. Try again.",
+          )
           return
         }
         flowState = walletQuoteToFlowState(flowState, walletQuote)
@@ -1832,7 +1867,7 @@ export default function SendPage() {
         <div className="space-y-2">
           <div
             className={`flex items-center justify-between gap-3 ${
-              receiveCurrency !== sendCurrency ? "min-h-[2.5rem]" : ""
+              receiveCurrency !== sendCurrency || showFeeInclusiveSendingLine ? "min-h-[2.5rem]" : ""
             }`}
           >
             <Label className="text-muted-foreground mb-0 shrink-0 text-sm font-medium leading-none">
@@ -1889,6 +1924,16 @@ export default function SendPage() {
                   </span>
                 )}
               </div>
+            ) : showFeeInclusiveSendingLine ? (
+              <div className="flex min-w-0 flex-1 items-center justify-end text-sm text-muted-foreground">
+                <span className="min-w-0 truncate">
+                  {amountEntryMode === "receive" ? "Sending" : "Receiving"}:{" "}
+                  {formatMoneyDisplay(
+                    amountEntryMode === "receive" ? exchangeDisplaySendAmount : exchangeDisplayReceiveAmount,
+                    amountEntryMode === "receive" ? sendCurrency : receiveCurrency,
+                  )}
+                </span>
+              </div>
             ) : null}
           </div>
           <div
@@ -1916,16 +1961,22 @@ export default function SendPage() {
               className="w-full min-w-0 bg-transparent border-0 outline-none font-black text-foreground text-5xl placeholder:text-muted-foreground/50 focus:ring-0 focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
           </div>
-          {hasInsufficientBalance && sourceAccount && (
-            <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>
-                Insufficient {sourceAccount.currency} balance. You need{" "}
-                {getCurrencySymbol(sourceAccount.currency)}
-                {shortfallAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} more, or choose another source.
-              </span>
-            </div>
-          )}
+          {hasInsufficientBalance && sourceAccount ? (
+            <p className="text-sm text-destructive">
+              {insufficientSourceBalanceDetail(
+                sourceAccount.currency,
+                shortfallAmount,
+                `${getCurrencySymbol(sourceAccount.currency)}${shortfallAmount.toLocaleString("en-US", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}`,
+              )}
+            </p>
+          ) : amountFieldError ? (
+            <p className="text-sm text-destructive">
+              {customerFacingSendAmountError(amountFieldError, sendCurrency) ?? amountFieldError}
+            </p>
+          ) : null}
         </div>
       )}
 
@@ -1984,7 +2035,6 @@ export default function SendPage() {
               ))}
             </SelectContent>
           </Select>
-          {amountFieldError ? <p className="text-sm text-destructive">{amountFieldError}</p> : null}
         </div>
       ) : recipient && !isWalletRecipient ? (
         <div className="space-y-2">
@@ -1996,7 +2046,6 @@ export default function SendPage() {
             onChange={(e) => setNote(e.target.value)}
             className="h-11"
           />
-          {amountFieldError ? <p className="text-sm text-destructive">{amountFieldError}</p> : null}
         </div>
       ) : null}
 

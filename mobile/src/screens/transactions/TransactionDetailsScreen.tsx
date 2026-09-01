@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, useSyncExternalStore } from 'react'
 import {
   View,
   Text,
@@ -26,7 +26,7 @@ import {
   Share2,
 } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { TransactionDetailsBodySkeleton } from '../../components/skeletons'
 import {
@@ -224,6 +224,51 @@ function mergeTransactionSnapshots(
   return merged as LedgerTransaction
 }
 
+function findListTransactionSnapshot(
+  qc: QueryClient,
+  scope: Parameters<typeof scopeKey>[0] | null | undefined,
+  transactionId: string,
+): LedgerTransaction | null {
+  if (!scope || !transactionId) return null
+  const entries = qc.getQueriesData<{
+    pages?: Array<{ transactions?: Array<Record<string, unknown>> }>
+  }>({
+    queryKey: [...scopeKey(scope), 'transactions', 'list'],
+    exact: false,
+  })
+  for (const [, listData] of entries) {
+    if (!listData?.pages?.length) continue
+    for (const page of listData.pages) {
+      for (const row of page.transactions ?? []) {
+        const id = String(row?.id ?? '')
+        const txid = String(row?.transaction_id ?? '')
+        const ledgerId = String(row?.ledger_row_id ?? '')
+        if (transactionId === id || transactionId === txid || transactionId === ledgerId) {
+          return row as unknown as LedgerTransaction
+        }
+      }
+    }
+  }
+  return null
+}
+
+function useCachedListTransaction(
+  qc: QueryClient,
+  scope: Parameters<typeof scopeKey>[0] | null | undefined,
+  transactionId: string,
+): LedgerTransaction | null {
+  return useSyncExternalStore(
+    (onStoreChange) =>
+      qc.getQueryCache().subscribe((event) => {
+        const key = event.query.queryKey
+        if (!Array.isArray(key) || !key.includes('transactions')) return
+        onStoreChange()
+      }),
+    () => findListTransactionSnapshot(qc, scope, transactionId),
+    () => null,
+  )
+}
+
 export default function TransactionDetailsScreen({ navigation, route }: NavigationProps) {
   const footerPadding = useFixedFooterPadding(spacing[4])
   // The action bar (bottomContainer) is a normal-flow view below the ScrollView, so the
@@ -255,29 +300,7 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   const recipientsQuery = useRecipientsList()
   const detailQuery = useTransactionDetail(transactionId)
   const copyToClipboard = useCopyToClipboard()
-  const cachedListSnapshot = useMemo<LedgerTransaction | null>(() => {
-    if (!scope || !transactionId) return null
-    const entries = qc.getQueriesData<{
-      pages?: Array<{ transactions?: Array<Record<string, unknown>> }>
-    }>({
-      queryKey: [...scopeKey(scope), 'transactions', 'list'],
-      exact: false,
-    })
-    for (const [, listData] of entries) {
-      if (!listData?.pages?.length) continue
-      for (const page of listData.pages) {
-        for (const row of page.transactions ?? []) {
-          const id = String(row?.id ?? '')
-          const txid = String(row?.transaction_id ?? '')
-          const ledgerId = String(row?.ledger_row_id ?? '')
-          if (transactionId === id || transactionId === txid || transactionId === ledgerId) {
-            return row as unknown as LedgerTransaction
-          }
-        }
-      }
-    }
-    return null
-  }, [qc, scope, transactionId])
+  const cachedListSnapshot = useCachedListTransaction(qc, scope, transactionId)
   const cachedDetailSnapshot = useMemo<LedgerTransaction | null>(() => {
     if (!scope || !transactionId) return null
     const fromQuery = unwrapTransactionDetailPayload(detailQuery.data ?? undefined)
@@ -294,8 +317,8 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   const transaction = useMemo(
     () =>
       mergeTransactionSnapshots(
-        initialTransaction ?? null,
         mergeTransactionSnapshots(cachedDetailSnapshot, cachedListSnapshot),
+        initialTransaction ?? null,
       ),
     [initialTransaction, cachedDetailSnapshot, cachedListSnapshot],
   )

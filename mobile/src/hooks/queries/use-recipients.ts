@@ -1,7 +1,8 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query'
-import type { PersonalScope } from '@easner/shared'
+import type { PersonalScope, Scope } from '@easner/shared'
 import { qk } from '@easner/shared'
 import { recipientService } from '../../lib/recipientService'
+import { saveRecipientsListCache } from '../../lib/recipientsListCache'
 import { useScope } from '../../query/scope'
 import type { Recipient } from '../../types'
 
@@ -14,6 +15,21 @@ export const RECIPIENTS_STALE_MS = 60 * 60_000
 const RECIPIENTS_GC_MS = 4 * 60 * 60_000
 
 const RECIPIENTS_QUERY_META = { safePersist: true, freshness: 'operational' as const }
+
+export function upsertRecipientInListCache(
+  qc: QueryClient,
+  scope: Scope | null | undefined,
+  userId: string,
+  row: Recipient,
+) {
+  if (!scope) return
+  qc.setQueryData<Recipient[]>(qk.beneficiaries.list(scope), (prev) => {
+    const list = Array.isArray(prev) ? prev : []
+    return [row, ...list.filter((item) => item.id !== row.id)]
+  })
+  const next = qc.getQueryData<Recipient[]>(qk.beneficiaries.list(scope)) ?? [row]
+  void saveRecipientsListCache(userId, next)
+}
 
 export function prefetchRecipientsList(
   qc: QueryClient,

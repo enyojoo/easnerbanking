@@ -13,8 +13,24 @@ export function recipientsCompatQueryKey(userId: string) {
   return ["business", "compat-cache", CACHE_KEYS.RECIPIENTS(userId)] as const
 }
 
-export function invalidateRecipientsCache(queryClient: QueryClient, userId: string) {
-  return queryClient.invalidateQueries({ queryKey: recipientsCompatQueryKey(userId) })
+export function recipientsCachePersistKey(userId: string) {
+  return `recipients_cache_v2_${userId}`
+}
+
+export function rememberSavedRecipient(queryClient: QueryClient, userId: string, beneficiary: Beneficiary) {
+  const queryKey = recipientsCompatQueryKey(userId)
+  queryClient.setQueryData<Beneficiary[]>(queryKey, (prev) => {
+    const list = Array.isArray(prev) ? prev : []
+    return [beneficiary, ...list.filter((row) => row.id !== beneficiary.id)]
+  })
+  if (typeof window === "undefined") return
+  try {
+    const persistKey = recipientsCachePersistKey(userId)
+    const current = queryClient.getQueryData<Beneficiary[]>(queryKey) ?? [beneficiary]
+    window.localStorage.setItem(persistKey, JSON.stringify({ data: current, timestamp: Date.now() }))
+  } catch {
+    // Ignore storage quota/write errors.
+  }
 }
 
 async function fetchRecipientsSafe(userId: string): Promise<Beneficiary[]> {
@@ -40,7 +56,7 @@ export function useRecipientsCached(enabled: boolean) {
   return useCachedData<Beneficiary[]>({
     enabled: enabled && Boolean(profileUserId),
     cacheKey: profileUserId ? CACHE_KEYS.RECIPIENTS(profileUserId) : null,
-    persistKey: profileUserId ? `recipients_cache_v2_${profileUserId}` : undefined,
+    persistKey: profileUserId ? recipientsCachePersistKey(profileUserId) : undefined,
     initialData: [],
     ttlMs: RECIPIENTS_CACHE_TTL_MS,
     fetcher: async () => fetchRecipientsSafe(profileUserId!),

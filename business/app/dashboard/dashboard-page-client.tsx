@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -47,6 +48,7 @@ export function DashboardPageClient() {
     balances,
     baseCurrency,
     hasAuthoritativeBalances,
+    hasDisplayableBalances,
     loadError: accountsError,
     refreshAccounts,
   } = useBusinessAccountRows()
@@ -127,16 +129,15 @@ export function DashboardPageClient() {
   const computedPrimaryBalance = usdInBase + eurInBase
   const summaryCurrency = code
   const computedPrimaryBalanceText = formatCurrency(computedPrimaryBalance, code)
-  const zeroPrimaryBalanceText = useMemo(() => formatCurrency(0, code), [code])
   useEffect(() => {
-    if (!hasAuthoritativeBalances) return
+    if (!hasDisplayableBalances) return
     if (!Number.isFinite(computedPrimaryBalance)) return
     setLastStableBalanceText(computedPrimaryBalanceText)
-  }, [computedPrimaryBalance, computedPrimaryBalanceText, hasAuthoritativeBalances])
+  }, [computedPrimaryBalance, computedPrimaryBalanceText, hasDisplayableBalances])
   const visiblePrimaryBalanceText = balancesVisible
-    ? (lastStableBalanceText ??
-        (hasAuthoritativeBalances ? computedPrimaryBalanceText : zeroPrimaryBalanceText))
+    ? (lastStableBalanceText ?? (hasDisplayableBalances ? computedPrimaryBalanceText : null))
     : MASK
+  const showBalancePending = balancesVisible && visiblePrimaryBalanceText == null
 
   // Soft refresh failures keep cached balances/activity. Full-page error only when
   // there is nothing usable to render (no activity rows and no balance to show).
@@ -144,6 +145,7 @@ export function DashboardPageClient() {
   const hasUsableCachedDashboard =
     rows.length > 0 ||
     hasAuthoritativeBalances ||
+    hasDisplayableBalances ||
     Boolean(lastStableBalanceText) ||
     listLoading
 
@@ -195,7 +197,11 @@ export function DashboardPageClient() {
                         !balancesVisible && "tracking-[0.2em]",
                       )}
                     >
-                      {visiblePrimaryBalanceText}
+                      {showBalancePending ? (
+                        <Skeleton className="h-14 w-64 max-w-full" />
+                      ) : (
+                        visiblePrimaryBalanceText
+                      )}
                     </span>
                   </span>
                 </h2>

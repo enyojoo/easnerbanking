@@ -494,12 +494,15 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
   }, [])
 
   useEffect(() => {
-    if (!recipient || !user?.id || easetagUi) return
-    if (!isDraftRecipientId(recipient.id) || !draftRecipientPersist) return
+    if (!recipient || !user?.id) return
+    if (!isDraftRecipientId(recipient.id)) return
     let cancelled = false
     void (async () => {
       try {
-        const resolved = await resolveDraftRecipient(user.id, recipient, draftRecipientPersist)
+        const resolved = await resolveDraftRecipient(user.id, recipient, draftRecipientPersist, {
+          qc,
+          scope,
+        })
         if (!cancelled) setRecipient(resolved)
       } catch (e) {
         if (!cancelled) {
@@ -686,13 +689,11 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
         setSendingAfterPin(true)
         try {
           let flowRecipient = recipient
-          if (
-            isDraftRecipientId(recipient.id) &&
-            draftRecipientPersist &&
-            user?.id &&
-            !easetagUi
-          ) {
-            flowRecipient = await resolveDraftRecipient(user.id, recipient, draftRecipientPersist)
+          if (isDraftRecipientId(recipient.id) && user?.id) {
+            flowRecipient = await resolveDraftRecipient(user.id, recipient, draftRecipientPersist, {
+              qc,
+              scope,
+            })
             setRecipient(flowRecipient)
           }
 

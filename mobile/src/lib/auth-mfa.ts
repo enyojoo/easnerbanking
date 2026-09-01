@@ -23,15 +23,23 @@ export type TotpEnrollSetup = {
 /** `listFactors().totp` may omit unverified factors; use `all` filtered by type. */
 export function totpFactorsFromListResponse(data: {
   all?: Array<{ factor_type: string; id: string; status: string; friendly_name?: string }>
+  totp?: Array<{ id: string; status: string; friendly_name?: string }>
 } | null | undefined): TotpFactorLike[] {
-  if (!data?.all?.length) return []
-  return data.all
-    .filter((f) => f.factor_type === 'totp')
-    .map((f) => ({
-      id: f.id,
-      status: f.status,
-      friendly_name: f.friendly_name,
-    }))
+  if (data?.all?.length) {
+    return data.all
+      .filter((f) => f.factor_type === 'totp')
+      .map((f) => ({
+        id: f.id,
+        status: f.status,
+        friendly_name: f.friendly_name,
+      }))
+  }
+  if (!data?.totp?.length) return []
+  return data.totp.map((f) => ({
+    id: f.id,
+    status: f.status,
+    friendly_name: f.friendly_name,
+  }))
 }
 
 /** First verified TOTP factor id, if any. */
@@ -44,7 +52,9 @@ export function getVerifiedTotpFactorId(
 }
 
 /** Factor already removed (e.g. duplicate cleanup after aborting MFA setup). */
-function isMfaFactorGoneError(error: { message?: string; status?: number } | null | undefined): boolean {
+export function isMfaFactorGoneError(
+  error: { message?: string; status?: number } | null | undefined,
+): boolean {
   if (!error) return false
   if (error.status === 404) return true
   const msg = String(error.message || '').toLowerCase()
@@ -52,33 +62,61 @@ function isMfaFactorGoneError(error: { message?: string; status?: number } | nul
 }
 
 let unenrollUnverifiedTotpInFlight: Promise<void> | null = null
+/** Factor id from the latest `beginTotpEnrollment` – background cleanup must not delete it. */
+let activeUnverifiedTotpFactorId: string | null = null
+/** True while enroll list/create is running (active id is not set yet). */
+let totpEnrollInProgress = false
+
+function clearActiveUnverifiedTotpEnrollment() {
+  activeUnverifiedTotpFactorId = null
+}
 
 /**
  * Drops TOTP factors stuck in `unverified` (abandoned enroll, duplicate friendly name on re-enroll).
  * Safe to call before `mfa.enroll`; does not remove verified factors.
  * Concurrent calls share one in-flight request; 404 on delete is treated as success.
+ * Skips the in-progress enroll factor unless `force` is set (user aborted setup).
  */
-export async function unenrollUnverifiedTotpFactors(client: SupabaseClient): Promise<void> {
-  if (unenrollUnverifiedTotpInFlight) {
-    return unenrollUnverifiedTotpInFlight
-  }
+export async function unenrollUnverifiedTotpFactors(
+  client: SupabaseClient,
+  opts?: { force?: boolean },
+): Promise<void> {
+  const force = opts?.force === true
+  if (!force && totpEnrollInProgress) return
 
-  unenrollUnverifiedTotpInFlight = (async () => {
+  const previous = unenrollUnverifiedTotpInFlight
+  const run = (async () => {
+    if (previous) await previous
+    if (!force && totpEnrollInProgress) return
     const { data, error } = await client.auth.mfa.listFactors()
+    if (!force && totpEnrollInProgress) return
     if (error || !data?.all?.length) return
     for (const f of data.all) {
       if (f.factor_type !== 'totp' || f.status !== 'unverified') continue
+      if (!force && totpEnrollInProgress) return
+      if (!force && f.id === activeUnverifiedTotpFactorId) continue
       const { error: uErr } = await client.auth.mfa.unenroll({ factorId: f.id })
       if (uErr && !isMfaFactorGoneError(uErr)) {
         // Non-404 failures are rare; keep going so other stale factors can still be removed.
         continue
       }
     }
-  })().finally(() => {
-    unenrollUnverifiedTotpInFlight = null
+  })()
+
+  unenrollUnverifiedTotpInFlight = run
+  void run.finally(() => {
+    if (unenrollUnverifiedTotpInFlight === run) {
+      unenrollUnverifiedTotpInFlight = null
+    }
   })
 
-  return unenrollUnverifiedTotpInFlight
+  return run
+}
+
+/** Drop abandoned unverified TOTP after the user leaves setup (including the factor they were scanning). */
+export async function discardUnverifiedTotpEnrollment(client: SupabaseClient): Promise<void> {
+  clearActiveUnverifiedTotpEnrollment()
+  await unenrollUnverifiedTotpFactors(client, { force: true })
 }
 
 export function isDuplicateMfaFriendlyNameError(message: string): boolean {
@@ -102,51 +140,106 @@ export function totpKeyUriForEnroll(secret: string, email: string | null | undef
 }
 
 export async function beginTotpEnrollment(client: SupabaseClient): Promise<TotpEnrollSetup> {
-  await unenrollUnverifiedTotpFactors(client)
+  totpEnrollInProgress = true
+  clearActiveUnverifiedTotpEnrollment()
+  try {
+    await unenrollUnverifiedTotpFactors(client, { force: true })
 
-  const {
-    data: { session },
-  } = await client.auth.getSession()
-  const email = session?.user?.email?.trim() ?? null
-  const enrollParams = {
-    factorType: 'totp' as const,
-    issuer: MFA_TOTP_ISSUER,
-    friendlyName: email ? `${MFA_TOTP_ISSUER} (${email})` : MFA_TOTP_ISSUER,
-  }
+    const {
+      data: { session },
+    } = await client.auth.getSession()
+    const email = session?.user?.email?.trim() ?? null
+    const enrollParams = {
+      factorType: 'totp' as const,
+      issuer: MFA_TOTP_ISSUER,
+      friendlyName: email ? `${MFA_TOTP_ISSUER} (${email})` : MFA_TOTP_ISSUER,
+    }
 
-  let { data, error: enErr } = await client.auth.mfa.enroll(enrollParams)
-  if (enErr && isDuplicateMfaFriendlyNameError(enErr.message)) {
-    await unenrollUnverifiedTotpFactors(client)
-    const second = await client.auth.mfa.enroll(enrollParams)
-    data = second.data
-    enErr = second.error
-  }
+    let { data, error: enErr } = await client.auth.mfa.enroll(enrollParams)
+    if (enErr && isDuplicateMfaFriendlyNameError(enErr.message)) {
+      await unenrollUnverifiedTotpFactors(client, { force: true })
+      const second = await client.auth.mfa.enroll(enrollParams)
+      data = second.data
+      enErr = second.error
+    }
 
-  if (enErr || !data) {
-    throw new Error(enErr?.message || 'Could not start enrollment. Is TOTP enabled in your project?')
-  }
-  if (data.type !== 'totp' || !data.totp) {
-    throw new Error('Unexpected response from the server.')
-  }
+    if (enErr || !data) {
+      throw new Error(enErr?.message || 'Could not start enrollment. Is TOTP enabled in your project?')
+    }
+    if (data.type !== 'totp' || !data.totp) {
+      throw new Error('Unexpected response from the server.')
+    }
 
-  const totpPayload = data.totp as {
-    qr_code: string
-    secret?: string
-    uri?: string
-  }
-  const { qr_code, secret, uri: keyUriRaw } = totpPayload
-  const qrDataUrl = qr_code.startsWith('data:')
-    ? qr_code
-    : `data:image/svg+xml;utf-8,${encodeURIComponent(qr_code)}`
-  const keyUri =
-    typeof keyUriRaw === 'string' && keyUriRaw.startsWith('otpauth://') ? keyUriRaw.trim() : null
+    const totpPayload = data.totp as {
+      qr_code: string
+      secret?: string
+      uri?: string
+    }
+    const { qr_code, secret, uri: keyUriRaw } = totpPayload
+    const qrDataUrl = qr_code.startsWith('data:')
+      ? qr_code
+      : `data:image/svg+xml;utf-8,${encodeURIComponent(qr_code)}`
+    const keyUri =
+      typeof keyUriRaw === 'string' && keyUriRaw.startsWith('otpauth://') ? keyUriRaw.trim() : null
 
-  return {
-    factorId: data.id,
-    qrDataUrl,
-    secret: secret ?? null,
-    keyUri,
+    activeUnverifiedTotpFactorId = data.id
+    return {
+      factorId: data.id,
+      qrDataUrl,
+      secret: secret ?? null,
+      keyUri,
+    }
+  } finally {
+    totpEnrollInProgress = false
   }
+}
+
+export type DisableTotpResult =
+  | { ok: true }
+  | { ok: false; message: string; invalidCode?: boolean }
+
+/**
+ * Always challenge + verify TOTP before `unenroll`, including AAL2 sessions.
+ * An unlocked device must not drop MFA without a fresh authenticator code.
+ */
+export async function disableVerifiedTotpWithCode(
+  client: SupabaseClient,
+  codeRaw: string,
+): Promise<DisableTotpResult> {
+  const code = codeRaw.replace(/\D/g, '')
+  if (code.length !== 6) {
+    return { ok: false, message: 'Enter the 6-digit code from your authenticator app.' }
+  }
+  const { data, error: listErr } = await client.auth.mfa.listFactors()
+  if (listErr) {
+    return { ok: false, message: listErr.message || 'Could not load MFA factors.' }
+  }
+  const id = getVerifiedTotpFactorId(totpFactorsFromListResponse(data))
+  if (!id) {
+    return { ok: false, message: 'No verified authenticator found.' }
+  }
+  const { data: ch, error: chErr } = await client.auth.mfa.challenge({ factorId: id })
+  if (chErr || !ch?.id) {
+    return { ok: false, message: chErr?.message || 'Could not verify the code.' }
+  }
+  const { error: vErr } = await client.auth.mfa.verify({
+    factorId: id,
+    challengeId: ch.id,
+    code,
+  })
+  if (vErr) {
+    const raw = String(vErr.message || '').toLowerCase()
+    return {
+      ok: false,
+      message: vErr.message || 'Invalid code.',
+      invalidCode: raw.includes('invalid') || raw.includes('code'),
+    }
+  }
+  const { error: uErr } = await client.auth.mfa.unenroll({ factorId: id })
+  if (uErr) {
+    return { ok: false, message: uErr.message || 'Could not disable two-factor authentication.' }
+  }
+  return { ok: true }
 }
 
 /** Same as business web: reliable `listFactors` for Security / More row (session + retries). */

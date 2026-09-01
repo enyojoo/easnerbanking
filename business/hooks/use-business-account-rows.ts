@@ -2,12 +2,25 @@
 
 import { useCallback, useEffect, useMemo, useRef } from "react"
 import { useIsRestoring, useQuery, useQueryClient } from "@tanstack/react-query"
-import { qk, isVaAnswerSettled, shouldShowBankDepositTab, resolveUsPayInModeFromCatalog, usPayInAllowsExpress, usPayInAllowsVa } from "@easner/shared"
+import {
+  qk,
+  isVaAnswerSettled,
+  shouldShowBankDepositTab,
+  resolveUsPayInModeFromCatalog,
+  usPayInAllowsExpress,
+  usPayInAllowsVa,
+  isSuspiciousAuthoritativeZeroRegression,
+  scopeId,
+} from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import type { Account } from "@/lib/finance-types"
 import { useWalletBalances } from "@/hooks/queries/use-wallets"
 import { useScope } from "@/lib/query/scope"
+import {
+  extractFiatBalanceMap,
+  readWalletListDisplaySnapshot,
+} from "@/lib/query/workspace-prefetch"
 import {
   canDisplayProvisionedFinancialData,
   canPerformNoahMoneyMovement,
@@ -55,20 +68,35 @@ export function useBusinessAccountRows() {
   const { bankCorridors, data: sendDestinations } = useSendDestinations()
   const usPayInMode = resolveUsPayInModeFromCatalog(bankCorridors, sendDestinations != null)
   const walletQuery = useWalletBalances()
-  const lastKnownAuthoritativeBalancesRef = useRef<{ USD: string; EUR: string } | null>(null)
+  const lastKnownAuthoritativeBalancesRef = useRef<Record<string, string> | null>(null)
+  const lastSeededScopeKeyRef = useRef<string>("")
+  const activeScopeKey = scope ? scopeId(scope) : ""
+  if (lastSeededScopeKeyRef.current !== activeScopeKey) {
+    lastSeededScopeKeyRef.current = activeScopeKey
+    lastKnownAuthoritativeBalancesRef.current = scope
+      ? extractFiatBalanceMap(
+          readWalletListDisplaySnapshot(scope)?.data.balances as Record<string, unknown> | undefined,
+        )
+      : null
+  }
 
   const balancesSource = walletQuery.data?.balances?.source
   const isAuthoritativeBalanceRead =
     Boolean(walletQuery.data) &&
     (balancesSource === "turnkey" || balancesSource === "db" || balancesSource === "realtime")
+  const incomingFiatMap = extractFiatBalanceMap(walletQuery.data?.balances as Record<string, unknown> | undefined)
+  const suspiciousZeroRegression = isSuspiciousAuthoritativeZeroRegression(
+    balancesSource,
+    walletQuery.data?.balances?.USD,
+    walletQuery.data?.balances?.EUR,
+    lastKnownAuthoritativeBalancesRef.current,
+  )
+  const isEffectiveAuthoritativeBalanceRead = isAuthoritativeBalanceRead && !suspiciousZeroRegression
 
   useEffect(() => {
-    if (!isAuthoritativeBalanceRead) return
-    lastKnownAuthoritativeBalancesRef.current = {
-      USD: String(walletQuery.data?.balances?.USD ?? "0"),
-      EUR: String(walletQuery.data?.balances?.EUR ?? "0"),
-    }
-  }, [isAuthoritativeBalanceRead, walletQuery.data?.balances?.EUR, walletQuery.data?.balances?.USD])
+    if (!isEffectiveAuthoritativeBalanceRead || !incomingFiatMap) return
+    lastKnownAuthoritativeBalancesRef.current = incomingFiatMap
+  }, [incomingFiatMap, isEffectiveAuthoritativeBalanceRead])
 
   const enabledExtras = useMemo(
     () => normalizeAvailableExtras(walletQuery.data?.available?.enabledExtras),
@@ -131,32 +159,34 @@ export function useBusinessAccountRows() {
   )
 
   const hasAnyProvisionedData = useMemo(() => {
-    if (isAuthoritativeBalanceRead || lastKnownAuthoritativeBalancesRef.current) return true
+    if (isEffectiveAuthoritativeBalanceRead || lastKnownAuthoritativeBalancesRef.current) return true
     if (hasStablecoinDeposits) return true
     if (hasProvisionedVirtualAccounts) return true
     return false
-  }, [hasProvisionedVirtualAccounts, hasStablecoinDeposits, isAuthoritativeBalanceRead])
+  }, [hasProvisionedVirtualAccounts, hasStablecoinDeposits, isEffectiveAuthoritativeBalanceRead])
 
   const canDisplayFinancialData = canDisplayProvisionedFinancialData(tier1Complete, hasAnyProvisionedData)
   const canMoveMoney =
     canPerformNoahMoneyMovement(tier1Complete) && businessRole !== "Viewer"
 
   // Balances always reflect wallet state (KYB only gates deposit rails, not amounts).
-  const balances = useMemo(
-    () => ({
-      USD: isAuthoritativeBalanceRead
-        ? String(walletQuery.data?.balances?.USD ?? "0")
-        : (lastKnownAuthoritativeBalancesRef.current?.USD ?? "0"),
-      EUR: isAuthoritativeBalanceRead
-        ? String(walletQuery.data?.balances?.EUR ?? "0")
-        : (lastKnownAuthoritativeBalancesRef.current?.EUR ?? "0"),
-    }),
-    [
-      isAuthoritativeBalanceRead,
-      walletQuery.data?.balances?.EUR,
-      walletQuery.data?.balances?.USD,
-    ],
-  )
+  const balances = useMemo(() => {
+    const raw = (walletQuery.data?.balances ?? {}) as Record<string, unknown>
+    const last = lastKnownAuthoritativeBalancesRef.current
+    const pick = (code: string) => {
+      if (isEffectiveAuthoritativeBalanceRead) return String(raw[code] ?? last?.[code] ?? "0")
+      return String(last?.[code] ?? raw[code] ?? "0")
+    }
+    const out: Record<string, string> = {
+      USD: pick("USD"),
+      EUR: pick("EUR"),
+    }
+    for (const key of Object.keys({ ...raw, ...(last ?? {}) })) {
+      if (!/^[A-Z]{3}$/.test(key)) continue
+      out[key] = pick(key)
+    }
+    return out
+  }, [isEffectiveAuthoritativeBalanceRead, walletQuery.data?.balances])
 
   const stablecoinDeposit = useMemo(
     () => ({
@@ -201,7 +231,7 @@ export function useBusinessAccountRows() {
     // still shows the verification notice (rails omitted below); balances stay live.
     if (
       tier1Complete &&
-      !isAuthoritativeBalanceRead &&
+      !isEffectiveAuthoritativeBalanceRead &&
       !lastKnownAuthoritativeBalancesRef.current
     ) {
       return []
@@ -210,12 +240,9 @@ export function useBusinessAccountRows() {
     const codes = ["USD", "EUR", ...enabledExtras.filter((c) => c !== "USD" && c !== "EUR")] as Account["currency"][]
     return codes.map((currency) => {
       const va = vaByCurrency[currency]
-      const bal =
-        currency === "USD"
-          ? parseBalanceString(balances.USD)
-          : currency === "EUR"
-            ? parseBalanceString(balances.EUR)
-            : 0
+      const bal = parseBalanceString(
+        String((balances as Record<string, string | undefined>)[currency] ?? ""),
+      )
 
       const hasVa = Boolean(tier1Complete && va?.hasAccount)
       const isNoahFiatRail = currency === "USD" || currency === "EUR" || currency === "GBP"
@@ -261,11 +288,10 @@ export function useBusinessAccountRows() {
       }
     })
   }, [
-    balances.EUR,
-    balances.USD,
+    balances,
     displayName,
     enabledExtras,
-    isAuthoritativeBalanceRead,
+    isEffectiveAuthoritativeBalanceRead,
     stablecoinDeposit.EUR,
     stablecoinDeposit.USD,
     tier1Complete,
@@ -280,16 +306,18 @@ export function useBusinessAccountRows() {
     !loadError &&
     (walletQuery.isFetched || virtualAccountsQuery.isFetched)
 
+  const hasHeldBalanceSnapshot = Boolean(lastKnownAuthoritativeBalancesRef.current)
+
   const loading =
-    !isRestoring &&
-    (profileLoading ||
-      (accountRows.length === 0 &&
-        ((walletQuery.isPending && !walletQuery.data) ||
-          (virtualAccountsQuery.isPending && !virtualAccountsQuery.data))) ||
-      (tier1Complete &&
-        accountRows.length === 0 &&
-        !isAuthoritativeBalanceRead &&
-        !lastKnownAuthoritativeBalancesRef.current))
+    (!hasHeldBalanceSnapshot && isRestoring) ||
+    (!hasHeldBalanceSnapshot &&
+      (profileLoading ||
+        (accountRows.length === 0 &&
+          ((walletQuery.isPending && !walletQuery.data) ||
+            (virtualAccountsQuery.isPending && !virtualAccountsQuery.data))) ||
+        (tier1Complete &&
+          accountRows.length === 0 &&
+          !isEffectiveAuthoritativeBalanceRead)))
 
   return {
     accountRows,
@@ -306,7 +334,8 @@ export function useBusinessAccountRows() {
     displayName,
     balances,
     balancesSource: balancesSource ?? null,
-    hasAuthoritativeBalances: isAuthoritativeBalanceRead,
+    hasAuthoritativeBalances: isEffectiveAuthoritativeBalanceRead,
+    hasDisplayableBalances: hasHeldBalanceSnapshot || isEffectiveAuthoritativeBalanceRead,
     baseCurrency: baseCurrency?.toUpperCase() || "USD",
   }
 }
