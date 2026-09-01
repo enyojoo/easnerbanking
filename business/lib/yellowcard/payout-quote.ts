@@ -5,7 +5,6 @@ import {
   applyProviderBindingToRecipient,
   assertYcBalancePayoutEconomicsSufficient,
   computeYcBalancePayoutPricing,
-  computeYcBalancePayoutPricingBeforeSend,
   estimateYcSendLegSettlementCryptoForQuotedReceive,
   normalizeGlobalPayoutQuoteReceiveAmount,
   normalizePayoutReceiveAmount,
@@ -216,15 +215,20 @@ export async function buildYcPayoutQuote(input: {
     throw new Error("Could not derive USDC amount for Yellowcard payout quote.")
   }
 
-  const pricing = computeYcBalancePayoutPricingBeforeSend({
+  /**
+   * Customer-facing preview totals must match lock economics (settlement crypto +
+   * Easner 1%), not `computeYcBalancePayoutPricingBeforeSend`. That helper adds an
+   * extra ~2% USDC pad for internal reserve; overlaying it as "Sending" (e.g. $1.53)
+   * then locking (~$1.50 all-in) looks like the debit dropped on Review.
+   */
+  const pricing = computeYcBalancePayoutPricing({
     receiveAmount: quoteReceiveAmount,
     customerRate,
-    provisionalCryptoUsd,
+    ycFloorUsd: provisionalCryptoUsd,
     ycMidUsd:
       payoutRate?.yc_sell != null && payoutRate.yc_sell > 0
         ? roundUsdc(quoteReceiveAmount / payoutRate.yc_sell)
         : undefined,
-    ycBuyRate: payoutRate?.yc_sell != null && payoutRate.yc_sell > 0 ? payoutRate.yc_sell : undefined,
     processingFeeBps,
   })
 

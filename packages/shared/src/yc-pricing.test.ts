@@ -562,6 +562,33 @@ describe("computeYcBalancePayoutPricing", () => {
     expect(padded.totalDebited).toBeGreaterThan(preview.totalDebited)
   })
 
+  it("amount-screen Sending must use unpadded lock economics, not BeforeSend pad (₦2000 @ 1358)", () => {
+    const receiveAmount = 2000
+    const customerRate = 1358
+    const provisionalCryptoUsd = estimateYcSendLegSettlementCryptoForQuotedReceive({
+      quotedReceive: receiveAmount,
+      destinationRate: customerRate,
+      feeConfig: { minFeeLocal: 0, feePercentage: 1, flatFeeLocal: 0 },
+    })
+    const customerFacing = computeYcBalancePayoutPricing({
+      receiveAmount,
+      customerRate,
+      ycFloorUsd: provisionalCryptoUsd,
+      processingFeeBps: 100,
+    })
+    const padded = computeYcBalancePayoutPricingBeforeSend({
+      receiveAmount,
+      customerRate,
+      provisionalCryptoUsd,
+      ycBuyRate: customerRate,
+      processingFeeBps: 100,
+    })
+    expect(padded.totalDebited).toBeGreaterThan(customerFacing.totalDebited + 0.02)
+    expect(customerFacing.totalDebited).toBeCloseTo(1.5, 1)
+    expect(padded.totalDebited).toBeGreaterThan(1.52)
+    expect(padded.totalDebited).toBeLessThan(1.55)
+  })
+
   it("caps fee wallet sweep to debit surplus", () => {
     const sweep = computeYcBalancePayoutCappedFeeWalletSweep({
       totalDebited: 4.61368,

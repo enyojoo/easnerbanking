@@ -276,7 +276,11 @@ export function estimateYcBalancePayoutSendLegFeesUsd(input: {
   return roundUsdc(crypto * 0.02)
 }
 
-/** Preview pricing with padded YC floor before POST /send locks actual cryptoAmount. */
+/**
+ * Conservative padded floor for probes/reserve — not customer-facing quotes.
+ * Preview `/quote` and amount-screen "Sending" must use `computeYcBalancePayoutPricing`
+ * with unpadded settlement crypto so totals match Review (lock) all-in debit.
+ */
 export function computeYcBalancePayoutPricingBeforeSend(input: {
   receiveAmount: number
   customerRate: number
