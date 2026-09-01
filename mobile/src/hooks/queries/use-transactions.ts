@@ -9,7 +9,6 @@ import { qk, type Scope, type TxFilters, pollingIntervalFor, recipientIdFromLedg
 import { apiFetch } from '../../query/api-client'
 import { useDocumentVisibility } from '../useDocumentVisibility'
 import { useRealtimeHealth } from '../../query/realtime-health-context'
-import { useDocumentVisibility } from '../useDocumentVisibility'
 import { ACCOUNT_SCOPE_INDIVIDUAL_HEADERS } from '../../lib/apiClient'
 import {
   readCachedTransactionDetail,
