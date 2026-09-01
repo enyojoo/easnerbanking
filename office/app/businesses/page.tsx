@@ -46,6 +46,9 @@ type BusinessRow = {
   owner_user_id?: string | null
   owner_email?: string | null
   owner_name?: string | null
+  accountRestrictionPhase?: "wind_down" | "locked" | null
+  accountRestrictionWindDownEndsAt?: string | null
+  accountRestrictionSource?: "grid" | "noah" | "office" | null
 }
 
 function displayText(v: string | null | undefined): string {
@@ -98,6 +101,22 @@ function verificationBadgeVariant(rawStatus: string): "emerald" | "amber" | "oxb
 function KybBadge({ rawStatus }: { rawStatus: string }) {
   const label = verificationStatusLabel(rawStatus || null)
   return <Badge variant={verificationBadgeVariant(rawStatus)}>{label}</Badge>
+}
+
+function BusinessKybStatusBadge({
+  verificationStatus,
+  accountRestrictionPhase,
+}: {
+  verificationStatus?: string | null
+  accountRestrictionPhase?: "wind_down" | "locked" | null
+}) {
+  if (accountRestrictionPhase === "wind_down") {
+    return <Badge variant="oxblood">Restricted</Badge>
+  }
+  if (accountRestrictionPhase === "locked") {
+    return <Badge variant="oxblood">Closed</Badge>
+  }
+  return <KybBadge rawStatus={verificationStatus || "not_started"} />
 }
 
 function BusinessesPageInner() {
@@ -281,7 +300,10 @@ function BusinessesPageInner() {
                         </TableCell>
                         <TableCell className="max-w-[220px] text-sm">{businessTypeDisplayText(o.business_type)}</TableCell>
                         <TableCell className="text-center">
-                          <KybBadge rawStatus={o.verification_status || "not_started"} />
+                          <BusinessKybStatusBadge
+                            verificationStatus={o.verification_status}
+                            accountRestrictionPhase={o.accountRestrictionPhase}
+                          />
                         </TableCell>
                         <TableCell className="text-center">
                           <Button variant="outline" size="sm" onClick={() => setSelectedBusiness(o)}>
@@ -416,7 +438,10 @@ function BusinessesPageInner() {
                     <div className="mt-2 space-y-2">
                       <div className="flex justify-between gap-4 text-sm">
                         <span className="shrink-0 text-gray-600">KYB status</span>
-                        <KybBadge rawStatus={selectedBusiness.verification_status || "not_started"} />
+                        <BusinessKybStatusBadge
+                          verificationStatus={selectedBusiness.verification_status}
+                          accountRestrictionPhase={selectedBusiness.accountRestrictionPhase}
+                        />
                       </div>
                       <DetailRow label="Noah customer ID" mono>
                         {displayText(selectedBusiness.grid_customer_id)}

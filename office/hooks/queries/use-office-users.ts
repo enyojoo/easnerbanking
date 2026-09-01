@@ -99,6 +99,12 @@ export async function fetchOfficeUsersDirectory(): Promise<OfficeUserRow[]> {
       totalVolume: 0,
       verificationStatus: noahKycStatus === "approved" ? "verified" : "pending",
       noahKycStatus,
+      accountRestrictionPhase:
+        (row.accountRestrictionPhase as OfficeUserRow["accountRestrictionPhase"]) ?? null,
+      accountRestrictionWindDownEndsAt:
+        (row.accountRestrictionWindDownEndsAt as string | null | undefined) ?? null,
+      accountRestrictionSource:
+        (row.accountRestrictionSource as OfficeUserRow["accountRestrictionSource"]) ?? null,
     } as OfficeUserRow
   })
 }

@@ -111,6 +111,26 @@ function AccountRestrictionBadge({ user }: { user: UserData }) {
   )
 }
 
+function BusinessVerificationStatusBadge({ user }: { user: UserData }) {
+  if (user.accountRestrictionPhase) {
+    return <AccountRestrictionBadge user={user} />
+  }
+  return <NoahVerificationBadge rawStatus={user.verification_status || "not_started"} />
+}
+
+function IdentityVerificationStatusBadge({
+  user,
+  showBusinessContext,
+}: {
+  user: UserData
+  showBusinessContext: boolean
+}) {
+  if (user.accountRestrictionPhase && !showBusinessContext) {
+    return <AccountRestrictionBadge user={user} />
+  }
+  return <NoahVerificationBadge rawStatus={user.noah_kyc_status || "not_started"} />
+}
+
 function UserOverviewStatusBadge({ user }: { user: UserData }) {
   if (user.accountRestrictionPhase) {
     return <AccountRestrictionBadge user={user} />
@@ -734,7 +754,10 @@ export default function AdminUsersPage() {
                                         {ver.showIdentity ? (
                                           <div className="flex justify-between gap-4 items-center">
                                             <span className="text-gray-600">Identity verification</span>
-                                            <NoahVerificationBadge rawStatus={selectedUser.noah_kyc_status || "not_started"} />
+                                            <IdentityVerificationStatusBadge
+                                              user={selectedUser}
+                                              showBusinessContext={ver.showBusiness}
+                                            />
                                           </div>
                                         ) : null}
                                       </div>
@@ -754,7 +777,7 @@ export default function AdminUsersPage() {
                                         {ver.showBusiness ? (
                                           <div className="flex justify-between gap-4 items-center">
                                             <span className="text-gray-600">Business verification</span>
-                                            <NoahVerificationBadge rawStatus={selectedUser.verification_status || "not_started"} />
+                                            <BusinessVerificationStatusBadge user={selectedUser} />
                                           </div>
                                         ) : null}
                                       </div>
