@@ -156,7 +156,7 @@ export async function GET(request: Request) {
     const n = countByUser.get(r.id) ?? 0
     const hasExpoPushToken = n > 0
     const { communication_preferences: commRaw, ...rest } = row as Record<string, unknown>
-    const role = String(r.role ?? "").toLowerCase()
+    const role = String(rest.role ?? "").toLowerCase()
     const businessId = r.easner_business_id ? String(r.easner_business_id) : null
     const restriction =
       (role === "business" || businessId) && businessId

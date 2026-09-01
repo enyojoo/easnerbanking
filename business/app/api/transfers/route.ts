@@ -106,7 +106,6 @@ export async function POST(request: Request) {
     )
   }
 
-  const admin = createSupabaseAdmin()
   const { data: recipient } = await admin
     .from("recipients")
     .select("*")

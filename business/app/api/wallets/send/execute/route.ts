@@ -36,7 +36,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "recipientId and formSessionId are required" }, { status: 400 })
   }
 
-  const admin = createSupabaseAdmin()
   const { data: recipient } = await admin
     .from("recipients")
     .select("*")

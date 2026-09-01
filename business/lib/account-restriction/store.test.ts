@@ -5,8 +5,8 @@ const mockNotifyApplied = vi.fn(async () => undefined)
 const mockNotifyLifted = vi.fn(async () => undefined)
 
 vi.mock("@/lib/notifications/restriction-notify", () => ({
-  notifyAccountRestrictionApplied: (...args: unknown[]) => mockNotifyApplied(...args),
-  notifyAccountRestrictionLifted: (...args: unknown[]) => mockNotifyLifted(...args),
+  notifyAccountRestrictionApplied: mockNotifyApplied,
+  notifyAccountRestrictionLifted: mockNotifyLifted,
 }))
 
 import {

@@ -29,7 +29,6 @@ export async function GET(request: Request) {
   const modeParam = String(url.searchParams.get("mode") ?? "").trim().toLowerCase()
   const mode = modeParam === "fast" ? "fast" : "ensure"
 
-  const admin = createSupabaseAdmin()
   if (mode === "ensure") {
     await trySyncTurnkeyDepositVaultsIfNeeded(admin, acc.ctx)
   }

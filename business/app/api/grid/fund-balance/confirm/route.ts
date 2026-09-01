@@ -48,7 +48,6 @@ export async function POST(request: Request) {
     )
   }
 
-  const admin = createSupabaseAdmin()
   const businessId = noahCtxResult.scope === "business" ? noahCtxResult.businessId : null
   let kycUserId = user.id
   let userRow: Record<string, unknown> | null = null

@@ -221,7 +221,6 @@ export async function GET(request: Request) {
   const acc = await resolveNoahAccountContext(request, user.id)
   if (!acc.ok) return acc.response
 
-  const admin = createSupabaseAdmin()
   let gridBusinessSoR = false
   if (acc.ctx.scope === "business" && acc.ctx.subjectBusinessId) {
     const { data: bizRow } = await admin

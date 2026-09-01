@@ -38,7 +38,6 @@ export async function POST(request: Request) {
   }
 
   try {
-    const admin = createSupabaseAdmin()
     const created = await createTurnkeySend(admin, {
       ctx: accountCtx.ctx,
       asset: asset as "USDC" | "EURC",
