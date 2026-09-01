@@ -25,7 +25,7 @@ import {
   canDisplayProvisionedFinancialData,
   canPerformNoahMoneyMovement,
 } from "@/lib/compliance-display"
-import { formatUserFacingFetchError, isFatalQueryFailure } from "@/lib/query/fetch-errors"
+import { formatUserFacingFetchError, isAccountRestrictionFetchError, isFatalQueryFailure } from "@/lib/query/fetch-errors"
 import { useSendDestinations } from "@/lib/use-send-destinations"
 
 type VaJson = {
@@ -220,7 +220,7 @@ export function useBusinessAccountRows() {
   )
   // Background refresh failures keep cached balances — only surface errors with no data.
   const loadError =
-    isFatalQueryFailure(walletQuery)
+    isFatalQueryFailure(walletQuery) && !isAccountRestrictionFetchError(walletQuery.error)
       ? formatUserFacingFetchError(walletQuery.error, "Couldn’t load account balances")
       : isFatalQueryFailure(virtualAccountsQuery)
         ? formatUserFacingFetchError(virtualAccountsQuery.error, "Couldn’t load account details")

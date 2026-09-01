@@ -45,6 +45,7 @@ import {
   RECIPIENT_HOLDER_ADDRESS_REQUIRED_EDIT_CTA,
   RECIPIENT_HOLDER_ADDRESS_REQUIRED_BACK_CTA,
   type NoahWalletRateRow,
+  accountRestrictionSendBlockedCopy,
 } from "@easner/shared"
 import { getCurrencySymbol, getSendAmountFieldSymbol } from "@/lib/utils"
 import { fetchWithSession } from "@/lib/fetch-with-session"
@@ -154,6 +155,7 @@ import type { PayoutQuoteResult } from "@/lib/noah/payout-quote"
 import type { WalletSendQuoteResult } from "@/lib/wallet-send/wallet-send-quote"
 import { warmYcMetadataCacheOnContinue } from "@/lib/yellowcard/warm-yc-metadata-cache"
 import { usePayoutMinEnforcement } from "@/hooks/use-payout-min-enforcement"
+import { useAccountRestriction } from "@/hooks/use-account-restriction"
 import { useYcPayoutMinEnforcement } from "@/hooks/use-yc-payout-min-enforcement"
 import { useYcCrossBorderSendMinEnforcement } from "@/hooks/use-yc-cross-border-send-min-enforcement"
 import {
@@ -208,6 +210,8 @@ export default function SendPage() {
   const router = useRouter()
   const { tier1Complete, hasData, isLoading: profileLoading, businessId, countryCode } =
     useBusinessProfile()
+  const restrictionQuery = useAccountRestriction()
+  const accountRestricted = Boolean(restrictionQuery.data?.active)
   const { accountRows: sourceAccounts } = useBusinessAccountRows()
   const [recipient, setRecipient] = useState<Beneficiary | null>(null)
   const [draftRecipientPersist, setDraftRecipientPersist] = useState<RecipientUpsertInput | undefined>()
@@ -1477,6 +1481,7 @@ export default function SendPage() {
 
   useEffect(() => {
     if (
+      accountRestricted ||
       !needsWalletQuoteBeforeConfirm ||
       !debouncedWalletQuoteCacheKey ||
       !recipient?.id ||
@@ -1485,10 +1490,11 @@ export default function SendPage() {
       return
     void fetchWalletQuote()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [needsWalletQuoteBeforeConfirm, debouncedWalletQuoteCacheKey, recipient?.id])
+  }, [accountRestricted, needsWalletQuoteBeforeConfirm, debouncedWalletQuoteCacheKey, recipient?.id])
 
   useEffect(() => {
     if (
+      accountRestricted ||
       !needsPayoutQuoteBeforeConfirm ||
       !debouncedPayoutQuotePrefetchKey ||
       !recipient?.id ||
@@ -1516,6 +1522,7 @@ export default function SendPage() {
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    accountRestricted,
     needsPayoutQuoteBeforeConfirm,
     debouncedPayoutQuotePrefetchKey,
     recipient?.id,
@@ -1524,6 +1531,7 @@ export default function SendPage() {
 
   useEffect(() => {
     if (
+      accountRestricted ||
       !needsPayoutQuoteBeforeConfirm ||
       !debouncedPayoutLockPrefetchKey ||
       !recipient?.id ||
@@ -1551,6 +1559,7 @@ export default function SendPage() {
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    accountRestricted,
     needsPayoutQuoteBeforeConfirm,
     debouncedPayoutLockPrefetchKey,
     recipient?.id,
@@ -1559,6 +1568,7 @@ export default function SendPage() {
 
   useEffect(() => {
     if (
+      accountRestricted ||
       !debouncedCrossBorderBankQuotePrefetchKey ||
       !recipient?.id ||
       !otherCurrency ||
@@ -1607,6 +1617,10 @@ export default function SendPage() {
 
   const handleContinue = async () => {
     if (!canContinue || !recipient || isContinuePending || isContinueLoading) return
+    if (accountRestricted) {
+      setAmountFieldError(accountRestrictionSendBlockedCopy())
+      return
+    }
     // Lock synchronously before any await: blocks double-taps through the whole handler.
     // Spinner only appears if we haven't navigated within 175ms.
     setIsContinuePending(true)
@@ -2088,10 +2102,14 @@ export default function SendPage() {
         </div>
       ) : null}
 
+      {accountRestricted && recipient && canContinue ? (
+        <p className="text-sm text-destructive">{accountRestrictionSendBlockedCopy()}</p>
+      ) : null}
+
       <Button
         size="lg"
         className="w-full h-12"
-        disabled={!canContinue || isContinuePending || isContinueLoading}
+        disabled={!canContinue || accountRestricted || isContinuePending || isContinueLoading}
         onClick={handleContinue}
       >
         {isContinueLoading ? (

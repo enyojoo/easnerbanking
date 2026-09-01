@@ -35,7 +35,7 @@ import {
   hasHistoricalBaseCurrencyMismatch,
   REPORTING_FX_BASE_CHANGE_NOTE,
 } from "@/lib/fx/base-currency-display"
-import { isSuccessfulTransactionStatus, resolveReportingAmountForFeed, accountRestrictionDepositsBlockedCopy, accountRestrictionSendBlockedCopy } from "@easner/shared"
+import { isSuccessfulTransactionStatus, resolveReportingAmountForFeed, accountRestrictionDepositsBlockedCopy } from "@easner/shared"
 import { useAccountRestriction } from "@/hooks/use-account-restriction"
 
 export function DashboardPageClient() {
@@ -58,7 +58,6 @@ export function DashboardPageClient() {
   const restrictionQuery = useAccountRestriction()
   const accountRestricted = Boolean(restrictionQuery.data?.active)
   const depositsBlocked = accountRestricted
-  const sendBlocked = accountRestricted
 
   const [timePeriod, setTimePeriod] = useState<TimePeriod>("all")
   const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
@@ -145,8 +144,8 @@ export function DashboardPageClient() {
   const showBalancePending = balancesVisible && visiblePrimaryBalanceText == null
 
   // Soft refresh failures keep cached balances/activity. Full-page error only when
-  // there is nothing usable to render (no activity rows and no balance to show).
-  const loadError = transactionsError || accountsError
+  // there is nothing usable to render. Account restriction blocks deposits, not the dashboard.
+  const blockingLoadError = transactionsError || (accountsError && !accountRestricted ? accountsError : null)
   const hasUsableCachedDashboard =
     rows.length > 0 ||
     hasAuthoritativeBalances ||
@@ -154,10 +153,10 @@ export function DashboardPageClient() {
     Boolean(lastStableBalanceText) ||
     listLoading
 
-  if (loadError && !hasUsableCachedDashboard) {
+  if (blockingLoadError && !hasUsableCachedDashboard) {
     return (
       <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4 p-6 text-center">
-        <p className="text-sm text-destructive">{loadError}</p>
+        <p className="text-sm text-destructive">{blockingLoadError}</p>
         <Button
           type="button"
           variant="outline"
@@ -213,24 +212,12 @@ export function DashboardPageClient() {
               </div>
             </div>
             <div className="flex flex-wrap gap-2 justify-end shrink-0">
-              {sendBlocked ? (
-                <Button
-                  size="sm"
-                  className="shadow-sm flex items-center gap-2"
-                  disabled
-                  title={accountRestrictionSendBlockedCopy()}
-                >
+              <Button asChild size="sm" className="shadow-sm">
+                <Link href="/send" className="flex items-center gap-2">
                   <Send className="h-4 w-4" />
                   Send
-                </Button>
-              ) : (
-                <Button asChild size="sm" className="shadow-sm">
-                  <Link href="/send" className="flex items-center gap-2">
-                    <Send className="h-4 w-4" />
-                    Send
-                  </Link>
-                </Button>
-              )}
+                </Link>
+              </Button>
               {depositsBlocked ? (
                 <Button
                   variant="outline"

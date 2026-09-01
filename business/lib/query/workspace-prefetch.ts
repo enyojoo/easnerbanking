@@ -8,6 +8,7 @@ import {
 import {
   INVOICES_LIST_STALE_MS,
 } from "@/lib/invoices/invoice-query-cache"
+import { isAccountRestrictionFetchError } from "@/lib/query/fetch-errors"
 import { apiFetch } from "@/lib/query/api-client"
 import {
   BUSINESS_TRANSACTIONS_LIST_PAGE_SIZE,
@@ -163,6 +164,11 @@ export async function fetchWalletBalances(
   queryClient: QueryClient,
 ): Promise<WalletBalancesData> {
   const queryKey = qk.wallets.list(scope)
+  const emptyDeposits: DepositAddresses = {
+    USD: { address: "", ownerAddress: "", stablecoin: "USDC", chain: "Solana", memo: "" },
+    EUR: { address: "", ownerAddress: "", stablecoin: "EURC", chain: "Solana", memo: "" },
+  }
+
   const [balances, available, deposits] = await Promise.all([
     apiFetch<OnChainBalances>("/api/wallets/on-chain-balances", { headers: ACCOUNT_SCOPE_HEADERS }),
     apiFetch<AvailableCurrencies>("/api/accounts/available-currencies", {
@@ -171,6 +177,9 @@ export async function fetchWalletBalances(
     apiFetch<DepositAddresses>("/api/wallets/deposit-addresses", {
       query: { mode: "fast" },
       headers: ACCOUNT_SCOPE_HEADERS,
+    }).catch((err) => {
+      if (isAccountRestrictionFetchError(err)) return emptyDeposits
+      throw err
     }),
   ])
   const detail = String(balances?.detail ?? "")

@@ -24,6 +24,7 @@ import { BusinessLogo } from "@/components/brand/business-logo"
 import { useAuth } from "@/lib/auth-context"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { Tier1VerificationBadge } from "@/components/compliance/tier1-verification-badge"
+import { useAccountRestriction } from "@/hooks/use-account-restriction"
 import { BusinessOnboardingChecklist } from "@/components/business-onboarding-checklist"
 import { StableImage } from "@easner/shared"
 import { normalizeBusinessLogoUrl, warmBusinessLogoUrl } from "@/lib/image-cache"
@@ -68,6 +69,9 @@ export function DashboardNav() {
     tier1Complete,
     tier1VerificationStatus,
   } = useBusinessProfile()
+
+  const restrictionQuery = useAccountRestriction()
+  const accountRestricted = Boolean(restrictionQuery.data?.active)
 
   const showBusinessHeaderSkeleton = businessProfileLoading && !businessProfileHasData
 
@@ -188,6 +192,7 @@ export function DashboardNav() {
             <Tier1VerificationBadge
               tier1Complete={tier1Complete}
               tier1VerificationStatus={tier1VerificationStatus}
+              accountRestricted={accountRestricted}
               compact
             />
           </div>

@@ -214,9 +214,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
             </div>
           ) : null}
           {showRestrictionBanner && restrictionQuery.data ? (
-            <div className="z-20 shrink-0 px-8 pt-2">
-              <AccountRestrictionBanner restriction={restrictionQuery.data} />
-            </div>
+            <AccountRestrictionBanner restriction={restrictionQuery.data} />
           ) : null}
           {/*
             Page chrome contract: header + optional banner sit above main (shrink-0).
@@ -228,7 +226,8 @@ export function DashboardShell({ children }: DashboardShellProps) {
             ref={mainRef}
             style={
               {
-                "--dashboard-sticky-top": showTier1Banner ? "6.5rem" : "4rem",
+                "--dashboard-sticky-top":
+                  showTier1Banner || showRestrictionBanner ? "6.5rem" : "4rem",
               } as React.CSSProperties
             }
             className="mx-auto min-h-0 w-full max-w-[1440px] flex-1 overflow-y-auto overscroll-contain px-8 pb-10 pt-6"

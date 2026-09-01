@@ -381,11 +381,6 @@ export function BusinessVerificationSection({
             <CardContent
               className={cn(connectFlowActive && "flex min-h-0 flex-1 flex-col p-0")}
             >
-              {accountRestricted ? (
-                <p className="mb-4 rounded-lg border border-[hsl(var(--warning)/0.3)] bg-[hsl(var(--warning)/0.08)] px-3 py-2 text-sm text-[hsl(var(--warning))]">
-                  {accountRestrictionVerificationBlockedCopy()}
-                </p>
-              ) : null}
               <div
                 className={cn(
                   "grid gap-4 md:grid-cols-2",
@@ -414,6 +409,7 @@ export function BusinessVerificationSection({
                               compact
                               tier1Complete={tier1Complete}
                               tier1VerificationStatus={tier1VerificationStatus}
+                              accountRestricted={accountRestricted}
                             />
                           ) : (
                             <Badge
@@ -431,51 +427,59 @@ export function BusinessVerificationSection({
                       </CardHeader>
                       {isGlobalBanking ? (
                         <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
-                          {error ? <p className="text-xs text-destructive">{error}</p> : null}
-                          {info ? <p className="text-xs text-muted-foreground">{info}</p> : null}
-                          {tier1AwaitingReview && !tier1ActionRequired ? (
+                          {accountRestricted ? (
                             <p className="text-xs text-muted-foreground">
-                              {NOAH_VERIFICATION_IN_REVIEW_COPY}
+                              {accountRestrictionVerificationBlockedCopy()}
                             </p>
-                          ) : null}
-                          {tier1Rejected && tier1FinalReject ? (
-                            <p className="text-xs text-muted-foreground">
-                              {NOAH_FINAL_REJECTION_USER_MESSAGE}
-                            </p>
-                          ) : tier1ActionRequired ? (
-                            <p className="text-xs text-destructive">
-                              {VERIFICATION_SECTION_COPY.verificationOnHold}
-                            </p>
-                          ) : null}
-                          {!businessId ? (
-                            <p className="text-xs text-muted-foreground">
-                              Setting up your organization…
-                            </p>
-                          ) : null}
-                          {!canManageBusinessVerification ? (
-                            <p className="text-xs text-muted-foreground">
-                              Only the organization owner can start verification.
-                            </p>
-                          ) : null}
-                          {canManageBusinessVerification &&
-                          !tier1Complete &&
-                          !tier1FinalReject &&
-                          !tier1AwaitingReview &&
-                          !tier1OnHold ? (
-                            <KybRequiredDocumentsNotice />
-                          ) : null}
-                          <div className="flex flex-wrap gap-2">
-                            {showTier1HostedCta ? (
-                              <Button
-                                size="sm"
-                                onClick={() => void openHostedVerification()}
-                                disabled={!businessId || opening}
-                              >
-                                {opening ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-                                {tier1HostedCtaLabel}
-                              </Button>
-                            ) : null}
-                          </div>
+                          ) : (
+                            <>
+                              {error ? <p className="text-xs text-destructive">{error}</p> : null}
+                              {info ? <p className="text-xs text-muted-foreground">{info}</p> : null}
+                              {tier1AwaitingReview && !tier1ActionRequired ? (
+                                <p className="text-xs text-muted-foreground">
+                                  {NOAH_VERIFICATION_IN_REVIEW_COPY}
+                                </p>
+                              ) : null}
+                              {tier1Rejected && tier1FinalReject ? (
+                                <p className="text-xs text-muted-foreground">
+                                  {NOAH_FINAL_REJECTION_USER_MESSAGE}
+                                </p>
+                              ) : tier1ActionRequired ? (
+                                <p className="text-xs text-destructive">
+                                  {VERIFICATION_SECTION_COPY.verificationOnHold}
+                                </p>
+                              ) : null}
+                              {!businessId ? (
+                                <p className="text-xs text-muted-foreground">
+                                  Setting up your organization…
+                                </p>
+                              ) : null}
+                              {!canManageBusinessVerification ? (
+                                <p className="text-xs text-muted-foreground">
+                                  Only the organization owner can start verification.
+                                </p>
+                              ) : null}
+                              {canManageBusinessVerification &&
+                              !tier1Complete &&
+                              !tier1FinalReject &&
+                              !tier1AwaitingReview &&
+                              !tier1OnHold ? (
+                                <KybRequiredDocumentsNotice />
+                              ) : null}
+                              <div className="flex flex-wrap gap-2">
+                                {showTier1HostedCta ? (
+                                  <Button
+                                    size="sm"
+                                    onClick={() => void openHostedVerification()}
+                                    disabled={!businessId || opening}
+                                  >
+                                    {opening ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+                                    {tier1HostedCtaLabel}
+                                  </Button>
+                                ) : null}
+                              </div>
+                            </>
+                          )}
                         </CardContent>
                       ) : null}
                     </Card>

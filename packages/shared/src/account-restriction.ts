@@ -3,6 +3,7 @@ export const ACCOUNT_RESTRICTION_WIND_DOWN_MS = 7 * 24 * 60 * 60 * 1000
 
 export const ACCOUNT_RESTRICTED_CODE = "ACCOUNT_RESTRICTED" as const
 export const ACCOUNT_LOCKED_CODE = "ACCOUNT_LOCKED" as const
+export const ACCOUNT_RESTRICTION_STATUS_LABEL = "Restricted" as const
 
 export type AccountRestrictionPhase = "none" | "wind_down" | "locked"
 export type AccountRestrictionSubjectKind = "user" | "business"
@@ -60,8 +61,10 @@ export const ACCOUNT_RESTRICTION_WIND_DOWN_BANNER =
 
 export const ACCOUNT_RESTRICTION_WIND_DOWN_CONTACT_CTA = "Contact Us"
 
-export function accountRestrictionWindDownBannerCopy(): string {
-  return ACCOUNT_RESTRICTION_WIND_DOWN_BANNER
+export function accountRestrictionWindDownBannerCopy(windDownEndsAt?: string | null): string {
+  const deadline = formatAccountRestrictionDeadline(windDownEndsAt)
+  if (!deadline) return ACCOUNT_RESTRICTION_WIND_DOWN_BANNER
+  return `${ACCOUNT_RESTRICTION_WIND_DOWN_BANNER} Contact Easner support by ${deadline} or your account may be closed.`
 }
 
 export function accountRestrictionSendBlockedCopy(): string {

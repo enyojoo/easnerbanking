@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest"
 import {
   formatUserFacingFetchError,
+  isAccountRestrictionFetchError,
   isFatalQueryFailure,
   isTransientNetworkError,
 } from "./fetch-errors"
+import { ApiError } from "./api-client"
+import { ACCOUNT_RESTRICTED_CODE } from "@easner/shared"
 
 describe("fetch-errors", () => {
   it("detects transient browser network failures", () => {
@@ -16,6 +19,13 @@ describe("fetch-errors", () => {
     expect(formatUserFacingFetchError(new TypeError("Failed to fetch"))).toBe(
       "Connection interrupted. Check your network and try again.",
     )
+  })
+
+  it("detects account restriction API errors", () => {
+    expect(
+      isAccountRestrictionFetchError(new ApiError("Deposits blocked", 403, ACCOUNT_RESTRICTED_CODE, {})),
+    ).toBe(true)
+    expect(isAccountRestrictionFetchError(new ApiError("Nope", 403, "OTHER", {}))).toBe(false)
   })
 
   it("only treats empty-cache failures as fatal", () => {

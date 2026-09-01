@@ -806,6 +806,7 @@ export {
   ACCOUNT_RESTRICTION_WIND_DOWN_MS,
   ACCOUNT_RESTRICTED_CODE,
   ACCOUNT_LOCKED_CODE,
+  ACCOUNT_RESTRICTION_STATUS_LABEL,
   computeAccountRestrictionPhase,
   emptyAccountRestriction,
   formatAccountRestrictionDeadline,

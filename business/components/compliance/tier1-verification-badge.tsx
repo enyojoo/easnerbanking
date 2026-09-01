@@ -2,7 +2,7 @@
 
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import { verificationStatusLabel } from "@easner/shared"
+import { verificationStatusLabel, ACCOUNT_RESTRICTION_STATUS_LABEL } from "@easner/shared"
 
 /**
  * Compact Tier 1 (business KYB) status for headers – pairs with org name; matches tier-card semantics.
@@ -14,6 +14,7 @@ export function Tier1VerificationBadge({
   tier1VerificationStatus,
   isLoading,
   compact = false,
+  accountRestricted = false,
   className,
 }: {
   tier1Complete: boolean
@@ -21,6 +22,8 @@ export function Tier1VerificationBadge({
   isLoading?: boolean
   /** Smaller badge for sidebar under org name */
   compact?: boolean
+  /** Compliance hold — takes precedence over KYB verification status. */
+  accountRestricted?: boolean
   className?: string
 }) {
   const sizeClass = compact ? compactBadge : "text-xs"
@@ -35,6 +38,14 @@ export function Tier1VerificationBadge({
         )}
         aria-hidden
       />
+    )
+  }
+
+  if (accountRestricted) {
+    return (
+      <Badge variant="oxblood" className={cn("shrink-0 font-medium", sizeClass, className)}>
+        {ACCOUNT_RESTRICTION_STATUS_LABEL}
+      </Badge>
     )
   }
 

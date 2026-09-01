@@ -1,33 +1,31 @@
 "use client"
 
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { openBusinessSupport } from "@/lib/intercom-messenger"
 import {
-  ACCOUNT_RESTRICTION_WIND_DOWN_BANNER,
   ACCOUNT_RESTRICTION_WIND_DOWN_CONTACT_CTA,
+  accountRestrictionWindDownBannerCopy,
   type ResolvedAccountRestriction,
 } from "@easner/shared"
+import { openBusinessSupport } from "@/lib/intercom-messenger"
 
+/** Full-width strip matching KYB verification banners in `dashboard-shell`. */
 export function AccountRestrictionBanner({ restriction }: { restriction: ResolvedAccountRestriction }) {
   if (!restriction.active || restriction.phase !== "wind_down") return null
 
   return (
-    <Card className="border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/30">
-      <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
-        <p className="text-sm text-amber-950 dark:text-amber-100">{ACCOUNT_RESTRICTION_WIND_DOWN_BANNER}</p>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="border-amber-300 bg-white text-amber-950 hover:bg-amber-100 dark:border-amber-800 dark:bg-transparent dark:text-amber-100 dark:hover:bg-amber-950/60"
-          onClick={() => {
-            void openBusinessSupport()
-          }}
-        >
-          {ACCOUNT_RESTRICTION_WIND_DOWN_CONTACT_CTA}
-        </Button>
-      </CardContent>
-    </Card>
+    <div
+      className="z-20 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[hsl(var(--warning)/0.3)] bg-[hsl(var(--warning)/0.12)] px-8 py-2.5 text-sm text-[hsl(var(--warning))] backdrop-blur-sm"
+      role="status"
+    >
+      <span>{accountRestrictionWindDownBannerCopy(restriction.windDownEndsAt)}</span>
+      <button
+        type="button"
+        className="font-semibold text-[hsl(var(--warning))] underline underline-offset-2"
+        onClick={() => {
+          void openBusinessSupport()
+        }}
+      >
+        {ACCOUNT_RESTRICTION_WIND_DOWN_CONTACT_CTA}
+      </button>
+    </div>
   )
 }

@@ -70,7 +70,7 @@ import {
   type SettingsVerificationEmbeddedFlow,
 } from "@/lib/compliance/cutover-comms"
 import { useSearchParams } from "next/navigation"
-import { verificationStatusLabel, accountRestrictionVerificationBlockedCopy } from "@easner/shared"
+import { verificationStatusLabel } from "@easner/shared"
 import { VERIFICATION_SECTION_COPY } from "@/lib/copy/business-ui-copy"
 import { cn } from "@/lib/utils"
 
@@ -657,9 +657,6 @@ export function SettingsStripeConnectPanel({
           </CardDescription>
         </CardHeader>
         <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
-          {verificationActionsBlocked ? (
-            <p className="text-xs text-muted-foreground">{accountRestrictionVerificationBlockedCopy()}</p>
-          ) : null}
           {panelUx?.bodyCopyDestructive ? (
             <p className="text-xs text-destructive">{panelUx.bodyCopyDestructive}</p>
           ) : null}
