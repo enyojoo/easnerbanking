@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   feeRefund: vi.fn(),
   ledgerExists: vi.fn(),
   visibleLedgerExists: vi.fn(),
+  gridVisible: vi.fn(),
+  isGridTreasury: vi.fn(),
 }))
 
 vi.mock("@/lib/turnkey/config", () => ({
@@ -51,6 +53,15 @@ vi.mock("@/lib/solana/rpc-connection", () => ({
 vi.mock("@/lib/solana/spl-mints", () => ({
   mintForStablecoinAsset: () => null,
 }))
+vi.mock("@/lib/grid/grid-va-sweep-treasury", () => ({
+  isGridVaSweepTreasurySender: (...args: unknown[]) => mocks.isGridTreasury(...args),
+}))
+vi.mock("@/lib/grid/grid-bank-deposit-chain-suppression", () => ({
+  gridVaInboundCreditVisible: (...args: unknown[]) => mocks.gridVisible(...args),
+}))
+vi.mock("@/lib/grid/grid-va-turnkey-dust", () => ({
+  isGridVaTurnkeyDustAmount: (amount: number) => Number.isFinite(amount) && amount > 0 && amount < 0.01,
+}))
 
 import { applyTurnkeyBalanceWebhookSideEffects } from "@/lib/turnkey/balance-webhook-sync"
 
@@ -77,6 +88,8 @@ describe("applyTurnkeyBalanceWebhookSideEffects", () => {
     mocks.visibleLedgerExists.mockResolvedValue(false)
     mocks.inboundVisible.mockResolvedValue(false)
     mocks.easetagCreditVisible.mockResolvedValue(false)
+    mocks.gridVisible.mockResolvedValue(false)
+    mocks.isGridTreasury.mockReturnValue(false)
     mocks.resolveScope.mockResolvedValue({
       userId: "user-1",
       businessId: "biz-1",
@@ -162,5 +175,34 @@ describe("applyTurnkeyBalanceWebhookSideEffects", () => {
     const ok = await applyTurnkeyBalanceWebhookSideEffects({ from: vi.fn() } as never, deposit, "ev-3")
     expect(ok).toBe(true)
     expect(mocks.applyInbound).not.toHaveBeenCalled()
+  })
+
+  it("creates a stablecoin deposit on the fee wallet when the inbound is not a YC refund", async () => {
+    mocks.applyInbound.mockResolvedValue({ kind: "applied", transactionId: "tx-fee" })
+    mocks.inboundVisible.mockResolvedValueOnce(false).mockResolvedValueOnce(true)
+
+    const ok = await applyTurnkeyBalanceWebhookSideEffects(
+      { from: vi.fn() } as never,
+      { ...deposit, address: "fee-wallet" },
+      "ev-fee",
+    )
+    expect(ok).toBe(true)
+    expect(mocks.applyInbound).toHaveBeenCalled()
+    expect(mocks.feeRefund).toHaveBeenCalled()
+  })
+
+  it("accepts Grid treasury suppress when the Grid VA bank-deposit row is already visible", async () => {
+    mocks.applyInbound.mockResolvedValueOnce({ kind: "suppressed_noah", allowOrganicFallback: false })
+    mocks.isGridTreasury.mockReturnValue(true)
+    mocks.gridVisible.mockResolvedValue(true)
+    mocks.inboundVisible.mockResolvedValue(false)
+
+    const ok = await applyTurnkeyBalanceWebhookSideEffects(
+      { from: vi.fn() } as never,
+      { ...deposit, counterpartyAddress: "E6GjrWqtzTfm5ShTCxpphBzEuNt22goKDUKspkA9tJ3U" },
+      "ev-grid",
+    )
+    expect(ok).toBe(true)
+    expect(mocks.applyInbound).toHaveBeenCalledTimes(1)
   })
 })

@@ -135,3 +135,40 @@ export async function findPendingGridVaBankDepositForInboundAmount(
 
   return null
 }
+
+/** User-facing Grid VA bank-deposit row exists (fiat credited; chain hash may still be empty). */
+export async function gridVaInboundCreditVisible(
+  admin: SupabaseClient,
+  input: {
+    userId: string
+    businessId: string | null
+    amount?: number | null
+    withinHours?: number
+  },
+): Promise<boolean> {
+  const hours = input.withinHours ?? 48
+  const sinceIso = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString()
+  let q = admin
+    .from("transactions")
+    .select("id,metadata,amount,hidden_from_feed")
+    .eq("provider", "grid")
+    .eq("direction", "in")
+    .eq("status", "settled")
+    .filter("metadata->>flow", "eq", "bank_onramp")
+    .filter("metadata->>grid_va_inbound", "eq", "true")
+    .gte("created_at", sinceIso)
+  q = applyLedgerScope(q, input)
+  const { data: rows } = await q.limit(24)
+  const amount = Number(input.amount ?? 0)
+  for (const row of rows ?? []) {
+    if (row.hidden_from_feed === true) continue
+    if (!isGridVaBankDepositMetadata(row.metadata)) continue
+    if (amount > 0) {
+      const meta = (row.metadata as Record<string, unknown> | undefined) ?? {}
+      const settled = Number(meta.settled_stablecoin_amount ?? row.amount ?? 0)
+      if (!amountsRoughlyEqual(settled, amount)) continue
+    }
+    return true
+  }
+  return false
+}

@@ -18,9 +18,14 @@ import {
 import { findNoahBankOnrampChainSettlementForSuppression } from "@/lib/noah/noah-bank-onramp-chain-suppression"
 import { findRelayDepositChainSettlementForSuppression } from "@/lib/relay-deposit/relay-deposit-suppression"
 import { reconcileRelayDepositCreditForSolanaTx } from "@/lib/relay-deposit/settle-relay-deposit"
-import { findGridVaBankDepositChainSettlementForSuppression } from "@/lib/grid/grid-bank-deposit-chain-suppression"
+import {
+  findGridVaBankDepositChainSettlementForSuppression,
+  findPendingGridVaBankDepositForInboundAmount,
+} from "@/lib/grid/grid-bank-deposit-chain-suppression"
+import { isGridVaSweepTreasurySender } from "@/lib/grid/grid-va-sweep-treasury"
 import { isGridVaTurnkeyDustAmount } from "@/lib/grid/grid-va-turnkey-dust"
 import { reconcileGridVaBankDepositCreditForSolanaTx } from "@/lib/grid/grid-bank-deposit-credit"
+import { suppressTurnkeyGridVaChainMirrorRow } from "@/lib/grid/grid-va-turnkey-mirror"
 import {
   findGridVaTurnkeySweepForSolanaTx,
   settleGridVaTurnkeySweepForSolanaTx,
@@ -118,6 +123,25 @@ export async function applyTurnkeyInboundLedgerEvent(
   const direction = input.direction
   const skipProductSuppressors = opts?.forceOrganicStablecoinDeposit === true
 
+  if (direction === "in" && (isGridVaTurnkeyDustAmount(input.amount) || input.amount <= 0)) {
+    if (txHash && status === "settled" && businessId) {
+      const sweepByTx = await findGridVaTurnkeySweepForSolanaTx(admin, {
+        txHash,
+        businessId,
+        userId,
+        amount: input.amount,
+      })
+      if (sweepByTx) {
+        await settleGridVaTurnkeySweepForSolanaTx(admin, {
+          transferId: sweepByTx.transferId,
+          solanaTxHash: txHash,
+          inboundAmount: input.amount,
+        }).catch(() => {})
+      }
+    }
+    return { kind: "skipped" }
+  }
+
   if (direction === "in" && !skipProductSuppressors) {
     if (txHash && status === "settled") {
       if (isDepositSplitEnabled()) {
@@ -180,7 +204,17 @@ export async function applyTurnkeyInboundLedgerEvent(
         userId,
         businessId,
       })
-      if (gridSuppressed) {
+      const gridTreasuryPending =
+        !gridSuppressed && isGridVaSweepTreasurySender(input.counterpartyAddress)
+          ? await findPendingGridVaBankDepositForInboundAmount(admin, {
+              userId,
+              businessId,
+              amount: input.amount,
+              currency: input.currency,
+              txHash,
+            })
+          : null
+      if (gridSuppressed || gridTreasuryPending) {
         await reconcileGridVaBankDepositCreditForSolanaTx(admin, {
           solanaTxHash: txHash,
           userId,
@@ -195,6 +229,20 @@ export async function applyTurnkeyInboundLedgerEvent(
           currency: input.currency,
           txHash,
         })
+        await suppressTurnkeyGridVaChainMirrorRow(admin, {
+          txHash,
+          userId,
+          businessId,
+        }).catch(() => {})
+        return suppressedNoah(false)
+      }
+
+      if (isGridVaSweepTreasurySender(input.counterpartyAddress)) {
+        await suppressTurnkeyGridVaChainMirrorRow(admin, {
+          txHash,
+          userId,
+          businessId,
+        }).catch(() => {})
         return suppressedNoah(false)
       }
 
@@ -275,12 +323,6 @@ export async function applyTurnkeyInboundLedgerEvent(
         }).catch(() => {})
       }
       return suppressedNoah(false)
-    }
-
-    if (direction === "in" && !skipProductSuppressors) {
-      if (isGridVaTurnkeyDustAmount(input.amount) || input.amount <= 0) {
-        return { kind: "skipped" }
-      }
     }
   }
 

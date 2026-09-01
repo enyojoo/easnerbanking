@@ -18,6 +18,9 @@ import { resolveSolanaInboundSenderFromTxHash } from "@/lib/turnkey/solana-inbou
 import { resolveWalletSendFeeSolanaAddress } from "@/lib/wallet-send/fee-address"
 import { findYcCrossBorderFeeWalletRefundSuppression } from "@/lib/yellowcard/yc-ledger"
 import { withOrganicStablecoinDepositMetadata } from "@/lib/turnkey/organic-stablecoin-deposit-metadata"
+import { isGridVaSweepTreasurySender } from "@/lib/grid/grid-va-sweep-treasury"
+import { isGridVaTurnkeyDustAmount } from "@/lib/grid/grid-va-turnkey-dust"
+import { gridVaInboundCreditVisible } from "@/lib/grid/grid-bank-deposit-chain-suppression"
 
 function mapAssetToCurrency(asset: string): string {
   const a = asset.trim().toUpperCase()
@@ -47,6 +50,15 @@ async function ensureVisibleStablecoinDepositForBalanceWebhook(
     input
   const txHash = String(deposit.txHash || "").trim()
   if (!txHash) return
+  if (isGridVaTurnkeyDustAmount(deposit.amount) || deposit.amount <= 0) return
+  if (isGridVaSweepTreasurySender(counterpartyAddress)) {
+    const gridVisible = await gridVaInboundCreditVisible(admin, {
+      userId: scope.userId,
+      businessId: scope.businessId,
+      amount: deposit.amount,
+    })
+    if (gridVisible) return
+  }
 
   const visible = await inboundHashHasVisibleLedgerCredit(admin, {
     txHash,
@@ -173,8 +185,7 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
         .eq("id", match.transferId)
       return true
     }
-    // Unmatched fee-wallet inbound – do not create user ledger rows.
-    return true
+    // Same address is also the org vault: unmatched USDC is a Stablecoin deposit.
   }
 
   const scope = await resolveTurnkeyWalletScopeFromEvent(admin, {
@@ -273,6 +284,13 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
       result.easetagTransferGroupId
     ) {
       visible = await easetagP2pCreditVisibleForTransferGroup(admin, result.easetagTransferGroupId)
+    }
+    if (!visible && isGridVaSweepTreasurySender(counterpartyAddress)) {
+      visible = await gridVaInboundCreditVisible(admin, {
+        userId: scope.userId,
+        businessId: scope.businessId,
+        amount: deposit.amount,
+      })
     }
     if (!visible) {
       if (result.allowOrganicFallback === true) {

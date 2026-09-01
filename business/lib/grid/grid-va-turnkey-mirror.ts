@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 
-/** Hide duplicate Turnkey balance-webhook rows once Grid VA sweep is linked on-chain. */
+/** Delete duplicate Turnkey balance-webhook rows once Grid VA sweep is linked on-chain. */
 export async function suppressTurnkeyGridVaChainMirrorRow(
   admin: SupabaseClient,
   input: {
@@ -28,9 +28,14 @@ export async function suppressTurnkeyGridVaChainMirrorRow(
 
   for (const row of rows ?? []) {
     const meta = (row.metadata as Record<string, unknown> | undefined) ?? {}
-    if (meta.grid_va_turnkey_chain_mirror === true) continue
     const source = String(meta.source ?? "").trim()
-    if (source !== "turnkey_balance_webhook" && source !== "turnkey_chain_sync") continue
+    if (
+      source !== "turnkey_balance_webhook" &&
+      source !== "turnkey_chain_sync" &&
+      meta.grid_va_turnkey_chain_mirror !== true
+    ) {
+      continue
+    }
 
     const reportingAmount = Number(meta.reporting_wallet_amount ?? row.amount ?? 0)
     if (meta.balance_delta_applied === true && reportingAmount > 0) {
@@ -44,19 +49,7 @@ export async function suppressTurnkeyGridVaChainMirrorRow(
       reversedBalance += reportingAmount
     }
 
-    await admin
-      .from("transactions")
-      .update({
-        hidden_from_feed: true,
-        metadata: {
-          ...meta,
-          grid_va_turnkey_chain_mirror: true,
-          suppress_in_feed: true,
-          balance_delta_applied: false,
-        },
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", row.id)
+    await admin.from("transactions").delete().eq("id", row.id)
     suppressed += 1
   }
 

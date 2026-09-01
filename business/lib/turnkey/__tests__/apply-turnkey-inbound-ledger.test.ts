@@ -82,6 +82,12 @@ vi.mock("@/lib/grid/grid-bank-deposit-chain-suppression", () => ({
   findGridVaBankDepositChainSettlementForSuppression: mocks.findGridVa,
   findPendingGridVaBankDepositForInboundAmount: mocks.findPendingGridVa,
 }))
+vi.mock("@/lib/grid/grid-va-sweep-treasury", () => ({
+  isGridVaSweepTreasurySender: vi.fn().mockReturnValue(false),
+}))
+vi.mock("@/lib/grid/grid-va-turnkey-mirror", () => ({
+  suppressTurnkeyGridVaChainMirrorRow: vi.fn().mockResolvedValue({ suppressed: 0, reversedBalance: 0 }),
+}))
 vi.mock("@/lib/grid/grid-va-turnkey-dust", () => ({
   GRID_VA_TURNKEY_DUST_MAX_USD: 0.01,
   isGridVaTurnkeyDustAmount: (amount: number) => Number.isFinite(amount) && amount > 0 && amount < 0.01,
@@ -107,6 +113,7 @@ vi.mock("@/lib/turnkey/ledger-inbound-exists", () => ({
 import { applyTurnkeyInboundLedgerEvent } from "@/lib/turnkey/apply-turnkey-inbound-ledger"
 import { turnkeyVisibleInboundLedgerRowExists } from "@/lib/turnkey/ledger-inbound-exists"
 import { findGridVaTurnkeySweepForSolanaTx } from "@/lib/grid/va-turnkey-sweep"
+import { isGridVaSweepTreasurySender } from "@/lib/grid/grid-va-sweep-treasury"
 import { findYcFundBalanceChainSettlementForSuppression } from "@/lib/yellowcard/yc-ledger"
 import { tryCompleteYcFundBalanceFromUserVaultInbound } from "@/lib/yellowcard/execute-yc-fund-balance-split"
 
@@ -326,7 +333,7 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
       amount: 0.0001,
       txHash: "hash-grid-dust",
     })
-    expect(result.kind).toBe("suppressed_noah")
+    expect(result.kind).toBe("skipped")
     expect(findGridVaTurnkeySweepForSolanaTx).toHaveBeenCalledWith(admin, {
       txHash: "hash-grid-dust",
       businessId: "biz-1",
@@ -432,5 +439,68 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     expect(mocks.reconcileNoah).not.toHaveBeenCalled()
     expect(mocks.findEasetag).not.toHaveBeenCalled()
     expect(mocks.upsertLedger).toHaveBeenCalled()
+  })
+
+  it("suppresses Grid VA sweep when sender is Grid treasury and a pending Grid deposit matches", async () => {
+    vi.mocked(isGridVaSweepTreasurySender).mockReturnValue(true)
+    mocks.findPendingGridVa.mockResolvedValue({
+      transactionId: "grid-pay-1",
+      gridTransactionId: "Transaction:in-1",
+    })
+    const admin = { from: vi.fn() }
+
+    const result = await applyTurnkeyInboundLedgerEvent(admin as never, {
+      ...baseInput,
+      businessId: "biz-1",
+      counterpartyAddress: "E6GjrWqtzTfm5ShTCxpphBzEuNt22goKDUKspkA9tJ3U",
+      amount: 100,
+      txHash: "hash-grid-treasury",
+    })
+    expect(result).toEqual({ kind: "suppressed_noah", allowOrganicFallback: false })
+    expect(mocks.reconcileGridVa).toHaveBeenCalled()
+    expect(mocks.upsertLedger).not.toHaveBeenCalled()
+  })
+
+  it("does not amount-match Grid when sender is not the Grid treasury", async () => {
+    vi.mocked(isGridVaSweepTreasurySender).mockReturnValue(false)
+    mocks.findPendingGridVa.mockResolvedValue({
+      transactionId: "grid-pay-1",
+      gridTransactionId: "Transaction:in-1",
+    })
+    const admin = {
+      from: vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { metadata: {} } }),
+        update: vi.fn().mockReturnThis(),
+      })),
+    }
+
+    const result = await applyTurnkeyInboundLedgerEvent(admin as never, {
+      ...baseInput,
+      businessId: "biz-1",
+      counterpartyAddress: "SomeOtherWallet111",
+      amount: 100,
+      txHash: "hash-organic-100",
+    })
+    expect(result.kind).toBe("applied")
+    expect(mocks.findPendingGridVa).not.toHaveBeenCalled()
+    expect(mocks.upsertLedger).toHaveBeenCalled()
+  })
+
+  it("never force-creates Grid dust as a stablecoin deposit", async () => {
+    const admin = { from: vi.fn() }
+    const result = await applyTurnkeyInboundLedgerEvent(
+      admin as never,
+      {
+        ...baseInput,
+        businessId: "biz-1",
+        amount: 0.001,
+        txHash: "hash-dust-force",
+      },
+      { forceOrganicStablecoinDeposit: true },
+    )
+    expect(result.kind).toBe("skipped")
+    expect(mocks.upsertLedger).not.toHaveBeenCalled()
   })
 })
