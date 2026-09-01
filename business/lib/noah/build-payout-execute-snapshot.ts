@@ -64,6 +64,10 @@ export function normalizePayoutReviewSnapshot(
     ...(Number.isFinite(Number(o.noah_send_amount))
       ? { noah_send_amount: Number(o.noah_send_amount) }
       : {}),
+    ...(Number.isFinite(Number(o.yc_floor)) ? { yc_floor: Number(o.yc_floor) } : {}),
+    ...(Number.isFinite(Number(o.yc_send_amount))
+      ? { yc_send_amount: Number(o.yc_send_amount) }
+      : {}),
     ...(Number.isFinite(Number(o.channel_cost)) ? { channel_cost: Number(o.channel_cost) } : {}),
     ...(Number.isFinite(Number(o.noah_schedule_fee))
       ? { noah_schedule_fee: Number(o.noah_schedule_fee) }

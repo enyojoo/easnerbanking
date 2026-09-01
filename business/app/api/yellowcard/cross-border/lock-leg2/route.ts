@@ -160,7 +160,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, ...result })
   } catch (e) {
     const ycError = asYcPayoutError(e)
-    if (ycError) return crossBorderLockError(ycError.code, ycError.message, ycError.status)
+    if (ycError) return crossBorderLockError(ycError.code, ycError.userMessage, ycError.status)
     const message = e instanceof Error ? e.message : "Cross-border leg2 lock failed"
     if (
       message === "ng_local_verification_incomplete" ||

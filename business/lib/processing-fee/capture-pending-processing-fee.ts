@@ -3,6 +3,7 @@ import {
   computeEasnerRevenueFeeWalletSweepAmount,
   computeWalletSendFeeWalletSweepAmount,
   computeYcBalancePayoutCappedFeeWalletSweep,
+  payoutCryptoAuthorizedAmountFromMeta,
 } from "@easner/shared"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import {
@@ -115,7 +116,7 @@ export async function captureGlobalPayoutProcessingFeeIfPending(
     marginAmount: Number(meta.margin_amount ?? 0),
     processingFee: Number(meta.processing_fee ?? 0),
     totalDebited: Number(meta.total_debited ?? row.amount ?? 0),
-    cryptoAuthorizedAmount: Number(meta.noah_send_amount ?? meta.crypto_authorized_amount ?? 0),
+    cryptoAuthorizedAmount: Number(payoutCryptoAuthorizedAmountFromMeta(meta) ?? 0),
   })
 
   if (!Number.isFinite(feeLegAmount) || feeLegAmount <= FEE_DUST) {
@@ -245,7 +246,7 @@ export async function captureYcBalancePayoutProcessingFeeIfPending(
 
   const sweepAmt = computeYcBalancePayoutCappedFeeWalletSweep({
     totalDebited: Number(meta.total_debited ?? row.amount ?? 0),
-    cryptoAuthorizedAmount: Number(meta.crypto_authorized_amount ?? meta.noah_send_amount ?? 0),
+    cryptoAuthorizedAmount: Number(payoutCryptoAuthorizedAmountFromMeta(meta) ?? 0),
     marginAmount: Number(meta.margin_amount ?? 0),
     processingFee: Number(meta.processing_fee ?? 0),
   })
@@ -307,7 +308,7 @@ export async function captureGridBalancePayoutProcessingFeeIfPending(
 
   const sweepAmt = computeYcBalancePayoutCappedFeeWalletSweep({
     totalDebited: Number(meta.total_debited ?? row.amount ?? 0),
-    cryptoAuthorizedAmount: Number(meta.crypto_authorized_amount ?? meta.noah_send_amount ?? 0),
+    cryptoAuthorizedAmount: Number(payoutCryptoAuthorizedAmountFromMeta(meta) ?? 0),
     marginAmount: Number(meta.margin_amount ?? 0),
     processingFee: Number(meta.processing_fee ?? 0),
   })

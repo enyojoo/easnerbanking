@@ -268,8 +268,8 @@ export function buildYcBalancePayoutOutMetadata(input: {
     easner_transaction_id: input.easnerTransactionId,
     form_session_id: input.ycSendId ?? input.sequenceId,
     crypto_authorized_amount: String(input.cryptoAuthorizedAmount),
-    noah_floor: String(input.cryptoAuthorizedAmount),
-    noah_send_amount: String(input.cryptoAuthorizedAmount),
+    yc_floor: String(input.cryptoAuthorizedAmount),
+    yc_send_amount: String(input.cryptoAuthorizedAmount),
     total_debited: input.totalDebited,
     margin_amount: input.marginAmount ?? 0,
     processing_fee: processingFee,
@@ -377,13 +377,10 @@ export function buildYcRefundExpectedPatch(
   return {
     ...(prior ?? {}),
     yc_refund_expected: true,
-    noah_refund_expected: true,
     ...(opts?.refundAmount != null && Number.isFinite(opts.refundAmount)
-      ? { yc_refund_amount: opts.refundAmount, noah_refund_amount: opts.refundAmount }
+      ? { yc_refund_amount: opts.refundAmount }
       : {}),
-    ...(opts?.refundTxHash
-      ? { yc_refund_tx_hash: opts.refundTxHash, noah_refund_tx_hash: opts.refundTxHash }
-      : {}),
+    ...(opts?.refundTxHash ? { yc_refund_tx_hash: opts.refundTxHash } : {}),
   }
 }
 

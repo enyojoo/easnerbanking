@@ -91,8 +91,10 @@ export function pickRefundAmountCandidatesFromGlobalPayoutMeta(
   push(meta.yc_refund_amount)
   push(meta.grid_refund_amount)
   push(meta.noah_send_amount)
+  push(meta.yc_send_amount)
   push(meta.crypto_authorized_amount)
   push(meta.noah_floor)
+  push(meta.yc_floor)
   if (Number.isFinite(rowAmount) && rowAmount > 0) push(rowAmount)
   push(meta.total_debited)
   return candidates
@@ -138,14 +140,15 @@ export async function persistGlobalPayoutRefundTxHashOnOutRow(
     .update({
       metadata: {
         ...prior,
-        noah_refund_expected: true,
-        noah_refund_tx_hash: txHash,
         ...(isYc
           ? {
               yc_refund_expected: true,
               yc_refund_tx_hash: txHash,
             }
-          : {}),
+          : {
+              noah_refund_expected: true,
+              noah_refund_tx_hash: txHash,
+            }),
         ...(isGrid
           ? {
               grid_refund_expected: true,

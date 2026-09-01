@@ -323,26 +323,64 @@ describe("submitYcSendWithDestinationAmountLock", () => {
     expect(result.discardedSendIds).toEqual([])
   })
 
-  it("fails closed without creating another send when the one-shot lock underpays", async () => {
-    const buildSubmit = vi.fn(async (): Promise<YcSendSubmitResult> => ({
-      id: "unsafe-send",
-      convertedAmount: 1999.99,
-      settlementInfo: { cryptoAmount: 1.48, walletAddress: "w" },
-    }))
-
-    await expect(
-      submitYcSendWithDestinationAmountLock({
-        receiveAmount: 2000,
-        initialSettlementCryptoUsd: 1.468537,
-        destinationRate: 1373,
-        ycSellRate: 1373,
+  it.each([56, 60, 100, 250, 1.5, 87.43])(
+    "production lock never underpays sendUsd=%s → NGN (fee + worse sell rate)",
+    async (sendUsd) => {
+      const customerRate = 1358.5
+      const ycSellRate = 1358.36
+      const quotedReceive = Math.round(sendUsd * customerRate)
+      const result = await submitYcSendWithDestinationAmountLock({
+        receiveAmount: quotedReceive,
+        initialSettlementCryptoUsd: sendUsd,
+        destinationRate: customerRate,
+        ycSellRate,
         receiveCurrency: "NGN",
-        feeConfig: { minFeeLocal: 0, feePercentage: 0, flatFeeLocal: 0 },
+        feeConfig: { minFeeLocal: 0, feePercentage: 1, flatFeeLocal: 0 },
         singleSafeSurplusLock: true,
-        buildSubmit,
-      }),
-    ).rejects.toMatchObject({ code: "YC_SEND_NO_COMPLIANT_QUANTUM", status: 422 })
-    expect(buildSubmit).toHaveBeenCalledTimes(1)
+        buildSubmit: async ({ settlementCryptoUsd, attempt }) =>
+          ycLockResponse(settlementCryptoUsd, ycSellRate, `send-${attempt}`),
+      })
+
+      expect(result.recipientLocalAmount).toBeGreaterThanOrEqual(quotedReceive)
+    },
+  )
+
+  it("bumps one USDC cent when the first lock underpays", async () => {
+    const responses: YcSendSubmitResult[] = [
+      {
+        id: "short",
+        convertedAmount: 81501.85,
+        settlementInfo: { cryptoAmount: 60, walletAddress: "w" },
+      },
+      {
+        id: "ok",
+        convertedAmount: 81515.43,
+        settlementInfo: { cryptoAmount: 60.01, walletAddress: "w" },
+      },
+    ]
+    let call = 0
+
+    const result = await submitYcSendWithDestinationAmountLock({
+      receiveAmount: 81510,
+      initialSettlementCryptoUsd: 60,
+      destinationRate: 1358.5,
+      ycSellRate: 1358.5,
+      receiveCurrency: "NGN",
+      feeConfig: { minFeeLocal: 0, feePercentage: 0, flatFeeLocal: 0 },
+      singleSafeSurplusLock: true,
+      buildSubmit: async () => {
+        const next = responses[call]
+        call += 1
+        if (!next) throw new Error("unexpected extra YC send")
+        return next
+      },
+    })
+
+    expect(call).toBe(2)
+    expect(result.sendRes.id).toBe("ok")
+    expect(result.recipientLocalAmount).toBe(81515.43)
+    expect(result.recipientLocalAmount).toBeGreaterThanOrEqual(81510)
+    expect(result.discardedSendIds).toEqual(["short"])
   })
 
   it("fails closed when YC returns unsupported settlement precision", async () => {

@@ -258,8 +258,17 @@ export function mapNoahPayoutUserError(
     }
     return "Something went wrong with this payout. Please try again in a moment."
   }
-  if (e instanceof Error) return e.message
-  return String(e)
+  if (e instanceof Error) {
+    if (/yellowcard|yellow card/i.test(e.message)) {
+      return "This transfer is temporarily unavailable. Try again shortly."
+    }
+    return e.message
+  }
+  const fallback = String(e)
+  if (/yellowcard|yellow card/i.test(fallback)) {
+    return "This transfer is temporarily unavailable. Try again shortly."
+  }
+  return fallback
 }
 
 /** @deprecated Use `mapNoahPayoutUserError`. */

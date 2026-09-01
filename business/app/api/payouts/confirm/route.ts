@@ -183,8 +183,9 @@ export async function POST(request: Request) {
   } catch (e) {
     const ycError = asYcPayoutError(e)
     if (ycError) {
+      console.warn("[payouts/confirm] yc payout error", ycError.code, ycError.message)
       return NextResponse.json(
-        { ok: false, error: ycError.message, code: ycError.code },
+        { ok: false, error: ycError.userMessage, code: ycError.code },
         { status: ycError.status },
       )
     }

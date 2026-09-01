@@ -15,6 +15,9 @@ export type GlobalPayoutReviewSnapshot = {
   easner_fee?: number
   noah_floor?: number
   noah_send_amount?: number
+  /** USDC/EURC authorized to Yellowcard (not Noah). */
+  yc_floor?: number
+  yc_send_amount?: number
   channel_cost?: number
   /** Noah merchant schedule fee at quote (reconciliation). */
   noah_schedule_fee?: number

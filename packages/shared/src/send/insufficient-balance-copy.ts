@@ -55,6 +55,24 @@ export function customerFacingSendAmountError(raw: unknown, sourceCurrency: stri
   const s = String(raw).trim()
   if (!s) return null
   if (isInsufficientBalanceError(s)) return insufficientSourceBalanceCopy(sourceCurrency)
-  if (/^[a-zA-Z][a-zA-Z0-9]*(?:_[a-zA-Z0-9]+)+$/.test(s)) return null
+  if (/^[a-zA-Z][a-zA-Z0-9]*(?:_[a-zA-Z0-9]+)+$/.test(s)) {
+    if (
+      s === "YC_SEND_NO_COMPLIANT_QUANTUM" ||
+      s === "YC_SEND_PRECISION_UNDETERMINED" ||
+      s === "YC_SEND_FEE_UNAVAILABLE" ||
+      s === "YC_SEND_UNAVAILABLE" ||
+      s === "YC_QUOTE_EXPIRED"
+    ) {
+      return s === "YC_QUOTE_EXPIRED"
+        ? "This quote expired. Go back and try again."
+        : s === "YC_SEND_NO_COMPLIANT_QUANTUM" || s === "YC_SEND_PRECISION_UNDETERMINED"
+          ? "We couldn't complete this transfer at the amount shown. Try a slightly different amount."
+          : "This transfer is temporarily unavailable. Try again shortly."
+    }
+    return null
+  }
+  if (/\b(yellowcard|yellow card|\bnoah\b|\bgrid\b)\b/i.test(s) || /payout partner/i.test(s)) {
+    return "We couldn't complete this transfer at the amount shown. Try again."
+  }
   return s
 }

@@ -25,6 +25,7 @@ import {
   formatAccountBalanceLabel,
   formatReviewRowMoneyDisplay,
   isDraftRecipientId,
+  payoutReviewRailOpsFields,
 } from '@easner/shared'
 import { CreditDestinationRow } from '../../components/transactions/CreditDestinationRow'
 import { TransactionDetailSummaryRow } from '../../components/transactions/TransactionDetailSummaryRow'
@@ -720,10 +721,23 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
                     ? { execution_model: walletExecutionModel }
                     : {}),
                   ...(exchangeFee > 0 ? { channel_cost: exchangeFee } : {}),
-                  ...(payoutSession?.noahFloor ? { noah_floor: Number(payoutSession.noahFloor) } : {}),
-                  ...(payoutSession?.noahSendAmount
-                    ? { noah_send_amount: Number(payoutSession.noahSendAmount) }
-                    : {}),
+                  ...(payoutSession?.payoutProvider === 'yellowcard'
+                    ? payoutReviewRailOpsFields({
+                        payoutProvider: 'yellowcard',
+                        cryptoSendAmount: Number(
+                          payoutSession.cryptoAuthorizedAmount ??
+                            payoutSession.ycCryptoAmount ??
+                            payoutSession.noahSendAmount,
+                        ),
+                      })
+                    : {
+                        ...(payoutSession?.noahFloor
+                          ? { noah_floor: Number(payoutSession.noahFloor) }
+                          : {}),
+                        ...(payoutSession?.noahSendAmount
+                          ? { noah_send_amount: Number(payoutSession.noahSendAmount) }
+                          : {}),
+                      }),
                 }
               : undefined
 

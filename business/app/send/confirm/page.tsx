@@ -21,6 +21,7 @@ import {
   YC_PAY_IN_REVIEW_AND_COMPLETE_TITLE,
   attestPayInPayment,
   shouldShowPayoutReviewFeeRow,
+  payoutReviewRailOpsFields,
 } from "@easner/shared"
 import { usePayoutFormSchema } from "@/lib/use-payout-form-schema"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
@@ -854,15 +855,17 @@ export default function SendConfirmPage() {
         ...(reviewProcessingFee > 0 ? { easner_fee: reviewProcessingFee } : {}),
         ...(reviewMargin > 0 ? { margin_amount: reviewMargin } : {}),
         ...(reviewChannelCost > 0 ? { channel_cost: reviewChannelCost } : {}),
-        ...(pqLive.scheduleFee != null ? { noah_schedule_fee: pqLive.scheduleFee } : {}),
-        ...(pqLive.prepareChannelFee != null ? { noah_channel_fee: pqLive.prepareChannelFee } : {}),
-        ...(pqLive.quoteNoahMid != null ? { quote_noah_mid: pqLive.quoteNoahMid } : {}),
         ...(pqLive.provider === "grid"
           ? { noah_floor: reviewYouSend, noah_send_amount: reviewYouSend }
-          : {
-              ...(pqLive.noahFloor ? { noah_floor: Number(pqLive.noahFloor) } : {}),
-              ...(pqLive.noahSendAmount ? { noah_send_amount: Number(pqLive.noahSendAmount) } : {}),
-            }),
+          : payoutReviewRailOpsFields({
+              payoutProvider: pqLive.provider,
+              cryptoSendAmount: Number(
+                pqLive.cryptoAuthorizedAmount ?? pqLive.noahSendAmount ?? pqLive.noahFloor,
+              ),
+              scheduleFee: pqLive.scheduleFee,
+              prepareChannelFee: pqLive.prepareChannelFee,
+              quoteNoahMid: pqLive.quoteNoahMid,
+            })),
       }
 
       const transferBody = {

@@ -238,4 +238,45 @@ describe("resolveGlobalPayoutOffRampDetail", () => {
     expect(resolved?.payoutReview?.total_debited).toBe(1.546737)
     expect(resolved?.recipientSnapshot?.full_name).toBe("Samuel Enyojo Odiba")
   })
+
+  it("presents Yellowcard send as yc_send_amount instead of Noah aliases", () => {
+    const resolved = resolveGlobalPayoutOffRampDetail({
+      direction: "out",
+      status: "settled",
+      amount: 1.5,
+      currency: "USD",
+      metadata: {
+        payout_type: "global_fiat",
+        payout_provider: "yellowcard",
+        yc_mode: "balance_payout",
+        source: "api_yellowcard_balance_payout",
+        receive_amount: 2000,
+        receive_currency: "NGN",
+        crypto_authorized_amount: "1.485",
+        noah_send_amount: "1.485",
+        noah_floor: "1.485",
+        total_debited: 1.499751,
+        beneficiary_name: "Samuel Enyojo Odiba",
+        payout_review: {
+          you_send_amount: 1.475099,
+          total_debited: 1.499751,
+          noah_send_amount: 1.485,
+          noah_floor: 1.485,
+          receive_amount: 2004.66,
+          requested_receive_amount: 2000,
+          receive_currency: "NGN",
+          send_currency: "USD",
+          transfer_method: "Local transfer",
+          exchange_rate: 1359,
+          processing_fee: 0.014751,
+          exchange_fee: 0.009901,
+          processing_time: "Within minutes",
+        },
+      },
+    })
+    expect(resolved?.payoutReview?.yc_send_amount).toBe(1.485)
+    expect(resolved?.payoutReview?.noah_send_amount).toBeUndefined()
+    expect(resolved?.effectiveMetadata.noah_send_amount).toBeUndefined()
+    expect(resolved?.effectiveMetadata.yc_send_amount).toBe(1.485)
+  })
 })

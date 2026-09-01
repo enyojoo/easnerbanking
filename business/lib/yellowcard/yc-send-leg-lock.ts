@@ -123,7 +123,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
   if (!(requestedLocal > 0)) {
     throw new YcPayoutError(
       "YC_SEND_NO_COMPLIANT_QUANTUM",
-      "Yellowcard recipient amount must be positive.",
+      "Recipient amount must be positive.",
       422,
     )
   }
@@ -170,7 +170,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
     if (!(grossLocal > 0)) {
       throw new YcPayoutError(
         "YC_SEND_UNAVAILABLE",
-        "Yellowcard send response is missing the locked local amount.",
+        "Payout quote is missing the locked local amount.",
         503,
       )
     }
@@ -182,7 +182,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
     } else if (!(feeLocal > 0) && !input.feeConfig) {
       throw new YcPayoutError(
         "YC_SEND_FEE_UNAVAILABLE",
-        "Yellowcard fee data is unavailable; recipient amount cannot be guaranteed.",
+        "Payout fee data is unavailable; recipient amount cannot be guaranteed.",
         503,
       )
     }
@@ -192,7 +192,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
     if (!(accepted > 0)) {
       throw new YcPayoutError(
         "YC_SEND_UNAVAILABLE",
-        "Yellowcard send response is missing the authoritative crypto amount.",
+        "Payout quote is missing the authoritative crypto amount.",
         503,
       )
     }
@@ -200,7 +200,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
     if (!sameMicroAmount(accepted, submitted) && !isCentAligned(accepted)) {
       throw new YcPayoutError(
         "YC_SEND_PRECISION_UNDETERMINED",
-        `Yellowcard changed ${submitted} USDC to unsupported amount ${accepted}.`,
+        `Payout partner changed ${submitted} USDC to unsupported amount ${accepted}.`,
         422,
       )
     }
@@ -232,7 +232,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
       } else {
         throw new YcPayoutError(
           "YC_SEND_PRECISION_UNDETERMINED",
-          `Yellowcard changed ${submitted} USDC to unsupported amount ${accepted}.`,
+          `Payout partner changed ${submitted} USDC to unsupported amount ${accepted}.`,
           422,
         )
       }
@@ -242,7 +242,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
     ) {
       throw new YcPayoutError(
         "YC_SEND_PRECISION_UNDETERMINED",
-        "Yellowcard settlement precision changed during quote locking.",
+        "Payout settlement precision changed during quote locking.",
         422,
       )
     }
@@ -252,65 +252,75 @@ export async function submitYcSendWithDestinationAmountLock(input: {
 
   if (input.singleSafeSurplusLock) {
     // YC converts direct-settlement sends in nearest-cent settlement buckets while it may
-    // echo the submitted funding amount to more decimals. Submitting at the upper half-cent
-    // boundary selects the same safe bucket as the former adjacent-probe path with one send.
+    // echo the submitted funding amount to more decimals. Start at the upper half-cent
+    // boundary; if that bucket still underpays (rate/fee rounding), bump one USDC cent.
     const conversionCent = Math.ceil((nextCrypto - 0.0000001) * 100) / 100
-    const candidateCrypto = roundUsdc(conversionCent - YC_SEND_LEG_CRYPTO_CENT / 2)
-    const selected = await observeRaw(candidateCrypto, 0)
-    const surplus = roundLocal(selected.netLocal - requestedLocal)
-    // With only one YC send there is no adjacent response to observe. Derive a conservative
-    // local cent-bucket ceiling from the selected response's gross conversion. The actual
-    // recipient amount remains authoritative and must independently satisfy never-underpay.
-    const conversionBucketCrypto = Math.max(
-      YC_SEND_LEG_CRYPTO_CENT,
-      Math.round(candidateCrypto * 100) / 100,
-    )
-    const payoutQuantumLocal = roundLocal(
-      Math.max(0.01, (selected.grossLocal / conversionBucketCrypto) * YC_SEND_LEG_CRYPTO_CENT),
-    )
+    let candidateCrypto = roundUsdc(conversionCent - YC_SEND_LEG_CRYPTO_CENT / 2)
+    const discardedSendIds: string[] = []
+    const maxCentBumps = 8
 
-    if (surplus < 0) {
-      throw new YcPayoutError(
-        "YC_SEND_NO_COMPLIANT_QUANTUM",
-        `Yellowcard's single locked send would underpay the recipient by ${Math.abs(surplus).toFixed(2)} ${input.receiveCurrency}.`,
-        422,
+    for (let bump = 0; bump <= maxCentBumps; bump++) {
+      const selected = await observeRaw(candidateCrypto, bump)
+      const surplus = roundLocal(selected.netLocal - requestedLocal)
+      const conversionBucketCrypto = Math.max(
+        YC_SEND_LEG_CRYPTO_CENT,
+        Math.round(Math.max(candidateCrypto, selected.acceptedCryptoUsd) * 100) / 100,
+      )
+      const payoutQuantumLocal = roundLocal(
+        Math.max(0.01, (selected.grossLocal / conversionBucketCrypto) * YC_SEND_LEG_CRYPTO_CENT),
+      )
+
+      if (surplus >= 0) {
+        if (surplus > payoutQuantumLocal) {
+          console.info("[yc-send-lock] accepted surplus above one payout quantum", {
+            requestedLocalAmount: requestedLocal,
+            recipientLocalAmount: selected.netLocal,
+            receiveCurrency: input.receiveCurrency,
+            surplus,
+            payoutQuantumLocal,
+            bump,
+          })
+        }
+        console.info("[yc-send-lock] selected single safe-surplus settlement", {
+          requestedLocalAmount: requestedLocal,
+          recipientLocalAmount: selected.netLocal,
+          receiveCurrency: input.receiveCurrency,
+          precisionMode: "cent",
+          settlementQuantumUsd: YC_SEND_LEG_CRYPTO_CENT,
+          payoutQuantumLocal,
+          recipientSurplusLocal: surplus,
+          selectedSendId: selected.sendId,
+          discardedSendIds,
+          attempts: bump + 1,
+        })
+        return {
+          sendRes: selected.sendRes,
+          requestedLocalAmount: requestedLocal,
+          finalSettlementCryptoUsd: selected.acceptedCryptoUsd,
+          lockedLocalAmount: selected.grossLocal,
+          recipientLocalAmount: selected.netLocal,
+          sendLegFeeLocal: selected.feeLocal,
+          recipientSurplusLocal: surplus,
+          payoutQuantumLocal,
+          settlementQuantumUsd: YC_SEND_LEG_CRYPTO_CENT,
+          precisionMode: "cent",
+          sequenceId: selected.sequenceId,
+          expiresAt: responseExpiry(selected.sendRes),
+          discardedSendIds,
+        }
+      }
+
+      if (selected.sendId) discardedSendIds.push(selected.sendId)
+      candidateCrypto = roundUsdc(
+        Math.max(candidateCrypto, selected.acceptedCryptoUsd) + YC_SEND_LEG_CRYPTO_CENT,
       )
     }
-    if (surplus > payoutQuantumLocal) {
-      throw new YcPayoutError(
-        "YC_SEND_NO_COMPLIANT_QUANTUM",
-        `Yellowcard recipient surplus ${surplus.toFixed(2)} ${input.receiveCurrency} exceeds one payout quantum ${payoutQuantumLocal.toFixed(2)}.`,
-        422,
-      )
-    }
 
-    console.info("[yc-send-lock] selected single safe-surplus settlement", {
-      requestedLocalAmount: requestedLocal,
-      recipientLocalAmount: selected.netLocal,
-      receiveCurrency: input.receiveCurrency,
-      precisionMode: "cent",
-      settlementQuantumUsd: YC_SEND_LEG_CRYPTO_CENT,
-      payoutQuantumLocal,
-      recipientSurplusLocal: surplus,
-      selectedSendId: selected.sendId,
-      discardedSendIds: [],
-      attempts: 1,
-    })
-    return {
-      sendRes: selected.sendRes,
-      requestedLocalAmount: requestedLocal,
-      finalSettlementCryptoUsd: selected.acceptedCryptoUsd,
-      lockedLocalAmount: selected.grossLocal,
-      recipientLocalAmount: selected.netLocal,
-      sendLegFeeLocal: selected.feeLocal,
-      recipientSurplusLocal: surplus,
-      payoutQuantumLocal,
-      settlementQuantumUsd: YC_SEND_LEG_CRYPTO_CENT,
-      precisionMode: "cent",
-      sequenceId: selected.sequenceId,
-      expiresAt: responseExpiry(selected.sendRes),
-      discardedSendIds: [],
-    }
+    throw new YcPayoutError(
+      "YC_SEND_NO_COMPLIANT_QUANTUM",
+      `Could not lock a never-underpay ${requestedLocal} ${input.receiveCurrency} payout after ${maxCentBumps} USDC-cent bumps.`,
+      422,
+    )
   }
 
   if (input.parallelBoundaryProbe) {
@@ -394,7 +404,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
     if (seenAccepted.has(acceptedKey)) {
       throw new YcPayoutError(
         "YC_SEND_PRECISION_UNDETERMINED",
-        "Yellowcard returned the same settlement bucket for different adaptive requests.",
+        "Payout partner returned the same settlement bucket for different adaptive requests.",
         422,
       )
     }
@@ -422,7 +432,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
         if (surplus < 0 || surplus > payoutQuantumLocal) {
           throw new YcPayoutError(
             "YC_SEND_NO_COMPLIANT_QUANTUM",
-            `Yellowcard recipient surplus ${surplus.toFixed(2)} ${input.receiveCurrency} exceeds one observed payout quantum ${payoutQuantumLocal.toFixed(2)}.`,
+            `Recipient surplus ${surplus.toFixed(2)} ${input.receiveCurrency} exceeds one observed payout quantum ${payoutQuantumLocal.toFixed(2)}.`,
             422,
           )
         }
@@ -485,7 +495,7 @@ export async function submitYcSendWithDestinationAmountLock(input: {
 
   throw new YcPayoutError(
     "YC_SEND_NO_COMPLIANT_QUANTUM",
-    `Yellowcard could not bracket a never-underpay ${requestedLocal} ${input.receiveCurrency} payout within ${maxAttempts} quotes.`,
+    `Could not lock a never-underpay ${requestedLocal} ${input.receiveCurrency} payout within ${maxAttempts} quotes.`,
     422,
   )
 }

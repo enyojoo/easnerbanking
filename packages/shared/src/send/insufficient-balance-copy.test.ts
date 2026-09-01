@@ -21,6 +21,15 @@ describe("insufficient balance copy", () => {
       "Insufficient USD balance",
     )
     expect(customerFacingSendAmountError("quote_failed", "USD")).toBeNull()
+    expect(
+      customerFacingSendAmountError(
+        "Yellowcard's single locked send would underpay the recipient by 8.15 NGN.",
+        "USD",
+      ),
+    ).toBe("We couldn't complete this transfer at the amount shown. Try again.")
+    expect(customerFacingSendAmountError("YC_SEND_NO_COMPLIANT_QUANTUM", "USD")).toBe(
+      "We couldn't complete this transfer at the amount shown. Try a slightly different amount.",
+    )
   })
 
   it("includes shortfall as a sentence, not a code", () => {

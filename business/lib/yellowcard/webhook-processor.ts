@@ -169,7 +169,9 @@ export async function handleYcBalancePayoutSendWebhook(
   }
 
   if (input.classified.isTerminalFailure) {
-    const refundAmt = Number(prior.crypto_authorized_amount ?? prior.noah_send_amount ?? row.amount ?? 0)
+    const refundAmt = Number(
+      prior.crypto_authorized_amount ?? prior.yc_send_amount ?? prior.noah_send_amount ?? row.amount ?? 0,
+    )
     let meta = buildYcRefundExpectedPatch(prior, {
       refundAmount: Number.isFinite(refundAmt) && refundAmt > 0 ? refundAmt : null,
     })

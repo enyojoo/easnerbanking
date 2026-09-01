@@ -9,7 +9,10 @@ import {
   getGlobalPayoutProcessingTime,
   isGlobalPayoutOffRampOutRow,
   TLC_LOCAL_TRANSFER_METHOD,
+  isYcBalancePayoutMetadata,
+  payoutCryptoAuthorizedAmountFromMeta,
   rawPayoutReviewFromMetadata,
+  relabelYcPayoutMetadataForPresentation,
   type GlobalPayoutLifecycleStep,
   type GlobalPayoutRecipientSnapshot,
   type GlobalPayoutReviewSnapshot,
@@ -360,9 +363,21 @@ function derivePayoutReview(
       fromMeta?.processing_time || getGlobalPayoutProcessingTime(transferMethod),
     ...(fromMeta?.margin_amount != null ? { margin_amount: fromMeta.margin_amount } : {}),
     ...(fromMeta?.easner_fee != null ? { easner_fee: fromMeta.easner_fee } : {}),
-    ...(fromMeta?.noah_floor != null ? { noah_floor: fromMeta.noah_floor } : {}),
-    ...(fromMeta?.noah_send_amount != null ? { noah_send_amount: fromMeta.noah_send_amount } : {}),
     ...(fromMeta?.channel_cost != null ? { channel_cost: fromMeta.channel_cost } : {}),
+    ...(() => {
+      const ycMeta = isYcBalancePayoutMetadata(meta)
+      if (ycMeta) {
+        const ycSend =
+          fromMeta?.yc_send_amount ??
+          payoutCryptoAuthorizedAmountFromMeta(meta) ??
+          fromMeta?.noah_send_amount
+        return ycSend != null ? { yc_send_amount: ycSend, yc_floor: fromMeta?.yc_floor ?? ycSend } : {}
+      }
+      return {
+        ...(fromMeta?.noah_floor != null ? { noah_floor: fromMeta.noah_floor } : {}),
+        ...(fromMeta?.noah_send_amount != null ? { noah_send_amount: fromMeta.noah_send_amount } : {}),
+      }
+    })(),
     ...(() => {
       const displayFeeLocal =
         roundFiat(fromMeta?.display_processing_fee_local) ??
@@ -436,7 +451,7 @@ export function resolveGlobalPayoutOffRampDetail(
   const completedAt = pickIso(webhook?.completedAt, meta.completed_at)
   const failedAt = pickIso(webhook?.failedAt, meta.failed_at, meta.noah_payout_failed_at)
 
-  const effectiveMetadata: Record<string, unknown> = {
+  const effectiveMetadata: Record<string, unknown> = relabelYcPayoutMetadataForPresentation({
     ...meta,
     ...(processingAt ? { processing_at: processingAt } : {}),
     ...(completedAt ? { completed_at: completedAt } : {}),
@@ -447,7 +462,7 @@ export function resolveGlobalPayoutOffRampDetail(
           counterparty_name: recipientName,
         }
       : {}),
-  }
+  })
 
   const lifecycle = buildGlobalPayoutLifecycle({
     status: String(row.status ?? ""),

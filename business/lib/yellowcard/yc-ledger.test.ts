@@ -88,6 +88,10 @@ describe("yc-ledger metadata builders", () => {
     expect(meta.yc_mode).toBe("balance_payout")
     expect(meta.processing_fee_pending).toBe(true)
     expect(meta.easner_payout_id).toBe("payout-1")
+    expect(meta.yc_send_amount).toBe("48.5")
+    expect(meta.yc_floor).toBe("48.5")
+    expect(meta.noah_send_amount).toBeUndefined()
+    expect(meta.noah_floor).toBeUndefined()
     expect(isYcBalancePayoutRow(meta)).toBe(true)
   })
 
@@ -113,11 +117,12 @@ describe("yc-ledger metadata builders", () => {
     expect(isYcInternalCryptoLeg(meta)).toBe(false)
   })
 
-  it("sets yc + noah refund expected flags on failure", () => {
+  it("sets yc refund expected flags on failure", () => {
     const patch = buildYcRefundExpectedPatch({ foo: 1 }, { refundAmount: 48.5, refundTxHash: "ref1" })
     expect(patch.yc_refund_expected).toBe(true)
-    expect(patch.noah_refund_expected).toBe(true)
+    expect(patch.noah_refund_expected).toBeUndefined()
     expect(patch.yc_refund_amount).toBe(48.5)
+    expect(patch.noah_refund_amount).toBeUndefined()
     expect(patch.yc_refund_tx_hash).toBe("ref1")
   })
 

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   computeEasnerRevenueFeeWalletSweepAmount,
   EASNER_REVENUE_FEE_WALLET_SWEEP_MIN,
+  payoutCryptoAuthorizedAmountFromMeta,
 } from "@easner/shared"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { createTurnkeySend } from "@/lib/turnkey/send"
@@ -32,7 +33,7 @@ export function computeSweepAmountFromMetadata(
     marginAmount: Number(meta.margin_amount ?? 0),
     processingFee: Number(meta.processing_fee ?? 0),
     totalDebited: Number(meta.total_debited ?? opts?.rowAmount ?? 0),
-    cryptoAuthorizedAmount: Number(meta.crypto_authorized_amount ?? meta.noah_send_amount ?? 0),
+    cryptoAuthorizedAmount: Number(payoutCryptoAuthorizedAmountFromMeta(meta) ?? 0),
     ...(opts?.ledgerSurplus != null ? { ledgerSurplus: opts.ledgerSurplus } : {}),
   })
 }

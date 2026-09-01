@@ -997,8 +997,12 @@ export type {
 export { displayPayoutReceiveAmount } from "./transactions/global-payout-types"
 export {
   isGridBalancePayoutMetadata,
+  isYcBalancePayoutMetadata,
   overlayGridExecutedPayoutReview,
+  payoutCryptoAuthorizedAmountFromMeta,
+  payoutReviewRailOpsFields,
   rawPayoutReviewFromMetadata,
+  relabelYcPayoutMetadataForPresentation,
 } from "./transactions/payout-review-from-metadata"
 export type {
   BalanceMoveDirection,

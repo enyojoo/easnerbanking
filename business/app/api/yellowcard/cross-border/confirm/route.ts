@@ -172,7 +172,7 @@ export async function POST(request: Request) {
     })
   } catch (e) {
     const ycError = asYcPayoutError(e)
-    if (ycError) return crossBorderQuoteError(ycError.code, ycError.message, ycError.status)
+    if (ycError) return crossBorderQuoteError(ycError.code, ycError.userMessage, ycError.status)
     const message = e instanceof Error ? e.message : "Cross-border confirm failed"
     if (message === "deposit_omnibus_solana_address_usd_required") {
       return ycFundBalanceQuoteError(
