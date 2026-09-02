@@ -55,7 +55,22 @@ export async function assertOutboundComplianceAllows(
     amountUsd: number
   },
 ): Promise<{ ok: true } | OutboundComplianceDeny> {
-  const allowance = await resolveSendAllowance(admin, input)
+  let allowance
+  try {
+    allowance = await resolveSendAllowance(admin, input)
+  } catch (err) {
+    console.error("[wallet-send-compliance] resolveSendAllowance failed", {
+      rail: input.rail,
+      businessId: input.businessId,
+      error: err instanceof Error ? err.message : err,
+    })
+    return {
+      ok: false,
+      code: "WALLET_SEND_DAILY_LIMIT",
+      status: 403,
+      message: "Send limits are temporarily unavailable. Please try again shortly.",
+    }
+  }
   if (allowance.allowed) return { ok: true }
   return {
     ok: false,

@@ -16,7 +16,7 @@ export {
   outboundComplianceSendFailureResponse,
   OutboundComplianceError,
 } from "./assert"
-export { resolveSendAllowance, computeStablecoinAllowance } from "./resolve-send-allowance"
+export { resolveSendAllowance, computeStablecoinAllowance, computeFiatPayoutAllowance } from "./resolve-send-allowance"
 export { resolveBusinessDailyTier } from "./resolve-daily-tier"
 export {
   loadActiveVelocityControl,

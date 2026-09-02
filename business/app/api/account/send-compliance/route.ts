@@ -11,6 +11,21 @@ import {
 
 export const runtime = "nodejs"
 
+async function safeAllowance(
+  admin: ReturnType<typeof createSupabaseAdmin>,
+  input: Parameters<typeof resolveSendAllowance>[1],
+) {
+  try {
+    return await resolveSendAllowance(admin, input)
+  } catch (err) {
+    console.error("[account/send-compliance] resolveSendAllowance failed", {
+      rail: input.rail,
+      error: err instanceof Error ? err.message : err,
+    })
+    return emptySendAllowance()
+  }
+}
+
 /** Daily + velocity send allowance for the authenticated business. */
 export async function GET(request: Request) {
   const user = await getUserFromApiRequest(request)
@@ -41,8 +56,8 @@ export async function GET(request: Request) {
   }
 
   const [stablecoin, fiatPayout] = await Promise.all([
-    resolveSendAllowance(admin, { businessId, rail: "stablecoin", amountUsd: 0 }),
-    resolveSendAllowance(admin, { businessId, rail: "fiat_payout", amountUsd: 0 }),
+    safeAllowance(admin, { businessId, rail: "stablecoin", amountUsd: 0 }),
+    safeAllowance(admin, { businessId, rail: "fiat_payout", amountUsd: 0 }),
   ])
 
   return NextResponse.json({

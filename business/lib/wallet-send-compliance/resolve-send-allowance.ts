@@ -68,6 +68,31 @@ export function computeStablecoinAllowance(input: {
   }
 }
 
+/** Provider-agnostic fiat daily limit (Noah / Yellowcard / Grid all use rail `fiat_payout`). */
+export function computeFiatPayoutAllowance(input: {
+  amountUsd: number
+  dailyLimitUsd: number
+  dailyUsedUsd: number
+  dailyRetryAfterIso: string | null
+}): ResolvedSendAllowance {
+  const dailyRemainingUsd = Math.max(0, roundUsd(input.dailyLimitUsd - input.dailyUsedUsd))
+  const allowed = input.amountUsd <= dailyRemainingUsd + 1e-6
+  return {
+    allowed,
+    remainingUsd: dailyRemainingUsd,
+    dailyLimitUsd: input.dailyLimitUsd,
+    dailyUsedUsd: input.dailyUsedUsd,
+    dailyRemainingUsd,
+    dailyTier: null,
+    velocityActive: false,
+    velocityRemainingUsd: null,
+    velocityExpiresAt: null,
+    velocityMode: null,
+    code: allowed ? null : FIAT_PAYOUT_DAILY_LIMIT_CODE,
+    message: allowed ? null : fiatPayoutDailyLimitCopy(input.dailyRetryAfterIso),
+  }
+}
+
 export async function resolveSendAllowance(
   admin: SupabaseClient,
   input: {
@@ -82,32 +107,19 @@ export async function resolveSendAllowance(
   if (!(await isWalletSendCompliancePlatformEnabled(admin))) return emptySendAllowance()
   const now = input.now ?? Date.now()
   const amountUsd = Math.max(0, input.amountUsd)
+  const cfg = walletSendComplianceConfig()
 
   if (input.rail === "fiat_payout") {
-    const cfg = walletSendComplianceConfig()
     const [usage, override] = await Promise.all([
       sumRolling24hOutboundUsd(admin, businessId, "fiat_payout", now),
       loadActiveLimitOverride(admin, businessId, "fiat_payout", now),
     ])
-    const dailyLimitUsd = override?.dailyMaxUsd ?? cfg.fiatDailyUsd
-    const dailyUsedUsd = usage.usedUsd
-    const dailyRemainingUsd = Math.max(0, Math.round((dailyLimitUsd - dailyUsedUsd) * 100) / 100)
-    const allowed = amountUsd <= dailyRemainingUsd + 1e-6
-    const retryAfter = dailyRetryAfterIso(usage.oldestCountedAt, now)
-    return {
-      allowed,
-      remainingUsd: dailyRemainingUsd,
-      dailyLimitUsd,
-      dailyUsedUsd,
-      dailyRemainingUsd,
-      dailyTier: null,
-      velocityActive: false,
-      velocityRemainingUsd: null,
-      velocityExpiresAt: null,
-      velocityMode: null,
-      code: allowed ? null : FIAT_PAYOUT_DAILY_LIMIT_CODE,
-      message: allowed ? null : fiatPayoutDailyLimitCopy(retryAfter),
-    }
+    return computeFiatPayoutAllowance({
+      amountUsd,
+      dailyLimitUsd: override?.dailyMaxUsd ?? cfg.fiatDailyUsd,
+      dailyUsedUsd: usage.usedUsd,
+      dailyRetryAfterIso: dailyRetryAfterIso(usage.oldestCountedAt, now),
+    })
   }
 
   const [tier, usage, override, velocity] = await Promise.all([
