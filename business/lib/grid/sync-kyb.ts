@@ -154,7 +154,7 @@ export async function syncGridBusinessKybToSupabase(input: {
 
   const { data: priorBiz } = await input.admin
     .from("businesses")
-    .select("verification_status,tax_id")
+    .select("verification_status,tax_id,kyb_verified_at")
     .eq("id", input.businessId)
     .maybeSingle()
   const priorLocal = String(priorBiz?.verification_status ?? "not_started").toLowerCase()
@@ -166,6 +166,11 @@ export async function syncGridBusinessKybToSupabase(input: {
     !gridVerificationsMissingIdentityDocument(verifications)
   ) {
     status = "pending"
+  }
+  // Recreated Grid shells are UNVERIFIED. That must not un-verify a business
+  // that already passed KYB (restriction / wind-down is a separate flag).
+  if (priorLocal === "approved" && status === "not_started") {
+    status = "approved"
   }
   const previousStatus = verificationStatusForKybEmail(priorLocal as VerificationStatus)
 
@@ -187,7 +192,10 @@ export async function syncGridBusinessKybToSupabase(input: {
     provider: "grid",
     status,
     rejectionReasons,
-    verifiedAt: status === "approved" ? verifiedAt : null,
+    verifiedAt:
+      status === "approved"
+        ? String(priorBiz?.kyb_verified_at ?? "").trim() || verifiedAt
+        : null,
     gridCustomerId: customerId,
   })
 

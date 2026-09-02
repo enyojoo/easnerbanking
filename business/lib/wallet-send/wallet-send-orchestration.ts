@@ -23,6 +23,12 @@ import {
   captureWalletSendFeeLegIfPending,
 } from "@/lib/processing-fee/capture-pending-processing-fee"
 import { destinationMetadata } from "@/lib/destination-reference"
+import {
+  assertOutboundComplianceOrThrow,
+  ledgerAmountToUsd,
+  OutboundComplianceError,
+  recordVelocityOutboundSpend,
+} from "@/lib/wallet-send-compliance"
 
 export type ExecuteWalletSendInput = {
   admin: SupabaseClient
@@ -45,7 +51,7 @@ export type ExecuteWalletSendResult =
       providerTransactionId: string
       txHash?: string | null
     }
-  | { ok: false; error: string }
+  | { ok: false; error: string; code?: string }
 
 const MARGIN_DUST = 0.000_001
 
@@ -177,6 +183,20 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
     reviewSnapshot: input.reviewSnapshot,
   })
 
+  try {
+    await assertOutboundComplianceOrThrow(input.admin, {
+      businessId: input.businessId,
+      rail: "stablecoin",
+      amount: session.total_debited,
+      currency: balanceCurrency,
+    })
+  } catch (err) {
+    if (err instanceof OutboundComplianceError) {
+      return { ok: false, error: err.message, code: err.code }
+    }
+    throw err
+  }
+
   if (executionModel === "direct_turnkey") {
     const asset = session.receive_asset === "EURC" ? "EURC" : "USDC"
     const marginAmount = session.margin_amount
@@ -234,6 +254,11 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
         currency: balanceCurrency,
         amount: session.total_debited,
       })
+      await recordVelocityOutboundSpend(
+        input.admin,
+        input.businessId,
+        ledgerAmountToUsd(session.total_debited, balanceCurrency),
+      )
 
       const occurredAt = new Date().toISOString()
       const upsert = await upsertLedgerTransaction(input.admin, {
@@ -337,6 +362,11 @@ export async function executeWalletSend(input: ExecuteWalletSendInput): Promise<
     currency: balanceCurrency,
     amount: session.total_debited,
   })
+  await recordVelocityOutboundSpend(
+    input.admin,
+    input.businessId,
+    ledgerAmountToUsd(session.total_debited, balanceCurrency),
+  )
 
   const feeLegAmount = Math.round((marginAmount + processingFee) * 1_000_000) / 1_000_000
   const bridgeProvider = "relay"

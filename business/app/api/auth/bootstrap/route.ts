@@ -456,10 +456,10 @@ export async function POST(request: Request) {
     (residencePersisted && (existingResidence || countryCode)) || existingResidence || null
 
   /**
-   * When DB `full_name` differs from JWT (e.g. edited in Supabase or profile API), align auth metadata
-   * so the mobile session can refresh to match without another profile save.
+   * When DB `full_name` differs from JWT (e.g. personal settings or KYB owner sync), align auth metadata
+   * so the session can refresh to match without another profile save.
    */
-  if (role === "individual" && dbFullNameTrim.length > 0) {
+  if (dbFullNameTrim.length > 0) {
     const jwtName = typeof user.user_metadata?.name === "string" ? user.user_metadata.name.trim() : ""
     if (jwtName !== dbFullNameTrim) {
       try {

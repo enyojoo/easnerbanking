@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
+import { ledgerAmountToUsd, maybeApplyVelocityControl } from "@/lib/wallet-send-compliance"
 import {
   extractNoahBankPayInEnrichment,
   isNoahBankOnrampOrchestrationOutLeg,
@@ -141,6 +142,14 @@ export async function tryCreditNoahBankOnrampPayInWallet(
     userId: input.businessId ? null : input.userId,
     currency: enrichment.walletLedgerCurrency,
     delta: enrichment.settledStablecoinAmount,
+  })
+
+  await maybeApplyVelocityControl(admin, {
+    businessId: input.businessId,
+    amountUsd: ledgerAmountToUsd(enrichment.settledStablecoinAmount, enrichment.walletLedgerCurrency),
+    source: "noah_bank_onramp",
+    transactionId: input.transactionId,
+    creditKey,
   })
 
   await admin

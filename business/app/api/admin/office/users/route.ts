@@ -3,6 +3,7 @@ import { parseCommunicationPreferences } from "@easner/shared"
 import { computeAccountRestrictionPhase } from "@easner/shared"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireOfficeAdmin } from "@/lib/api/admin-auth"
+import { loadActiveVelocityControlsByBusinessIds } from "@/lib/wallet-send-compliance"
 
 type UsersCursor = { createdAt: string; id: string }
 
@@ -160,6 +161,8 @@ export async function GET(request: Request) {
     }
   }
 
+  const velocityByBusiness = await loadActiveVelocityControlsByBusinessIds(admin, bizIds)
+
   const users = (rows ?? []).map((row) => {
     const r = row as UserRow & { communication_preferences?: unknown }
     const org = r.easner_business_id ? orgKybByBusinessId.get(r.easner_business_id) : undefined
@@ -182,6 +185,14 @@ export async function GET(request: Request) {
       accountRestrictionWindDownEndsAt: restriction?.windDownEndsAt ?? null,
       accountRestrictionSource:
         (restriction?.source as "grid" | "noah" | "office" | null | undefined) ?? null,
+      velocityLimitActive: Boolean(businessId && velocityByBusiness.get(businessId)),
+      velocityExpiresAt: businessId ? velocityByBusiness.get(businessId)?.expires_at ?? null : null,
+      velocityMaxSendUsd: businessId ? velocityByBusiness.get(businessId)?.max_send_usd ?? null : null,
+      velocitySentUsd: businessId ? velocityByBusiness.get(businessId)?.sent_usd ?? null : null,
+      velocityTriggerReason: businessId
+        ? velocityByBusiness.get(businessId)?.trigger_reason ?? null
+        : null,
+      velocityMode: businessId ? velocityByBusiness.get(businessId)?.mode ?? null : null,
       ...(org
         ? {
             grid_customer_id: org.grid_customer_id,

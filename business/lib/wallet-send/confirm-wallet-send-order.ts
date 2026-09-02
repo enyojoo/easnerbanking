@@ -18,6 +18,7 @@ import {
 import { isBridgeExecutionModel } from "./routing"
 import { isPayoutLockOnReviewEnabled } from "@/lib/payout/payout-lock-flags"
 import type { WalletSendQuoteResult } from "./wallet-send-quote"
+import { assertOutboundComplianceOrThrow } from "@/lib/wallet-send-compliance"
 
 function sessionBridgeMid(session: WalletSendSessionRow): number {
   return session.relay_mid
@@ -39,6 +40,13 @@ export async function confirmWalletSendOrder(input: {
   if (!session) {
     throw new Error("Wallet send quote expired or not found.")
   }
+
+  await assertOutboundComplianceOrThrow(input.admin, {
+    businessId: input.ctx.scope === "business" ? input.ctx.subjectBusinessId : null,
+    rail: "stablecoin",
+    amount: session.total_debited,
+    currency: session.source_balance_currency,
+  })
 
   let locked = session
   if (isPayoutLockOnReviewEnabled("wallet")) {

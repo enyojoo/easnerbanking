@@ -20,6 +20,10 @@ import {
   type SendDestinationRow,
 } from "@/lib/send-destination"
 import { resolveRecipientPayoutCountry } from "@/lib/terminal/recipient-sell-prepare"
+import {
+  assertOutboundComplianceOrThrow,
+  OutboundComplianceError,
+} from "@/lib/wallet-send-compliance"
 
 export interface SendOperationContext {
   admin: SupabaseClient
@@ -147,9 +151,16 @@ export async function lockSendDestination(
     paymentPurpose: input.purpose,
     recipient: input.destination,
   })
+  const sourceAmount = quote.totalDebited ?? quote.sendAmount ?? input.amount
+  await assertOutboundComplianceOrThrow(context.admin, {
+    businessId: context.businessId,
+    rail: "fiat_payout",
+    amount: sourceAmount,
+    currency: context.sourceCurrency,
+  })
   return {
     lockId: quote.lockId ?? null,
-    sourceAmount: quote.totalDebited ?? quote.sendAmount ?? input.amount,
+    sourceAmount,
     rawQuote: quote,
     payload: {
       kind: "fiat_payout",
@@ -210,12 +221,30 @@ export async function executeSendDestination(
       reviewSnapshot: input.reviewSnapshot ?? undefined,
     })
     if (!result.ok) {
-      return { state: "failed", code: "wallet_send_failed", message: result.error }
+      return {
+        state: "failed",
+        code: result.code || "wallet_send_failed",
+        message: result.error,
+      }
     }
     return {
       state: result.status === "settled" ? "settled" : "submitted",
       transactionId: result.easnerTransactionId,
     }
+  }
+
+  try {
+    await assertOutboundComplianceOrThrow(context.admin, {
+      businessId: context.businessId,
+      rail: "fiat_payout",
+      amount: input.locked.sourceAmount,
+      currency: context.sourceCurrency,
+    })
+  } catch (err) {
+    if (err instanceof OutboundComplianceError) {
+      return { state: "failed", code: err.code, message: err.message }
+    }
+    throw err
   }
 
   const fiatAmount = Number(payload.receiveAmount ?? input.amount)

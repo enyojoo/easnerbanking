@@ -4,6 +4,7 @@ import { turnkeyInboundAppliedBalanceDelta } from "@/lib/noah/credit-bank-onramp
 import { notifyGridBankDepositPayInSettledPush } from "@/lib/notifications/bank-deposit-settled-notify"
 import { mergeBankDepositLifecycleMetadata } from "@/lib/noah/bank-onramp-tx"
 import { suppressTurnkeyGridVaChainMirrorRow } from "./grid-va-turnkey-mirror"
+import { ledgerAmountToUsd, maybeApplyVelocityControl } from "@/lib/wallet-send-compliance"
 
 function applyLedgerScope<T extends { eq: (col: string, val: string) => T; is: (col: string, val: null) => T }>(
   query: T,
@@ -154,6 +155,14 @@ export async function tryCreditGridVaBankDepositWallet(
     userId: input.businessId ? null : input.userId,
     currency: input.ledgerCurrency,
     delta: input.creditAmount,
+  })
+
+  await maybeApplyVelocityControl(admin, {
+    businessId: input.businessId,
+    amountUsd: ledgerAmountToUsd(input.creditAmount, input.ledgerCurrency),
+    source: "grid_va",
+    transactionId: input.transactionId,
+    creditKey,
   })
 
   const chainSettledAt = input.solanaTxHash

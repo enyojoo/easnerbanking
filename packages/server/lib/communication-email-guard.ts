@@ -51,6 +51,7 @@ const TEMPLATE_PREFERENCE: Record<string, EmailPreferenceCategory> = {
   accountRestrictionClosed: "transactional",
   accountRestrictionLifted: "transactional",
   accountRestrictionOpsNotification: "internal",
+  walletSendVelocityOpsNotification: "internal",
 }
 
 export function emailTemplatePreferenceCategory(templateKey: string): EmailPreferenceCategory {

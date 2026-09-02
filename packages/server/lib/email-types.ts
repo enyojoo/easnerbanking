@@ -203,6 +203,24 @@ export interface AccountRestrictionOpsEmailData {
   officeUrl?: string
 }
 
+/** Internal compliance alert for outbound velocity / daily-limit algo events. */
+export interface WalletSendVelocityOpsEmailData {
+  event: "triggered" | "boosted" | "repeat"
+  subjectLabel: string
+  subjectId: string
+  businessName?: string
+  accountEmail?: string
+  ownerName?: string
+  triggerReason?: string
+  inboundTotalUsd?: number
+  maxSendUsd?: number
+  capPct?: number
+  mode?: string
+  expiresAt?: string | null
+  triggerCount?: number
+  officeUrl?: string
+}
+
 /** easner.com “Get the app” popup – download link email to a non-account visitor. */
 export interface AppDownloadLinkEmailData {
   email: string

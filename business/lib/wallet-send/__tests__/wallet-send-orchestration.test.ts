@@ -41,6 +41,14 @@ vi.mock("../fee-address", () => ({
 vi.mock("@/lib/processing-fee/capture-pending-processing-fee", () => ({
   captureWalletSendFeeLegIfPending: vi.fn().mockResolvedValue({ captured: false }),
 }))
+vi.mock("@/lib/wallet-send-compliance", () => ({
+  assertOutboundComplianceOrThrow: vi.fn(),
+  recordVelocityOutboundSpend: vi.fn(),
+  ledgerAmountToUsd: (amount: number) => amount,
+  OutboundComplianceError: class OutboundComplianceError extends Error {
+    code = "WALLET_SEND_DAILY_LIMIT"
+  },
+}))
 
 import { executeWalletSend } from "../wallet-send-orchestration"
 

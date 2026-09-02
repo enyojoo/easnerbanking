@@ -19,6 +19,7 @@ import { loadCorridorRouting } from "@/lib/payout-providers"
 import { requirePayoutProviderEnv } from "@/lib/payout-providers/require-provider-env"
 import type { PayoutEnvProviderId } from "@/lib/payout-providers/require-provider-env"
 import { asYcPayoutError } from "@/lib/yellowcard/payout-errors"
+import { outboundComplianceCatchResponse } from "@/lib/wallet-send-compliance"
 
 /** Lock balance payout order after user reaches review (Noah + YC + Grid). */
 export async function POST(request: Request) {
@@ -185,6 +186,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true, quote: locked.rawQuote })
   } catch (e) {
+    const compliance = outboundComplianceCatchResponse(e)
+    if (compliance) return compliance
     const ycError = asYcPayoutError(e)
     if (ycError) {
       console.warn("[payouts/confirm] yc payout error", ycError.code, ycError.message)

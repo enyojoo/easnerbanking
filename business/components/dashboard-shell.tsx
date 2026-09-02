@@ -33,7 +33,9 @@ import {
 } from "@/lib/compliance/prime-business-verification-flow"
 import { isSettingsVerificationFlowLocation } from "@/lib/compliance/cutover-comms"
 import { AccountRestrictionBanner } from "@/components/account-restriction-banner"
+import { WalletSendComplianceBanner } from "@/components/wallet-send-compliance-banner"
 import { useAccountRestriction } from "@/hooks/use-account-restriction"
+import { useWalletSendCompliance } from "@/hooks/use-wallet-send-compliance"
 
 function useHostedVerificationFlowOpen() {
   const [open, setOpen] = useState(false)
@@ -121,6 +123,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
   const showProfileChromeSkeleton = profileLoading && !profileHasData && !profileImageUrl
   const hostedVerificationFlowOpen = useHostedVerificationFlowOpen()
   const restrictionQuery = useAccountRestriction()
+  const sendComplianceQuery = useWalletSendCompliance(Boolean(businessId))
   const showTier1Banner =
     profileHasData &&
     !profileLoading &&
@@ -130,6 +133,15 @@ export function DashboardShell({ children }: DashboardShellProps) {
     !restrictionQuery.data?.active
   const showRestrictionBanner = Boolean(
     restrictionQuery.data?.active && restrictionQuery.data.phase === "wind_down",
+  )
+  const showSendComplianceBanner = Boolean(
+    businessId &&
+      !restrictionQuery.data?.active &&
+      sendComplianceQuery.data &&
+      (sendComplianceQuery.data.velocityEnforced ||
+        (sendComplianceQuery.data.stablecoin.dailyLimitUsd > 0 &&
+          sendComplianceQuery.data.stablecoin.dailyRemainingUsd <=
+            sendComplianceQuery.data.stablecoin.dailyLimitUsd * 0.1)),
   )
 
   useEffect(() => {
@@ -216,6 +228,12 @@ export function DashboardShell({ children }: DashboardShellProps) {
           {showRestrictionBanner && restrictionQuery.data ? (
             <AccountRestrictionBanner restriction={restrictionQuery.data} />
           ) : null}
+          {showSendComplianceBanner && sendComplianceQuery.data ? (
+            <WalletSendComplianceBanner
+              stablecoin={sendComplianceQuery.data.stablecoin}
+              velocityEnforced={sendComplianceQuery.data.velocityEnforced}
+            />
+          ) : null}
           {/*
             Page chrome contract: header + optional banner sit above main (shrink-0).
             Inner column is h-dvh overflow-hidden so only main scrolls on long pages
@@ -227,7 +245,11 @@ export function DashboardShell({ children }: DashboardShellProps) {
             style={
               {
                 "--dashboard-sticky-top":
-                  showTier1Banner || showRestrictionBanner ? "6.5rem" : "4rem",
+                  [showTier1Banner, showRestrictionBanner, showSendComplianceBanner].filter(Boolean).length > 1
+                    ? "9rem"
+                    : showTier1Banner || showRestrictionBanner || showSendComplianceBanner
+                      ? "6.5rem"
+                      : "4rem",
               } as React.CSSProperties
             }
             className="mx-auto min-h-0 w-full max-w-[1440px] flex-1 overflow-y-auto overscroll-contain px-8 pb-10 pt-6"

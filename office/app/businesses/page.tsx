@@ -16,7 +16,10 @@ import { businessTypeDisplayText } from "@/lib/business-type-label"
 import { OfficeQueryError } from "@/components/data/office-data-status"
 import { ProcessingFeeOverrideSection } from "@/components/platform-control/processing-fee-override-section"
 import { CheckoutFeeOverrideSection } from "@/components/platform-control/checkout-fee-override-section"
-import { VERIFICATION_STATUS_COPY, verificationStatusLabel } from "@easner/shared"
+import { VERIFICATION_STATUS_COPY, verificationStatusLabel, WALLET_SEND_COMPLIANCE_STATUS_LABEL } from "@easner/shared"
+import { WalletSendComplianceOfficePanel } from "@/components/wallet-send-compliance-office-panel"
+import { useQueryClient } from "@tanstack/react-query"
+import { officeKeys } from "@/lib/query/keys"
 
 /** Mirrors `public.businesses` (+ owner fields from admin API). */
 type BusinessRow = {
@@ -49,6 +52,12 @@ type BusinessRow = {
   accountRestrictionPhase?: "wind_down" | "locked" | null
   accountRestrictionWindDownEndsAt?: string | null
   accountRestrictionSource?: "grid" | "noah" | "office" | null
+  velocityLimitActive?: boolean
+  velocityExpiresAt?: string | null
+  velocityMaxSendUsd?: number | null
+  velocitySentUsd?: number | null
+  velocityTriggerReason?: string | null
+  velocityMode?: string | null
 }
 
 function displayText(v: string | null | undefined): string {
@@ -106,22 +115,30 @@ function KybBadge({ rawStatus }: { rawStatus: string }) {
 function BusinessKybStatusBadge({
   verificationStatus,
   accountRestrictionPhase,
+  velocityLimitActive,
 }: {
   verificationStatus?: string | null
   accountRestrictionPhase?: "wind_down" | "locked" | null
+  velocityLimitActive?: boolean
 }) {
-  if (accountRestrictionPhase === "wind_down") {
-    return <Badge variant="oxblood">Restricted</Badge>
-  }
-  if (accountRestrictionPhase === "locked") {
-    return <Badge variant="oxblood">Closed</Badge>
-  }
-  return <KybBadge rawStatus={verificationStatus || "not_started"} />
+  return (
+    <span className="inline-flex flex-wrap items-center justify-center gap-1">
+      {accountRestrictionPhase === "wind_down" ? (
+        <Badge variant="oxblood">Restricted</Badge>
+      ) : accountRestrictionPhase === "locked" ? (
+        <Badge variant="oxblood">Closed</Badge>
+      ) : (
+        <KybBadge rawStatus={verificationStatus || "not_started"} />
+      )}
+      {velocityLimitActive ? <Badge variant="amber">{WALLET_SEND_COMPLIANCE_STATUS_LABEL}</Badge> : null}
+    </span>
+  )
 }
 
 function BusinessesPageInner() {
   const searchParams = useSearchParams()
   const highlightBusinessId = searchParams.get("highlight")
+  const queryClient = useQueryClient()
 
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedBusiness, setSelectedBusiness] = useState<BusinessRow | null>(null)
@@ -303,6 +320,7 @@ function BusinessesPageInner() {
                           <BusinessKybStatusBadge
                             verificationStatus={o.verification_status}
                             accountRestrictionPhase={o.accountRestrictionPhase}
+                            velocityLimitActive={o.velocityLimitActive}
                           />
                         </TableCell>
                         <TableCell className="text-center">
@@ -441,6 +459,7 @@ function BusinessesPageInner() {
                         <BusinessKybStatusBadge
                           verificationStatus={selectedBusiness.verification_status}
                           accountRestrictionPhase={selectedBusiness.accountRestrictionPhase}
+                          velocityLimitActive={selectedBusiness.velocityLimitActive}
                         />
                       </div>
                       <DetailRow label="Noah customer ID" mono>
@@ -458,6 +477,19 @@ function BusinessesPageInner() {
                   />
 
                   <CheckoutFeeOverrideSection businessId={selectedBusiness.id} />
+
+                  <WalletSendComplianceOfficePanel
+                    businessId={selectedBusiness.id}
+                    velocityLimitActive={selectedBusiness.velocityLimitActive}
+                    velocityExpiresAt={selectedBusiness.velocityExpiresAt}
+                    velocityMaxSendUsd={selectedBusiness.velocityMaxSendUsd}
+                    velocitySentUsd={selectedBusiness.velocitySentUsd}
+                    velocityTriggerReason={selectedBusiness.velocityTriggerReason}
+                    velocityMode={selectedBusiness.velocityMode}
+                    onChanged={() => {
+                      void queryClient.invalidateQueries({ queryKey: officeKeys.businesses() })
+                    }}
+                  />
 
                   <div>
                     <label className="text-sm font-medium text-gray-900">Extra account currencies</label>

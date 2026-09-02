@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
+import { maybeApplyVelocityControl } from "@/lib/wallet-send-compliance"
 
 /** Credit wallet + settle Grid fund-balance pay-in on INCOMING webhook. */
 export async function creditGridFundBalanceFromWebhook(
@@ -46,6 +47,14 @@ export async function creditGridFundBalanceFromWebhook(
       updated_at: now,
     })
   }
+
+  await maybeApplyVelocityControl(admin, {
+    businessId,
+    amountUsd: usdCredit,
+    source: "grid_fund_balance",
+    transactionId: input.transactionId,
+    creditKey: `grid_fund_balance:${input.transferId}`,
+  })
 
   const { data: tx } = await admin
     .from("transactions")

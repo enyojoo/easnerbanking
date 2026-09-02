@@ -17,6 +17,7 @@ import { selectProviderForCorridor } from "@/lib/payout-providers"
 import { requirePayoutProviderEnv } from "@/lib/payout-providers/require-provider-env"
 import { sendDestinationFromRow } from "@/lib/send-destination"
 import { executeSendDestination } from "@/lib/send-destination-operations"
+import { outboundComplianceSendFailureResponse } from "@/lib/wallet-send-compliance"
 
 type TransferRequest = {
   amount?: string | number
@@ -247,6 +248,8 @@ export async function POST(request: Request) {
     )
 
     if (result.state === "failed") {
+      const compliance = outboundComplianceSendFailureResponse(result)
+      if (compliance) return compliance
       if (result.message === "insufficient_balance") {
         return NextResponse.json(
           { error: "Insufficient balance for this payout." },

@@ -112,6 +112,16 @@ export async function persistVerificationStatus(
   }
 
   if (input.kind === "business" && input.businessId) {
+    if (input.status === "not_started") {
+      const { data: current } = await admin
+        .from("businesses")
+        .select("verification_status")
+        .eq("id", input.businessId)
+        .maybeSingle()
+      if (String(current?.verification_status ?? "").toLowerCase() === "approved") {
+        return
+      }
+    }
     const { error } = await admin.from("businesses").update(patch).eq("id", input.businessId)
     if (error) throw new Error(`persistVerificationStatus(business): ${error.message}`)
     return

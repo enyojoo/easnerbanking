@@ -19,6 +19,7 @@ import type {
   SecurityAlertEmailData,
   AccountRestrictionEmailData,
   AccountRestrictionOpsEmailData,
+  WalletSendVelocityOpsEmailData,
   TeamInviteEmailData,
   TeamMemberJoinedEmailData,
   PayrollEasetagInviteEmailData,
@@ -749,6 +750,7 @@ If you have questions, contact Easner support: ${EASNER_CONTACT_URL}`
   },
 
   accountRestrictionOpsNotification: accountRestrictionOpsNotificationTemplate(),
+  walletSendVelocityOpsNotification: walletSendVelocityOpsNotificationTemplate(),
 
   passwordChanged: securityTemplate("password_changed"),
   passwordResetCompleted: securityTemplate("password_reset_completed"),
@@ -1041,6 +1043,59 @@ function accountRestrictionOpsNotificationTemplate(): EmailTemplate {
             : `\nEmail: ${data.accountEmail}`
       }
       t += `\n\n${officeUrl}`
+      return t
+    },
+  }
+}
+
+function walletSendVelocityOpsEventLabel(event: WalletSendVelocityOpsEmailData["event"]): string {
+  if (event === "boosted") return "velocity cap tightened"
+  if (event === "repeat") return "repeat velocity trigger"
+  return "velocity trigger"
+}
+
+function walletSendVelocityOpsNotificationTemplate(): EmailTemplate {
+  return {
+    subject: (data: WalletSendVelocityOpsEmailData) =>
+      `Outbound velocity – ${walletSendVelocityOpsEventLabel(data.event)} – ${data.subjectLabel}`,
+    preheader: (data: WalletSendVelocityOpsEmailData) =>
+      `${data.subjectLabel}: ${walletSendVelocityOpsEventLabel(data.event)} (${data.mode || "shadow"}).`,
+    html: (data: WalletSendVelocityOpsEmailData) => {
+      const officeUrl =
+        data.officeUrl ||
+        `${process.env.NEXT_PUBLIC_OFFICE_URL || "https://bk.easner.com"}/businesses?highlight=${encodeURIComponent(data.subjectId)}`
+      const content = `
+        <p class="confirmation-text">
+          <strong>${escapeHtmlText(data.subjectLabel)}</strong> hit an outbound velocity event:
+          <strong>${escapeHtmlText(walletSendVelocityOpsEventLabel(data.event))}</strong>.
+        </p>
+        <p class="confirmation-text">Reason: ${escapeHtmlText(data.triggerReason || "n/a")}</p>
+        <p class="confirmation-text">Inbound total: $${escapeHtmlText(String(data.inboundTotalUsd ?? 0))} · Cap: $${escapeHtmlText(String(data.maxSendUsd ?? 0))} (${escapeHtmlText(String(data.capPct ?? 20))}%) · Mode: ${escapeHtmlText(data.mode || "shadow")}</p>
+        ${data.expiresAt ? `<p class="confirmation-text">Expires: ${escapeHtmlText(data.expiresAt)}</p>` : ""}
+        ${data.event === "repeat" ? `<p class="confirmation-text">This business has ${escapeHtmlText(String(data.triggerCount ?? 0))} triggers in the last 30 days. Review in Office before applying a restriction — this is not automatic.</p>` : ""}
+        ${data.accountEmail ? `<p class="confirmation-text">Owner: ${escapeHtmlText(data.ownerName ? `${data.ownerName} (${data.accountEmail})` : data.accountEmail)}</p>` : ""}
+        <p class="confirmation-text">Business ID: ${escapeHtmlText(data.subjectId)}</p>
+      `
+      return generateBaseEmailTemplate(
+        "Outbound velocity",
+        "",
+        content,
+        { text: "View in Office", url: officeUrl },
+        { audience: "business", showPreferencesLink: false },
+      )
+    },
+    text: (data: WalletSendVelocityOpsEmailData) => {
+      const officeUrl =
+        data.officeUrl ||
+        `${process.env.NEXT_PUBLIC_OFFICE_URL || "https://bk.easner.com"}/businesses?highlight=${encodeURIComponent(data.subjectId)}`
+      let t = `${data.subjectLabel} hit an outbound velocity event: ${walletSendVelocityOpsEventLabel(data.event)}.\n`
+      t += `Reason: ${data.triggerReason || "n/a"}\n`
+      t += `Inbound: $${data.inboundTotalUsd ?? 0} · Cap: $${data.maxSendUsd ?? 0} (${data.capPct ?? 20}%) · Mode: ${data.mode || "shadow"}\n`
+      if (data.expiresAt) t += `Expires: ${data.expiresAt}\n`
+      if (data.event === "repeat") {
+        t += `Triggers in 30 days: ${data.triggerCount ?? 0}. Review in Office — restriction is not automatic.\n`
+      }
+      t += `Business ID: ${data.subjectId}\n${officeUrl}`
       return t
     },
   }

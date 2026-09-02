@@ -11,6 +11,9 @@ vi.mock("../wallet-send-session", () => ({
   getWalletSendSession: (...args: unknown[]) => getWalletSendSession(...args),
   lockWalletSendSession: (...args: unknown[]) => lockWalletSendSession(...args),
 }))
+vi.mock("@/lib/wallet-send-compliance", () => ({
+  assertOutboundComplianceOrThrow: vi.fn(),
+}))
 
 import { confirmWalletSendOrder } from "../confirm-wallet-send-order"
 

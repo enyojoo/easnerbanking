@@ -4,9 +4,10 @@ import {
   isAccountRestrictionFetchError,
   isFatalQueryFailure,
   isTransientNetworkError,
+  isWalletSendComplianceFetchError,
 } from "./fetch-errors"
 import { ApiError } from "./api-client"
-import { ACCOUNT_RESTRICTED_CODE } from "@easner/shared"
+import { ACCOUNT_RESTRICTED_CODE, WALLET_SEND_DAILY_LIMIT_CODE } from "@easner/shared"
 
 describe("fetch-errors", () => {
   it("detects transient browser network failures", () => {
@@ -26,6 +27,15 @@ describe("fetch-errors", () => {
       isAccountRestrictionFetchError(new ApiError("Deposits blocked", 403, ACCOUNT_RESTRICTED_CODE, {})),
     ).toBe(true)
     expect(isAccountRestrictionFetchError(new ApiError("Nope", 403, "OTHER", {}))).toBe(false)
+  })
+
+  it("detects wallet send compliance API errors", () => {
+    expect(
+      isWalletSendComplianceFetchError(
+        new ApiError("Daily limit", 403, WALLET_SEND_DAILY_LIMIT_CODE, {}),
+      ),
+    ).toBe(true)
+    expect(isWalletSendComplianceFetchError(new ApiError("Nope", 403, "OTHER", {}))).toBe(false)
   })
 
   it("only treats empty-cache failures as fatal", () => {

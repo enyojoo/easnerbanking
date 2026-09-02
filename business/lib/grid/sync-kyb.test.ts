@@ -371,6 +371,38 @@ describe("syncGridBusinessKybToSupabase", () => {
     )
   })
 
+  it("does not un-verify an approved business when Grid reports a new UNVERIFIED shell", async () => {
+    mockFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: {
+              verification_status: "approved",
+              kyb_verified_at: "2026-08-27T22:06:11.647+00:00",
+            },
+          }),
+        }),
+      }),
+      update: mockBusinessUpdate,
+    })
+    mockGridReads({ kybStatus: "UNVERIFIED" })
+
+    await syncGridBusinessKybToSupabase({
+      admin: mockAdmin as never,
+      businessId: "biz-1",
+      userId: "user-1",
+      customerId: "Customer:abc",
+    })
+
+    expect(mockPersistVerificationStatus).toHaveBeenCalledWith(
+      mockAdmin,
+      expect.objectContaining({
+        status: "approved",
+        verifiedAt: "2026-08-27T22:06:11.647+00:00",
+      }),
+    )
+  })
+
   it("sends KYB status emails on transitions", async () => {
     mockGridReads({ kybStatus: "APPROVED" })
 

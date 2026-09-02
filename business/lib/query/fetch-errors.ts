@@ -1,4 +1,4 @@
-import { ACCOUNT_LOCKED_CODE, ACCOUNT_RESTRICTED_CODE } from "@easner/shared"
+import { ACCOUNT_LOCKED_CODE, ACCOUNT_RESTRICTED_CODE, isWalletSendComplianceCode } from "@easner/shared"
 import { ApiError } from "@/lib/query/api-client"
 
 /** True when an API response reflects an account restriction (deposits/send blocked). */
@@ -9,6 +9,13 @@ export function isAccountRestrictionFetchError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false
   const code = (err as { code?: string | null }).code
   return code === ACCOUNT_RESTRICTED_CODE || code === ACCOUNT_LOCKED_CODE
+}
+
+/** True when send was blocked by daily or velocity limits. */
+export function isWalletSendComplianceFetchError(err: unknown): boolean {
+  if (err instanceof ApiError) return isWalletSendComplianceCode(err.code)
+  if (!err || typeof err !== "object") return false
+  return isWalletSendComplianceCode((err as { code?: string | null }).code)
 }
 
 /** Detect browser/network failures that should retry or degrade gracefully. */

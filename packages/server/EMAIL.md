@@ -32,7 +32,10 @@ Welcome, KYB/KYC, team invite, security, and invoice emails are always subject t
 | `SENDGRID_FROM_EMAIL_RECEIPTS` | Optional | Checkout / Payment Link receipt from (default **`receipt@easner.com`**). Not required in env; same pattern as invoices. |
 | `EASNER_RECEIPT_TIMEZONE` | Optional | IANA zone for checkout/link receipt “When” (else Stripe Dashboard timezone, else UTC) |
 | `SENDGRID_REPLY_TO` | Recommended | Reply-to / support routing |
-| `EASNER_COMPLIANCE_OPS_EMAIL` | Optional | Internal KYB/KYC lifecycle alerts (default **`compliance@easner.com`**; `EASNER_KYB_OPS_EMAIL` still supported) |
+| `EASNER_COMPLIANCE_OPS_EMAIL` | Optional | Internal KYB/KYC lifecycle alerts and outbound velocity ops (default **`compliance@easner.com`**; `EASNER_KYB_OPS_EMAIL` still supported) |
+| `WALLET_SEND_VELOCITY_SHADOW_MODE` | Optional | Default **false** (velocity caps outbound sends). Set `true` locally to log/email triggers without capping |
+| `WALLET_SEND_DAILY_LIMIT_YOUNG_USD` / `_STANDARD_USD` / `_ESTABLISHED_USD` | Optional | Rolling 24h stablecoin send tiers |
+| `FIAT_PAYOUT_DAILY_LIMIT_USD` | Optional | Rolling 24h fiat payout cap (default 100000) |
 | `LEDGER_TRANSACTION_EMAIL_ENABLED` | Optional | Default **on**. Set `false` to disable ledger transaction emails platform-wide |
 | `NEXT_PUBLIC_MOBILE_APP_URL` | Optional | Personal email / universal-link origin (default `https://app.easner.com`) |
 | `EASNER_APP_STORE_URL` | Optional | iOS App Store listing for download emails / marketing |

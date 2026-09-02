@@ -42,6 +42,12 @@ export type OfficeUserRow = {
   accountRestrictionPhase?: "wind_down" | "locked" | null
   accountRestrictionWindDownEndsAt?: string | null
   accountRestrictionSource?: "grid" | "noah" | "office" | null
+  velocityLimitActive?: boolean
+  velocityExpiresAt?: string | null
+  velocityMaxSendUsd?: number | null
+  velocitySentUsd?: number | null
+  velocityTriggerReason?: string | null
+  velocityMode?: string | null
 }
 
 /**
@@ -105,6 +111,13 @@ export async function fetchOfficeUsersDirectory(): Promise<OfficeUserRow[]> {
         (row.accountRestrictionWindDownEndsAt as string | null | undefined) ?? null,
       accountRestrictionSource:
         (row.accountRestrictionSource as OfficeUserRow["accountRestrictionSource"]) ?? null,
+      velocityLimitActive: Boolean(row.velocityLimitActive),
+      velocityExpiresAt: (row.velocityExpiresAt as string | null | undefined) ?? null,
+      velocityMaxSendUsd:
+        typeof row.velocityMaxSendUsd === "number" ? row.velocityMaxSendUsd : null,
+      velocitySentUsd: typeof row.velocitySentUsd === "number" ? row.velocitySentUsd : null,
+      velocityTriggerReason: (row.velocityTriggerReason as string | null | undefined) ?? null,
+      velocityMode: (row.velocityMode as string | null | undefined) ?? null,
     } as OfficeUserRow
   })
 }

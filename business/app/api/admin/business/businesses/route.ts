@@ -3,6 +3,7 @@ import { computeAccountRestrictionPhase } from "@easner/shared"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireOfficeAdmin } from "@/lib/api/admin-auth"
 import { batchResolveBusinessOwners } from "@/lib/admin/org-owner-batch"
+import { loadActiveVelocityControlsByBusinessIds } from "@/lib/wallet-send-compliance"
 
 export async function GET(request: Request) {
   const auth = await requireOfficeAdmin(request)
@@ -47,9 +48,12 @@ export async function GET(request: Request) {
     }
   }
 
+  const velocityByBusiness = await loadActiveVelocityControlsByBusinessIds(admin, ids)
+
   const businesses = list.map((o: { id: string }) => {
     const oi = owners.get(o.id) ?? { owner_user_id: null, owner_email: null, owner_name: null }
     const restriction = restrictionByBusiness.get(o.id)
+    const velocity = velocityByBusiness.get(o.id)
     return {
       ...o,
       ...oi,
@@ -57,6 +61,12 @@ export async function GET(request: Request) {
       accountRestrictionWindDownEndsAt: restriction?.windDownEndsAt ?? null,
       accountRestrictionSource:
         (restriction?.source as "grid" | "noah" | "office" | null | undefined) ?? null,
+      velocityLimitActive: Boolean(velocity),
+      velocityExpiresAt: velocity?.expires_at ?? null,
+      velocityMaxSendUsd: velocity?.max_send_usd ?? null,
+      velocitySentUsd: velocity?.sent_usd ?? null,
+      velocityTriggerReason: velocity?.trigger_reason ?? null,
+      velocityMode: velocity?.mode ?? null,
     }
   })
 

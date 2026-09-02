@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/app/api/noah/_helpers"
+import { requireAccountAllowsForUser } from "@/lib/account-restriction"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { isWalletSendEnabled } from "@/lib/relay/config"
@@ -7,6 +8,7 @@ import { buildWalletSendQuote } from "@/lib/wallet-send/wallet-send-quote"
 import { validateWalletRecipientForSend, type WalletRecipientRow } from "@/lib/wallet-send/validate-recipient"
 import { resolveTurnkeyAddressForNoahPair } from "@/lib/wallet/resolve-wallet-owner"
 import { settlementAssetForBalance } from "@/lib/wallet-send/routing"
+import { outboundComplianceCatchResponse } from "@/lib/wallet-send-compliance"
 
 export const runtime = "nodejs"
 
@@ -16,6 +18,10 @@ export async function POST(request: Request) {
   if (!isWalletSendEnabled()) {
     return NextResponse.json({ error: "wallet_send_disabled" }, { status: 503 })
   }
+
+  const admin = createSupabaseAdmin()
+  const restricted = await requireAccountAllowsForUser(admin, auth.user.id, "send")
+  if (restricted instanceof NextResponse) return restricted
 
   const acc = await resolveNoahAccountContext(request, auth.user.id, undefined, "write")
   if (!acc.ok) return acc.response
@@ -33,7 +39,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "recipientId is required" }, { status: 400 })
   }
 
-  const admin = createSupabaseAdmin()
   const { data: recipient, error } = await admin
     .from("recipients")
     .select("*")
@@ -93,6 +98,8 @@ export async function POST(request: Request) {
     })
     return NextResponse.json({ ok: true, quote })
   } catch (e) {
+    const compliance = outboundComplianceCatchResponse(e)
+    if (compliance) return compliance
     const message = e instanceof Error ? e.message : "quote_failed"
     console.error("[wallet_send_quote]", {
       recipientId,

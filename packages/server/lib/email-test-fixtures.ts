@@ -250,6 +250,22 @@ export const accountRestrictionOpsNotificationFixture = {
   officeUrl: "https://bk.easner.com/users?highlight=user-123",
 }
 
+export const walletSendVelocityOpsNotificationFixture = {
+  event: "triggered" as const,
+  subjectLabel: "Acme LLC",
+  subjectId: "biz-123",
+  businessName: "Acme LLC",
+  accountEmail: "owner@example.com",
+  ownerName: "Alex",
+  triggerReason: "single_inbound_10k",
+  inboundTotalUsd: 50000,
+  maxSendUsd: 10000,
+  capPct: 20,
+  mode: "enforce",
+  expiresAt: "Sep 3, 2026, 12:00 PM",
+  officeUrl: "https://bk.easner.com/businesses?highlight=biz-123",
+}
+
 /** Template key → fixture data for render tests */
 export const templateFixtures: Record<string, unknown> = {
   appDownloadLink: appDownloadLinkFixture,
@@ -288,6 +304,7 @@ export const templateFixtures: Record<string, unknown> = {
   accountRestrictionClosed: accountRestrictionClosedFixture,
   accountRestrictionLifted: accountRestrictionLiftedFixture,
   accountRestrictionOpsNotification: accountRestrictionOpsNotificationFixture,
+  walletSendVelocityOpsNotification: walletSendVelocityOpsNotificationFixture,
   passwordChanged: securityPasswordChangedFixture,
   passwordResetCompleted: { ...securityPasswordChangedFixture, alertType: "password_reset_completed" as const },
   mfaEnabled: { ...securityPasswordChangedFixture, alertType: "mfa_enabled" as const },

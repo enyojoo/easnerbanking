@@ -65,6 +65,9 @@ export async function POST(request: Request) {
   })
 
   if (!result.ok) {
+    if (result.code) {
+      return NextResponse.json({ ok: false, error: result.error, code: result.code }, { status: 403 })
+    }
     if (result.error === "quote_expired") {
       console.warn("[wallet_send_execute] quote_expired", {
         userId: auth.user.id,

@@ -4,6 +4,11 @@ import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { requireAccountAllowsForUser } from "@/lib/account-restriction"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { createTurnkeySend } from "@/lib/turnkey/send"
+import {
+  ledgerAmountToUsd,
+  recordVelocityOutboundSpend,
+  requireOutboundComplianceAllows,
+} from "@/lib/wallet-send-compliance"
 
 export const runtime = "nodejs"
 
@@ -37,6 +42,16 @@ export async function POST(request: Request) {
     )
   }
 
+  const businessId =
+    accountCtx.ctx.scope === "business" ? accountCtx.ctx.subjectBusinessId : null
+  const amountUsd = ledgerAmountToUsd(amount, asset)
+  const compliance = await requireOutboundComplianceAllows(admin, {
+    businessId,
+    rail: "stablecoin",
+    amountUsd,
+  })
+  if (compliance instanceof NextResponse) return compliance
+
   try {
     const created = await createTurnkeySend(admin, {
       ctx: accountCtx.ctx,
@@ -45,6 +60,11 @@ export async function POST(request: Request) {
       destinationAddress,
       amount,
     })
+    if (businessId && created.status !== "failed") {
+      await recordVelocityOutboundSpend(admin, businessId, amountUsd).catch((err) => {
+        console.error("[wallet-send-compliance] legacy send velocity spend failed:", err)
+      })
+    }
     return NextResponse.json({
       ok: true,
       provider: "turnkey",

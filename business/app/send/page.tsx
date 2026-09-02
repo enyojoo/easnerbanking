@@ -46,6 +46,7 @@ import {
   RECIPIENT_HOLDER_ADDRESS_REQUIRED_BACK_CTA,
   type NoahWalletRateRow,
   accountRestrictionSendBlockedCopy,
+  sendComplianceContinueBlockedCopy,
 } from "@easner/shared"
 import { getCurrencySymbol, getSendAmountFieldSymbol } from "@/lib/utils"
 import { fetchWithSession } from "@/lib/fetch-with-session"
@@ -156,6 +157,7 @@ import type { WalletSendQuoteResult } from "@/lib/wallet-send/wallet-send-quote"
 import { warmYcMetadataCacheOnContinue } from "@/lib/yellowcard/warm-yc-metadata-cache"
 import { usePayoutMinEnforcement } from "@/hooks/use-payout-min-enforcement"
 import { useAccountRestriction } from "@/hooks/use-account-restriction"
+import { useWalletSendCompliance } from "@/hooks/use-wallet-send-compliance"
 import { useYcPayoutMinEnforcement } from "@/hooks/use-yc-payout-min-enforcement"
 import { useYcCrossBorderSendMinEnforcement } from "@/hooks/use-yc-cross-border-send-min-enforcement"
 import {
@@ -212,6 +214,7 @@ export default function SendPage() {
     useBusinessProfile()
   const restrictionQuery = useAccountRestriction()
   const accountRestricted = Boolean(restrictionQuery.data?.active)
+  const sendComplianceQuery = useWalletSendCompliance(Boolean(businessId))
   const { accountRows: sourceAccounts } = useBusinessAccountRows()
   const [recipient, setRecipient] = useState<Beneficiary | null>(null)
   const [draftRecipientPersist, setDraftRecipientPersist] = useState<RecipientUpsertInput | undefined>()
@@ -1255,6 +1258,40 @@ export default function SendPage() {
   const walletReceiveBelowMin =
     isWalletRecipient && receiveAmount > 0 && receiveAmount < walletMinReceive
 
+  const complianceContinueMessage = useMemo(() => {
+    if (
+      accountRestricted ||
+      isEasetagRecipient ||
+      !isBalanceSource ||
+      !businessId ||
+      !sendComplianceQuery.data ||
+      previewBalanceDebitAmount <= 0
+    ) {
+      return null
+    }
+    const isWalletSend = isWalletRecipient
+    const isFiatPayout = Boolean(recipient && !isWalletRecipient && !isEasetagRecipient)
+    if (!isWalletSend && !isFiatPayout) return null
+    return sendComplianceContinueBlockedCopy({
+      stablecoin: sendComplianceQuery.data.stablecoin,
+      fiatPayout: sendComplianceQuery.data.fiatPayout,
+      velocityEnforced: sendComplianceQuery.data.velocityEnforced,
+      amountUsd: previewBalanceDebitAmount,
+      isWalletSend,
+    })
+  }, [
+    accountRestricted,
+    isEasetagRecipient,
+    isBalanceSource,
+    businessId,
+    sendComplianceQuery.data,
+    previewBalanceDebitAmount,
+    isWalletRecipient,
+    recipient,
+  ])
+
+  const complianceBlocksContinue = Boolean(complianceContinueMessage)
+
   const canContinueBalance =
     recipient !== null &&
     displayReceiveAmount > 0 &&
@@ -1267,6 +1304,7 @@ export default function SendPage() {
     payoutCorridorExecutable &&
     !payoutReceiveBelowMin &&
     !walletReceiveBelowMin &&
+    !complianceBlocksContinue &&
     (!needsProfileBeforeEasenetSend || (hasData && !profileLoading))
 
   const canContinueOtherCurrency =
@@ -2104,6 +2142,22 @@ export default function SendPage() {
 
       {accountRestricted && recipient && canContinue ? (
         <p className="text-sm text-destructive">{accountRestrictionSendBlockedCopy()}</p>
+      ) : null}
+      {!accountRestricted && complianceContinueMessage && recipient && displayReceiveAmount > 0 ? (
+        <p className="text-sm text-destructive">{complianceContinueMessage}</p>
+      ) : null}
+      {!accountRestricted &&
+      !complianceBlocksContinue &&
+      !isEasetagRecipient &&
+      isWalletRecipient &&
+      sendComplianceQuery.data?.stablecoin &&
+      (sendComplianceQuery.data.velocityEnforced ||
+        sendComplianceQuery.data.stablecoin.dailyUsedUsd > 0) ? (
+        <p className="text-sm text-muted-foreground">
+          {sendComplianceQuery.data.velocityEnforced
+            ? `External stablecoin remaining: $${Math.round(sendComplianceQuery.data.stablecoin.remainingUsd).toLocaleString()}.`
+            : `Daily external transfer remaining: $${Math.round(sendComplianceQuery.data.stablecoin.dailyRemainingUsd).toLocaleString()} of $${Math.round(sendComplianceQuery.data.stablecoin.dailyLimitUsd).toLocaleString()}.`}
+        </p>
       ) : null}
 
       <Button

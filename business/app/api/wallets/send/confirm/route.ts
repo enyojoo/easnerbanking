@@ -6,6 +6,7 @@ import { requireAccountAllowsForUser } from "@/lib/account-restriction"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { isWalletSendEnabled } from "@/lib/relay/config"
 import { confirmWalletSendOrder } from "@/lib/wallet-send/confirm-wallet-send-order"
+import { outboundComplianceCatchResponse } from "@/lib/wallet-send-compliance"
 
 /** Lock wallet send session for review (Turnkey direct + Relay bridge). */
 export async function POST(request: Request) {
@@ -50,6 +51,8 @@ export async function POST(request: Request) {
       quote: { ...quote, quotePhase: "locked", requiresConfirm: false, lockId: formSessionId },
     })
   } catch (e) {
+    const compliance = outboundComplianceCatchResponse(e)
+    if (compliance) return compliance
     const msg = e instanceof Error ? e.message : "Wallet send confirm failed"
     return NextResponse.json({ ok: false, error: msg }, { status: 400 })
   }

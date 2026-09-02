@@ -9,6 +9,7 @@ export type {
   SecurityAlertEmailData,
   AccountRestrictionEmailData,
   AccountRestrictionOpsEmailData,
+  WalletSendVelocityOpsEmailData,
 } from "./email-types"
 export type { EmailAudience } from "./email-audience"
 export { getEmailAudienceProfile, resolveEmailAudienceFromData } from "./email-audience"

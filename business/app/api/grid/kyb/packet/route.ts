@@ -6,13 +6,22 @@ import {
   type GridKybCompanyDraft,
 } from "@easner/shared"
 import { requireKybContext } from "../_context"
+import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import {
   ensureKybApplication,
   linkKybPeopleToGridOwnerErrors,
   listKybDocuments,
   listKybPeople,
+  mapKybPersonRow,
+  personWritePayload,
 } from "@/lib/grid/kyb-application-store"
 import { ensureGridBusinessCustomer, loadGridBusinessProfile } from "@/lib/grid/ensure-grid-business-customer"
+import {
+  emptyKybOwnerFromPersonal,
+  kybPersonNeedsPersonalPrefill,
+  mergeKybPersonFromPersonal,
+  personalOwnerPrefillFromUserRow,
+} from "@/lib/grid/prefill-kyb-owner-from-personal"
 
 function prefillCompanyFromProfile(
   company: GridKybCompanyDraft,
@@ -71,6 +80,51 @@ export async function GET(request: Request) {
       }),
   ])
   people = await linkKybPeopleToGridOwnerErrors(ctx.admin, people, application.last_errors)
+  try {
+    const ownerUserId = await resolveOrgOwnerUserId(ctx.admin, ctx.businessId, ctx.userId)
+    const { data: ownerRow } = await ctx.admin
+      .from("users")
+      .select(
+        "full_name,email,phone,date_of_birth,residence_country,kyc_address_street,kyc_address_city,kyc_address_state,kyc_address_post_code,kyc_address_country,kyc_id_type,kyc_id_number,kyc_id_issuing_country",
+      )
+      .eq("id", ownerUserId)
+      .maybeSingle()
+    const personal = personalOwnerPrefillFromUserRow(ownerRow as Record<string, unknown> | null)
+    if (personal.fullName || personal.email) {
+      if (people.length === 0) {
+        const seeded = emptyKybOwnerFromPersonal(personal)
+        if (seeded.firstName && seeded.lastName) {
+          const { data: created } = await ctx.admin
+            .from("business_kyb_people")
+            .insert(personWritePayload({ applicationId: application.id, businessId: ctx.businessId, person: seeded }))
+            .select("*")
+            .single()
+          if (created) people = [mapKybPersonRow(created as Record<string, unknown>, true)]
+        }
+      } else {
+        const person = people[0]
+        const merged = mergeKybPersonFromPersonal(person, personal)
+        if (kybPersonNeedsPersonalPrefill(person, merged)) {
+          const { data: updated } = await ctx.admin
+            .from("business_kyb_people")
+            .update(
+              personWritePayload({
+                applicationId: application.id,
+                businessId: ctx.businessId,
+                person: { ...person, ...merged },
+              }),
+            )
+            .eq("id", person.id)
+            .eq("application_id", application.id)
+            .select("*")
+            .single()
+          if (updated) people = [mapKybPersonRow(updated as Record<string, unknown>, true), ...people.slice(1)]
+        }
+      }
+    }
+  } catch (error) {
+    console.warn("[grid/kyb/packet] prefill owner from personal settings:", error)
+  }
   const peopleWithRoles = withRequiredKybOwnerRoles(people)
   if (peopleWithRoles[0] && peopleWithRoles[0].roles !== people[0]?.roles) {
     await ctx.admin

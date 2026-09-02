@@ -29,6 +29,10 @@ import {
 import { createWalletSendSession, WALLET_SEND_QUOTE_TTL_MS } from "./wallet-send-session"
 import { assertWalletSendFeeSolanaAddressConfigured } from "./fee-address"
 import { quoteCryptoProcessingFeeBps } from "@/lib/processing-fee/quote-processing-fee-bps"
+import {
+  assertOutboundComplianceOrThrow,
+  maybeApplyEarlyOutboundBooster,
+} from "@/lib/wallet-send-compliance"
 
 export type WalletSendQuoteResult = {
   receiveAmount: number
@@ -81,6 +85,10 @@ export async function buildWalletSendQuote(input: {
   const recipient = coerceWalletRecipientRow(input.recipient)
   const gate = validateWalletRecipientForSend(recipient)
   if (!gate.ok) throw new Error(gate.error)
+
+  void maybeApplyEarlyOutboundBooster(input.admin, input.businessId).catch((err) => {
+    console.error("[wallet-send-compliance] early outbound booster failed:", err)
+  })
 
   const sourceBalanceCurrency = input.sourceBalanceCurrency.trim().toUpperCase()
   if (sourceBalanceCurrency !== "USD" && sourceBalanceCurrency !== "EUR") {
@@ -240,6 +248,13 @@ export async function buildWalletSendQuote(input: {
   const formSessionId = randomUUID()
   const pricingQuoteId = randomUUID()
   const expiresAt = new Date(Date.now() + WALLET_SEND_QUOTE_TTL_MS).toISOString()
+
+  await assertOutboundComplianceOrThrow(input.admin, {
+    businessId: input.businessId,
+    rail: "stablecoin",
+    amount: pricing.totalDebited,
+    currency: sourceBalanceCurrency,
+  })
 
   await createWalletSendSession(input.admin, {
     form_session_id: formSessionId,

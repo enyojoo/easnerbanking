@@ -32,6 +32,12 @@ vi.mock("@/lib/wallet/resolve-wallet-owner", () => ({
 vi.mock("@/lib/wallet-send/routing", () => ({
   settlementAssetForBalance: vi.fn(() => "USDC"),
 }))
+vi.mock("@/lib/wallet-send-compliance", () => ({
+  assertOutboundComplianceOrThrow: vi.fn(),
+  OutboundComplianceError: class OutboundComplianceError extends Error {
+    code = "WALLET_SEND_DAILY_LIMIT"
+  },
+}))
 
 import { executeGridBalancePayout } from "@/lib/grid/balance-payout-execute"
 import { executeTurnkeyOfframpPayout } from "@/lib/noah/turnkey-offramp-orchestration"

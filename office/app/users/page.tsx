@@ -56,10 +56,12 @@ import {
   VERIFICATION_STATUS_COPY,
   verificationStatusLabel,
   accountRestrictionOfficeLiftBlockedCopy,
+  WALLET_SEND_COMPLIANCE_STATUS_LABEL,
 } from "@easner/shared"
 import { OfficeQueryError } from "@/components/data/office-data-status"
 import { OfficePageSkeleton } from "@/components/data/office-page-skeleton"
 import { ProcessingFeeOverrideSection } from "@/components/platform-control/processing-fee-override-section"
+import { WalletSendComplianceOfficePanel } from "@/components/wallet-send-compliance-office-panel"
 
 /** Mirrors `public.users` (+ `email_confirmed_at` merged from auth). */
 type UserData = OfficeUserRow
@@ -92,6 +94,11 @@ function verificationBadgeVariant(rawStatus: string): "emerald" | "amber" | "oxb
 function NoahVerificationBadge({ rawStatus }: { rawStatus: string }) {
   const label = verificationStatusLabel(rawStatus || null)
   return <Badge variant={verificationBadgeVariant(rawStatus)}>{label}</Badge>
+}
+
+function VelocityLimitBadge({ user }: { user: UserData }) {
+  if (!user.velocityLimitActive) return null
+  return <Badge variant="amber">{WALLET_SEND_COMPLIANCE_STATUS_LABEL}</Badge>
 }
 
 function AccountRestrictionBadge({ user }: { user: UserData }) {
@@ -662,7 +669,10 @@ export default function AdminUsersPage() {
                     </TableCell>
                     <TableCell className="text-center">{getAccountTypeBadge(user)}</TableCell>
                     <TableCell className="text-center">
-                      <UserOverviewStatusBadge user={user} />
+                      <span className="inline-flex flex-wrap items-center justify-center gap-1">
+                        <UserOverviewStatusBadge user={user} />
+                        <VelocityLimitBadge user={user} />
+                      </span>
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-2">
@@ -777,7 +787,10 @@ export default function AdminUsersPage() {
                                         {ver.showBusiness ? (
                                           <div className="flex justify-between gap-4 items-center">
                                             <span className="text-gray-600">Business verification</span>
-                                            <BusinessVerificationStatusBadge user={selectedUser} />
+                                            <span className="inline-flex flex-wrap items-center justify-end gap-1">
+                                              <BusinessVerificationStatusBadge user={selectedUser} />
+                                              <VelocityLimitBadge user={selectedUser} />
+                                            </span>
                                           </div>
                                         ) : null}
                                       </div>
@@ -909,6 +922,21 @@ export default function AdminUsersPage() {
                                             </Button>
                                             </>
                                           )}
+                                          {selectedUser.easner_business_id ? (
+                                            <WalletSendComplianceOfficePanel
+                                              businessId={selectedUser.easner_business_id}
+                                              userId={selectedUser.id}
+                                              velocityLimitActive={selectedUser.velocityLimitActive}
+                                              velocityExpiresAt={selectedUser.velocityExpiresAt}
+                                              velocityMaxSendUsd={selectedUser.velocityMaxSendUsd}
+                                              velocitySentUsd={selectedUser.velocitySentUsd}
+                                              velocityTriggerReason={selectedUser.velocityTriggerReason}
+                                              velocityMode={selectedUser.velocityMode}
+                                              onChanged={() => {
+                                                void queryClient.invalidateQueries({ queryKey: officeKeys.users() })
+                                              }}
+                                            />
+                                          ) : null}
                                         </div>
                                       </div>
                                       <div className="flex h-full flex-col rounded-lg border bg-muted/20 p-3">

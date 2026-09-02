@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
+import { ledgerAmountToUsd, maybeApplyVelocityControl } from "@/lib/wallet-send-compliance"
 import { findEasetagSettlementForChainSuppression, updateEasetagSettlementSettled, patchEasetagP2pChainSettlement } from "@/lib/ledger/easetag-settlement"
 import { suppressTurnkeyEasetagChainMirrorRow } from "@/lib/ledger/easetag-turnkey-mirror"
 import {
@@ -431,6 +432,18 @@ export async function applyTurnkeyInboundLedgerEvent(
       currency: input.currency,
       delta: signed,
     })
+    if (direction === "in" && input.amount > 0) {
+      await maybeApplyVelocityControl(admin, {
+        businessId,
+        amountUsd: ledgerAmountToUsd(input.amount, input.currency),
+        source: "on_chain",
+        transactionId: upsert.transactionId,
+        creditKey: input.providerTransactionId || txHash
+          ? `on_chain:${String(input.providerTransactionId || txHash)}`
+          : null,
+        metadata: { asset: input.asset, chain: input.chain },
+      })
+    }
     const priorMeta =
       upsert.transactionId != null
         ? (

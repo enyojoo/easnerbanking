@@ -291,10 +291,13 @@ export async function persistKybApplicationFromGrid(input: {
     localStatus: input.localStatus,
   })
   const hasVerification = Boolean(input.verificationStatus || input.verificationId)
-  const status =
+  let status =
     application.status === "draft" && !hasVerification && inferred !== "approved" && inferred !== "rejected"
       ? "draft"
       : inferred
+  if (application.status === "approved" && status === "draft") {
+    status = "approved"
+  }
   const now = new Date().toISOString()
   // Do not stamp updated_at here. Polls used to set it equal to last_synced_at,
   // which made complete skip PATCHing company fields Grid still did not have.
