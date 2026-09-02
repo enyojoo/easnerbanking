@@ -1265,6 +1265,7 @@ export default function SendPage() {
       !isBalanceSource ||
       !businessId ||
       !sendComplianceQuery.data ||
+      !sendComplianceQuery.data.platformEnabled ||
       previewBalanceDebitAmount <= 0
     ) {
       return null
@@ -2150,6 +2151,7 @@ export default function SendPage() {
       !complianceBlocksContinue &&
       !isEasetagRecipient &&
       isWalletRecipient &&
+      sendComplianceQuery.data?.platformEnabled &&
       sendComplianceQuery.data?.stablecoin &&
       (sendComplianceQuery.data.velocityEnforced ||
         sendComplianceQuery.data.stablecoin.dailyUsedUsd > 0) ? (

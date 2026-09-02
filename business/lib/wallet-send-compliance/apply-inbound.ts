@@ -7,6 +7,7 @@ import {
   upsertVelocityControl,
 } from "./velocity-store"
 import { maybeNotifyRepeatEscalation, notifyVelocityTrigger } from "./notify-velocity"
+import { isWalletSendCompliancePlatformEnabled } from "./platform-enabled"
 
 export async function maybeApplyVelocityControl(
   admin: SupabaseClient,
@@ -21,6 +22,7 @@ export async function maybeApplyVelocityControl(
 ): Promise<void> {
   const businessId = String(input.businessId || "").trim()
   if (!businessId || !(input.amountUsd > 0)) return
+  if (!(await isWalletSendCompliancePlatformEnabled(admin))) return
 
   const recorded = await recordInboundEvent(admin, {
     businessId,

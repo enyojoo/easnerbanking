@@ -138,6 +138,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
     businessId &&
       !restrictionQuery.data?.active &&
       sendComplianceQuery.data &&
+      sendComplianceQuery.data?.platformEnabled &&
       (sendComplianceQuery.data.velocityEnforced ||
         (sendComplianceQuery.data.stablecoin.dailyLimitUsd > 0 &&
           sendComplianceQuery.data.stablecoin.dailyRemainingUsd <=

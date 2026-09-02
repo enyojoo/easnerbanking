@@ -3,7 +3,11 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { getUserFromApiRequest } from "@/lib/supabase/admin"
 import { emptySendAllowance } from "@easner/shared"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
-import { isVelocityOutboundEnforced, resolveSendAllowance } from "@/lib/wallet-send-compliance"
+import {
+  isVelocityOutboundEnforced,
+  isWalletSendCompliancePlatformEnabled,
+  resolveSendAllowance,
+} from "@/lib/wallet-send-compliance"
 
 export const runtime = "nodejs"
 
@@ -15,11 +19,13 @@ export async function GET(request: Request) {
   }
 
   const admin = createSupabaseAdmin()
+  const platformEnabled = await isWalletSendCompliancePlatformEnabled(admin)
   const acc = await resolveNoahAccountContext(request, user.id, undefined, "read")
   if (!acc.ok) {
     return NextResponse.json({
       stablecoin: emptySendAllowance(),
       fiatPayout: emptySendAllowance(),
+      platformEnabled,
       velocityEnforced: false,
     })
   }
@@ -29,6 +35,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       stablecoin: emptySendAllowance(),
       fiatPayout: emptySendAllowance(),
+      platformEnabled,
       velocityEnforced: false,
     })
   }
@@ -39,8 +46,9 @@ export async function GET(request: Request) {
   ])
 
   return NextResponse.json({
+    platformEnabled,
     stablecoin,
     fiatPayout,
-    velocityEnforced: isVelocityOutboundEnforced(stablecoin.velocityActive),
+    velocityEnforced: platformEnabled && isVelocityOutboundEnforced(stablecoin.velocityActive),
   })
 }

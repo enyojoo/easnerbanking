@@ -61,6 +61,7 @@ export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection
     maintenanceMode: false,
     registrationEnabled: true,
     emailVerificationRequired: true,
+    walletSendComplianceEnabled: true,
   })
 
   // Security settings derived from system settings
@@ -91,6 +92,7 @@ export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection
       maintenanceMode: false,
       registrationEnabled: true,
       emailVerificationRequired: true,
+      walletSendComplianceEnabled: true,
     }
     const newSecuritySettings = {
       sessionTimeout: 30,
@@ -115,6 +117,9 @@ export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection
           break
         case "email_verification_required":
           newPlatformConfig.emailVerificationRequired = setting.value === "true"
+          break
+        case "wallet_send_compliance_enabled":
+          newPlatformConfig.walletSendComplianceEnabled = setting.value === "true"
           break
         case "session_timeout":
           newSecuritySettings.sessionTimeout = Number.parseInt(setting.value)
@@ -357,6 +362,21 @@ export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection
           onCheckedChange={(checked) => handlePlatformConfigChange("emailVerificationRequired", checked)}
                                 />
                               </div>
+      <div className="flex items-center justify-between">
+        <div>
+          <Label htmlFor="walletSendCompliance">Outbound send compliance</Label>
+          <p className="text-sm text-gray-500">
+            Daily send limits and velocity controls on business wallet payouts (stablecoin and fiat)
+          </p>
+        </div>
+        <Switch
+          id="walletSendCompliance"
+          checked={platformConfig.walletSendComplianceEnabled}
+          onCheckedChange={(checked) =>
+            handlePlatformConfigChange("walletSendComplianceEnabled", checked)
+          }
+        />
+      </div>
     </div>
   )
 

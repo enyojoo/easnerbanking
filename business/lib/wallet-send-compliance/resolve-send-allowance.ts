@@ -14,6 +14,7 @@ import {
   type WalletSendVelocityMode,
 } from "@easner/shared"
 import { isVelocityOutboundEnforced } from "./config"
+import { isWalletSendCompliancePlatformEnabled } from "./platform-enabled"
 import { resolveBusinessDailyTier } from "./resolve-daily-tier"
 import { dailyRetryAfterIso, sumRolling24hOutboundUsd } from "./resolve-daily-usage"
 import { loadActiveLimitOverride } from "./resolve-limit-override"
@@ -78,6 +79,7 @@ export async function resolveSendAllowance(
 ): Promise<ResolvedSendAllowance> {
   const businessId = String(input.businessId || "").trim()
   if (!businessId) return emptySendAllowance()
+  if (!(await isWalletSendCompliancePlatformEnabled(admin))) return emptySendAllowance()
   const now = input.now ?? Date.now()
   const amountUsd = Math.max(0, input.amountUsd)
 

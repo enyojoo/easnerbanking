@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query"
 import { emptySendAllowance, type ResolvedSendAllowance } from "@easner/shared"
 
 export type WalletSendComplianceResponse = {
+  platformEnabled: boolean
   stablecoin: ResolvedSendAllowance
   fiatPayout: ResolvedSendAllowance
   velocityEnforced: boolean
@@ -16,6 +17,7 @@ async function fetchWalletSendCompliance(businessScope: boolean): Promise<Wallet
   })
   if (!res.ok) {
     return {
+      platformEnabled: false,
       stablecoin: emptySendAllowance(),
       fiatPayout: emptySendAllowance(),
       velocityEnforced: false,

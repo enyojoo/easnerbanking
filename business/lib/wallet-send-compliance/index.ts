@@ -1,3 +1,8 @@
+export {
+  isWalletSendCompliancePlatformEnabled,
+  resetWalletSendCompliancePlatformCacheForTests,
+  WALLET_SEND_COMPLIANCE_PLATFORM_KEY,
+} from "./platform-enabled"
 export { isVelocityOutboundEnforced, walletSendComplianceConfig } from "./config"
 export { recordInboundEvent, listInboundCredits } from "./inbound-events"
 export { maybeApplyVelocityControl } from "./apply-inbound"

@@ -3,6 +3,7 @@ import { walletSendComplianceConfig } from "./config"
 import { recentInboundTotalUsd } from "./inbound-events"
 import { applyBoostedCap, loadActiveVelocityControl } from "./velocity-store"
 import { notifyVelocityBooster } from "./notify-velocity"
+import { isWalletSendCompliancePlatformEnabled } from "./platform-enabled"
 
 /** On stablecoin quote: tighten cap to 10% if outbound follows a large inbound within 6h. */
 export async function maybeApplyEarlyOutboundBooster(
@@ -11,6 +12,7 @@ export async function maybeApplyEarlyOutboundBooster(
 ): Promise<void> {
   const id = String(businessId || "").trim()
   if (!id) return
+  if (!(await isWalletSendCompliancePlatformEnabled(admin))) return
   const cfg = walletSendComplianceConfig()
   const since = new Date(Date.now() - cfg.earlyOutboundHours * 60 * 60 * 1000).toISOString()
   const recentLarge = await recentInboundTotalUsd(admin, id, since)
