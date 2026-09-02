@@ -13,7 +13,7 @@ import {
   type WalletSendDailyTier,
   type WalletSendVelocityMode,
 } from "@easner/shared"
-import { isVelocityOutboundEnforced } from "./config"
+import { isVelocityOutboundEnforced, walletSendComplianceConfig } from "./config"
 import { isWalletSendCompliancePlatformEnabled } from "./platform-enabled"
 import { resolveBusinessDailyTier } from "./resolve-daily-tier"
 import { dailyRetryAfterIso, sumRolling24hOutboundUsd } from "./resolve-daily-usage"
@@ -84,6 +84,7 @@ export async function resolveSendAllowance(
   const amountUsd = Math.max(0, input.amountUsd)
 
   if (input.rail === "fiat_payout") {
+    const cfg = walletSendComplianceConfig()
     const [usage, override] = await Promise.all([
       sumRolling24hOutboundUsd(admin, businessId, "fiat_payout", now),
       loadActiveLimitOverride(admin, businessId, "fiat_payout", now),
