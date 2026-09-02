@@ -26,6 +26,23 @@ function currencyAccountType(currency: string): string {
 const GRID_IBAN_CURRENCIES = new Set(["AED", "DKK", "EUR"])
 const GRID_MOMO_FIAT_CURRENCIES = new Set(["UGX", "RWF", "KES", "TZS", "MWK", "BWP", "ZMW", "XOF", "XAF"])
 
+/** Grid/Thunes settles CNY bank as B2B only; individuals use AliPay/WeChat. */
+export function isGridChinaCnyBankRail(input: {
+  currency?: string | null
+  country?: string | null
+  rail: "bank_transfer" | "mobile_money"
+}): boolean {
+  return (
+    input.rail === "bank_transfer" &&
+    String(input.currency ?? "")
+      .trim()
+      .toUpperCase() === "CNY" &&
+    String(input.country ?? "")
+      .trim()
+      .toUpperCase() === "CN"
+  )
+}
+
 function gridUsesMomoAccountShape(input: {
   rail: "bank_transfer" | "mobile_money"
   currency: string
@@ -37,22 +54,59 @@ function gridUsesMomoAccountShape(input: {
   return GRID_MOMO_FIAT_CURRENCIES.has(input.currency) && !input.bankName
 }
 
+function beneficiaryAddressFromRecipient(
+  recipient: RecipientSellPrepareRow,
+  country: string | undefined,
+): Record<string, string> {
+  const line1 = String(recipient.address_line1 ?? "").trim() || "Address on file"
+  const city = String(recipient.city ?? "").trim() || "Unknown"
+  const postalCode = String(recipient.postal_code ?? "").trim() || "000000"
+  return {
+    line1,
+    city,
+    country: country || "CN",
+    postalCode,
+  }
+}
+
 function beneficiaryFromRecipient(input: {
   recipient: RecipientSellPrepareRow
   profile?: GridPersonProfile
+  /** Grid CNY bank transfer settles B2B-only via Thunes. */
+  forceBusinessBeneficiary?: boolean
 }): Record<string, unknown> {
   const name =
     String(input.recipient.full_name ?? input.profile?.fullName ?? "").trim() || "Beneficiary"
   const country = resolveRecipientPayoutCountry(input.recipient)?.toUpperCase()
   const phone = input.recipient.phone_number || input.profile?.phone
+  const phoneNumber = phone ? normalizeYcMomoPhone(String(phone), country ?? "") : undefined
+  const email = input.recipient.email || input.profile?.email || undefined
+  const metadata =
+    input.recipient.metadata && typeof input.recipient.metadata === "object"
+      ? (input.recipient.metadata as Record<string, unknown>)
+      : {}
+
+  if (input.forceBusinessBeneficiary) {
+    const registrationNumber = String(
+      metadata.registration_number ?? metadata.company_registration_number ?? "",
+    ).trim()
+    return {
+      beneficiaryType: "BUSINESS",
+      legalName: name,
+      countryOfResidence: country,
+      phoneNumber,
+      email,
+      address: beneficiaryAddressFromRecipient(input.recipient, country),
+      ...(registrationNumber ? { registrationNumber } : {}),
+    }
+  }
+
   return {
     beneficiaryType: "INDIVIDUAL",
     fullName: name,
     countryOfResidence: country,
-    phoneNumber: phone
-      ? normalizeYcMomoPhone(String(phone), country ?? "")
-      : undefined,
-    email: input.recipient.email || input.profile?.email || undefined,
+    phoneNumber,
+    email,
     birthDate: input.profile?.dateOfBirth || undefined,
   }
 }
@@ -71,11 +125,15 @@ export function buildGridExternalAccountPayload(input: {
   const country = resolveRecipientPayoutCountry(recipient)?.toUpperCase()
   if (!currency) throw new Error("Recipient currency is required for Grid external account.")
 
-  const chinaCnyBank =
-    currency === "CNY" && country === "CN" && input.rail === "bank_transfer"
+  const chinaCnyBank = isGridChinaCnyBankRail({
+    currency,
+    country,
+    rail: input.rail,
+  })
   const beneficiary = beneficiaryFromRecipient({
     recipient,
     profile: input.profile,
+    forceBusinessBeneficiary: chinaCnyBank,
   })
   const accountType = currencyAccountType(currency)
   const bankName = resolveGridBankName(

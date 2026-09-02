@@ -20,6 +20,7 @@ import { requirePayoutProviderEnv } from "@/lib/payout-providers/require-provide
 import type { PayoutEnvProviderId } from "@/lib/payout-providers/require-provider-env"
 import { asYcPayoutError } from "@/lib/yellowcard/payout-errors"
 import { outboundComplianceCatchResponse } from "@/lib/wallet-send-compliance"
+import { mapGridPayoutQuoteUserError } from "@/lib/grid/format-grid-api-error"
 
 /** Lock balance payout order after user reaches review (Noah + YC + Grid). */
 export async function POST(request: Request) {
@@ -177,10 +178,14 @@ export async function POST(request: Request) {
         })
         return NextResponse.json({ ok: true, quote: live })
       } catch (e) {
+        const userError = mapGridPayoutQuoteUserError(e)
         console.warn(
-          "[payouts/confirm] grid live-quote fold failed (client falls back to grid-prepare):",
+          "[payouts/confirm] grid live-quote fold failed:",
           e instanceof Error ? e.message : e,
         )
+        // Do not return an incomplete lock without grid.quoteId — client shows
+        // "Incomplete locked payout quote" and never recovers usefully.
+        return NextResponse.json({ ok: false, error: userError }, { status: 400 })
       }
     }
 

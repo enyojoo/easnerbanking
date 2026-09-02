@@ -55,6 +55,18 @@ function isDocumentScreeningError(error: unknown, msg: string): boolean {
   )
 }
 
+/** User-facing Grid payout quote failures (Thunes corridors, etc.). */
+export function mapGridPayoutQuoteUserError(error: unknown): string {
+  const msg = formatGridApiError(error)
+  if (/No Thunes payer.*CNY.*BankAccount.*B2C|Thunes payer.*currency=CNY.*B2C/i.test(msg)) {
+    return "China bank transfers require a business recipient. For individuals, send via AliPay or WeChat Pay."
+  }
+  if (/No Thunes payer/i.test(msg)) {
+    return "This payout corridor is unavailable for the selected recipient. Try another bank or payment method."
+  }
+  return msg || "Could not lock payout order. Try again."
+}
+
 /** User-facing copy for hosted KYB start failures. */
 export function formatHostedKybStartError(error: unknown): string {
   const msg = formatGridApiError(error)

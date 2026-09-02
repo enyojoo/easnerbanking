@@ -1058,15 +1058,27 @@ export function RecipientForm({
             <div className="space-y-2">
               <label className="text-sm font-medium flex items-center gap-2">
                 <User className="h-4 w-4 text-muted-foreground" />
-                {terminology === "payroll" ? "Account holder name" : "Recipient Name"}
+                {terminology === "payroll"
+                  ? "Account holder name"
+                  : selectedCountry?.code === "CN"
+                    ? "Business legal name"
+                    : "Recipient Name"}
               </label>
               <Input
                 id="name"
                 value={formData.name}
                 onChange={(e) => handleInputChange("name", e.target.value)}
-                placeholder="John Doe"
+                placeholder={
+                  selectedCountry?.code === "CN" ? "Shanghai Trading Co Ltd" : "John Doe"
+                }
                 className={`h-12 placeholder:text-xs placeholder:text-muted-foreground/60 capitalize ${errors.name ? "border-red-500" : ""}`}
               />
+              {selectedCountry?.code === "CN" ? (
+                <p className="text-xs text-muted-foreground">
+                  China bank payouts require a business recipient. For individuals, use AliPay or
+                  WeChat Pay under Mobile money.
+                </p>
+              ) : null}
               {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
             </div>
           )}

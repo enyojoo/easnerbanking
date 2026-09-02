@@ -93,8 +93,11 @@ export function buildGridSchemaFromDiscoveries(input: {
     status: "ready",
     channel_type: "bank",
     bank_enum: uniqueBanks,
+    account_number_hint: isChinaBank
+      ? "Business bank account (China local bank is B2B)"
+      : undefined,
     note: isChinaBank
-      ? "Synced from Grid discoveries (China local bank transfer)"
+      ? "Synced from Grid discoveries. China bank settles B2B; individuals use AliPay/WeChat."
       : "Synced from Grid discoveries",
   }
 }

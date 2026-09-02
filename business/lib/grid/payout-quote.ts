@@ -22,7 +22,7 @@ import {
   type RecipientSellPrepareRow,
 } from "@/lib/terminal/recipient-sell-prepare"
 import { ensureGridCustomer, type GridPersonProfile } from "./ensure-grid-customer"
-import { createGridExternalAccount, gridMinorUnits } from "./external-account"
+import { createGridExternalAccount, gridMinorUnits, isGridChinaCnyBankRail } from "./external-account"
 import { loadGridRecipientBankCandidates } from "./grid-bank-candidates"
 import { buildGridIdempotencyKey } from "./idempotency"
 import {
@@ -557,7 +557,14 @@ export async function lockGridBalancePayoutQuote(
       ? ("mobile_money" as const)
       : ("bank_transfer" as const)
 
-  const storedExternalAccountId = storedGridExternalAccountId(input.recipient)
+  // CNY bank settles B2B-only via Thunes; never reuse a prior individual (B2C) EA.
+  const storedExternalAccountId = isGridChinaCnyBankRail({
+    currency: receiveCurrency,
+    country: countryCode,
+    rail,
+  })
+    ? null
+    : storedGridExternalAccountId(input.recipient)
   const lockStartedAt = Date.now()
   const [customerResult, gridCandidates, rates, processingFeeBps] = await Promise.all([
     ensureGridCustomer({

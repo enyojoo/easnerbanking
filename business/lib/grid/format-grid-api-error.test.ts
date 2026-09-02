@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest"
-import { formatHostedKybStartError } from "./format-grid-api-error"
+import { formatHostedKybStartError, mapGridPayoutQuoteUserError } from "./format-grid-api-error"
 import { GridHttpError } from "./http"
+
+describe("mapGridPayoutQuoteUserError", () => {
+  it("maps China Thunes B2C bank failures to business-recipient guidance", () => {
+    expect(
+      mapGridPayoutQuoteUserError(
+        new Error("No Thunes payer found for currency=CNY, service_type=BankAccount, transaction_type=B2C"),
+      ),
+    ).toMatch(/business recipient/i)
+  })
+})
 
 describe("formatHostedKybStartError", () => {
   it("maps Grid document screening failures to ID photo guidance", () => {

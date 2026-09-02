@@ -7,6 +7,7 @@ import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { getPayoutLockSession } from "@/lib/payout/payout-lock-session"
 import { attachLiveGridQuoteToLockSession } from "@/lib/payout/confirm-grid-balance-payout"
 import type { RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
+import { mapGridPayoutQuoteUserError } from "@/lib/grid/format-grid-api-error"
 
 /** Background Grid POST /quotes so PIN can fund without blocking Continue. */
 export async function POST(request: Request) {
@@ -89,7 +90,9 @@ export async function POST(request: Request) {
     })
     return NextResponse.json({ ok: true, quote })
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Could not prepare Grid quote."
-    return NextResponse.json({ ok: false, error: msg }, { status: 400 })
+    return NextResponse.json(
+      { ok: false, error: mapGridPayoutQuoteUserError(e) },
+      { status: 400 },
+    )
   }
 }

@@ -211,24 +211,35 @@ describe("buildGridExternalAccountPayload BRL", () => {
 })
 
 describe("buildGridExternalAccountPayload CNY", () => {
-  it("sets BANK_TRANSFER paymentRails for China bank recipients", () => {
+  it("uses BUSINESS beneficiary and BANK_TRANSFER for China bank recipients", () => {
     const payload = buildGridExternalAccountPayload({
       customerId: "Customer:abc",
       rail: "bank_transfer",
       recipient: {
         currency: "CNY",
         country_code: "CN",
-        full_name: "Li Wei",
+        full_name: "Shanghai Trading Co Ltd",
         account_number: "6222021234567890123",
         bank_name: "Bank Of China",
+        address_line1: "100 Century Avenue",
+        city: "Shanghai",
+        postal_code: "200120",
+        metadata: { registration_number: "91310000MA1K3XXXXX" },
       },
     })
     expect(payload.accountInfo.accountType).toBe("CNY_ACCOUNT")
     expect(payload.accountInfo.paymentRails).toEqual(["BANK_TRANSFER"])
     expect(payload.accountInfo.bankName).toBe("Bank Of China")
     expect(payload.accountInfo.beneficiary).toMatchObject({
-      beneficiaryType: "INDIVIDUAL",
-      fullName: "Li Wei",
+      beneficiaryType: "BUSINESS",
+      legalName: "Shanghai Trading Co Ltd",
+      registrationNumber: "91310000MA1K3XXXXX",
+      address: {
+        line1: "100 Century Avenue",
+        city: "Shanghai",
+        country: "CN",
+        postalCode: "200120",
+      },
     })
   })
 
