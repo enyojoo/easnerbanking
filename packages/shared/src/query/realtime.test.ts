@@ -486,4 +486,43 @@ describe("attachRealtime identity / verification", () => {
     detach()
     qc.clear()
   })
+
+  it("patches account-restriction when account_restrictions changes", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const mock = buildMockSupabase()
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries")
+    const detach = attachRealtime({
+      qc,
+      scope: BUSINESS,
+      supabase: mock.supabase,
+      batchMs: 0,
+    })
+
+    mock.triggerInsert(
+      {
+        id: "rest-1",
+        subject_kind: "business",
+        business_id: "org-1",
+        restricted_at: "2026-09-02T10:00:00.000Z",
+        wind_down_ends_at: "2026-09-09T10:00:00.000Z",
+        locked_at: null,
+        lifted_at: null,
+        source: "office",
+        reason: "Office hold",
+      },
+      "account_restrictions",
+    )
+    await new Promise((r) => setTimeout(r, 5))
+
+    expect(qc.getQueryData(qk.accountRestriction.root())).toMatchObject({
+      active: true,
+      phase: "wind_down",
+      source: "office",
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: qk.accountRestriction.root() }),
+    )
+    detach()
+    qc.clear()
+  })
 })

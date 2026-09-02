@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import type { ResolvedAccountRestriction } from "@easner/shared"
-import { emptyAccountRestriction } from "@easner/shared"
+import { emptyAccountRestriction, qk } from "@easner/shared"
 
 async function fetchAccountRestriction(): Promise<ResolvedAccountRestriction> {
   const res = await fetchWithSession("/api/account/restriction")
@@ -14,9 +14,11 @@ async function fetchAccountRestriction(): Promise<ResolvedAccountRestriction> {
 
 export function useAccountRestriction(enabled = true) {
   return useQuery({
-    queryKey: ["account-restriction"],
+    queryKey: qk.accountRestriction.root(),
     queryFn: fetchAccountRestriction,
-    staleTime: 30_000,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchOnMount: "always",
     enabled,
   })
 }

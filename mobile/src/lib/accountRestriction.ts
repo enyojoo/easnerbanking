@@ -1,5 +1,5 @@
 import type { ResolvedAccountRestriction } from "@easner/shared"
-import { computeAccountRestrictionPhase, emptyAccountRestriction } from "@easner/shared"
+import { emptyAccountRestriction, resolvedAccountRestrictionFromRow } from "@easner/shared"
 import { getApiBaseUrl } from "./apiClient"
 import { supabase } from "./supabase"
 
@@ -25,25 +25,14 @@ export async function fetchAccountRestriction(): Promise<ResolvedAccountRestrict
 }
 
 export function normalizeRestrictionRow(row: {
+  subject_kind?: string | null
   phase?: string | null
   restricted_at?: string | null
   wind_down_ends_at?: string | null
   locked_at?: string | null
+  lifted_at?: string | null
+  reason?: string | null
+  source?: string | null
 } | null | undefined): ResolvedAccountRestriction {
-  if (!row?.restricted_at || !row.wind_down_ends_at) return emptyAccountRestriction()
-  const phase = computeAccountRestrictionPhase({
-    restrictedAt: row.restricted_at,
-    windDownEndsAt: row.wind_down_ends_at,
-    lockedAt: row.locked_at,
-  })
-  return {
-    active: true,
-    phase,
-    subjectKind: null,
-    restrictedAt: row.restricted_at,
-    windDownEndsAt: row.wind_down_ends_at,
-    lockedAt: row.locked_at,
-    reason: null,
-    source: null,
-  }
+  return resolvedAccountRestrictionFromRow(row)
 }

@@ -29,6 +29,7 @@ import {
   shouldIncludeRowInUserFeed,
 } from "../transactions/map-ledger-list-row"
 import { resolveYcPayInFeedStatus } from "../transactions/yc-pay-in-display"
+import { resolvedAccountRestrictionFromRow } from "../account-restriction"
 
 // Minimal Supabase client shape we rely on. Using a structural type avoids
 // pulling `@supabase/supabase-js` into the shared package's types graph.
@@ -714,6 +715,33 @@ export function attachRealtime({
         if (!identityFieldsChanged(p.old as Record<string, unknown> | undefined, row)) return
         markEvent()
         scheduleIdentityRefresh(qc, scope, batcher, "users", row, onIdentityChange)
+      },
+    )
+  }
+
+  // --- account restrictions (Office / partner compliance holds) --------------
+  // Instant-patch the session restriction query, then refetch for full API shape.
+  {
+    const restrictionFilter =
+      scope.kind === "business"
+        ? `business_id=eq.${scope.orgId}`
+        : `user_id=eq.${scope.userId}`
+    channel.on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "account_restrictions",
+        filter: restrictionFilter,
+      },
+      (p) => {
+        markEvent()
+        const row = ((p.new ?? p.old) ?? {}) as Record<string, unknown>
+        const key = qk.accountRestriction.root()
+        batcher.schedule(key, () => {
+          qc.setQueryData(key, resolvedAccountRestrictionFromRow(row))
+          qc.invalidateQueries({ queryKey: key, refetchType: "active" })
+        })
       },
     )
   }

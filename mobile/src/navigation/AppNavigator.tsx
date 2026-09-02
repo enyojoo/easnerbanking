@@ -37,8 +37,8 @@ import { useResponsiveLayout } from '../contexts/ResponsiveLayoutContext'
 import { ResponsiveAppShell } from '../components/layout/ResponsiveAppShell'
 import { MobileAppLockShell } from '../components/MobileAppLockShell'
 import { AccountSuspendedScreen } from '../components/AccountSuspendedScreen'
-import { fetchAccountRestriction } from '../lib/accountRestriction'
-import { emptyAccountRestriction, type ResolvedAccountRestriction } from '@easner/shared'
+import { useAccountRestriction } from '../hooks/queries/use-account-restriction'
+import { emptyAccountRestriction } from '@easner/shared'
 import { enterMainAppOnWeb } from './webMainEntry'
 import { webStackScreenListeners } from './webStackScreenListeners'
 import { staticScreenTransitionOptions, useMainStackTransitionOptionsFactory } from './useScreenTransitionOptions'
@@ -511,33 +511,15 @@ export default function AppNavigator() {
   signOutRef.current = signOut
   const palette = useThemeColors()
   const [pinGate, setPinGate] = useState<'loading' | 'setup' | 'pin' | 'main'>('loading')
-  const [accountRestriction, setAccountRestriction] = useState<ResolvedAccountRestriction>(emptyAccountRestriction())
-  const [restrictionLoading, setRestrictionLoading] = useState(false)
+  const restrictionQuery = useAccountRestriction(Boolean(user?.id))
+  const accountRestriction = restrictionQuery.data ?? emptyAccountRestriction()
+  const restrictionLoading = Boolean(user?.id) && restrictionQuery.isLoading && !restrictionQuery.data
   const [lockTick, setLockTick] = useState(0)
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(Platform.OS === 'web' ? true : null)
   // PIN TEMPORARILY DISABLED - keeping state variables for easy re-enable
   // const [pinSetup, setPinSetup] = useState<boolean | null>(null)
   // const [sessionValid, setSessionValid] = useState<boolean | null>(null)
   const [checkingAuth, setCheckingAuth] = useState(Platform.OS !== 'web')
-
-  useEffect(() => {
-    if (!user?.id) {
-      setAccountRestriction(emptyAccountRestriction())
-      setRestrictionLoading(false)
-      return
-    }
-    let cancelled = false
-    setRestrictionLoading(true)
-    void fetchAccountRestriction().then((restriction) => {
-      if (!cancelled) {
-        setAccountRestriction(restriction)
-        setRestrictionLoading(false)
-      }
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [user?.id])
 
   useEffect(() => {
     if (!user?.id) return

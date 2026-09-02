@@ -46,6 +46,45 @@ export function computeAccountRestrictionPhase(input: {
   return "wind_down"
 }
 
+/** Map an `account_restrictions` row (realtime or DB) into UI state. Lifted rows → inactive. */
+export function resolvedAccountRestrictionFromRow(
+  row: {
+    subject_kind?: string | null
+    restricted_at?: string | null
+    wind_down_ends_at?: string | null
+    locked_at?: string | null
+    lifted_at?: string | null
+    reason?: string | null
+    source?: string | null
+  } | null | undefined,
+  now = Date.now(),
+): ResolvedAccountRestriction {
+  if (!row?.restricted_at || !row.wind_down_ends_at) return emptyAccountRestriction()
+  if (row.lifted_at) return emptyAccountRestriction()
+
+  const subjectKind =
+    row.subject_kind === "business" || row.subject_kind === "user" ? row.subject_kind : null
+  const source =
+    row.source === "grid" || row.source === "noah" || row.source === "office" ? row.source : null
+  const phase = computeAccountRestrictionPhase({
+    restrictedAt: row.restricted_at,
+    windDownEndsAt: row.wind_down_ends_at,
+    lockedAt: row.locked_at,
+    now,
+  })
+
+  return {
+    active: true,
+    phase,
+    subjectKind,
+    restrictedAt: row.restricted_at,
+    windDownEndsAt: row.wind_down_ends_at,
+    lockedAt: row.locked_at ?? null,
+    reason: row.reason ?? null,
+    source,
+  }
+}
+
 export function formatAccountRestrictionDeadline(iso: string | null | undefined, locale = "en-US"): string {
   if (!iso) return ""
   const ms = Date.parse(iso)

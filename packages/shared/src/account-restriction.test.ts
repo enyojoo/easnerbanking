@@ -4,6 +4,7 @@ import {
   accountRestrictionOfficeCanLift,
   computeAccountRestrictionPhase,
   formatAccountRestrictionDeadline,
+  resolvedAccountRestrictionFromRow,
 } from "@easner/shared"
 
 describe("account restriction shared", () => {
@@ -39,5 +40,40 @@ describe("account restriction shared", () => {
 
   it("review window is 7 days", () => {
     expect(ACCOUNT_RESTRICTION_WIND_DOWN_MS).toBe(7 * 24 * 60 * 60 * 1000)
+  })
+
+  it("maps restriction rows including lifts", () => {
+    expect(
+      resolvedAccountRestrictionFromRow({
+        subject_kind: "business",
+        restricted_at: "2026-09-02T10:00:00.000Z",
+        wind_down_ends_at: "2026-09-09T10:00:00.000Z",
+        locked_at: null,
+        lifted_at: null,
+        source: "office",
+        reason: "Office hold",
+      }),
+    ).toMatchObject({ active: true, phase: "wind_down", source: "office" })
+
+    expect(
+      resolvedAccountRestrictionFromRow({
+        subject_kind: "user",
+        restricted_at: "2026-09-02T10:00:00.000Z",
+        wind_down_ends_at: "2026-09-09T10:00:00.000Z",
+        locked_at: "2026-09-09T10:00:00.000Z",
+        lifted_at: null,
+        source: "grid",
+      }),
+    ).toMatchObject({ active: true, phase: "locked", source: "grid" })
+
+    expect(
+      resolvedAccountRestrictionFromRow({
+        subject_kind: "user",
+        restricted_at: "2026-09-02T10:00:00.000Z",
+        wind_down_ends_at: "2026-09-09T10:00:00.000Z",
+        lifted_at: "2026-09-03T10:00:00.000Z",
+        source: "office",
+      }),
+    ).toMatchObject({ active: false, phase: "none" })
   })
 })

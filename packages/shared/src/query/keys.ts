@@ -167,6 +167,10 @@ export const qk = {
     packet: (scope: Scope) => [...scopeKey(scope), "verification", "packet"] as const,
     expressOnramp: (scope: Scope) => [...scopeKey(scope), "verification", "express-onramp"] as const,
   },
+  /** Global (per session) – not scope-prefixed; API resolves user vs business subject. */
+  accountRestriction: {
+    root: () => ["account-restriction"] as const,
+  },
   notifications: {
     root: (userId: string) => ["notifications", userId] as const,
     unread: (userId: string) => ["notifications", userId, "unread"] as const,

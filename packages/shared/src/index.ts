@@ -809,6 +809,7 @@ export {
   ACCOUNT_RESTRICTION_STATUS_LABEL,
   computeAccountRestrictionPhase,
   emptyAccountRestriction,
+  resolvedAccountRestrictionFromRow,
   formatAccountRestrictionDeadline,
   ACCOUNT_RESTRICTION_WIND_DOWN_BANNER,
   ACCOUNT_RESTRICTION_WIND_DOWN_CONTACT_CTA,
