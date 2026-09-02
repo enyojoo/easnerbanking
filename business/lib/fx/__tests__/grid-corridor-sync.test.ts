@@ -66,12 +66,13 @@ describe("collectGridCorridorTargets", () => {
     const targets = collectGridCorridorTargets({
       discoveries: [],
       exchangeRates: [
-        { from: "USD", to: "INR", country: "IN" },
+        { from: "USD", to: "GHS", country: "GH" },
         { from: "USD", to: "BRL", country: "BR" },
       ],
     })
 
-    expect(targets.some((t) => t.countryCode === "BR" && t.currencyCode === "BRL")).toBe(false)
+    // Exchange rates alone must not invent corridors; static bank pairs (e.g. BR:BRL) may still appear.
+    expect(targets.some((t) => t.countryCode === "GH" && t.currencyCode === "GHS")).toBe(false)
   })
 
   it("excludes NG mobile money corridor target", () => {
@@ -130,6 +131,24 @@ describe("collectGridCorridorTargets", () => {
 
     expect(targets).toEqual(
       expect.arrayContaining([{ countryCode: "DK", currencyCode: "DKK", rail: "bank_transfer" }]),
+    )
+  })
+
+  it("builds China bank and AliPay/WeChat mobile money corridors", () => {
+    const targets = collectGridCorridorTargets({
+      discoveries: [
+        { country: "CN", currency: "CNY", bankName: "Bank Of China" },
+        { country: "CN", currency: "CNY", bankName: "AliPay", displayName: "AliPay" },
+        { country: "CN", currency: "CNY", bankName: "WechatPay", displayName: "WechatPay" },
+      ],
+      exchangeRates: [],
+    })
+
+    expect(targets).toEqual(
+      expect.arrayContaining([
+        { countryCode: "CN", currencyCode: "CNY", rail: "bank_transfer" },
+        { countryCode: "CN", currencyCode: "CNY", rail: "mobile_money" },
+      ]),
     )
   })
 })

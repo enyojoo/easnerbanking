@@ -8,7 +8,7 @@ const DISCOVERY_TTL_MS = 5 * 60_000
 const BRIDGE_CURRENCIES = new Set(["USD", "USDC", "USDT", "EURC", "BTC", "ETH", "SOL", "PYUSD"])
 
 const MOMO_HINTS =
-  /mobile|momo|m-pesa|mpesa|airtel|mtn|orange|tigo|wave|vodafone|moov|tnm|free money/i
+  /mobile|momo|m-pesa|mpesa|airtel|mtn|orange|tigo|wave|vodafone|moov|tnm|free money|alipay|ali pay|wechat|weixin|tenpay/i
 
 export function isMomoGridDiscovery(d: GridDiscovery): boolean {
   const label = `${String(d.displayName ?? d.bankName ?? "")} ${String(d.bankName ?? "")}`

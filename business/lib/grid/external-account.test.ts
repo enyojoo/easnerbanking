@@ -209,3 +209,51 @@ describe("buildGridExternalAccountPayload BRL", () => {
     expect(payload.accountInfo.bankName).toBeUndefined()
   })
 })
+
+describe("buildGridExternalAccountPayload CNY", () => {
+  it("sets BANK_TRANSFER paymentRails for China bank recipients", () => {
+    const payload = buildGridExternalAccountPayload({
+      customerId: "Customer:abc",
+      rail: "bank_transfer",
+      recipient: {
+        currency: "CNY",
+        country_code: "CN",
+        full_name: "Li Wei",
+        account_number: "6222021234567890123",
+        bank_name: "Bank Of China",
+      },
+    })
+    expect(payload.accountInfo.accountType).toBe("CNY_ACCOUNT")
+    expect(payload.accountInfo.paymentRails).toEqual(["BANK_TRANSFER"])
+    expect(payload.accountInfo.bankName).toBe("Bank Of China")
+    expect(payload.accountInfo.beneficiary).toMatchObject({
+      beneficiaryType: "INDIVIDUAL",
+      fullName: "Li Wei",
+    })
+  })
+
+  it("maps AliPay/WeChat via bankName on mobile money", () => {
+    const payload = buildGridExternalAccountPayload({
+      customerId: "Customer:abc",
+      rail: "mobile_money",
+      recipient: {
+        currency: "CNY",
+        country_code: "CN",
+        full_name: "Li Wei",
+        account_number: "",
+        phone_number: "+8613812345678",
+        mobile_provider: "WechatPay",
+      },
+      gridMomoCandidates: [{ value: "WechatPay", label: "WechatPay" }],
+    })
+    expect(payload.accountInfo.accountType).toBe("CNY_ACCOUNT")
+    expect(payload.accountInfo.paymentRails).toEqual(["MOBILE_MONEY"])
+    expect(payload.accountInfo.bankName).toBe("WechatPay")
+    expect(payload.accountInfo.phoneNumber).toBeTruthy()
+    expect(payload.accountInfo.provider).toBeUndefined()
+    expect(payload.accountInfo.beneficiary).toMatchObject({
+      beneficiaryType: "INDIVIDUAL",
+      fullName: "Li Wei",
+    })
+  })
+})

@@ -41,6 +41,30 @@ describe("gridDiscoverySupportsCorridor", () => {
     })
     expect(ok).toBe(false)
   })
+
+  it("treats China AliPay/WeChat as mobile money and banks as bank transfer", () => {
+    const discoveries = [
+      { country: "CN", currency: "CNY", bankName: "Bank Of China" },
+      { country: "CN", currency: "CNY", bankName: "AliPay", displayName: "AliPay" },
+      { country: "CN", currency: "CNY", bankName: "WechatPay", displayName: "WechatPay" },
+    ]
+    expect(
+      gridDiscoverySupportsCorridor({
+        discoveries,
+        countryCode: "CN",
+        currencyCode: "CNY",
+        rail: "bank_transfer",
+      }),
+    ).toBe(true)
+    expect(
+      gridDiscoverySupportsCorridor({
+        discoveries,
+        countryCode: "CN",
+        currencyCode: "CNY",
+        rail: "mobile_money",
+      }),
+    ).toBe(true)
+  })
 })
 
 describe("grid webhook verify", () => {

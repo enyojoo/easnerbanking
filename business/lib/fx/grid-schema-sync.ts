@@ -59,11 +59,16 @@ export function buildGridSchemaFromDiscoveries(input: {
       .filter((e) => e.value)
     const unique = [...new Map(momo.map((e) => [e.value, e])).values()]
     if (!unique.length) return null
+    const isChina = country === "CN" && currency === "CNY"
     return {
       status: "ready",
       channel_type: "momo",
       momo_provider_enum: unique,
-      note: "Synced from Grid discoveries",
+      account_number_label: "Phone number",
+      account_number_hint: isChina ? "AliPay or WeChat Pay registered phone" : undefined,
+      note: isChina
+        ? "Synced from Grid discoveries (AliPay / WeChat Pay)"
+        : "Synced from Grid discoveries",
     }
   }
 
@@ -72,6 +77,7 @@ export function buildGridSchemaFromDiscoveries(input: {
     .map((d) => discoveryValue(d))
     .filter(Boolean)
   const uniqueBanks = [...new Set(banks)]
+  const isChinaBank = country === "CN" && currency === "CNY"
   if (!uniqueBanks.length) {
     const fallback = filtered.map((d) => discoveryValue(d)).filter(Boolean)
     const uniqueFallback = [...new Set(fallback)]
@@ -87,7 +93,9 @@ export function buildGridSchemaFromDiscoveries(input: {
     status: "ready",
     channel_type: "bank",
     bank_enum: uniqueBanks,
-    note: "Synced from Grid discoveries",
+    note: isChinaBank
+      ? "Synced from Grid discoveries (China local bank transfer)"
+      : "Synced from Grid discoveries",
   }
 }
 

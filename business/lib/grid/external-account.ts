@@ -71,7 +71,12 @@ export function buildGridExternalAccountPayload(input: {
   const country = resolveRecipientPayoutCountry(recipient)?.toUpperCase()
   if (!currency) throw new Error("Recipient currency is required for Grid external account.")
 
-  const beneficiary = beneficiaryFromRecipient({ recipient, profile: input.profile })
+  const chinaCnyBank =
+    currency === "CNY" && country === "CN" && input.rail === "bank_transfer"
+  const beneficiary = beneficiaryFromRecipient({
+    recipient,
+    profile: input.profile,
+  })
   const accountType = currencyAccountType(currency)
   const bankName = resolveGridBankName(
     String(recipient.bank_name ?? "").trim(),
@@ -102,7 +107,15 @@ export function buildGridExternalAccountPayload(input: {
     const phone = String(recipient.phone_number ?? input.profile?.phone ?? accountNumber ?? "").trim()
     if (!phone) throw new Error("Mobile money recipient requires phone number.")
     accountInfo.phoneNumber = normalizeYcMomoPhone(phone, country ?? "")
-    if (mobileProvider) accountInfo.provider = mobileProvider
+    // China wallets (AliPay / WeChat) are selected via bankName per Grid CNY_ACCOUNT.
+    if (currency === "CNY") {
+      const walletName = mobileProvider || bankName
+      if (!walletName) throw new Error("China mobile money requires AliPay or WeChat Pay.")
+      accountInfo.bankName = walletName
+      accountInfo.paymentRails = ["MOBILE_MONEY"]
+    } else if (mobileProvider) {
+      accountInfo.provider = mobileProvider
+    }
     if (currency === "XOF" && country && ["BJ", "CI", "SN", "TG"].includes(country)) {
       accountInfo.region = country
     }
@@ -141,6 +154,7 @@ export function buildGridExternalAccountPayload(input: {
       accountInfo.accountNumber = accountNumber
     }
     if (currency !== "BRL" && bankName) accountInfo.bankName = bankName
+    if (chinaCnyBank) accountInfo.paymentRails = ["BANK_TRANSFER"]
     if (country === "US" && currency === "USD") {
       const routing = String(recipient.routing_number ?? "").replace(/\D/g, "")
       if (routing.length !== 9) {
