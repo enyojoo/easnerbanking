@@ -1,6 +1,5 @@
 export {
   isWalletSendCompliancePlatformEnabled,
-  resetWalletSendCompliancePlatformCacheForTests,
   WALLET_SEND_COMPLIANCE_PLATFORM_KEY,
 } from "./platform-enabled"
 export { isVelocityOutboundEnforced, walletSendComplianceConfig } from "./config"

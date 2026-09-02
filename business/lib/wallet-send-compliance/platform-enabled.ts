@@ -3,10 +3,6 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 /** Office Platform Configuration → system_settings key */
 export const WALLET_SEND_COMPLIANCE_PLATFORM_KEY = "wallet_send_compliance_enabled"
 
-const CACHE_TTL_MS = 15_000
-
-let cached: { at: number; enabled: boolean } | null = null
-
 function parseSettingBool(value: unknown, fallback: boolean): boolean {
   if (value == null) return fallback
   const s = String(value).trim().toLowerCase()
@@ -19,9 +15,6 @@ function parseSettingBool(value: unknown, fallback: boolean): boolean {
 export async function isWalletSendCompliancePlatformEnabled(
   admin: SupabaseClient,
 ): Promise<boolean> {
-  const now = Date.now()
-  if (cached && now - cached.at < CACHE_TTL_MS) return cached.enabled
-
   const { data, error } = await admin
     .from("system_settings")
     .select("value")
@@ -33,11 +26,5 @@ export async function isWalletSendCompliancePlatformEnabled(
     return true
   }
 
-  const enabled = parseSettingBool(data?.value, true)
-  cached = { at: now, enabled }
-  return enabled
-}
-
-export function resetWalletSendCompliancePlatformCacheForTests(): void {
-  cached = null
+  return parseSettingBool(data?.value, true)
 }

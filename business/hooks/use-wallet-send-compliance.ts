@@ -30,7 +30,8 @@ export function useWalletSendCompliance(enabled = true) {
   return useQuery({
     queryKey: ["wallet-send-compliance", enabled ? "business" : "none"],
     queryFn: () => fetchWalletSendCompliance(enabled),
-    staleTime: 30_000,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
     enabled,
   })
 }
