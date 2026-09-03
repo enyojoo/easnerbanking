@@ -1,5 +1,5 @@
 import React from 'react'
-import { Text, StyleSheet } from 'react-native'
+import { View, Text, StyleSheet } from 'react-native'
 import {
   REVIEW_ROW_LABELS,
   buildInboundReceiveDetailRows,
