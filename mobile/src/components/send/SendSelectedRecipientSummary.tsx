@@ -1,5 +1,6 @@
 import React from 'react'
 import { View, Text, StyleSheet } from 'react-native'
+import { PostHogMaskView } from 'posthog-react-native'
 import { ProfileAvatarCircle } from '../ProfileAvatarCircle'
 import { PayoutRecipientAvatar } from '../PayoutRecipientAvatar'
 import { colors, textStyles, spacing, fontFamily } from '../../theme'
@@ -68,7 +69,7 @@ export function SendSelectedRecipientSummary({
 
   if (alignEnd) {
     return (
-      <View style={styles.rootAlignEnd}>
+      <PostHogMaskView style={styles.rootAlignEnd}>
         <View style={styles.infoAlignEnd}>
           <Text style={[styles.name, styles.textAlignEnd]} numberOfLines={1} ellipsizeMode="tail">
             {displayName}
@@ -95,12 +96,12 @@ export function SendSelectedRecipientSummary({
             <PayoutRecipientAvatar recipient={recipient} size={36} />
           )}
         </View>
-      </View>
+      </PostHogMaskView>
     )
   }
 
   return (
-    <View style={styles.root}>
+    <PostHogMaskView style={styles.root}>
       <View style={styles.avatarSlot}>
         {isEasenet ? (
           <EasenetRecipientAvatar recipient={recipient} easenetPreview={easenetPreview} />
@@ -127,7 +128,7 @@ export function SendSelectedRecipientSummary({
           />
         )}
       </View>
-    </View>
+    </PostHogMaskView>
   )
 }
 

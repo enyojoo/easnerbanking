@@ -1,5 +1,6 @@
 import React, { type ReactNode } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
+import { PostHogMaskView } from 'posthog-react-native'
 import {
   REVIEW_ROW_LABELS,
   displayPayoutReceiveAmount,
@@ -137,7 +138,7 @@ export function PayoutReviewDetailRows({
           {recipientNode ? (
             recipientNode
           ) : recipientSnapshot ? (
-            <View style={styles.valueStack}>
+            <PostHogMaskView style={styles.valueStack}>
               <Text style={styles.valuePrimary}>{recipientSnapshot.full_name}</Text>
               {formatPayoutRecipientSubtitle({
                 bankName: recipientSnapshot.bank_name,
@@ -158,9 +159,9 @@ export function PayoutReviewDetailRows({
                   })}
                 </Text>
               ) : null}
-            </View>
+            </PostHogMaskView>
           ) : (
-            <View style={styles.valueStack}>
+            <PostHogMaskView style={styles.valueStack}>
               <Text style={styles.valuePrimary}>
                 {String(
                   displayDescription || name || counterpartyName || 'Wallet transfer',
@@ -181,7 +182,7 @@ export function PayoutReviewDetailRows({
                   })}
                 </Text>
               ) : null}
-            </View>
+            </PostHogMaskView>
           )}
         </TransactionDetailSummaryRow>
       ) : null}

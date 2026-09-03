@@ -83,6 +83,7 @@ import {
   seedExpressSetupForm,
 } from '../../lib/expressSetupFormDraft'
 import GlossyPrimaryButton from '../../components/premium/GlossyPrimaryButton'
+import { PostHogMaskView } from 'posthog-react-native'
 
 export default function ExpressDepositsSetupScreen({ navigation }: NavigationProps) {
   const { userProfile } = useAuth()
@@ -708,15 +709,15 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
           {!stripeEl || Platform.OS !== 'web' ? (
             <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
               {step === 'link' ? (
-                <View style={styles.profileCard}>
+                <PostHogMaskView style={styles.profileCard}>
                   {field('email', 'Email', { keyboard: 'email', autoCapitalize: 'none' })}
                   {field('phone', 'Phone number', { keyboard: 'phone' })}
                   {field('given_name', 'First name')}
                   {field('surname', 'Last name')}
-                </View>
+                </PostHogMaskView>
               ) : null}
               {step === 'us_kyc' || step === 'eu_kyc' ? (
-                <View style={styles.profileCard}>
+                <PostHogMaskView style={styles.profileCard}>
                   <Text style={styles.bodyText}>{EXPRESS_DEPOSITS_COPY.kycHint}</Text>
                   {field('given_name', 'First name')}
                   {field('surname', 'Last name')}
@@ -748,13 +749,13 @@ export default function ExpressDepositsSetupScreen({ navigation }: NavigationPro
                       {field('birth_country', EXPRESS_DEPOSITS_COPY.birthCountryLabel)}
                     </>
                   ) : null}
-                </View>
+                </PostHogMaskView>
               ) : null}
               {step === 'eu_identifiers' ? (
-                <View style={styles.profileCard}>
+                <PostHogMaskView style={styles.profileCard}>
                   <Text style={styles.bodyText}>{EXPRESS_DEPOSITS_COPY.identifierHint}</Text>
                   {field('identifier', 'ID number')}
-                </View>
+                </PostHogMaskView>
               ) : null}
 
               {step === 'eu_attestation' ? (

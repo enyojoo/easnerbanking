@@ -1,6 +1,7 @@
 import React from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import { Landmark, Smartphone } from 'lucide-react-native'
+import { PostHogMaskView } from 'posthog-react-native'
 import {
   REVIEW_ROW_LABELS,
   YC_PAY_IN_SEND_EXACTLY_LABEL,
@@ -85,7 +86,7 @@ export function YcPayInPaymentBlock({
         </View>
       ) : null}
 
-      <View style={styles.paymentCard}>
+      <PostHogMaskView style={styles.paymentCard}>
         <View style={styles.paymentCardHeader}>
           {isMobileMoney ? (
             <Smartphone size={20} color={colors.primary.main} strokeWidth={2} />
@@ -128,7 +129,7 @@ export function YcPayInPaymentBlock({
             ),
           )
         )}
-      </View>
+      </PostHogMaskView>
     </>
   )
 }

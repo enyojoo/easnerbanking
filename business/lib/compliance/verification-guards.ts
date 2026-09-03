@@ -8,6 +8,7 @@ import {
   readVerificationRow,
 } from "./verification-store"
 import { isVerificationApproved } from "./map-partner-status"
+import { assertAccountAllows, accountRestrictionErrorResponse } from "@/lib/account-restriction/assert"
 
 export type VerificationScope = {
   subjectUserId: string
@@ -92,13 +93,24 @@ export async function hasProvisionedArtifacts(
   return false
 }
 
-/** Block money movement until canonical verification is approved. */
+/** Block money movement until canonical verification is approved.
+ *  Also blocks when Office restriction/closure is active — Office status supersedes KYB. */
 export async function requireVerificationApproved(
   subjectUserId: string,
   scope: NoahCustomerScope,
   subjectBusinessId?: string | null,
 ): Promise<NextResponse | null> {
   const admin = createSupabaseAdmin()
+
+  // Office restriction supersedes KYB status
+  const restriction = await assertAccountAllows(admin, {
+    userId: subjectUserId,
+    businessId: subjectBusinessId ?? undefined,
+  }, "send")
+  if (!restriction.ok) {
+    return accountRestrictionErrorResponse(restriction)
+  }
+
   const ctx: VerificationScope = { subjectUserId, scope, subjectBusinessId }
 
   if (scope === "business") {

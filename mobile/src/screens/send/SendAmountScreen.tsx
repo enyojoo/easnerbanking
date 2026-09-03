@@ -13,7 +13,7 @@ import {
   useWindowDimensions,
   ActivityIndicator,
 } from 'react-native'
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
+import { AndroidSoftInputModes, KeyboardController } from 'react-native-keyboard-controller'
 import { MessageSquareText, ChevronDown, User, Coins, RotateCcw, ArrowLeft, ArrowUpDown, Link, Delete, X, ChevronRight } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -587,6 +587,18 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     }, [route.params, refreshUserProfile, noahKycStatus, refreshBalances])
   )
 
+  // Keep method selector, note, and numeric keypad fixed. The system keyboard overlays them
+  // instead of resizing/padding the layout (which previously stacked two keypads).
+  useFocusEffect(
+    React.useCallback(() => {
+      if (Platform.OS === 'web') return undefined
+      KeyboardController.setInputMode(AndroidSoftInputModes.SOFT_INPUT_ADJUST_NOTHING)
+      return () => {
+        KeyboardController.setDefaultMode()
+      }
+    }, []),
+  )
+
   useFocusEffect(
     React.useCallback(() => {
       void getCachedSendDestinations().then((c) => {
@@ -627,6 +639,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   // Keypad handlers - natural typing with optional decimal mode.
   const handleKeypadPress = (value: string) => {
     if (!recipient) return // Disabled until recipient is selected
+    Keyboard.dismiss()
     
     haptics.tap()
 
@@ -2130,17 +2143,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     />
   )
 
-  const mainContentWrapperProps =
-    Platform.OS === 'web'
-      ? ({ style: styles.keyboardContainer } as const)
-      : ({
-          style: styles.keyboardContainer,
-          behavior: Platform.OS === 'ios' ? ('padding' as const) : ('height' as const),
-          keyboardVerticalOffset: Platform.OS === 'ios' ? spacing[2] : 0,
-        } as const)
-
-  const MainScrollWrapper = Platform.OS === 'web' ? View : KeyboardAvoidingView
-
   return (
     <ScreenWrapper>
       <View style={styles.container}>
@@ -2166,7 +2168,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
           </View>
         ) : (
           <>
-          <MainScrollWrapper {...mainContentWrapperProps}>
+          <View style={styles.keyboardContainer}>
           <View style={styles.mainColumn}>
             {/* Header */}
             <Animated.View 
@@ -2318,6 +2320,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   ]}
                   onPress={() => {
                     haptics.tap()
+                    Keyboard.dismiss()
                     setShowCurrencyPicker(true)
                   }} >
                   <View style={styles.flagContainer}>
@@ -2376,6 +2379,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       onChangeText={setNote}
                       multiline={false}
                       returnKeyType="done"
+                      blurOnSubmit
                       onSubmitEditing={() => Keyboard.dismiss()}
                     />
                   </View>
@@ -2459,7 +2463,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               </View>
             </Animated.View>
           </View>
-        </MainScrollWrapper>
+        </View>
 
         <View
           onLayout={(e) => {

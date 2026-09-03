@@ -33,6 +33,7 @@ import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
 import { supabase } from '../../lib/supabase'
 import { notifySecurityAlert } from '../../lib/securityAlertNotify'
+import { PostHogMaskView } from 'posthog-react-native'
 
 const MIN_PASSWORD_LEN = 8
 
@@ -173,7 +174,7 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
             <View style={styles.sectionInner}>
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>CURRENT PASSWORD</Text>
-              <View style={styles.passwordInputContainer}>
+              <PostHogMaskView style={styles.passwordInputContainer}>
                 <TextInput
                   style={styles.passwordInput}
                   value={currentPassword}
@@ -199,12 +200,12 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                     <Eye size={20} color={colors.text.tertiary} strokeWidth={2} />
                   )}
                 </Pressable>
-              </View>
+              </PostHogMaskView>
             </View>
 
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>NEW PASSWORD</Text>
-              <View style={styles.passwordInputContainer}>
+              <PostHogMaskView style={styles.passwordInputContainer}>
                 <TextInput
                   style={styles.passwordInput}
                   value={newPassword}
@@ -230,12 +231,12 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                     <Eye size={20} color={colors.text.tertiary} strokeWidth={2} />
                   )}
                 </Pressable>
-              </View>
+              </PostHogMaskView>
             </View>
 
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>CONFIRM NEW PASSWORD</Text>
-              <View style={styles.passwordInputContainer}>
+              <PostHogMaskView style={styles.passwordInputContainer}>
                 <TextInput
                   style={styles.passwordInput}
                   value={confirmPassword}
@@ -261,7 +262,7 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
                     <Eye size={20} color={colors.text.tertiary} strokeWidth={2} />
                   )}
                 </Pressable>
-              </View>
+              </PostHogMaskView>
             </View>
 
             <GlossyPrimaryButton

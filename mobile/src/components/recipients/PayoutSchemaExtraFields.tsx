@@ -1,5 +1,6 @@
 import React from 'react'
 import { View, TextInput, StyleSheet } from 'react-native'
+import { PostHogMaskView } from 'posthog-react-native'
 import type { PayoutFieldsSchemaHint } from '@easner/shared'
 import {
   recipientFormNeedsEmail,
@@ -51,7 +52,7 @@ export function PayoutSchemaExtraFields({
   if (!needsEmail && !needsPhone && !needsAddress) return null
 
   return (
-    <View style={styles.wrap}>
+    <PostHogMaskView style={styles.wrap}>
       {needsPhone ? (
         <TextInput
           style={styles.input}
@@ -115,7 +116,7 @@ export function PayoutSchemaExtraFields({
           </View>
         </>
       ) : null}
-    </View>
+    </PostHogMaskView>
   )
 }
 

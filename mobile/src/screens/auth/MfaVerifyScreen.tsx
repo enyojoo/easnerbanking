@@ -17,6 +17,7 @@ import { authScreenStyles } from '../../theme/authScreen'
 import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
 import { AuthFlowContainer } from '../../components/layout/AuthFlowContainer'
+import { PostHogMaskView } from 'posthog-react-native'
 
 export default function MfaVerifyScreen() {
   const palette = useThemeColors()
@@ -71,7 +72,7 @@ export default function MfaVerifyScreen() {
           </Text>
 
           <SectionCard style={styles.verifyCard}>
-            <View
+            <PostHogMaskView
               style={submitting ? styles.otpVerifyLock : undefined}
               pointerEvents={submitting ? 'none' : 'auto'}
             >
@@ -89,7 +90,7 @@ export default function MfaVerifyScreen() {
                 disabled={submitting}
                 loading={submitting}
               />
-            </View>
+            </PostHogMaskView>
 
             <View style={styles.primaryCtaWrap}>
               <Button

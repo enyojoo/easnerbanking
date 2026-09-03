@@ -3,6 +3,7 @@ import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, TextIn
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { X } from 'lucide-react-native'
+import { PostHogMaskView } from 'posthog-react-native'
 import { extractWalletAddress } from '../../lib/extract-wallet-address'
 import { colors, spacing, textStyles, fontFamily } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
@@ -61,7 +62,7 @@ export function WalletAddressQrScannerContent({
 
   if (Platform.OS === 'web') {
     return (
-      <View style={[styles.root, styles.webPasteRoot]}>
+      <PostHogMaskView style={[styles.root, styles.webPasteRoot]}>
         <Text style={styles.webPasteTitle}>Paste wallet address</Text>
         <TextInput
           value={pasteValue}
@@ -89,12 +90,12 @@ export function WalletAddressQrScannerContent({
             <X size={22} color={colors.text.inverse} strokeWidth={2} />
           </Pressable>
         ) : null}
-      </View>
+      </PostHogMaskView>
     )
   }
 
   return (
-    <View style={styles.root} collapsable={false}>
+    <PostHogMaskView style={styles.root} collapsable={false}>
       <CameraView
         style={styles.camera}
         facing="back"
@@ -125,7 +126,7 @@ export function WalletAddressQrScannerContent({
           <Text style={styles.hint}>Align QR code inside the frame</Text>
         </View>
       </View>
-    </View>
+    </PostHogMaskView>
   )
 }
 

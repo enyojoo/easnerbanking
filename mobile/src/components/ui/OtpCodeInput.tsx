@@ -12,6 +12,7 @@ import {
   InteractionManager,
   ActivityIndicator,
 } from 'react-native'
+import { PostHogMaskView } from 'posthog-react-native'
 import { colors, spacing, textStyles } from '../../theme'
 import { otpCodeBoxStyles, OTP_CODE_BOX_H } from '../../theme/otpCodeBoxVisual'
 import { useOtpClipboardAutofill } from '../../hooks/useOtpClipboardAutofill'
@@ -118,67 +119,69 @@ export function OtpCodeInput({
           {label}
         </Text>
       ) : null}
-      <Pressable
-        style={styles.inputStack}
-        onPress={focusInput}
-        disabled={disabled || loading}
-        accessibilityLabel={label ? undefined : 'One-time code'}
-        accessibilityRole="none"
-        accessibilityHint="Tap to enter or paste your verification code"
-      >
-        <View style={otpCodeBoxStyles.boxRow} pointerEvents="none">
-          {loading ? (
-            <View style={otpCodeBoxStyles.boxesLoadingOnly}>
-              <ActivityIndicator size="small" color={colors.primary.main} />
-            </View>
-          ) : (
-            Array.from({ length }, (_, i) => (
-              <View
-                key={i}
-                style={[
-                  otpCodeBoxStyles.box,
-                  activeIndex === i ? otpCodeBoxStyles.boxActive : otpCodeBoxStyles.boxIdle,
-                ]}
-                accessibilityElementsHidden
-                importantForAccessibility="no-hide-descendants"
-              >
-                <Text
-                  style={otpCodeBoxStyles.digit}
-                  maxFontSizeMultiplier={1.4}
-                  {...Platform.select({
-                    ios: { fontVariant: ['tabular-nums'] as const },
-                  })}
-                >
-                  {digits[i] ?? ''}
-                </Text>
+      <PostHogMaskView>
+        <Pressable
+          style={styles.inputStack}
+          onPress={focusInput}
+          disabled={disabled || loading}
+          accessibilityLabel={label ? undefined : 'One-time code'}
+          accessibilityRole="none"
+          accessibilityHint="Tap to enter or paste your verification code"
+        >
+          <View style={otpCodeBoxStyles.boxRow} pointerEvents="none">
+            {loading ? (
+              <View style={otpCodeBoxStyles.boxesLoadingOnly}>
+                <ActivityIndicator size="small" color={colors.primary.main} />
               </View>
-            ))
-          )}
-        </View>
-        <TextInput
-          ref={inputRef}
-          nativeID={id}
-          value={digits}
-          onChangeText={applyDigits}
-          keyboardType={Platform.OS === 'ios' ? 'default' : 'numeric'}
-          inputMode="numeric"
-          maxLength={length}
-          editable={!disabled && !loading}
-          onFocus={handleFocus}
-          caretHidden
-          showSoftInputOnFocus
-          autoCapitalize="none"
-          autoCorrect={false}
-          contextMenuHidden={false}
-          {...(Platform.OS === 'ios'
-            ? { textContentType: 'oneTimeCode' as const }
-            : { autoComplete: 'sms-otp' as const })}
-          spellCheck={false}
-          importantForAutofill="yes"
-          style={styles.hiddenInput}
-          selectionColor="transparent"
-        />
-      </Pressable>
+            ) : (
+              Array.from({ length }, (_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    otpCodeBoxStyles.box,
+                    activeIndex === i ? otpCodeBoxStyles.boxActive : otpCodeBoxStyles.boxIdle,
+                  ]}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                >
+                  <Text
+                    style={otpCodeBoxStyles.digit}
+                    maxFontSizeMultiplier={1.4}
+                    {...Platform.select({
+                      ios: { fontVariant: ['tabular-nums'] as const },
+                    })}
+                  >
+                    {digits[i] ?? ''}
+                  </Text>
+                </View>
+              ))
+            )}
+          </View>
+          <TextInput
+            ref={inputRef}
+            nativeID={id}
+            value={digits}
+            onChangeText={applyDigits}
+            keyboardType={Platform.OS === 'ios' ? 'default' : 'numeric'}
+            inputMode="numeric"
+            maxLength={length}
+            editable={!disabled && !loading}
+            onFocus={handleFocus}
+            caretHidden
+            showSoftInputOnFocus
+            autoCapitalize="none"
+            autoCorrect={false}
+            contextMenuHidden={false}
+            {...(Platform.OS === 'ios'
+              ? { textContentType: 'oneTimeCode' as const }
+              : { autoComplete: 'sms-otp' as const })}
+            spellCheck={false}
+            importantForAutofill="yes"
+            style={styles.hiddenInput}
+            selectionColor="transparent"
+          />
+        </Pressable>
+      </PostHogMaskView>
     </View>
   )
 }

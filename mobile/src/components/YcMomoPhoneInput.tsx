@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { StyleSheet, View, Text, TextInput, type TextInputProps } from 'react-native'
+import { PostHogMaskView } from 'posthog-react-native'
 import {
   buildYcMomoPhoneFromLocal,
   parseYcMomoLocalPhone,
@@ -37,7 +38,7 @@ export function YcMomoPhoneInput({
   }
 
   return (
-    <View style={styles.row}>
+    <PostHogMaskView style={styles.row}>
       <View style={styles.prefix}>
         <Text style={styles.prefixText}>{prefix}</Text>
       </View>
@@ -50,7 +51,7 @@ export function YcMomoPhoneInput({
         style={[styles.input, style]}
         autoComplete="tel-national"
       />
-    </View>
+    </PostHogMaskView>
   )
 }
 

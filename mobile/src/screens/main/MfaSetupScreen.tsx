@@ -52,6 +52,7 @@ import { NavigationProps } from '../../types'
 import { useAuth } from '../../contexts/AuthContext'
 import { EasnerAlertSheet } from '../../components/premium'
 import { haptics } from '../../lib/haptics'
+import { PostHogMaskView } from 'posthog-react-native'
 
 function svgXmlFromQrDataUrl(qrDataUrl: string | null): string | null {
   if (!qrDataUrl || !qrDataUrl.startsWith('data:image/svg')) return null
@@ -515,6 +516,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                         <Text style={[styles.body, styles.mtSm]}>
                           Enter the 6-digit code from your authenticator app to confirm disabling 2FA.
                         </Text>
+                        <PostHogMaskView>
                         <OtpCodeInput
                           id="mfa-disable-code"
                           label={MFA_COPY.digitCodeLabel}
@@ -534,6 +536,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                           disabled={turnOffSubmitting}
                           loading={turnOffSubmitting}
                         />
+                        </PostHogMaskView>
                         <Button
                           title="Confirm disable"
                           variant="destructive"
@@ -581,6 +584,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                 {!showVerifyInput ? (
                   <>
                     <Text style={styles.enrollIntro}>{MFA_COPY.enrollDescription}</Text>
+                    <PostHogMaskView>
                     <View style={styles.qrSection}>
                       <View style={styles.qrContainer}>
                         {totpQrValue ? (
@@ -649,10 +653,11 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                         />
                       )}
                     </View>
+                    </PostHogMaskView>
                   </>
                 ) : null}
                 {showVerifyInput ? (
-                  <View
+                  <PostHogMaskView
                     style={[
                       styles.otpAfterSecret,
                       verifySubmitting ? styles.otpVerifyLock : undefined,
@@ -679,7 +684,7 @@ export default function MfaSetupScreen({ navigation, route }: NavigationProps) {
                       }}
                       disabled={verifySubmitting || enrollFetching || !enrollFactorId}
                     />
-                  </View>
+                  </PostHogMaskView>
                 ) : null}
                 <View style={[styles.enrollCtaWrap, showVerifyInput ? styles.enrollCtaWrapAfterOtp : undefined]}>
                   <Button

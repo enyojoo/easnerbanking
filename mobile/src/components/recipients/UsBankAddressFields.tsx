@@ -9,6 +9,7 @@ import {
   type TextStyle,
   type ViewStyle,
 } from 'react-native'
+import { PostHogMaskView } from 'posthog-react-native'
 import { colors } from '../../theme'
 
 type Values = {
@@ -79,7 +80,7 @@ export function UsBankAddressFields({
   halfInputStyle,
 }: Props) {
   return (
-    <>
+    <PostHogMaskView>
       <FieldInput
         scrollRef={scrollRef}
         style={inputStyle}
@@ -126,7 +127,7 @@ export function UsBankAddressFields({
           />
         </View>
       </View>
-    </>
+    </PostHogMaskView>
   )
 }
 

@@ -1,5 +1,6 @@
 import React, { type ReactNode } from 'react'
-import { View, Text, StyleSheet } from 'react-native'
+import { Text, StyleSheet } from 'react-native'
+import { PostHogMaskView } from 'posthog-react-native'
 import {
   buildCrossBorderSendDetailRows,
   formatPayoutRecipientSubtitle,
@@ -64,10 +65,10 @@ export function CrossBorderSendDetailRows({
               label={row.label}
               last={index === rows.length - 1}
             >
-              <View style={styles.valueStack}>
+              <PostHogMaskView style={styles.valueStack}>
                 <Text style={styles.valuePrimary}>{recipientSnapshot.full_name}</Text>
                 {subtitle ? <Text style={styles.valueSecondary}>{subtitle}</Text> : null}
-              </View>
+              </PostHogMaskView>
             </TransactionDetailSummaryRow>
           )
         }

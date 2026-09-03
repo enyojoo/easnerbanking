@@ -29,6 +29,7 @@ import { PinLockedHintText } from '../../components/pin/PinLockedHintText'
 import { markBalanceSendPinVerified } from '../../lib/sendFlowPostPinGate'
 import { haptics } from '../../lib/haptics'
 import { USE_NATIVE_DRIVER } from '../../lib/animation'
+import { PostHogMaskView } from 'posthog-react-native'
 
 export default function SendPinScreen({ navigation }: NavigationProps) {
   const palette = useThemeColors()
@@ -211,7 +212,7 @@ export default function SendPinScreen({ navigation }: NavigationProps) {
           </View>
         </View>
 
-        <View style={styles.content}>
+        <PostHogMaskView style={styles.content}>
           <View style={styles.topBlock}>
             <View style={styles.pinDotsWrapper}>
               {showDotsSpinner ? (
@@ -247,7 +248,7 @@ export default function SendPinScreen({ navigation }: NavigationProps) {
               filledCount={filledCount}
             />
           </View>
-        </View>
+        </PostHogMaskView>
       </KeyboardAvoidingView>
     </View>
   )

@@ -34,6 +34,7 @@ import { EmbeddedWalletAddressQrScanner } from '../recipients/WalletAddressQrSca
 import { formatAccountNumber, formatIBAN, formatRoutingNumber, formatSortCode } from '../../utils/formatters'
 import { resolvePayrollReceivingDestination } from '../../features/payroll/receivingMethodDefaults'
 import { useAuth } from '../../contexts/AuthContext'
+import { PostHogMaskView } from 'posthog-react-native'
 
 export type PayrollExternalMethodType = 'bank' | 'mobile_money' | 'stablecoin'
 
@@ -466,13 +467,17 @@ export function PayrollReceivingMethodSheet({
                     if (!value) return null
                     const sensitive = ['accountNumber', 'phoneNumber', 'walletAddress', 'iban'].includes(field.key)
                     const shown = sensitive && value.length > 4 ? `••••${value.slice(-4)}` : value
+                    const ReplayWrap =
+                      sensitive || ['routingNumber', 'sortCode', 'swiftBic'].includes(field.key)
+                        ? PostHogMaskView
+                        : View
                     return (
-                      <View key={field.key} style={styles.reviewRow}>
+                      <ReplayWrap key={field.key} style={styles.reviewRow}>
                         <Text style={styles.reviewLabel}>{field.label}</Text>
                         <Text style={styles.reviewValue} numberOfLines={1}>
                           {shown}
                         </Text>
-                      </View>
+                      </ReplayWrap>
                     )
                   })}
                   {editingMethod ? (
@@ -714,9 +719,26 @@ export function PayrollReceivingMethodSheet({
                         )
                       }
 
+                      if (field.key === 'fullName') {
+                        return (
+                          <TextInput
+                            key={field.key}
+                            style={styles.formInput}
+                            value={fields[field.key] ?? ''}
+                            onChangeText={(value) => updateField(field.key, value)}
+                            placeholder={`${field.placeholder}${field.required ? ' *' : ''}`}
+                            placeholderTextColor={colors.text.secondary}
+                            keyboardType={field.keyboardType}
+                            autoCapitalize="words"
+                            autoCorrect={false}
+                            editable={!submitting}
+                          />
+                        )
+                      }
+
                       return (
+                        <PostHogMaskView key={field.key}>
                         <TextInput
-                          key={field.key}
                           style={styles.formInput}
                           value={fields[field.key] ?? ''}
                           onChangeText={(value) => updateField(field.key, value)}
@@ -727,6 +749,7 @@ export function PayrollReceivingMethodSheet({
                           autoCorrect={false}
                           editable={!submitting}
                         />
+                        </PostHogMaskView>
                       )
                     })
                   ) : null}

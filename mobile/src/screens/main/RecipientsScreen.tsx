@@ -124,6 +124,7 @@ import { UsBankAddressFields } from '../../components/recipients/UsBankAddressFi
 import { RecipientFormDropdownHost, RegisterRecipientDropdownSheet } from '../../components/recipients/RecipientFormDropdownHost'
 import { haptics } from '../../lib/haptics'
 import { apiFetch } from '../../query/api-client'
+import { PostHogMaskView } from 'posthog-react-native'
 
 function RecipientsContent({ navigation, route }: NavigationProps) {
   const { user, userProfile } = useAuth()
@@ -1899,6 +1900,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                     placeholderTextColor={colors.text.secondary}
                     editable={!isSubmitting}
                   />
+                  <PostHogMaskView>
                   <TextInput
                     style={styles.modalInput}
                     value={newRecipient.phoneNumber}
@@ -1908,6 +1910,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                     keyboardType="phone-pad"
                     editable={!isSubmitting}
                   />
+                  </PostHogMaskView>
                 </>
               )}
               {selectedRecipientType === 'wallet' && (
@@ -2170,6 +2173,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                           isSubmitting={isSubmitting}
                         />
                         ) : null}
+                        <PostHogMaskView>
                         <View>
                           <TextInput
                             style={[styles.modalInput, fieldErrors.routingNumber && styles.modalInputError]}
@@ -2215,12 +2219,13 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                             <Text style={styles.errorText}>{fieldErrors.accountNumber}</Text>
                           )}
                         </View>
+                        </PostHogMaskView>
                       </>
                     )}
 
                     {/* UK Account Fields */}
                     {accountConfig.accountType === "uk" && (
-                      <>
+                      <PostHogMaskView>
                         <View style={styles.twoColumnRow}>
                           <View style={styles.halfInput}>
                             <TextInput
@@ -2300,12 +2305,12 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                           onSubmitEditing={() => Keyboard.dismiss()}
                           editable={!isSubmitting}
                         />
-                      </>
+                      </PostHogMaskView>
                     )}
 
                     {/* EURO Account Fields */}
                     {accountConfig.accountType === "euro" && (
-                      <>
+                      <PostHogMaskView>
                         <View>
                           <TextInput
                             style={[styles.modalInput, fieldErrors.iban && styles.modalInputError]}
@@ -2325,12 +2330,12 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                             <Text style={styles.errorText}>{fieldErrors.iban}</Text>
                           )}
                         </View>
-                      </>
+                      </PostHogMaskView>
                     )}
 
                     {/* Generic Account Fields (for African countries, etc.) */}
                     {accountConfig.accountType === "generic" && (
-                      <View>
+                      <PostHogMaskView>
                         <TextInput
                           style={[styles.modalInput, fieldErrors.accountNumber && styles.modalInputError]}
                           value={newRecipient.accountNumber}
@@ -2407,7 +2412,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
                             ) : null}
                           </>
                         ) : null}
-                      </View>
+                      </PostHogMaskView>
                     )}
 
                     {selectedRecipientType === 'bank' && selectedCountryCurrency ? (

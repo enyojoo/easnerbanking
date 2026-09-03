@@ -1,5 +1,6 @@
 import React from 'react'
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native'
+import { PostHogMaskView } from 'posthog-react-native'
 import type { RecipientYcMetadata, YcCorridorSchemaHint, YcRecipientFieldDef } from '@easner/shared'
 import { colors, spacing, textStyles, compactInputMetrics, fontFamily } from '../../theme'
 
@@ -25,7 +26,7 @@ export function CorridorRecipientExtraFields({
   if (!list.length) return null
 
   return (
-    <View style={styles.wrap}>
+    <PostHogMaskView style={styles.wrap}>
       {list.map((field) => {
         const key = field.key
         if (key === 'account_number') return null
@@ -74,7 +75,7 @@ export function CorridorRecipientExtraFields({
           </View>
         )
       })}
-    </View>
+    </PostHogMaskView>
   )
 }
 

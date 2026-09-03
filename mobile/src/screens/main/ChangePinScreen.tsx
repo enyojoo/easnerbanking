@@ -23,6 +23,7 @@ import { EasnerAlertSheet } from '../../components/premium'
 import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
 import { USE_NATIVE_DRIVER } from '../../lib/animation'
+import { PostHogMaskView } from 'posthog-react-native'
 
 type Step = 'verify' | 'pin' | 'confirm'
 
@@ -290,7 +291,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
           </Pressable>
         </View>
 
-        <View style={styles.content}>
+        <PostHogMaskView style={styles.content}>
           <View style={styles.topBlock}>
             <View style={styles.titleBlock}>
               <Text style={styles.title}>{titleText}</Text>
@@ -346,7 +347,7 @@ export default function ChangePinScreen({ navigation }: NavigationProps) {
               backspaceActiveColor={colors.error.main}
             />
           </View>
-        </View>
+        </PostHogMaskView>
       </KeyboardAvoidingView>
 
       <EasnerAlertSheet

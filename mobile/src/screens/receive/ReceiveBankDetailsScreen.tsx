@@ -48,6 +48,7 @@ import { useConsumerVirtualAccounts } from '../../hooks/queries/use-receive-depo
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { haptics } from '../../lib/haptics'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
+import { PostHogMaskView } from 'posthog-react-native'
 
 type RouteParams = {
   currency?: 'USD' | 'EUR'
@@ -463,7 +464,7 @@ export default function ReceiveBankDetailsScreen({ navigation, route }: Navigati
           <View style={styles.content}>
             {showBankDepositDetails && bankAccountDetails ? (
               <>
-                <View style={styles.section}>
+                <PostHogMaskView style={styles.section}>
                   {bankAccountDetails.accountName &&
                     renderCopyableField('Account Name', bankAccountDetails.accountName, 'accountName')}
 
@@ -495,7 +496,7 @@ export default function ReceiveBankDetailsScreen({ navigation, route }: Navigati
                     renderCopyableField('Bank Name', bankAccountDetails.bankName, 'bankName')}
                   {bankAccountDetails.bankAddress &&
                     renderCopyableField('Bank Address', bankAccountDetails.bankAddress, 'bankAddress')}
-                </View>
+                </PostHogMaskView>
 
                 <View style={styles.detailActionsRow}>
                   <Pressable

@@ -29,6 +29,7 @@ import { EasnerAlertSheet } from '../../components/premium'
 import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
 import { AuthFlowContainer } from '../../components/layout/AuthFlowContainer'
+import { PostHogMaskView } from 'posthog-react-native'
 
 export default function PinSetupScreen({ navigation, route }: NavigationProps) {
   const palette = useThemeColors()
@@ -170,7 +171,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.content}>
+        <PostHogMaskView style={styles.content}>
           <AuthFlowContainer>
           <View style={styles.helpRow}>
             <Pressable
@@ -241,7 +242,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
             </Pressable>
           )}
           </AuthFlowContainer>
-        </View>
+        </PostHogMaskView>
       </KeyboardAvoidingView>
 
       <EasnerAlertSheet

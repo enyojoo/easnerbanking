@@ -21,6 +21,7 @@ import { useToast } from '../../components/ToastProvider'
 import KeyboardAwareScreen from '../../components/KeyboardAwareScreen'
 import { haptics } from '../../lib/haptics'
 import { AuthFlowContainer } from '../../components/layout/AuthFlowContainer'
+import { PostHogMaskView } from 'posthog-react-native'
 
 export default function ResetPasswordScreen({ navigation, route }: NavigationProps) {
   const [password, setPassword] = useState('')
@@ -202,6 +203,7 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
           <Text style={authScreenStyles.screenTitleCompact}>Reset password</Text>
 
           <View style={styles.form}>
+            <PostHogMaskView>
             <TextField
               label="New password"
               value={password}
@@ -230,7 +232,9 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
                 </Pressable>
               }
             />
+            </PostHogMaskView>
 
+            <PostHogMaskView>
             <TextField
               label="Confirm password"
               value={confirmPassword}
@@ -259,6 +263,7 @@ export default function ResetPasswordScreen({ navigation, route }: NavigationPro
                 </Pressable>
               }
             />
+            </PostHogMaskView>
 
             <View style={styles.primaryCtaWrap}>
               <GlossyPrimaryButton

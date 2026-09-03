@@ -20,6 +20,7 @@ import { TextField } from '../../components/ui'
 import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
 import KeyboardAwareScreen from '../../components/KeyboardAwareScreen'
+import { PostHogMaskView } from 'posthog-react-native'
 
 export default function LoginScreen({ navigation }: NavigationProps) {
   const themeColors = useThemeColors()
@@ -120,6 +121,7 @@ export default function LoginScreen({ navigation }: NavigationProps) {
                 containerStyle={styles.fieldFlush}
               />
 
+              <PostHogMaskView>
               <TextField
                 label="Password"
                 value={password}
@@ -134,6 +136,7 @@ export default function LoginScreen({ navigation }: NavigationProps) {
                 onSubmitEditing={handleLogin}
                 containerStyle={styles.fieldFlush}
               />
+              </PostHogMaskView>
 
               {/* Remember Me Checkbox */}
               <View style={styles.rememberMeContainer}>

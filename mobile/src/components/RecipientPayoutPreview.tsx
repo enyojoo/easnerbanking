@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
+import { PostHogMaskView } from 'posthog-react-native'
 import type { Recipient } from '../types'
 import { getPayoutRecipientSubtitleParts } from '../lib/recipientPayoutPreview'
 import { PayoutRecipientAvatar } from './PayoutRecipientAvatar'
@@ -19,7 +20,7 @@ export function RecipientPayoutPreview({ recipient, variant = 'card', titleEndAc
   const { left, right } = getPayoutRecipientSubtitleParts(recipient)
 
   return (
-    <View style={[styles.wrap, row && styles.wrapRow]}>
+    <PostHogMaskView style={[styles.wrap, row && styles.wrapRow]}>
       <View style={styles.avatarWrap}>
         <PayoutRecipientAvatar recipient={recipient} size={48} />
       </View>
@@ -32,7 +33,7 @@ export function RecipientPayoutPreview({ recipient, variant = 'card', titleEndAc
         </View>
         <PayoutSubtitleRow left={left} right={right} textStyle={styles.tagLine} gap={4} />
       </View>
-    </View>
+    </PostHogMaskView>
   )
 }
 

@@ -1,5 +1,6 @@
 import React from 'react'
 import { View, Text, StyleSheet } from 'react-native'
+import { PostHogMaskView } from 'posthog-react-native'
 import type { ReceiptVisualRow } from '@easner/shared'
 import { REVIEW_ROW_LABELS } from '@easner/shared'
 import { TransactionRecipientSummary } from '../transactions/TransactionRecipientSummary'
@@ -15,7 +16,7 @@ type Props = {
 export function ReceiptVisualRowValue({ row }: Props) {
   if (row.kind === 'recipient') {
     return (
-      <View style={styles.recipientWrap}>
+      <PostHogMaskView style={styles.recipientWrap}>
         <TransactionRecipientSummary
           recipientSnapshot={
             row.display.bankName || row.display.accountNumber
@@ -38,7 +39,7 @@ export function ReceiptVisualRowValue({ row }: Props) {
           payeeEasetag={row.display.payeeEasetag}
           alignEnd
         />
-      </View>
+      </PostHogMaskView>
     )
   }
 
@@ -55,10 +56,10 @@ export function ReceiptVisualRowValue({ row }: Props) {
     const match = row.value.match(/^(.+?) \((.+)\)$/)
     if (match) {
       return (
-        <View style={styles.valueStack}>
+        <PostHogMaskView style={styles.valueStack}>
           <Text style={styles.valuePrimary}>{match[1].trim()}</Text>
           <Text style={styles.valueSecondary}>({match[2].trim()})</Text>
-        </View>
+        </PostHogMaskView>
       )
     }
   }

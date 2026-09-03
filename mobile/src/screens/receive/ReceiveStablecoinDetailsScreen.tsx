@@ -40,6 +40,7 @@ import { haptics } from '../../lib/haptics'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { useStackHardwareBack } from '../../hooks/useStackHardwareBack'
 import { navigateStackBack } from '../../navigation/stackBackNavigation'
+import { PostHogMaskView } from 'posthog-react-native'
 
 type RouteParams = {
   currency?: 'USD' | 'EUR'
@@ -166,7 +167,7 @@ export default function ReceiveStablecoinDetailsScreen({ navigation, route }: Na
           <View style={styles.content}>
             {address ? (
               <>
-                <View style={styles.section}>
+                <PostHogMaskView style={styles.section}>
                   <View style={styles.qrSection}>
                     <View style={styles.qrContainer}>
                       <QRCode
@@ -191,7 +192,7 @@ export default function ReceiveStablecoinDetailsScreen({ navigation, route }: Na
                   {renderCopyableField(`${asset} Address`, address, 'stablecoinAddress')}
 
                   {memo ? renderCopyableField('Memo (Required)', memo, 'memo') : null}
-                </View>
+                </PostHogMaskView>
 
                 <View style={styles.detailActionsRow}>
                   <Pressable

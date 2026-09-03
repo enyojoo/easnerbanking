@@ -12,8 +12,10 @@ export const posthogOptions: PostHogOptions | undefined =
         // Session replay is native-only (iOS/Android). Expo web keeps event tracking only.
         enableSessionReplay: Platform.OS !== 'web',
         sessionReplayConfig: {
-          maskAllTextInputs: true,
+          // Match business: show UI for fraud/risk; mask secrets via PostHogMaskView.
+          maskAllTextInputs: false,
           maskAllImages: true,
+          maskAllSandboxedViews: true,
           captureNetworkTelemetry: true,
         },
       }

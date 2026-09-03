@@ -57,6 +57,7 @@ import {
 } from '../../lib/calendarDate'
 
 import { ACCOUNT_DELETED_FLAG_KEY } from '../../constants/auth'
+import { PostHogMaskView } from 'posthog-react-native'
 
 function ProfileEditContent({ navigation }: NavigationProps) {
   const { user, userProfile, refreshUserProfile, applyPersonalSettingsFromServer, signOut } = useAuth()
@@ -606,7 +607,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
   const renderVerifiedIdentityCard = () => {
     if (!verifiedIdentity.visible) return null
     return (
-      <View style={[styles.profileCard, styles.verifiedCard]}>
+      <PostHogMaskView style={[styles.profileCard, styles.verifiedCard]}>
         {verifiedIdentity.idType ? (
           <View style={styles.fieldContainer}>
             <Text style={styles.fieldLabelEdit}>ID type</Text>
@@ -646,7 +647,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
             </View>
           </View>
         ) : null}
-      </View>
+      </PostHogMaskView>
     )
   }
 
@@ -956,7 +957,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                 </View>
               </View>
 
-              <View>
+              <PostHogMaskView>
                 {renderProfileField(
                   'Full Name',
                   isEditing ? editProfileData.fullName : profileData.fullName,
@@ -976,7 +977,7 @@ function ProfileEditContent({ navigation }: NavigationProps) {
                 )}
                 {renderDateOfBirthField()}
                 {renderEasetagField()}
-              </View>
+              </PostHogMaskView>
             </View>
 
             {renderVerifiedIdentityCard()}

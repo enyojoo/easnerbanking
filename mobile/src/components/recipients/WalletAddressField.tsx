@@ -1,6 +1,7 @@
 import React from 'react'
-import { View, TextInput, Pressable, StyleSheet } from 'react-native'
+import { TextInput, Pressable, StyleSheet } from 'react-native'
 import { ScanLine } from 'lucide-react-native'
+import { PostHogMaskView } from 'posthog-react-native'
 import { colors, spacing, borderRadius, compactFormInputStyle } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 
@@ -20,7 +21,7 @@ export function WalletAddressField({
   editable = true,
 }: WalletAddressFieldProps) {
   return (
-    <View style={styles.wrap}>
+    <PostHogMaskView style={styles.wrap}>
       <TextInput
         style={styles.input}
         value={value}
@@ -41,7 +42,7 @@ export function WalletAddressField({
       >
         <ScanLine size={20} color={colors.primary.main} strokeWidth={2} />
       </Pressable>
-    </View>
+    </PostHogMaskView>
   )
 }
 

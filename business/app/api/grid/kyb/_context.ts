@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { requireAuth, requireGridEnv, resolveGridBusinessContextAsync } from "../_helpers"
+import { assertAccountAllows, accountRestrictionErrorResponse } from "@/lib/account-restriction/assert"
 
 function normalizeMembershipRole(value: string | null | undefined): string {
   const raw = String(value ?? "").trim().toLowerCase()
@@ -35,6 +36,15 @@ export async function requireKybContext(request: Request) {
         { status: 403 },
       ),
     }
+  }
+
+  // Block KYB sync for restricted/closed accounts — Office status supersedes
+  const restriction = await assertAccountAllows(admin, {
+    businessId: ctx.businessId,
+    userId: ctx.userId,
+  }, "send")
+  if (!restriction.ok) {
+    return { error: accountRestrictionErrorResponse(restriction) }
   }
 
   return { admin, businessId: ctx.businessId, userId: ctx.userId }

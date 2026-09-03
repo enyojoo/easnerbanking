@@ -29,6 +29,7 @@ import EaseEnter from '../../components/EaseEnter'
 import { AuthFlowContainer } from '../../components/layout/AuthFlowContainer'
 import { useScreenDecorativeEnter } from '../../hooks/useScreenDecorativeEnter'
 import { USE_NATIVE_DRIVER } from '../../lib/animation'
+import { PostHogMaskView } from 'posthog-react-native'
 
 export default function PinEntryScreen({ navigation: navigationProp }: NavigationProps) {
   const { shouldAnimateEnter } = useScreenDecorativeEnter()
@@ -179,7 +180,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.content}>
+        <PostHogMaskView style={styles.content}>
           <AuthFlowContainer>
           <EaseEnter enabled={shouldAnimateEnter}>
           <View style={styles.helpRow}>
@@ -271,7 +272,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
           </Pressable>
           </EaseEnter>
           </AuthFlowContainer>
-        </View>
+        </PostHogMaskView>
       </KeyboardAvoidingView>
 
       <EasnerAlertSheet

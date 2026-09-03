@@ -34,6 +34,7 @@ import { signupPrecheck } from '../../lib/signupPrecheck'
 import { clearSignupOtpEmail, readSignupOtpEmail, stashSignupOtpEmail } from '../../lib/signupOtpEmailStorage'
 import { consumeSignupBlockedMessage } from '../../lib/signupBlockedMessage'
 import { useScreenDecorativeEnter } from '../../hooks/useScreenDecorativeEnter'
+import { PostHogMaskView } from 'posthog-react-native'
 
 /**
  * Layout mirrors business auth pages:
@@ -512,6 +513,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
                   containerStyle={styles.fieldFlush}
                 />
 
+                <PostHogMaskView>
                 <TextField
                   label="Password"
                   value={password}
@@ -540,6 +542,7 @@ export default function AuthScreen({ navigation }: NavigationProps) {
                     </Pressable>
                   }
                 />
+                </PostHogMaskView>
               </>
             )}
 

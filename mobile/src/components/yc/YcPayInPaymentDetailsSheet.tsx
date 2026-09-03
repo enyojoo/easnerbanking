@@ -17,6 +17,7 @@ import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 import { ycBankInfoFields } from '../../lib/yc-bank-info-fields'
 import { colors, spacing, textStyles, borderRadius } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
+import { PostHogMaskView } from 'posthog-react-native'
 
 type Props = {
   visible: boolean
@@ -85,7 +86,7 @@ export function YcPayInPaymentDetailsSheet({ visible, onClose, details }: Props)
           </View>
         ) : null}
 
-        <View style={styles.card}>
+        <PostHogMaskView style={styles.card}>
           <View style={styles.paymentHeader}>
             <PaymentIcon size={20} color={colors.primary.main} strokeWidth={2} />
             <View style={styles.paymentHeaderText}>
@@ -136,7 +137,7 @@ export function YcPayInPaymentDetailsSheet({ visible, onClose, details }: Props)
               </Pressable>
             ))
           )}
-        </View>
+        </PostHogMaskView>
       </ScrollView>
     </PremiumModalSheet>
   )

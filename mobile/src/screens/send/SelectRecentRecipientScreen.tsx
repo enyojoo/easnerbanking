@@ -121,6 +121,7 @@ import { useFocusRefresh } from '../../hooks/useFocusRefresh'
 import { useFocusEffect } from '@react-navigation/native'
 import { haptics } from '../../lib/haptics'
 import { exitSendFlowFromHub } from '../../navigation/stackBackNavigation'
+import { PostHogMaskView } from 'posthog-react-native'
 
 const getInitials = (name: string): string => {
   const parts = name.trim().split(' ')
@@ -1439,6 +1440,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                     placeholderTextColor={colors.text.secondary}
                     editable={!isSubmitting}
                   />
+                  <PostHogMaskView>
                   <TextInput
                     style={styles.modalInput}
                     value={newRecipient.phoneNumber}
@@ -1448,6 +1450,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                     keyboardType="phone-pad"
                     editable={!isSubmitting}
                   />
+                  </PostHogMaskView>
                 </>
               )}
 
@@ -1704,6 +1707,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                           isSubmitting={isSubmitting}
                         />
                         ) : null}
+                        <PostHogMaskView>
                         <View>
                           <TextInput
                             style={styles.modalInput}
@@ -1739,12 +1743,13 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                             editable={!isSubmitting}
                           />
                         </View>
+                        </PostHogMaskView>
                       </>
                     )}
 
                     {/* UK Account Fields */}
                     {accountConfig.accountType === "uk" && (
-                      <>
+                      <PostHogMaskView>
                         <View style={styles.twoColumnRow}>
                           <View style={styles.halfInput}>
                             <TextInput
@@ -1809,12 +1814,12 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                           onSubmitEditing={() => Keyboard.dismiss()}
                           editable={!isSubmitting}
                         />
-                      </>
+                      </PostHogMaskView>
                     )}
 
                     {/* EURO Account Fields */}
                     {accountConfig.accountType === "euro" && (
-                      <>
+                      <PostHogMaskView>
                         <View>
                           <TextInput
                             style={styles.modalInput}
@@ -1831,12 +1836,12 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                             editable={!isSubmitting}
                           />
                         </View>
-                      </>
+                      </PostHogMaskView>
                     )}
 
                     {/* Generic Account Fields */}
                     {accountConfig.accountType === "generic" && (
-                      <View>
+                      <PostHogMaskView>
                         <TextInput
                           style={styles.modalInput}
                           value={newRecipient.accountNumber}
@@ -1867,7 +1872,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
                             editable={!isSubmitting}
                           />
                         ) : null}
-                      </View>
+                      </PostHogMaskView>
                     )}
 
                     {selectedRecipientType === 'bank' && selectedCountryCurrency ? (
