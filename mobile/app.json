@@ -3,12 +3,12 @@
     "name": "Easner",
     "slug": "easner",
     "scheme": "easner",
-    "version": "1.0.9",
+    "version": "1.10.0",
     "orientation": "portrait",
     "icon": "./assets/icons/ios-light.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "buildNumber": "4",
+      "buildNumber": "5",
       "supportsTablet": false,
       "deploymentTarget": "16.4",
       "bundleIdentifier": "com.easner.mobile",
@@ -42,7 +42,7 @@
       }
     },
     "android": {
-      "versionCode": 4,
+      "versionCode": 5,
       "softwareKeyboardLayoutMode": "resize",
       "icon": "./assets/icons/adaptive-icon.png",
       "adaptiveIcon": {
