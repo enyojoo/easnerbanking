@@ -103,7 +103,7 @@ export const getCurrentUser = async () => {
   return session.user
 }
 
-export const signOut = async () => {
-  const { error } = await supabase.auth.signOut()
+export const signOut = async (options?: { scope?: 'local' | 'global' }) => {
+  const { error } = await supabase.auth.signOut({ scope: options?.scope ?? 'local' })
   if (error) throw error
 }

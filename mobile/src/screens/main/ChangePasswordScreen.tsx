@@ -33,6 +33,7 @@ import { useToast } from '../../components/ToastProvider'
 import { haptics } from '../../lib/haptics'
 import { supabase } from '../../lib/supabase'
 import { notifySecurityAlert } from '../../lib/securityAlertNotify'
+import { useAuth } from '../../contexts/AuthContext'
 import { PostHogMaskView } from 'posthog-react-native'
 
 const MIN_PASSWORD_LEN = 8
@@ -41,6 +42,7 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
   const insets = useSafeAreaInsets()
   const scrollBottomPadding = useScrollBottomPadding(spacing[5])
   const { showError, showSuccess } = useToast()
+  const { signOut } = useAuth()
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -104,10 +106,11 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
       }
 
       void notifySecurityAlert('password_changed')
-      showSuccess('Your password was updated')
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
+      showSuccess('Password updated. Sign in again on all devices.')
+      await signOut({ scope: 'global' })
     } catch (error) {
       console.error('Error changing password:', error)
       showError('Failed to change password')
@@ -153,6 +156,9 @@ export default function ChangePasswordScreen({ navigation }: NavigationProps) {
             </Pressable>
             <View style={styles.headerContent}>
               <Text style={styles.title}>Change Password</Text>
+              <Text style={styles.subtitle}>
+                Changing your password signs you out on every device.
+              </Text>
             </View>
           </Animated.View>
 
@@ -306,6 +312,11 @@ const styles = StyleSheet.create({
   title: {
     ...textStyles.headlineMedium,
     color: colors.text.primary,
+  },
+  subtitle: {
+    ...textStyles.bodySmall,
+    color: colors.text.secondary,
+    marginTop: spacing[1],
   },
   content: {
     padding: spacing[5],

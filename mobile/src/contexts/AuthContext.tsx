@@ -298,7 +298,8 @@ interface AuthContextType {
     name: string,
     residenceCountry?: string,
   ) => Promise<{ error: any; needsEmailConfirmation?: boolean }>
-  signOut: (options?: { preserveOnboarding?: boolean }) => Promise<void>
+  /** Default `local` = this device only. Pass `scope: 'global'` after password change. */
+  signOut: (options?: { preserveOnboarding?: boolean; scope?: 'local' | 'global' }) => Promise<void>
   refreshUserProfile: () => Promise<void>
   /** Merge `PUT/GET /api/settings/personal` payload into session + snapshot (avoids stale Supabase read after save). */
   applyPersonalSettingsFromServer: (
@@ -407,7 +408,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
         const fid = getVerifiedTotpFactorId(totpFactorsFromListResponse(factors))
         if (!fid) {
-          await supabase.auth.signOut()
+          await supabase.auth.signOut({ scope: 'local' })
           setUser(null)
           setUserProfile(null)
           payoutCorridorsBootstrappedForUserRef.current = null
@@ -1375,10 +1376,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }
 
-  const signOut = async (options?: { preserveOnboarding?: boolean }) => {
+  const signOut = async (options?: { preserveOnboarding?: boolean; scope?: 'local' | 'global' }) => {
+    const scope = options?.scope ?? 'local'
     const mfaCacheUserId = user?.id
     try {
-      console.log('AuthContext: Signing out user')
+      console.log('AuthContext: Signing out user', { scope })
       setMfaPending(null)
       setMfaGateResolved(true)
       clearSessionUserHydrated()
@@ -1414,8 +1416,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       clearAuthSessionCache()
 
       // Sign out from Supabase (this will trigger onAuthStateChange which also sets user to null)
-      // Do this AFTER setting user to null so navigation happens first
-      await supabase.auth.signOut()
+      // Do this AFTER setting user to null so navigation happens first.
+      // Default `local` keeps other devices signed in; `global` revokes every session.
+      await supabase.auth.signOut({ scope })
       console.log('AuthContext: Sign out successful')
     } catch (error) {
       console.error('Sign out error:', error)

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import jwt from "jsonwebtoken"
+import { createClient } from "@supabase/supabase-js"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
 type Body = {
@@ -38,6 +39,28 @@ async function findAuthUserIdByEmail(admin: ReturnType<typeof createSupabaseAdmi
     page += 1
   }
   return null
+}
+
+/** Revoke every refresh token for the user after a password reset. */
+async function revokeAllSessionsForUser(email: string, newPassword: string): Promise<void> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+  if (!url || !publishableKey) return
+
+  const ephemeral = createClient(url, publishableKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+  const { data, error } = await ephemeral.auth.signInWithPassword({ email, password: newPassword })
+  if (error || !data.session?.access_token) {
+    console.warn("password reset: could not mint session to revoke others:", error?.message)
+    return
+  }
+
+  const admin = createSupabaseAdmin()
+  const { error: signOutErr } = await admin.auth.admin.signOut(data.session.access_token, "global")
+  if (signOutErr) {
+    console.warn("password reset: global session revoke failed:", signOutErr.message)
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -78,6 +101,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Failed to reset password." }, { status: 500 })
   }
 
+  await revokeAllSessionsForUser(email, newPassword).catch((e) =>
+    console.warn("password reset: session revoke (non-fatal):", e),
+  )
+
   const { sendSecurityAlertEmail } = await import("@/lib/notifications/security-notify")
   await sendSecurityAlertEmail(admin, {
     userId,
@@ -87,4 +114,3 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true }, { status: 200 })
 }
-

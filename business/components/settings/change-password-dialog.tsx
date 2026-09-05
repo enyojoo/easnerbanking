@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Eye, EyeOff, Key, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,8 +16,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
+import { useAuth } from "@/lib/auth-context"
 
 const MIN_PASSWORD_LEN = 8
+const PASSWORD_UPDATED_LOGIN_MESSAGE =
+  "Password updated. Sign in again on all devices."
 
 interface ChangePasswordDialogProps {
   open: boolean
@@ -24,6 +28,8 @@ interface ChangePasswordDialogProps {
 }
 
 export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialogProps) {
+  const router = useRouter()
+  const { logout } = useAuth()
   const [current, setCurrent] = useState("")
   const [next, setNext] = useState("")
   const [confirm, setConfirm] = useState("")
@@ -98,14 +104,13 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
         body: JSON.stringify({ alertType: "password_changed" }),
       }).catch(() => {})
 
-      setSuccess("Your password was updated.")
+      setSuccess("Password updated. Signing you out everywhere…")
       setCurrent("")
       setNext("")
       setConfirm("")
-      setTimeout(() => {
-        setSuccess(null)
-        onOpenChange(false)
-      }, 900)
+      onOpenChange(false)
+      await logout({ scope: "global" })
+      router.replace(`/auth/login?message=${encodeURIComponent(PASSWORD_UPDATED_LOGIN_MESSAGE)}`)
     } finally {
       setSubmitting(false)
     }
@@ -120,7 +125,8 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
             Change password
           </DialogTitle>
           <DialogDescription>
-            Enter your current password, then choose a new one.
+            Enter your current password, then choose a new one. Changing it signs you out on every
+            device so you must sign in again.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">

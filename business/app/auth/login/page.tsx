@@ -180,7 +180,7 @@ export default function LoginPage() {
     setMfaFactorId(null)
     setStep("password")
     const supabase = createSupabaseBrowser()
-    await supabase.auth.signOut()
+    await supabase.auth.signOut({ scope: "local" })
   }
 
   const handleGoogleSignIn = async () => {

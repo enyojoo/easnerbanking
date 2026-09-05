@@ -32,7 +32,7 @@ export async function ensureBusinessWebSurface(supabase: SupabaseBrowser): Promi
   }
   const body = (await res.json().catch(() => ({}))) as { error?: string }
   if (!res.ok) {
-    await supabase.auth.signOut()
+    await supabase.auth.signOut({ scope: "local" })
     clearBusinessAppSessionCookie()
     throw new Error(
       typeof body.error === "string" ? body.error : "This account cannot access Easner Business.",

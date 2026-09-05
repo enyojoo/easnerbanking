@@ -63,7 +63,8 @@ interface AuthContextType {
   resendSignupOtp: (email: string) => Promise<void>
   signInWithGoogle: () => Promise<void>
   signInWithApple: () => Promise<void>
-  logout: () => Promise<void>
+  /** Default `local` = this browser only. Use `global` after password change to revoke every device. */
+  logout: (options?: { scope?: "local" | "global" }) => Promise<void>
   /** Reset idle timer (after PIN unlock, etc.). */
   resetSessionActivity: () => void
   isLoading: boolean
@@ -332,7 +333,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             bootJson.error ||
             "This email can't be used to sign up."
           stashSignupBlockedMessage(msg)
-          await supabase.auth.signOut()
+          await supabase.auth.signOut({ scope: "local" })
           if (typeof window !== "undefined") {
             window.location.replace("/auth/signup")
           }
@@ -492,7 +493,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const logout = async () => {
+  const logout = async (options?: { scope?: "local" | "global" }) => {
+    const scope = options?.scope ?? "local"
     const currentUserId = user?.id ?? null
     try {
       const { data } = await supabase.auth.getUser()
@@ -506,7 +508,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearAllBusinessBrowserState(currentUserId)
     analytics.trackSignOut({ userId: user?.id || null })
     analytics.reset()
-    await supabase.auth.signOut()
+    await supabase.auth.signOut({ scope })
   }
 
   /**
@@ -544,7 +546,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resendSignupOtp: (email: string) => handlersRef.current.resendSignupOtp(email),
       signInWithGoogle: () => handlersRef.current.signInWithGoogle(),
       signInWithApple: () => handlersRef.current.signInWithApple(),
-      logout: () => handlersRef.current.logout(),
+      logout: (options?: { scope?: "local" | "global" }) => handlersRef.current.logout(options),
     }),
     [],
   )
