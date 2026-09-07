@@ -24,23 +24,23 @@ function split(ledger: Record<string, unknown>[]) {
 }
 
 describe("splitStatementLedger", () => {
-  it("measures opening from activity before the period", () => {
-    const { summary } = split([
+  it("excludes activity before the period from the flows", () => {
+    const { summary, inPeriod } = split([
       row("2026-07-01T10:00:00.000Z", "in", 500),
       row("2026-07-20T10:00:00.000Z", "out", 200),
       row("2026-08-20T10:00:00.000Z", "in", 100),
       row("2026-08-21T10:00:00.000Z", "out", 40),
     ])
-    expect(summary).toEqual({ opening: 300, moneyIn: 100, moneyOut: 40, closing: 360 })
+    expect(summary).toEqual({ moneyIn: 100, moneyOut: 40 })
+    expect(inPeriod).toHaveLength(2)
   })
 
-  it("opens at zero when the whole history falls inside the period", () => {
+  it("sums the period's flows", () => {
     const { summary } = split([
       row("2026-08-18T10:00:00.000Z", "in", 2351.16),
       row("2026-08-19T10:00:00.000Z", "out", 699.52),
     ])
-    expect(summary.opening).toBe(0)
-    expect(summary.closing).toBe(1651.64)
+    expect(summary).toEqual({ moneyIn: 2351.16, moneyOut: 699.52 })
   })
 
   it("excludes activity after the period from both the summary and the lines", () => {
@@ -48,19 +48,16 @@ describe("splitStatementLedger", () => {
       row("2026-08-18T10:00:00.000Z", "in", 100),
       row("2026-09-30T10:00:00.000Z", "in", 999),
     ])
-    expect(summary).toEqual({ opening: 0, moneyIn: 100, moneyOut: 0, closing: 100 })
+    expect(summary).toEqual({ moneyIn: 100, moneyOut: 0 })
     expect(inPeriod).toHaveLength(1)
   })
 
-  it("keeps closing equal to opening plus the period's flows", () => {
+  it("rounds the flows to cents", () => {
     const { summary } = split([
-      row("2026-01-05T10:00:00.000Z", "in", 12.34),
       row("2026-08-18T10:00:00.000Z", "in", 0.055),
       row("2026-08-19T10:00:00.000Z", "out", 0.015),
     ])
-    expect(summary.closing).toBe(
-      Math.round((summary.opening + summary.moneyIn - summary.moneyOut) * 100) / 100,
-    )
+    expect(summary).toEqual({ moneyIn: 0.06, moneyOut: 0.02 })
   })
 
   it("returns the period rows oldest first with their instants", () => {
@@ -87,7 +84,7 @@ describe("splitStatementLedger", () => {
         metadata: {},
       },
     ])
-    expect(summary).toEqual({ opening: 0, moneyIn: 50, moneyOut: 0, closing: 50 })
+    expect(summary).toEqual({ moneyIn: 50, moneyOut: 0 })
     // Still listed, so the statement shows the movement even when it cannot value it.
     expect(inPeriod).toHaveLength(2)
   })

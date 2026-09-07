@@ -2,10 +2,8 @@ import { impactInStatementCurrency } from "./activity"
 import type { StatementCurrency } from "./types"
 
 export type StatementFlowSummary = {
-  opening: number
   moneyIn: number
   moneyOut: number
-  closing: number
 }
 
 export type StatementPeriodRow = { row: Record<string, unknown>; at: Date }
@@ -18,13 +16,13 @@ function rowInstant(row: Record<string, unknown>): Date | null {
 }
 
 /**
- * Split a completed ledger into the period's activity and its balance summary.
+ * Split a completed ledger into the period's activity and its money in/out.
  *
- * `opening` is measured — the net the ledger reached before the period starts —
- * and `closing` is the period's own arithmetic. Neither is derived from the live
- * wallet balance: that is a snapshot of the wallet now, so back-solving from it
- * pushes any ledger-versus-wallet drift into `opening`, where it can surface as
- * a negative balance the account never held.
+ * The statement reports measured flows and the live wallet balance, and no
+ * period-boundary balance. An opening balance can only be as sound as the rows
+ * behind it, and deriving one from the wallet snapshot puts every
+ * ledger-versus-wallet difference into it — which read as a negative balance
+ * the account never held.
  *
  * `ledger` must already be filtered to completed, feed-visible rows in the
  * statement currency, ordered oldest first.
@@ -35,7 +33,6 @@ export function splitStatementLedger(input: {
   periodStartMs: number
   periodEndMs: number
 }): { summary: StatementFlowSummary; inPeriod: StatementPeriodRow[] } {
-  let opening = 0
   let moneyIn = 0
   let moneyOut = 0
   const inPeriod: StatementPeriodRow[] = []
@@ -48,10 +45,7 @@ export function splitStatementLedger(input: {
       (String(row.direction ?? "").toLowerCase() === "in" ? 1 : -1) *
       impactInStatementCurrency(row, input.currency)
 
-    if (ms < input.periodStartMs) {
-      opening += signed
-      continue
-    }
+    if (ms < input.periodStartMs) continue
     if (ms > input.periodEndMs) continue
 
     if (signed > 0) moneyIn += signed
@@ -59,11 +53,8 @@ export function splitStatementLedger(input: {
     inPeriod.push({ row, at })
   }
 
-  opening = round2(opening)
-  moneyIn = round2(moneyIn)
-  moneyOut = round2(moneyOut)
   return {
-    summary: { opening, moneyIn, moneyOut, closing: round2(opening + moneyIn - moneyOut) },
+    summary: { moneyIn: round2(moneyIn), moneyOut: round2(moneyOut) },
     inPeriod,
   }
 }

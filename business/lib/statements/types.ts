@@ -34,15 +34,11 @@ export type AssembledStatement = {
   addressLabel: "Residential Address" | "Business Address"
   address: string
   bank: StatementBankFields | null
-  opening: number
   moneyIn: number
   moneyOut: number
-  closing: number
   available: number
-  openingLabel: string
   moneyInLabel: string
   moneyOutLabel: string
-  closingLabel: string
   availableLabel: string
   lines: StatementActivityPdfRow[]
 }

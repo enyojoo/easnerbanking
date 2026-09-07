@@ -270,7 +270,7 @@ export async function assembleStatement(
     periodStartMs,
     periodEndMs,
   })
-  const { opening, moneyIn, moneyOut, closing } = summary
+  const { moneyIn, moneyOut } = summary
 
   const linesNewestFirst: AssembledStatement["lines"] = []
   for (const { row, at } of inPeriod) {
@@ -310,15 +310,11 @@ export async function assembleStatement(
     addressLabel: scope === "business" ? "Business Address" : "Residential Address",
     address,
     bank: bankFieldsFromVa(input.currency, va),
-    opening,
     moneyIn,
     moneyOut,
-    closing,
     available,
-    openingLabel: formatStatementMoney(opening, input.currency),
     moneyInLabel: formatStatementMoney(moneyIn, input.currency),
     moneyOutLabel: formatStatementMoney(moneyOut, input.currency),
-    closingLabel: formatStatementMoney(closing, input.currency),
     availableLabel: formatStatementMoney(available, input.currency),
     lines: linesNewestFirst,
   }
