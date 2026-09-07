@@ -1,6 +1,6 @@
+import type { ComponentProps, ComponentType, ReactNode } from "react"
 import { Document, Page, Text, View, Image, StyleSheet, Link } from "@react-pdf/renderer"
 import { STATEMENT_LOGO_DATA_URL } from "@/lib/statement-logo-base64"
-import { chunkStatementActivityPages } from "@/lib/statements/paginate"
 import type { AssembledStatement, StatementActivityPdfRow } from "@/lib/statements/types"
 
 const INK = "#1A1C1A"
@@ -12,20 +12,36 @@ const HEADER_FILL = "#F3F0E6"
 const STRIPE_FILL = "#F8F6F0"
 const ROW_LINE = "#EFECE2"
 
+/**
+ * The page must stay exactly A4 (595.28 x 841.89pt), so it wraps natively and
+ * react-pdf paginates the activity table. Header and footer are absolutely
+ * positioned `fixed` nodes, which means page padding has to reserve their bands
+ * by hand — content would otherwise flow underneath them.
+ */
+const PAGE_PADDING_TOP = 32
+const HEADER_BLOCK_HEIGHT = 71 // logo + issuer lines: the taller of the two header variants
+const HEADER_GAP = 18
+const FOOTER_BOTTOM = 24
+const FOOTER_BLOCK_HEIGHT = 29 // rule + two lines of 7pt disclaimer
+const FOOTER_GAP = 10
+
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 32,
-    paddingBottom: 56,
+    paddingTop: PAGE_PADDING_TOP + HEADER_BLOCK_HEIGHT + HEADER_GAP,
+    paddingBottom: FOOTER_BOTTOM + FOOTER_BLOCK_HEIGHT + FOOTER_GAP,
     paddingHorizontal: 40,
     fontSize: 9,
     fontFamily: "StatementSans",
     color: INK,
   },
   header: {
+    position: "absolute",
+    top: PAGE_PADDING_TOP,
+    left: 40,
+    right: 40,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 18,
   },
   issuer: {
     marginTop: 8,
@@ -115,19 +131,20 @@ const styles = StyleSheet.create({
     fontWeight: 700,
     marginBottom: 2,
   },
-  tableShell: {
-    borderWidth: 1,
-    borderColor: LINE,
-    borderRadius: 8,
-    overflow: "hidden",
-  },
+  /**
+   * Borders live on the header and the rows, not on an outer shell — a bordered
+   * wrapper split across pages leaves an empty stub and squared-off corners at
+   * the break.
+   */
   tableHeader: {
     flexDirection: "row",
     backgroundColor: HEADER_FILL,
     paddingVertical: 7,
     paddingHorizontal: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: LINE,
+    borderWidth: 1,
+    borderColor: LINE,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
   },
   th: {
     fontSize: 8,
@@ -139,6 +156,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     paddingVertical: 6,
     paddingHorizontal: 10,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderLeftColor: LINE,
+    borderRightColor: LINE,
     borderBottomWidth: 1,
     borderBottomColor: ROW_LINE,
   },
@@ -146,7 +167,9 @@ const styles = StyleSheet.create({
     backgroundColor: STRIPE_FILL,
   },
   trLast: {
-    borderBottomWidth: 0,
+    borderBottomColor: LINE,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
   },
   colDate: { width: "16%" },
   colType: { width: "14%" },
@@ -157,16 +180,11 @@ const styles = StyleSheet.create({
     fontFamily: "StatementSans",
     fontWeight: 700,
   },
-  headerCompact: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    marginBottom: 12,
-  },
   footer: {
     position: "absolute",
     left: 0,
     right: 0,
-    bottom: 24,
+    bottom: FOOTER_BOTTOM,
     alignItems: "center",
   },
   footerRule: {
@@ -193,12 +211,17 @@ const styles = StyleSheet.create({
     fontWeight: 700,
     fontSize: 9,
   },
-  continuation: {
-    fontSize: 8,
-    color: MUTED,
-    marginBottom: 12,
-  },
 })
+
+/**
+ * `ViewProps.render` in @react-pdf/types is typed `{ pageNumber }` only, but the
+ * renderer passes `totalPages` too (see `resolvePageIndices` in
+ * @react-pdf/layout). Narrow it here rather than threading `any` through JSX.
+ */
+type PageAwareRender = (props: { pageNumber: number; totalPages: number }) => ReactNode
+const PageAwareView = View as ComponentType<
+  Omit<ComponentProps<typeof View>, "render"> & { render?: PageAwareRender }
+>
 
 function Field({ label, value }: { label: string; value?: string | null }) {
   const v = String(value ?? "").trim()
@@ -257,135 +280,143 @@ function SummaryBlock({ doc }: { doc: AssembledStatement }) {
   )
 }
 
-function ActivityTable({ rows }: { rows: StatementActivityPdfRow[] }) {
+function ActivityRow({ row, index, last }: { row: StatementActivityPdfRow; index: number; last: boolean }) {
   return (
-    <View style={styles.tableShell}>
-      <View style={styles.tableHeader}>
+    <View
+      wrap={false}
+      style={[styles.tr, index % 2 === 1 ? styles.trStripe : {}, last ? styles.trLast : {}]}
+    >
+      <Text style={styles.colDate}>{row.date}</Text>
+      <Text style={styles.colType}>{row.type}</Text>
+      <Text style={styles.colDetails}>{row.details}</Text>
+      <Text style={[styles.colIn, row.moneyIn ? styles.amountBold : {}]}>{row.moneyIn}</Text>
+      <Text style={[styles.colOut, row.moneyOut ? styles.amountBold : {}]}>{row.moneyOut}</Text>
+    </View>
+  )
+}
+
+function EndNote() {
+  return <Text style={styles.endNote}>End of statement</Text>
+}
+
+/**
+ * Holds the end note so the last row and "End of statement" travel together in
+ * one non-wrapping block — otherwise a table that ends flush with the bottom
+ * margin leaves the note stranded alone on a final page.
+ */
+function ActivityTable({ rows }: { rows: StatementActivityPdfRow[] }) {
+  const head = rows.slice(0, -1)
+  const tail = rows.length > 0 ? rows[rows.length - 1] : null
+  return (
+    <View>
+      {/* `fixed` repeats the column header on every page the table spills onto. */}
+      <View style={styles.tableHeader} fixed>
         <Text style={[styles.th, styles.colDate]}>Date</Text>
         <Text style={[styles.th, styles.colType]}>Type</Text>
         <Text style={[styles.th, styles.colDetails]}>Details</Text>
         <Text style={[styles.th, styles.colIn]}>In</Text>
         <Text style={[styles.th, styles.colOut]}>Out</Text>
       </View>
-      {rows.map((row, i) => {
-        const last = i === rows.length - 1
-        return (
-          <View
-            key={`${row.date}-${row.details}-${i}`}
-            wrap={false}
-            style={[
-              styles.tr,
-              i % 2 === 1 ? styles.trStripe : {},
-              last ? styles.trLast : {},
-            ]}
-          >
-            <Text style={styles.colDate}>{row.date}</Text>
-            <Text style={styles.colType}>{row.type}</Text>
-            <Text style={styles.colDetails}>{row.details}</Text>
-            <Text style={[styles.colIn, row.moneyIn ? styles.amountBold : {}]}>{row.moneyIn}</Text>
-            <Text style={[styles.colOut, row.moneyOut ? styles.amountBold : {}]}>{row.moneyOut}</Text>
-          </View>
-        )
-      })}
-    </View>
-  )
-}
-
-function Header({
-  statementId,
-  pageLabel,
-  compact = false,
-}: {
-  statementId: string
-  pageLabel: string
-  compact?: boolean
-}) {
-  const titleBlock = (
-    <View style={styles.titleBlock}>
-      <Text style={styles.title}>Account statement</Text>
-      <Text style={styles.statementId}>{statementId}</Text>
-      <Text style={styles.pagePill}>{pageLabel}</Text>
-    </View>
-  )
-
-  if (compact) {
-    return <View style={styles.headerCompact}>{titleBlock}</View>
-  }
-
-  return (
-    <View style={styles.header}>
-      <View>
-        <Image src={STATEMENT_LOGO_DATA_URL} style={{ width: 114, height: 25, objectFit: "contain" }} />
-        <View style={styles.issuer}>
-          <Text style={styles.issuerName}>Easner Group, Inc.</Text>
-          <Text style={styles.muted}>584 Castro St, Suite 4092</Text>
-          <Text style={styles.muted}>San Francisco, CA 94114</Text>
+      {head.map((row, i) => (
+        <ActivityRow key={`${row.date}-${row.details}-${i}`} row={row} index={i} last={false} />
+      ))}
+      {tail ? (
+        <View wrap={false}>
+          <ActivityRow row={tail} index={rows.length - 1} last />
+          <EndNote />
         </View>
-      </View>
-      {titleBlock}
+      ) : (
+        <EndNote />
+      )}
     </View>
   )
 }
 
+/** Full issuer block on page 1, a one-line continuation label after that. */
+function StatementHeader({ doc, continuation }: { doc: AssembledStatement; continuation: string }) {
+  return (
+    <PageAwareView
+      style={styles.header}
+      fixed
+      render={({ pageNumber, totalPages }) => (
+        <>
+          <View>
+            {pageNumber === 1 ? (
+              <>
+                <Image
+                  src={STATEMENT_LOGO_DATA_URL}
+                  style={{ width: 114, height: 25, objectFit: "contain" }}
+                />
+                <View style={styles.issuer}>
+                  <Text style={styles.issuerName}>Easner Group, Inc.</Text>
+                  <Text style={styles.muted}>584 Castro St, Suite 4092</Text>
+                  <Text style={styles.muted}>San Francisco, CA 94114</Text>
+                </View>
+              </>
+            ) : (
+              <Text style={styles.muted}>{continuation}</Text>
+            )}
+          </View>
+          <View style={styles.titleBlock}>
+            <Text style={styles.title}>Account statement</Text>
+            <Text style={styles.statementId}>{doc.statementId}</Text>
+            <Text style={styles.pagePill}>{`Page ${pageNumber} of ${totalPages}`}</Text>
+          </View>
+        </>
+      )}
+    />
+  )
+}
+
+/** Disclaimer sits at the foot of the final page only, beside "End of statement". */
 function StatementFooter() {
   return (
-    <View style={styles.footer} fixed>
-      <View style={styles.footerRule} />
-      <Text style={styles.footerText}>
-        Easner Group, Inc. ("Easner") is a financial technology company, not a bank. Banking,
-        payment, verification, and card services are provided by licensed partners. More here:{" "}
-        <Link src="https://www.easner.com/terms" style={styles.footerLink}>
-          easner.com/terms
-        </Link>
-      </Text>
-    </View>
+    <PageAwareView
+      style={styles.footer}
+      fixed
+      render={({ pageNumber, totalPages }) =>
+        pageNumber === totalPages ? (
+          <>
+            <View style={styles.footerRule} />
+            <Text style={styles.footerText}>
+              Easner Group, Inc. ("Easner") is a financial technology company, not a bank. Banking,
+              payment, verification, and card services are provided by licensed partners. More here:{" "}
+              <Link src="https://www.easner.com/terms" style={styles.footerLink}>
+                easner.com/terms
+              </Link>
+            </Text>
+          </>
+        ) : null
+      }
+    />
   )
 }
 
 export function StatementPDFDocument({ doc }: { doc: AssembledStatement }) {
-  const pages = chunkStatementActivityPages(doc.lines)
-  const totalPages = pages.length
   const continuation = `${doc.holderName} · ${doc.currency} · ${doc.periodLabel}`
 
   return (
     <Document>
-      {pages.map((rows, pageIndex) => {
-        const isFirst = pageIndex === 0
-        const isLast = pageIndex === totalPages - 1
-        return (
-          <Page key={`statement-page-${pageIndex}`} size="A4" style={styles.page} wrap={false}>
-            <Header
-              statementId={doc.statementId}
-              pageLabel={`Page ${pageIndex + 1} of ${totalPages}`}
-              compact={!isFirst}
-            />
-            {isFirst ? (
-              <>
-                <View style={styles.metaRow}>
-                  <View>
-                    <Text style={styles.fieldLabel}>Period</Text>
-                    <Text style={styles.fieldValue}>{doc.periodLabel}</Text>
-                  </View>
-                  <View style={{ alignItems: "flex-end" }}>
-                    <Text style={styles.fieldLabel}>Available as of</Text>
-                    <Text style={styles.fieldValue}>{doc.availableAsOfLabel}</Text>
-                  </View>
-                </View>
-                <View style={styles.divider} />
-                <AccountBlock doc={doc} />
-                <View style={styles.divider} />
-                <SummaryBlock doc={doc} />
-                <Text style={styles.sectionTitle}>Activity</Text>
-              </>
-            ) : (
-              <Text style={styles.continuation}>{continuation}</Text>
-            )}
-            <ActivityTable rows={rows} />
-            {isLast ? <Text style={styles.endNote}>End of statement</Text> : null}
-            <StatementFooter />
-          </Page>
-        )
-      })}
+      <Page size="A4" style={styles.page}>
+        <StatementHeader doc={doc} continuation={continuation} />
+        <StatementFooter />
+        <View style={styles.metaRow}>
+          <View>
+            <Text style={styles.fieldLabel}>Period</Text>
+            <Text style={styles.fieldValue}>{doc.periodLabel}</Text>
+          </View>
+          <View style={{ alignItems: "flex-end" }}>
+            <Text style={styles.fieldLabel}>Available as of</Text>
+            <Text style={styles.fieldValue}>{doc.availableAsOfLabel}</Text>
+          </View>
+        </View>
+        <View style={styles.divider} />
+        <AccountBlock doc={doc} />
+        <View style={styles.divider} />
+        <SummaryBlock doc={doc} />
+        <Text style={styles.sectionTitle}>Activity</Text>
+        <ActivityTable rows={doc.lines} />
+      </Page>
     </Document>
   )
 }
