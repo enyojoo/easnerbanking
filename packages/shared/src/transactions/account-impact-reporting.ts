@@ -43,6 +43,27 @@ function isWalletReportingCurrency(currency: string): boolean {
 }
 
 /**
+ * Resolve the first candidate whose amount **and** currency both hold up.
+ *
+ * Amount and currency must come from the same field family: pairing a USD
+ * `total_debited` with an NGN `base_currency` used to discard the row (counted
+ * as zero), and pairing an NGN `base_amount` with a USD `send_currency` used to
+ * report a local magnitude as dollars.
+ */
+function firstResolvablePair(
+  pairs: Array<{ amount: unknown; currency: unknown }>,
+): { amount: number; currency: string } | null {
+  for (const pair of pairs) {
+    const amount = positiveNumber(pair.amount)
+    if (amount == null) continue
+    const currency = normalizeWalletReportingCurrency(pair.currency)
+    if (!isWalletReportingCurrency(currency)) continue
+    return { amount, currency }
+  }
+  return null
+}
+
+/**
  * Resolve the value that entered or left the Easner account.
  *
  * YC local-to-local cross-border is the exception: it has no wallet debit, so
@@ -73,73 +94,41 @@ export function resolveAccountImpactAmount(
   if (isCrossBorder) return null
 
   if (isCredit) {
-    const hasUsdCredit =
-      positiveNumber(depositReview.usd_credit, meta.usd_credit) != null
-    const creditedAmount = positiveNumber(
-      row.account_impact_amount,
-      row.accountImpactAmount,
-      meta.reporting_wallet_amount,
-      depositReview.usd_credit,
-      meta.usd_credit,
-      row.posted_amount,
-      meta.posted_amount,
-      row.amount,
-    )
-    const creditedCurrency = normalizeWalletReportingCurrency(
-      row.account_impact_currency ??
-        row.accountImpactCurrency ??
-        meta.reporting_wallet_currency ??
-        (hasUsdCredit ? "USD" : undefined) ??
-        depositReview.credit_currency ??
-        meta.posted_currency ??
-        row.posted_currency ??
-        row.currency,
-    )
-    if (creditedAmount != null && isWalletReportingCurrency(creditedCurrency)) {
-      return {
-        amount: creditedAmount,
-        currency: creditedCurrency,
-        source: "credited_balance",
-      }
-    }
-    return null
+    const credited = firstResolvablePair([
+      { amount: row.account_impact_amount, currency: row.account_impact_currency },
+      { amount: row.accountImpactAmount, currency: row.accountImpactCurrency },
+      { amount: meta.reporting_wallet_amount, currency: meta.reporting_wallet_currency },
+      { amount: depositReview.usd_credit, currency: depositReview.credit_currency ?? "USD" },
+      { amount: meta.usd_credit, currency: "USD" },
+      { amount: row.posted_amount, currency: row.posted_currency ?? meta.posted_currency },
+      { amount: meta.posted_amount, currency: meta.posted_currency ?? row.posted_currency },
+      { amount: row.amount, currency: row.currency },
+    ])
+    if (!credited) return null
+    return { ...credited, source: "credited_balance" }
   }
 
-  const ledgerAmount = positiveNumber(
-    row.account_impact_amount,
-    row.accountImpactAmount,
-    row.ledger_amount,
-    row.ledgerAmount,
-    meta.reporting_wallet_amount,
-    meta.total_debited,
-    payoutReview.total_debited,
-    row.base_amount,
-    row.baseAmount,
-    row.amount,
-  )
-  const ledgerCurrency = normalizeWalletReportingCurrency(
-    row.account_impact_currency ??
-      row.accountImpactCurrency ??
-      row.ledger_currency ??
-      row.ledgerCurrency ??
-      meta.reporting_wallet_currency ??
-      payoutReview.send_currency ??
-      row.base_currency ??
-      row.baseCurrency ??
-      row.displayCurrency ??
-      row.currency,
-  )
-  if (ledgerAmount != null && isWalletReportingCurrency(ledgerCurrency)) {
-    const source =
-      row.ledger_amount != null || row.account_impact_amount != null
-        ? "ledger"
-        : meta.total_debited != null || payoutReview.total_debited != null
-          ? "metadata"
-          : "ledger"
-    return { amount: ledgerAmount, currency: ledgerCurrency, source }
-  }
+  const debited = firstResolvablePair([
+    { amount: row.account_impact_amount, currency: row.account_impact_currency },
+    { amount: row.accountImpactAmount, currency: row.accountImpactCurrency },
+    { amount: row.ledger_amount, currency: row.ledger_currency },
+    { amount: row.ledgerAmount, currency: row.ledgerCurrency },
+    { amount: meta.reporting_wallet_amount, currency: meta.reporting_wallet_currency },
+    { amount: meta.total_debited, currency: meta.send_currency ?? payoutReview.send_currency },
+    { amount: payoutReview.total_debited, currency: payoutReview.send_currency },
+    { amount: row.base_amount, currency: row.base_currency },
+    { amount: row.baseAmount, currency: row.baseCurrency },
+    { amount: row.amount, currency: row.displayCurrency ?? row.currency },
+  ])
+  if (!debited) return null
 
-  return null
+  const source =
+    row.ledger_amount != null || row.account_impact_amount != null
+      ? "ledger"
+      : meta.total_debited != null || payoutReview.total_debited != null
+        ? "metadata"
+        : "ledger"
+  return { ...debited, source }
 }
 
 export function findReportingFxRate(

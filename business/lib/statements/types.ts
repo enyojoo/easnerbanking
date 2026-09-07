@@ -37,10 +37,12 @@ export type AssembledStatement = {
   opening: number
   moneyIn: number
   moneyOut: number
+  closing: number
   available: number
   openingLabel: string
   moneyInLabel: string
   moneyOutLabel: string
+  closingLabel: string
   availableLabel: string
   lines: StatementActivityPdfRow[]
 }

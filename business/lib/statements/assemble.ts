@@ -5,11 +5,11 @@ import { LEDGER_LIST_SELECT } from "@/lib/ledger/ledger-select"
 import { getVirtualAccountDisplayFromDb } from "@/lib/noah/virtual-accounts-db"
 import {
   buildActivityLine,
-  impactInStatementCurrency,
   isCompletedFeedRow,
   needsEasetagSenderLookup,
   transferGroupIdOf,
 } from "./activity"
+import { splitStatementLedger } from "./summary"
 import {
   clipPeriodToAccountOpen,
   formatAvailableAsOf,
@@ -264,26 +264,17 @@ export async function assembleStatement(
   const senderHandles = await resolveMissingEasetagSenders(admin, ledger)
   const available = await readAvailable(admin, input)
 
-  let moneyIn = 0
-  let moneyOut = 0
+  const { summary, inPeriod } = splitStatementLedger({
+    ledger,
+    currency: input.currency,
+    periodStartMs,
+    periodEndMs,
+  })
+  const { opening, moneyIn, moneyOut, closing } = summary
+
   const linesNewestFirst: AssembledStatement["lines"] = []
-
-  for (const row of ledger) {
-    const when = new Date(String(row.occurred_at ?? row.created_at ?? ""))
-    if (Number.isNaN(when.getTime())) continue
-    const ms = when.getTime()
-    if (ms < periodStartMs) continue
-
-    const signed =
-      (String(row.direction ?? "").toLowerCase() === "in" ? 1 : -1) *
-      impactInStatementCurrency(row, input.currency)
-
-    if (ms > periodEndMs) continue
-
-    if (signed > 0) moneyIn += signed
-    else if (signed < 0) moneyOut += -signed
-
-    const dateLabel = formatStatementCalendarDate(when.toISOString().slice(0, 10))
+  for (const { row, at } of inPeriod) {
+    const dateLabel = formatStatementCalendarDate(at.toISOString().slice(0, 10))
     const gid = transferGroupIdOf(row)
     const override = gid ? senderHandles.get(gid) ?? null : null
     const line = buildActivityLine(row, dateLabel, override)
@@ -295,12 +286,7 @@ export async function assembleStatement(
       moneyOut: line.moneyOut,
     })
   }
-
   linesNewestFirst.reverse()
-  moneyIn = Math.round(moneyIn * 100) / 100
-  moneyOut = Math.round(moneyOut * 100) / 100
-  // Tie summary to current Available and period Money in/out only (exclude post-period activity).
-  const opening = Math.round((available - moneyIn + moneyOut) * 100) / 100
 
   const va = await getVirtualAccountDisplayFromDb(admin, {
     currency: input.currency.toLowerCase() as "usd" | "eur",
@@ -327,10 +313,12 @@ export async function assembleStatement(
     opening,
     moneyIn,
     moneyOut,
+    closing,
     available,
     openingLabel: formatStatementMoney(opening, input.currency),
     moneyInLabel: formatStatementMoney(moneyIn, input.currency),
     moneyOutLabel: formatStatementMoney(moneyOut, input.currency),
+    closingLabel: formatStatementMoney(closing, input.currency),
     availableLabel: formatStatementMoney(available, input.currency),
     lines: linesNewestFirst,
   }

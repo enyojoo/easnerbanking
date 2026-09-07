@@ -69,6 +69,48 @@ describe("resolveAccountImpactAmount", () => {
     ).toBeNull()
   })
 
+  it("keeps a USD wallet debit that sits beside a local base currency", () => {
+    // total_debited is USD; base_currency is the payout's local leg. Reading the
+    // two independently discarded the row, so Money out lost the debit.
+    expect(
+      resolveAccountImpactAmount({
+        direction: "out",
+        amount: 200_000,
+        currency: "USD",
+        base_amount: 200_000,
+        base_currency: "NGN",
+        metadata: { total_debited: 128.4, payout_review: { send_currency: "USD" } },
+      }),
+    ).toMatchObject({ amount: 128.4, currency: "USD" })
+  })
+
+  it("never reports a local magnitude as the wallet currency", () => {
+    // base_amount is NGN. It must not be paired with the USD send_currency.
+    expect(
+      resolveAccountImpactAmount({
+        direction: "out",
+        amount: 260_000,
+        currency: "NGN",
+        base_amount: 260_000,
+        base_currency: "NGN",
+        metadata: { payout_review: { send_currency: "USD" } },
+      }),
+    ).toBeNull()
+  })
+
+  it("prefers the credited wallet amount over a gross posted amount", () => {
+    expect(
+      resolveAccountImpactAmount({
+        direction: "in",
+        amount: 100_000,
+        currency: "NGN",
+        posted_amount: 100_000,
+        posted_currency: "NGN",
+        metadata: { deposit_review: { usd_credit: 61.2 } },
+      }),
+    ).toMatchObject({ amount: 61.2, currency: "USD" })
+  })
+
   it("normalizes stablecoin wallet sends", () => {
     expect(
       resolveAccountImpactAmount({

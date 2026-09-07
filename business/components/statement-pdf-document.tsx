@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   summaryCell: {
-    width: "25%",
+    width: "20%",
     paddingRight: 8,
   },
   summaryValue: {
@@ -270,6 +270,10 @@ function SummaryBlock({ doc }: { doc: AssembledStatement }) {
         <View style={styles.summaryCell}>
           <Text style={styles.summaryValue}>{doc.moneyOutLabel}</Text>
           <Text style={styles.fieldLabel}>Money out</Text>
+        </View>
+        <View style={styles.summaryCell}>
+          <Text style={styles.summaryValue}>{doc.closingLabel}</Text>
+          <Text style={styles.fieldLabel}>Closing</Text>
         </View>
         <View style={styles.summaryCell}>
           <Text style={[styles.summaryValue, { color: SUCCESS }]}>{doc.availableLabel}</Text>
