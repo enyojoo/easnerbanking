@@ -31,3 +31,11 @@ export { useOfficeCryptoDestinations } from "./use-office-crypto-destinations"
 export { useOfficeProcessingFeeSchedule } from "./use-office-processing-fee-schedule"
 export { useOfficeProcessingFeeOverride } from "./use-office-processing-fee-override"
 export { useOfficeSystemSettings, type OfficeSystemSetting } from "./use-office-system-settings"
+export {
+  useOfficeKybPacket,
+  useOfficeSubjectBanking,
+  useOfficeBusinessMembers,
+  useOfficeSubjectAudit,
+  useOfficeSendCompliance,
+  useOfficeBusinessTransactions,
+} from "./use-office-case"

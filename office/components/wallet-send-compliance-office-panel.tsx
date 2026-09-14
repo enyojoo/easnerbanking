@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { officeFetch } from "@/lib/api-client"
 import { WALLET_SEND_COMPLIANCE_STATUS_LABEL } from "@easner/shared"
+import { OfficeSection } from "@/components/case/office-detail-grid"
 
 type Props = {
   businessId: string
@@ -94,10 +95,9 @@ export function WalletSendComplianceOfficePanel({
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-border p-3">
-      <p className="text-sm font-medium">Outbound compliance</p>
+    <OfficeSection title="Outbound" divide={false}>
       {velocityLimitActive ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {WALLET_SEND_COMPLIANCE_STATUS_LABEL}
           {velocityMode ? ` · ${velocityMode}` : ""}
           {velocityTriggerReason ? ` · ${velocityTriggerReason}` : ""}
@@ -106,7 +106,7 @@ export function WalletSendComplianceOfficePanel({
           {velocityExpiresAt ? ` · expires ${new Date(velocityExpiresAt).toLocaleString()}` : ""}
         </p>
       ) : (
-        <p className="text-xs text-muted-foreground">No active velocity control.</p>
+        <p className="text-sm text-muted-foreground">No active velocity control.</p>
       )}
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" variant="outline" disabled={busy || !velocityLimitActive} onClick={() => void liftVelocity()}>
@@ -114,10 +114,10 @@ export function WalletSendComplianceOfficePanel({
         </Button>
       </div>
       <div className="flex flex-wrap items-end gap-2">
-        <label className="text-xs">
+        <label className="text-xs text-muted-foreground">
           Rail
           <select
-            className="mt-1 block rounded-md border border-input bg-background px-2 py-1 text-sm"
+            className="mt-1 block rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground"
             value={rail}
             onChange={(e) => setRail(e.target.value as "stablecoin" | "fiat_payout")}
           >
@@ -125,7 +125,7 @@ export function WalletSendComplianceOfficePanel({
             <option value="fiat_payout">Fiat payout</option>
           </select>
         </label>
-        <label className="text-xs">
+        <label className="text-xs text-muted-foreground">
           Daily max USD
           <Input className="mt-1 h-8 w-28" value={dailyMaxUsd} onChange={(e) => setDailyMaxUsd(e.target.value)} />
         </label>
@@ -137,6 +137,6 @@ export function WalletSendComplianceOfficePanel({
         </Button>
       </div>
       {message ? <p className="text-xs text-muted-foreground">{message}</p> : null}
-    </div>
+    </OfficeSection>
   )
 }

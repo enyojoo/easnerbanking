@@ -44,4 +44,12 @@ export const officeKeys = {
   processingFeeOverride: (subjectType: string, subjectId: string) =>
     [...officeKeys.root, "processing-fee-override", subjectType, subjectId] as const,
   systemSettings: () => [...officeKeys.root, "system-settings"] as const,
+  kybPacket: (businessId: string) => [...officeKeys.root, "kyb-packet", businessId] as const,
+  subjectBanking: (kind: "user" | "business", id: string) =>
+    [...officeKeys.root, "subject-banking", kind, id] as const,
+  businessMembers: (businessId: string) => [...officeKeys.root, "business-members", businessId] as const,
+  subjectAudit: (subjectId: string) => [...officeKeys.root, "subject-audit", subjectId] as const,
+  sendCompliance: (businessId: string) => [...officeKeys.root, "send-compliance", businessId] as const,
+  businessTransactions: (businessId: string) =>
+    [...officeKeys.root, "business-transactions", businessId] as const,
 } as const

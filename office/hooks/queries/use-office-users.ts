@@ -33,13 +33,22 @@ export type OfficeUserRow = {
   verification_provider?: string | null
   bridge_customer_id?: string | null
   bridge_kyc_status?: string | null
-  org_bridge_customer_id?: string | null
-  org_bridge_kyc_status?: string | null
   linkedBusinessName?: string | null
   enabled_extra_account_currencies?: string[]
   email_confirmed_at?: string | null
   communicationPreferences?: CommunicationPreferences
   hasExpoPushToken?: boolean
+  easetag?: string | null
+  kyc_id_number?: string | null
+  kyc_id_issuing_country?: string | null
+  kyc_address_street?: string | null
+  kyc_address_city?: string | null
+  kyc_address_state?: string | null
+  kyc_address_post_code?: string | null
+  kyc_address_country?: string | null
+  residence_country?: string | null
+  bridge_cutover_required_at?: string | null
+  bridge_cutover_deadline_at?: string | null
   totalTransactions: number
   totalVolume: number
   verificationStatus?: string
@@ -104,8 +113,6 @@ export async function fetchOfficeUsersDirectory(): Promise<OfficeUserRow[]> {
       verification_provider: row.verification_provider as string | null | undefined,
       bridge_customer_id: row.bridge_customer_id as string | null | undefined,
       bridge_kyc_status: row.bridge_kyc_status as string | null | undefined,
-      org_bridge_customer_id: row.org_bridge_customer_id as string | null | undefined,
-      org_bridge_kyc_status: row.org_bridge_kyc_status as string | null | undefined,
       linkedBusinessName: (row.linkedBusinessName as string | null | undefined) ?? null,
       enabled_extra_account_currencies: row.enabled_extra_account_currencies as string[] | undefined,
       email_confirmed_at: row.email_confirmed_at as string | null | undefined,

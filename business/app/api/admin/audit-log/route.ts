@@ -8,13 +8,12 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const limit = Math.min(Number(searchParams.get("limit")) || 100, 500)
+  const subjectId = searchParams.get("subjectId")?.trim() || null
 
   const admin = createSupabaseAdmin()
-  const { data, error } = await admin
-    .from("admin_audit_log")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(limit)
+  let query = admin.from("admin_audit_log").select("*").order("created_at", { ascending: false }).limit(limit)
+  if (subjectId) query = query.eq("resource", subjectId)
+  const { data, error } = await query
 
   if (error) {
     return NextResponse.json({ error: error.message, entries: [] }, { status: 500 })

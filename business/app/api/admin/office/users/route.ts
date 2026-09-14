@@ -200,8 +200,6 @@ export async function GET(request: Request) {
             grid_customer_id: org.grid_customer_id,
             verification_status: org.verification_status,
             linkedBusinessName: org.name,
-            org_bridge_customer_id: org.bridge_customer_id,
-            org_bridge_kyc_status: org.bridge_kyc_status,
           }
         : {}),
     }

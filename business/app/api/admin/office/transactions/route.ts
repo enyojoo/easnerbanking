@@ -15,6 +15,7 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url)
   const userId = url.searchParams.get("userId")?.trim() || undefined
+  const businessId = url.searchParams.get("businessId")?.trim() || undefined
   const provider = url.searchParams.get("provider")?.trim() || undefined
   const ycMode = url.searchParams.get("ycMode")?.trim() || undefined
   const rail = url.searchParams.get("rail")?.trim() || undefined
@@ -45,6 +46,7 @@ export async function GET(request: Request) {
 
   const listLoad = await loadOfficeLedgerTransactions(admin, {
     userId,
+    businessId,
     provider,
     ycMode,
     rail,

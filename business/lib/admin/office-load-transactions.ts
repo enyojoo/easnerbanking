@@ -104,6 +104,7 @@ function attachAccountProfiles(
 
 export type OfficeLedgerLoadFilters = {
   userId?: string
+  businessId?: string
   provider?: string
   ycMode?: string
   rail?: string
@@ -216,6 +217,9 @@ export async function loadOfficeLedgerTransactions(
 
   if (opts.userId) {
     q = q.eq("user_id", opts.userId)
+  }
+  if (opts.businessId) {
+    q = q.eq("business_id", opts.businessId)
   }
 
   const txRes = await q.limit(fetchLimit)
