@@ -82,7 +82,7 @@ export const authSeo = {
       altText: "Join an Easner Business team",
     },
   },
-  noahComplete: {
+  onboardingComplete: {
     metadata: {
       title: "Onboarding Complete | Easner Business Banking",
       description: "Your banking onboarding step is complete. Return to Easner Business to finish verification and unlock accounts – built for modern finance teams and operators.",
@@ -91,17 +91,6 @@ export const authSeo = {
       h1: "Onboarding Complete",
       subhead: "Return to Easner Business to continue setup.",
       altText: "Banking onboarding complete",
-    },
-  },
-  gridComplete: {
-    metadata: {
-      title: "Onboarding Complete | Easner Business Banking",
-      description: "Your payment onboarding step is complete. Return to Easner Business to finish setup and accept customer funds – built for modern finance teams and operators.",
-    },
-    hero: {
-      h1: "Onboarding Complete",
-      subhead: "Return to Easner Business to continue setup.",
-      altText: "Payment onboarding complete",
     },
   },
 } as const satisfies Record<string, SeoPageContent>

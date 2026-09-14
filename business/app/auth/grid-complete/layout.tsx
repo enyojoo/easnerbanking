@@ -3,7 +3,7 @@ import { authSeo } from "@/lib/seo/content/auth"
 import { businessMetadata } from "@/lib/seo/metadata"
 
 export const metadata = businessMetadata({
-  metadata: authSeo.gridComplete.metadata,
+  metadata: authSeo.onboardingComplete.metadata,
   path: "/auth/grid-complete",
 })
 

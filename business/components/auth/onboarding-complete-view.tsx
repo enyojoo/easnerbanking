@@ -2,8 +2,8 @@
 
 import { useEffect } from "react"
 
-/** Minimal ReturnURL target for Noah hosted onboarding (iframe or in-app browser). */
-export function NoahCompleteView() {
+/** Minimal ReturnURL target for hosted KYC/KYB (iframe or in-app browser). */
+export function OnboardingCompleteView() {
   useEffect(() => {
     const embedded = window.parent !== window
     if (!embedded) return
@@ -12,7 +12,7 @@ export function NoahCompleteView() {
       {
         type: "kycCompleted",
         kycCompleted: true,
-        noahHostedComplete: true,
+        hostedComplete: true,
         context,
       },
       window.location.origin,

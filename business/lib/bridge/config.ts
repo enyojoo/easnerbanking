@@ -1,8 +1,15 @@
-/** Bridge.xyz API configuration. */
+/** Bridge.xyz API configuration. Production default: https://api.bridge.xyz (not sandbox). */
+
+import {
+  canonicalizeHostedOnboardingReturnUrl,
+  getHostedOnboardingReturnUrl,
+} from "@/lib/auth/hosted-onboarding-complete"
+
+const BRIDGE_PRODUCTION_API_ORIGIN = "https://api.bridge.xyz"
 
 export function getBridgeBaseUrl(): string {
   const raw = String(process.env.BRIDGE_BASE_URL ?? "").trim()
-  return raw.replace(/\/+$/, "") || "https://api.bridge.xyz"
+  return raw.replace(/\/+$/, "") || BRIDGE_PRODUCTION_API_ORIGIN
 }
 
 export function getBridgeApiKey(): string {
@@ -18,14 +25,18 @@ export function getBridgeWebhookPublicKey(): string | null {
   return pem || null
 }
 
+/** Hosted individual KYC return. Shared with Noah and Grid. */
 export function getBridgeKycReturnUrl(): string {
-  return String(process.env.BRIDGE_KYC_RETURN_URL ?? process.env.NOAH_ONBOARDING_RETURN_URL ?? "").trim()
+  const explicit = String(process.env.BRIDGE_KYC_RETURN_URL ?? "").trim()
+  if (explicit) return canonicalizeHostedOnboardingReturnUrl(explicit)
+  return getHostedOnboardingReturnUrl("kyc")
 }
 
+/** Hosted business KYB return. Shared with Noah and Grid. */
 export function getBridgeBusinessKybReturnUrl(): string {
-  return String(
-    process.env.BRIDGE_BUSINESS_KYB_RETURN_URL ?? process.env.GRID_BUSINESS_KYB_RETURN_URL ?? "",
-  ).trim()
+  const explicit = String(process.env.BRIDGE_BUSINESS_KYB_RETURN_URL ?? "").trim()
+  if (explicit) return canonicalizeHostedOnboardingReturnUrl(explicit)
+  return getHostedOnboardingReturnUrl("business")
 }
 
 export function isBridgeConfigured(): boolean {

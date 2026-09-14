@@ -4,9 +4,9 @@ import { businessMetadata } from "@/lib/seo/metadata"
 
 export const metadata = businessMetadata({
   metadata: authSeo.onboardingComplete.metadata,
-  path: "/auth/noah-complete",
+  path: "/auth/bridge-complete",
 })
 
-export default function NoahCompleteLayout({ children }: { children: ReactNode }) {
+export default function BridgeCompleteLayout({ children }: { children: ReactNode }) {
   return children
 }

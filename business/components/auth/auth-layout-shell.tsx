@@ -1,18 +1,14 @@
 "use client"
 
 import { usePathname } from "next/navigation"
-import { BusinessLogo } from "@/components/brand/business-logo"
 import { AuthSessionRedirect } from "@/components/auth/auth-session-redirect"
-
-/** Hosted Noah completion – no auth marketing chrome (loaded inside iframe or in-app browser). */
-function isNoahCompletePath(pathname: string | null): boolean {
-  return pathname === "/auth/noah-complete"
-}
+import { BusinessLogo } from "@/components/brand/business-logo"
+import { isHostedOnboardingCompletePath } from "@/lib/auth/hosted-onboarding-complete"
 
 export function AuthLayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
 
-  if (isNoahCompletePath(pathname)) {
+  if (isHostedOnboardingCompletePath(pathname)) {
     return <>{children}</>
   }
 

@@ -1,5 +1,6 @@
-import { bridgeFetch } from "./http"
+import { canonicalizeHostedOnboardingReturnUrl } from "@/lib/auth/hosted-onboarding-complete"
 import { getBridgeBusinessKybReturnUrl, getBridgeKycReturnUrl } from "./config"
+import { bridgeFetch } from "./http"
 
 export type BridgeCustomerType = "individual" | "business"
 
@@ -25,9 +26,10 @@ export async function createBridgeKycLink(input: {
   endorsements?: string[]
   idempotencyKey: string
 }): Promise<BridgeKycLink> {
-  const redirect =
+  const redirect = canonicalizeHostedOnboardingReturnUrl(
     input.redirectUri?.trim() ||
-    (input.type === "business" ? getBridgeBusinessKybReturnUrl() : getBridgeKycReturnUrl())
+      (input.type === "business" ? getBridgeBusinessKybReturnUrl() : getBridgeKycReturnUrl()),
+  )
   return bridgeFetch<BridgeKycLink>({
     method: "POST",
     path: "/kyc_links",

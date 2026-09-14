@@ -3,6 +3,10 @@
  * @see https://docs.noah.com/api-concepts/authentication/configuration
  */
 
+import {
+  canonicalizeHostedOnboardingReturnUrl,
+  getHostedOnboardingReturnUrl,
+} from "@/lib/auth/hosted-onboarding-complete"
 import { assertNoahEs384SigningPrivateKeyPem } from "./normalize-signing-key"
 
 const NOAH_PRODUCTION_BASE_URL = "https://api.noah.com/v1"
@@ -78,21 +82,19 @@ function assertHttpsReturnUrl(url: string, envName: string): string {
 /** Consumer (Individual) hosted KYC – same value as `ReturnURL` in the Noah request. */
 export function getNoahReturnUrl(): string {
   const raw = process.env.NOAH_ONBOARDING_RETURN_URL?.trim()
-  if (!raw) {
-    throw new Error(
-      "NOAH_ONBOARDING_RETURN_URL is required – set it to https://<host>/auth/noah-complete?context=kyc (see Noah Hosted Onboarding recipe)."
-    )
-  }
-  return assertHttpsReturnUrl(raw, "NOAH_ONBOARDING_RETURN_URL")
+  const resolved = canonicalizeHostedOnboardingReturnUrl(
+    raw || getHostedOnboardingReturnUrl("kyc"),
+  )
+  return assertHttpsReturnUrl(resolved, "NOAH_ONBOARDING_RETURN_URL")
 }
 
-/** KYB (Business) hosted onboarding; if unset, uses the same URL as consumer. Prefer `…/auth/noah-complete?context=kyb`. */
+/** KYB (Business) hosted onboarding. Shared `/auth/onboarding-complete` with Grid and Bridge. */
 export function getNoahBusinessReturnUrl(): string {
   const raw = process.env.NOAH_BUSINESS_ONBOARDING_RETURN_URL?.trim()
-  if (!raw) {
-    return getNoahReturnUrl()
-  }
-  return assertHttpsReturnUrl(raw, "NOAH_BUSINESS_ONBOARDING_RETURN_URL")
+  const resolved = canonicalizeHostedOnboardingReturnUrl(
+    raw || getHostedOnboardingReturnUrl("business"),
+  )
+  return assertHttpsReturnUrl(resolved, "NOAH_BUSINESS_ONBOARDING_RETURN_URL")
 }
 
 export function isNoahConfigured(): boolean {

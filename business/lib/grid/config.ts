@@ -1,5 +1,10 @@
 /** Lightspark Grid API configuration (sandbox-first). */
 
+import {
+  canonicalizeHostedOnboardingReturnUrl,
+  getHostedOnboardingReturnUrl,
+} from "@/lib/auth/hosted-onboarding-complete"
+
 export function getGridBaseUrl(): string {
   const raw = String(process.env.GRID_BASE_URL || "").trim()
   if (raw) return raw.replace(/\/+$/, "")
@@ -83,20 +88,16 @@ export function resolveGridQuoteExpiresAt(preferred?: string | null): string {
   return new Date(Date.now() + getGridQuoteTtlMs()).toISOString()
 }
 
-/** Return URL after hosted Grid KYB (SumSub) completes. */
+/** Return URL after hosted Grid KYB (SumSub) completes. Shared with Noah and Bridge. */
 export function getGridBusinessKybReturnUrl(): string {
   const explicit = String(process.env.GRID_BUSINESS_KYB_RETURN_URL || "").trim()
-  if (explicit) return explicit
-  const app = String(process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "").trim()
-  if (app) return `${app.replace(/\/+$/, "")}/auth/grid-complete?context=business`
-  return "http://localhost:3000/auth/grid-complete?context=business"
+  if (explicit) return canonicalizeHostedOnboardingReturnUrl(explicit)
+  return getHostedOnboardingReturnUrl("business")
 }
 
-/** Return URL after hosted Grid KYC (individual / mobile) completes. */
+/** Return URL after hosted Grid KYC (individual / mobile) completes. Shared with Noah and Bridge. */
 export function getGridIndividualKycReturnUrl(): string {
   const explicit = String(process.env.GRID_KYC_RETURN_URL || "").trim()
-  if (explicit) return explicit
-  const app = String(process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "").trim()
-  if (app) return `${app.replace(/\/+$/, "")}/auth/grid-complete?context=kyc`
-  return "http://localhost:3000/auth/grid-complete?context=kyc"
+  if (explicit) return canonicalizeHostedOnboardingReturnUrl(explicit)
+  return getHostedOnboardingReturnUrl("kyc")
 }

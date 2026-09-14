@@ -1,5 +1,5 @@
-import { GridCompleteView } from "@/components/auth/grid-complete-view"
+import { OnboardingCompleteView } from "@/components/auth/onboarding-complete-view"
 
 export default function GridCompletePage() {
-  return <GridCompleteView />
+  return <OnboardingCompleteView />
 }

@@ -1,5 +1,6 @@
-import { gridFetch } from "./http"
+import { canonicalizeHostedOnboardingReturnUrl } from "@/lib/auth/hosted-onboarding-complete"
 import { getGridBusinessKybReturnUrl } from "./config"
+import { gridFetch } from "./http"
 
 export type GridKycLinkResponse = {
   kycUrl: string
@@ -13,7 +14,9 @@ export async function createGridBusinessKycLink(input: {
   redirectUri?: string
   idempotencyKey?: string
 }): Promise<GridKycLinkResponse> {
-  const redirectUri = input.redirectUri?.trim() || getGridBusinessKybReturnUrl()
+  const redirectUri = canonicalizeHostedOnboardingReturnUrl(
+    input.redirectUri?.trim() || getGridBusinessKybReturnUrl(),
+  )
   const res = await gridFetch<GridKycLinkResponse>({
     method: "POST",
     path: `/customers/${encodeURIComponent(input.customerId)}/kyc-link`,
