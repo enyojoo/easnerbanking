@@ -175,6 +175,25 @@ const nextConfig = {
     "@noble/curves",
     "@noble/hashes",
   ],
+  async redirects() {
+    return [
+      {
+        source: "/auth/noah-complete",
+        destination: "/auth/onboarding-complete",
+        permanent: true,
+      },
+      {
+        source: "/auth/grid-complete",
+        destination: "/auth/onboarding-complete",
+        permanent: true,
+      },
+      {
+        source: "/auth/bridge-complete",
+        destination: "/auth/onboarding-complete",
+        permanent: true,
+      },
+    ]
+  },
   async rewrites() {
     const payHosts = [...new Set(["pay.easner.com", hostnameFromOrigin(process.env.NEXT_PUBLIC_PAY_APP_URL, "pay.easner.com")])]
       .filter((host) => host === "pay.easner.com" || host.startsWith("pay."))

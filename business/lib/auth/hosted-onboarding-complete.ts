@@ -11,8 +11,7 @@ const LEGACY_COMPLETE_PATHS = new Set([
 export type HostedOnboardingContext = "kyc" | "kyb" | "business"
 
 export function isHostedOnboardingCompletePath(pathname: string | null | undefined): boolean {
-  const path = String(pathname ?? "").replace(/\/$/, "")
-  return path === HOSTED_ONBOARDING_COMPLETE_PATH || LEGACY_COMPLETE_PATHS.has(path)
+  return String(pathname ?? "").replace(/\/$/, "") === HOSTED_ONBOARDING_COMPLETE_PATH
 }
 
 export function isHostedOnboardingCompleteUrl(href: string): boolean {
@@ -20,12 +19,7 @@ export function isHostedOnboardingCompleteUrl(href: string): boolean {
     const url = new URL(href, typeof window !== "undefined" ? window.location.origin : "http://localhost")
     return isHostedOnboardingCompletePath(url.pathname)
   } catch {
-    return (
-      href.includes(HOSTED_ONBOARDING_COMPLETE_PATH) ||
-      href.includes("/auth/noah-complete") ||
-      href.includes("/auth/grid-complete") ||
-      href.includes("/auth/bridge-complete")
-    )
+    return href.includes(HOSTED_ONBOARDING_COMPLETE_PATH)
   }
 }
 
@@ -34,7 +28,7 @@ export function getHostedOnboardingReturnUrl(context: HostedOnboardingContext): 
   return `${getBusinessAppPublicOrigin().replace(/\/+$/, "")}${HOSTED_ONBOARDING_COMPLETE_PATH}?context=${context}`
 }
 
-/** Map leftover provider-named complete paths onto the shared return URL. */
+/** Rewrite leftover provider-named env URLs onto the shared return path. */
 export function canonicalizeHostedOnboardingReturnUrl(url: string): string {
   try {
     const parsed = new URL(url)

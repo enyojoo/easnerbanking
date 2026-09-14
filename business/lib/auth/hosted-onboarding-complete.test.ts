@@ -54,12 +54,12 @@ describe("hosted onboarding complete URL", () => {
     ).toBe("https://example.com/custom-return")
   })
 
-  it("treats legacy and canonical paths as complete URLs", () => {
+  it("treats only the shared path as the complete URL", () => {
     expect(isHostedOnboardingCompleteUrl("https://business.easner.com/auth/onboarding-complete")).toBe(
       true,
     )
     expect(isHostedOnboardingCompleteUrl("https://business.easner.com/auth/noah-complete?context=kyc")).toBe(
-      true,
+      false,
     )
     expect(isHostedOnboardingCompleteUrl("https://business.easner.com/auth/login")).toBe(false)
   })
