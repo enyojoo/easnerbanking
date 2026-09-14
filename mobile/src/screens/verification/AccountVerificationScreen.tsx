@@ -46,7 +46,11 @@ import {
   fontFamily,
 } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
-import { CONSUMER_VERIFICATION_PRODUCTS } from '../../lib/compliance-tier-ladder-copy'
+import {
+  CONSUMER_VERIFICATION_PRODUCTS,
+  VERIFICATION_COMING_LATER_LABEL,
+  verificationTierLabel,
+} from '../../lib/compliance-tier-ladder-copy'
 
 const GLOBAL_BANKING_PRODUCT = CONSUMER_VERIFICATION_PRODUCTS.find((p) => p.id === 'global_banking')!
 import {

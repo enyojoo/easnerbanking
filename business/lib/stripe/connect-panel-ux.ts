@@ -23,7 +23,7 @@ export type ConnectPanelAction = {
   variant: "default" | "secondary" | "outline"
   dialogTitle: string
   dialogDescription?: string
-  /** Shown disabled (e.g. Global banking not complete yet). */
+  /** Shown disabled (e.g. USD account verification not complete yet). */
   disabled?: boolean
   disabledReason?: string
 }

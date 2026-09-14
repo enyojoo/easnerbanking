@@ -1,4 +1,4 @@
-/** Office US:USD bank pay-in product mode. Persist `va` / `va_express`; omit or `disabled` when off. */
+/** Office USD/EUR bank pay-in product mode. Persist `va` / `va_express`; omit or `disabled` when off. */
 export type UsPayInMode = "disabled" | "va" | "va_express"
 
 export type UsPayInModeOption = {
@@ -16,6 +16,12 @@ export function isUsUsdCorridor(countryCode: string, currencyCode: string): bool
     String(countryCode ?? "").trim().toUpperCase() === "US" &&
     String(currencyCode ?? "").trim().toUpperCase() === "USD"
   )
+}
+
+/** Office Pay-in uses VA / VA & Express instead of a Noah/YC/Grid provider pick. */
+export function isVaExpressPayInCorridor(countryCode: string, currencyCode: string): boolean {
+  if (isUsUsdCorridor(countryCode, currencyCode)) return true
+  return String(currencyCode ?? "").trim().toUpperCase() === "EUR"
 }
 
 /** US USD is domestic payout + VA/Express — not a YC/Grid local-currency cross-border corridor. */
@@ -79,9 +85,12 @@ export function clearUsCrossBorderMetadata(metadata: Record<string, unknown>): v
 export function applyUsPayInModeToMetadata(
   metadata: Record<string, unknown>,
   mode: UsPayInMode,
+  opts?: { clearCrossBorder?: boolean },
 ): Record<string, unknown> {
   const next = { ...metadata }
-  clearUsCrossBorderMetadata(next)
+  if (opts?.clearCrossBorder !== false) {
+    clearUsCrossBorderMetadata(next)
+  }
   delete next.pay_in_provider
   if (mode === "disabled") {
     delete next.pay_in_mode
@@ -127,4 +136,52 @@ export function resolveUsPayInModeFromCatalog<
   if (row) return resolveUsPayInModeFromCorridor(row)
   if (!catalogLoaded) return "va_express"
   return "disabled"
+}
+
+function bankRowsForCurrency<
+  T extends {
+    country_code?: string
+    currency_code?: string
+    rail?: string
+    metadata?: unknown
+    enabled?: boolean | null
+  },
+>(rows: T[] | null | undefined, currency: string): T[] {
+  const cur = currency.trim().toUpperCase()
+  return (rows ?? []).filter(
+    (row) =>
+      String(row.currency_code ?? "").trim().toUpperCase() === cur &&
+      (row.rail == null || row.rail === "bank_transfer"),
+  )
+}
+
+function mostPermissiveVaPayInMode(modes: UsPayInMode[]): UsPayInMode {
+  if (modes.includes("va_express")) return "va_express"
+  if (modes.includes("va")) return "va"
+  return "disabled"
+}
+
+/**
+ * Ledger VA/Express gate. USD reads the US:USD bank row. EUR uses the most
+ * permissive live EUR bank corridor. Until any EUR row has an explicit
+ * `pay_in_mode`, keep today's VA UX.
+ */
+export function resolveVaPayInModeFromCatalog<
+  T extends {
+    country_code?: string
+    currency_code?: string
+    rail?: string
+    metadata?: unknown
+    enabled?: boolean | null
+  },
+>(rows: T[] | null | undefined, currency: string, catalogLoaded = true): UsPayInMode {
+  const cur = String(currency ?? "").trim().toUpperCase()
+  if (cur === "USD") return resolveUsPayInModeFromCatalog(rows, catalogLoaded)
+  if (cur !== "EUR") return catalogLoaded ? "disabled" : "va_express"
+  if (!catalogLoaded) return "va_express"
+  const eurRows = bankRowsForCurrency(rows, "EUR")
+  if (eurRows.length === 0) return "va_express"
+  const hasExplicitMode = eurRows.some((row) => parseUsPayInMode(metadataRecord(row.metadata).pay_in_mode))
+  if (!hasExplicitMode) return "va_express"
+  return mostPermissiveVaPayInMode(eurRows.map((row) => resolveUsPayInModeFromCorridor(row)))
 }

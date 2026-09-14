@@ -134,7 +134,7 @@ describe("express setup done copy", () => {
 })
 
 describe("expressDepositsVerificationCta", () => {
-  it("hides the button when verified, like Global banking", () => {
+  it("hides the button when verified, like USD accounts", () => {
     expect(expressDepositsVerificationCta("approved")).toBeNull()
     expect(expressDepositsVerificationCta("ready")).toBeNull()
     expect(expressDepositsVerificationCta("verified")).toBeNull()

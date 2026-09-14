@@ -25,7 +25,7 @@ export const EXPRESS_DEPOSITS_COPY = {
   setupRequiredHint: "Set up Express deposits to use this method.",
   geoUnavailable: "Express deposits is not available in your region.",
   ownerOnly: "Only the account owner can set up Express deposits.",
-  globalBankingRequired: "Complete Global banking verification first.",
+  globalBankingRequired: "Complete USD account verification first.",
   estimatedTotalToPay: "Estimated total to pay",
   youPay: "You pay",
   youGet: "You get",
@@ -232,7 +232,7 @@ export function expressDepositSavePaymentHint(
   return EXPRESS_DEPOSITS_COPY.saveCardHint
 }
 
-/** Verification hub CTA. Verified matches Global banking: badge only, no button. */
+/** Verification hub CTA. Verified matches USD accounts: badge only, no button. */
 export function expressDepositsVerificationCta(
   status?: string | null,
 ): (typeof EXPRESS_DEPOSITS_COPY)["setupCta"] | (typeof EXPRESS_DEPOSITS_COPY)["continueCta"] | null {

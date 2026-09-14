@@ -14,6 +14,7 @@ import {
   clearUsCrossBorderMetadata,
   corridorOffersCrossBorder,
   isUsUsdCorridor,
+  isVaExpressPayInCorridor,
   patchCorridorSurfaceRouting,
   readCorridorSurfaceRouting,
   readCorridorSurfacesMap,
@@ -443,7 +444,7 @@ function crossBorderProviderOptions(row: Pick<
 
 function SurfaceSelectRow(input: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-2">
       <span className="w-14 shrink-0 text-[10px] text-muted-foreground">{input.label}</span>
       {input.children}
     </div>
@@ -453,7 +454,7 @@ function SurfaceSelectRow(input: { label: string; children: ReactNode }) {
 function StackedRoutingCell(input: { mismatch: boolean; liveOff: boolean; children: ReactNode }) {
   return (
     <TableCell className={input.mismatch ? "bg-muted/40" : undefined}>
-      <div className={`flex flex-col gap-1.5 ${input.liveOff ? "opacity-60" : ""}`}>{input.children}</div>
+      <div className={`flex flex-col gap-2.5 ${input.liveOff ? "opacity-60" : ""}`}>{input.children}</div>
     </TableCell>
   )
 }
@@ -621,8 +622,8 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
     const supportYcPayIn = caps.supportYcPayIn
     const supportNoahPayIn = caps.supportNoahPayIn
     const supportGridPayIn = caps.supportGridPayIn
-    const usCorridor = isUsUsdCorridor(r.country_code, r.currency_code)
-    const payInSupported = usCorridor
+    const vaPayInCorridor = isVaExpressPayInCorridor(r.country_code, r.currency_code)
+    const payInSupported = vaPayInCorridor
       ? true
       : payInProviderOptions({
           supportYcPayIn,
@@ -637,7 +638,7 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
       (supportYcPayout || supportGridPayout)
     const business = routingUiFromCorridor(r, caps, crossBorderSupported, "business")
     const personal = routingUiFromCorridor(r, caps, crossBorderSupported, "personal")
-    const payInEnabled = usCorridor
+    const payInEnabled = vaPayInCorridor
       ? business.usPayInMode !== "disabled" || personal.usPayInMode !== "disabled"
       : (business.payInProvider !== null &&
           railRows.some((row) => rowPayInEnabledForProvider(row, business.payInProvider))) ||
@@ -875,10 +876,14 @@ export function PayoutCorridorsAdminPanel() {
         const patched = patchCorridorSurfaceRouting(
           { provider_routing: corridor.provider_routing, metadata: corridor.metadata },
           surface,
-          { pay_in_mode: mode },
+          { pay_in_mode: mode, pay_in: mode === "disabled" ? null : "noah" },
         )
         const metadata =
-          surface === "business" ? applyUsPayInModeToMetadata(patched.metadata, mode) : patched.metadata
+          surface === "business"
+            ? applyUsPayInModeToMetadata(patched.metadata, mode, {
+                clearCrossBorder: isUsUsdCorridor(corridor.country_code, corridor.currency_code),
+              })
+            : patched.metadata
         return { ...corridor, metadata }
       }),
     )
@@ -890,10 +895,14 @@ export function PayoutCorridorsAdminPanel() {
           const patched = patchCorridorSurfaceRouting(
             { provider_routing: existing.provider_routing, metadata: existing.metadata },
             surface,
-            { pay_in_mode: mode },
+            { pay_in_mode: mode, pay_in: mode === "disabled" ? null : "noah" },
           )
           const metadata =
-            surface === "business" ? applyUsPayInModeToMetadata(patched.metadata, mode) : patched.metadata
+            surface === "business"
+              ? applyUsPayInModeToMetadata(patched.metadata, mode, {
+                  clearCrossBorder: isUsUsdCorridor(existing.country_code, existing.currency_code),
+                })
+              : patched.metadata
           return payoutCorridorsApi.patch(id, { metadata })
         }),
       )
@@ -1015,7 +1024,7 @@ export function PayoutCorridorsAdminPanel() {
                   <TableHead className="w-[88px] text-right">Live</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className="[&_td]:h-auto [&_td]:py-4">
                 {fiatRows.map((r) => {
                   const payoutProviders = payoutProviderOptions(r)
                   const payInProviders = payInProviderOptions({
@@ -1025,9 +1034,9 @@ export function PayoutCorridorsAdminPanel() {
                   })
                   const crossBorderProviders = crossBorderProviderOptions(r)
                   const liveOff = !r.enabled
-                  const usCorridor = isUsUsdCorridor(r.country_code, r.currency_code)
+                  const vaPayInCorridor = isVaExpressPayInCorridor(r.country_code, r.currency_code)
                   const payoutMismatch = r.business.payoutSelection !== r.personal.payoutSelection
-                  const payInMismatch = usCorridor
+                  const payInMismatch = vaPayInCorridor
                     ? r.business.usPayInMode !== r.personal.usPayInMode
                     : r.business.payInSelection !== r.personal.payInSelection
                   const xbMismatch = r.business.crossBorderSelection !== r.personal.crossBorderSelection
@@ -1064,7 +1073,7 @@ export function PayoutCorridorsAdminPanel() {
                         </SurfaceSelectRow>
                       </StackedRoutingCell>
                       <StackedRoutingCell mismatch={payInMismatch} liveOff={liveOff}>
-                        {usCorridor ? (
+                        {vaPayInCorridor ? (
                           <>
                             <SurfaceSelectRow label="Business">
                               <FeatureSelect

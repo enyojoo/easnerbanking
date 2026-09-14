@@ -139,7 +139,33 @@ Ledger **transaction** emails in production are **on by default**; set `LEDGER_T
 
 ## Supabase Auth emails (OTP / password reset)
 
-Supabase sends signup verification and password-reset OTP mail from **Auth → Email Templates** (not SES/SendGrid). HTML is generated from the same frame as transactional mail:
+Supabase Auth (signup OTP, password reset) is **not** sent by `sendMail`. Point the project at SES with **custom SMTP** in the dashboard. Templates stay in Supabase; only the transport changes.
+
+### SES SMTP (dashboard)
+
+IAM access keys (`AWS_ACCESS_KEY_ID`) **cannot** be pasted as SMTP username/password. Auth SMTP uses the **Mail Manager** endpoint created in SES (not classic `email-smtp.eu-west-2.amazonaws.com`).
+
+1. AWS Console → **Amazon SES** → **SMTP settings** → credentials CSV from **Create SMTP credentials** (Mail Manager).
+2. Use the SMTP username/password from that CSV (raw values first; AWS also lists base64 — only switch to base64 if Supabase auth fails).
+3. Mail Manager rule set must include **Send to internet** for `easner.com`.
+
+Then in **Supabase Dashboard → Authentication → Emails → SMTP Settings**:
+
+| Field | Value |
+|-------|--------|
+| Enable custom SMTP | On |
+| Sender email | `hello@easner.com` (must be on the verified SES identity) |
+| Sender name | `Easner` |
+| Host | `iburiu5pqyfy.akwp.mail-manager-smtp.amazonaws.com` |
+| Port | `587` (STARTTLS). Mail Manager does not use 465 |
+| Username | SMTP username from the Mail Manager CSV (not `AWS_ACCESS_KEY_ID`) |
+| Password | SMTP password from the Mail Manager CSV (not `AWS_SECRET_ACCESS_KEY`) |
+
+Save, then trigger **Confirm signup** or **Reset password** to a real inbox. Check SES → **Email sending** → **Sending statistics** if it does not arrive.
+
+Office **Email provider** does **not** switch Auth mail. Auth stays on this SMTP config until you change the dashboard.
+
+HTML is generated from the same frame as transactional mail:
 
 ```bash
 npm run email:render-supabase-auth

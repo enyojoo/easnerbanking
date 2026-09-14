@@ -19,7 +19,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { BUSINESS_VERIFICATION_PRODUCTS } from "@/lib/compliance-tier-ladder-copy"
+import {
+  BUSINESS_VERIFICATION_PRODUCTS,
+  VERIFICATION_COMING_LATER_LABEL,
+  verificationTierLabel,
+} from "@/lib/compliance-tier-ladder-copy"
 import { cn } from "@/lib/utils"
 import { KybRequiredDocumentsNotice } from "@/components/compliance/kyb-required-documents-notice"
 import { Tier1VerificationBadge } from "@/components/compliance/tier1-verification-badge"
@@ -383,8 +387,7 @@ export function BusinessVerificationSection({
             >
               <div
                 className={cn(
-                  "grid gap-4 md:grid-cols-2",
-                  showExpressCard ? "xl:grid-cols-4" : "xl:grid-cols-3",
+                  "grid gap-4 md:grid-cols-2 xl:grid-cols-3",
                   connectFlowActive && "flex min-h-0 flex-1 flex-col gap-0 md:grid-cols-1",
                 )}
               >
@@ -402,6 +405,11 @@ export function BusinessVerificationSection({
                       )}
                     >
                       <CardHeader className="gap-1.5 px-4 pb-0 md:px-4">
+                        {verificationTierLabel(t.ladderTier) ? (
+                          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                            {verificationTierLabel(t.ladderTier)}
+                          </p>
+                        ) : null}
                         <div className="flex flex-nowrap items-center gap-1.5">
                           <CardTitle className="min-w-0 text-base leading-tight">{t.title}</CardTitle>
                           {isGlobalBanking ? (
@@ -416,7 +424,7 @@ export function BusinessVerificationSection({
                               variant="secondary"
                               className="h-5 shrink-0 px-1.5 py-0 text-[10px] leading-none font-medium"
                             >
-                              Coming later
+                              {VERIFICATION_COMING_LATER_LABEL}
                             </Badge>
                           )}
                         </div>

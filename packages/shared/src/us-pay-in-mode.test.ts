@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest"
 import {
   applyUsPayInModeToMetadata,
   corridorOffersCrossBorder,
+  isVaExpressPayInCorridor,
   resolveUsPayInMode,
   resolveUsPayInModeFromCatalog,
   resolveUsPayInModeFromCorridor,
+  resolveVaPayInModeFromCatalog,
   usPayInAllowsExpress,
   usPayInAllowsVa,
   US_PAY_IN_MODE_OPTIONS,
@@ -32,6 +34,19 @@ describe("corridorOffersCrossBorder", () => {
     expect(corridorOffersCrossBorder("NG", "NGN")).toBe(true)
     expect(corridorOffersCrossBorder("KE", "KES")).toBe(true)
     expect(corridorOffersCrossBorder("DE", "EUR")).toBe(true)
+  })
+})
+
+describe("isVaExpressPayInCorridor", () => {
+  it("is true for US USD and every EUR country", () => {
+    expect(isVaExpressPayInCorridor("US", "USD")).toBe(true)
+    expect(isVaExpressPayInCorridor("DE", "EUR")).toBe(true)
+    expect(isVaExpressPayInCorridor("FR", "EUR")).toBe(true)
+  })
+
+  it("is false for local-currency corridors", () => {
+    expect(isVaExpressPayInCorridor("NG", "NGN")).toBe(false)
+    expect(isVaExpressPayInCorridor("US", "NGN")).toBe(false)
   })
 })
 
@@ -85,6 +100,50 @@ describe("resolveUsPayInModeFromCatalog", () => {
   })
 })
 
+describe("resolveVaPayInModeFromCatalog", () => {
+  it("keeps EUR VA until an explicit mode is saved", () => {
+    expect(
+      resolveVaPayInModeFromCatalog(
+        [{ country_code: "DE", currency_code: "EUR", rail: "bank_transfer", metadata: { yc_receive_enabled: true } }],
+        "EUR",
+        true,
+      ),
+    ).toBe("va_express")
+  })
+
+  it("uses the most permissive EUR bank corridor", () => {
+    expect(
+      resolveVaPayInModeFromCatalog(
+        [
+          { country_code: "DE", currency_code: "EUR", rail: "bank_transfer", metadata: { pay_in_mode: "disabled" } },
+          { country_code: "FR", currency_code: "EUR", rail: "bank_transfer", metadata: { pay_in_mode: "va" } },
+        ],
+        "EUR",
+        true,
+      ),
+    ).toBe("va")
+  })
+
+  it("hides EUR VA when every live EUR bank corridor is disabled", () => {
+    expect(
+      resolveVaPayInModeFromCatalog(
+        [
+          { country_code: "DE", currency_code: "EUR", rail: "bank_transfer", metadata: { pay_in_mode: "disabled" } },
+          {
+            country_code: "FR",
+            currency_code: "EUR",
+            rail: "bank_transfer",
+            enabled: false,
+            metadata: { pay_in_mode: "va_express" },
+          },
+        ],
+        "EUR",
+        true,
+      ),
+    ).toBe("disabled")
+  })
+})
+
 describe("usPayInAllowsVa / Express", () => {
   it("Disable hides both", () => {
     expect(usPayInAllowsVa("disabled")).toBe(false)
@@ -125,7 +184,7 @@ describe("applyUsPayInModeToMetadata", () => {
     expect(next.stripe_express_enabled).toBe(false)
   })
 
-  it("does not enable Yellowcard for US", () => {
+  it("does not enable Yellowcard for VA pay-in", () => {
     const next = applyUsPayInModeToMetadata({}, "va_express")
     expect(next.yc_receive_enabled).toBe(false)
   })
@@ -139,5 +198,16 @@ describe("applyUsPayInModeToMetadata", () => {
     expect(next.grid_receive_enabled).toBe(false)
     expect(next.noah_receive_enabled).toBe(false)
     expect(next.stripe_express_enabled).toBe(false)
+  })
+
+  it("can keep EUR cross-border when applying a VA mode", () => {
+    const next = applyUsPayInModeToMetadata(
+      { cross_border_enabled: true, cross_border_provider: "yellowcard" },
+      "va",
+      { clearCrossBorder: false },
+    )
+    expect(next.pay_in_mode).toBe("va")
+    expect(next.cross_border_enabled).toBe(true)
+    expect(next.cross_border_provider).toBe("yellowcard")
   })
 })
