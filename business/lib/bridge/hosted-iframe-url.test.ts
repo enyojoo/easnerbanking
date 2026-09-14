@@ -29,14 +29,9 @@ describe("buildBridgeHostedIframeUrl", () => {
     expect(out.match(/iframe-origin=/g)?.length).toBe(1)
   })
 
-  it("leaves non-verify paths intact aside from iframe-origin", () => {
-    const out = buildBridgeHostedIframeUrl(
-      "https://dashboard.bridge.xyz/accept-terms?session=abc",
-      "https://business.easner.com",
-    )
-    const parsed = new URL(out)
-    expect(parsed.pathname).toBe("/accept-terms")
-    expect(parsed.searchParams.get("iframe-origin")).toBe("https://business.easner.com")
+  it("leaves TOS URLs untouched so Accept can redirect", () => {
+    const href = "https://dashboard.bridge.xyz/accept-terms?session=abc"
+    expect(buildBridgeHostedIframeUrl(href, "https://business.easner.com")).toBe(href)
   })
 
   it("returns unparseable links unchanged", () => {

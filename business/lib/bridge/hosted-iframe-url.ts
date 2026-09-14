@@ -6,6 +6,10 @@
 export function buildBridgeHostedIframeUrl(link: string, iframeOrigin: string): string {
   try {
     const url = new URL(link)
+    const host = url.hostname.toLowerCase()
+    const isPersona = host.includes("withpersona.com") || host.includes("persona.com")
+    if (!isPersona) return link
+
     if (url.pathname.includes("/verify")) {
       url.pathname = url.pathname.replace("/verify", "/widget")
     }

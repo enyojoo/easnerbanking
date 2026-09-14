@@ -54,6 +54,26 @@ function hostedUrlFromPayload(payload: unknown): string | null {
   return url || null
 }
 
+/** POST /kyc_links does not put redirect_uri on tos_link. Accept would otherwise stay on Bridge. */
+export function applyBridgeHostedRedirect(
+  link: string | null | undefined,
+  redirectUrl: string,
+): string | null {
+  const href = String(link ?? "").trim()
+  if (!href) return null
+  const redirect = canonicalizeHostedOnboardingReturnUrl(redirectUrl)
+  if (!redirect) return href
+  try {
+    const url = new URL(href)
+    if (!url.searchParams.has("redirect_uri")) {
+      url.searchParams.set("redirect_uri", redirect)
+    }
+    return url.toString()
+  } catch {
+    return href
+  }
+}
+
 export async function createBridgeKycLink(input: {
   fullName: string
   email: string
@@ -66,7 +86,7 @@ export async function createBridgeKycLink(input: {
     input.redirectUri?.trim() ||
       (input.type === "business" ? getBridgeBusinessKybReturnUrl() : getBridgeKycReturnUrl()),
   )
-  return bridgeFetch<BridgeKycLink>({
+  const created = await bridgeFetch<BridgeKycLink>({
     method: "POST",
     path: "/kyc_links",
     idempotencyKey: input.idempotencyKey,
@@ -78,6 +98,10 @@ export async function createBridgeKycLink(input: {
       ...(redirect ? { redirect_uri: redirect } : {}),
     },
   })
+  return {
+    ...created,
+    tos_link: applyBridgeHostedRedirect(created.tos_link, getBridgeTosReturnUrl()),
+  }
 }
 
 export async function getBridgeKycLink(kycLinkId: string): Promise<BridgeKycLink> {

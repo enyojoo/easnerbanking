@@ -12,6 +12,7 @@ import {
   isBridgeTosAcceptedMessage,
   isHostedVerificationCompleteMessage,
   signedAgreementIdFromUnknown,
+  signedAgreementIdFromUrl,
 } from "@/lib/bridge/hosted-iframe-url"
 
 const EUR_TITLE =
@@ -62,6 +63,7 @@ export function BridgeHostedSetup({ onClose }: Props) {
   const finishedRef = useRef(false)
   const pendingKycUrl = useRef<string | null>(null)
   const phaseRef = useRef<HostedPhase>("tos")
+  const iframeRef = useRef<HTMLIFrameElement | null>(null)
 
   const iframeSrc = useMemo(() => {
     if (!hostedUrl) return null
@@ -184,6 +186,25 @@ export function BridgeHostedSetup({ onClose }: Props) {
     return () => window.removeEventListener("message", onMessage)
   }, [closeAndSync, continueToKyc])
 
+  const readTosReturnFromIframe = useCallback(() => {
+    if (phaseRef.current !== "tos") return
+    try {
+      const href = iframeRef.current?.contentWindow?.location.href ?? ""
+      if (!href) return
+      if (href.includes("/auth/onboarding-complete") || href.includes("signed_agreement_id")) {
+        void continueToKyc(signedAgreementIdFromUrl(href))
+      }
+    } catch {
+      // Still on Bridge's origin until Accept redirects.
+    }
+  }, [continueToKyc])
+
+  useEffect(() => {
+    if (phase !== "tos" || !iframeSrc) return
+    const timer = window.setInterval(readTosReturnFromIframe, 400)
+    return () => window.clearInterval(timer)
+  }, [iframeSrc, phase, readTosReturnFromIframe])
+
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-background">
       <div className="grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b px-2 py-2 sm:px-4">
@@ -221,12 +242,16 @@ export function BridgeHostedSetup({ onClose }: Props) {
           </div>
         ) : iframeSrc ? (
           <iframe
+            ref={iframeRef}
             title={EUR_TITLE}
             src={iframeSrc}
             className="absolute inset-0 h-full w-full border-0 bg-background"
             allow="camera; microphone"
             sandbox={phase === "tos" ? TOS_IFRAME_SANDBOX : KYC_IFRAME_SANDBOX}
-            onLoad={() => setFrameReady(true)}
+            onLoad={() => {
+              setFrameReady(true)
+              readTosReturnFromIframe()
+            }}
           />
         ) : null}
         {!error && !frameReady ? (

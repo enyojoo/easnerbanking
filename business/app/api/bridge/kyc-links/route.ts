@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import {
+  applyBridgeHostedRedirect,
   createBridgeKycLink,
   mapBridgeKycStatus,
   pickBridgeKycLinkFullName,
@@ -11,6 +12,7 @@ import {
   hostedLinksForExistingCustomer,
   resolveBridgeCustomerKycStatus,
 } from "@/lib/bridge/kyc-links"
+import { getBridgeTosReturnUrl } from "@/lib/bridge/config"
 import {
   customerIdFromBridgeError,
   formatBridgeKycStartError,
@@ -246,7 +248,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     kyc_link: link.kyc_link ?? null,
-    tos_link: link.tos_link ?? null,
+    tos_link: applyBridgeHostedRedirect(link.tos_link, getBridgeTosReturnUrl()),
     kyc_status: status,
     customer_id: customerId || null,
     alreadyOnboarded: Boolean(link.alreadyOnboarded) || status === "approved",

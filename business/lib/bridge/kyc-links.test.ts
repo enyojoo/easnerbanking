@@ -5,6 +5,7 @@ import {
   pickBridgeCustomerForEmail,
   resolveBridgeCustomerKycStatus,
   hostedLinksForExistingCustomer,
+  applyBridgeHostedRedirect,
 } from "./kyc-links"
 
 describe("pickBridgeKycLinkFullName", () => {
@@ -117,6 +118,17 @@ describe("resolveBridgeCustomerKycStatus", () => {
         endorsements: [{ name: "base", status: "approved" }],
       }),
     ).toBe("approved")
+  })
+})
+
+describe("applyBridgeHostedRedirect", () => {
+  it("adds redirect_uri to a Bridge TOS link that has none", () => {
+    const out = applyBridgeHostedRedirect(
+      "https://dashboard.bridge.xyz/accept-terms-of-service?session_token=abc",
+      "https://business.easner.com/auth/onboarding-complete?context=bridge-tos",
+    )
+    expect(out).toContain("redirect_uri=")
+    expect(out).toContain("bridge-tos")
   })
 })
 
