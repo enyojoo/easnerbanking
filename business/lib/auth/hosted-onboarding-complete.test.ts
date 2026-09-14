@@ -54,6 +54,17 @@ describe("hosted onboarding complete URL", () => {
     ).toBe("https://example.com/custom-return")
   })
 
+  it("ignores API hosts and http origins so Noah still gets https", () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://api.easner.com"
+    expect(getHostedOnboardingReturnUrl("kyc")).toBe(
+      "https://business.easner.com/auth/onboarding-complete?context=kyc",
+    )
+    process.env.NEXT_PUBLIC_APP_URL = "http://localhost:3000"
+    expect(getHostedOnboardingReturnUrl("business")).toBe(
+      "https://business.easner.com/auth/onboarding-complete?context=business",
+    )
+  })
+
   it("treats only the shared path as the complete URL", () => {
     expect(isHostedOnboardingCompleteUrl("https://business.easner.com/auth/onboarding-complete")).toBe(
       true,

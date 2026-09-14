@@ -6,12 +6,15 @@ import { useAuth } from "@/lib/auth-context"
 import { resolvePostSignInMfaRequirement } from "@/lib/auth-mfa"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 
-/** Routes that must run while a session may exist (recovery, OAuth exchange, Noah returns). */
+/** Routes that must run while a session may exist (recovery, OAuth exchange, hosted KYC returns). */
 function skipAuthenticatedRedirect(pathname: string): boolean {
   return (
     pathname.startsWith("/auth/callback") ||
     pathname.startsWith("/auth/reset-password") ||
-    pathname.startsWith("/auth/noah-")
+    pathname.startsWith("/auth/onboarding-complete") ||
+    pathname.startsWith("/auth/noah-") ||
+    pathname.startsWith("/auth/grid-") ||
+    pathname.startsWith("/auth/bridge-")
   )
 }
 
