@@ -133,7 +133,7 @@ describe("applyBridgeHostedRedirect", () => {
 })
 
 describe("hostedLinksForExistingCustomer", () => {
-  it("starts KYC when both links exist so Begin does not open TOS", () => {
+  it("keeps TOS when it is still pending so signed_agreement_id can be attached", () => {
     expect(
       hostedLinksForExistingCustomer({
         customerId: "23921f79-bef6-461a-89e3-26802bee52b6",
@@ -142,23 +142,23 @@ describe("hostedLinksForExistingCustomer", () => {
       }),
     ).toEqual({
       kyc_link: "https://kyc.example",
-      tos_link: null,
+      tos_link: "https://tos.example",
       kyc_status: "in_progress",
       customer_id: "23921f79-bef6-461a-89e3-26802bee52b6",
       alreadyOnboarded: false,
     })
   })
 
-  it("returns TOS only when there is no KYC link", () => {
+  it("omits TOS after it is approved", () => {
     expect(
       hostedLinksForExistingCustomer({
         customerId: "23921f79-bef6-461a-89e3-26802bee52b6",
-        customer: { kyc_status: "incomplete", tos_status: "pending" },
-        hosted: { kyc_link: null, tos_link: "https://tos.example" },
+        customer: { kyc_status: "incomplete", tos_status: "approved" },
+        hosted: { kyc_link: "https://kyc.example", tos_link: "https://tos.example" },
       }),
     ).toMatchObject({
-      kyc_link: null,
-      tos_link: "https://tos.example",
+      kyc_link: "https://kyc.example",
+      tos_link: null,
       alreadyOnboarded: false,
     })
   })

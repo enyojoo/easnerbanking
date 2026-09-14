@@ -144,15 +144,15 @@ export function BridgeHostedSetup({ onClose }: Props) {
       closeAndSync()
       return
     }
-    if (json.kyc_link) {
-      openKyc(json.kyc_link)
-      return
-    }
     if (json.tos_link) {
-      pendingKycUrl.current = null
+      pendingKycUrl.current = json.kyc_link || null
       phaseRef.current = "tos"
       setPhase("tos")
       setHostedUrl(json.tos_link)
+      return
+    }
+    if (json.kyc_link) {
+      openKyc(json.kyc_link)
       return
     }
     throw new Error("Could not start verification")
