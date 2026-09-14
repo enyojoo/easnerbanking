@@ -627,8 +627,8 @@ export function SettingsStripeConnectPanel({
   const primaryLocked = primaryWaitOnUsBanking || primaryWaitOnPayoutAccount
 
   return (
-      <Card className="flex h-full flex-col gap-3 border-primary/25 py-4 md:border-primary/40">
-        <CardHeader className="gap-1.5 px-4 pb-0 md:px-4">
+      <Card className="flex h-full min-h-44 flex-col justify-between gap-4 border-primary/25 py-5 md:border-primary/40">
+        <CardHeader className="shrink-0 items-start gap-1.5 px-4 pb-0 md:px-4">
           <div className="flex flex-nowrap items-center gap-1.5">
             <CardTitle className="min-w-0 text-base leading-tight">
               {onlinePayments?.title ?? "Online payments"}
@@ -653,7 +653,7 @@ export function SettingsStripeConnectPanel({
               "Get paid online by card, mobile wallet, or ACH."}
           </CardDescription>
         </CardHeader>
-        <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
+        <CardContent className="mt-auto shrink-0 space-y-3 px-4 pt-0 md:px-4">
           {panelUx?.bodyCopyDestructive ? (
             <p className="text-xs text-destructive">{panelUx.bodyCopyDestructive}</p>
           ) : null}

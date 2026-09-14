@@ -29,14 +29,14 @@ export const USD_VERIFICATION_REQUIRED_COPY = "Complete US banking verification 
 const USD_ACCOUNTS: VerificationProduct = {
   id: "global_banking",
   title: "Global banking",
-  description: "Get a dollar account, and send to more countries.",
+  description: "USD account, send to more countries.",
   availability: "live",
 }
 
 const EUR_ACCOUNTS: VerificationProduct = {
   id: "eur",
   title: "More accounts",
-  description: "Add euro accounts, and more ways to receive money.",
+  description: "Euro accounts, more ways to receive.",
   availability: "live",
 }
 

@@ -19,8 +19,8 @@ import {
   verificationTierLabel,
 } from "@/lib/compliance-tier-ladder-copy"
 import { cn } from "@/lib/utils"
-import { KybRequiredDocumentsNotice } from "@/components/compliance/kyb-required-documents-notice"
 import { Tier1VerificationBadge } from "@/components/compliance/tier1-verification-badge"
+import { businessHubKybCtaLabel } from "@/lib/compliance/hub-kyb-cta"
 import { SettingsCardHeader } from "@/components/settings/settings-card-header"
 import { SettingsStripeConnectPanel } from "@/components/settings/settings-stripe-connect-panel"
 import { SETTINGS_TAB_COPY, VERIFICATION_SECTION_COPY } from "@/lib/copy/business-ui-copy"
@@ -49,6 +49,9 @@ import { GridKybWizard } from "@/components/compliance/grid-kyb-wizard"
 import { analytics } from "@/lib/analytics"
 import { useKybPacket } from "@/lib/grid/kyb-packet-query"
 import { useAccountRestriction } from "@/hooks/use-account-restriction"
+
+/** Title/subtext stay top; notice + CTA sit on the bottom of a slightly taller hub card. */
+const HUB_PRODUCT_CARD_CLASS = "flex h-full min-h-44 flex-col justify-between gap-4 py-5"
 
 function tier1StatusIsInReview(status: string | null | undefined): boolean {
   const s = (status || "").toLowerCase()
@@ -329,19 +332,24 @@ export function BusinessVerificationSection({
     !tier1Rejected &&
     !tier1AwaitingReview &&
     (tier1InProgress || (tier1VerificationStatus === "not_started" && hasGridCustomer))
-  const showTier1HostedCta =
-    canManageBusinessVerification &&
-    !accountRestricted &&
-    !gridKybComplete &&
-    !tier1AwaitingReview &&
-    tier1CanResubmit &&
-    (!tier1OnHold || tier1CanResubmit)
-  const tier1HostedCtaLabel =
-    tier1Rejected || tier1OnHold
-      ? VERIFICATION_SECTION_COPY.reviewAndFixCta
-      : tier1InProgress || tier1StartedNotSubmitted
-        ? VERIFICATION_SECTION_COPY.continueVerificationCta
-        : VERIFICATION_SECTION_COPY.beginVerificationCta
+  const eurStatus = bridgeKycComplete ? "approved" : String(bridgeKycStatus || "not_started")
+  const eurRejected = eurStatus === "rejected"
+  const eurOnHold = eurStatus === "hold"
+  const eurAwaitingReview = !eurRejected && !eurOnHold && tier1StatusIsInReview(eurStatus)
+  const gridCtaLabel = businessHubKybCtaLabel({
+    status: tier1AwaitingReview ? "pending" : tier1VerificationStatus,
+    complete: gridKybComplete,
+    startedNotSubmitted: tier1StartedNotSubmitted,
+    canResubmit: tier1CanResubmit,
+    finalReject: tier1FinalReject,
+  })
+  const eurCtaLabel = businessHubKybCtaLabel({
+    status: eurStatus,
+    complete: bridgeKycComplete,
+    startedNotSubmitted: eurStatus === "in_progress",
+  })
+  const showGridCta = Boolean(gridCtaLabel) && canManageBusinessVerification && !accountRestricted
+  const showEurCta = Boolean(eurCtaLabel) && canManageBusinessVerification && !accountRestricted
 
   /** Full-page flow fills remaining main; in-tab fallback keeps title/tabs chrome. */
   const verificationFlowPanelClass =
@@ -442,25 +450,46 @@ export function BusinessVerificationSection({
                   const isGlobalBanking = t.id === "global_banking"
                   const isEurAccounts = t.id === "eur"
                   const isOnlinePayments = t.id === "online_payments"
-                  const eurStatus = bridgeKycComplete
-                    ? "approved"
-                    : String(bridgeKycStatus || "not_started")
-                  const showEurCta =
-                    isEurAccounts &&
-                    canManageBusinessVerification &&
-                    !bridgeKycComplete &&
-                    !accountRestricted
+                  const kybCtaLabel = isGlobalBanking ? gridCtaLabel : isEurAccounts ? eurCtaLabel : null
+                  const showKybCta = isGlobalBanking ? showGridCta : isEurAccounts ? showEurCta : false
+                  const kybComplete = isGlobalBanking
+                    ? gridKybComplete
+                    : isEurAccounts
+                      ? bridgeKycComplete
+                      : false
+                  const kybAwaitingReview = isGlobalBanking
+                    ? tier1AwaitingReview && !tier1ActionRequired
+                    : isEurAccounts
+                      ? eurAwaitingReview
+                      : false
+                  const kybFinalReject = isGlobalBanking && tier1Rejected && tier1FinalReject
+                  const kybActionRequired = isGlobalBanking
+                    ? tier1ActionRequired
+                    : isEurAccounts
+                      ? eurRejected || eurOnHold
+                      : false
+                  const showKybFooter =
+                    isGlobalBanking || isEurAccounts
+                      ? accountRestricted ||
+                        (isGlobalBanking && Boolean(error || info)) ||
+                        kybAwaitingReview ||
+                        kybFinalReject ||
+                        kybActionRequired ||
+                        (!kybComplete && !businessId) ||
+                        (!kybComplete && !canManageBusinessVerification) ||
+                        showKybCta
+                      : false
 
                   const comingLaterCard = (
                     <Card
                       key={t.id}
                       className={cn(
-                        "flex h-full flex-col gap-3 py-4",
+                        HUB_PRODUCT_CARD_CLASS,
                         isGlobalBanking && "border-primary/25 md:border-primary/40",
                         connectFlowActive && "hidden",
                       )}
                     >
-                      <CardHeader className="gap-1.5 px-4 pb-0 md:px-4">
+                      <CardHeader className="shrink-0 items-start gap-1.5 px-4 pb-0 md:px-4">
                         {verificationTierLabel(t.ladderTier) ? (
                           <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                             {verificationTierLabel(t.ladderTier)}
@@ -493,78 +522,62 @@ export function BusinessVerificationSection({
                         </div>
                         <CardDescription className="text-sm">{t.description}</CardDescription>
                       </CardHeader>
-                      {isGlobalBanking ? (
-                        <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
+                      {showKybFooter ? (
+                        <CardContent className="mt-auto shrink-0 space-y-3 px-4 pt-0 md:px-4">
                           {accountRestricted ? (
                             <p className="text-xs text-muted-foreground">
                               {accountRestrictionVerificationBlockedCopy()}
                             </p>
                           ) : (
                             <>
-                              {error ? <p className="text-xs text-destructive">{error}</p> : null}
-                              {info ? <p className="text-xs text-muted-foreground">{info}</p> : null}
-                              {tier1AwaitingReview && !tier1ActionRequired ? (
+                              {isGlobalBanking && error ? (
+                                <p className="text-xs text-destructive">{error}</p>
+                              ) : null}
+                              {isGlobalBanking && info ? (
+                                <p className="text-xs text-muted-foreground">{info}</p>
+                              ) : null}
+                              {kybAwaitingReview ? (
                                 <p className="text-xs text-muted-foreground">
                                   {NOAH_VERIFICATION_IN_REVIEW_COPY}
                                 </p>
                               ) : null}
-                              {tier1Rejected && tier1FinalReject ? (
+                              {kybFinalReject ? (
                                 <p className="text-xs text-muted-foreground">
                                   {NOAH_FINAL_REJECTION_USER_MESSAGE}
                                 </p>
-                              ) : tier1ActionRequired ? (
+                              ) : kybActionRequired ? (
                                 <p className="text-xs text-destructive">
                                   {VERIFICATION_SECTION_COPY.verificationOnHold}
                                 </p>
                               ) : null}
-                              {!businessId ? (
+                              {!kybComplete && !businessId ? (
                                 <p className="text-xs text-muted-foreground">
                                   Setting up your organization…
                                 </p>
                               ) : null}
-                              {!canManageBusinessVerification ? (
+                              {!kybComplete && !canManageBusinessVerification ? (
                                 <p className="text-xs text-muted-foreground">
                                   Only the organization owner can start verification.
                                 </p>
                               ) : null}
-                              {canManageBusinessVerification &&
-                              !gridKybComplete &&
-                              !tier1FinalReject &&
-                              !tier1AwaitingReview &&
-                              !tier1OnHold ? (
-                                <KybRequiredDocumentsNotice />
-                              ) : null}
-                              <div className="flex flex-wrap gap-2">
-                                {showTier1HostedCta ? (
+                              {showKybCta ? (
+                                <div className="flex flex-wrap gap-2">
                                   <Button
                                     size="sm"
-                                    onClick={() => void openHostedVerification()}
+                                    onClick={
+                                      isGlobalBanking
+                                        ? () => void openHostedVerification()
+                                        : openBridgeVerification
+                                    }
                                     disabled={!businessId || opening}
                                   >
                                     {opening ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-                                    {tier1HostedCtaLabel}
+                                    {kybCtaLabel}
                                   </Button>
-                                ) : null}
-                              </div>
+                                </div>
+                              ) : null}
                             </>
                           )}
-                        </CardContent>
-                      ) : isEurAccounts ? (
-                        <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
-                          {showEurCta ? (
-                            <div className="flex flex-wrap gap-2">
-                              <Button
-                                size="sm"
-                                disabled={opening || !businessId}
-                                onClick={openBridgeVerification}
-                              >
-                                {opening ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-                                {eurStatus === "in_progress" || eurStatus === "pending"
-                                  ? "Continue"
-                                  : "Start"}
-                              </Button>
-                            </div>
-                          ) : null}
                         </CardContent>
                       ) : null}
                     </Card>
@@ -592,8 +605,8 @@ export function BusinessVerificationSection({
                   return comingLaterCard
                 })}
                 {showExpressCard ? (
-                  <Card className="flex h-full flex-col gap-3 py-4">
-                    <CardHeader className="gap-1.5 px-4 pb-0 md:px-4">
+                  <Card className={HUB_PRODUCT_CARD_CLASS}>
+                    <CardHeader className="shrink-0 items-start gap-1.5 px-4 pb-0 md:px-4">
                       <div className="flex flex-nowrap items-center gap-1.5">
                         <CardTitle className="min-w-0 text-base leading-tight">
                           {EXPRESS_DEPOSITS_COPY.title}
@@ -619,7 +632,7 @@ export function BusinessVerificationSection({
                       </CardDescription>
                     </CardHeader>
                     {showExpressCta ? (
-                      <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
+                      <CardContent className="mt-auto shrink-0 space-y-3 px-4 pt-0 md:px-4">
                         <div className="flex flex-wrap gap-2">
                           <Button type="button" size="sm" onClick={openExpressSetup}>
                             {expressSetupCta}

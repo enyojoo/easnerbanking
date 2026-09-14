@@ -93,7 +93,7 @@ export const BUSINESS_DEPOSIT_KYB_COPY = {
   euro_banking: {
     title: "Add more accounts to get this account",
     body: "Add more accounts to receive deposit details for this account.",
-    cta: "Start",
+    cta: "Begin verification",
     inReviewTitle: "More accounts is in review",
     inReviewBody: "We’re checking the information you submitted. This usually completes within 1–3 business days.",
     rejectedBody:

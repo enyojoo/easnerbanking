@@ -17,13 +17,13 @@ describe("verification product catalog", () => {
 
     const usd = BUSINESS_VERIFICATION_PRODUCTS[0]
     expect(usd?.title).toBe("Global banking")
-    expect(usd?.description).toBe("Get a dollar account, and send to more countries.")
+    expect(usd?.description).toBe("USD account, send to more countries.")
     expect(usd?.availability).toBe("live")
     expect(usd?.ladderTier).toBeUndefined()
 
     const europe = BUSINESS_VERIFICATION_PRODUCTS.find((p) => p.id === "eur")
     expect(europe?.title).toBe("More accounts")
-    expect(europe?.description).toBe("Add euro accounts, and more ways to receive money.")
+    expect(europe?.description).toBe("Euro accounts, more ways to receive.")
     expect(europe?.availability).toBe("live")
     expect(europe?.footnote).toBeUndefined()
 
