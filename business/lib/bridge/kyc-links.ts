@@ -318,7 +318,7 @@ export function hostedLinksForExistingCustomer(input: {
   }
   return {
     kyc_link: input.hosted.kyc_link,
-    tos_link: tosOk ? null : input.hosted.tos_link,
+    tos_link: tosOk || input.hosted.kyc_link ? null : input.hosted.tos_link,
     kyc_status: mapped,
     customer_id: input.customerId,
     alreadyOnboarded: false,

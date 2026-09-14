@@ -246,9 +246,10 @@ export async function POST(request: Request) {
     })
   }
 
+  const kycLink = link.kyc_link ?? null
   return NextResponse.json({
-    kyc_link: link.kyc_link ?? null,
-    tos_link: applyBridgeHostedRedirect(link.tos_link, getBridgeTosReturnUrl()),
+    kyc_link: kycLink,
+    tos_link: kycLink ? null : applyBridgeHostedRedirect(link.tos_link, getBridgeTosReturnUrl()),
     kyc_status: status,
     customer_id: customerId || null,
     alreadyOnboarded: Boolean(link.alreadyOnboarded) || status === "approved",

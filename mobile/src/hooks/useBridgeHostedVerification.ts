@@ -113,17 +113,28 @@ export function useBridgeHostedVerification() {
         Boolean(response.alreadyOnboarded) || String(response.kyc_status || '').toLowerCase() === 'approved'
       if (approved || (!tos && !kyc)) return response
 
-      if (Platform.OS !== 'web' && !tos && kyc) {
-        await openPersonaInBrowser(kyc)
+      if (kyc) {
+        if (Platform.OS !== 'web') {
+          await openPersonaInBrowser(kyc)
+          return response
+        }
+        await new Promise<void>((resolve) => {
+          waitCloseRef.current = resolve
+          pendingKycUrl.current = null
+          phaseRef.current = 'kyc'
+          setPhase('kyc')
+          setUrl(embedUrl(kyc))
+          setIsVisible(true)
+        })
         return response
       }
 
       await new Promise<void>((resolve) => {
         waitCloseRef.current = resolve
-        pendingKycUrl.current = kyc || null
-        phaseRef.current = tos ? 'tos' : 'kyc'
-        setPhase(tos ? 'tos' : 'kyc')
-        setUrl(tos ? tos : embedUrl(kyc))
+        pendingKycUrl.current = null
+        phaseRef.current = 'tos'
+        setPhase('tos')
+        setUrl(tos)
         setIsVisible(true)
       })
       return response
