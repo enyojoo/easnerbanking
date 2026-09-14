@@ -68,3 +68,7 @@ export function isDefinitiveMobileSurfaceDenial(code?: string): boolean {
     code === 'OFFICE_ADMIN_WRONG_APP'
   )
 }
+
+export function isSessionPreservingSurfaceDenial(code?: string): boolean {
+  return code === 'PLATFORM_MAINTENANCE'
+}

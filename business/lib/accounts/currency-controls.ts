@@ -1,6 +1,6 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
-type CurrencyCode = "USD" | "EUR" | "GBP" | "NGN"
+type CurrencyCode = "USD" | "EUR"
 
 export type CurrencyPolicy = {
   code: CurrencyCode
@@ -8,14 +8,12 @@ export type CurrencyPolicy = {
   active: boolean
 }
 
-const ALL_CODES: CurrencyCode[] = ["USD", "EUR", "GBP", "NGN"]
+const ALL_CODES: CurrencyCode[] = ["USD", "EUR"]
 
-/** Human labels for business base currency UI (subset of tracked fiat policies). */
+/** Human labels for business / mobile base currency UI. */
 export const FIAT_CURRENCY_LABELS: Record<CurrencyCode, string> = {
   USD: "US Dollar",
   EUR: "Euro",
-  GBP: "British Pound",
-  NGN: "Nigerian Naira",
 }
 
 export type AllowedBaseCurrencyOption = { code: CurrencyCode; label: string }
@@ -26,20 +24,19 @@ export async function getAllowedBaseCurrencyOptions(): Promise<AllowedBaseCurren
   const out: AllowedBaseCurrencyOption[] = []
   for (const code of ALL_CODES) {
     const p = policies[code]
-    if (p.available && p.active) {
+    if (p.active) {
       out.push({ code, label: `${code} - ${FIAT_CURRENCY_LABELS[code]}` })
     }
   }
   return out
 }
 
-/** True if `code` is a tracked policy currency and is both available and active. */
+/** True if `code` is a tracked policy currency and is active. */
 export async function isAllowedBaseCurrency(code: string): Promise<boolean> {
   const upper = String(code || "").trim().toUpperCase() as CurrencyCode
   if (!ALL_CODES.includes(upper)) return false
   const policies = await getGlobalCurrencyPolicies()
-  const p = policies[upper]
-  return p.available && p.active
+  return policies[upper].active
 }
 
 function normalizeBool(v: string | null | undefined, fallback: boolean): boolean {
@@ -52,7 +49,7 @@ function normalizeBool(v: string | null | undefined, fallback: boolean): boolean
 
 export async function getGlobalCurrencyPolicies(): Promise<Record<CurrencyCode, CurrencyPolicy>> {
   const admin = createSupabaseAdmin()
-  const keys = ALL_CODES.flatMap((code) => [`currency_available_${code}`, `currency_active_${code}`])
+  const keys = ALL_CODES.map((code) => `currency_active_${code}`)
   const { data } = await admin.from("system_settings").select("key,value").in("key", keys)
 
   const map = new Map<string, string>()
@@ -62,11 +59,8 @@ export async function getGlobalCurrencyPolicies(): Promise<Record<CurrencyCode, 
 
   const out = {} as Record<CurrencyCode, CurrencyPolicy>
   for (const code of ALL_CODES) {
-    const isDefault = code === "USD" || code === "EUR"
-    const availableDefault = isDefault ? true : false
-    const available = normalizeBool(map.get(`currency_available_${code}`), availableDefault)
     const active = normalizeBool(map.get(`currency_active_${code}`), true)
-    out[code] = { code, available, active }
+    out[code] = { code, available: true, active }
   }
   return out
 }
@@ -77,12 +71,8 @@ export async function ensureCurrencyUsable(code: string): Promise<{ ok: true } |
 
   const policies = await getGlobalCurrencyPolicies()
   const policy = policies[upper]
-  if (!policy.available) {
-    return { ok: false, reason: `${upper} is not available yet.` }
-  }
   if (!policy.active) {
     return { ok: false, reason: `${upper} is temporarily unavailable.` }
   }
   return { ok: true }
 }
-

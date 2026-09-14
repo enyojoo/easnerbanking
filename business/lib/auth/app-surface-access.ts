@@ -1,6 +1,12 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { hasPendingTeamInviteForEmail } from "@/lib/business/claim-team-invite"
 import { ACCOUNT_CLOSED_MESSAGE } from "@/lib/settings/account-deletion"
+import {
+  accessForSurface,
+  PLATFORM_MAINTENANCE_CODE,
+  platformMaintenanceMessage,
+  readPlatformAccess,
+} from "@/lib/platform-access"
 
 export type AppSurface = "business_web" | "consumer_mobile"
 
@@ -41,6 +47,16 @@ export async function validateAppSurfaceAccess(
         surface === "business_web"
           ? "Office administrator accounts must sign in through the Easner Office console."
           : "Office administrator accounts must sign in through the Easner Office console.",
+    }
+  }
+
+  const flags = accessForSurface(await readPlatformAccess(admin), surface)
+  if (flags.maintenance) {
+    return {
+      ok: false,
+      status: 403,
+      code: PLATFORM_MAINTENANCE_CODE,
+      message: platformMaintenanceMessage(surface),
     }
   }
 

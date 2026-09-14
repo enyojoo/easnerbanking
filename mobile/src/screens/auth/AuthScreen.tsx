@@ -31,6 +31,7 @@ import KeyboardAwareScreen from '../../components/KeyboardAwareScreen'
 import EaseEnter from '../../components/EaseEnter'
 import { haptics } from '../../lib/haptics'
 import { signupPrecheck } from '../../lib/signupPrecheck'
+import { usePlatformAccess } from '../../hooks/usePlatformAccess'
 import { clearSignupOtpEmail, readSignupOtpEmail, stashSignupOtpEmail } from '../../lib/signupOtpEmailStorage'
 import { consumeSignupBlockedMessage } from '../../lib/signupBlockedMessage'
 import { useScreenDecorativeEnter } from '../../hooks/useScreenDecorativeEnter'
@@ -102,6 +103,8 @@ export default function AuthScreen({ navigation }: NavigationProps) {
   const showBackButton = modeStack.length > 1 || fromOnboarding
   const insets = useSafeAreaInsets()
   const termsLink = useExternalLink()
+  const platformAccess = usePlatformAccess()
+  const registrationClosed = platformAccess.data?.registration === false
 
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -432,9 +435,32 @@ export default function AuthScreen({ navigation }: NavigationProps) {
                 : authScreenStyles.screenTitleCompact
             }
           >
-            {isLogin ? 'Welcome back' : isSignupOtp ? 'Verify your email' : 'Open an account'}
+            {isLogin
+              ? 'Welcome back'
+              : isSignupOtp
+                ? 'Verify your email'
+                : registrationClosed
+                  ? 'Registration closed'
+                  : 'Open an account'}
           </Text>
 
+          {!isLogin && registrationClosed ? (
+            <View>
+              <Text style={authScreenStyles.subtitle}>
+                {platformAccess.data?.registrationMessage}
+              </Text>
+              <View style={[styles.footer, { paddingHorizontal: 0 }]}>
+                <Text style={authScreenStyles.footerMuted}>Already have an account? </Text>
+                <Pressable
+                  android_ripple={ripple.neutral}
+                  onPress={() => switchMode('login')}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                >
+                  <Text style={authScreenStyles.footerLink}>Sign in</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
           <View style={styles.form}>
             {!isLogin && signupStep === 'form' && (
               <Text style={authScreenStyles.termsIntro}>
@@ -633,6 +659,8 @@ export default function AuthScreen({ navigation }: NavigationProps) {
             )}
 
             <View style={[styles.footer, { paddingHorizontal: 0 }]}>
+              {isLogin && registrationClosed ? null : (
+                <>
               <Text style={authScreenStyles.footerMuted}>
                 {isLogin ? "Don't have an account? " : 'Already have an account? '}
               </Text>
@@ -642,8 +670,11 @@ export default function AuthScreen({ navigation }: NavigationProps) {
               >
                 <Text style={authScreenStyles.footerLink}>{isLogin ? 'Sign up' : 'Sign in'}</Text>
               </Pressable>
+                </>
+              )}
             </View>
           </View>
+          )}
           </AuthFlowContainer>
         </EaseEnter>
       </KeyboardAwareScreen>

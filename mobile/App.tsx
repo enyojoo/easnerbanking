@@ -38,6 +38,7 @@ import {
 import { warmTransactionDetailForNavigation } from './src/hooks/queries/use-transactions'
 import { getMobileQueryClient } from './src/query/client'
 import AppNavigator from './src/navigation/AppNavigator'
+import { PlatformAccessGate } from './src/components/PlatformAccessGate'
 import { webLinking } from './src/navigation/linking'
 import { setPreserveUserPathOverAuth } from './src/navigation/webLinkingGuard'
 import { formatWebDocumentTitle, setWebDocumentTitle } from './src/navigation/webDocumentTitle'
@@ -241,7 +242,9 @@ function AppContent() {
         backgroundColor={Platform.OS === 'android' ? palette.background.primary : undefined}
       />
       <WebIdleSessionBridge />
-      <AppNavigator />
+      <PlatformAccessGate>
+        <AppNavigator />
+      </PlatformAccessGate>
     </NavigationContainer>
   )
 

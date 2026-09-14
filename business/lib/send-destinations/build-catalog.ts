@@ -213,7 +213,7 @@ export async function buildSendDestinationsCatalog(input?: {
   }
   const crypto = [...cryptoByAsset.values()]
 
-  const balance_currencies = (["USD", "EUR", "GBP", "NGN"] as const).map((code) => ({
+  const balance_currencies = (["USD", "EUR"] as const).map((code) => ({
     code,
     available: policies[code].available,
     active: policies[code].active,

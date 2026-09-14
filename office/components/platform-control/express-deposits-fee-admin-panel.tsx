@@ -32,8 +32,27 @@ export function ExpressDepositsFeeAdminPanel() {
   const handleSave = useCallback(async () => {
     setSaving(true)
     setError(null)
+    const key = officeKeys.processingFeeSchedule("express_deposits")
+    const previous = queryClient.getQueryData(key)
+    const bps = normalizeBps(payInBps)
+    const current = feesQuery.data?.[0]
+    queryClient.setQueryData(key, [
+      {
+        ...(current ?? {
+          scope: "express_deposits" as const,
+          country_code: null,
+          currency_code: null,
+          asset_code: null,
+          pay_out_bps: 0,
+          cross_border_bps: 0,
+        }),
+        scope: "express_deposits" as const,
+        pay_in_bps: bps,
+        pay_out_bps: 0,
+        cross_border_bps: 0,
+      },
+    ])
     try {
-      const bps = normalizeBps(payInBps)
       await processingFeeScheduleApi.upsert([
         {
           scope: "express_deposits",
@@ -42,13 +61,14 @@ export function ExpressDepositsFeeAdminPanel() {
           cross_border_bps: 0,
         },
       ])
-      await queryClient.invalidateQueries({ queryKey: officeKeys.processingFeeSchedule("express_deposits") })
+      await queryClient.invalidateQueries({ queryKey: key, refetchType: "active" })
     } catch (e) {
+      if (previous) queryClient.setQueryData(key, previous)
       setError(e instanceof Error ? e.message : "Save failed")
     } finally {
       setSaving(false)
     }
-  }, [payInBps, queryClient])
+  }, [payInBps, queryClient, feesQuery.data])
 
   return (
     <Card>

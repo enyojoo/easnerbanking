@@ -8,7 +8,9 @@ export {
   isEmailProviderCredentialsConfigured,
   isSesCredentialsConfigured,
   isSendGridCredentialsConfigured,
+  parseEmailProvider,
 } from "./email-provider"
+export { clearEmailProviderCache } from "./resolve-email-provider"
 export {
   resolvePersonalFromEmail,
   resolveInvoiceFromEmailAddress,

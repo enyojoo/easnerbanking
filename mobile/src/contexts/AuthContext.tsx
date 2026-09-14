@@ -39,7 +39,11 @@ import {
 } from '@easner/shared'
 import { mapUsersRowToUser, splitFullNameForForm } from '../lib/userProfileHelpers'
 import type { PersonalSettingsPayload } from '../lib/userService'
-import { ensureConsumerMobileAccess, isDefinitiveMobileSurfaceDenial } from '../lib/validateAppSurface'
+import {
+  ensureConsumerMobileAccess,
+  isDefinitiveMobileSurfaceDenial,
+  isSessionPreservingSurfaceDenial,
+} from '../lib/validateAppSurface'
 import { hydratePayoutCorridorsFromStorage, refreshPayoutCorridors } from '../lib/payoutCorridors'
 import { readProfileSnapshot, writeProfileSnapshot } from '../lib/profileSnapshot'
 import { clearMfaVerified } from '../lib/mfaStatusCache'
@@ -128,6 +132,9 @@ async function finalizePostAuthSession(options?: {
   }
 
   const surfaceGate = await ensureConsumerMobileAccess()
+  if (surfaceGate.kind === 'denied' && isSessionPreservingSurfaceDenial(surfaceGate.code)) {
+    return { error: null }
+  }
   if (surfaceGate.kind === 'denied' && isDefinitiveMobileSurfaceDenial(surfaceGate.code)) {
     const msg = surfaceGate.error?.message || 'This account cannot use the Easner mobile app.'
     await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
@@ -486,7 +493,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return { error: new Error(vErr.message || 'Invalid code.') }
       }
       const surfaceGate = await ensureConsumerMobileAccess()
-      if (surfaceGate.error) {
+      if (surfaceGate.error && !isSessionPreservingSurfaceDenial(surfaceGate.code)) {
         return { error: surfaceGate.error }
       }
       const finalized = await finalizePostAuthSession()
@@ -518,7 +525,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       // Surface gate as soon as the session exists; PIN gate will happen in AppNavigator.
       const surfaceGate = await ensureConsumerMobileAccess()
-      if (surfaceGate.error) return { error: surfaceGate.error }
+      if (surfaceGate.error && !isSessionPreservingSurfaceDenial(surfaceGate.code)) {
+        return { error: surfaceGate.error }
+      }
 
       return { error: null }
     } catch (e) {
@@ -582,7 +591,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (shouldRunPostAuthBootstrap(opts?.sourceEvent)) {
         const surfaceGate = await ensureConsumerMobileAccess()
-        if (surfaceGate.kind === 'denied' && surfaceGate.error) {
+        if (surfaceGate.kind === 'denied' && isSessionPreservingSurfaceDenial(surfaceGate.code)) {
+          // Office maintenance: keep the session; PlatformAccessGate shows the screen.
+        } else if (surfaceGate.kind === 'denied' && surfaceGate.error) {
           console.warn('AuthContext: App surface denied:', surfaceGate.error.message)
           analytics.trackError('sign_in_failed', {
             reason: surfaceGate.error.message,

@@ -30,8 +30,9 @@ export async function ensureBusinessWebSurface(supabase: SupabaseBrowser): Promi
     // Offline / transient network: do not block sign-in.
     return
   }
-  const body = (await res.json().catch(() => ({}))) as { error?: string }
+  const body = (await res.json().catch(() => ({}))) as { error?: string; code?: string }
   if (!res.ok) {
+    if (body.code === "PLATFORM_MAINTENANCE") return
     await supabase.auth.signOut({ scope: "local" })
     clearBusinessAppSessionCookie()
     throw new Error(

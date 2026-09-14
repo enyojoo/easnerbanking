@@ -8,6 +8,7 @@ import {
   type SignupExistingRole,
 } from "@easner/shared"
 import { applyCorsHeaders, corsPreflightResponse, getCorsAllowedOrigins } from "@/lib/cors"
+import { readPlatformAccess, registrationClosedBlock } from "@/lib/platform-access"
 
 const SURFACES: SignupAuthSurface[] = ["business_web", "consumer_mobile"]
 
@@ -25,11 +26,12 @@ function emailIlikePattern(email: string): string {
  * Pre-sign-up gate (called BEFORE `supabase.auth.signUp`, so it needs no session).
  *
  * Blocks early, with clear messaging, instead of advancing to OTP:
- *  1. Disposable / throwaway email domains and Apple Hide My Email relay addresses.
- *  2. An email already registered on this product → "Please sign in instead."
- *  3. An email already registered on the other product (Business ↔ Mobile share one
+ *  1. Office registration closed for this product surface.
+ *  2. Disposable / throwaway email domains and Apple Hide My Email relay addresses.
+ *  3. An email already registered on this product → "Please sign in instead."
+ *  4. An email already registered on the other product (Business ↔ Mobile share one
  *     Supabase project; role lives in `public.users`).
- *  4. A hard-closed account → contact support (not "sign in").
+ *  5. A hard-closed account → contact support (not "sign in").
  */
 export async function OPTIONS(request: NextRequest) {
   const allowed = getCorsAllowedOrigins()
@@ -64,6 +66,16 @@ export async function POST(request: NextRequest) {
     return respond(200, { ok: true })
   }
 
+  const admin = createSupabaseAdmin()
+  const closed = registrationClosedBlock(await readPlatformAccess(admin), surface)
+  if (closed) {
+    return respond(200, {
+      ok: false,
+      code: closed.code,
+      error: closed.error,
+    })
+  }
+
   const emailBlock = resolveSignupEmailBlock(email)
   if (emailBlock) {
     return respond(200, {
@@ -73,7 +85,6 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  const admin = createSupabaseAdmin()
   const { data: existing, error: lookupError } = await admin
     .from("users")
     .select("role,deleted_at")

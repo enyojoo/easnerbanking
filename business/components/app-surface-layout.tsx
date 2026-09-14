@@ -8,6 +8,7 @@ import { WorkspaceBootSplash } from "@/components/loading-spinner"
 import { useAuth } from "@/lib/auth-context"
 import { redirectToWorkspaceLogin } from "@/lib/auth/workspace-login-redirect"
 import { probeStoredSupabaseSession } from "@/lib/query/web-persist"
+import { PlatformAccessGate } from "@/components/platform-access-gate"
 
 const DASHBOARD_SHELL_ROOTS = [
   "/accounts",
@@ -74,7 +75,7 @@ export function AppSurfaceLayout({ children }: { children: React.ReactNode }) {
   }, [isShellRoute, canShowWorkspace, isLoading])
 
   if (!isShellRoute) {
-    return <>{children}</>
+    return <PlatformAccessGate>{children}</PlatformAccessGate>
   }
 
   if (!canShowWorkspace) {
@@ -85,8 +86,10 @@ export function AppSurfaceLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <DashboardShell>
-      {children}
-    </DashboardShell>
+    <PlatformAccessGate>
+      <DashboardShell>
+        {children}
+      </DashboardShell>
+    </PlatformAccessGate>
   )
 }
