@@ -49,7 +49,6 @@ export async function prefillBridgeBusinessCustomer(input: {
       method: "PUT",
       path: `/customers/${encodeURIComponent(customerId)}`,
       json: body,
-      idempotencyKey: `bridge-prefill:${input.businessId}:${customerId}`,
     })
   } catch (error) {
     console.warn("[bridge] Grid packet prefill failed", error)

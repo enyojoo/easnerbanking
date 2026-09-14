@@ -18,6 +18,37 @@ export type BridgeKycLink = {
   endorsements?: string[]
 }
 
+/** Bridge KYC links: individuals use the person; businesses must send the entity legal name. */
+export function pickBridgeKycLinkFullName(input: {
+  type: BridgeCustomerType
+  businessLegalName?: string | null
+  personFullName?: string | null
+}): string {
+  if (input.type === "business") {
+    return String(input.businessLegalName ?? "").trim() || "Business"
+  }
+  return String(input.personFullName ?? "").trim() || "Customer"
+}
+
+export function bridgeCreateKycLinkIdempotencyKey(input: {
+  type: BridgeCustomerType
+  subjectId: string
+  fullName: string
+}): string {
+  const name = String(input.fullName ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+  return `bridge-kyc:${input.type}:${input.subjectId}:${name}`
+}
+
+function hostedUrlFromPayload(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null
+  const rec = payload as Record<string, unknown>
+  const url = String(rec.url ?? rec.kyc_link ?? rec.tos_link ?? "").trim()
+  return url || null
+}
+
 export async function createBridgeKycLink(input: {
   fullName: string
   email: string
@@ -49,6 +80,33 @@ export async function getBridgeKycLink(kycLinkId: string): Promise<BridgeKycLink
     method: "GET",
     path: `/kyc_links/${encodeURIComponent(kycLinkId)}`,
   })
+}
+
+export async function getBridgeCustomerKycLink(customerId: string): Promise<string | null> {
+  const payload = await bridgeFetch<unknown>({
+    method: "GET",
+    path: `/customers/${encodeURIComponent(customerId)}/kyc_link?endorsement=sepa`,
+  })
+  return hostedUrlFromPayload(payload)
+}
+
+export async function getBridgeCustomerTosLink(customerId: string): Promise<string | null> {
+  const payload = await bridgeFetch<unknown>({
+    method: "GET",
+    path: `/customers/${encodeURIComponent(customerId)}/tos_acceptance_link`,
+  })
+  return hostedUrlFromPayload(payload)
+}
+
+export async function getBridgeHostedLinksForCustomer(customerId: string): Promise<{
+  kyc_link: string | null
+  tos_link: string | null
+}> {
+  const [kyc, tos] = await Promise.all([
+    getBridgeCustomerKycLink(customerId).catch(() => null),
+    getBridgeCustomerTosLink(customerId).catch(() => null),
+  ])
+  return { kyc_link: kyc, tos_link: tos }
 }
 
 export async function getBridgeCustomer(customerId: string): Promise<{
