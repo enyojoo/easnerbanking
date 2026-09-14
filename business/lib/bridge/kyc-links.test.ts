@@ -104,6 +104,23 @@ describe("pickBridgeCustomerForEmail", () => {
       )?.id,
     ).toBe("23921f79-bef6-461a-89e3-26802bee52b6")
   })
+
+  it("does not attach an individual customer to a business KYB email lookup", () => {
+    expect(
+      pickBridgeCustomerForEmail(
+        [
+          {
+            id: "owner-individual",
+            email: "owner@example.com",
+            type: "individual",
+            kyc_status: "approved",
+          },
+        ],
+        "owner@example.com",
+        "business",
+      ),
+    ).toBeNull()
+  })
 })
 
 describe("resolveBridgeCustomerKycStatus", () => {
@@ -129,6 +146,16 @@ describe("applyBridgeHostedRedirect", () => {
     )
     expect(out).toContain("redirect_uri=")
     expect(out).toContain("bridge-tos")
+  })
+
+  it("overwrites a KYB complete redirect so TOS cannot close the sheet", () => {
+    const out = applyBridgeHostedRedirect(
+      "https://dashboard.bridge.xyz/accept-terms-of-service?redirect_uri=https%3A%2F%2Fbusiness.easner.com%2Fauth%2Fonboarding-complete%3Fcontext%3Dbusiness",
+      "https://business.easner.com/auth/onboarding-complete?context=bridge-tos",
+      { overwrite: true },
+    )
+    expect(out).toContain("bridge-tos")
+    expect(out).not.toContain("context%3Dbusiness")
   })
 })
 

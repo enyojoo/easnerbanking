@@ -3,6 +3,21 @@
 import { useEffect } from "react"
 import { SETTINGS_BRIDGE_FLOW_HREF, SETTINGS_VERIFICATION_HREF } from "@/lib/compliance/cutover-comms"
 
+async function attachSignedAgreement(signedAgreementId: string) {
+  for (const scope of ["business", "individual"] as const) {
+    const res = await fetch("/api/bridge/tos-accept", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Easner-Account-Scope": scope,
+      },
+      body: JSON.stringify({ signed_agreement_id: signedAgreementId }),
+    }).catch(() => null)
+    if (res?.ok) return
+  }
+}
+
 /** Minimal ReturnURL target for hosted KYC/KYB (iframe or in-app browser). */
 export function OnboardingCompleteView() {
   useEffect(() => {
@@ -11,7 +26,8 @@ export function OnboardingCompleteView() {
     const signedAgreementId =
       params.get("signed_agreement_id")?.trim() || params.get("signedAgreementId")?.trim() || undefined
     const embedded = window.parent !== window
-    if (context === "bridge-tos") {
+    const tosReturn = context === "bridge-tos" || Boolean(signedAgreementId)
+    if (tosReturn) {
       if (embedded) {
         window.parent.postMessage(
           {
@@ -25,7 +41,10 @@ export function OnboardingCompleteView() {
         )
         return
       }
-      window.location.replace(SETTINGS_BRIDGE_FLOW_HREF)
+      void (async () => {
+        if (signedAgreementId) await attachSignedAgreement(signedAgreementId)
+        window.location.replace(SETTINGS_BRIDGE_FLOW_HREF)
+      })()
       return
     }
     if (embedded) {

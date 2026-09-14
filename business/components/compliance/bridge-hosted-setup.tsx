@@ -64,6 +64,7 @@ export function BridgeHostedSetup({ onClose }: Props) {
   const pendingKycUrl = useRef<string | null>(null)
   const phaseRef = useRef<HostedPhase>("tos")
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
+  const ignoreNextCompleteRef = useRef(false)
 
   const iframeSrc = useMemo(() => {
     if (!hostedUrl) return null
@@ -91,6 +92,7 @@ export function BridgeHostedSetup({ onClose }: Props) {
 
   const openKyc = useCallback((url: string) => {
     pendingKycUrl.current = null
+    ignoreNextCompleteRef.current = true
     phaseRef.current = "kyc"
     setPhase("kyc")
     setFrameReady(false)
@@ -179,6 +181,10 @@ export function BridgeHostedSetup({ onClose }: Props) {
         }
       }
       if (phaseRef.current === "kyc" && isHostedVerificationCompleteMessage(event.data)) {
+        if (ignoreNextCompleteRef.current) {
+          ignoreNextCompleteRef.current = false
+          return
+        }
         closeAndSync()
       }
     }

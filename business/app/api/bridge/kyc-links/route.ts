@@ -106,14 +106,15 @@ export async function POST(request: Request) {
     if (!ctx.ok) return ctx.response
     businessId = ctx.businessId
     const profile = await loadGridBusinessProfile(admin, businessId).catch(() => null)
-    businessLegalName = String(profile?.legalName ?? "").trim() || null
     const { data: biz } = await admin
       .from("businesses")
-      .select("bridge_customer_id,bridge_kyc_status")
+      .select("bridge_customer_id,bridge_kyc_status,name")
       .eq("id", businessId)
       .maybeSingle()
     existingCustomerId = String(biz?.bridge_customer_id ?? "").trim()
     existingStatus = String(biz?.bridge_kyc_status ?? "").trim()
+    businessLegalName =
+      String(profile?.legalName ?? "").trim() || String(biz?.name ?? "").trim() || null
   } else {
     existingStatus = String(userRow?.bridge_kyc_status ?? "").trim()
   }
@@ -126,6 +127,14 @@ export async function POST(request: Request) {
   const email = String(body.email ?? userRow?.email ?? user.email ?? "").trim()
   if (!email) {
     return NextResponse.json({ error: "Email is required to start verification." }, { status: 400 })
+  }
+
+  if (existingCustomerId && type === "business") {
+    const attached = await getBridgeCustomer(existingCustomerId).catch(() => null)
+    if (String(attached?.type ?? "").toLowerCase() === "individual") {
+      existingCustomerId = ""
+      existingStatus = ""
+    }
   }
 
   const existingMapped = mapBridgeKycStatus(existingStatus)
@@ -141,7 +150,7 @@ export async function POST(request: Request) {
 
   if (!existingCustomerId) {
     const found = await findBridgeCustomerByEmail(email, type).catch(() => null)
-    if (found?.id) {
+    if (found?.id && found.type === type) {
       existingCustomerId = found.id
       existingStatus = resolveBridgeCustomerKycStatus(found)
     }
@@ -248,7 +257,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     kyc_link: link.kyc_link ?? null,
-    tos_link: applyBridgeHostedRedirect(link.tos_link, getBridgeTosReturnUrl()),
+    tos_link: applyBridgeHostedRedirect(link.tos_link, getBridgeTosReturnUrl(), { overwrite: true }),
     kyc_status: status,
     customer_id: customerId || null,
     alreadyOnboarded: Boolean(link.alreadyOnboarded) || status === "approved",

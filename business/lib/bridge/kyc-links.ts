@@ -58,6 +58,7 @@ function hostedUrlFromPayload(payload: unknown): string | null {
 export function applyBridgeHostedRedirect(
   link: string | null | undefined,
   redirectUrl: string,
+  opts?: { overwrite?: boolean },
 ): string | null {
   const href = String(link ?? "").trim()
   if (!href) return null
@@ -65,7 +66,7 @@ export function applyBridgeHostedRedirect(
   if (!redirect) return href
   try {
     const url = new URL(href)
-    if (!url.searchParams.has("redirect_uri")) {
+    if (opts?.overwrite || !url.searchParams.has("redirect_uri")) {
       url.searchParams.set("redirect_uri", redirect)
     }
     return url.toString()
@@ -100,7 +101,7 @@ export async function createBridgeKycLink(input: {
   })
   return {
     ...created,
-    tos_link: applyBridgeHostedRedirect(created.tos_link, getBridgeTosReturnUrl()),
+    tos_link: applyBridgeHostedRedirect(created.tos_link, getBridgeTosReturnUrl(), { overwrite: true }),
   }
 }
 
@@ -219,7 +220,7 @@ export function pickBridgeCustomerForEmail(
   const wanted = email.trim().toLowerCase()
   if (!wanted) return null
   const matches = rows.filter((row) => {
-    if (row.type && row.type !== type) return false
+    if (row.type !== type) return false
     const rowEmail = String(row.email ?? "").trim().toLowerCase()
     return !rowEmail || rowEmail === wanted
   })
