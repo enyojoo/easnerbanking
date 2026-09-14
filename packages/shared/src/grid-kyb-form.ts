@@ -1246,6 +1246,31 @@ export function gridKybWizardReadiness(input: {
   return ready ? "ready_to_submit" : "not_submitted"
 }
 
+/** Why Complete stays disabled before first Grid submit (no error pointers yet). */
+export function gridKybWizardNotReadyReasons(input: {
+  company: GridKybCompanyDraft
+  hasReadyPeople: boolean
+  hasIdentityDocument: boolean
+  hasAllRequiredCompanyDocuments: boolean
+}): string[] {
+  const reasons: string[] = []
+  if (!input.company.legalName.trim()) reasons.push("Add the legal company name.")
+  if (!input.hasReadyPeople) {
+    reasons.push(
+      "Finish each owner on People: name, date of birth, nationality, address, and tax ID.",
+    )
+  }
+  if (!input.hasIdentityDocument) {
+    reasons.push(
+      "On People, upload an ID for each owner with issuing country, authority, and document number.",
+    )
+  }
+  if (!input.hasAllRequiredCompanyDocuments) {
+    reasons.push("Upload every required company document.")
+  }
+  return reasons
+}
+
 export type GridKybApplicationStatus =
   | "draft"
   | "submitted"

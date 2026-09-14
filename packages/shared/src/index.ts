@@ -791,6 +791,7 @@ export {
   gridKybErrorIsDocumentQuality,
   gridKybOwnerResourceMatches,
   gridKybWizardReadiness,
+  gridKybWizardNotReadyReasons,
   hasAllRequiredKybCompanyDocuments,
   hasReadyKybIdentityDocuments,
   hasReadyKybPeople,

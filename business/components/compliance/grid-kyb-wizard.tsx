@@ -8,6 +8,7 @@ import {
   gridKybSectionAttentionCounts,
   gridKybApplicationIsEditable,
   gridKybWizardReadiness,
+  gridKybWizardNotReadyReasons,
   hasAllRequiredKybCompanyDocuments,
   hasReadyKybIdentityDocuments,
   hasReadyKybPeople,
@@ -113,11 +114,15 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
     })
   }, [packet, company])
   const counts = useMemo(() => {
-    return gridKybSectionAttentionCounts({
+    const next = gridKybSectionAttentionCounts({
       pointers,
       people: packet?.people ?? [],
       documents: packet?.documents ?? [],
     })
+    if (!hasReadyKybPeople(packet?.people ?? []) || !hasReadyKybIdentityDocuments(packet?.people ?? [], packet?.documents ?? [])) {
+      next.people = Math.max(next.people, 1)
+    }
+    return next
   }, [pointers, packet])
   const readiness = useMemo(() => {
     const documents = packet?.documents ?? []
@@ -130,6 +135,16 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
       hasAllRequiredCompanyDocuments: hasAllRequiredKybCompanyDocuments(documents),
     })
   }, [status, pointers.length, company, packet])
+  const notReadyReasons = useMemo(() => {
+    if (readiness !== "not_submitted") return []
+    const documents = packet?.documents ?? []
+    return gridKybWizardNotReadyReasons({
+      company,
+      hasReadyPeople: hasReadyKybPeople(packet?.people ?? []),
+      hasIdentityDocument: hasReadyKybIdentityDocuments(packet?.people ?? [], documents),
+      hasAllRequiredCompanyDocuments: hasAllRequiredKybCompanyDocuments(documents),
+    })
+  }, [readiness, company, packet])
 
   async function saveCompany() {
     const res = await fetchWithSession("/api/grid/kyb/company", {
@@ -369,6 +384,15 @@ export function GridKybWizard({ onClose, initialCompany, initialPacket, initialI
           ) : null}
         </div>
       </div>
+      {section === "documents" && notReadyReasons.length > 0 ? (
+        <div className="border-t px-4 py-2 sm:px-6">
+          <ul className="mx-auto max-w-2xl list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+            {notReadyReasons.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center justify-between gap-2 border-t bg-background px-4 py-3 sm:px-6">
         <Button type="button" variant="outline" size="sm" disabled={pendingCta === "exit"} onClick={() => void saveAndExit()}>
           {pendingCta === "exit" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}

@@ -13,6 +13,7 @@ import {
   gridKybOwnerCountriesFromNationality,
   gridKybOwnerIdTypeForGrid,
   gridKybWizardReadiness,
+  gridKybWizardNotReadyReasons,
   hasAllRequiredKybCompanyDocuments,
   hasReadyKybIdentityDocuments,
   hasReadyKybPeople,
@@ -652,6 +653,20 @@ describe("gridKybWizardReadiness", () => {
     }
     expect(gridKybWizardReadiness({ ...base, remainingPointers: 2 })).toBe("needs_attention")
     expect(gridKybWizardReadiness({ ...base, remainingPointers: 0 })).toBe("ready_to_submit")
+  })
+
+  it("lists local blockers while Not submitted", () => {
+    expect(
+      gridKybWizardNotReadyReasons({
+        company: { ...emptyGridKybCompanyDraft(), legalName: "Acme" },
+        hasReadyPeople: false,
+        hasIdentityDocument: false,
+        hasAllRequiredCompanyDocuments: true,
+      }),
+    ).toEqual([
+      "Finish each owner on People: name, date of birth, nationality, address, and tax ID.",
+      "On People, upload an ID for each owner with issuing country, authority, and document number.",
+    ])
   })
 
   it("stays not_submitted until every required company document is uploaded", () => {
