@@ -45,7 +45,7 @@ async function fetchPublicBusiness(
 ): Promise<{ business: PublicPayBusiness; tier1Complete: boolean }> {
   const { data } = await admin
     .from("businesses")
-    .select("name, logo_url, easetag, verification_status, verification_provider, grid_customer_id")
+    .select("name, logo_url, easetag, verification_status, verification_provider, grid_customer_id, bridge_kyc_status")
     .eq("id", businessId)
     .maybeSingle()
 

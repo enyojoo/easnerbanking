@@ -29,7 +29,7 @@ import {
   type StablecoinReceiveMethod,
 } from "@/components/receive/ReceiveStablecoinMethodList"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import { resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, resolvePayInProvider, type NgLocalIdType, resolveReceiveCountryName, receiveInternationalBankTitle, receiveInternationalDepositSubtitle, receiveLocalBankTitle, receiveLocalMomoTitle, receiveLocalDepositSubtitle, localPayInCountries, expressDepositMethodTitle, expressDepositMethodSubtitle, expressDepositsStatusIsReady, isExpressCashKind, listExpressCashKinds, type CashPayInMethodKind } from "@easner/shared"
+import { resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, resolvePayInProvider, type NgLocalIdType, resolveReceiveCountryName, receiveInternationalBankTitle, receiveInternationalDepositSubtitle, receiveLocalBankTitle, receiveLocalMomoTitle, receiveLocalDepositSubtitle, localPayInCountries, expressDepositMethodTitle, expressDepositMethodSubtitle, expressDepositsStatusIsReady, isExpressCashKind, listExpressCashKinds, type CashPayInMethodKind, BUSINESS_DEPOSIT_KYB_COPY, type BusinessDepositKybProduct } from "@easner/shared"
 import { LocalDepositWizard } from "@/components/local-deposit-wizard"
 import { AccountsExpressDepositFlow } from "@/components/accounts/accounts-express-deposit-flow"
 import { NgLocalVerificationNotice } from "@/components/compliance/ng-local-verification-notice"
@@ -328,6 +328,11 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
     canUseGeoPersonalRails,
     residenceCountry: profileResidenceCountry,
   } = useBusinessProfile()
+  const depositKybComplete = account.depositKybComplete ?? tier1Complete
+  const depositKybProduct: BusinessDepositKybProduct = account.depositKybProduct ?? "us_banking"
+  const depositKybStatus = account.depositKybStatus ?? tier1VerificationStatus
+  const depositKybHref = account.depositKybHref ?? "/settings?tab=verification"
+  const depositKybCopy = BUSINESS_DEPOSIT_KYB_COPY[depositKybProduct]
   const usAllowsExpress = account.currency !== "USD" || account.usPayInAllowsExpress !== false
   const stablecoinAccount =
     account.stablecoinAddress && account.stablecoinToken
@@ -340,7 +345,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
         }
       : undefined
   const hasStablecoin = stablecoinAccount !== undefined
-  const showBankTab = account.showBankDepositTab ?? !tier1Complete
+  const showBankTab = account.showBankDepositTab ?? !depositKybComplete
   const showStablecoinTab = hasStablecoin
 
   const [residenceCountry, setResidenceCountry] = useState<string | null>(profileResidenceCountry)
@@ -678,28 +683,28 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
   const isNgn = account.currency === "NGN"
   const blockedByAfricanTier = isNgn && !TIER2_COMPLETE_PLACEHOLDER
   /** Mirror mobile Receive: deposit rails require approved verification (not cached artifacts alone). */
-  const blockedByGlobalTier = !isNgn && !tier1Complete
+  const blockedByGlobalTier = !isNgn && !depositKybComplete
   const depositDetailsBlocked = blockedByAfricanTier || blockedByGlobalTier
 
   const kybInReview =
-    blockedByGlobalTier && tier1StatusIsInReview(tier1VerificationStatus)
+    blockedByGlobalTier && tier1StatusIsInReview(depositKybStatus)
   const kybRejected =
-    blockedByGlobalTier && (tier1VerificationStatus || "").toLowerCase() === "rejected"
+    blockedByGlobalTier && (depositKybStatus || "").toLowerCase() === "rejected"
   const showVerifyCta = blockedByGlobalTier && !kybInReview
 
   const blockedTitle = blockedByAfricanTier
     ? "Nigeria local verification required"
     : kybInReview
-      ? "Verification in Review"
-      : "Complete Verification to get an account"
+      ? depositKybCopy.inReviewTitle
+      : depositKybCopy.title
 
   const blockedBody = blockedByAfricanTier
     ? "Complete Nigeria local verification (NIN + BVN) to unlock local deposits. This is separate from global account verification."
     : kybInReview
-      ? "Your business verification is currently being reviewed."
+      ? depositKybCopy.inReviewBody
       : kybRejected
-        ? "Your verification could not be completed. Please complete business verification again to receive your account details."
-        : "Please complete your business verification to receive bank and stablecoin deposit information."
+        ? depositKybCopy.rejectedBody
+        : depositKybCopy.body
 
   const handleShare = async (type: "bank" | "stablecoin" | "local") => {
     const bankDetails =
@@ -832,7 +837,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
             </DialogDescription>
           ) : (
             <DialogDescription className="sr-only">
-              Business verification is required to view deposit details.
+              {depositKybCopy.title}
             </DialogDescription>
           )}
         </DialogHeader>
@@ -846,8 +851,8 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
             <p className="mt-2 max-w-sm text-sm text-muted-foreground">{blockedBody}</p>
             {showVerifyCta || blockedByAfricanTier ? (
               <Button asChild className="mt-6 gap-2">
-                <Link href="/settings?tab=verification">
-                  Complete Verification
+                <Link href={depositKybHref}>
+                  {depositKybCopy.cta}
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>

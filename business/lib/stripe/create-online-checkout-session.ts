@@ -114,7 +114,7 @@ export async function createOnlineCheckoutSession(
 
   const { data: biz } = await admin
     .from("businesses")
-    .select("name, verification_status, verification_provider, grid_customer_id")
+    .select("name, verification_status, verification_provider, grid_customer_id, bridge_kyc_status")
     .eq("id", input.businessId)
     .maybeSingle()
 

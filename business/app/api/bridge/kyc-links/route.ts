@@ -53,17 +53,6 @@ export async function POST(request: Request) {
     const ctx = await resolveGridBusinessContextAsync(user.id)
     if (!ctx.ok) return ctx.response
     businessId = ctx.businessId
-    const { data: biz } = await admin
-      .from("businesses")
-      .select("verification_status")
-      .eq("id", businessId)
-      .maybeSingle()
-    if (String(biz?.verification_status ?? "").toLowerCase() !== "approved") {
-      return NextResponse.json(
-        { error: "Complete USD account verification first.", code: "USD_VERIFICATION_REQUIRED" },
-        { status: 400 },
-      )
-    }
   }
 
   const fullName =

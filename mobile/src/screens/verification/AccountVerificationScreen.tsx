@@ -376,8 +376,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     kycAddressCountry: userProfile?.profile?.kyc_address_country,
   })
   const localExpressEligible = isStripeOnrampPayerEligible({ country: localExpressCountry })
-  const showExpressCard =
-    isGlobalBankingVerified(userProfile) && (expressEligible ?? localExpressEligible)
+  const showExpressCard = Boolean(expressEligible ?? localExpressEligible)
   const expressCta = expressDepositsVerificationCta(expressStatus)
 
   const applyExpressStatus = useCallback((data: { eligible?: boolean; ready?: boolean; status?: string } | null) => {
@@ -466,6 +465,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   const bankKycStatus = consumerBankKycStatus(userProfile)
   const cutoverPending = isBridgeConsumerCutoverPending(userProfile)
   const noahKycApproved = bankKycStatus.toLowerCase() === 'approved' && !cutoverPending
+  const showExpressCta = Boolean(expressCta) && noahKycApproved
   const kycStatusLower = bankKycStatus.trim().toLowerCase()
   const noahKycInReview = kycStatusLower === 'under_review' || kycStatusLower === 'in_review' || kycStatusLower === 'pending'
   const noahKycRejected = kycStatusLower === 'rejected'
@@ -960,7 +960,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
 
               {showExpressCard ? (
                 <View style={styles.card}>
-                  {expressCta ? (
+                  {showExpressCta ? (
                     <View style={styles.cardInner}>
                       <View style={[styles.cardContent, styles.cardContentWithCta]}>
                         <View style={styles.cardLeft}>
@@ -1006,7 +1006,15 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                           {EXPRESS_DEPOSITS_COPY.description}
                         </Text>
                       </View>
-                      <View style={styles.cardRight}>{getStatusBadge(expressStatus)}</View>
+                      <View style={styles.cardRight}>
+                        {expressStatus === 'approved' ? (
+                          getStatusBadge(expressStatus)
+                        ) : (
+                          <View style={styles.comingLaterPill}>
+                            <Text style={styles.comingLaterPillText}>Coming later</Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
                   )}
                 </View>

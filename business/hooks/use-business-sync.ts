@@ -102,13 +102,21 @@ export function useBusinessSync(): void {
     String(bridgeKycStatus).toLowerCase() !== "not_started" &&
     !bridgeKycComplete
 
+  const gridApproved = String(tier1VerificationStatus ?? "").toLowerCase() === "approved"
+  const gridInFlight =
+    !gridApproved &&
+    Boolean(tier1VerificationStatus) &&
+    String(tier1VerificationStatus).toLowerCase() !== "not_started"
+  const shouldSyncBridge = bridgeKycStarted || bridgeKycComplete
+
   const shouldSync =
     !isLoading &&
     Boolean(businessId) &&
     canManageBusinessVerification &&
     (!isBusinessTier1Complete(profileSlice) ||
       needsBusinessVirtualAccountProvision(profileSlice, { fiatProvisionResolved }) ||
-      bridgeKycStarted)
+      bridgeKycStarted ||
+      gridInFlight)
 
   const runSync = useCallback(async () => {
     if (!shouldSync) return
@@ -119,12 +127,17 @@ export function useBusinessSync(): void {
 
     try {
       const needsAccounts = needsBusinessVirtualAccountProvision(profileSlice, { fiatProvisionResolved })
-      const result =
-        isBusinessTier1Complete(profileSlice) || needsAccounts
-          ? await syncBusinessGridStatusUntilAccountsReady()
-          : await syncBusinessGridStatus()
-      if (bridgeKycStarted) {
-        await fetchWithSession("/api/bridge/sync-status", {
+      let result: Awaited<ReturnType<typeof syncBusinessGridStatus>> = { ok: true }
+
+      if (gridApproved) {
+        result = await syncBusinessGridStatusUntilAccountsReady()
+      } else if (gridInFlight || (!bridgeKycComplete && (!tier1Complete || needsAccounts))) {
+        result = await syncBusinessGridStatus()
+      }
+
+      let bridgeProvisioned = false
+      if (shouldSyncBridge) {
+        const bridgeRes = await fetchWithSession("/api/bridge/sync-status", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -132,8 +145,15 @@ export function useBusinessSync(): void {
           },
           body: JSON.stringify({}),
         }).catch(() => undefined)
+        if (bridgeRes?.ok) {
+          const json = (await bridgeRes.json().catch(() => null)) as { provisioned?: boolean } | null
+          bridgeProvisioned = json?.provisioned === true
+        }
       }
-      if (result.needsFiatAccounts === false || result.accountsReady === true) {
+
+      const gridAccountsReady = result.needsFiatAccounts === false || result.accountsReady === true
+      const bridgeOnlyReady = Boolean(bridgeKycComplete && !gridApproved && bridgeProvisioned)
+      if (gridAccountsReady || bridgeOnlyReady) {
         setFiatProvisionResolved(true)
         if (scope) {
           void queryClient.invalidateQueries({ queryKey: qk.wallets.root(scope) })
@@ -155,6 +175,10 @@ export function useBusinessSync(): void {
     user?.id,
     tier1Complete,
     bridgeKycStarted,
+    bridgeKycComplete,
+    gridApproved,
+    gridInFlight,
+    shouldSyncBridge,
   ])
 
   useEffect(() => {

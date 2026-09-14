@@ -1,6 +1,6 @@
 import type { BusinessProfile } from "@/lib/use-business-profile"
 
-/** Org Tier 1 KYB approved (`verification_status === 'approved'` on Grid SoR). */
+/** Org KYB approved (`tier1Complete` from profile: Grid or Bridge). */
 export function isBusinessTier1Complete(
   profile: Pick<BusinessProfile, "tier1Complete"> | null | undefined,
 ): boolean {

@@ -13,7 +13,7 @@ import {
 } from "@/lib/bridge/hosted-iframe-url"
 
 const EUR_TITLE =
-  BUSINESS_VERIFICATION_PRODUCTS.find((product) => product.id === "eur")?.title ?? "EUR accounts"
+  BUSINESS_VERIFICATION_PRODUCTS.find((product) => product.id === "eur")?.title ?? "More accounts"
 
 const IFRAME_SANDBOX =
   "allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-top-navigation-by-user-activation"

@@ -21,8 +21,16 @@ export interface Account {
   showBankDepositTab?: boolean
   /** Office US:USD Express product. Omit on non-USD ledgers. */
   usPayInAllowsExpress?: boolean
-  /** Fiat VA source for payment instruction copy (Grid vs Noah). */
-  depositProvider?: "grid" | "noah"
+  /** Fiat VA source for payment instruction copy. */
+  depositProvider?: "grid" | "noah" | "bridge"
+  /** This currency’s bank KYB is approved for the Office pay-in rail. */
+  depositKybComplete?: boolean
+  /** Hub product to open when bank KYB is still required. */
+  depositKybProduct?: "us_banking" | "euro_banking"
+  /** Rail-specific verification status for the deposit notice. */
+  depositKybStatus?: string | null
+  /** Settings href for the rail-specific Begin verification CTA. */
+  depositKybHref?: string
 }
 
 export interface Card {

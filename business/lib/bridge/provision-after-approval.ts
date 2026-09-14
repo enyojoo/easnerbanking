@@ -1,15 +1,26 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { persistBridgeVirtualAccount } from "./persist-virtual-accounts"
 import { createBridgeVirtualAccount, listBridgeVirtualAccounts } from "./virtual-accounts"
+import { ensureBusinessTurnkeyCustody } from "@/lib/wallet/ensure-business-turnkey-custody"
 
 export async function provisionBridgeVirtualAccounts(input: {
   admin: SupabaseClient
   userId: string
   businessId: string | null
   customerId: string
+  /** Skip when a Turnkey vault job just completed and is retrying VAs. */
+  ensureTurnkey?: boolean
 }): Promise<{ usd: boolean; eur: boolean }> {
   const customerId = input.customerId.trim()
   if (!customerId) return { usd: false, eur: false }
+
+  if (input.businessId && input.ensureTurnkey !== false) {
+    await ensureBusinessTurnkeyCustody({
+      admin: input.admin,
+      businessId: input.businessId,
+      subjectUserId: input.userId,
+    })
+  }
 
   const existing = await listBridgeVirtualAccounts(customerId).catch(() => [])
   const hasUsd = existing.some((va) => {

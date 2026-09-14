@@ -124,7 +124,7 @@ describe("express setup done copy", () => {
   it("describes completion without vendor names", () => {
     expect(EXPRESS_DEPOSITS_COPY.readyTitle).toBe("You're set up")
     expect(EXPRESS_DEPOSITS_COPY.readyBody).toBe(
-      "You can add money with Card, Apple Pay, Google Pay, and ACH Direct.",
+      "You can add money with a card, mobile wallet, or ACH.",
     )
     expect(EXPRESS_DEPOSITS_COPY.addMoneyCta).toBe("Add money")
     expect(EXPRESS_DEPOSITS_COPY.changePaymentCta).toBe("Change")
@@ -134,7 +134,7 @@ describe("express setup done copy", () => {
 })
 
 describe("expressDepositsVerificationCta", () => {
-  it("hides the button when verified, like USD accounts", () => {
+  it("hides the button when verified, like US banking", () => {
     expect(expressDepositsVerificationCta("approved")).toBeNull()
     expect(expressDepositsVerificationCta("ready")).toBeNull()
     expect(expressDepositsVerificationCta("verified")).toBeNull()

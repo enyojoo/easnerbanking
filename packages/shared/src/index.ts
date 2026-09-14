@@ -581,6 +581,12 @@ export type {
   ResolveCashPayInMethodsInput,
 } from "./cash-pay-in-methods"
 export {
+  BUSINESS_DEPOSIT_KYB_COPY,
+  resolveBusinessDepositKyb,
+  resolveBusinessLedgerPayInProvider,
+} from "./business-deposit-kyb"
+export type { BusinessDepositKybGate, BusinessDepositKybProduct } from "./business-deposit-kyb"
+export {
   BUSINESS_VERIFICATION_PRODUCTS,
   CONSUMER_VERIFICATION_PRODUCTS,
   USD_VERIFICATION_REQUIRED_COPY,

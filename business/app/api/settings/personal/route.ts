@@ -62,7 +62,7 @@ async function resolveOrgKybApproved(
   if (!businessId) return false
   const { data } = await admin
     .from("businesses")
-    .select("verification_provider,verification_status,kyb_verified_at")
+    .select("verification_provider,verification_status,kyb_verified_at,bridge_kyc_status")
     .eq("id", businessId)
     .maybeSingle()
   return isBusinessTier1Complete(data)

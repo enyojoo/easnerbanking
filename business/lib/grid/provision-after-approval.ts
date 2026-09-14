@@ -1,15 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { isGridDigitalAssetJurisdiction } from "@easner/shared"
-import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { enrichGridUsdVirtualAccountPersistFields } from "./enrich-grid-va-display"
 import { gridFetchAllPages } from "./http"
 import { normalizeGridCustomerId } from "./quote-request"
 import { registerTurnkeyUsdcExternalAccount } from "./turnkey-external-account"
 import { resolveBusinessCountryIso2 } from "./business-profile-shell"
-import { ensureTurnkeySubOrgForEasnerOwner } from "@/lib/wallet/ensure-turnkey-sub-org"
-import { trySyncTurnkeyDepositVaultsIfNeeded } from "@/lib/wallet/sync-deposit-vaults"
-import { scheduleTurnkeyWalletsAfterKycApproved } from "@/lib/wallet/turnkey-provisioning"
-import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
+import { ensureBusinessTurnkeyCustody } from "@/lib/wallet/ensure-business-turnkey-custody"
 
 type GridInternalAccountRow = {
   id: string
@@ -145,55 +141,11 @@ export async function provisionGridAfterBusinessKybApproved(input: {
   subjectUserId: string
   gridCustomerId: string | null
 }): Promise<Record<string, unknown>> {
-  let subjectUserId = input.subjectUserId
-  const ownerId = await resolveBusinessOrgOwnerUserId(input.admin, input.businessId)
-  if (ownerId) subjectUserId = ownerId
-
-  const { data: biz } = await input.admin
-    .from("businesses")
-    .select("name,support_email")
-    .eq("id", input.businessId)
-    .maybeSingle()
-  const { data: ownerUser } = await input.admin
-    .from("users")
-    .select("email,full_name")
-    .eq("id", subjectUserId)
-    .maybeSingle()
-
-  const userEmail =
-    String(biz?.support_email ?? "").trim() ||
-    String(ownerUser?.email ?? "").trim() ||
-    null
-  const displayName = String(biz?.name ?? ownerUser?.full_name ?? "").trim() || null
-
-  const subOrg = await ensureTurnkeySubOrgForEasnerOwner({
+  const { subjectUserId, subOrg } = await ensureBusinessTurnkeyCustody({
     admin: input.admin,
-    scope: "business",
-    subjectUserId,
-    subjectBusinessId: input.businessId,
-    noahCustomerId: "",
-    userEmail,
-    displayName,
+    businessId: input.businessId,
+    subjectUserId: input.subjectUserId,
   })
-  if (!subOrg.ok) {
-    console.warn("[provisionGridAfterBusinessKybApproved] Turnkey sub-org:", subOrg.reason)
-  }
-
-  await scheduleTurnkeyWalletsAfterKycApproved({
-    scope: "business",
-    subjectUserId,
-    subjectBusinessId: input.businessId,
-    noahCustomerId: "",
-  })
-
-  const accountCtx: NoahAccountContext = {
-    scope: "business",
-    customerType: "Business",
-    noahCustomerId: "",
-    subjectBusinessId: input.businessId,
-    subjectUserId,
-  }
-  await trySyncTurnkeyDepositVaultsIfNeeded(input.admin, accountCtx)
 
   const receiveRails = await refreshGridBusinessReceiveRails({
     admin: input.admin,

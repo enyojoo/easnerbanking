@@ -49,9 +49,9 @@ export type BusinessProfile = {
   onboardingComplete: boolean
   role: "business" | "individual"
   ownerName: string
-  /** Org-level Tier 1: Business KYB approved (`verification_status === 'approved'`). */
+  /** Org KYB complete: Grid approved or Bridge approved. */
   tier1Complete: boolean
-  /** Org verification status from profile API (Grid canonical `verification_status`). */
+  /** US banking status from profile API (Grid `verification_status` only). */
   tier1VerificationStatus: string | null
   /** Decline reasons from Noah when org KYB is rejected. */
   tier1RejectionReasons: unknown[] | null
@@ -209,7 +209,7 @@ export function applyHostedKycStatusToProfile(kycStatus: string | undefined) {
   patchCachedBusinessProfile({
     tier1VerificationStatus: "not_started",
     noahKybCustomerId: null,
-    tier1Complete: false,
+    // Leave org complete alone — Bridge-approved businesses stay unlocked.
     tier1CanResubmit: true,
   })
 }

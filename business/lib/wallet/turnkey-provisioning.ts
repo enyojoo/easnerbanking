@@ -19,17 +19,27 @@ import { enqueueVaultProvisioningJobs, upsertWalletOwnerFromNoah } from "@/lib/w
 const MAX_ATTEMPTS = 5
 const BACKOFF_MS = 5000
 
-async function ownerUsesGridBusinessVerification(
+/** Skip Noah fiat onramp for business orgs on Grid or Bridge. */
+async function ownerSkipsNoahFiatOnramp(
   admin: ReturnType<typeof createSupabaseAdmin>,
   owner: { owner_type: string; owner_ref: string },
-): Promise<boolean> {
-  if (owner.owner_type !== "business") return false
+): Promise<{ skipNoah: boolean; bridgeCustomerId: string; gridCustomerId: string }> {
+  if (owner.owner_type !== "business") {
+    return { skipNoah: false, bridgeCustomerId: "", gridCustomerId: "" }
+  }
   const { data } = await admin
     .from("businesses")
-    .select("verification_provider")
+    .select("verification_provider,bridge_kyc_status,bridge_customer_id,grid_customer_id")
     .eq("id", owner.owner_ref)
     .maybeSingle()
-  return businessUsesGridVerification(data as { verification_provider?: string | null } | null)
+  const bridgeCustomerId = String(data?.bridge_customer_id ?? "").trim()
+  const gridCustomerId = String(data?.grid_customer_id ?? "").trim()
+  const skipNoah =
+    businessUsesGridVerification(data as { verification_provider?: string | null } | null) ||
+    String(data?.bridge_kyc_status ?? "").toLowerCase() === "approved" ||
+    Boolean(bridgeCustomerId) ||
+    Boolean(gridCustomerId)
+  return { skipNoah, bridgeCustomerId, gridCustomerId }
 }
 
 /**
@@ -200,8 +210,8 @@ export async function processNextWalletProvisioningJob(opts?: {
 
     const noahCustomerId = owner.noah_customer_id?.trim() || ""
     const ledger = String(job.ledger_currency || "").toUpperCase()
-    const skipNoahOnramp = await ownerUsesGridBusinessVerification(admin, owner)
-    if (noahCustomerId && !skipNoahOnramp && (ledger === "USD" || ledger === "EUR")) {
+    const skip = await ownerSkipsNoahFiatOnramp(admin, owner)
+    if (noahCustomerId && !skip.skipNoah && (ledger === "USD" || ledger === "EUR")) {
       try {
         await ensureFiatVirtualAccountForLedgerCurrency(admin, {
           ownerType: owner.owner_type === "business" ? "business" : "individual",
@@ -214,19 +224,33 @@ export async function processNextWalletProvisioningJob(opts?: {
       }
     }
 
-    if (skipNoahOnramp && owner.owner_type === "business" && ledger === "USD") {
+    if (skip.skipNoah && owner.owner_type === "business") {
       try {
         const businessId = String(owner.owner_ref ?? "").trim()
         if (businessId) {
           const userId = await resolveBusinessOrgOwnerUserId(admin, businessId, businessId)
-          await refreshGridBusinessReceiveRails({
-            admin,
-            businessId,
-            userId,
-          })
+          if (skip.gridCustomerId && ledger === "USD") {
+            await refreshGridBusinessReceiveRails({
+              admin,
+              businessId,
+              userId,
+            })
+          }
+          if (skip.bridgeCustomerId) {
+            const { provisionBridgeVirtualAccounts } = await import(
+              "@/lib/bridge/provision-after-approval"
+            )
+            await provisionBridgeVirtualAccounts({
+              admin,
+              userId,
+              businessId,
+              customerId: skip.bridgeCustomerId,
+              ensureTurnkey: false,
+            })
+          }
         }
       } catch (e) {
-        console.warn("[turnkey-provisioning] grid receive rails after vault:", e)
+        console.warn("[turnkey-provisioning] receive rails after vault:", e)
       }
     }
 

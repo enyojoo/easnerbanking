@@ -3,7 +3,7 @@
 import type { QueryClient } from "@tanstack/react-query"
 import { qk, type IdentityChangeEvent, type Scope } from "@easner/shared"
 import { CACHE_KEYS } from "@/lib/cache"
-import { patchCachedBusinessProfile } from "@/lib/use-business-profile"
+import { patchCachedBusinessProfile, type BusinessProfile } from "@/lib/use-business-profile"
 import { KYB_PACKET_QUERY_KEY } from "@/lib/grid/kyb-packet-query"
 import type { KybPacket } from "@/lib/grid/kyb-packet-types"
 import { fetchAndCacheConnectStatus } from "@/lib/stripe/connect-status-cache"
@@ -21,19 +21,33 @@ export function applyBusinessIdentityRealtime(
 ): void {
   if (event.table === "businesses") {
     const status = String(event.row.verification_status ?? "").trim()
+    const bridgeStatus = String(event.row.bridge_kyc_status ?? "").trim()
+    const patch: Partial<BusinessProfile> = {}
     if (status) {
       const gridCustomerId = event.row.grid_customer_id
       const reasons = event.row.verification_rejection_reasons
-      patchCachedBusinessProfile({
-        tier1VerificationStatus: status,
-        tier1Complete: status === "approved",
-        tier1RejectionReasons: Array.isArray(reasons) ? reasons : reasons == null ? null : [reasons],
-        tier1CanResubmit: status !== "approved",
-        noahKybCustomerId:
-          gridCustomerId == null || gridCustomerId === ""
-            ? undefined
-            : String(gridCustomerId),
-      })
+      patch.tier1VerificationStatus = status
+      patch.tier1RejectionReasons = Array.isArray(reasons)
+        ? reasons
+        : reasons == null
+          ? null
+          : [reasons]
+      patch.tier1CanResubmit = status !== "approved"
+      if (gridCustomerId != null && gridCustomerId !== "") {
+        patch.noahKybCustomerId = String(gridCustomerId)
+      }
+      // Never set complete false from Grid status — Bridge-approved orgs stay unlocked.
+      if (status === "approved") patch.tier1Complete = true
+    }
+    if (bridgeStatus) {
+      patch.bridgeKycStatus = bridgeStatus
+      if (bridgeStatus.toLowerCase() === "approved") {
+        patch.bridgeKycComplete = true
+        patch.tier1Complete = true
+      }
+    }
+    if (Object.keys(patch).length > 0) {
+      patchCachedBusinessProfile(patch)
     }
   }
 

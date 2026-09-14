@@ -6,6 +6,7 @@ export type BusinessVerificationFields = {
   verification_provider?: string | null
   verification_rejection_reasons?: unknown
   grid_customer_id?: string | null
+  bridge_kyc_status?: string | null
 }
 
 function usesGridVerification(row: BusinessVerificationFields | null | undefined): boolean {
@@ -19,18 +20,31 @@ export function businessUsesGridVerification(
   return usesGridVerification(row)
 }
 
-/** Effective Tier 1 status – reads canonical `verification_status`. */
+/** US banking (Grid) status only – never mix with Bridge/Euro. */
 export function businessTier1Status(row: BusinessVerificationFields | null | undefined): string | null {
   if (!row) return null
   const status = String(row.verification_status ?? "not_started").trim()
   return status || "not_started"
 }
 
-/** Product Tier 1 complete for a business row (canonical verification_status). */
-export function isBusinessTier1Complete(row: BusinessVerificationFields | null | undefined): boolean {
+/** True when US banking KYB is approved (Grid `verification_status` only). */
+export function isBusinessGridKybApproved(row: BusinessVerificationFields | null | undefined): boolean {
   const status = businessTier1Status(row)
   if (!status) return false
   return isVerificationApproved(status.toLowerCase() as VerificationStatus)
+}
+
+/** True when Euro banking KYB is approved (`bridge_kyc_status` only). */
+export function isBusinessBridgeKybApproved(row: BusinessVerificationFields | null | undefined): boolean {
+  return isVerificationApproved(String(row?.bridge_kyc_status ?? "").toLowerCase() as VerificationStatus)
+}
+
+/**
+ * Org KYB complete: Grid approved OR Bridge approved.
+ * Columns stay independent so finishing one rail does not overwrite the other.
+ */
+export function isBusinessTier1Complete(row: BusinessVerificationFields | null | undefined): boolean {
+  return isBusinessGridKybApproved(row) || isBusinessBridgeKybApproved(row)
 }
 
 export function businessTier1RejectionReasons(

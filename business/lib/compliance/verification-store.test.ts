@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { canonicalVerificationStatus } from "./verification-store"
 
 describe("canonicalVerificationStatus", () => {
-  it("Grid business KYB uses verification_status only", () => {
+  it("Grid business KYB uses verification_status when Bridge is not approved", () => {
     expect(
       canonicalVerificationStatus({
         verification_provider: "grid",
@@ -60,5 +60,29 @@ describe("canonicalVerificationStatus", () => {
         verification_status: "in_progress",
       }),
     ).toBe("in_progress")
+  })
+
+  it("unlocks when either Grid or Bridge is approved", () => {
+    expect(
+      canonicalVerificationStatus({
+        verification_provider: "grid",
+        verification_status: "in_progress",
+        bridge_kyc_status: "approved",
+      }),
+    ).toBe("approved")
+    expect(
+      canonicalVerificationStatus({
+        verification_provider: null,
+        verification_status: "not_started",
+        bridge_kyc_status: "approved",
+      }),
+    ).toBe("approved")
+    expect(
+      canonicalVerificationStatus({
+        verification_provider: "grid",
+        verification_status: "approved",
+        bridge_kyc_status: "not_started",
+      }),
+    ).toBe("approved")
   })
 })

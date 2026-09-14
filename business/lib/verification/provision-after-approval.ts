@@ -39,17 +39,8 @@ export async function provisionAfterVerificationApproved(opts: {
   const fromRow = String(row?.verification_provider ?? "").toLowerCase()
   const fromOpts = String(opts.provider ?? "").toLowerCase()
   const bridgeCustomerId = String(row?.bridge_customer_id ?? opts.partnerCustomerId ?? "").trim()
+  const bridgeApproved = String(row?.bridge_kyc_status ?? "").toLowerCase() === "approved"
 
-  if (fromOpts === "bridge" || fromRow === "bridge") {
-    if (!bridgeCustomerId) return { skipped: true, reason: "missing_bridge_customer_id" }
-    const vas = await provisionBridgeVirtualAccounts({
-      admin: opts.admin,
-      userId: opts.subjectUserId,
-      businessId: opts.scope === "business" ? opts.subjectBusinessId : null,
-      customerId: bridgeCustomerId,
-    })
-    return { provider: "bridge", ...vas }
-  }
   const gridCustomerId =
     String(row?.grid_customer_id ?? "").trim() ||
     (looksLikeGridCustomerId(opts.partnerCustomerId)
@@ -59,6 +50,7 @@ export async function provisionAfterVerificationApproved(opts: {
   const useGridBusiness =
     opts.scope === "business" &&
     Boolean(opts.subjectBusinessId) &&
+    fromOpts !== "bridge" &&
     (fromOpts === "grid" ||
       fromRow === "grid" ||
       Boolean(gridCustomerId) ||
@@ -71,6 +63,22 @@ export async function provisionAfterVerificationApproved(opts: {
       subjectUserId: opts.subjectUserId,
       gridCustomerId: gridCustomerId || opts.partnerCustomerId || null,
     })
+  }
+
+  const useBridge =
+    fromOpts === "bridge" ||
+    fromRow === "bridge" ||
+    (opts.scope === "business" && Boolean(bridgeCustomerId) && bridgeApproved)
+
+  if (useBridge) {
+    if (!bridgeCustomerId) return { skipped: true, reason: "missing_bridge_customer_id" }
+    const vas = await provisionBridgeVirtualAccounts({
+      admin: opts.admin,
+      userId: opts.subjectUserId,
+      businessId: opts.scope === "business" ? opts.subjectBusinessId : null,
+      customerId: bridgeCustomerId,
+    })
+    return { provider: "bridge", ...vas }
   }
 
   const noahCustomerId = String(opts.partnerCustomerId ?? "").trim()

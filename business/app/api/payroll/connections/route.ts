@@ -66,7 +66,7 @@ export async function GET(request: Request) {
       .eq("user_id", auth.user.id)
       .order("created_at", { ascending: false }),
     admin.from("payroll_connection_invitations")
-      .select("id,connection_id,business_id,person_id,status,expires_at,businesses(name,easetag,logo_url,verification_status),payroll_people(full_name),payroll_connections(preferred_method_id)", { count: "exact" })
+      .select("id,connection_id,business_id,person_id,status,expires_at,businesses(name,easetag,logo_url,verification_status,bridge_kyc_status),payroll_people(full_name),payroll_connections(preferred_method_id)", { count: "exact" })
       .eq("email", email)
       .eq("status", "pending")
       .gt("expires_at", now),

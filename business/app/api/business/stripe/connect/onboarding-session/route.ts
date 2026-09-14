@@ -24,7 +24,7 @@ export async function POST(request: Request) {
   const admin = createSupabaseAdmin()
   const { data: biz } = await admin
     .from("businesses")
-    .select("verification_status, verification_provider, grid_customer_id")
+    .select("verification_status, verification_provider, grid_customer_id, bridge_kyc_status")
     .eq("id", ctx.businessId)
     .maybeSingle()
   if (!isBusinessTier1Complete(biz)) {

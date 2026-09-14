@@ -86,7 +86,7 @@ describe("resolveConnectPanelUx", () => {
     expect(ux.bodyCopy).toBeUndefined()
     expect(ux.primary?.label).toBe("Begin verification")
     expect(ux.primary?.disabled).toBe(true)
-    expect(ux.primary?.disabledReason).toBe(VERIFICATION_SECTION_COPY.onlinePaymentsTier1Required)
+    expect(ux.primary?.disabledReason).toBeUndefined()
   })
 
   it("locks online payments until Tier 1 is approved", () => {

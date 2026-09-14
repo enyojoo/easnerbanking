@@ -9,6 +9,7 @@ export type StoredVerificationRow = {
   verified_at?: string | null
   grid_customer_id?: string | null
   bridge_customer_id?: string | null
+  bridge_kyc_status?: string | null
   noah_kyc_status?: string | null
 }
 
@@ -61,13 +62,17 @@ function isProgressedVerificationStatus(status: string): status is VerificationS
 /**
  * Canonical KYC/KYB for money-movement gates.
  *
- * Business Grid KYB: `verification_status` only – Noah mirror columns are not read.
+ * Business: Grid `verification_status` and Bridge `bridge_kyc_status` stay independent.
+ * Either approved status unlocks the org. In-progress still prefers the Grid/canonical column.
  * Consumer Noah KYC: prefer progressed canonical values; fall back to Noah mirrors when stale.
  */
 export function canonicalVerificationStatus(row: StoredVerificationRow | null): VerificationStatus {
   if (!row) return "not_started"
   const provider = String(row.verification_provider ?? "").toLowerCase()
   const direct = String(row.verification_status ?? "").toLowerCase()
+  const bridge = String(row.bridge_kyc_status ?? "").toLowerCase()
+
+  if (direct === "approved" || bridge === "approved") return "approved"
 
   if (provider === "grid" || provider === "bridge") {
     return isProgressedVerificationStatus(direct) ? direct : "not_started"
@@ -75,6 +80,9 @@ export function canonicalVerificationStatus(row: StoredVerificationRow | null): 
 
   if (isProgressedVerificationStatus(direct)) {
     return direct
+  }
+  if (isProgressedVerificationStatus(bridge)) {
+    return bridge
   }
   return mapNoahPartnerStatus(row.noah_kyc_status)
 }

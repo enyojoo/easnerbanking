@@ -71,7 +71,6 @@ import {
 } from "@/lib/compliance/cutover-comms"
 import { useSearchParams } from "next/navigation"
 import { verificationStatusLabel } from "@easner/shared"
-import { VERIFICATION_SECTION_COPY } from "@/lib/copy/business-ui-copy"
 import { cn } from "@/lib/utils"
 
 const ONLINE_PAYMENTS_VERIFICATION_TITLE = "Online payments Verification"
@@ -388,10 +387,7 @@ export function SettingsStripeConnectPanel({
   )
 
   const startOnboarding = useCallback(async () => {
-    if (!tier1Complete) {
-      toast.message(VERIFICATION_SECTION_COPY.onlinePaymentsTier1Required)
-      return
-    }
+    if (!tier1Complete) return
     if (!publishableKey || !isStripePublishableConfigured()) {
       toast.error("Online payments are not available yet")
       return
@@ -444,10 +440,7 @@ export function SettingsStripeConnectPanel({
 
   const openConnectFlow = useCallback(() => {
     if (verificationActionsBlocked) return
-    if (!tier1Complete) {
-      toast.message(VERIFICATION_SECTION_COPY.onlinePaymentsTier1Required)
-      return
-    }
+    if (!tier1Complete) return
     if (!publishableKey || !isStripePublishableConfigured()) {
       toast.error("Online payments are not available yet")
       return
@@ -628,6 +621,10 @@ export function SettingsStripeConnectPanel({
   }
 
   const onlinePayments = BUSINESS_VERIFICATION_PRODUCTS.find((t) => t.id === "online_payments")
+  const primaryWaitOnUsBanking = panelUx.primary?.disabled === true
+  const primaryWaitOnPayoutAccount =
+    panelUx.primary?.kind === "link_payout" && !status.hasGridVa
+  const primaryLocked = primaryWaitOnUsBanking || primaryWaitOnPayoutAccount
 
   return (
       <Card className="flex h-full flex-col gap-3 border-primary/25 py-4 md:border-primary/40">
@@ -653,7 +650,7 @@ export function SettingsStripeConnectPanel({
           </div>
           <CardDescription className="text-sm">
             {onlinePayments?.description ??
-              "Accept card payments on checkout, links and invoices."}
+              "Get paid online by card, mobile wallet, or ACH."}
           </CardDescription>
         </CardHeader>
         <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
@@ -666,28 +663,38 @@ export function SettingsStripeConnectPanel({
           {panelUx?.primary || panelUx?.secondary ? (
             <div className="flex flex-wrap gap-2">
               {!verificationActionsBlocked && panelUx?.primary ? (
-                panelUx.primary.disabled ||
-                (panelUx.primary.kind === "link_payout" && !status.hasGridVa) ? (
-                  <TooltipProvider delayDuration={200}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="inline-flex">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={panelUx.primary.variant}
-                            disabled
-                          >
-                            {panelUx.primary.label}
-                          </Button>
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {panelUx.primary.disabledReason ||
-                          "Complete business verification and open a virtual account before linking payouts."}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                primaryLocked ? (
+                  primaryWaitOnPayoutAccount ? (
+                    <TooltipProvider delayDuration={200}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={panelUx.primary.variant}
+                              disabled
+                            >
+                              {panelUx.primary.label}
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {panelUx.primary.disabledReason ||
+                            "Complete business verification and open a virtual account before linking payouts."}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={panelUx.primary.variant}
+                      disabled
+                    >
+                      {panelUx.primary.label}
+                    </Button>
+                  )
                 ) : (
                   <Button
                     type="button"

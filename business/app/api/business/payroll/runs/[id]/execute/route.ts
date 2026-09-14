@@ -18,7 +18,7 @@ export async function POST(
 
   const { data: business } = await admin
     .from("businesses")
-    .select("verification_status,verification_provider")
+    .select("verification_status,verification_provider,bridge_kyc_status")
     .eq("id", ctx.businessId)
     .maybeSingle()
   if (!isBusinessTier1Complete(business)) {

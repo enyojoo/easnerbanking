@@ -40,7 +40,7 @@ export async function resolveConnectReadyForCheckout(
 
   const { data: biz } = await admin
     .from("businesses")
-    .select("verification_status, verification_provider, grid_customer_id")
+    .select("verification_status, verification_provider, grid_customer_id, bridge_kyc_status")
     .eq("id", businessId)
     .maybeSingle()
 
@@ -48,10 +48,15 @@ export async function resolveConnectReadyForCheckout(
 
   const usesGrid = businessUsesGridVerification(biz as { verification_provider?: string | null } | null)
   const hasGridVa = usesGrid
-    ? await hasActiveGridVirtualAccountForBusinessInDb(admin, {
+    ? (await hasActiveGridVirtualAccountForBusinessInDb(admin, {
         currency: fiat,
         businessId,
-      })
+      })) ||
+      (await hasActiveVirtualAccountInDb(admin, {
+        currency: fiat,
+        businessId,
+        provider: "bridge",
+      }))
     : await hasActiveVirtualAccountInDb(admin, {
         currency: fiat,
         businessId,

@@ -638,5 +638,5 @@ export const VERIFICATION_SECTION_COPY = {
   continueVerificationCta: "Continue verification",
   beginVerificationCta: "Begin verification",
   retryVerificationCta: "Retry verification",
-  onlinePaymentsTier1Required: "Complete USD account verification first.",
+  onlinePaymentsTier1Required: "Complete verification first.",
 } as const

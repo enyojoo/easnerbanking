@@ -14,10 +14,10 @@
  * these selectors remain stable across environments and constraint names.
  */
 export const PERSONAL_PAYROLL_CONNECTION_LIST_SELECT =
-  "*,businesses(name,easetag,logo_url,verification_status)"
+  "*,businesses(name,easetag,logo_url,verification_status,bridge_kyc_status)"
 
 export const PERSONAL_PAYROLL_CONNECTION_DETAIL_SELECT =
-  "*,businesses(name,easetag,logo_url,verification_status)"
+  "*,businesses(name,easetag,logo_url,verification_status,bridge_kyc_status)"
 
 export const PERSONAL_PAYROLL_METHOD_SELECT =
   "id,connection_id,type,label,owner_type,status,full_name,country_code,currency,account_number,bank_name,phone_number,email,mobile_provider,wallet_network,routing_number,sort_code,iban,swift_bic,transfer_type,checking_or_savings,address_line1,city,state,postal_code,metadata"

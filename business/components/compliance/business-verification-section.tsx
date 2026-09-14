@@ -14,14 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
-import {
   BUSINESS_VERIFICATION_PRODUCTS,
-  USD_VERIFICATION_REQUIRED_COPY,
   VERIFICATION_COMING_LATER_LABEL,
   verificationTierLabel,
 } from "@/lib/compliance-tier-ladder-copy"
@@ -109,21 +102,28 @@ export function BusinessVerificationSection({
     registeredAddressState,
     registeredAddressPostalCode,
   } = useBusinessProfile()
+  const gridKybComplete = String(tier1VerificationStatus ?? "").toLowerCase() === "approved"
 
   const restrictionQuery = useAccountRestriction()
   const accountRestricted = Boolean(restrictionQuery.data?.active)
 
   const showOnlinePayments = onlinePaymentsEnabled !== false
   const expressQuery = useBusinessExpressOnrampStatus()
-  const showExpressCard = canUseGeoPersonalRails && expressQuery.data?.eligible === true
+  const showExpressCard = canUseGeoPersonalRails && expressQuery.data?.eligible !== false
   const expressReady = expressQuery.data?.ready === true
   const expressStatus = expressReady
     ? "approved"
     : expressQuery.data?.status || "not_started"
   const expressSetupCta = expressDepositsVerificationCta(expressStatus)
+  const showExpressCta =
+    Boolean(expressSetupCta) &&
+    !expressReady &&
+    !accountRestricted &&
+    tier1Complete &&
+    canManageBusinessVerification
 
   const openExpressSetup = useCallback(() => {
-    if (accountRestricted) return
+    if (accountRestricted || !tier1Complete) return
     analytics.trackKybStarted({ provider: "express_deposits" })
     const peeked = peekBusinessExpressOnrampStatus()
     if (peeked?.publishableKey) {
@@ -136,7 +136,7 @@ export function BusinessVerificationSection({
     next.set("tab", "verification")
     next.set("flow", SETTINGS_EXPRESS_FLOW_PARAM)
     window.history.replaceState(null, "", `/settings?${next.toString()}`)
-  }, [accountRestricted, onFlowOpenChange, searchParams])
+  }, [accountRestricted, onFlowOpenChange, searchParams, tier1Complete])
 
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
@@ -223,10 +223,6 @@ export function BusinessVerificationSection({
 
   const openBridgeVerification = useCallback(() => {
     if (accountRestricted) return
-    if (!tier1Complete) {
-      setInfo(USD_VERIFICATION_REQUIRED_COPY)
-      return
-    }
     setError(null)
     analytics.trackKybStarted({ provider: "bridge" })
     onFlowOpenChange?.(true, "bridge")
@@ -234,7 +230,7 @@ export function BusinessVerificationSection({
     next.set("tab", "verification")
     next.set("flow", SETTINGS_BRIDGE_FLOW_PARAM)
     window.history.replaceState(null, "", `/settings?${next.toString()}`)
-  }, [accountRestricted, onFlowOpenChange, searchParams, tier1Complete])
+  }, [accountRestricted, onFlowOpenChange, searchParams])
 
   const closeBridgeAndSync = useCallback(() => {
     onFlowOpenChange?.(false)
@@ -336,7 +332,7 @@ export function BusinessVerificationSection({
   const showTier1HostedCta =
     canManageBusinessVerification &&
     !accountRestricted &&
-    !tier1Complete &&
+    !gridKybComplete &&
     !tier1AwaitingReview &&
     tier1CanResubmit &&
     (!tier1OnHold || tier1CanResubmit)
@@ -475,7 +471,7 @@ export function BusinessVerificationSection({
                           {isGlobalBanking ? (
                             <Tier1VerificationBadge
                               compact
-                              tier1Complete={tier1Complete}
+                              tier1Complete={gridKybComplete}
                               tier1VerificationStatus={tier1VerificationStatus}
                               accountRestricted={accountRestricted}
                             />
@@ -496,9 +492,6 @@ export function BusinessVerificationSection({
                           )}
                         </div>
                         <CardDescription className="text-sm">{t.description}</CardDescription>
-                        {t.footnote && !(isEurAccounts && tier1Complete) ? (
-                          <p className="text-xs text-muted-foreground pt-1">{t.footnote}</p>
-                        ) : null}
                       </CardHeader>
                       {isGlobalBanking ? (
                         <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
@@ -535,7 +528,7 @@ export function BusinessVerificationSection({
                                 </p>
                               ) : null}
                               {canManageBusinessVerification &&
-                              !tier1Complete &&
+                              !gridKybComplete &&
                               !tier1FinalReject &&
                               !tier1AwaitingReview &&
                               !tier1OnHold ? (
@@ -559,34 +552,18 @@ export function BusinessVerificationSection({
                       ) : isEurAccounts ? (
                         <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
                           {showEurCta ? (
-                            <>
-                              {!tier1Complete ? (
-                                <p className="text-xs text-muted-foreground">{t.footnote}</p>
-                              ) : null}
-                              <div className="flex flex-wrap gap-2">
-                                <TooltipProvider delayDuration={200}>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <span className="inline-flex">
-                                        <Button
-                                          size="sm"
-                                          disabled={!tier1Complete || opening || !businessId}
-                                          onClick={openBridgeVerification}
-                                        >
-                                          {opening ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-                                          {eurStatus === "in_progress" || eurStatus === "pending"
-                                            ? "Continue"
-                                            : "Start"}
-                                        </Button>
-                                      </span>
-                                    </TooltipTrigger>
-                                    {!tier1Complete ? (
-                                      <TooltipContent>{USD_VERIFICATION_REQUIRED_COPY}</TooltipContent>
-                                    ) : null}
-                                  </Tooltip>
-                                </TooltipProvider>
-                              </div>
-                            </>
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                size="sm"
+                                disabled={opening || !businessId}
+                                onClick={openBridgeVerification}
+                              >
+                                {opening ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+                                {eurStatus === "in_progress" || eurStatus === "pending"
+                                  ? "Continue"
+                                  : "Start"}
+                              </Button>
+                            </div>
                           ) : null}
                         </CardContent>
                       ) : null}
@@ -615,51 +592,39 @@ export function BusinessVerificationSection({
                   return comingLaterCard
                 })}
                 {showExpressCard ? (
-                  <Card className="flex h-full flex-col gap-3 border-primary/20 py-4">
+                  <Card className="flex h-full flex-col gap-3 py-4">
                     <CardHeader className="gap-1.5 px-4 pb-0 md:px-4">
                       <div className="flex flex-nowrap items-center gap-1.5">
                         <CardTitle className="min-w-0 text-base leading-tight">
                           {EXPRESS_DEPOSITS_COPY.title}
                         </CardTitle>
-                        <Tier1VerificationBadge
-                          compact
-                          isLoading={expressQuery.isLoading && !expressQuery.data}
-                          tier1Complete={expressReady}
-                          tier1VerificationStatus={expressStatus}
-                        />
+                        {expressReady || tier1Complete ? (
+                          <Tier1VerificationBadge
+                            compact
+                            isLoading={expressQuery.isLoading && !expressQuery.data}
+                            tier1Complete={expressReady}
+                            tier1VerificationStatus={expressStatus}
+                          />
+                        ) : (
+                          <Badge
+                            variant="secondary"
+                            className="h-5 shrink-0 px-1.5 py-0 text-[10px] leading-none font-medium"
+                          >
+                            {VERIFICATION_COMING_LATER_LABEL}
+                          </Badge>
+                        )}
                       </div>
                       <CardDescription className="text-sm">
                         {EXPRESS_DEPOSITS_COPY.description}
                       </CardDescription>
                     </CardHeader>
-                    {!expressReady && expressSetupCta && !accountRestricted ? (
+                    {showExpressCta ? (
                       <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
-                        {!tier1Complete ? (
-                          <div className="flex flex-wrap gap-2">
-                            <TooltipProvider delayDuration={200}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className="inline-flex">
-                                    <Button type="button" size="sm" disabled>
-                                      {EXPRESS_DEPOSITS_COPY.setupCta}
-                                    </Button>
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  {EXPRESS_DEPOSITS_COPY.globalBankingRequired}
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </div>
-                        ) : !canManageBusinessVerification ? (
-                          <p className="text-xs text-muted-foreground">{EXPRESS_DEPOSITS_COPY.ownerOnly}</p>
-                        ) : (
-                          <div className="flex flex-wrap gap-2">
-                            <Button type="button" size="sm" onClick={openExpressSetup}>
-                              {expressSetupCta}
-                            </Button>
-                          </div>
-                        )}
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="button" size="sm" onClick={openExpressSetup}>
+                            {expressSetupCta}
+                          </Button>
+                        </div>
                       </CardContent>
                     ) : null}
                   </Card>

@@ -11,10 +11,16 @@ import {
   usPayInAllowsVa,
   isSuspiciousAuthoritativeZeroRegression,
   scopeId,
+  resolveBusinessDepositKyb,
+  resolveBusinessLedgerPayInProvider,
 } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import type { Account } from "@/lib/finance-types"
+import {
+  SETTINGS_BRIDGE_FLOW_HREF,
+  SETTINGS_VERIFICATION_FLOW_HREF,
+} from "@/lib/compliance/cutover-comms"
 import { useWalletBalances } from "@/hooks/queries/use-wallets"
 import { useScope } from "@/lib/query/scope"
 import {
@@ -64,11 +70,35 @@ export function useBusinessAccountRows() {
   const queryClient = useQueryClient()
   const { scope } = useScope()
   const isRestoring = useIsRestoring()
-  const { tier1Complete, isLoading: profileLoading, name, baseCurrency, businessRole } = useBusinessProfile()
+  const {
+    tier1Complete,
+    tier1VerificationStatus,
+    bridgeKycComplete,
+    bridgeKycStatus,
+    isLoading: profileLoading,
+    name,
+    baseCurrency,
+    businessRole,
+  } = useBusinessProfile()
   const { bankCorridors, data: sendDestinations } = useSendDestinations()
   const catalogLoaded = sendDestinations != null
   const usdPayInMode = resolveVaPayInModeFromCatalog(bankCorridors, "USD", catalogLoaded)
   const eurPayInMode = resolveVaPayInModeFromCatalog(bankCorridors, "EUR", catalogLoaded)
+  const usdPayInProvider = resolveBusinessLedgerPayInProvider(bankCorridors, "USD")
+  const eurPayInProvider = resolveBusinessLedgerPayInProvider(bankCorridors, "EUR")
+  const gridApproved = String(tier1VerificationStatus ?? "").toLowerCase() === "approved"
+  const usdDepositKyb = resolveBusinessDepositKyb({
+    currency: "USD",
+    officePayIn: usdPayInProvider,
+    gridApproved,
+    bridgeApproved: bridgeKycComplete,
+  })
+  const eurDepositKyb = resolveBusinessDepositKyb({
+    currency: "EUR",
+    officePayIn: eurPayInProvider,
+    gridApproved,
+    bridgeApproved: bridgeKycComplete,
+  })
   const walletQuery = useWalletBalances()
   const lastKnownAuthoritativeBalancesRef = useRef<Record<string, string> | null>(null)
   const lastSeededScopeKeyRef = useRef<string>("")
@@ -192,11 +222,12 @@ export function useBusinessAccountRows() {
 
   const stablecoinDeposit = useMemo(
     () => ({
-      USD: tier1Complete ? String(walletQuery.data?.deposits?.USD?.ownerAddress ?? "") : "",
-      EUR: tier1Complete ? String(walletQuery.data?.deposits?.EUR?.ownerAddress ?? "") : "",
+      USD: usdDepositKyb.complete ? String(walletQuery.data?.deposits?.USD?.ownerAddress ?? "") : "",
+      EUR: eurDepositKyb.complete ? String(walletQuery.data?.deposits?.EUR?.ownerAddress ?? "") : "",
     }),
     [
-      tier1Complete,
+      usdDepositKyb.complete,
+      eurDepositKyb.complete,
       walletQuery.data?.deposits?.EUR?.ownerAddress,
       walletQuery.data?.deposits?.USD?.ownerAddress,
     ],
@@ -246,11 +277,13 @@ export function useBusinessAccountRows() {
         String((balances as Record<string, string | undefined>)[currency] ?? ""),
       )
 
-      const hasVa = Boolean(tier1Complete && va?.hasAccount)
+      const depositKyb =
+        currency === "USD" ? usdDepositKyb : currency === "EUR" ? eurDepositKyb : { complete: tier1Complete, product: "us_banking" as const }
+      const hasVa = Boolean(depositKyb.complete && va?.hasAccount)
       const isNoahFiatRail = currency === "USD" || currency === "EUR" || currency === "GBP"
       const showBankDepositTab = isNoahFiatRail
         ? shouldShowBankDepositTab({
-            verificationComplete: tier1Complete,
+            verificationComplete: depositKyb.complete,
             vaSettled: isVaAnswerSettled({
               isFetched: virtualAccountsQuery.isFetched,
               hasCachedEntry: va != null,
@@ -269,6 +302,11 @@ export function useBusinessAccountRows() {
         currency === "EUR"
           ? stablecoinDeposit.EUR || undefined
           : stablecoinDeposit.USD || undefined
+      const vaProvider = String(va?.provider ?? "").trim().toLowerCase()
+      const depositKybStatus =
+        depositKyb.product === "euro_banking"
+          ? String(bridgeKycStatus || "not_started")
+          : String(tier1VerificationStatus || "not_started")
 
       return {
         id: `acc_${currency.toLowerCase()}`,
@@ -282,14 +320,24 @@ export function useBusinessAccountRows() {
         iban: currency === "EUR" && hasVa ? va?.iban : undefined,
         bic: currency === "EUR" && hasVa ? va?.bic : undefined,
         bankAddress: hasVa ? va?.bankAddress : undefined,
-        depositProvider: hasVa && va?.provider === "grid" ? "grid" : hasVa && va?.provider === "noah" ? "noah" : undefined,
+        depositProvider:
+          hasVa && (vaProvider === "grid" || vaProvider === "noah" || vaProvider === "bridge")
+            ? vaProvider
+            : undefined,
         balance: bal,
         availableBalance: bal,
-        status: tier1Complete ? "active" : "pending",
+        status: depositKyb.complete ? "active" : "pending",
         stablecoinAddress,
         stablecoinChain: "Solana",
         stablecoinToken: usdc ? "USDC" : eurc ? "EURC" : "USDC",
         showBankDepositTab,
+        depositKybComplete: depositKyb.complete,
+        depositKybProduct: depositKyb.product,
+        depositKybStatus,
+        depositKybHref:
+          depositKyb.product === "euro_banking"
+            ? SETTINGS_BRIDGE_FLOW_HREF
+            : SETTINGS_VERIFICATION_FLOW_HREF,
         ...(currency === "USD" ? { usPayInAllowsExpress: usPayInAllowsExpress(usdPayInMode) } : {}),
       }
     })
@@ -303,6 +351,10 @@ export function useBusinessAccountRows() {
     tier1Complete,
     usdPayInMode,
     eurPayInMode,
+    usdDepositKyb,
+    eurDepositKyb,
+    bridgeKycStatus,
+    tier1VerificationStatus,
     vaByCurrency,
     virtualAccountsQuery.isFetched,
   ])

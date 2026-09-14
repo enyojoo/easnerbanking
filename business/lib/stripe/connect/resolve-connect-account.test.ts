@@ -46,6 +46,7 @@ beforeEach(() => {
   tier1Mock.mockReturnValue(true)
   usesGridMock.mockReturnValue(true)
   hasGridVaForBusinessMock.mockResolvedValue(true)
+  hasVaMock.mockResolvedValue(false)
 })
 
 describe("resolveConnectReadyForCheckout", () => {
@@ -76,6 +77,25 @@ describe("resolveConnectReadyForCheckout", () => {
 
     expect(result.hasGridVa).toBe(false)
     expect(result.reason).toBe("Your Easner USD account is needed before payouts can be linked")
+  })
+
+  it("accepts a Bridge VA when Grid KYB is in progress", async () => {
+    hasGridVaForBusinessMock.mockResolvedValue(false)
+    hasVaMock.mockResolvedValue(true)
+    const admin = adminWith(
+      { verification_status: "in_progress", verification_provider: "grid" },
+      null,
+    )
+
+    const result = await resolveConnectReadyForCheckout(admin, "biz-1")
+
+    expect(hasVaMock).toHaveBeenCalledWith(admin, {
+      currency: "usd",
+      businessId: "biz-1",
+      provider: "bridge",
+    })
+    expect(result.hasGridVa).toBe(true)
+    expect(result.reason).toBe("Complete online payment setup")
   })
 
   it("uses generic VA lookup for non-Grid businesses", async () => {

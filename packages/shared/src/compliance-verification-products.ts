@@ -24,57 +24,53 @@ export type VerificationProduct = {
 
 export const VERIFICATION_COMING_LATER_LABEL = "Coming later"
 
-export const USD_VERIFICATION_REQUIRED_COPY = "Complete USD account verification first."
+export const USD_VERIFICATION_REQUIRED_COPY = "Complete US banking verification first."
 
 const USD_ACCOUNTS: VerificationProduct = {
   id: "global_banking",
-  title: "USD accounts",
-  description: "USD balances, US bank details, and USDC.",
+  title: "Global banking",
+  description: "Get a dollar account, and send to more countries.",
   availability: "live",
 }
 
 const EUR_ACCOUNTS: VerificationProduct = {
   id: "eur",
-  title: "EUR accounts",
-  description: "Euro balances and SEPA bank details.",
-  footnote: USD_VERIFICATION_REQUIRED_COPY,
+  title: "More accounts",
+  description: "Add euro accounts, and more ways to receive money.",
   availability: "live",
 }
 
 const BANK_ACCOUNTS: VerificationProduct = {
   id: "global_banking",
-  title: "Bank accounts",
-  description: "USD and euro balances with local bank deposit details.",
+  title: "Global banking",
+  description: "Get USD and EUR accounts to receive money.",
   availability: "live",
 }
 
 const CARDS: VerificationProduct = {
   id: "cards",
   title: "Cards",
-  description: "Spend from your balance online and in store.",
+  description: "Spend from your balance, in store or online.",
   availability: "coming_later",
 }
 
 const ONLINE_PAYMENTS: VerificationProduct = {
   id: "online_payments",
   title: "Online payments",
-  description: "Accept card payments on checkout, links and invoices.",
+  description: "Get paid online by card, mobile wallet, or ACH.",
   availability: "live",
 }
 
 export const BUSINESS_VERIFICATION_PRODUCTS: VerificationProduct[] = [
   USD_ACCOUNTS,
   EUR_ACCOUNTS,
-  { ...CARDS, description: "Business cards for online and in-store payments." },
+  CARDS,
   ONLINE_PAYMENTS,
 ]
 
 export const CONSUMER_VERIFICATION_PRODUCTS: VerificationProduct[] = [
   BANK_ACCOUNTS,
-  {
-    ...CARDS,
-    description: "Personal cards for your online and physical payments.",
-  },
+  CARDS,
 ]
 
 /** Hubs no longer show numbered tiers. Kept as null so leftover callers stay blank. */

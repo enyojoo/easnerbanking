@@ -24,7 +24,13 @@ export {
   requireNoahVerificationApproved,
   type VerificationScope,
 } from "./verification-guards"
-export { isBusinessTier1Complete, businessTier1Status, businessUsesGridVerification } from "./business-tier1"
+export {
+  isBusinessTier1Complete,
+  isBusinessGridKybApproved,
+  isBusinessBridgeKybApproved,
+  businessTier1Status,
+  businessUsesGridVerification,
+} from "./business-tier1"
 export {
   needsBusinessProvisionAfterApproval,
   needsBusinessTurnkeyVaultProvision,

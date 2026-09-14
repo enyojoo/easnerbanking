@@ -22,6 +22,36 @@ describe("business-tier1 grid KYB", () => {
     ).toBe(true)
   })
 
+  it("treats Bridge approved as complete even when Grid is not started", () => {
+    expect(
+      isBusinessTier1Complete({
+        verification_provider: "grid",
+        verification_status: "not_started",
+        bridge_kyc_status: "approved",
+      }),
+    ).toBe(true)
+  })
+
+  it("keeps US banking status on Grid only", () => {
+    expect(
+      businessTier1Status({
+        verification_provider: "grid",
+        verification_status: "in_progress",
+        bridge_kyc_status: "approved",
+      }),
+    ).toBe("in_progress")
+  })
+
+  it("is incomplete when neither Grid nor Bridge is approved", () => {
+    expect(
+      isBusinessTier1Complete({
+        verification_provider: "grid",
+        verification_status: "in_progress",
+        bridge_kyc_status: "pending",
+      }),
+    ).toBe(false)
+  })
+
   it("reads verification rejection reasons", () => {
     expect(
       businessTier1RejectionReasons({

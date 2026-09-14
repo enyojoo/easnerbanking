@@ -179,7 +179,6 @@ export function resolveConnectPanelUx(status: ConnectStatusSnapshot): ConnectPan
         primary: {
           ...onboardingAction(BEGIN_VERIFICATION, ONLINE_PAYMENT_VERIFICATION),
           disabled: true,
-          disabledReason: VERIFICATION_SECTION_COPY.onlinePaymentsTier1Required,
         },
       }
 
