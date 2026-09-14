@@ -56,69 +56,6 @@ export function isHostedVerificationFlowLocation(
   return isSettingsVerificationFlowLocation(pathname, search)
 }
 
-/** Email template for business KYB cutover – re-verification required. */
-export function buildBusinessKybCutoverEmail(input: {
-  businessName: string
-  verifyUrl: string
-}): { subject: string; text: string; html: string } {
-  const subject = "Action required: verify your business on Easner"
-  const text = [
-    `Hi ${input.businessName},`,
-    "",
-    "We upgraded business verification on Easner. To continue sending, receiving, and invoicing, please complete verification again.",
-    "",
-    `Start verification: ${input.verifyUrl}`,
-    "",
-    "If you have open bank deposit instructions from before this change, please finish any in-flight deposits within the wind-down window shown in your dashboard.",
-    "",
-    "– Easner",
-  ].join("\n")
-
-  const html = `
-    <p>Hi ${input.businessName},</p>
-    <p>We upgraded business verification on Easner. To continue sending, receiving, and invoicing, please complete verification again.</p>
-    <p><a href="${input.verifyUrl}">Start verification</a></p>
-    <p>If you have open bank deposit instructions from before this change, please finish any in-flight deposits within the wind-down window shown in your dashboard.</p>
-    <p>– Easner</p>
-  `.trim()
-
-  return { subject, text, html }
-}
-
-/** Email for personal Noah→Bridge receive wind-down. Never names providers. */
-export function buildMobileBridgeCutoverEmail(input: {
-  firstName: string
-  verifyUrl: string
-  deadlineAt?: string | null
-}): { subject: string; text: string; html: string } {
-  const subject = "Action required: update verification on Easner"
-  const deadline = input.deadlineAt
-    ? new Date(input.deadlineAt).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })
-    : null
-  const windowLine = deadline
-    ? `Please finish any deposits already in flight by ${deadline}. After that, new bank details from the previous check will no longer be shown.`
-    : "Please finish any deposits already in flight during the wind-down window shown in the app."
-  const text = [
-    `Hi ${input.firstName},`,
-    "",
-    "We updated identity verification for bank accounts on Easner. Complete the updated check so you can keep receiving USD and euro deposits.",
-    "",
-    `Continue verification: ${input.verifyUrl}`,
-    "",
-    windowLine,
-    "",
-    "– Easner",
-  ].join("\n")
-  const html = `
-    <p>Hi ${input.firstName},</p>
-    <p>We updated identity verification for bank accounts on Easner. Complete the updated check so you can keep receiving USD and euro deposits.</p>
-    <p><a href="${input.verifyUrl}">Continue verification</a></p>
-    <p>${windowLine}</p>
-    <p>– Easner</p>
-  `.trim()
-  return { subject, text, html }
-}
-
 /** Ops checklist for Noah VA wind-down during Grid KYB cutover. */
 export const KYB_CUTOVER_OPS_CHECKLIST = [
   "Inventory approved businesses and open Noah receivables",

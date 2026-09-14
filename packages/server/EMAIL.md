@@ -20,7 +20,7 @@ Audience (`business` | `personal`) is resolved in `business/lib/notifications/re
 
 Ledger **transaction** emails (deposit, payout, wallet send, stablecoin receive – settled / failed) are **on by default**. Set `LEDGER_TRANSACTION_EMAIL_ENABLED=false` to disable platform-wide (e.g. rollback). User-level opt-out still uses **Settings → Communication → Email notifications**.
 
-Welcome, KYB/KYC, team invite, security, and invoice emails are always subject to normal preference rules (not gated by this env flag).
+Welcome, KYB/KYC (including `kycVerificationUpdate` / `kybVerificationUpdate` re-verification), team invite, security, and invoice emails are always subject to normal preference rules (not gated by this env flag). Cutover re-verification mail goes through `emailService.sendEmail` and the shared HTML templates — never raw `sendMail` HTML.
 
 ## Environment variables
 

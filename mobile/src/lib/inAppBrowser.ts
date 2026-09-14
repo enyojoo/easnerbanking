@@ -14,6 +14,8 @@ export const EASNER_IN_APP_BROWSER_OPTIONS = {
  *
  * Android `createTask: false` keeps the Custom Tab in the app task so
  * `singleTask` MainActivity still receives OAuth deep-link callbacks.
+ *
+ * Web KYC/Legal should use `useExternalLink` (in-app modal), not this helper.
  */
 export async function openEasnerInAppBrowser(url: string) {
   return WebBrowser.openBrowserAsync(url, {

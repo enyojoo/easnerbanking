@@ -1,7 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { isBridgeOnboardableResidence, personalMobileVerificationUrl } from "@easner/shared"
 import { getBridgeCutoverWindDownDays } from "./config"
-import { buildMobileBridgeCutoverEmail } from "@/lib/compliance/cutover-comms"
 
 export const MOBILE_BRIDGE_CUTOVER_COPY = {
   bannerTitle: "Update verification to keep receiving bank deposits",
@@ -72,22 +71,30 @@ export async function ensureMobileBridgeCutover(
   const email = String(row.email ?? "").trim()
   if (!emailSent && email) {
     const firstName = String(row.full_name ?? "").trim().split(/\s+/)[0] || "there"
-    const copy = buildMobileBridgeCutoverEmail({
-      firstName,
-      verifyUrl: personalMobileVerificationUrl(),
-      deadlineAt,
-    })
     try {
-      const { sendMail, resolvePersonalFromEmail, resolvePersonalFromName, resolveEmailReplyTo } =
-        await import("@easner/server")
-      await sendMail({
-        to: email,
-        from: { email: resolvePersonalFromEmail(), name: resolvePersonalFromName() },
-        replyTo: resolveEmailReplyTo(),
-        subject: copy.subject,
-        html: copy.html,
-        text: copy.text,
-      })
+      const { emailService } = await import("@easner/server")
+      const { data: prefsRow } = await admin
+        .from("user_preferences")
+        .select("communication_preferences")
+        .eq("user_id", userId)
+        .maybeSingle()
+      const result = await emailService.sendEmail(
+        {
+          to: email,
+          template: "kycVerificationUpdate",
+          audience: "personal",
+          data: {
+            firstName,
+            email,
+            verifyUrl: personalMobileVerificationUrl(),
+            deadlineAt,
+          },
+        },
+        (prefsRow as { communication_preferences?: unknown } | null)?.communication_preferences,
+      )
+      if (!result.success || result.skipped) {
+        throw new Error(result.skipReason || "Cutover email was not sent")
+      }
       await admin
         .from("users")
         .update({

@@ -1,6 +1,6 @@
 // Email templates - design-system aligned, Business vs Personal variants
 
-import { personalMobileTransactionUrl } from "@easner/shared/mobile-personal-links"
+import { personalMobileTransactionUrl, personalMobileVerificationUrl } from "@easner/shared/mobile-personal-links"
 import { resolveMobileAppStoreUrls } from "@easner/shared/mobile-app-store-urls"
 import { formatTransactionWhen, renderGridReceiptDisclosureHtml, sanitizeCustomerFacingFailureReason } from "@easner/shared"
 import {
@@ -29,6 +29,7 @@ import type {
   TransactionEmailData,
   OnlinePaymentsEmailData,
   VerificationEmailData,
+  VerificationCutoverEmailData,
   KybOpsEmailData,
   KycOpsEmailData,
   WelcomeEmailData,
@@ -405,6 +406,8 @@ ${data.dashboardUrl || profile.dashboardUrl}${profile.signatureText ?? ""}`
   kycSubmitted: verificationTemplate("KYC", "personal", "submitted"),
   kycApproved: verificationTemplate("KYC", "personal", "approved"),
   kycRejected: verificationTemplate("KYC", "personal", "rejected"),
+  kycVerificationUpdate: verificationCutoverTemplate("kyc"),
+  kybVerificationUpdate: verificationCutoverTemplate("kyb"),
 
   kycOpsNotification: kycOpsNotificationTemplate(),
 
@@ -1244,6 +1247,80 @@ function verificationTemplate(
         t += `\n\n${verificationSettingsUrl(data, audience)}`
       }
       return t
+    },
+  }
+}
+
+function formatCutoverDeadlineLabel(deadlineAt?: string | null): string | null {
+  const raw = String(deadlineAt ?? "").trim()
+  if (!raw) return null
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  })
+}
+
+function verificationCutoverTemplate(kind: "kyc" | "kyb"): EmailTemplate {
+  const audience: EmailAudience = kind === "kyb" ? "business" : "personal"
+  const subject =
+    kind === "kyb"
+      ? "Action required: verify your business on Easner"
+      : "Action required: update verification on Easner"
+  const body =
+    kind === "kyb"
+      ? "We upgraded business verification on Easner. To continue sending, receiving, and invoicing, please complete verification again."
+      : "We updated identity verification for bank accounts on Easner. Complete the updated check so you can keep receiving USD and euro deposits."
+  const ctaText = kind === "kyb" ? "Begin verification" : "Continue verification"
+  const fallbackWindow =
+    kind === "kyb"
+      ? "If you have open bank deposit instructions from before this change, please finish any in-flight deposits within the wind-down window shown in your dashboard."
+      : "Please finish any deposits already in flight during the wind-down window shown in the app."
+
+  return {
+    subject,
+    preheader: body,
+    html: (data: VerificationCutoverEmailData) => {
+      const deadline = formatCutoverDeadlineLabel(data.deadlineAt)
+      const windowLine = deadline
+        ? `Please finish any deposits already in flight by ${deadline}. After that, new bank details from the previous check will no longer be shown.`
+        : fallbackWindow
+      const url =
+        String(data.verifyUrl ?? "").trim() ||
+        (kind === "kyb"
+          ? verificationSettingsUrl(
+              { email: data.email, status: "action_needed", dashboardUrl: data.dashboardUrl },
+              "business",
+            )
+          : personalMobileVerificationUrl())
+      const content = `
+        ${easnerUserGreetingParagraphHtml(data.firstName)}
+        <p class="confirmation-text">${escapeHtmlText(body)}</p>
+        <p class="confirmation-text">${escapeHtmlText(windowLine)}</p>
+      `
+      return generateBaseEmailTemplate(subject, "", content, { text: ctaText, url }, {
+        audience,
+        showPreferencesLink: false,
+        preheader: body,
+      })
+    },
+    text: (data: VerificationCutoverEmailData) => {
+      const deadline = formatCutoverDeadlineLabel(data.deadlineAt)
+      const windowLine = deadline
+        ? `Please finish any deposits already in flight by ${deadline}. After that, new bank details from the previous check will no longer be shown.`
+        : fallbackWindow
+      const url =
+        String(data.verifyUrl ?? "").trim() ||
+        (kind === "kyb"
+          ? verificationSettingsUrl(
+              { email: data.email, status: "action_needed", dashboardUrl: data.dashboardUrl },
+              "business",
+            )
+          : personalMobileVerificationUrl())
+      return `${subject}\n\n${formatEasnerUserGreetingPlain(data.firstName)}\n\n${body}\n\n${windowLine}\n\n${url}`
     },
   }
 }

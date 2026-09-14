@@ -498,13 +498,13 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         'Account holder'
 
       if (shouldUseBridgeConsumerKyc(userProfile, residenceOverride)) {
-        const response = await bridgeService.getKycLink(fullName, email)
+        const response = await bridgeService.getKycLink(fullName, email, residenceOverride)
         const hosted = String(response.kyc_link || response.tos_link || '').trim()
         if (!hosted) {
           showError('Unable to load verification. Please try again or contact support.')
           return
         }
-        // Hosted KYC; redirect_uri is /auth/onboarding-complete?context=kyc.
+        // Same as Noah: hosted URL → iOS Safari View / Android Custom Tab; Expo web iframe modal.
         await externalLink.openLink(hosted, 'Verification for bank accounts')
         try {
           await syncNoahStatus(false, true)

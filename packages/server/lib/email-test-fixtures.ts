@@ -213,6 +213,20 @@ export const payrollFundingNeededFixture: PayrollFundingNeededEmailData = {
   runUrl: "https://business.easner.com/payroll/runs/run-123",
 }
 
+export const kycVerificationUpdateFixture = {
+  firstName: "Samuel",
+  email: "samuel@example.com",
+  verifyUrl: "https://app.easner.com/user/verification",
+  deadlineAt: "2026-09-28T00:00:00.000Z",
+}
+
+export const kybVerificationUpdateFixture = {
+  firstName: "Alex",
+  email: "owner@example.com",
+  verifyUrl: "https://business.easner.com/settings?tab=verification",
+  dashboardUrl: "https://business.easner.com",
+}
+
 export const accountRestrictedFixture = {
   email: "owner@example.com",
   firstName: "Alex",
@@ -286,6 +300,8 @@ export const templateFixtures: Record<string, unknown> = {
   kycSubmitted: { ...kycRejectedFixture, status: "submitted" as const, rejectionReasons: undefined },
   kycApproved: { ...kycRejectedFixture, status: "approved" as const, rejectionReasons: undefined },
   kycRejected: kycRejectedFixture,
+  kycVerificationUpdate: kycVerificationUpdateFixture,
+  kybVerificationUpdate: kybVerificationUpdateFixture,
   onlinePaymentsSetupStarted: {
     ...onlinePaymentsReadyFixture,
     status: "setup_started" as const,
@@ -330,6 +346,8 @@ export const templateDefaultAudience: Record<string, "business" | "personal"> = 
   kycSubmitted: "personal",
   kycApproved: "personal",
   kycRejected: "personal",
+  kycVerificationUpdate: "personal",
+  kybVerificationUpdate: "business",
   onlinePaymentsSetupStarted: "business",
   onlinePaymentsActionRequired: "business",
   onlinePaymentsReady: "business",

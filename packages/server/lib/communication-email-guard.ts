@@ -27,6 +27,8 @@ const TEMPLATE_PREFERENCE: Record<string, EmailPreferenceCategory> = {
   kycSubmitted: "transactional",
   kycApproved: "transactional",
   kycRejected: "transactional",
+  kycVerificationUpdate: "transactional",
+  kybVerificationUpdate: "transactional",
   onlinePaymentsSetupStarted: "transactional",
   onlinePaymentsActionRequired: "transactional",
   onlinePaymentsReady: "transactional",

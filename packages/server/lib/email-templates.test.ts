@@ -157,6 +157,38 @@ describe("emailTemplates", () => {
     ).toBe("Your Easner KYC verification update")
   })
 
+  it("verification cutover uses the branded layout and never names providers", () => {
+    const html = emailTemplates.kycVerificationUpdate.html(
+      templateFixtures.kycVerificationUpdate,
+      "personal",
+    )
+    const text = emailTemplates.kycVerificationUpdate.text(
+      templateFixtures.kycVerificationUpdate,
+      "personal",
+    )
+    expect(emailTemplates.kycVerificationUpdate.subject).toBe(
+      "Action required: update verification on Easner",
+    )
+    expect(html).toContain("<!DOCTYPE html>")
+    expect(html).toContain("Hey Samuel,")
+    expect(html).toContain("Continue verification")
+    expect(html).toContain("https://app.easner.com/user/verification")
+    expect(html).toContain("September 28, 2026")
+    expect(html).not.toMatch(/Noah|Bridge|Grid/i)
+    expect(text).not.toMatch(/Noah|Bridge|Grid/i)
+
+    const kybHtml = emailTemplates.kybVerificationUpdate.html(
+      templateFixtures.kybVerificationUpdate,
+      "business",
+    )
+    expect(emailTemplates.kybVerificationUpdate.subject).toBe(
+      "Action required: verify your business on Easner",
+    )
+    expect(kybHtml).toContain("Begin verification")
+    expect(kybHtml).toContain("<!DOCTYPE html>")
+    expect(kybHtml).not.toMatch(/Noah|Bridge|Grid/i)
+  })
+
   it("appDownloadLink includes single download CTA", () => {
     const html = emailTemplates.appDownloadLink.html(templateFixtures.appDownloadLink, "personal")
     expect(html).toContain("Get the Easner app")
@@ -179,6 +211,14 @@ describe("emailTemplates", () => {
 
     const kycHtml = emailTemplates.kycApproved.html(templateFixtures.kycApproved, "personal")
     expect(kycHtml).toContain("Your KYC verification is complete.")
+
+    const cutoverHtml = emailTemplates.kycVerificationUpdate.html(
+      templateFixtures.kycVerificationUpdate,
+      "personal",
+    )
+    expect(cutoverHtml).toContain(
+      "We updated identity verification for bank accounts on Easner.",
+    )
 
     const mfaHtml = emailTemplates.mfaEnabled.html(
       templateFixtures.mfaEnabled as SecurityAlertEmailData,

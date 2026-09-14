@@ -24,6 +24,7 @@ export type {
   TransactionEmailData,
   WelcomeEmailData,
   VerificationEmailData,
+  VerificationCutoverEmailData,
   OnlinePaymentsEmailData,
   TeamInviteEmailData,
   SecurityAlertEmailData,

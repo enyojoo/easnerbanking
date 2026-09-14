@@ -79,6 +79,16 @@ export interface VerificationEmailData {
   audience?: EmailAudience
 }
 
+/** Personal or business re-verification (e.g. Noah → Bridge receive wind-down). */
+export interface VerificationCutoverEmailData {
+  firstName?: string
+  email: string
+  verifyUrl?: string
+  deadlineAt?: string | null
+  dashboardUrl?: string
+  audience?: EmailAudience
+}
+
 /** Internal KYB lifecycle alert for Easner compliance / ops. */
 export interface KybOpsEmailData {
   businessId: string

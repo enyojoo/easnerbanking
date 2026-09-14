@@ -39,6 +39,11 @@ export function bridgeCreateKycLinkIdempotencyKey(input: {
     .trim()
     .toLowerCase()
     .replace(/\s+/g, " ")
+  // Individuals retry with a display-name fallback (email local-part). Keep the
+  // key stable so Bridge does not treat reopen as a second customer.
+  if (input.type === "individual") {
+    return `bridge-kyc:${input.type}:${input.subjectId}`
+  }
   return `bridge-kyc:${input.type}:${input.subjectId}:${name}`
 }
 
@@ -69,7 +74,7 @@ export async function createBridgeKycLink(input: {
       full_name: input.fullName.trim(),
       email: input.email.trim(),
       type: input.type,
-      endorsements: input.endorsements ?? ["sepa"],
+      endorsements: input.endorsements ?? ["base", "sepa"],
       ...(redirect ? { redirect_uri: redirect } : {}),
     },
   })

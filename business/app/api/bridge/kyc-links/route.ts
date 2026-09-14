@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { createBridgeKycLink, mapBridgeKycStatus, pickBridgeKycLinkFullName, bridgeCreateKycLinkIdempotencyKey, getBridgeCustomer, getBridgeHostedLinksForCustomer } from "@/lib/bridge/kyc-links"
+import { formatBridgeKycStartError } from "@/lib/bridge/format-bridge-api-error"
 import { isBridgeOnboardableResidence } from "@/lib/bridge/geo"
 import { persistVerificationStatus } from "@/lib/compliance/verification-store"
 import { requireAuth, requireBridgeEnv } from "../_helpers"
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
   if ("error" in auth) return auth.error
   const { user } = auth
 
-  let body: { full_name?: string; email?: string; type?: string } = {}
+  let body: { full_name?: string; email?: string; type?: string; residenceCountry?: string } = {}
   try {
     body = await request.json()
   } catch {
@@ -31,18 +32,23 @@ export async function POST(request: Request) {
   const scope = readAccountScopeFromRequest(request)
   const type = body.type === "business" || scope === "business" ? "business" : "individual"
 
+  try {
   const { data: userRow } = await admin
     .from("users")
     .select("full_name,email,residence_country,kyc_address_state,kyc_address_country,bridge_customer_id,bridge_kyc_status")
     .eq("id", user.id)
     .maybeSingle()
 
-  const country = String(userRow?.kyc_address_country ?? userRow?.residence_country ?? "").trim()
+  const country = String(
+    body.residenceCountry ?? userRow?.kyc_address_country ?? userRow?.residence_country ?? "",
+  ).trim()
   const state = String(userRow?.kyc_address_state ?? "").trim()
   if (type === "individual" && !isBridgeOnboardableResidence({ countryCode: country, state })) {
     return NextResponse.json(
       {
-        error: "Bank accounts are not available in your region yet.",
+        error: country
+          ? "Bank accounts are not available in your region yet."
+          : "Select your country of residence to start verification.",
         code: "BRIDGE_GEO_BLOCKED",
       },
       { status: 400 },
@@ -145,7 +151,7 @@ export async function POST(request: Request) {
   }
   const status = mapBridgeKycStatus(link.kyc_status)
   if (type === "business" && businessId) {
-    await admin
+    const { error } = await admin
       .from("businesses")
       .update({
         ...(customerId ? { bridge_customer_id: customerId } : {}),
@@ -153,15 +159,22 @@ export async function POST(request: Request) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", businessId)
+    if (error) {
+      console.warn("[bridge/kyc-links] persist business KYB failed:", error.message)
+    }
   } else {
-    await persistVerificationStatus(admin, {
-      kind: "individual",
-      userId: user.id,
-      provider: "bridge",
-      status: status === "not_started" ? "in_progress" : status,
-      bridgeCustomerId: customerId || null,
-    })
-    await admin
+    try {
+      await persistVerificationStatus(admin, {
+        kind: "individual",
+        userId: user.id,
+        provider: "bridge",
+        status: status === "not_started" ? "in_progress" : status,
+        bridgeCustomerId: customerId || null,
+      })
+    } catch (persistError) {
+      console.warn("[bridge/kyc-links] persist individual KYC failed:", persistError)
+    }
+    const { error } = await admin
       .from("users")
       .update({
         ...(customerId ? { bridge_customer_id: customerId } : {}),
@@ -169,6 +182,9 @@ export async function POST(request: Request) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", user.id)
+    if (error) {
+      console.warn("[bridge/kyc-links] persist user KYC columns failed:", error.message)
+    }
   }
 
   return NextResponse.json({
@@ -177,4 +193,9 @@ export async function POST(request: Request) {
     kyc_status: status,
     customer_id: customerId || null,
   })
+  } catch (e: unknown) {
+    const msg = formatBridgeKycStartError(e)
+    console.warn("[bridge/kyc-links] hosted KYC start failed:", msg, e)
+    return NextResponse.json({ error: msg }, { status: 502 })
+  }
 }

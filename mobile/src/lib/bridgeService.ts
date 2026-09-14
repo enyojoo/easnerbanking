@@ -38,12 +38,17 @@ export type BridgeCutoverState = {
 }
 
 export const bridgeService = {
-  async getKycLink(fullName: string, email: string): Promise<BridgeKycLink> {
+  async getKycLink(fullName: string, email: string, residenceCountry?: string): Promise<BridgeKycLink> {
     const session = await requireAuthSession()
     const response = await fetch(`${apiUrl()}/api/bridge/kyc-links`, {
       method: 'POST',
       headers: individualHeaders(session.access_token),
-      body: JSON.stringify({ full_name: fullName, email, type: 'individual' }),
+      body: JSON.stringify({
+        full_name: fullName,
+        email,
+        type: 'individual',
+        ...(residenceCountry ? { residenceCountry } : {}),
+      }),
     })
     const json = (await response.json().catch(() => ({}))) as BridgeKycLink & { error?: string }
     if (!response.ok) {

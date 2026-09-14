@@ -34,6 +34,23 @@ describe("pickBridgeKycLinkFullName", () => {
 })
 
 describe("bridgeCreateKycLinkIdempotencyKey", () => {
+  it("stays stable for an individual when the display name changes", () => {
+    const subjectId = "user_1"
+    expect(
+      bridgeCreateKycLinkIdempotencyKey({
+        type: "individual",
+        subjectId,
+        fullName: "Jane Owner",
+      }),
+    ).toBe(
+      bridgeCreateKycLinkIdempotencyKey({
+        type: "individual",
+        subjectId,
+        fullName: "jane",
+      }),
+    )
+  })
+
   it("changes when the legal name changes so reopen does not reuse the owner-name link", () => {
     const subjectId = "biz_1"
     const ownerKey = bridgeCreateKycLinkIdempotencyKey({

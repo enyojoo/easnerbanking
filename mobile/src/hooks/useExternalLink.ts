@@ -1,5 +1,7 @@
 import { useState, useCallback } from 'react'
+import { Platform } from 'react-native'
 import { openEasnerInAppBrowser } from '../lib/inAppBrowser'
+import { hostedKycUrlForWebEmbed } from '../lib/hostedKycUrl'
 
 interface UseExternalLinkOptions {
   showBackButton?: boolean
@@ -11,9 +13,20 @@ export function useExternalLink(options: UseExternalLinkOptions = {}) {
   const [title, setTitle] = useState<string>('')
 
   const openLink = useCallback(async (linkUrl: string, linkTitle?: string) => {
-    setUrl(linkUrl)
+    const webOrigin = typeof window !== 'undefined' ? window.location.origin : ''
+    const href =
+      Platform.OS === 'web' ? hostedKycUrlForWebEmbed(linkUrl, webOrigin) : linkUrl
+    setUrl(href)
     setTitle(linkTitle || '')
+
+    // Expo web: same in-app hosted sheet Noah used (iframe WebView modal).
+    if (Platform.OS === 'web') {
+      setIsVisible(true)
+      return
+    }
+
     try {
+      // iOS SFSafariViewController / Android Chrome Custom Tabs.
       await openEasnerInAppBrowser(linkUrl)
       setIsVisible(false)
     } catch {
@@ -24,7 +37,6 @@ export function useExternalLink(options: UseExternalLinkOptions = {}) {
 
   const closeLink = useCallback(() => {
     setIsVisible(false)
-    // Reset after a short delay to allow modal animation to complete
     setTimeout(() => {
       setUrl('')
       setTitle('')
@@ -40,4 +52,3 @@ export function useExternalLink(options: UseExternalLinkOptions = {}) {
     showBackButton: options.showBackButton || false,
   }
 }
-
