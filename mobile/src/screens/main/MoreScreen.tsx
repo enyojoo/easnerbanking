@@ -51,6 +51,7 @@ import {
   shouldListFactorsForMfaRow,
 } from '../../lib/mfaStatusCache'
 import { isGlobalBankingVerified } from '../../lib/compliance'
+import { isBridgeConsumerCutoverPending } from '../../lib/bridgeConsumerKyc'
 import { VERIFICATION_STATUS_COPY } from '@easner/shared'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { apiFetch } from '../../query/api-client'
@@ -419,13 +420,17 @@ function MoreContent({ navigation }: NavigationProps) {
   // Conditional gradient banner – verify identity OR set up MFA when applicable.
   const profileReady = !authLoading && userProfile != null
   const globalBankingVerified = isGlobalBankingVerified(userProfile)
-  const showVerifyBanner = profileReady && !globalBankingVerified && verificationStatus !== 'in_review'
+  const cutoverPending = isBridgeConsumerCutoverPending(userProfile)
+  const showVerifyBanner =
+    profileReady && ((!globalBankingVerified && verificationStatus !== 'in_review') || cutoverPending)
   const showMfaBanner = profileReady && !showVerifyBanner && mfaStatusResolved && mfaStatusLine === 'Off'
   const banner = showVerifyBanner
     ? {
-        title: 'Verify your identity',
-        subtitle: 'Higher limits, full banking access',
-        cta: 'Begin',
+        title: cutoverPending ? 'Update your verification' : 'Verify your identity',
+        subtitle: cutoverPending
+          ? 'Keep receiving USD and euro deposits'
+          : 'Higher limits, full banking access',
+        cta: cutoverPending ? 'Continue' : 'Begin',
         Icon: ShieldCheck,
         onPress: () => navigateFromMoreTab('AccountVerification'),
       }

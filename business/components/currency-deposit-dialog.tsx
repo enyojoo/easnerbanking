@@ -574,7 +574,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
     }
     let cancelled = false
     void (async () => {
-      let payInProvider: "yellowcard" | "grid" | "noah" = "yellowcard"
+      let payInProvider: "yellowcard" | "grid" | "noah" | "bridge" = "yellowcard"
       try {
         const res = await fetchWithSession(
           `/api/payout-corridors?rail=bank_transfer`,

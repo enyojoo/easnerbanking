@@ -5,9 +5,10 @@ import { mapNoahPartnerStatus } from "./map-partner-status"
 export type StoredVerificationRow = {
   verification_provider: VerificationProvider | null
   verification_status: VerificationStatus | string | null
-  verification_rejection_reasons: unknown
+  verification_rejection_reasons?: unknown
   verified_at?: string | null
   grid_customer_id?: string | null
+  bridge_customer_id?: string | null
   noah_kyc_status?: string | null
 }
 
@@ -20,7 +21,7 @@ export async function readVerificationRow(
     const { data, error } = await admin
       .from("businesses")
       .select(
-        "verification_provider,verification_status,verification_rejection_reasons,kyb_verified_at,grid_customer_id",
+        "verification_provider,verification_status,verification_rejection_reasons,kyb_verified_at,grid_customer_id,bridge_customer_id,bridge_kyc_status",
       )
       .eq("id", input.businessId)
       .maybeSingle()
@@ -35,7 +36,7 @@ export async function readVerificationRow(
   const { data, error } = await admin
     .from("users")
     .select(
-      "verification_provider,verification_status,verification_rejection_reasons,kyc_verified_at,grid_customer_id,noah_kyc_status",
+      "verification_provider,verification_status,verification_rejection_reasons,kyc_verified_at,grid_customer_id,bridge_customer_id,bridge_kyc_status,noah_kyc_status",
     )
     .eq("id", input.userId)
     .maybeSingle()
@@ -68,7 +69,7 @@ export function canonicalVerificationStatus(row: StoredVerificationRow | null): 
   const provider = String(row.verification_provider ?? "").toLowerCase()
   const direct = String(row.verification_status ?? "").toLowerCase()
 
-  if (provider === "grid") {
+  if (provider === "grid" || provider === "bridge") {
     return isProgressedVerificationStatus(direct) ? direct : "not_started"
   }
 
@@ -89,9 +90,22 @@ export async function persistVerificationStatus(
     rejectionReasons?: unknown
     verifiedAt?: string | null
     gridCustomerId?: string | null
+    bridgeCustomerId?: string | null
   },
 ): Promise<void> {
   const now = new Date().toISOString()
+  if (input.kind === "business" && input.provider === "bridge" && input.businessId) {
+    const { error } = await admin
+      .from("businesses")
+      .update({
+        ...(input.bridgeCustomerId ? { bridge_customer_id: input.bridgeCustomerId } : {}),
+        bridge_kyc_status: input.status,
+        updated_at: now,
+      })
+      .eq("id", input.businessId)
+    if (error) throw new Error(`persistVerificationStatus(business-bridge): ${error.message}`)
+    return
+  }
   const patch: Record<string, unknown> = {
     verification_provider: input.provider,
     verification_status: input.status,
@@ -109,6 +123,12 @@ export async function persistVerificationStatus(
   }
   if (input.gridCustomerId) {
     patch.grid_customer_id = input.gridCustomerId
+  }
+  if (input.bridgeCustomerId) {
+    patch.bridge_customer_id = input.bridgeCustomerId
+  }
+  if (input.provider === "bridge") {
+    patch.bridge_kyc_status = input.status
   }
 
   if (input.kind === "business" && input.businessId) {

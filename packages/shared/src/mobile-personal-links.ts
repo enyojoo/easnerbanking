@@ -11,6 +11,10 @@ export function personalMobileDashboardUrl(origin?: string | null): string {
   return `${resolvePersonalMobileAppOrigin(origin)}/user/dashboard`
 }
 
+export function personalMobileVerificationUrl(origin?: string | null): string {
+  return `${resolvePersonalMobileAppOrigin(origin)}/user/verification`
+}
+
 export function personalMobileNotificationsUrl(origin?: string | null): string {
   return `${resolvePersonalMobileAppOrigin(origin)}/user/notifications`
 }

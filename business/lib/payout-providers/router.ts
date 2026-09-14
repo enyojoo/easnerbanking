@@ -9,6 +9,7 @@ import { loadUserRoutingSurface } from "@/lib/corridor-routing-surface"
 import { gridPayoutProvider } from "./grid-provider"
 import { noahPayoutProvider } from "./noah-provider"
 import { yellowcardPayoutProvider } from "./yellowcard-provider"
+import { bridgePayoutProvider } from "./bridge-provider"
 import { resolvePayoutSenderCountryCode } from "./resolve-sender-country"
 import type { CorridorContext, PayoutProvider, PayoutRailKind } from "./types"
 import { NoProviderForCorridorError } from "./types"
@@ -17,6 +18,7 @@ const registry: Record<string, PayoutProvider> = {
   noah: noahPayoutProvider,
   yellowcard: yellowcardPayoutProvider,
   grid: gridPayoutProvider,
+  bridge: bridgePayoutProvider,
 }
 
 function parseRouting(raw: unknown): ProviderRoutingEntry[] {
@@ -99,7 +101,11 @@ export async function loadCorridorRouting(
     input.surface ?? (await loadUserRoutingSurface(admin, input.userId))
   return parseRouting(
     projectCorridorForSurface(
-      { provider_routing: data.provider_routing, metadata: data.metadata },
+      {
+        provider_routing: data.provider_routing,
+        metadata: data.metadata,
+        currency_code: cur,
+      },
       surface,
     ).provider_routing,
   )

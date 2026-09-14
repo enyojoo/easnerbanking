@@ -44,6 +44,8 @@ type BusinessRow = {
   enabled_extra_account_currencies?: string[]
   grid_customer_id?: string | null
   verification_status?: string | null
+  bridge_customer_id?: string | null
+  bridge_kyc_status?: string | null
   created_at: string
   updated_at?: string | null
   owner_user_id?: string | null
@@ -271,7 +273,7 @@ function BusinessesPageInner() {
                     <TableHead className="w-[72px]">Logo</TableHead>
                     <TableHead>Easetag</TableHead>
                     <TableHead>Business type</TableHead>
-                    <TableHead className="w-[120px] text-center">KYB status</TableHead>
+                    <TableHead className="w-[168px] text-center">KYB</TableHead>
                     <TableHead className="w-[88px] text-center">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -317,11 +319,18 @@ function BusinessesPageInner() {
                         </TableCell>
                         <TableCell className="max-w-[220px] text-sm">{businessTypeDisplayText(o.business_type)}</TableCell>
                         <TableCell className="text-center">
-                          <BusinessKybStatusBadge
-                            verificationStatus={o.verification_status}
-                            accountRestrictionPhase={o.accountRestrictionPhase}
-                            velocityLimitActive={o.velocityLimitActive}
-                          />
+                          <div className="flex flex-col items-center gap-1">
+                            <BusinessKybStatusBadge
+                              verificationStatus={o.verification_status}
+                              accountRestrictionPhase={o.accountRestrictionPhase}
+                              velocityLimitActive={o.velocityLimitActive}
+                            />
+                            {o.bridge_kyc_status ? (
+                              <Badge variant={verificationBadgeVariant(o.bridge_kyc_status)}>
+                                Bridge · {verificationStatusLabel(o.bridge_kyc_status)}
+                              </Badge>
+                            ) : null}
+                          </div>
                         </TableCell>
                         <TableCell className="text-center">
                           <Button variant="outline" size="sm" onClick={() => setSelectedBusiness(o)}>
@@ -455,18 +464,27 @@ function BusinessesPageInner() {
                     <label className="text-sm font-medium text-gray-900">Provider references</label>
                     <div className="mt-2 space-y-2">
                       <div className="flex justify-between gap-4 text-sm">
-                        <span className="shrink-0 text-gray-600">KYB status</span>
+                        <span className="shrink-0 text-gray-600">Grid KYB</span>
                         <BusinessKybStatusBadge
                           verificationStatus={selectedBusiness.verification_status}
                           accountRestrictionPhase={selectedBusiness.accountRestrictionPhase}
                           velocityLimitActive={selectedBusiness.velocityLimitActive}
                         />
                       </div>
-                      <DetailRow label="Noah customer ID" mono>
+                      <DetailRow label="Grid customer ID" mono>
                         {displayText(selectedBusiness.grid_customer_id)}
                       </DetailRow>
+                      <div className="flex justify-between gap-4 text-sm">
+                        <span className="shrink-0 text-gray-600">Bridge KYB</span>
+                        <KybBadge rawStatus={selectedBusiness.bridge_kyc_status || "not_started"} />
+                      </div>
+                      <DetailRow label="Bridge customer ID" mono>
+                        {displayText(selectedBusiness.bridge_customer_id)}
+                      </DetailRow>
                       <p className="text-xs text-gray-600">
-                        Fiat bank details are in <span className="font-mono">virtual_accounts</span> (Grid or Noah).
+                        Fiat bank details are in <span className="font-mono">virtual_accounts</span>{" "}
+                        (Grid and/or Bridge). Office Fiat pay-in overlay picks which USD instructions
+                        the product UI shows.
                       </p>
                     </div>
                   </div>

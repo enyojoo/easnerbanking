@@ -1,4 +1,4 @@
-export type VerificationProvider = "grid" | "noah"
+export type VerificationProvider = "grid" | "noah" | "bridge"
 
 export type VerificationStatus =
   | "not_started"
@@ -14,5 +14,5 @@ export type VerificationSubjectRef =
   | { kind: "business"; businessId: string; subjectUserId: string }
   | { kind: "individual"; userId: string }
 
-export type VirtualAccountProvider = "grid" | "noah"
+export type VirtualAccountProvider = "grid" | "noah" | "bridge"
 export type VirtualAccountStatus = "active" | "pending" | "retired" | "failed"

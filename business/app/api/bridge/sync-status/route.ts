@@ -1,0 +1,88 @@
+import { NextResponse } from "next/server"
+import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { getBridgeCustomer, mapBridgeKycStatus } from "@/lib/bridge/kyc-links"
+import { persistVerificationStatus } from "@/lib/compliance/verification-store"
+import { provisionBridgeVirtualAccounts } from "@/lib/bridge/provision-after-approval"
+import { requireAuth, requireBridgeEnv } from "../_helpers"
+import { readAccountScopeFromRequest } from "@/lib/noah/resolve-noah-context"
+import { resolveGridBusinessContextAsync } from "@/app/api/grid/_helpers"
+
+export const runtime = "nodejs"
+
+export async function POST(request: Request) {
+  const mis = requireBridgeEnv()
+  if (mis) return mis
+  const auth = await requireAuth(request)
+  if ("error" in auth) return auth.error
+  const { user } = auth
+  const admin = createSupabaseAdmin()
+  const scope = readAccountScopeFromRequest(request)
+
+  let businessId: string | null = null
+  let customerId = ""
+  if (scope === "business") {
+    const ctx = await resolveGridBusinessContextAsync(user.id)
+    if (!ctx.ok) return ctx.response
+    businessId = ctx.businessId
+    const { data } = await admin
+      .from("businesses")
+      .select("bridge_customer_id,bridge_kyc_status")
+      .eq("id", businessId)
+      .maybeSingle()
+    customerId = String(data?.bridge_customer_id ?? "").trim()
+  } else {
+    const { data } = await admin
+      .from("users")
+      .select("bridge_customer_id,bridge_kyc_status")
+      .eq("id", user.id)
+      .maybeSingle()
+    customerId = String(data?.bridge_customer_id ?? "").trim()
+  }
+
+  if (!customerId) {
+    return NextResponse.json({ kyc_status: "not_started", provisioned: false })
+  }
+
+  const customer = await getBridgeCustomer(customerId)
+  const status = mapBridgeKycStatus(customer.kyc_status ?? customer.status)
+
+  if (businessId) {
+    await admin
+      .from("businesses")
+      .update({
+        bridge_customer_id: customerId,
+        bridge_kyc_status: status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", businessId)
+  } else {
+    await persistVerificationStatus(admin, {
+      kind: "individual",
+      userId: user.id,
+      provider: "bridge",
+      status,
+      bridgeCustomerId: customerId,
+    })
+    await admin
+      .from("users")
+      .update({
+        bridge_customer_id: customerId,
+        bridge_kyc_status: status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", user.id)
+  }
+
+  let provisioned = false
+  if (status === "approved") {
+    const vas = await provisionBridgeVirtualAccounts({
+      admin,
+      userId: user.id,
+      businessId,
+      customerId,
+    })
+    provisioned = vas.usd || vas.eur
+  }
+
+  return NextResponse.json({ kyc_status: status, provisioned, customer_id: customerId })
+}

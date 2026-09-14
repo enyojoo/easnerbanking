@@ -22,7 +22,7 @@ export function shouldDeferBankDepositSettledPush(metadata: unknown): boolean {
 async function dispatchFundBalanceSettledPush(
   admin: SupabaseClient,
   transactionId: string,
-  provider: "noah" | "yellowcard" | "grid",
+  provider: "noah" | "yellowcard" | "grid" | "bridge",
 ): Promise<void> {
   const id = String(transactionId || "").trim()
   if (!id) return

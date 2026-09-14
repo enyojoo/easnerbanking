@@ -129,7 +129,9 @@ export async function POST(request: Request) {
         userId: user.id,
       })
       const envProvider: PayoutEnvProviderId =
-        provider.id === "yellowcard" || provider.id === "grid" ? provider.id : "noah"
+        provider.id === "yellowcard" || provider.id === "grid" || provider.id === "bridge"
+          ? provider.id
+          : "noah"
       const envGate = requirePayoutProviderEnv(envProvider)
       if (envGate) return envGate
     } catch (e) {

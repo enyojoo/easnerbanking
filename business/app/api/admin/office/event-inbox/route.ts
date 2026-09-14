@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireOfficeAdmin } from "@/lib/api/admin-auth"
 
-const PROVIDERS = ["noah", "turnkey", "yellowcard", "grid", "other"] as const
+const PROVIDERS = ["noah", "turnkey", "yellowcard", "grid", "bridge", "other"] as const
 const STATUSES = ["received", "processed", "failed"] as const
 
 /**

@@ -3,6 +3,7 @@ import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { buildPayoutQuote } from "@/lib/noah/payout-quote"
 import { selectProviderForCorridor } from "@/lib/payout-providers"
 import { resolveRecipientPayoutCountry, type RecipientSellPrepareRow } from "@/lib/terminal/recipient-sell-prepare"
+import { confirmBridgeBalancePayoutOrder } from "@/lib/payout/confirm-bridge-balance-payout"
 import { confirmGridBalancePayoutOrder } from "@/lib/payout/confirm-grid-balance-payout"
 import { confirmNoahPayoutOrder } from "@/lib/payout/confirm-noah-payout"
 import { confirmYcBalancePayoutOrder } from "@/lib/payout/confirm-yc-balance-payout"
@@ -61,6 +62,22 @@ export async function confirmPayoutOrder(
     amountEntryMode === "send" && input.sendAmount != null && input.sendAmount > 0
       ? input.sendAmount
       : undefined
+
+  if (providerId === "bridge" && isPayoutLockOnReviewEnabled("bridge")) {
+    return confirmBridgeBalancePayoutOrder({
+      admin,
+      userId: kycUserId,
+      businessId: input.businessId,
+      recipientId: input.recipientId,
+      destinationRef: input.destinationRef,
+      recipient,
+      receiveFiatAmount: input.receiveAmount,
+      sourceBalanceCurrency: input.sourceBalanceCurrency,
+      amountEntryMode,
+      sendBudget,
+      paymentPurpose: input.paymentPurpose,
+    })
+  }
 
   if (providerId === "grid" && isPayoutLockOnReviewEnabled("grid")) {
     return confirmGridBalancePayoutOrder({

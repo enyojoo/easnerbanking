@@ -1118,7 +1118,7 @@ export function extractCorridorRecipientCandidates(input: {
   fieldsSchema?: unknown
   providers?: unknown
   /** When set, only that provider's schema is used (manual Office routing). */
-  payoutProvider?: "noah" | "yellowcard" | "grid" | null
+  payoutProvider?: "noah" | "yellowcard" | "grid" | "bridge" | null
 }): CorridorRecipientCandidates {
   const primary = input.payoutProvider ?? null
   const noah =
@@ -1209,7 +1209,7 @@ export function resolveCorridorRecipientOptions(input: {
   fieldsSchema?: unknown
   providers?: unknown
   /** Office primary payout provider – scopes banks/extras to that rail. */
-  payoutProvider?: "noah" | "yellowcard" | "grid" | null
+  payoutProvider?: "noah" | "yellowcard" | "grid" | "bridge" | null
 }): CorridorRecipientOptions {
   const primary = input.payoutProvider ?? null
   const candidates = extractCorridorRecipientCandidates({

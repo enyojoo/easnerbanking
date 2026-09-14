@@ -13,6 +13,7 @@ export {
 export { clearEmailProviderCache } from "./resolve-email-provider"
 export {
   resolvePersonalFromEmail,
+  resolvePersonalFromName,
   resolveInvoiceFromEmailAddress,
   resolveInvoiceFromName,
   resolveReceiptFromEmailAddress,

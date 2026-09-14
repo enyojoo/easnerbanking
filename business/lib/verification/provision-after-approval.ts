@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { readVerificationRow, type VerificationProvider } from "@/lib/compliance"
 import { provisionNoahAfterVerificationApproved } from "@/lib/noah/provision-after-approval"
 import { provisionGridAfterBusinessKybApproved } from "@/lib/grid/provision-after-approval"
+import { provisionBridgeVirtualAccounts } from "@/lib/bridge/provision-after-approval"
 
 function looksLikeGridCustomerId(id: string | null | undefined): boolean {
   const raw = String(id ?? "").trim()
@@ -37,6 +38,18 @@ export async function provisionAfterVerificationApproved(opts: {
 
   const fromRow = String(row?.verification_provider ?? "").toLowerCase()
   const fromOpts = String(opts.provider ?? "").toLowerCase()
+  const bridgeCustomerId = String(row?.bridge_customer_id ?? opts.partnerCustomerId ?? "").trim()
+
+  if (fromOpts === "bridge" || fromRow === "bridge") {
+    if (!bridgeCustomerId) return { skipped: true, reason: "missing_bridge_customer_id" }
+    const vas = await provisionBridgeVirtualAccounts({
+      admin: opts.admin,
+      userId: opts.subjectUserId,
+      businessId: opts.scope === "business" ? opts.subjectBusinessId : null,
+      customerId: bridgeCustomerId,
+    })
+    return { provider: "bridge", ...vas }
+  }
   const gridCustomerId =
     String(row?.grid_customer_id ?? "").trim() ||
     (looksLikeGridCustomerId(opts.partnerCustomerId)

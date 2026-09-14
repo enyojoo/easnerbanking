@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
 
-const PROVIDERS = ["all", "noah", "turnkey", "yellowcard", "grid", "other"] as const
+const PROVIDERS = ["all", "noah", "turnkey", "yellowcard", "grid", "bridge", "other"] as const
 const STATUSES = ["all", "received", "processed", "failed"] as const
 
 function statusVariant(status: string): "emerald" | "amber" | "oxblood" | "slate" {

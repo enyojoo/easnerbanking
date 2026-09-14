@@ -183,6 +183,10 @@ export interface User {
   stripe_express_kyc_tier?: string | null
   residence_country?: string | null
   kyc_verified_at?: string | null
+  verification_status?: string | null
+  verification_provider?: string | null
+  bridge_cutover_required_at?: string | null
+  bridge_cutover_deadline_at?: string | null
   status: "active" | "inactive"
   /** Legacy default for stats until preferences live on `users` */
   base_currency?: string
@@ -228,6 +232,10 @@ export interface AuthUser {
   residence_country?: string | null
   role?: "individual" | "business"
   easner_business_id?: string | null
+  verification_status?: string | null
+  verification_provider?: string | null
+  bridge_cutover_required_at?: string | null
+  bridge_cutover_deadline_at?: string | null
   bridge_kyc_status?: string
   bridge_customer_id?: string
   bridge_kyc_rejection_reasons?: unknown

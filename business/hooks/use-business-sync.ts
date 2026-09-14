@@ -10,6 +10,7 @@ import {
   isBusinessTier1Complete,
   needsBusinessVirtualAccountProvision,
 } from "@/lib/noah/business-account-sync"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 import {
   syncBusinessGridStatus,
   syncBusinessGridStatusUntilAccountsReady,
@@ -59,6 +60,8 @@ export function useBusinessSync(): void {
     businessId,
     tier1Complete,
     tier1VerificationStatus,
+    bridgeKycStatus,
+    bridgeKycComplete,
     canManageBusinessVerification,
     isLoading,
   } = useBusinessProfile()
@@ -94,12 +97,18 @@ export function useBusinessSync(): void {
   // effect, interval, and visibility listener on every workspace render.
   const profileSlice = useMemo(() => ({ tier1Complete }), [tier1Complete])
 
+  const bridgeKycStarted =
+    Boolean(bridgeKycStatus) &&
+    String(bridgeKycStatus).toLowerCase() !== "not_started" &&
+    !bridgeKycComplete
+
   const shouldSync =
     !isLoading &&
     Boolean(businessId) &&
     canManageBusinessVerification &&
     (!isBusinessTier1Complete(profileSlice) ||
-      needsBusinessVirtualAccountProvision(profileSlice, { fiatProvisionResolved }))
+      needsBusinessVirtualAccountProvision(profileSlice, { fiatProvisionResolved }) ||
+      bridgeKycStarted)
 
   const runSync = useCallback(async () => {
     if (!shouldSync) return
@@ -114,6 +123,16 @@ export function useBusinessSync(): void {
         isBusinessTier1Complete(profileSlice) || needsAccounts
           ? await syncBusinessGridStatusUntilAccountsReady()
           : await syncBusinessGridStatus()
+      if (bridgeKycStarted) {
+        await fetchWithSession("/api/bridge/sync-status", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Easner-Account-Scope": "business",
+          },
+          body: JSON.stringify({}),
+        }).catch(() => undefined)
+      }
       if (result.needsFiatAccounts === false || result.accountsReady === true) {
         setFiatProvisionResolved(true)
         if (scope) {
@@ -134,6 +153,8 @@ export function useBusinessSync(): void {
     profileSlice,
     tier1VerificationStatus,
     user?.id,
+    tier1Complete,
+    bridgeKycStarted,
   ])
 
   useEffect(() => {

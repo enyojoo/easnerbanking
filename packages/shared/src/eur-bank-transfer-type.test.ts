@@ -31,6 +31,13 @@ describe("eurBankPaymentMethodsForProvider", () => {
   it("returns empty for Yellowcard", () => {
     expect(eurBankPaymentMethodsForProvider("yellowcard")).toEqual([])
   })
+
+  it("returns SEPA Instant and SEPA for Bridge", () => {
+    expect(eurBankPaymentMethodsForProvider("bridge").map((m) => m.value)).toEqual([
+      "SEPA Instant",
+      "SEPA",
+    ])
+  })
 })
 
 describe("parseEurBankTransferType", () => {

@@ -60,6 +60,9 @@ export type BusinessProfile = {
   tier1RetryGuidance: string[]
   /** Internal reference on Owner's user row; not shown to customers in UI. */
   noahKybCustomerId: string | null
+  /** Additional EUR/USD bank KYB (hosted). */
+  bridgeKycStatus: string | null
+  bridgeKycComplete: boolean
   /** Whether the signed-in user may start or refresh hosted business verification. */
   canManageBusinessVerification: boolean
   /** Team role within the organization (Owner, Admin, Member, Viewer). */
@@ -113,6 +116,8 @@ const DEFAULT_PROFILE: BusinessProfile = {
   tier1CanResubmit: true,
   tier1RetryGuidance: [],
   noahKybCustomerId: null,
+  bridgeKycStatus: null,
+  bridgeKycComplete: false,
   canManageBusinessVerification: true,
   businessRole: "Owner",
   residenceCountry: null,
@@ -225,16 +230,27 @@ export function useBusinessProfile() {
     initialData: DEFAULT_PROFILE,
     ttlMs: PROFILE_CACHE_TTL_MS,
     persistMaxAgeMs: PROFILE_PERSIST_MAX_AGE_MS,
-    refetchInterval: (query) =>
-      verificationLiveRefetchIntervalMs(
+    refetchInterval: (query) => {
+      const grid = verificationLiveRefetchIntervalMs(
         query.state.data?.tier1VerificationStatus,
         tabVisible,
         realtimeHealth,
-      ),
+      )
+      const bridge = verificationLiveRefetchIntervalMs(
+        query.state.data?.bridgeKycStatus,
+        tabVisible,
+        realtimeHealth,
+      )
+      if (grid === false) return bridge
+      if (bridge === false) return grid
+      return Math.min(grid, bridge)
+    },
     refetchOnWindowFocus: (query) =>
-      verificationStatusNeedsLiveUpdates(query.state.data?.tier1VerificationStatus),
+      verificationStatusNeedsLiveUpdates(query.state.data?.tier1VerificationStatus) ||
+      verificationStatusNeedsLiveUpdates(query.state.data?.bridgeKycStatus),
     refetchOnMount: (query) =>
-      verificationStatusNeedsLiveUpdates(query.state.data?.tier1VerificationStatus)
+      (verificationStatusNeedsLiveUpdates(query.state.data?.tier1VerificationStatus) ||
+        verificationStatusNeedsLiveUpdates(query.state.data?.bridgeKycStatus))
         ? "always"
         : true,
     fetcher: async () => {

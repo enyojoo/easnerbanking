@@ -41,6 +41,14 @@ describe("usBankPaymentMethodsForProvider", () => {
   it("returns no methods for Yellowcard", () => {
     expect(usBankPaymentMethodsForProvider("yellowcard")).toEqual([])
   })
+
+  it("returns ACH Wire FedNow without RTP for Bridge", () => {
+    expect(usBankPaymentMethodsForProvider("bridge").map((m) => m.value)).toEqual([
+      "ACH",
+      "Wire",
+      "FEDNOW",
+    ])
+  })
 })
 
 describe("toGridPaymentRail", () => {
@@ -63,6 +71,12 @@ describe("coerceUsTransferTypeForProvider", () => {
     expect(coerceUsTransferTypeForProvider("RTP", "noah")).toBe("ACH")
     expect(coerceUsTransferTypeForProvider("FEDNOW", "noah")).toBe("ACH")
     expect(coerceUsTransferTypeForProvider("Wire", "noah")).toBe("Wire")
+  })
+
+  it("coerces RTP to ACH and keeps FedNow for Bridge", () => {
+    expect(coerceUsTransferTypeForProvider("RTP", "bridge")).toBe("ACH")
+    expect(coerceUsTransferTypeForProvider("FEDNOW", "bridge")).toBe("FEDNOW")
+    expect(coerceUsTransferTypeForProvider("Wire", "bridge")).toBe("Wire")
   })
 })
 

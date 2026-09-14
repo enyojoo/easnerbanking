@@ -162,31 +162,35 @@ describe("usPayInAllowsVa / Express", () => {
 })
 
 describe("applyUsPayInModeToMetadata", () => {
-  it("enables both VA providers and Stripe on VA & Express", () => {
+  it("sets Express without overwriting Office pay-in provider flags", () => {
     const next = applyUsPayInModeToMetadata(
-      { pay_in_provider: "grid", cross_border_enabled: true, cross_border_provider: "grid" },
+      {
+        pay_in_provider: "bridge",
+        bridge_receive_enabled: true,
+        cross_border_enabled: true,
+        cross_border_provider: "grid",
+      },
       "va_express",
     )
     expect(next.pay_in_mode).toBe("va_express")
-    expect(next.pay_in_provider).toBeUndefined()
-    expect(next.grid_receive_enabled).toBe(true)
-    expect(next.noah_receive_enabled).toBe(true)
+    expect(next.pay_in_provider).toBe("bridge")
+    expect(next.bridge_receive_enabled).toBe(true)
     expect(next.stripe_express_enabled).toBe(true)
     expect(next.cross_border_enabled).toBe(false)
     expect(next.cross_border_provider).toBeUndefined()
   })
 
-  it("VA only enables both VA flags and turns Express off", () => {
-    const next = applyUsPayInModeToMetadata({}, "va")
+  it("VA only turns Express off and keeps pay-in provider", () => {
+    const next = applyUsPayInModeToMetadata({ pay_in_provider: "grid", grid_receive_enabled: true }, "va")
     expect(next.pay_in_mode).toBe("va")
+    expect(next.pay_in_provider).toBe("grid")
     expect(next.grid_receive_enabled).toBe(true)
-    expect(next.noah_receive_enabled).toBe(true)
     expect(next.stripe_express_enabled).toBe(false)
   })
 
   it("does not enable Yellowcard for VA pay-in", () => {
     const next = applyUsPayInModeToMetadata({}, "va_express")
-    expect(next.yc_receive_enabled).toBe(false)
+    expect(next.yc_receive_enabled).toBeUndefined()
   })
 
   it("clears receive flags on Disable", () => {
@@ -197,6 +201,7 @@ describe("applyUsPayInModeToMetadata", () => {
     expect(next.pay_in_mode).toBeUndefined()
     expect(next.grid_receive_enabled).toBe(false)
     expect(next.noah_receive_enabled).toBe(false)
+    expect(next.bridge_receive_enabled).toBe(false)
     expect(next.stripe_express_enabled).toBe(false)
   })
 

@@ -9,6 +9,7 @@ import {
 import { buildPayoutQuote } from "@/lib/noah/payout-quote"
 import { confirmPayoutOrder } from "@/lib/payout/confirm-payout-order"
 import { executeGridBalancePayout } from "@/lib/grid/balance-payout-execute"
+import { executeBridgeBalancePayout } from "@/lib/bridge/balance-payout-execute"
 import { executeYcBalancePayout } from "@/lib/yellowcard/balance-payout-execute"
 import { buildWalletSendQuote } from "@/lib/wallet-send/wallet-send-quote"
 import { confirmWalletSendOrder } from "@/lib/wallet-send/confirm-wallet-send-order"
@@ -171,9 +172,11 @@ export async function lockSendDestination(
       channelId: quote.channelId,
       payoutProvider: quote.provider ?? "noah",
       lockId: quote.lockId ?? null,
-      formSessionId: quote.noah?.formSessionId ?? quote.grid?.sequenceId,
+      formSessionId: quote.noah?.formSessionId ?? quote.grid?.sequenceId ?? quote.settlement?.sessionId,
+      sourceBalanceCurrency: context.sourceCurrency,
       cryptoAuthorizedAmount:
-        quote.noah?.cryptoAuthorizedAmount ?? String(quote.grid?.cryptoAmount ?? ""),
+        quote.noah?.cryptoAuthorizedAmount ??
+        String(quote.grid?.cryptoAmount ?? quote.settlement?.cryptoAuthorizedAmount ?? ""),
       totalDebited: quote.totalDebited,
       marginAmount: quote.marginAmount,
       processingFee: quote.processingFee,
@@ -330,6 +333,48 @@ export async function executeSendDestination(
         state: "failed",
         code: "yellowcard_payout_failed",
         message: result.ok ? "Yellowcard payout failed." : result.error,
+      }
+    }
+    return { state: "submitted", transactionId: result.easnerTransactionId }
+  }
+
+  if (provider === "bridge") {
+    const result = await executeBridgeBalancePayout({
+      admin: context.admin,
+      userId: context.userId,
+      businessId: context.businessId,
+      recipientRow: input.destination,
+      recipientId: input.destination.id,
+      destinationRef: input.destination.destinationRef,
+      fiatAmount,
+      fiatCurrency,
+      countryCode,
+      reviewSnapshot: input.reviewSnapshot ?? undefined,
+      sendNote: input.note,
+      idempotencyKey: input.idempotencyKey,
+      lockId,
+      sourceBalanceCurrency: String(payload.sourceBalanceCurrency || context.sourceCurrency || "USD"),
+      bridge: {
+        customerId: payload.bridgeCustomerId as string | undefined,
+        externalAccountId: payload.bridgeExternalAccountId as string | undefined,
+        cryptoAmount: Number(payload.bridgeCryptoAmount ?? payload.customerPrincipal ?? 0),
+        fundingAddress: String(payload.bridgeFundingAddress || ""),
+        sequenceId: String(payload.formSessionId || ""),
+      },
+      pricing: {
+        totalDebited: Number(payload.totalDebited ?? 0),
+        customerPrincipal: Number(payload.customerPrincipal ?? payload.totalDebited ?? 0),
+        marginAmount: Number(payload.marginAmount ?? 0),
+        processingFee: Number(payload.processingFee ?? 0),
+        channelCost: Number(payload.channelCost ?? 0),
+        customerRate: payload.customerRate == null ? undefined : Number(payload.customerRate),
+      },
+    })
+    if (!result.ok || result.status === "failed") {
+      return {
+        state: "failed",
+        code: "bridge_payout_failed",
+        message: result.ok ? "Payout failed." : result.error,
       }
     }
     return { state: "submitted", transactionId: result.easnerTransactionId }

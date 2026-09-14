@@ -22,7 +22,7 @@ import {
   type YcPayInLimits,
 } from "./yc-pay-in-limits"
 
-export type PayInProviderId = "yellowcard" | "noah" | "grid"
+export type PayInProviderId = "yellowcard" | "noah" | "grid" | "bridge"
 
 function resolvePayInProviderFromCaps(input: {
   payoutProvider: PayInProviderId
@@ -80,7 +80,9 @@ export function resolvePayInProvider(input: {
   )
   const metadata = projected.metadata
   const explicit = String(metadata.pay_in_provider ?? "").trim().toLowerCase()
-  if (explicit === "yellowcard" || explicit === "noah" || explicit === "grid") return explicit
+  if (explicit === "yellowcard" || explicit === "noah" || explicit === "grid" || explicit === "bridge") {
+    return explicit
+  }
 
   const meta = metadata
 
@@ -88,6 +90,7 @@ export function resolvePayInProvider(input: {
   if (meta.noah_receive_enabled === true) return "noah"
   if (meta.yc_receive_enabled === true) return "yellowcard"
   if (meta.grid_receive_enabled === true) return "grid"
+  if (meta.bridge_receive_enabled === true) return "bridge"
 
   const routing = projected.provider_routing
   const payoutProvider = resolvePrimaryPayoutProvider(routing)
@@ -197,7 +200,7 @@ export function validateBalancePayoutAmountForProvider(
   const customerRate = input.customerRate ?? 0
 
   if (
-    (provider === "yellowcard" || provider === "grid") &&
+    (provider === "yellowcard" || provider === "grid" || provider === "bridge") &&
     source === "USD" &&
     input.ycLimits &&
     Number.isFinite(customerRate) &&
@@ -241,7 +244,8 @@ export function isPayInCorridorEnabled(
   return (
     meta.grid_receive_enabled === true ||
     meta.yc_receive_enabled === true ||
-    meta.noah_receive_enabled === true
+    meta.noah_receive_enabled === true ||
+    meta.bridge_receive_enabled === true
   )
 }
 

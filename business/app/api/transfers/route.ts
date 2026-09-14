@@ -40,7 +40,7 @@ type TransferRequest = {
   marginCaptureMode?: "surplus_send" | "split_debit" | "fee_wallet_deferred" | "fee_wallet_omnibus"
   customerRate?: number
   noahMid?: number
-  payoutProvider?: "noah" | "yellowcard" | "grid"
+  payoutProvider?: "noah" | "yellowcard" | "grid" | "bridge"
   ycSequenceId?: string
   ycSendId?: string
   ycWalletAddress?: string

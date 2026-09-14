@@ -5,7 +5,13 @@ import { qk } from '@easner/shared'
 import { useAuth } from '../contexts/AuthContext'
 import { useDocumentVisibility } from './useDocumentVisibility'
 import { noahService } from '../lib/noahService'
+import { bridgeService } from '../lib/bridgeService'
 import { isGlobalBankingVerified } from '../lib/compliance'
+import {
+  consumerBankKycStatus,
+  isBridgeConsumerCutoverPending,
+  shouldUseBridgeConsumerKyc,
+} from '../lib/bridgeConsumerKyc'
 import { needsNoahVirtualAccountProvision } from '../lib/noahAccountSync'
 import {
   readFiatProvisionResolved,
@@ -44,11 +50,19 @@ export function useConsumerKycNoahSync(): void {
     }
   }, [user?.id])
 
+  const usesBridge = shouldUseBridgeConsumerKyc(userProfile)
+  const bankApproved = usesBridge
+    ? consumerBankKycStatus(userProfile).toLowerCase() === 'approved'
+    : isGlobalBankingVerified(userProfile)
+  const cutoverPending = isBridgeConsumerCutoverPending(userProfile)
+
   const shouldSync =
     !!user?.id &&
     role !== 'business' &&
-    (!isGlobalBankingVerified(userProfile) ||
-      needsNoahVirtualAccountProvision(userProfile, { fiatProvisionResolved }))
+    (!bankApproved ||
+      cutoverPending ||
+      (usesBridge && bankApproved && !fiatProvisionResolved) ||
+      (!usesBridge && needsNoahVirtualAccountProvision(userProfile, { fiatProvisionResolved })))
 
   const runSync = useCallback(async () => {
     if (!shouldSync || !refreshUserProfile || !user?.id) return
@@ -58,6 +72,19 @@ export function useConsumerKycNoahSync(): void {
     lastAutoSyncMsRef.current = now
 
     try {
+      void bridgeService.ensureCutover().catch(() => undefined)
+      if (shouldUseBridgeConsumerKyc(userProfile)) {
+        const result = await bridgeService.syncStatus()
+        if (result.provisioned && user?.id) {
+          await writeFiatProvisionResolved(user.id)
+          setFiatProvisionResolved(true)
+          if (scope) {
+            void queryClient.invalidateQueries({ queryKey: qk.wallets.root(scope) })
+          }
+        }
+        await refreshUserProfile()
+        return
+      }
       const kycApproved =
         isGlobalBankingVerified(userProfile) ||
         String(userProfile?.noah_kyc_status ?? '').trim().toLowerCase() === 'approved'
@@ -77,7 +104,7 @@ export function useConsumerKycNoahSync(): void {
     } catch {
       // Non-blocking; Account Verification / webhooks can still update.
     }
-  }, [shouldSync, refreshUserProfile, user?.id, queryClient, scope])
+  }, [shouldSync, refreshUserProfile, user?.id, queryClient, scope, userProfile])
 
   useEffect(() => {
     void runSync()

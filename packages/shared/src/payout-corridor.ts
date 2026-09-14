@@ -6,7 +6,7 @@ import {
 import { isGridDigitalAssetJurisdiction } from "./jurisdiction-blocked-countries"
 import type { ProviderHealthStatus, ProviderRoutingEntry } from "./send-destinations"
 
-export type PayoutProviderId = "noah" | "yellowcard" | "grid"
+export type PayoutProviderId = "noah" | "yellowcard" | "grid" | "bridge"
 
 export function resolvePrimaryPayoutProvider(
   routing: ProviderRoutingEntry[] | null | undefined,
@@ -17,6 +17,7 @@ export function resolvePrimaryPayoutProvider(
     .toLowerCase()
   if (provider === "yellowcard") return "yellowcard"
   if (provider === "grid") return "grid"
+  if (provider === "bridge") return "bridge"
   return "noah"
 }
 
@@ -82,12 +83,16 @@ export type PayoutCorridorPayInMetadata = {
   yc_receive_enabled?: boolean
   grid_receive?: boolean
   grid_receive_enabled?: boolean
+  bridge_receive?: boolean
+  bridge_receive_enabled?: boolean
   noah_receive?: boolean
   noah_receive_enabled?: boolean
   yc_send?: boolean
   yc_send_enabled?: boolean
   grid_send?: boolean
   grid_send_enabled?: boolean
+  bridge_send?: boolean
+  bridge_send_enabled?: boolean
   noah_send_enabled?: boolean
 }
 
@@ -115,6 +120,10 @@ export type PayoutCorridorPublic = {
   yc_receive_available?: boolean
   /** Live or synced Grid local pay-in on this corridor rail. */
   grid_receive_available?: boolean
+  /** Office-enabled Bridge bank payout on this corridor rail. */
+  bridge_send_available?: boolean
+  /** Office-enabled Bridge virtual-account pay-in on this corridor rail. */
+  bridge_receive_available?: boolean
   provider_routing?: ProviderRoutingEntry[]
   provider_health?: Record<string, ProviderHealthStatus>
   /** Noah hints and/or nested `yellowcard` schema – see yc-recipient-schema. */
@@ -133,12 +142,16 @@ const PUBLIC_PAY_IN_METADATA_KEYS = [
   "yc_receive_enabled",
   "grid_receive",
   "grid_receive_enabled",
+  "bridge_receive",
+  "bridge_receive_enabled",
   "noah_receive",
   "noah_receive_enabled",
   "yc_send",
   "yc_send_enabled",
   "grid_send",
   "grid_send_enabled",
+  "bridge_send",
+  "bridge_send_enabled",
   "noah_send_enabled",
 ] as const
 
@@ -194,6 +207,14 @@ export function isGridBalancePayoutCorridor(
   surface: CorridorRoutingSurface = "business",
 ): boolean {
   return resolveOfficePayoutProvider(corridor ?? {}, surface) === "grid"
+}
+
+/** True when balance payout routes through Bridge + Turnkey settlement. */
+export function isBridgeBalancePayoutCorridor(
+  corridor: Pick<PayoutCorridorPublic, "provider_routing" | "metadata"> | null | undefined,
+  surface: CorridorRoutingSurface = "business",
+): boolean {
+  return resolveOfficePayoutProvider(corridor ?? {}, surface) === "bridge"
 }
 
 /** Primary Office provider for USD balance → local fiat payout on this corridor. */
@@ -265,6 +286,7 @@ export function isBalancePayoutCorridorExecutable(
         | "noah_sell_available"
         | "grid_send_available"
         | "yc_send_available"
+        | "bridge_send_available"
         | "provider_health"
       >
     | null
@@ -277,6 +299,12 @@ export function isBalancePayoutCorridorExecutable(
   if (primary === "grid") {
     if (corridor.provider_health?.grid === "unavailable") return false
     if (corridor.grid_send_available === false) return false
+    return true
+  }
+
+  if (primary === "bridge") {
+    if (corridor.provider_health?.bridge === "unavailable") return false
+    if (corridor.bridge_send_available === false) return false
     return true
   }
 

@@ -1,3 +1,4 @@
+import { settlementAssetForPayoutProvider } from "./bridge-corridors"
 import { parseCrossBorderProvider, type CrossBorderProviderId } from "./cross-border-routing"
 import type { PayoutProviderId } from "./payout-corridor"
 import type { ProviderRoutingEntry } from "./send-destinations"
@@ -26,7 +27,9 @@ export function parsePayoutProviderId(value: unknown): PayoutProviderId | null {
   const provider = String(value ?? "")
     .trim()
     .toLowerCase()
-  if (provider === "noah" || provider === "yellowcard" || provider === "grid") return provider
+  if (provider === "noah" || provider === "yellowcard" || provider === "grid" || provider === "bridge") {
+    return provider
+  }
   return null
 }
 
@@ -62,6 +65,7 @@ export function resolveLegacyOfficePayoutProvider(input: {
   if (!primary) return null
   const meta = asRecord(input.metadata)
   if (primary === "grid" && meta.grid_send_enabled !== true) return null
+  if (primary === "bridge" && meta.bridge_send_enabled !== true) return null
   if (primary === "yellowcard" && meta.yc_send_enabled !== true) return null
   if (primary === "noah" && meta.noah_send_enabled !== true) return null
   return primary
@@ -71,6 +75,7 @@ export function resolveLegacyOfficePayoutProvider(input: {
 export function resolveLegacyOfficePayInProvider(metadata: unknown): PayoutProviderId | null {
   const meta = asRecord(metadata)
   if (meta.grid_receive_enabled === true) return "grid"
+  if (meta.bridge_receive_enabled === true) return "bridge"
   if (meta.yc_receive_enabled === true) return "yellowcard"
   if (meta.noah_receive_enabled === true) return "noah"
   return null
@@ -169,8 +174,10 @@ function flattenLegacyFromSurface(
   next.noah_send_enabled = payout === "noah"
   next.yc_send_enabled = payout === "yellowcard"
   next.grid_send_enabled = payout === "grid"
+  next.bridge_send_enabled = payout === "bridge"
   if (payout === "yellowcard") next.yc_send = true
   if (payout === "grid") next.grid_send = true
+  if (payout === "bridge") next.bridge_send = true
 
   const payIn = overlay.pay_in
   if (payIn) next.pay_in_provider = payIn
@@ -178,9 +185,11 @@ function flattenLegacyFromSurface(
   next.noah_receive_enabled = payIn === "noah"
   next.yc_receive_enabled = payIn === "yellowcard"
   next.grid_receive_enabled = payIn === "grid"
+  next.bridge_receive_enabled = payIn === "bridge"
   if (payIn === "noah") next.noah_receive = true
   if (payIn === "yellowcard") next.yc_receive = true
   if (payIn === "grid") next.grid_receive = true
+  if (payIn === "bridge") next.bridge_receive = true
 
   if (overlay.cross_border?.enabled && overlay.cross_border.provider) {
     next.cross_border_enabled = true
@@ -205,6 +214,7 @@ export function patchCorridorSurfaceRouting(
   input: {
     provider_routing?: ProviderRoutingEntry[] | null | unknown
     metadata?: unknown
+    currency_code?: string | null
   },
   surface: CorridorRoutingSurface,
   patch: Partial<CorridorSurfaceRouting>,
@@ -225,7 +235,13 @@ export function patchCorridorSurfaceRouting(
   if (surface === "business") {
     metadata = { ...flattenLegacyFromSurface(metadata, next), surfaces }
     provider_routing = next.payout
-      ? [{ provider: next.payout, priority: 1, settlement_asset: "USDC" }]
+      ? [
+          {
+            provider: next.payout,
+            priority: 1,
+            settlement_asset: settlementAssetForPayoutProvider(next.payout, input.currency_code),
+          },
+        ]
       : []
   }
 
@@ -237,6 +253,7 @@ export function projectCorridorForSurface(
   input: {
     provider_routing?: ProviderRoutingEntry[] | null | unknown
     metadata?: unknown
+    currency_code?: string | null
   },
   surface: CorridorRoutingSurface,
 ): { provider_routing: ProviderRoutingEntry[]; metadata: Record<string, unknown> } {
@@ -245,7 +262,13 @@ export function projectCorridorForSurface(
   delete base.surfaces
   const metadata = flattenLegacyFromSurface(base, overlay)
   const provider_routing = overlay.payout
-    ? [{ provider: overlay.payout, priority: 1, settlement_asset: "USDC" }]
+    ? [
+        {
+          provider: overlay.payout,
+          priority: 1,
+          settlement_asset: settlementAssetForPayoutProvider(overlay.payout, input.currency_code),
+        },
+      ]
     : []
   return { provider_routing, metadata }
 }

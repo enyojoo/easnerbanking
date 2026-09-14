@@ -72,12 +72,14 @@ function publicCorridor(
     yc_send_available?: boolean
     grid_receive_available?: boolean
     yc_receive_available?: boolean
+    bridge_send_available?: boolean
+    bridge_receive_available?: boolean
     provider_health?: Record<string, ProviderHealthStatus>
   },
   surface: CorridorRoutingSurface,
 ): PayoutCorridorPublic {
   const projected = projectCorridorForSurface(
-    { provider_routing: row.provider_routing, metadata: row.metadata },
+    { provider_routing: row.provider_routing, metadata: row.metadata, currency_code: row.currency_code },
     surface,
   )
   return {
@@ -97,6 +99,10 @@ function publicCorridor(
       ? { grid_receive_available: row.grid_receive_available }
       : {}),
     ...(typeof row.yc_receive_available === "boolean" ? { yc_receive_available: row.yc_receive_available } : {}),
+    ...(typeof row.bridge_send_available === "boolean" ? { bridge_send_available: row.bridge_send_available } : {}),
+    ...(typeof row.bridge_receive_available === "boolean"
+      ? { bridge_receive_available: row.bridge_receive_available }
+      : {}),
     ...(row.provider_health ? { provider_health: row.provider_health } : {}),
     ...(row.fields_schema != null
       ? { fields_schema: row.fields_schema as PayoutFieldsSchemaHint }
@@ -186,13 +192,17 @@ export async function buildSendDestinationsCatalog(input?: {
         if (row.grid_send_available === false) provider_health.grid = "unavailable"
         else if (row.grid_send_available === true) provider_health.grid = "ok"
       }
+      if (routing.some((r) => r.provider === "bridge")) {
+        if (row.bridge_send_available === false) provider_health.bridge = "unavailable"
+        else provider_health.bridge = "ok"
+      }
       return { ...row, provider_health }
     })
   }
   if (executableOnly) {
     fiatRows = fiatRows.filter((row) => {
       const projected = projectCorridorForSurface(
-        { provider_routing: row.provider_routing, metadata: row.metadata },
+        { provider_routing: row.provider_routing, metadata: row.metadata, currency_code: row.currency_code },
         surface,
       )
       return isBalancePayoutCorridorExecutable({
@@ -201,6 +211,7 @@ export async function buildSendDestinationsCatalog(input?: {
         noah_sell_available: row.noah_sell_available,
         grid_send_available: row.grid_send_available,
         yc_send_available: row.yc_send_available,
+        bridge_send_available: row.bridge_send_available,
         provider_health: row.provider_health,
       })
     })

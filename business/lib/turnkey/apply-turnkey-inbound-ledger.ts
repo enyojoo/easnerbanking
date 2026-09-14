@@ -27,6 +27,7 @@ import { isGridVaSweepTreasurySender } from "@/lib/grid/grid-va-sweep-treasury"
 import { isGridVaTurnkeyDustAmount } from "@/lib/grid/grid-va-turnkey-dust"
 import { reconcileGridVaBankDepositCreditForSolanaTx } from "@/lib/grid/grid-bank-deposit-credit"
 import { suppressTurnkeyGridVaChainMirrorRow } from "@/lib/grid/grid-va-turnkey-mirror"
+import { findBridgeVaBankDepositChainSettlementForSuppression, findPendingBridgeVaBankDepositForInboundAmount } from "@/lib/bridge/va-chain-suppression"
 import {
   findGridVaTurnkeySweepForSolanaTx,
   settleGridVaTurnkeySweepForSolanaTx,
@@ -205,6 +206,23 @@ export async function applyTurnkeyInboundLedgerEvent(
         userId,
         businessId,
       })
+      const bridgeSuppressed = gridSuppressed
+        ? null
+        : await findBridgeVaBankDepositChainSettlementForSuppression(admin, {
+            txHash,
+            userId,
+            businessId,
+          })
+      const bridgePending =
+        !gridSuppressed && !bridgeSuppressed
+          ? await findPendingBridgeVaBankDepositForInboundAmount(admin, {
+              userId,
+              businessId,
+              amount: input.amount,
+              currency: input.currency,
+              txHash,
+            })
+          : null
       const gridTreasuryPending =
         !gridSuppressed && isGridVaSweepTreasurySender(input.counterpartyAddress)
           ? await findPendingGridVaBankDepositForInboundAmount(admin, {
@@ -215,7 +233,7 @@ export async function applyTurnkeyInboundLedgerEvent(
               txHash,
             })
           : null
-      if (gridSuppressed || gridTreasuryPending) {
+      if (gridSuppressed || gridTreasuryPending || bridgeSuppressed || bridgePending) {
         await reconcileGridVaBankDepositCreditForSolanaTx(admin, {
           solanaTxHash: txHash,
           userId,

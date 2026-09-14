@@ -67,6 +67,7 @@ export { mapOtpVerifyErrorMessage } from "./otp-verify-errors"
 export {
   resolvePersonalMobileAppOrigin,
   personalMobileDashboardUrl,
+  personalMobileVerificationUrl,
   personalMobileNotificationsUrl,
   personalMobileTransactionUrl,
 } from "./mobile-personal-links"
@@ -266,6 +267,7 @@ export {
   flagCodeFromCorridor,
   isYcBalancePayoutCorridor,
   isGridBalancePayoutCorridor,
+  isBridgeBalancePayoutCorridor,
   isNoahBalancePayoutCorridor,
   isBalancePayoutCorridorExecutable,
   pickPublicPayInMetadata,
@@ -290,6 +292,15 @@ export {
   type CorridorRoutingSurface,
   type CorridorSurfaceRouting,
 } from "./corridor-surface-routing"
+export {
+  bridgeOffersBankPayIn,
+  bridgeOffersBankPayout,
+  isBridgeEurSepaCorridor,
+  isBridgeUsdPayInCorridor,
+  isBridgeNewYorkResidence,
+  isBridgeOnboardableResidence,
+  settlementAssetForPayoutProvider,
+} from "./bridge-corridors"
 export {
   US_BANK_TRANSFER_SPEED_LABEL,
   US_BANK_TRANSFER_TYPES,

@@ -58,6 +58,7 @@ import { SectionCard } from '../../components/ui'
 import { formatSignedCurrency, getTransactionStatusDisplay } from '../../utils/formatters'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { isGlobalBankingVerified } from '../../lib/compliance'
+import { isBridgeConsumerCutoverPending } from '../../lib/bridgeConsumerKyc'
 import { noahService } from '../../lib/noahService'
 import { useTransactionsList, prefetchRecentTransactionDetailsInBackground, warmTransactionDetailForNavigation, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
 import { prefetchReceiveDepositQueries } from '../../hooks/queries/use-receive-deposit-queries'
@@ -356,8 +357,9 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   const shouldShowBalanceSkeleton = balanceVisible && !hasResolvedBalance
 
   /** Only after `userProfile` is loaded: `isGlobalBankingVerified(undefined)` is false and would flash the banner. */
+  const cutoverPending = isBridgeConsumerCutoverPending(userProfile)
   const showVerifyIdentityBanner =
-    !authLoading && userProfile != null && !isGlobalBankingVerified(userProfile)
+    !authLoading && userProfile != null && (!isGlobalBankingVerified(userProfile) || cutoverPending)
 
   // Get user's first name for greeting - use only the first word if multiple names exist
   const dashboardAvatarFullName =
@@ -641,14 +643,20 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                     haptics.tap()
                     navigation.navigate('AccountVerification' as never)
                   }} accessibilityRole="button"
-                  accessibilityLabel="Verify identity to unlock banking. Begin."
+                  accessibilityLabel={
+                    cutoverPending
+                      ? 'Update verification to keep receiving bank deposits. Continue.'
+                      : 'Verify identity to unlock banking. Begin.'
+                  }
                 >
                   <View style={styles.verifyAccountBannerTextWrap}>
                     <Text style={styles.verifyAccountBannerTitle} numberOfLines={2}>
-                      Verify identity to unlock banking
+                      {cutoverPending
+                        ? 'Update verification to keep receiving bank deposits'
+                        : 'Verify identity to unlock banking'}
                     </Text>
                   </View>
-                  <Text style={styles.verifyAccountBannerCta}>Begin</Text>
+                  <Text style={styles.verifyAccountBannerCta}>{cutoverPending ? 'Continue' : 'Begin'}</Text>
                 </Pressable>
               </View>
             ) : null}

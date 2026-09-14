@@ -129,6 +129,28 @@ describe("projectCorridorForSurface", () => {
     expect(personal.metadata.pay_in_provider).toBe("grid")
     expect(business.metadata.surfaces).toBeUndefined()
   })
+
+  it("uses EURC settlement for Bridge EUR payouts", () => {
+    const projected = projectCorridorForSurface(
+      {
+        currency_code: "EUR",
+        provider_routing: [],
+        metadata: {
+          surfaces: {
+            business: { payout: "bridge", pay_in: "bridge", cross_border: null },
+          },
+        },
+      },
+      "business",
+    )
+    expect(projected.provider_routing[0]).toEqual({
+      provider: "bridge",
+      priority: 1,
+      settlement_asset: "EURC",
+    })
+    expect(projected.metadata.bridge_send_enabled).toBe(true)
+    expect(projected.metadata.bridge_receive_enabled).toBe(true)
+  })
 })
 
 describe("mergeCorridorMetadataSurfaces", () => {

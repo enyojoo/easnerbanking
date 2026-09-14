@@ -2,6 +2,7 @@ import type { ProviderHealthStatus } from "@easner/shared"
 import { hasNoahSellChannelForRail } from "@/lib/noah/channel-availability"
 import { annotateCorridorsWithGridAvailability } from "@/lib/grid/corridor-availability"
 import { annotateCorridorsWithYcAvailability } from "@/lib/yellowcard/channel-availability"
+import { isBridgeConfigured } from "@/lib/bridge/config"
 
 type AdminCorridorRow = {
   id: string
@@ -33,6 +34,8 @@ export async function annotateAdminCorridorsWithProviderHealth<T extends AdminCo
       yc_receive_available?: boolean
       grid_send_available?: boolean
       grid_receive_available?: boolean
+      bridge_send_available?: boolean
+      bridge_receive_available?: boolean
       noah_sell_available?: boolean
     }
   >
@@ -46,6 +49,8 @@ export async function annotateAdminCorridorsWithProviderHealth<T extends AdminCo
       yc_receive_available?: boolean
       grid_send_available?: boolean
       grid_receive_available?: boolean
+      bridge_send_available?: boolean
+      bridge_receive_available?: boolean
       noah_sell_available?: boolean
     }
   > = []
@@ -60,6 +65,14 @@ export async function annotateAdminCorridorsWithProviderHealth<T extends AdminCo
       routing.some((r) => r.provider === "grid") ||
       row.grid_send_available === true ||
       row.grid_receive_available === true
+    const hasBridge = routing.some((r) => r.provider === "bridge")
+    const meta = (row.metadata && typeof row.metadata === "object" ? row.metadata : {}) as Record<
+      string,
+      unknown
+    >
+    const bridgeSend =
+      hasBridge || meta.bridge_send_enabled === true || meta.bridge_send === true
+    const bridgeReceive = meta.bridge_receive_enabled === true || meta.bridge_receive === true
 
     const provider_health: Record<string, ProviderHealthStatus> = {}
 
@@ -84,9 +97,15 @@ export async function annotateAdminCorridorsWithProviderHealth<T extends AdminCo
           : "unavailable"
     }
 
+    if (bridgeSend || bridgeReceive) {
+      provider_health.bridge = isBridgeConfigured() ? "ok" : "unavailable"
+    }
+
     out.push({
       ...row,
       ...(noahOk ? { noah_sell_available: true } : {}),
+      ...(bridgeSend ? { bridge_send_available: isBridgeConfigured() } : {}),
+      ...(bridgeReceive ? { bridge_receive_available: isBridgeConfigured() } : {}),
       ...(Object.keys(provider_health).length ? { provider_health } : {}),
     })
   }

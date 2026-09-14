@@ -34,6 +34,8 @@ type AnnotatedCorridorRow = PayoutCorridorRow & {
   noah_sell_available?: boolean
   grid_send_available?: boolean
   yc_send_available?: boolean
+  bridge_send_available?: boolean
+  bridge_receive_available?: boolean
 }
 
 function parseProviderRouting(raw: unknown): ProviderRoutingEntry[] {
@@ -56,7 +58,7 @@ function parseProviderRouting(raw: unknown): ProviderRoutingEntry[] {
 
 function publicCorridorPayload(row: AnnotatedCorridorRow, surface: "business" | "personal") {
   const projected = projectCorridorForSurface(
-    { provider_routing: row.provider_routing, metadata: row.metadata },
+    { provider_routing: row.provider_routing, metadata: row.metadata, currency_code: row.currency_code },
     surface,
   )
   return {
@@ -77,6 +79,12 @@ function publicCorridorPayload(row: AnnotatedCorridorRow, surface: "business" | 
       : {}),
     ...(typeof row.yc_send_available === "boolean"
       ? { yc_send_available: row.yc_send_available }
+      : {}),
+    ...(typeof row.bridge_send_available === "boolean"
+      ? { bridge_send_available: row.bridge_send_available }
+      : {}),
+    ...(typeof row.bridge_receive_available === "boolean"
+      ? { bridge_receive_available: row.bridge_receive_available }
       : {}),
     ...(row.metadata != null ? { metadata: pickPublicPayInMetadata(projected.metadata) } : {}),
   }
@@ -149,7 +157,7 @@ export async function GET(request: Request) {
   if (executableOnly) {
     rows = (rows as AnnotatedCorridorRow[]).filter((row) => {
       const projected = projectCorridorForSurface(
-        { provider_routing: row.provider_routing, metadata: row.metadata },
+        { provider_routing: row.provider_routing, metadata: row.metadata, currency_code: row.currency_code },
         surface,
       )
       return isBalancePayoutCorridorExecutable({
@@ -158,6 +166,7 @@ export async function GET(request: Request) {
         noah_sell_available: row.noah_sell_available,
         grid_send_available: row.grid_send_available,
         yc_send_available: row.yc_send_available,
+        bridge_send_available: row.bridge_send_available,
       })
     })
   }

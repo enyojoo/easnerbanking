@@ -97,18 +97,20 @@ export async function GET(request: Request) {
   ]
   const orgKybByBusinessId = new Map<
     string,
-    { name: string | null; grid_customer_id: string | null; verification_status: string | null }
+    { name: string | null; grid_customer_id: string | null; verification_status: string | null; bridge_customer_id: string | null; bridge_kyc_status: string | null }
   >()
   if (bizIds.length) {
     const { data: orgs } = await admin
       .from("businesses")
-      .select("id,name,grid_customer_id,verification_status")
+      .select("id,name,grid_customer_id,verification_status,bridge_customer_id,bridge_kyc_status")
       .in("id", bizIds)
     for (const o of orgs ?? []) {
       orgKybByBusinessId.set(String(o.id), {
         name: (o.name as string | null) ?? null,
         grid_customer_id: (o.grid_customer_id as string | null) ?? null,
         verification_status: (o.verification_status as string | null) ?? null,
+        bridge_customer_id: (o.bridge_customer_id as string | null) ?? null,
+        bridge_kyc_status: (o.bridge_kyc_status as string | null) ?? null,
       })
     }
   }
@@ -198,6 +200,8 @@ export async function GET(request: Request) {
             grid_customer_id: org.grid_customer_id,
             verification_status: org.verification_status,
             linkedBusinessName: org.name,
+            org_bridge_customer_id: org.bridge_customer_id,
+            org_bridge_kyc_status: org.bridge_kyc_status,
           }
         : {}),
     }

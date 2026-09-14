@@ -101,7 +101,7 @@ export type PayoutQuoteResult = {
   expiresAt: string
   executionModel: "turnkey_workflow"
   /** Payout rail provider when not Noah. */
-  provider?: "noah" | "yellowcard" | "grid"
+  provider?: "noah" | "yellowcard" | "grid" | "bridge"
   /** Yellowcard-specific locked send fields (balance_payout). */
   yc?: {
     sequenceId: string
@@ -920,6 +920,24 @@ export async function buildPayoutQuote(input: {
           businessId: input.businessId,
           recipientId: input.recipientId,
           row,
+          receiveFiatAmount: input.receiveFiatAmount,
+          sourceBalanceCurrency: input.sourceBalanceCurrency,
+          amountEntryMode: input.amountEntryMode,
+          sendBudget: input.sendBudget,
+          paymentPurpose: input.prepareOverrides?.paymentPurpose,
+        })
+      }
+      if (provider.id === "bridge") {
+        const { buildBridgeBalancePayoutPreview } = await import("@/lib/bridge/payout-quote")
+        if (!input.recipientId) {
+          throw new Error("recipientId is required for payout quote.")
+        }
+        return buildBridgeBalancePayoutPreview({
+          admin,
+          userId: input.userId,
+          businessId: input.businessId ?? null,
+          recipient: row,
+          recipientId: input.recipientId,
           receiveFiatAmount: input.receiveFiatAmount,
           sourceBalanceCurrency: input.sourceBalanceCurrency,
           amountEntryMode: input.amountEntryMode,

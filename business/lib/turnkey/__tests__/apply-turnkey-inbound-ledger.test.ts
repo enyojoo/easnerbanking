@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   enqueueSweep: vi.fn(),
   findGridVa: vi.fn(),
   findPendingGridVa: vi.fn(),
+  findBridgeVa: vi.fn(),
+  findPendingBridgeVa: vi.fn(),
   findPendingGridSweep: vi.fn(),
   reconcileGridVa: vi.fn(),
   settleGridSweep: vi.fn(),
@@ -77,6 +79,10 @@ vi.mock("@/lib/relay-deposit/relay-deposit-suppression", () => ({
 }))
 vi.mock("@/lib/relay-deposit/settle-relay-deposit", () => ({
   reconcileRelayDepositCreditForSolanaTx: mocks.reconcileRelay,
+}))
+vi.mock("@/lib/bridge/va-chain-suppression", () => ({
+  findBridgeVaBankDepositChainSettlementForSuppression: mocks.findBridgeVa,
+  findPendingBridgeVaBankDepositForInboundAmount: mocks.findPendingBridgeVa,
 }))
 vi.mock("@/lib/grid/grid-bank-deposit-chain-suppression", () => ({
   findGridVaBankDepositChainSettlementForSuppression: mocks.findGridVa,
@@ -165,6 +171,8 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     mocks.reconcileRelay.mockResolvedValue({ credited: false })
     mocks.findGridVa.mockResolvedValue(null)
     mocks.findPendingGridVa.mockResolvedValue(null)
+    mocks.findBridgeVa.mockResolvedValue(null)
+    mocks.findPendingBridgeVa.mockResolvedValue(null)
     mocks.findPendingGridSweep.mockResolvedValue(null)
     mocks.reconcileGridVa.mockResolvedValue({ credited: false })
     mocks.settleGridSweep.mockResolvedValue(undefined)
@@ -228,6 +236,7 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
       from: vi.fn(() => ({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({ data: null }),
         update: vi.fn().mockReturnThis(),
       })),
@@ -252,8 +261,10 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
       from: vi.fn(() => ({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({ data: { metadata: {} } }),
         update: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockReturnThis(),
       })),
     }
 
@@ -308,8 +319,10 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
       from: vi.fn(() => ({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({ data: { metadata: {} } }),
         update: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockReturnThis(),
       })),
     }
 
@@ -372,8 +385,10 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
       from: vi.fn(() => ({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({ data: { metadata: {} } }),
         update: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockReturnThis(),
       })),
     }
 
@@ -427,8 +442,10 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
       from: vi.fn(() => ({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({ data: { metadata: {} } }),
         update: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockReturnThis(),
       })),
     }
 
@@ -471,8 +488,10 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
       from: vi.fn(() => ({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({ data: { metadata: {} } }),
         update: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockReturnThis(),
       })),
     }
 

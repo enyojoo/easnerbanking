@@ -39,7 +39,7 @@ type VaJson = {
   bankName?: string
   bankAddress?: string
   accountHolderName?: string
-  provider?: "grid" | "noah"
+  provider?: "grid" | "noah" | "bridge"
 }
 
 const ACCOUNT_SCOPE_HEADERS = { "X-Easner-Account-Scope": "business" } as const

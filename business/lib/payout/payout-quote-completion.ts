@@ -8,6 +8,9 @@ export function isCompleteLockedPayoutQuote(quote: PayoutQuoteResult | null | un
     if (quote.provider === "grid") {
       return Boolean(quote.lockId && quote.grid?.quoteId)
     }
+    if (quote.provider === "bridge") {
+      return Boolean(quote.lockId)
+    }
     return Boolean(
       quote.lockId || quote.yc?.sendId || quote.settlement?.sessionId,
     )

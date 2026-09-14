@@ -120,6 +120,25 @@ describe("isCompleteLockedPayoutQuote", () => {
     ).toBe(true)
   })
 
+  it("accepts locked Bridge quotes with lockId only", () => {
+    expect(
+      isCompleteLockedPayoutQuote(
+        sampleQuote({
+          lockId: "lock-bridge-1",
+          provider: "bridge",
+        }),
+      ),
+    ).toBe(true)
+    expect(
+      isCompleteLockedPayoutQuote(
+        sampleQuote({
+          lockId: undefined,
+          provider: "bridge",
+        }),
+      ),
+    ).toBe(false)
+  })
+
   it("rejects expired quotes", () => {
     expect(
       isCompleteLockedPayoutQuote(

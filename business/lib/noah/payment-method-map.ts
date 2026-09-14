@@ -135,7 +135,7 @@ export type VirtualAccountDisplay = {
   accountHolderName?: string
   status: string
   /** Set when row comes from Grid (`virtual_accounts.provider = grid`). */
-  provider?: "grid" | "noah"
+  provider?: "grid" | "noah" | "bridge"
 }
 
 export type NoahBankRail = "ach" | "wire" | "swift" | "sepa" | "unknown"

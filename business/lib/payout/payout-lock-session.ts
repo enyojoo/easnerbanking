@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { computeFootedDisplayProcessingFee } from "@easner/shared"
 import type { PayoutQuoteResult } from "@/lib/noah/payout-quote"
 
-export type PayoutLockProvider = "noah" | "yellowcard" | "grid"
+export type PayoutLockProvider = "noah" | "yellowcard" | "grid" | "bridge"
 
 export type PayoutLockSessionRow = {
   id: string

@@ -46,4 +46,19 @@ describe("canonicalVerificationStatus", () => {
       }),
     ).toBe("approved")
   })
+
+  it("uses verification_status for Bridge individuals", () => {
+    expect(
+      canonicalVerificationStatus({
+        verification_provider: "bridge",
+        verification_status: "approved",
+      }),
+    ).toBe("approved")
+    expect(
+      canonicalVerificationStatus({
+        verification_provider: "bridge",
+        verification_status: "in_progress",
+      }),
+    ).toBe("in_progress")
+  })
 })

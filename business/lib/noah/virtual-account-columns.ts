@@ -28,7 +28,7 @@ export type VirtualAccountDbRow = {
 
 export type PickPreferredVirtualAccountOpts = {
   /** When set, prefer rows from this provider (e.g. business Grid KYB). */
-  preferProvider?: "grid" | "noah"
+  preferProvider?: "grid" | "noah" | "bridge"
 }
 
 export function parseRailFromPmId(pmId: string | null | undefined): NoahBankRail | null {

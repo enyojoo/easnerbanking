@@ -46,11 +46,14 @@ import {
   fontFamily,
 } from '../../theme'
 import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
+import { CONSUMER_VERIFICATION_PRODUCTS } from '../../lib/compliance-tier-ladder-copy'
+import { bridgeService } from '../../lib/bridgeService'
 import {
-  CONSUMER_VERIFICATION_PRODUCTS,
-  VERIFICATION_COMING_LATER_LABEL,
-  verificationTierLabel,
-} from '../../lib/compliance-tier-ladder-copy'
+  bridgeCutoverDeadlineLabel,
+  consumerBankKycStatus,
+  isBridgeConsumerCutoverPending,
+  shouldUseBridgeConsumerKyc,
+} from '../../lib/bridgeConsumerKyc'
 
 const GLOBAL_BANKING_PRODUCT = CONSUMER_VERIFICATION_PRODUCTS.find((p) => p.id === 'global_banking')!
 import {
@@ -172,12 +175,15 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
      */
     syncingRef.current = true
     try {
-      const kycRaw = userProfile?.noah_kyc_status
+      const usesBridge = shouldUseBridgeConsumerKyc(userProfile)
+      const kycRaw = usesBridge
+        ? consumerBankKycStatus(userProfile)
+        : userProfile?.noah_kyc_status
       const kycNorm = typeof kycRaw === 'string' ? kycRaw.trim().toLowerCase() : ''
-      /** Pull Noah until approved; after approval, keep syncing until fiat provisioning is resolved. */
+      /** Pull until approved; after approval, keep syncing until fiat provisioning is resolved. */
       const shouldSyncByStatus =
         kycNorm !== 'approved' ||
-        needsNoahVirtualAccountProvision(userProfile, { fiatProvisionResolved })
+        (!usesBridge && needsNoahVirtualAccountProvision(userProfile, { fiatProvisionResolved }))
 
       if (!shouldSyncByStatus) {
         if (!silent) {
@@ -238,7 +244,20 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
       }
 
       if (!silent) {
-        console.log('[SYNC-STATUS] Syncing Noah customer status...')
+        console.log('[SYNC-STATUS] Syncing verification status...')
+      }
+
+      if (usesBridge) {
+        const result = await bridgeService.syncStatus()
+        if (result.provisioned && userProfile.id) {
+          await writeFiatProvisionResolved(userProfile.id)
+          setFiatProvisionResolved(true)
+          if (scope) {
+            void queryClient.invalidateQueries({ queryKey: qk.wallets.root(scope) })
+          }
+        }
+        if (refreshUserProfile) await refreshUserProfile()
+        return
       }
 
       const needsAccounts = needsNoahVirtualAccountProvision(userProfile, { fiatProvisionResolved })
@@ -443,12 +462,12 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     }
   }, [userProfile?.id, userProfile?.noah_kyc_status, userProfile?.noah_kyc_rejection_reasons, userProfile?.role]) // Don't include syncNoahStatus to prevent loops
 
-  // Check if individual KYC (Noah) is approved
-  const noahKycApproved = isGlobalBankingVerified(userProfile)
-  const kycStatusLower = String(userProfile?.noah_kyc_status ?? '')
-    .trim()
-    .toLowerCase()
-  const noahKycInReview = kycStatusLower === 'under_review' || kycStatusLower === 'in_review'
+  // Check if individual bank KYC is approved (Bridge, or Noah for NY)
+  const bankKycStatus = consumerBankKycStatus(userProfile)
+  const cutoverPending = isBridgeConsumerCutoverPending(userProfile)
+  const noahKycApproved = bankKycStatus.toLowerCase() === 'approved' && !cutoverPending
+  const kycStatusLower = bankKycStatus.trim().toLowerCase()
+  const noahKycInReview = kycStatusLower === 'under_review' || kycStatusLower === 'in_review' || kycStatusLower === 'pending'
   const noahKycRejected = kycStatusLower === 'rejected'
   const rejectionReasons =
     userProfile?.noah_kyc_rejection_reasons ?? userProfile?.profile?.noah_kyc_rejection_reasons
@@ -469,12 +488,33 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
       )
       return
     }
-    
+
     setLoadingKyc(true)
-    
     try {
+      const fullName =
+        userProfile?.profile?.full_name?.trim() ||
+        [userProfile?.profile?.first_name, userProfile?.profile?.last_name].filter(Boolean).join(' ').trim() ||
+        email.split('@')[0] ||
+        'Account holder'
+
+      if (shouldUseBridgeConsumerKyc(userProfile, residenceOverride)) {
+        const response = await bridgeService.getKycLink(fullName, email)
+        const hosted = String(response.kyc_link || response.tos_link || '').trim()
+        if (!hosted) {
+          showError('Unable to load verification. Please try again or contact support.')
+          return
+        }
+        await externalLink.openLink(hosted, 'Verification for bank accounts')
+        try {
+          await syncNoahStatus(false, true)
+          if (refreshUserProfile) await refreshUserProfile()
+        } catch {
+          // Non-blocking
+        }
+        return
+      }
+
       // Always sync latest Noah customer status before opening KYC
-      // This ensures we have the current status and rejection_reasons even if database is outdated
       if (userProfile?.noah_customer_id) {
         try {
           console.log('[KYC-OPEN] Syncing Noah status before opening KYC...')
@@ -848,9 +888,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                     </View>
                     <View style={styles.cardRight}>
                       {getStatusBadge(
-                        userProfile?.noah_kyc_status ||
-                          userProfile?.profile?.noah_kyc_status ||
-                          'approved',
+                        bankKycStatus || 'approved',
                       )}
                     </View>
                   </View>
@@ -871,9 +909,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                     </View>
                     <View style={styles.cardRight}>
                       {getStatusBadge(
-                        userProfile?.noah_kyc_status ||
-                          userProfile?.profile?.noah_kyc_status ||
-                          'rejected',
+                        bankKycStatus || 'rejected',
                       )}
                     </View>
                   </View>
@@ -891,17 +927,16 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                         </Text>
                         <Text style={styles.cardDescription}>
                           {GLOBAL_BANKING_PRODUCT.description}
+                          {cutoverPending
+                            ? ` Finish the updated check by ${bridgeCutoverDeadlineLabel(userProfile) ?? 'the deadline in your email'} so new bank details stay available.`
+                            : ''}
                         </Text>
                       </View>
                       <View style={styles.cardRight}>
                         {loadingKyc ? (
                           <ActivityIndicator size="small" color={colors.primary.main} />
                         ) : (
-                          getStatusBadge(
-                            userProfile?.noah_kyc_status ||
-                              userProfile?.profile?.noah_kyc_status ||
-                              'not_started',
-                          )
+                          getStatusBadge(bankKycStatus || 'not_started')
                         )}
                       </View>
                     </View>
@@ -917,7 +952,11 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                         ]}
                         android_ripple={{ color: 'rgba(0, 122, 204, 0.12)', borderless: false }}
                       >
-                        <Text style={styles.startBadgeText}>Start</Text>
+                        <Text style={styles.startBadgeText}>
+                          {cutoverPending || kycStatusLower === 'in_progress' || kycStatusLower === 'pending'
+                            ? 'Continue'
+                            : 'Start'}
+                        </Text>
                         <ChevronRight size={12} color={colors.neutral.white} strokeWidth={2} />
                       </Pressable>
                     ) : null}

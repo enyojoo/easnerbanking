@@ -94,7 +94,7 @@ type FundBalanceQuote = {
 
 type YcRateRow = YcRateClientRow
 
-function fundBalanceApiBase(provider: "yellowcard" | "grid" | "noah"): string {
+function fundBalanceApiBase(provider: "yellowcard" | "grid" | "noah" | "bridge"): string {
   return provider === "grid" ? "/api/grid/fund-balance" : "/api/yellowcard/fund-balance"
 }
 
@@ -151,7 +151,7 @@ export function LocalDepositWizard({
     return rail === "mobile_money" && !cached?.length
   })
   const [isContinueLoading, setIsContinueLoading] = useState(false)
-  const [payInProvider, setPayInProvider] = useState<"yellowcard" | "grid" | "noah">("yellowcard")
+  const [payInProvider, setPayInProvider] = useState<"yellowcard" | "grid" | "noah" | "bridge">("yellowcard")
   const [payInCorridorSchema, setPayInCorridorSchema] = useState<unknown>(null)
 
   const isMomo = rail === "mobile_money"

@@ -17,6 +17,11 @@ import { ensureCurrencyUsable } from "@/lib/accounts/currency-controls"
 import { businessUsesGridVerification } from "@/lib/compliance/business-tier1"
 import { refreshGridBusinessReceiveRails } from "@/lib/grid/provision-after-approval"
 import { isGridConfigured } from "@/lib/grid/config"
+import { isBridgeConfigured } from "@/lib/bridge/config"
+import { provisionBridgeVirtualAccounts } from "@/lib/bridge/provision-after-approval"
+import { shouldHideNoahConsumerVirtualAccounts } from "@/lib/bridge/cutover"
+import { resolveVirtualAccountPreferProvider } from "@/lib/bridge/va-prefer-provider"
+import { isBridgeOnboardableResidence } from "@/lib/bridge/geo"
 import { requireAccountAllowsForUser } from "@/lib/account-restriction"
 
 type VaCurrency = "usd" | "eur" | "gbp"
@@ -33,8 +38,8 @@ type VaAccountJson = {
   bankAddress?: string
   accountHolderName?: string
   status?: string
-  source?: "db" | "noah" | "grid"
-  provider?: "grid" | "noah"
+  source?: "db" | "noah" | "grid" | "bridge"
+  provider?: "grid" | "noah" | "bridge"
 }
 
 const VA_CURRENCIES = new Set<VaCurrency>(["usd", "eur", "gbp"])
@@ -87,7 +92,7 @@ function accountJsonFromDb(
     bankAddress: cached.bankAddress,
     accountHolderName: cached.accountHolderName,
     status: cached.status,
-    source: cached.provider === "grid" ? "grid" : "db",
+    source: cached.provider === "grid" ? "grid" : cached.provider === "bridge" ? "bridge" : "db",
     provider: cached.provider,
   }
 }
@@ -123,6 +128,92 @@ async function resolveAccountsForCurrencies(input: {
   }
 
   if (!missing.length) return accounts
+
+  if (isBridgeConfigured()) {
+    let customerId = ""
+    if (subjectBusinessId) {
+      const { data } = await admin
+        .from("businesses")
+        .select("bridge_customer_id")
+        .eq("id", subjectBusinessId)
+        .maybeSingle()
+      customerId = String(data?.bridge_customer_id ?? "").trim()
+    } else {
+      const { data } = await admin
+        .from("users")
+        .select("bridge_customer_id")
+        .eq("id", subjectUserId)
+        .maybeSingle()
+      customerId = String(data?.bridge_customer_id ?? "").trim()
+    }
+    if (customerId) {
+      await provisionBridgeVirtualAccounts({
+        admin,
+        userId: subjectUserId,
+        businessId: subjectBusinessId,
+        customerId,
+      }).catch(() => undefined)
+      const stillMissing: VaCurrency[] = []
+      for (const currency of missing) {
+        const cached = await getVirtualAccountDisplayFromDb(admin, {
+          currency,
+          userId: subjectUserId,
+          businessId: subjectBusinessId,
+        })
+        if (cached?.hasAccount) {
+          accounts[currency.toUpperCase()] = {
+            ...accountJsonFromDb(currency, cached),
+            source: cached.provider === "bridge" ? "bridge" : accountJsonFromDb(currency, cached).source,
+          }
+        } else {
+          stillMissing.push(currency)
+        }
+      }
+      missing.length = 0
+      missing.push(...stillMissing)
+      if (!missing.length) return accounts
+    }
+  }
+
+  const stillForNoah: VaCurrency[] = []
+  if (!subjectBusinessId) {
+    const { data: userRow } = await admin
+      .from("users")
+      .select(
+        "verification_provider,verification_status,bridge_kyc_status,bridge_cutover_deadline_at,kyc_address_country,residence_country,kyc_address_state",
+      )
+      .eq("id", subjectUserId)
+      .maybeSingle()
+    const skipNoahPersonal =
+      shouldHideNoahConsumerVirtualAccounts(userRow) ||
+      isBridgeOnboardableResidence({
+        countryCode: String(userRow?.kyc_address_country ?? userRow?.residence_country ?? ""),
+        state: String(userRow?.kyc_address_state ?? ""),
+      })
+    for (const currency of missing) {
+      if (skipNoahPersonal) {
+        accounts[currency.toUpperCase()] = accounts[currency.toUpperCase()] ?? { hasAccount: false, currency }
+      } else {
+        stillForNoah.push(currency)
+      }
+    }
+  } else {
+    for (const currency of missing) {
+      const prefer = await resolveVirtualAccountPreferProvider(admin, {
+        userId: subjectUserId,
+        businessId: subjectBusinessId,
+        currency,
+      })
+      if (currency === "eur" || prefer === "bridge") {
+        accounts[currency.toUpperCase()] = accounts[currency.toUpperCase()] ?? { hasAccount: false, currency }
+      } else {
+        stillForNoah.push(currency)
+      }
+    }
+  }
+  if (!stillForNoah.length) return accounts
+  missing.length = 0
+  missing.push(...stillForNoah)
 
   const approved = await isNoahVerificationApproved(admin, {
     subjectUserId,
@@ -233,7 +324,7 @@ export async function GET(request: Request) {
     )
   }
 
-  if (!gridBusinessSoR) {
+  if (!gridBusinessSoR && !isBridgeConfigured()) {
     const mis = requireNoahEnv()
     if (mis) return mis
   }

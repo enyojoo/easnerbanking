@@ -14,7 +14,7 @@ export type ThroughLocalCurrencyEligibility = {
     reason?: string
   }
   balancePayout: {
-    provider: "noah" | "yellowcard" | "grid" | null
+    provider: "noah" | "yellowcard" | "grid" | "bridge" | null
     available: boolean
   }
 }

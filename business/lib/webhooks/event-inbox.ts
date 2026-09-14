@@ -12,7 +12,7 @@ function hashPayload(payload: unknown): string {
 export async function recordEventInbox(
   admin: SupabaseClient,
   params: {
-    provider: "noah" | "turnkey" | "yellowcard" | "grid" | "stripe" | "relay" | "other"
+    provider: "noah" | "turnkey" | "yellowcard" | "grid" | "bridge" | "stripe" | "relay" | "other"
     eventId: string
     eventType?: string
     payload: unknown

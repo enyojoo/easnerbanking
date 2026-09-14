@@ -70,7 +70,7 @@ export interface SendFlowState {
     /** Ticket-sized Noah mid used for pricing at quote time. */
     quoteNoahMid?: number
     /** Payout rail when corridor routes to Yellowcard or Grid. */
-    provider?: "noah" | "yellowcard" | "grid"
+    provider?: "noah" | "yellowcard" | "grid" | "bridge"
     ycSequenceId?: string
     ycSendId?: string
     ycWalletAddress?: string

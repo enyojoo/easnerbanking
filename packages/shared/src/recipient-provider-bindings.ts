@@ -12,7 +12,7 @@ import {
   type YcCorridorSchemaHint,
 } from "./yc-recipient-schema"
 
-export type PayoutBindingProviderId = "noah" | "yellowcard" | "grid"
+export type PayoutBindingProviderId = "noah" | "yellowcard" | "grid" | "bridge"
 
 export type RecipientProviderBinding = {
   bankName?: string
@@ -23,6 +23,7 @@ export type RecipientProviderBindings = {
   yellowcard?: RecipientProviderBinding
   grid?: RecipientProviderBinding
   noah?: RecipientProviderBinding
+  bridge?: RecipientProviderBinding
 }
 
 export const RECIPIENT_PROVIDER_BINDINGS_KEY = "provider_bindings"

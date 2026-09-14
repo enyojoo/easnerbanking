@@ -47,7 +47,7 @@ export async function GET(request: Request) {
   const countryCode = resolveRecipientPayoutCountry(recipient as never)
   const sendRail = resolveRecipientYcSendRail(recipient)
 
-  let balanceProvider: "noah" | "yellowcard" | "grid" | null = null
+  let balanceProvider: "noah" | "yellowcard" | "grid" | "bridge" | null = null
   let balanceAvailable = false
   if (countryCode && receiveCurrency) {
     try {

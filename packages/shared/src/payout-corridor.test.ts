@@ -78,6 +78,24 @@ describe("isBalancePayoutCorridorExecutable", () => {
         { provider: "grid", priority: 1 },
       ]),
     ).toBe("grid")
+    expect(resolvePrimaryPayoutProvider([{ provider: "bridge", priority: 1 }])).toBe("bridge")
+  })
+
+  it("treats Bridge like Grid for execute unless marked unavailable", () => {
+    expect(
+      isBalancePayoutCorridorExecutable({
+        provider_routing: [{ provider: "bridge", priority: 1 }],
+        metadata: { bridge_send_enabled: true },
+        bridge_send_available: true,
+      }),
+    ).toBe(true)
+    expect(
+      isBalancePayoutCorridorExecutable({
+        provider_routing: [{ provider: "bridge", priority: 1 }],
+        metadata: { bridge_send_enabled: true },
+        bridge_send_available: false,
+      }),
+    ).toBe(false)
   })
 })
 

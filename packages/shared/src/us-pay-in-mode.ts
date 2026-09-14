@@ -46,8 +46,11 @@ function metadataRecord(metadata: unknown): Record<string, unknown> {
 export function usPayInLegacyEnabled(metadata: unknown): boolean {
   const meta = metadataRecord(metadata)
   const provider = String(meta.pay_in_provider ?? "").trim().toLowerCase()
-  if (provider === "noah" || provider === "grid" || provider === "yellowcard") return true
+  if (provider === "noah" || provider === "grid" || provider === "yellowcard" || provider === "bridge") {
+    return true
+  }
   if (meta.grid_receive_enabled === true) return true
+  if (meta.bridge_receive_enabled === true) return true
   if (meta.noah_receive_enabled === true) return true
   if (meta.yc_receive_enabled === true) return true
   if (meta.stripe_express_enabled === true) return true
@@ -91,21 +94,17 @@ export function applyUsPayInModeToMetadata(
   if (opts?.clearCrossBorder !== false) {
     clearUsCrossBorderMetadata(next)
   }
-  delete next.pay_in_provider
   if (mode === "disabled") {
     delete next.pay_in_mode
+    delete next.pay_in_provider
     next.grid_receive_enabled = false
+    next.bridge_receive_enabled = false
     next.noah_receive_enabled = false
     next.yc_receive_enabled = false
     next.stripe_express_enabled = false
     return next
   }
   next.pay_in_mode = mode
-  next.grid_receive = true
-  next.grid_receive_enabled = true
-  next.noah_receive = true
-  next.noah_receive_enabled = true
-  next.yc_receive_enabled = false
   next.stripe_express_enabled = mode === "va_express"
   return next
 }

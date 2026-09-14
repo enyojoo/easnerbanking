@@ -247,7 +247,7 @@ async function getBusinessProfileResponse(request: Request) {
       admin
         .from("businesses")
         .select(
-          "verification_status,verification_provider,verification_rejection_reasons,grid_customer_id,kyb_verified_at",
+          "verification_status,verification_provider,verification_rejection_reasons,grid_customer_id,kyb_verified_at,bridge_customer_id,bridge_kyc_status",
         )
         .eq("id", orgId)
         .maybeSingle(),
@@ -347,6 +347,8 @@ async function getBusinessProfileResponse(request: Request) {
       tier1CanResubmit,
       tier1RetryGuidance,
       noahKybCustomerId,
+      bridgeKycStatus: String(orgKyb?.bridge_kyc_status ?? "").trim() || null,
+      bridgeKycComplete: String(orgKyb?.bridge_kyc_status ?? "").toLowerCase() === "approved",
       canManageBusinessVerification,
       businessRole,
       residenceCountry: actorResidenceCountry,

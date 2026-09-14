@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/tooltip"
 import {
   BUSINESS_VERIFICATION_PRODUCTS,
+  USD_VERIFICATION_REQUIRED_COPY,
   VERIFICATION_COMING_LATER_LABEL,
   verificationTierLabel,
 } from "@/lib/compliance-tier-ladder-copy"
@@ -38,11 +39,13 @@ import {
   accountRestrictionVerificationBlockedCopy,
 } from "@easner/shared"
 import {
+  SETTINGS_BRIDGE_FLOW_PARAM,
   SETTINGS_CONNECT_FLOW_PARAM,
   SETTINGS_EXPRESS_FLOW_PARAM,
   SETTINGS_VERIFICATION_FLOW_PARAM,
   type SettingsVerificationEmbeddedFlow,
 } from "@/lib/compliance/cutover-comms"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 import { ExpressDepositsSetup } from "@/components/compliance/express-deposits-setup"
 import { EXPRESS_DEPOSITS_COPY, expressDepositsVerificationCta } from "@easner/shared"
 import { peekBusinessExpressOnrampStatus } from "@/lib/express-onramp-status-cache"
@@ -76,6 +79,7 @@ export function BusinessVerificationSection({
   const flowFromUrl = searchParams.get("flow") === SETTINGS_VERIFICATION_FLOW_PARAM
   const connectFromUrl = searchParams.get("flow") === SETTINGS_CONNECT_FLOW_PARAM
   const expressFromUrl = searchParams.get("flow") === SETTINGS_EXPRESS_FLOW_PARAM
+  const bridgeFromUrl = searchParams.get("flow") === SETTINGS_BRIDGE_FLOW_PARAM
   const {
     tier1Complete,
     tier1VerificationStatus,
@@ -88,6 +92,8 @@ export function BusinessVerificationSection({
     hasData,
     businessId,
     noahKybCustomerId,
+    bridgeKycStatus,
+    bridgeKycComplete,
     onlinePaymentsEnabled,
     name,
     registrationNumber,
@@ -143,9 +149,10 @@ export function BusinessVerificationSection({
   const hostedFlowActive = hostedOpen || flowFromUrl || embeddedFlow === "hosted"
   const connectFlowActive = embeddedFlow === "connect" || connectFromUrl
   const expressFlowActive = embeddedFlow === "express" || expressFromUrl
+  const bridgeFlowActive = embeddedFlow === "bridge" || bridgeFromUrl
 
   // SumSub runs in a cross-origin iframe; parent window does not receive pointer/keyboard events.
-  useSuspendIdleLock(hostedFlowActive || connectFlowActive || expressFlowActive)
+  useSuspendIdleLock(hostedFlowActive || connectFlowActive || expressFlowActive || bridgeFlowActive)
 
   const pushVerificationFlowUrl = useCallback(() => {
     onFlowOpenChange?.(true, "hosted")
@@ -213,6 +220,39 @@ export function BusinessVerificationSection({
     setHostedOpen(true)
     pushVerificationFlowUrl()
   }, [accountRestricted, businessId, kybPacket, kybPacketQuery, pushVerificationFlowUrl])
+
+  const openBridgeVerification = useCallback(async () => {
+    if (accountRestricted) return
+    if (!tier1Complete) {
+      setInfo(USD_VERIFICATION_REQUIRED_COPY)
+      return
+    }
+    setOpening(true)
+    setError(null)
+    try {
+      const res = await fetchWithSession("/api/bridge/kyc-links", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Easner-Account-Scope": "business",
+        },
+        body: JSON.stringify({ type: "business" }),
+      })
+      const json = (await res.json().catch(() => ({}))) as {
+        kyc_link?: string | null
+        tos_link?: string | null
+        error?: string
+      }
+      if (!res.ok) throw new Error(json.error || "Could not start verification")
+      const hosted = String(json.kyc_link || json.tos_link || "").trim()
+      if (!hosted) throw new Error("Could not start verification")
+      window.location.assign(hosted)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start verification")
+    } finally {
+      setOpening(false)
+    }
+  }, [accountRestricted, tier1Complete])
 
   useEffect(() => {
     if (!accountRestricted) return
@@ -393,7 +433,16 @@ export function BusinessVerificationSection({
               >
                 {BUSINESS_VERIFICATION_PRODUCTS.map((t) => {
                   const isGlobalBanking = t.id === "global_banking"
+                  const isEurAccounts = t.id === "eur"
                   const isOnlinePayments = t.id === "online_payments"
+                  const eurStatus = bridgeKycComplete
+                    ? "approved"
+                    : String(bridgeKycStatus || "not_started")
+                  const showEurCta =
+                    isEurAccounts &&
+                    canManageBusinessVerification &&
+                    !bridgeKycComplete &&
+                    !accountRestricted
 
                   const comingLaterCard = (
                     <Card
@@ -419,6 +468,13 @@ export function BusinessVerificationSection({
                               tier1VerificationStatus={tier1VerificationStatus}
                               accountRestricted={accountRestricted}
                             />
+                          ) : isEurAccounts ? (
+                            <Tier1VerificationBadge
+                              compact
+                              tier1Complete={bridgeKycComplete}
+                              tier1VerificationStatus={eurStatus}
+                              accountRestricted={accountRestricted}
+                            />
                           ) : (
                             <Badge
                               variant="secondary"
@@ -429,7 +485,7 @@ export function BusinessVerificationSection({
                           )}
                         </div>
                         <CardDescription className="text-sm">{t.description}</CardDescription>
-                        {t.footnote ? (
+                        {t.footnote && !(isEurAccounts && tier1Complete) ? (
                           <p className="text-xs text-muted-foreground pt-1">{t.footnote}</p>
                         ) : null}
                       </CardHeader>
@@ -488,6 +544,39 @@ export function BusinessVerificationSection({
                               </div>
                             </>
                           )}
+                        </CardContent>
+                      ) : isEurAccounts ? (
+                        <CardContent className="mt-auto space-y-3 px-4 pt-0 md:px-4">
+                          {showEurCta ? (
+                            <>
+                              {!tier1Complete ? (
+                                <p className="text-xs text-muted-foreground">{t.footnote}</p>
+                              ) : null}
+                              <div className="flex flex-wrap gap-2">
+                                <TooltipProvider delayDuration={200}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="inline-flex">
+                                        <Button
+                                          size="sm"
+                                          disabled={!tier1Complete || opening || !businessId}
+                                          onClick={() => void openBridgeVerification()}
+                                        >
+                                          {opening ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+                                          {eurStatus === "in_progress" || eurStatus === "pending"
+                                            ? "Continue"
+                                            : "Start"}
+                                        </Button>
+                                      </span>
+                                    </TooltipTrigger>
+                                    {!tier1Complete ? (
+                                      <TooltipContent>{USD_VERIFICATION_REQUIRED_COPY}</TooltipContent>
+                                    ) : null}
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
+                            </>
+                          ) : null}
                         </CardContent>
                       ) : null}
                     </Card>

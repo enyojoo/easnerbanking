@@ -73,12 +73,17 @@ function userDisplayName(user: Pick<UserData, "id" | "email" | "full_name">) {
   return `${user.id.slice(0, 8)}…`
 }
 
-/** Raw Noah status string for table/overview: KYB when user is in a business context, else consumer KYC. */
+/** Raw status for table/overview: Grid KYB for business, Bridge then Noah for consumers. */
 function resolveOverviewVerificationStatus(user: UserData): string {
   const role = String(user.role || "").toLowerCase()
   const isBizContext = role === "business" || Boolean(user.easner_business_id)
   if (isBizContext && user.verification_status) {
     return String(user.verification_status)
+  }
+  const bridge = String(user.bridge_kyc_status || "").trim()
+  if (bridge) return bridge
+  if (String(user.verification_provider || "").toLowerCase() === "bridge") {
+    return String(user.verification_status || "not_started")
   }
   return String(user.noah_kyc_status || user.noahKycStatus || "not_started")
 }
@@ -135,7 +140,14 @@ function IdentityVerificationStatusBadge({
   if (user.accountRestrictionPhase && !showBusinessContext) {
     return <AccountRestrictionBadge user={user} />
   }
-  return <NoahVerificationBadge rawStatus={user.noah_kyc_status || "not_started"} />
+  const bridge = String(user.bridge_kyc_status || "").trim()
+  const provider = String(user.verification_provider || "").toLowerCase()
+  const raw =
+    bridge ||
+    (provider === "bridge" ? String(user.verification_status || "not_started") : "") ||
+    user.noah_kyc_status ||
+    "not_started"
+  return <NoahVerificationBadge rawStatus={raw} />
 }
 
 function UserOverviewStatusBadge({ user }: { user: UserData }) {
@@ -355,6 +367,7 @@ export default function AdminUsersPage() {
         "Email confirmed",
         "Identity verification (KYC)",
         "Business verification (KYB)",
+        "Bridge KYC/KYB",
         "Created",
       ].join(","),
       ...filteredUsers.map((u: UserData) =>
@@ -367,6 +380,7 @@ export default function AdminUsersPage() {
           u.email_confirmed_at ? "yes" : "no",
           u.noah_kyc_status || "",
           u.verification_status || "",
+          u.org_bridge_kyc_status || u.bridge_kyc_status || "",
           formatDate(u.created_at),
         ].join(","),
       ),
@@ -762,13 +776,39 @@ export default function AdminUsersPage() {
                                           </div>
                                         ) : null}
                                         {ver.showIdentity ? (
-                                          <div className="flex justify-between gap-4 items-center">
-                                            <span className="text-gray-600">Identity verification</span>
-                                            <IdentityVerificationStatusBadge
-                                              user={selectedUser}
-                                              showBusinessContext={ver.showBusiness}
-                                            />
-                                          </div>
+                                          <>
+                                            <div className="flex justify-between gap-4 items-center">
+                                              <span className="text-gray-600">Identity verification</span>
+                                              <IdentityVerificationStatusBadge
+                                                user={selectedUser}
+                                                showBusinessContext={ver.showBusiness}
+                                              />
+                                            </div>
+                                            {selectedUser.bridge_customer_id || selectedUser.bridge_kyc_status ? (
+                                              <>
+                                                <div className="flex justify-between gap-4 items-center">
+                                                  <span className="text-gray-600">Bridge KYC</span>
+                                                  <NoahVerificationBadge
+                                                    rawStatus={selectedUser.bridge_kyc_status || "not_started"}
+                                                  />
+                                                </div>
+                                                <div className="flex justify-between gap-4">
+                                                  <span className="text-gray-600">Bridge customer ID</span>
+                                                  <span className="min-w-0 break-all font-mono text-xs text-right">
+                                                    {selectedUser.bridge_customer_id || "–"}
+                                                  </span>
+                                                </div>
+                                              </>
+                                            ) : null}
+                                            {selectedUser.noah_customer_id ? (
+                                              <div className="flex justify-between gap-4">
+                                                <span className="text-gray-600">Noah customer ID</span>
+                                                <span className="min-w-0 break-all font-mono text-xs text-right">
+                                                  {selectedUser.noah_customer_id}
+                                                </span>
+                                              </div>
+                                            ) : null}
+                                          </>
                                         ) : null}
                                       </div>
                                       <div className="space-y-2 text-sm">
@@ -785,13 +825,41 @@ export default function AdminUsersPage() {
                                           {getEasnerRoleBadge(selectedUser.role)}
                                         </div>
                                         {ver.showBusiness ? (
-                                          <div className="flex justify-between gap-4 items-center">
-                                            <span className="text-gray-600">Business verification</span>
-                                            <span className="inline-flex flex-wrap items-center justify-end gap-1">
-                                              <BusinessVerificationStatusBadge user={selectedUser} />
-                                              <VelocityLimitBadge user={selectedUser} />
-                                            </span>
-                                          </div>
+                                          <>
+                                            <div className="flex justify-between gap-4 items-center">
+                                              <span className="text-gray-600">Business verification</span>
+                                              <span className="inline-flex flex-wrap items-center justify-end gap-1">
+                                                <BusinessVerificationStatusBadge user={selectedUser} />
+                                                <VelocityLimitBadge user={selectedUser} />
+                                              </span>
+                                            </div>
+                                            {selectedUser.grid_customer_id ? (
+                                              <div className="flex justify-between gap-4">
+                                                <span className="text-gray-600">Grid customer ID</span>
+                                                <span className="min-w-0 break-all font-mono text-xs text-right">
+                                                  {selectedUser.grid_customer_id}
+                                                </span>
+                                              </div>
+                                            ) : null}
+                                            <div className="flex justify-between gap-4 items-center">
+                                              <span className="text-gray-600">Bridge KYB</span>
+                                              <NoahVerificationBadge
+                                                rawStatus={
+                                                  selectedUser.org_bridge_kyc_status ||
+                                                  selectedUser.bridge_kyc_status ||
+                                                  "not_started"
+                                                }
+                                              />
+                                            </div>
+                                            <div className="flex justify-between gap-4">
+                                              <span className="text-gray-600">Bridge customer ID</span>
+                                              <span className="min-w-0 break-all font-mono text-xs text-right">
+                                                {selectedUser.org_bridge_customer_id ||
+                                                  selectedUser.bridge_customer_id ||
+                                                  "–"}
+                                              </span>
+                                            </div>
+                                          </>
                                         ) : null}
                                       </div>
                                     </div>

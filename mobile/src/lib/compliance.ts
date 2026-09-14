@@ -34,5 +34,13 @@ export function isGlobalBankingVerified(
   )
     .trim()
     .toLowerCase()
-  return noah === "approved"
+  if (noah === "approved") return true
+  const bridge = String(
+    (profile as { bridge_kyc_status?: string | null } | null)?.bridge_kyc_status ??
+      (profile as { profile?: { bridge_kyc_status?: string | null } } | null)?.profile?.bridge_kyc_status ??
+      "",
+  )
+    .trim()
+    .toLowerCase()
+  return bridge === "approved"
 }

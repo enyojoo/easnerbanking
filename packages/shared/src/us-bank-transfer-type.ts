@@ -33,6 +33,13 @@ const NOAH_METHODS: UsBankTransferMethodOption[] = [
   { value: "Wire", label: "Wire", speedLabel: US_BANK_TRANSFER_SPEED_LABEL.Wire },
 ]
 
+/** Bridge USD: ACH, wire, FedNow. No RTP. */
+const BRIDGE_METHODS: UsBankTransferMethodOption[] = [
+  { value: "ACH", label: "ACH", speedLabel: US_BANK_TRANSFER_SPEED_LABEL.ACH },
+  { value: "Wire", label: "Wire", speedLabel: US_BANK_TRANSFER_SPEED_LABEL.Wire },
+  { value: "FEDNOW", label: "FedNow", speedLabel: US_BANK_TRANSFER_SPEED_LABEL.FEDNOW },
+]
+
 export const US_BANK_TRANSFER_TYPES: UsBankTransferType[] = [
   "ACH",
   "Wire",
@@ -56,6 +63,7 @@ export function usBankPaymentMethodsForProvider(
 ): UsBankTransferMethodOption[] {
   if (provider === "grid") return GRID_METHODS
   if (provider === "noah") return NOAH_METHODS
+  if (provider === "bridge") return BRIDGE_METHODS
   return []
 }
 
@@ -77,6 +85,7 @@ export function coerceUsTransferTypeForProvider(
   const allowed = usBankPaymentMethodsForProvider(provider)
   if (allowed.some((option) => option.value === parsed)) return parsed
   if (provider === "noah") return parsed === "Wire" ? "Wire" : "ACH"
+  if (provider === "bridge") return parsed === "Wire" ? "Wire" : parsed === "FEDNOW" ? "FEDNOW" : "ACH"
   return allowed[0]?.value ?? "ACH"
 }
 

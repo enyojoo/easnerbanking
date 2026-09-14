@@ -6,6 +6,8 @@ import {
   pickPreferredVirtualAccountRow,
   type VirtualAccountDbRow,
 } from "./virtual-account-columns"
+import { resolveVirtualAccountPreferProvider } from "@/lib/bridge/va-prefer-provider"
+import { shouldHideNoahConsumerVirtualAccounts } from "@/lib/bridge/cutover"
 
 function normalizeCurrencyCode(raw: string): "usd" | "eur" | "gbp" | null {
   const c = String(raw || "").trim().toUpperCase()
@@ -48,7 +50,9 @@ function rowToDisplay(row: VirtualAccountDbRow, currency: "usd" | "eur" | "gbp")
         ? "grid"
         : String(row.provider ?? "").trim().toLowerCase() === "noah"
           ? "noah"
-          : undefined,
+          : String(row.provider ?? "").trim().toLowerCase() === "bridge"
+            ? "bridge"
+            : undefined,
   }
 }
 
@@ -77,7 +81,7 @@ export async function hasActiveVirtualAccountInDb(
     currency: "usd" | "eur" | "gbp"
     userId?: string
     businessId?: string | null
-    provider?: "grid" | "noah"
+    provider?: "grid" | "noah" | "bridge"
   },
 ): Promise<boolean> {
   const display = await getVirtualAccountDisplayFromDb(admin, input)
@@ -122,7 +126,7 @@ export async function getVirtualAccountDisplayFromDb(
     currency: "usd" | "eur" | "gbp"
     userId?: string
     businessId?: string | null
-    provider?: "grid" | "noah"
+    provider?: "grid" | "noah" | "bridge"
   },
 ): Promise<VirtualAccountDisplay | null> {
   const fiat = input.currency.toUpperCase()
@@ -147,8 +151,19 @@ export async function getVirtualAccountDisplayFromDb(
     return null
   }
 
-  if (input.provider) {
-    q = q.eq("provider", input.provider)
+  let preferProvider = input.provider
+  if (!preferProvider && input.userId) {
+    preferProvider = await resolveVirtualAccountPreferProvider(admin, {
+      userId: input.userId,
+      businessId: input.businessId ?? null,
+      currency: input.currency,
+    })
+  }
+
+  // Business overlay: never show Grid and Bridge USD instructions at once.
+  // Personal: keep Noah rows available during cutover until Bridge VAs exist or wind-down ends.
+  if (preferProvider && input.businessId) {
+    q = q.eq("provider", preferProvider)
   }
 
   const { data, error } = await q
@@ -157,21 +172,37 @@ export async function getVirtualAccountDisplayFromDb(
   const currency = normalizeCurrencyCode(String(data[0]?.currency ?? fiat))
   if (!currency) return null
 
-  const mirroredPmId = input.businessId
-    ? null
-    : input.userId
-      ? await readUserMirroredVirtualAccountId(admin, {
-          subjectUserId: input.userId,
-          currency,
-        })
-      : null
-  const rows = data as VirtualAccountDbRow[]
+  let hideNoah = false
+  if (!input.businessId && input.userId) {
+    const { data: userRow } = await admin
+      .from("users")
+      .select(
+        "verification_provider,verification_status,bridge_kyc_status,bridge_cutover_deadline_at,kyc_address_country,residence_country,kyc_address_state",
+      )
+      .eq("id", input.userId)
+      .maybeSingle()
+    hideNoah = shouldHideNoahConsumerVirtualAccounts(userRow)
+  }
+
+  const mirroredPmId =
+    input.businessId || preferProvider === "bridge" || preferProvider === "grid" || hideNoah
+      ? null
+      : input.userId
+        ? await readUserMirroredVirtualAccountId(admin, {
+            subjectUserId: input.userId,
+            currency,
+          })
+        : null
+  const rows = (data as VirtualAccountDbRow[]).filter((r) => {
+    if (!hideNoah) return true
+    return String(r.provider ?? "").trim().toLowerCase() !== "noah"
+  })
   const row =
     (mirroredPmId
       ? rows.find((r) => String(r.provider_virtual_account_id ?? "").trim() === mirroredPmId)
       : null) ??
     pickPreferredVirtualAccountRow(rows, currency, {
-      preferProvider: input.provider ?? (input.businessId ? "grid" : undefined),
+      preferProvider: preferProvider ?? (input.businessId ? "grid" : undefined),
     })
   if (!row) return null
 

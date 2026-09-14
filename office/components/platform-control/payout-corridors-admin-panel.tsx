@@ -11,6 +11,8 @@ import { payoutCorridorsApi, type PayoutCorridorAdminRow } from "@/lib/payout-co
 import { toast } from "sonner"
 import {
   applyUsPayInModeToMetadata,
+  bridgeOffersBankPayIn,
+  bridgeOffersBankPayout,
   clearUsCrossBorderMetadata,
   corridorOffersCrossBorder,
   isUsUsdCorridor,
@@ -19,6 +21,7 @@ import {
   readCorridorSurfaceRouting,
   readCorridorSurfacesMap,
   resolveUsPayInMode,
+  settlementAssetForPayoutProvider,
   yellowcardOffersDomesticBankPayout,
   US_PAY_IN_MODE_OPTIONS,
   type CorridorRoutingSurface,
@@ -34,7 +37,7 @@ import { ProcessingFeePricingDialog } from "@/components/platform-control/proces
 import { Skeleton } from "@/components/ui/skeleton"
 import { Loader2 } from "lucide-react"
 
-type ProviderId = "noah" | "yellowcard" | "grid"
+type ProviderId = "noah" | "yellowcard" | "grid" | "bridge"
 type FeatureSelection<T extends string> = T | "disabled"
 
 type SurfaceRoutingUi = {
@@ -63,9 +66,11 @@ type FiatDestinationRow = {
   supportNoahPayout: boolean
   supportYcPayout: boolean
   supportGridPayout: boolean
+  supportBridgePayout: boolean
   supportYcPayIn: boolean
   supportNoahPayIn: boolean
   supportGridPayIn: boolean
+  supportBridgePayIn: boolean
   crossBorderSupported: boolean
   sample: PayoutCorridorAdminRow
 }
@@ -81,13 +86,19 @@ function parseRouting(routing: unknown): RoutingEntry[] {
       priority: Number((item as { priority?: number }).priority ?? 99),
       settlement_asset: String((item as { settlement_asset?: string }).settlement_asset ?? "USDC"),
     }))
-    .filter((item) => item.provider === "noah" || item.provider === "yellowcard" || item.provider === "grid")
+    .filter(
+      (item) =>
+        item.provider === "noah" ||
+        item.provider === "yellowcard" ||
+        item.provider === "grid" ||
+        item.provider === "bridge",
+    )
 }
 
 function routingPrimaryProvider(routing: unknown): ProviderId | null {
   const sorted = [...parseRouting(routing)].sort((a, b) => a.priority - b.priority)
   const p = sorted[0]?.provider
-  if (p === "yellowcard" || p === "noah" || p === "grid") return p
+  if (p === "yellowcard" || p === "noah" || p === "grid" || p === "bridge") return p
   return null
 }
 
@@ -122,8 +133,35 @@ function rowSupportsGridPayout(row: PayoutCorridorAdminRow): boolean {
 }
 
 function rowSupportsGridPayIn(row: PayoutCorridorAdminRow): boolean {
+  if (
+    isUsUsdCorridor(row.country_code, row.currency_code) &&
+    normalizeCorridorRail(row.rail) === "bank_transfer"
+  ) {
+    return true
+  }
   const meta = rowMetadata(row)
   return meta.grid_receive === true || row.grid_receive_available === true
+}
+
+function rowSupportsBridgePayout(row: PayoutCorridorAdminRow): boolean {
+  if (normalizeCorridorRail(row.rail) === "mobile_money") return false
+  const meta = rowMetadata(row)
+  return (
+    bridgeOffersBankPayout(row.country_code, row.currency_code, row.rail) ||
+    meta.bridge_send === true ||
+    row.bridge_send_available === true ||
+    routingPrimaryProvider(row.provider_routing) === "bridge"
+  )
+}
+
+function rowSupportsBridgePayIn(row: PayoutCorridorAdminRow): boolean {
+  if (normalizeCorridorRail(row.rail) === "mobile_money") return false
+  const meta = rowMetadata(row)
+  return (
+    bridgeOffersBankPayIn(row.country_code, row.currency_code, row.rail) ||
+    meta.bridge_receive === true ||
+    row.bridge_receive_available === true
+  )
 }
 
 function rowSupportsNoahPayout(row: PayoutCorridorAdminRow): boolean {
@@ -144,6 +182,7 @@ function rowPayInEnabledForProvider(row: PayoutCorridorAdminRow, provider: Provi
   if (provider === "yellowcard" && rowSupportsYcPayIn(row)) return meta.yc_receive_enabled === true
   if (provider === "noah" && rowSupportsNoahPayIn(row)) return meta.noah_receive_enabled === true
   if (provider === "grid" && rowSupportsGridPayIn(row)) return meta.grid_receive_enabled === true
+  if (provider === "bridge" && rowSupportsBridgePayIn(row)) return meta.bridge_receive_enabled === true
   return false
 }
 
@@ -164,6 +203,10 @@ function applyPayoutSendFlags(
   if (caps.supportGridPayout) {
     if (provider === "grid" && enabled) metadata.grid_send = true
     metadata.grid_send_enabled = provider === "grid" && enabled
+  }
+  if (caps.supportBridgePayout) {
+    if (provider === "bridge" && enabled) metadata.bridge_send = true
+    metadata.bridge_send_enabled = provider === "bridge" && enabled
   }
 }
 
@@ -186,18 +229,24 @@ function applyPayInReceiveFlags(
     if (provider === "grid" && enabled) metadata.grid_receive = true
     metadata.grid_receive_enabled = provider === "grid" && enabled
   }
+  if (caps.supportBridgePayIn) {
+    if (provider === "bridge" && enabled) metadata.bridge_receive = true
+    metadata.bridge_receive_enabled = provider === "bridge" && enabled
+  }
 }
 
 function disableAllPayoutSendFlags(metadata: Record<string, unknown>, corridor: PayoutCorridorAdminRow): void {
   applyPayoutSendFlags(metadata, corridor, "noah", false)
   applyPayoutSendFlags(metadata, corridor, "yellowcard", false)
   applyPayoutSendFlags(metadata, corridor, "grid", false)
+  applyPayoutSendFlags(metadata, corridor, "bridge", false)
 }
 
 function disableAllPayInReceiveFlags(metadata: Record<string, unknown>, corridor: PayoutCorridorAdminRow): void {
   applyPayInReceiveFlags(metadata, corridor, "noah", false)
   applyPayInReceiveFlags(metadata, corridor, "yellowcard", false)
   applyPayInReceiveFlags(metadata, corridor, "grid", false)
+  applyPayInReceiveFlags(metadata, corridor, "bridge", false)
   delete metadata.pay_in_provider
 }
 
@@ -209,7 +258,11 @@ function applyPayoutChoiceToCorridor(
 ): PayoutCorridorAdminRow {
   const payout = choice === "disabled" ? null : choice
   const patched = patchCorridorSurfaceRouting(
-    { provider_routing: corridor.provider_routing, metadata: corridor.metadata },
+    {
+      provider_routing: corridor.provider_routing,
+      metadata: corridor.metadata,
+      currency_code: corridor.currency_code,
+    },
     surface,
     { payout },
   )
@@ -230,10 +283,11 @@ function applyPayoutChoiceToCorridor(
   if (row.supportNoahPayout && choice !== "noah") metadata.noah_send_enabled = false
   if (row.supportYcPayout && choice !== "yellowcard") metadata.yc_send_enabled = false
   if (row.supportGridPayout && choice !== "grid") metadata.grid_send_enabled = false
+  if (row.supportBridgePayout && choice !== "bridge") metadata.bridge_send_enabled = false
   if (isUsUsdCorridor(corridor.country_code, corridor.currency_code)) {
     clearUsCrossBorderMetadata(metadata)
   }
-  return { ...corridor, metadata, provider_routing: buildProviderRouting(choice) }
+  return { ...corridor, metadata, provider_routing: buildProviderRouting(choice, corridor.currency_code) }
 }
 
 function applyPayInChoiceToCorridors(
@@ -249,7 +303,7 @@ function applyPayInChoiceToCorridors(
   const routing =
     row.business.payoutSelection === "disabled" || businessPayout === null
       ? []
-      : buildProviderRouting(businessPayout)
+      : buildProviderRouting(businessPayout, row.currency_code)
   const payInCorridorIds =
     provider !== null
       ? payInCorridorIdsForProvider(
@@ -271,7 +325,11 @@ function applyPayInChoiceToCorridors(
     }
     if (metadataIds.has(corridor.id)) {
       const patched = patchCorridorSurfaceRouting(
-        { provider_routing: next.provider_routing, metadata: next.metadata },
+        {
+          provider_routing: next.provider_routing,
+          metadata: next.metadata,
+          currency_code: next.currency_code,
+        },
         surface,
         { pay_in: provider },
       )
@@ -286,6 +344,7 @@ function applyPayInChoiceToCorridors(
           if (row.supportNoahPayIn && provider !== "noah") metadata.noah_receive_enabled = false
           if (row.supportYcPayIn && provider !== "yellowcard") metadata.yc_receive_enabled = false
           if (row.supportGridPayIn && provider !== "grid") metadata.grid_receive_enabled = false
+          if (row.supportBridgePayIn && provider !== "bridge") metadata.bridge_receive_enabled = false
         }
         if (isUsUsdCorridor(corridor.country_code, corridor.currency_code)) {
           clearUsCrossBorderMetadata(metadata)
@@ -364,7 +423,8 @@ function routingUiFromCorridor(
     overlay.pay_in &&
     ((overlay.pay_in === "noah" && caps.supportNoahPayIn) ||
       (overlay.pay_in === "yellowcard" && caps.supportYcPayIn) ||
-      (overlay.pay_in === "grid" && caps.supportGridPayIn))
+      (overlay.pay_in === "grid" && caps.supportGridPayIn) ||
+      (overlay.pay_in === "bridge" && caps.supportBridgePayIn))
       ? overlay.pay_in
       : overlay.pay_in
   const usPayInMode = overlay.pay_in_mode ?? resolveUsPayInMode(rowMetadata(corridor))
@@ -388,6 +448,7 @@ function usPayInModeLabel(mode: Exclude<UsPayInMode, "disabled">): string {
 function providerLabel(provider: ProviderId): string {
   if (provider === "yellowcard") return "Yellowcard"
   if (provider === "grid") return "Grid"
+  if (provider === "bridge") return "Bridge"
   return "Noah"
 }
 
@@ -395,19 +456,52 @@ function crossBorderProviderLabel(provider: CrossBorderProviderId): string {
   return provider === "grid" ? "Grid" : "Yellowcard"
 }
 
-function buildProviderRouting(payoutProvider: ProviderId): RoutingEntry[] {
+function buildProviderRouting(payoutProvider: ProviderId, currencyCode?: string): RoutingEntry[] {
   // Payout-only. Pay-in is stored on metadata.pay_in_provider – never as a
   // secondary provider_routing entry (that caused silent payout failover).
-  return [{ provider: payoutProvider, priority: 1, settlement_asset: "USDC" }]
+  return [
+    {
+      provider: payoutProvider,
+      priority: 1,
+      settlement_asset: settlementAssetForPayoutProvider(payoutProvider, currencyCode),
+    },
+  ]
 }
 
-function payInProviderOptions(caps: {
-  supportYcPayIn: boolean
-  supportNoahPayIn: boolean
-  supportGridPayIn: boolean
-}): ProviderId[] {
+function defaultVaPayInProvider(
+  surface: CorridorRoutingSurface,
+  countryCode: string,
+  currencyCode: string,
+): ProviderId {
+  if (surface === "personal") return "bridge"
+  if (String(currencyCode).trim().toUpperCase() === "EUR") return "bridge"
+  if (isUsUsdCorridor(countryCode, currencyCode)) return "grid"
+  return "bridge"
+}
+
+function payInProviderOptions(
+  caps: {
+    supportYcPayIn: boolean
+    supportNoahPayIn: boolean
+    supportGridPayIn: boolean
+    supportBridgePayIn: boolean
+  },
+  opts?: { surface?: CorridorRoutingSurface; countryCode?: string; currencyCode?: string },
+): ProviderId[] {
+  const va = Boolean(
+    opts?.countryCode &&
+      opts.currencyCode &&
+      isVaExpressPayInCorridor(opts.countryCode, opts.currencyCode),
+  )
+  if (va && opts?.surface === "personal") {
+    return caps.supportBridgePayIn ? ["bridge"] : []
+  }
+  if (va && String(opts?.currencyCode ?? "").toUpperCase() === "EUR") {
+    return caps.supportBridgePayIn ? ["bridge"] : []
+  }
   return (
     [
+      caps.supportBridgePayIn ? "bridge" : null,
       caps.supportGridPayIn ? "grid" : null,
       caps.supportYcPayIn ? "yellowcard" : null,
       caps.supportNoahPayIn ? "noah" : null,
@@ -417,7 +511,12 @@ function payInProviderOptions(caps: {
 
 function payoutProviderOptions(row: Pick<
   FiatDestinationRow,
-  "supportNoahPayout" | "supportYcPayout" | "supportGridPayout" | "country_code" | "currency_code"
+  | "supportNoahPayout"
+  | "supportYcPayout"
+  | "supportGridPayout"
+  | "supportBridgePayout"
+  | "country_code"
+  | "currency_code"
 >): ProviderId[] {
   const ycOk = yellowcardOffersDomesticBankPayout(row.country_code, row.currency_code, "bank_transfer")
   return (
@@ -425,6 +524,7 @@ function payoutProviderOptions(row: Pick<
       row.supportNoahPayout ? "noah" : null,
       row.supportYcPayout && ycOk ? "yellowcard" : null,
       row.supportGridPayout ? "grid" : null,
+      row.supportBridgePayout ? "bridge" : null,
     ] as Array<ProviderId | null>
   ).filter(Boolean) as ProviderId[]
 }
@@ -498,9 +598,11 @@ type CountryCurrencyCaps = {
   supportNoahPayout: boolean
   supportYcPayout: boolean
   supportGridPayout: boolean
+  supportBridgePayout: boolean
   supportYcPayIn: boolean
   supportNoahPayIn: boolean
   supportGridPayIn: boolean
+  supportBridgePayIn: boolean
 }
 
 function normalizeCorridorRail(rail: string | null | undefined): "bank_transfer" | "mobile_money" {
@@ -523,9 +625,11 @@ function hasOpsConfiguration(meta: Record<string, unknown>): boolean {
     meta.noah_send_enabled === true ||
     meta.yc_send_enabled === true ||
     meta.grid_send_enabled === true ||
+    meta.bridge_send_enabled === true ||
     meta.noah_receive_enabled === true ||
     meta.yc_receive_enabled === true ||
     meta.grid_receive_enabled === true ||
+    meta.bridge_receive_enabled === true ||
     meta.cross_border_enabled === true
   )
 }
@@ -541,7 +645,11 @@ function corridorHasRailCapability(row: PayoutCorridorAdminRow): boolean {
     row.yc_send_available === true ||
     row.yc_receive_available === true ||
     row.grid_send_available === true ||
-    row.grid_receive_available === true
+    row.grid_receive_available === true ||
+    row.bridge_send_available === true ||
+    row.bridge_receive_available === true ||
+    rowSupportsBridgePayout(row) ||
+    rowSupportsBridgePayIn(row)
   ) {
     return true
   }
@@ -557,6 +665,8 @@ function corridorHasRailCapability(row: PayoutCorridorAdminRow): boolean {
     meta.yc_receive === true ||
     meta.grid_send === true ||
     meta.grid_receive === true ||
+    meta.bridge_send === true ||
+    meta.bridge_receive === true ||
     meta.noah_receive === true
   )
 }
@@ -566,9 +676,11 @@ function rowCaps(row: PayoutCorridorAdminRow): CountryCurrencyCaps {
     supportNoahPayout: rowSupportsNoahPayout(row),
     supportYcPayout: rowSupportsYcPayout(row),
     supportGridPayout: rowSupportsGridPayout(row),
+    supportBridgePayout: rowSupportsBridgePayout(row),
     supportYcPayIn: rowSupportsYcPayIn(row),
     supportNoahPayIn: rowSupportsNoahPayIn(row),
     supportGridPayIn: rowSupportsGridPayIn(row),
+    supportBridgePayIn: rowSupportsBridgePayIn(row),
   }
 }
 
@@ -577,9 +689,11 @@ function mergeCaps(a: CountryCurrencyCaps, b: CountryCurrencyCaps): CountryCurre
     supportNoahPayout: a.supportNoahPayout || b.supportNoahPayout,
     supportYcPayout: a.supportYcPayout || b.supportYcPayout,
     supportGridPayout: a.supportGridPayout || b.supportGridPayout,
+    supportBridgePayout: a.supportBridgePayout || b.supportBridgePayout,
     supportYcPayIn: a.supportYcPayIn || b.supportYcPayIn,
     supportNoahPayIn: a.supportNoahPayIn || b.supportNoahPayIn,
     supportGridPayIn: a.supportGridPayIn || b.supportGridPayIn,
+    supportBridgePayIn: a.supportBridgePayIn || b.supportBridgePayIn,
   }
 }
 
@@ -591,6 +705,7 @@ function payInCorridorIdsForProvider(
     .filter((r) => {
       if (provider === "yellowcard") return rowSupportsYcPayIn(r)
       if (provider === "grid") return rowSupportsGridPayIn(r)
+      if (provider === "bridge") return rowSupportsBridgePayIn(r)
       return rowSupportsNoahPayIn(r)
     })
     .map((r) => r.id)
@@ -608,9 +723,11 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
             supportNoahPayout: existing.supportNoahPayout,
             supportYcPayout: existing.supportYcPayout,
             supportGridPayout: existing.supportGridPayout,
+            supportBridgePayout: existing.supportBridgePayout,
             supportYcPayIn: existing.supportYcPayIn,
             supportNoahPayIn: existing.supportNoahPayIn,
             supportGridPayIn: existing.supportGridPayIn,
+            supportBridgePayIn: existing.supportBridgePayIn,
           },
           rowCaps(r),
         )
@@ -619,9 +736,11 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
     const supportNoahPayout = caps.supportNoahPayout
     const supportYcPayout = caps.supportYcPayout
     const supportGridPayout = caps.supportGridPayout
+    const supportBridgePayout = caps.supportBridgePayout
     const supportYcPayIn = caps.supportYcPayIn
     const supportNoahPayIn = caps.supportNoahPayIn
     const supportGridPayIn = caps.supportGridPayIn
+    const supportBridgePayIn = caps.supportBridgePayIn
     const vaPayInCorridor = isVaExpressPayInCorridor(r.country_code, r.currency_code)
     const payInSupported = vaPayInCorridor
       ? true
@@ -629,6 +748,7 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
           supportYcPayIn,
           supportNoahPayIn,
           supportGridPayIn,
+          supportBridgePayIn,
         }).length > 0
     const railRows = filteredRows.filter(
       (row) => row.country_code === r.country_code && row.currency_code === r.currency_code,
@@ -665,9 +785,11 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
         supportNoahPayout,
         supportYcPayout,
         supportGridPayout,
+        supportBridgePayout,
         supportYcPayIn,
         supportNoahPayIn,
         supportGridPayIn,
+        supportBridgePayIn,
         crossBorderSupported,
         sample: r,
       })
@@ -679,9 +801,11 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
     existing.supportNoahPayout = supportNoahPayout
     existing.supportYcPayout = supportYcPayout
     existing.supportGridPayout = supportGridPayout
+    existing.supportBridgePayout = supportBridgePayout
     existing.supportYcPayIn = supportYcPayIn
     existing.supportNoahPayIn = supportNoahPayIn
     existing.supportGridPayIn = supportGridPayIn
+    existing.supportBridgePayIn = supportBridgePayIn
     existing.business = business
     existing.personal = personal
     existing.payInSupported = payInSupported
@@ -870,13 +994,22 @@ export function PayoutCorridorsAdminPanel() {
     const key = `${row.key}:uspayin:${surface}`
     setSavingKey(key)
     const mode: UsPayInMode = choice === "disabled" ? "disabled" : choice
+    const payIn =
+      mode === "disabled"
+        ? null
+        : row[surface].payInProvider ??
+          defaultVaPayInProvider(surface, row.country_code, row.currency_code)
     queryClient.setQueryData<PayoutCorridorAdminRow[]>(officeKeys.payoutCorridors(), (prev) =>
       (prev ?? []).map((corridor) => {
         if (!row.corridorIds.includes(corridor.id)) return corridor
         const patched = patchCorridorSurfaceRouting(
-          { provider_routing: corridor.provider_routing, metadata: corridor.metadata },
+          {
+            provider_routing: corridor.provider_routing,
+            metadata: corridor.metadata,
+            currency_code: corridor.currency_code,
+          },
           surface,
-          { pay_in_mode: mode, pay_in: mode === "disabled" ? null : "noah" },
+          { pay_in_mode: mode, pay_in: payIn },
         )
         const metadata =
           surface === "business"
@@ -893,9 +1026,13 @@ export function PayoutCorridorsAdminPanel() {
         row.corridorIds.map((id) => {
           const existing = rows.find((r) => r.id === id) ?? row.sample
           const patched = patchCorridorSurfaceRouting(
-            { provider_routing: existing.provider_routing, metadata: existing.metadata },
+            {
+              provider_routing: existing.provider_routing,
+              metadata: existing.metadata,
+              currency_code: existing.currency_code,
+            },
             surface,
-            { pay_in_mode: mode, pay_in: mode === "disabled" ? null : "noah" },
+            { pay_in_mode: mode, pay_in: payIn },
           )
           const metadata =
             surface === "business"
@@ -1027,11 +1164,32 @@ export function PayoutCorridorsAdminPanel() {
               <TableBody className="[&_td]:h-auto [&_td]:py-4">
                 {fiatRows.map((r) => {
                   const payoutProviders = payoutProviderOptions(r)
-                  const payInProviders = payInProviderOptions({
-                    supportYcPayIn: r.supportYcPayIn,
-                    supportNoahPayIn: r.supportNoahPayIn,
-                    supportGridPayIn: r.supportGridPayIn,
-                  })
+                  const payInProviders = payInProviderOptions(
+                    {
+                      supportYcPayIn: r.supportYcPayIn,
+                      supportNoahPayIn: r.supportNoahPayIn,
+                      supportGridPayIn: r.supportGridPayIn,
+                      supportBridgePayIn: r.supportBridgePayIn,
+                    },
+                    {
+                      surface: "business",
+                      countryCode: r.country_code,
+                      currencyCode: r.currency_code,
+                    },
+                  )
+                  const mobilePayInProviders = payInProviderOptions(
+                    {
+                      supportYcPayIn: r.supportYcPayIn,
+                      supportNoahPayIn: r.supportNoahPayIn,
+                      supportGridPayIn: r.supportGridPayIn,
+                      supportBridgePayIn: r.supportBridgePayIn,
+                    },
+                    {
+                      surface: "personal",
+                      countryCode: r.country_code,
+                      currencyCode: r.currency_code,
+                    },
+                  )
                   const crossBorderProviders = crossBorderProviderOptions(r)
                   const liveOff = !r.enabled
                   const vaPayInCorridor = isVaExpressPayInCorridor(r.country_code, r.currency_code)
@@ -1085,6 +1243,22 @@ export function PayoutCorridorsAdminPanel() {
                                 onChange={(choice) => void setUsPayInMode(r, choice, "business")}
                               />
                             </SurfaceSelectRow>
+                            {payInProviders.length > 0 ? (
+                              <SurfaceSelectRow label="VA">
+                                <FeatureSelect
+                                  value={r.business.payInSelection}
+                                  ariaLabel="Business pay-in provider"
+                                  providers={payInProviders}
+                                  labelFor={providerLabel}
+                                  disabled={
+                                    liveOff ||
+                                    r.business.usPayInMode === "disabled" ||
+                                    savingKey === `${r.key}:payin:business`
+                                  }
+                                  onChange={(choice) => void setPayInChoice(r, choice, "business")}
+                                />
+                              </SurfaceSelectRow>
+                            ) : null}
                             <SurfaceSelectRow label="Mobile">
                               <FeatureSelect
                                 value={r.personal.usPayInMode}
@@ -1095,6 +1269,22 @@ export function PayoutCorridorsAdminPanel() {
                                 onChange={(choice) => void setUsPayInMode(r, choice, "personal")}
                               />
                             </SurfaceSelectRow>
+                            {mobilePayInProviders.length > 0 ? (
+                              <SurfaceSelectRow label="VA">
+                                <FeatureSelect
+                                  value={r.personal.payInSelection}
+                                  ariaLabel="Mobile pay-in provider"
+                                  providers={mobilePayInProviders}
+                                  labelFor={providerLabel}
+                                  disabled={
+                                    liveOff ||
+                                    r.personal.usPayInMode === "disabled" ||
+                                    savingKey === `${r.key}:payin:personal`
+                                  }
+                                  onChange={(choice) => void setPayInChoice(r, choice, "personal")}
+                                />
+                              </SurfaceSelectRow>
+                            ) : null}
                           </>
                         ) : (
                           <>
@@ -1112,7 +1302,7 @@ export function PayoutCorridorsAdminPanel() {
                               <FeatureSelect
                                 value={r.personal.payInSelection}
                                 ariaLabel="Mobile pay-in provider"
-                                providers={payInProviders}
+                                providers={mobilePayInProviders}
                                 labelFor={providerLabel}
                                 disabled={liveOff || savingKey === `${r.key}:payin:personal`}
                                 onChange={(choice) => void setPayInChoice(r, choice, "personal")}

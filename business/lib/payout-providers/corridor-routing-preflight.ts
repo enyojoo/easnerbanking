@@ -55,6 +55,7 @@ function schemaReadyForProvider(fieldsSchema: unknown, provider: string): boolea
     if (!grid || typeof grid !== "object") return false
     return String(grid.status ?? "ready").toLowerCase() !== "pending_schema"
   }
+  if (provider === "bridge") return true
   return false
 }
 
@@ -104,7 +105,7 @@ export function preflightCorridorRoutingPatch(input: {
   }
 
   const primary = resolvePrimaryPayoutProvider(routing)
-  if (!["noah", "yellowcard", "grid"].includes(primary)) {
+  if (!["noah", "yellowcard", "grid", "bridge"].includes(primary)) {
     issues.push({
       code: "PROVIDER_UNKNOWN",
       message: `Unknown primary payout provider: ${primary}`,
@@ -124,6 +125,12 @@ export function preflightCorridorRoutingPatch(input: {
       issues.push({
         code: "SEND_FLAG_DISABLED",
         message: "Grid is primary payout but grid_send_enabled is false.",
+      })
+    }
+    if (primary === "bridge" && metadata.bridge_send_enabled === false) {
+      issues.push({
+        code: "SEND_FLAG_DISABLED",
+        message: "Bridge is primary payout but bridge_send_enabled is false.",
       })
     }
     if (primary === "noah" && metadata.noah_send_enabled === false) {
@@ -157,6 +164,12 @@ export function preflightCorridorRoutingPatch(input: {
       issues.push({
         code: "RECEIVE_FLAG_DISABLED",
         message: "pay_in_provider is grid but grid_receive_enabled is false.",
+      })
+    }
+    if (payIn === "bridge" && metadata.bridge_receive_enabled === false) {
+      issues.push({
+        code: "RECEIVE_FLAG_DISABLED",
+        message: "pay_in_provider is bridge but bridge_receive_enabled is false.",
       })
     }
     if (payIn === "noah" && metadata.noah_receive_enabled === false) {

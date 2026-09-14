@@ -38,6 +38,7 @@ const GRID_METHODS: EurBankTransferMethodOption[] = [
 ]
 
 const NOAH_METHODS: EurBankTransferMethodOption[] = [...GRID_METHODS]
+const BRIDGE_METHODS: EurBankTransferMethodOption[] = [...GRID_METHODS]
 
 export const EUR_BANK_TRANSFER_TYPES: EurBankTransferType[] = ["SEPA Instant", "SEPA"]
 
@@ -55,6 +56,7 @@ export function eurBankPaymentMethodsForProvider(
 ): EurBankTransferMethodOption[] {
   if (provider === "grid") return GRID_METHODS
   if (provider === "noah") return NOAH_METHODS
+  if (provider === "bridge") return BRIDGE_METHODS
   return []
 }
 

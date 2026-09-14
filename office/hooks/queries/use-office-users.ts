@@ -30,6 +30,11 @@ export type OfficeUserRow = {
   noah_kyb_customer_id?: string | null
   grid_customer_id?: string | null
   verification_status?: string | null
+  verification_provider?: string | null
+  bridge_customer_id?: string | null
+  bridge_kyc_status?: string | null
+  org_bridge_customer_id?: string | null
+  org_bridge_kyc_status?: string | null
   linkedBusinessName?: string | null
   enabled_extra_account_currencies?: string[]
   email_confirmed_at?: string | null
@@ -96,6 +101,11 @@ export async function fetchOfficeUsersDirectory(): Promise<OfficeUserRow[]> {
       noah_kyb_customer_id: row.noah_kyb_customer_id as string | null | undefined,
       grid_customer_id: row.grid_customer_id as string | null | undefined,
       verification_status: row.verification_status as string | null | undefined,
+      verification_provider: row.verification_provider as string | null | undefined,
+      bridge_customer_id: row.bridge_customer_id as string | null | undefined,
+      bridge_kyc_status: row.bridge_kyc_status as string | null | undefined,
+      org_bridge_customer_id: row.org_bridge_customer_id as string | null | undefined,
+      org_bridge_kyc_status: row.org_bridge_kyc_status as string | null | undefined,
       linkedBusinessName: (row.linkedBusinessName as string | null | undefined) ?? null,
       enabled_extra_account_currencies: row.enabled_extra_account_currencies as string[] | undefined,
       email_confirmed_at: row.email_confirmed_at as string | null | undefined,

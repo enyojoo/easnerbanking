@@ -1,15 +1,5 @@
 /**
- * Customer-facing verification products. No provider names.
- *
- * Ladder (identity / banking):
- *   1 USD accounts — live (base KYC/KYB)
- *   2 EUR & GBP accounts — next (Bridge), not live yet
- *   3 Cards — coming soon
- *
- * Additional (own provider KYB, after USD):
- *   online payments, express deposits (business + mobile)
- *
- * Local / African rails stay a separate additional check, not this ladder’s Tier 2.
+ * Customer-facing verification products. No provider names. No Tier labels on hubs.
  */
 
 export type VerificationLadderTier = 1 | 2 | 3
@@ -18,6 +8,7 @@ export type VerificationProductAvailability = "live" | "coming_later"
 
 export type VerificationProductId =
   | "global_banking"
+  | "eur"
   | "eur_gbp"
   | "cards"
   | "online_payments"
@@ -39,24 +30,28 @@ const USD_ACCOUNTS: VerificationProduct = {
   id: "global_banking",
   title: "USD accounts",
   description: "USD balances, US bank details, and USDC.",
-  ladderTier: 1,
   availability: "live",
 }
 
-const EUR_GBP_ACCOUNTS: VerificationProduct = {
-  id: "eur_gbp",
-  title: "EUR and GBP accounts",
-  description: "SEPA and Faster Payments accounts for euro and pounds.",
-  footnote: "Unlocks after USD verification.",
-  ladderTier: 2,
-  availability: "coming_later",
+const EUR_ACCOUNTS: VerificationProduct = {
+  id: "eur",
+  title: "EUR accounts",
+  description: "Euro balances and SEPA bank details.",
+  footnote: USD_VERIFICATION_REQUIRED_COPY,
+  availability: "live",
+}
+
+const BANK_ACCOUNTS: VerificationProduct = {
+  id: "global_banking",
+  title: "Bank accounts",
+  description: "USD and euro balances with local bank deposit details.",
+  availability: "live",
 }
 
 const CARDS: VerificationProduct = {
   id: "cards",
   title: "Cards",
   description: "Spend from your balance online and in store.",
-  ladderTier: 3,
   availability: "coming_later",
 }
 
@@ -69,21 +64,20 @@ const ONLINE_PAYMENTS: VerificationProduct = {
 
 export const BUSINESS_VERIFICATION_PRODUCTS: VerificationProduct[] = [
   USD_ACCOUNTS,
-  EUR_GBP_ACCOUNTS,
+  EUR_ACCOUNTS,
   { ...CARDS, description: "Business cards for online and in-store payments." },
   ONLINE_PAYMENTS,
 ]
 
 export const CONSUMER_VERIFICATION_PRODUCTS: VerificationProduct[] = [
-  USD_ACCOUNTS,
-  EUR_GBP_ACCOUNTS,
+  BANK_ACCOUNTS,
   {
     ...CARDS,
     description: "Personal cards for your online and physical payments.",
   },
 ]
 
-export function verificationTierLabel(tier: VerificationLadderTier | undefined): string | null {
-  if (tier == null) return null
-  return `Tier ${tier}`
+/** Hubs no longer show numbered tiers. Kept as null so leftover callers stay blank. */
+export function verificationTierLabel(_tier: VerificationLadderTier | undefined): string | null {
+  return null
 }

@@ -2,8 +2,9 @@ import { NextResponse } from "next/server"
 import { isNoahConfigured, isNoahSigningConfigured } from "@/lib/noah/config"
 import { isGridConfigured } from "@/lib/grid/config"
 import { isYellowcardConfigured } from "@/lib/yellowcard/config"
+import { isBridgeConfigured } from "@/lib/bridge/config"
 
-export type PayoutEnvProviderId = "noah" | "yellowcard" | "grid"
+export type PayoutEnvProviderId = "noah" | "yellowcard" | "grid" | "bridge"
 
 function providerUnavailable(message: string): NextResponse {
   return NextResponse.json({ error: message, code: "PROVIDER_ENV_UNAVAILABLE" }, { status: 503 })
@@ -17,6 +18,11 @@ export function isYellowcardEnvReady(): boolean {
 /** True when Grid API credentials are present. */
 export function isGridEnvReady(): boolean {
   return isGridConfigured()
+}
+
+/** True when Bridge API credentials are present. */
+export function isBridgeEnvReady(): boolean {
+  return isBridgeConfigured()
 }
 
 /** True when Noah API + signing are present. */
@@ -41,6 +47,14 @@ export function requirePayoutProviderEnv(provider: PayoutEnvProviderId): NextRes
     if (!isGridEnvReady()) {
       return providerUnavailable(
         "Grid payouts are not available in this environment. Configure Grid API credentials.",
+      )
+    }
+    return null
+  }
+  if (provider === "bridge") {
+    if (!isBridgeEnvReady()) {
+      return providerUnavailable(
+        "Bank payouts are not available in this environment. Configure Bridge API credentials.",
       )
     }
     return null
