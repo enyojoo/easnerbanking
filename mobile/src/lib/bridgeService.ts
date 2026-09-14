@@ -39,6 +39,20 @@ export type BridgeCutoverState = {
 }
 
 export const bridgeService = {
+  async acceptTos(signedAgreementId: string): Promise<{ kyc_link?: string | null }> {
+    const session = await requireAuthSession()
+    const response = await fetch(`${apiUrl()}/api/bridge/tos-accept`, {
+      method: 'POST',
+      headers: individualHeaders(session.access_token),
+      body: JSON.stringify({ signed_agreement_id: signedAgreementId }),
+    })
+    const json = (await response.json().catch(() => ({}))) as { kyc_link?: string | null; error?: string }
+    if (!response.ok) {
+      throw new Error(json.error || 'Failed to record terms')
+    }
+    return json
+  },
+
   async getKycLink(fullName: string, email: string, residenceCountry?: string): Promise<BridgeKycLink> {
     const session = await requireAuthSession()
     const response = await fetch(`${apiUrl()}/api/bridge/kyc-links`, {

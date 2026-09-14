@@ -25,6 +25,11 @@ export function getBridgeWebhookPublicKey(): string | null {
   return pem || null
 }
 
+/** TOS-only return. Must not look like KYC/KYB finished. */
+export function getBridgeTosReturnUrl(): string {
+  return getHostedOnboardingReturnUrl("bridge-tos")
+}
+
 /** Hosted individual KYC return. Shared with Noah and Grid. */
 export function getBridgeKycReturnUrl(): string {
   const explicit = String(process.env.BRIDGE_KYC_RETURN_URL ?? "").trim()

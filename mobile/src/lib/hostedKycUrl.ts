@@ -28,14 +28,56 @@ function asRecord(data: unknown): Record<string, unknown> | null {
   return data as Record<string, unknown>
 }
 
+export function signedAgreementIdFromUnknown(data: unknown): string | null {
+  const rec = asRecord(data)
+  if (!rec) return null
+  const id = String(rec.signedAgreementId ?? rec.signed_agreement_id ?? '').trim()
+  return id && id.length <= 1024 ? id : null
+}
+
+export function signedAgreementIdFromUrl(href: string): string | null {
+  try {
+    const url = new URL(href)
+    const id = String(
+      url.searchParams.get('signed_agreement_id') ?? url.searchParams.get('signedAgreementId') ?? '',
+    ).trim()
+    return id && id.length <= 1024 ? id : null
+  } catch {
+    return null
+  }
+}
+
+export function isBridgeTosAcceptedMessage(data: unknown): boolean {
+  const rec = asRecord(data)
+  if (!rec) return false
+  if (rec.type === 'bridgeTosAccepted' || rec.bridgeTosAccepted === true) return true
+  return Boolean(signedAgreementIdFromUnknown(rec))
+}
+
 export function isHostedVerificationCompleteMessage(data: unknown): boolean {
   const rec = asRecord(data)
   if (!rec) return false
+  if (isBridgeTosAcceptedMessage(rec)) return false
   if (rec.hostedComplete === true || rec.kycCompleted === true || rec.type === 'kycCompleted') {
     return true
   }
   const name = String(rec.name ?? rec.event ?? '').toLowerCase()
   return name === 'complete' || name === 'inquiry-complete' || name === 'complete-inquiry'
+}
+
+/** TOS vs KYC return from `/auth/onboarding-complete`. */
+export function hostedOnboardingReturnKind(href: string): 'tos' | 'complete' | null {
+  try {
+    const url = new URL(href)
+    if (!url.pathname.includes('/auth/onboarding-complete')) return null
+    return url.searchParams.get('context') === 'bridge-tos' ? 'tos' : 'complete'
+  } catch {
+    return href.includes('/auth/onboarding-complete')
+      ? href.includes('bridge-tos')
+        ? 'tos'
+        : 'complete'
+      : null
+  }
 }
 
 export function isHostedKycMessageOrigin(origin: string, appOrigin: string): boolean {

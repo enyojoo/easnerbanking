@@ -8,7 +8,7 @@ const LEGACY_COMPLETE_PATHS = new Set([
 
 const PRODUCTION_BUSINESS_ORIGIN = "https://business.easner.com"
 
-export type HostedOnboardingContext = "kyc" | "kyb" | "business"
+export type HostedOnboardingContext = "kyc" | "kyb" | "business" | "bridge-tos"
 
 function tryHttpsWebOrigin(raw: string | undefined): string | null {
   const value = String(raw ?? "").trim()

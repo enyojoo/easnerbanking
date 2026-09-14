@@ -1,4 +1,10 @@
-import { hostedKycUrlForWebEmbed } from '../hostedKycUrl'
+import {
+  hostedKycUrlForWebEmbed,
+  hostedOnboardingReturnKind,
+  isBridgeTosAcceptedMessage,
+  isHostedVerificationCompleteMessage,
+  signedAgreementIdFromUrl,
+} from '../hostedKycUrl'
 
 describe('hostedKycUrlForWebEmbed', () => {
   it('rewrites Persona verify links for the web iframe modal', () => {
@@ -23,5 +29,25 @@ describe('hostedKycUrlForWebEmbed', () => {
     expect(hostedKycUrlForWebEmbed('https://easner.com/privacy', 'https://app.easner.com')).toBe(
       'https://easner.com/privacy',
     )
+  })
+})
+
+describe('hosted onboarding return + TOS messages', () => {
+  it('treats bridge-tos as TOS, not KYC complete', () => {
+    expect(
+      hostedOnboardingReturnKind(
+        'https://business.easner.com/auth/onboarding-complete?context=bridge-tos',
+      ),
+    ).toBe('tos')
+    expect(
+      hostedOnboardingReturnKind('https://business.easner.com/auth/onboarding-complete?context=kyc'),
+    ).toBe('complete')
+    expect(isBridgeTosAcceptedMessage({ type: 'bridgeTosAccepted' })).toBe(true)
+    expect(isHostedVerificationCompleteMessage({ type: 'bridgeTosAccepted' })).toBe(false)
+    expect(
+      signedAgreementIdFromUrl(
+        'https://business.easner.com/auth/onboarding-complete?context=bridge-tos&signed_agreement_id=agr_1',
+      ),
+    ).toBe('agr_1')
   })
 })

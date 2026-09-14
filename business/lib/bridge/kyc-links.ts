@@ -1,5 +1,5 @@
 import { canonicalizeHostedOnboardingReturnUrl } from "@/lib/auth/hosted-onboarding-complete"
-import { getBridgeBusinessKybReturnUrl, getBridgeKycReturnUrl } from "./config"
+import { getBridgeBusinessKybReturnUrl, getBridgeKycReturnUrl, getBridgeTosReturnUrl } from "./config"
 import { bridgeFetch } from "./http"
 
 export type BridgeCustomerType = "individual" | "business"
@@ -87,13 +87,13 @@ export async function getBridgeKycLink(kycLinkId: string): Promise<BridgeKycLink
   })
 }
 
-function hostedRedirectQuery(): string {
-  const redirect = canonicalizeHostedOnboardingReturnUrl(getBridgeKycReturnUrl())
+function hostedRedirectQuery(redirectUrl: string): string {
+  const redirect = canonicalizeHostedOnboardingReturnUrl(redirectUrl)
   return redirect ? `redirect_uri=${encodeURIComponent(redirect)}` : ""
 }
 
 export async function getBridgeCustomerKycLink(customerId: string): Promise<string | null> {
-  const redirect = hostedRedirectQuery()
+  const redirect = hostedRedirectQuery(getBridgeKycReturnUrl())
   const payload = await bridgeFetch<unknown>({
     method: "GET",
     path: `/customers/${encodeURIComponent(customerId)}/kyc_link?endorsement=sepa${redirect ? `&${redirect}` : ""}`,
@@ -101,8 +101,24 @@ export async function getBridgeCustomerKycLink(customerId: string): Promise<stri
   return hostedUrlFromPayload(payload)
 }
 
+export async function attachBridgeSignedAgreement(input: {
+  customerId: string
+  signedAgreementId: string
+}): Promise<void> {
+  const signed = String(input.signedAgreementId ?? "").trim()
+  if (!signed || signed.length > 1024) {
+    throw new Error("signed_agreement_id is required")
+  }
+  await bridgeFetch({
+    method: "PUT",
+    path: `/customers/${encodeURIComponent(input.customerId)}`,
+    idempotencyKey: `bridge-tos:${input.customerId}:${signed}`,
+    json: { signed_agreement_id: signed },
+  })
+}
+
 export async function getBridgeCustomerTosLink(customerId: string): Promise<string | null> {
-  const redirect = hostedRedirectQuery()
+  const redirect = hostedRedirectQuery(getBridgeTosReturnUrl())
   const payload = await bridgeFetch<unknown>({
     method: "GET",
     path: `/customers/${encodeURIComponent(customerId)}/tos_acceptance_link${redirect ? `?${redirect}` : ""}`,

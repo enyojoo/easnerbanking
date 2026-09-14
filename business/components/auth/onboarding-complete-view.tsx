@@ -1,13 +1,33 @@
 "use client"
 
 import { useEffect } from "react"
-import { SETTINGS_VERIFICATION_HREF } from "@/lib/compliance/cutover-comms"
+import { SETTINGS_BRIDGE_FLOW_HREF, SETTINGS_VERIFICATION_HREF } from "@/lib/compliance/cutover-comms"
 
 /** Minimal ReturnURL target for hosted KYC/KYB (iframe or in-app browser). */
 export function OnboardingCompleteView() {
   useEffect(() => {
-    const context = new URLSearchParams(window.location.search).get("context") ?? undefined
+    const params = new URLSearchParams(window.location.search)
+    const context = params.get("context") ?? undefined
+    const signedAgreementId =
+      params.get("signed_agreement_id")?.trim() || params.get("signedAgreementId")?.trim() || undefined
     const embedded = window.parent !== window
+    if (context === "bridge-tos") {
+      if (embedded) {
+        window.parent.postMessage(
+          {
+            type: "bridgeTosAccepted",
+            bridgeTosAccepted: true,
+            ...(signedAgreementId
+              ? { signed_agreement_id: signedAgreementId, signedAgreementId }
+              : {}),
+          },
+          window.location.origin,
+        )
+        return
+      }
+      window.location.replace(SETTINGS_BRIDGE_FLOW_HREF)
+      return
+    }
     if (embedded) {
       window.parent.postMessage(
         {

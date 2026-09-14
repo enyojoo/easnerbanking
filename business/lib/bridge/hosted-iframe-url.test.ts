@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest"
 import {
   buildBridgeHostedIframeUrl,
   isBridgeHostedMessageOrigin,
+  isBridgeTosAcceptedMessage,
   isHostedVerificationCompleteMessage,
+  signedAgreementIdFromUnknown,
+  signedAgreementIdFromUrl,
 } from "./hosted-iframe-url"
 
 describe("buildBridgeHostedIframeUrl", () => {
@@ -61,12 +64,29 @@ describe("isHostedVerificationCompleteMessage", () => {
     expect(isHostedVerificationCompleteMessage({ name: "ready" })).toBe(false)
     expect(isHostedVerificationCompleteMessage(null)).toBe(false)
   })
+
+  it("does not treat TOS acceptance as KYC complete", () => {
+    expect(isBridgeTosAcceptedMessage({ type: "bridgeTosAccepted" })).toBe(true)
+    expect(isBridgeTosAcceptedMessage({ signedAgreementId: "agr_1" })).toBe(true)
+    expect(isHostedVerificationCompleteMessage({ type: "bridgeTosAccepted" })).toBe(false)
+  })
+
+  it("reads signed_agreement_id from TOS return and postMessage", () => {
+    expect(
+      signedAgreementIdFromUrl(
+        "https://business.easner.com/auth/onboarding-complete?context=bridge-tos&signed_agreement_id=agr_1",
+      ),
+    ).toBe("agr_1")
+    expect(signedAgreementIdFromUnknown({ signedAgreementId: "agr_2" })).toBe("agr_2")
+    expect(signedAgreementIdFromUnknown({ type: "bridgeTosAccepted" })).toBeNull()
+  })
 })
 
 describe("isBridgeHostedMessageOrigin", () => {
   it("allows the app origin and Persona hosts", () => {
     expect(isBridgeHostedMessageOrigin("https://business.easner.com", "https://business.easner.com")).toBe(true)
     expect(isBridgeHostedMessageOrigin("https://bridge.withpersona.com", "https://business.easner.com")).toBe(true)
+    expect(isBridgeHostedMessageOrigin("https://dashboard.bridge.xyz", "https://business.easner.com")).toBe(true)
     expect(isBridgeHostedMessageOrigin("https://evil.example", "https://business.easner.com")).toBe(false)
   })
 })

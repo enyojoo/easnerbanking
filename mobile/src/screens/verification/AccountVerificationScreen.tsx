@@ -27,7 +27,9 @@ import { qk, canResubmitNoahVerification, getNoahRejectionDisplay, NOAH_FINAL_RE
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
 import ExternalLinkModal from '../../components/ExternalLinkModal'
+import BridgeHostedVerificationModal from '../../components/BridgeHostedVerificationModal'
 import { useExternalLink } from '../../hooks/useExternalLink'
+import { useBridgeHostedVerification } from '../../hooks/useBridgeHostedVerification'
 import { useAuth } from '../../contexts/AuthContext'
 import { NavigationProps } from '../../types'
 import { noahService } from '../../lib/noahService'
@@ -132,6 +134,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   // KYC open state (hosted link opens via in-app browser – same as Legal)
   const [loadingKyc, setLoadingKyc] = useState(false)
   const externalLink = useExternalLink()
+  const bridgeHosted = useBridgeHostedVerification()
   const [legacyResidenceOpen, setLegacyResidenceOpen] = useState(false)
   const [legacyResidenceCode, setLegacyResidenceCode] = useState('')
   const [legacyResidenceError, setLegacyResidenceError] = useState<string | null>(null)
@@ -498,7 +501,11 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         'Account holder'
 
       if (shouldUseBridgeConsumerKyc(userProfile, residenceOverride)) {
-        const response = await bridgeService.getKycLink(fullName, email, residenceOverride)
+        const response = await bridgeHosted.start({
+          fullName,
+          email,
+          residenceCountry: residenceOverride,
+        })
         const tosUrl = String(response.tos_link || '').trim()
         const kycUrl = String(response.kyc_link || '').trim()
         const kycStatus = String(response.kyc_status || '').toLowerCase()
@@ -519,20 +526,6 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
           }
           showError('Unable to load verification. Please try again or contact support.')
           return
-        }
-        let skipKyc = Boolean(response.alreadyOnboarded) || kycStatus === 'approved'
-        if (tosUrl) {
-          await externalLink.openLink(tosUrl, 'Verification for bank accounts')
-          try {
-            const synced = await bridgeService.syncStatus()
-            if (String(synced.kyc_status || '').toLowerCase() === 'approved') skipKyc = true
-            if (refreshUserProfile) await refreshUserProfile()
-          } catch {
-            // Non-blocking
-          }
-        }
-        if (kycUrl && !skipKyc) {
-          await externalLink.openLink(kycUrl, 'Verification for bank accounts')
         }
         try {
           await syncNoahStatus(false, true)
@@ -1077,6 +1070,14 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         url={externalLink.url}
         title={externalLink.title}
         onClose={externalLink.closeLink}
+      />
+      <BridgeHostedVerificationModal
+        visible={bridgeHosted.isVisible}
+        url={bridgeHosted.url}
+        title={bridgeHosted.title}
+        phase={bridgeHosted.phase}
+        onClose={bridgeHosted.close}
+        onHostedEvent={bridgeHosted.onHostedEvent}
       />
       <WebAwareModal
         visible={legacyResidenceOpen}

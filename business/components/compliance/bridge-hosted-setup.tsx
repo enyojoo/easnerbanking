@@ -9,25 +9,59 @@ import { fetchWithSession } from "@/lib/fetch-with-session"
 import {
   buildBridgeHostedIframeUrl,
   isBridgeHostedMessageOrigin,
+  isBridgeTosAcceptedMessage,
   isHostedVerificationCompleteMessage,
+  signedAgreementIdFromUnknown,
 } from "@/lib/bridge/hosted-iframe-url"
 
 const EUR_TITLE =
   BUSINESS_VERIFICATION_PRODUCTS.find((product) => product.id === "eur")?.title ?? "More accounts"
 
-const IFRAME_SANDBOX =
-  "allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-top-navigation-by-user-activation"
+const TOS_IFRAME_SANDBOX =
+  "allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
+const KYC_IFRAME_SANDBOX = `${TOS_IFRAME_SANDBOX} allow-top-navigation-by-user-activation`
+
+type HostedPhase = "tos" | "kyc"
 
 type Props = {
   onClose: () => void
+}
+
+async function fetchBridgeHostedLinks(): Promise<{
+  kyc_link: string
+  tos_link: string
+  alreadyOnboarded: boolean
+}> {
+  const res = await fetchWithSession("/api/bridge/kyc-links", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Easner-Account-Scope": "business",
+    },
+    body: JSON.stringify({ type: "business" }),
+  })
+  const json = (await res.json().catch(() => ({}))) as {
+    kyc_link?: string | null
+    tos_link?: string | null
+    alreadyOnboarded?: boolean
+    error?: string
+  }
+  if (!res.ok) throw new Error(json.error || "Could not start verification")
+  return {
+    kyc_link: String(json.kyc_link || "").trim(),
+    tos_link: String(json.tos_link || "").trim(),
+    alreadyOnboarded: Boolean(json.alreadyOnboarded),
+  }
 }
 
 export function BridgeHostedSetup({ onClose }: Props) {
   const [hostedUrl, setHostedUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [frameReady, setFrameReady] = useState(false)
+  const [phase, setPhase] = useState<HostedPhase>("tos")
   const finishedRef = useRef(false)
   const pendingKycUrl = useRef<string | null>(null)
+  const phaseRef = useRef<HostedPhase>("tos")
 
   const iframeSrc = useMemo(() => {
     if (!hostedUrl) return null
@@ -35,51 +69,7 @@ export function BridgeHostedSetup({ onClose }: Props) {
     return buildBridgeHostedIframeUrl(hostedUrl, origin)
   }, [hostedUrl])
 
-  const loadHosted = useCallback(async () => {
-    setError(null)
-    setFrameReady(false)
-    setHostedUrl(null)
-    const res = await fetchWithSession("/api/bridge/kyc-links", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Easner-Account-Scope": "business",
-      },
-      body: JSON.stringify({ type: "business" }),
-    })
-    const json = (await res.json().catch(() => ({}))) as {
-      kyc_link?: string | null
-      tos_link?: string | null
-      error?: string
-    }
-    if (!res.ok) throw new Error(json.error || "Could not start verification")
-    const tos = String(json.tos_link || "").trim()
-    const kyc = String(json.kyc_link || "").trim()
-    const hosted = tos || kyc
-    if (!hosted) throw new Error("Could not start verification")
-    pendingKycUrl.current = tos && kyc ? kyc : null
-    setHostedUrl(hosted)
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    void loadHosted().catch((err: unknown) => {
-      if (cancelled) return
-      setError(err instanceof Error ? err.message : "Could not start verification")
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [loadHosted])
-
-  const finish = useCallback(() => {
-    const next = pendingKycUrl.current
-    if (next) {
-      pendingKycUrl.current = null
-      setFrameReady(false)
-      setHostedUrl(next)
-      return
-    }
+  const closeAndSync = useCallback(() => {
     if (finishedRef.current) return
     finishedRef.current = true
     onClose()
@@ -97,15 +87,102 @@ export function BridgeHostedSetup({ onClose }: Props) {
       })
   }, [onClose])
 
+  const openKyc = useCallback((url: string) => {
+    pendingKycUrl.current = null
+    phaseRef.current = "kyc"
+    setPhase("kyc")
+    setFrameReady(false)
+    setHostedUrl(url)
+  }, [])
+
+  const attachTosInBackground = useCallback((signedAgreementId: string) => {
+    void fetchWithSession("/api/bridge/tos-accept", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Easner-Account-Scope": "business",
+      },
+      body: JSON.stringify({ signed_agreement_id: signedAgreementId }),
+    }).catch(() => undefined)
+  }, [])
+
+  const continueToKyc = useCallback(async (signedAgreementId?: string | null) => {
+    if (phaseRef.current === "kyc") return
+    const signed = String(signedAgreementId ?? "").trim()
+    if (signed) attachTosInBackground(signed)
+    const stored = String(pendingKycUrl.current ?? "").trim()
+    if (stored) {
+      openKyc(stored)
+      return
+    }
+    setFrameReady(false)
+    try {
+      const next = await fetchBridgeHostedLinks()
+      if (next.alreadyOnboarded) {
+        closeAndSync()
+        return
+      }
+      if (!next.kyc_link) {
+        setError("Could not start verification")
+        return
+      }
+      openKyc(next.kyc_link)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Could not start verification")
+    }
+  }, [attachTosInBackground, closeAndSync, openKyc])
+
+  const loadHosted = useCallback(async () => {
+    setError(null)
+    setFrameReady(false)
+    setHostedUrl(null)
+    finishedRef.current = false
+    const json = await fetchBridgeHostedLinks()
+    if (json.alreadyOnboarded && !json.tos_link && !json.kyc_link) {
+      closeAndSync()
+      return
+    }
+    if (json.tos_link) {
+      pendingKycUrl.current = json.kyc_link || null
+      phaseRef.current = "tos"
+      setPhase("tos")
+      setHostedUrl(json.tos_link)
+      return
+    }
+    if (json.kyc_link) {
+      openKyc(json.kyc_link)
+      return
+    }
+    throw new Error("Could not start verification")
+  }, [closeAndSync, openKyc])
+
+  useEffect(() => {
+    let cancelled = false
+    void loadHosted().catch((err: unknown) => {
+      if (cancelled) return
+      setError(err instanceof Error ? err.message : "Could not start verification")
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [loadHosted])
+
   useEffect(() => {
     function onMessage(event: MessageEvent) {
-      if (!isHostedVerificationCompleteMessage(event.data)) return
       if (!isBridgeHostedMessageOrigin(event.origin, window.location.origin)) return
-      finish()
+      if (isBridgeTosAcceptedMessage(event.data) || phaseRef.current === "tos") {
+        if (isBridgeTosAcceptedMessage(event.data) || isHostedVerificationCompleteMessage(event.data)) {
+          void continueToKyc(signedAgreementIdFromUnknown(event.data))
+          return
+        }
+      }
+      if (phaseRef.current === "kyc" && isHostedVerificationCompleteMessage(event.data)) {
+        closeAndSync()
+      }
     }
     window.addEventListener("message", onMessage)
     return () => window.removeEventListener("message", onMessage)
-  }, [finish])
+  }, [closeAndSync, continueToKyc])
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-background">
@@ -115,7 +192,7 @@ export function BridgeHostedSetup({ onClose }: Props) {
           variant="ghost"
           size="sm"
           className="h-8 min-w-[8.5rem] justify-start gap-1 px-2"
-          onClick={finish}
+          onClick={closeAndSync}
         >
           <ArrowLeft className="size-4" aria-hidden />
           Back
@@ -148,7 +225,7 @@ export function BridgeHostedSetup({ onClose }: Props) {
             src={iframeSrc}
             className="absolute inset-0 h-full w-full border-0 bg-background"
             allow="camera; microphone"
-            sandbox={IFRAME_SANDBOX}
+            sandbox={phase === "tos" ? TOS_IFRAME_SANDBOX : KYC_IFRAME_SANDBOX}
             onLoad={() => setFrameReady(true)}
           />
         ) : null}

@@ -26,10 +26,47 @@ function asRecord(data: unknown): Record<string, unknown> | null {
   return data as Record<string, unknown>
 }
 
+export function normalizeSignedAgreementId(raw: unknown): string | null {
+  const id = String(raw ?? "").trim()
+  if (!id || id.length > 1024) return null
+  return id
+}
+
+/** Bridge TOS return / postMessage — required to PUT the agreement onto the customer. */
+export function signedAgreementIdFromUnknown(data: unknown): string | null {
+  const rec = asRecord(data)
+  if (!rec) return null
+  return (
+    normalizeSignedAgreementId(rec.signedAgreementId) ??
+    normalizeSignedAgreementId(rec.signed_agreement_id)
+  )
+}
+
+export function signedAgreementIdFromUrl(href: string): string | null {
+  try {
+    const url = new URL(href)
+    return (
+      normalizeSignedAgreementId(url.searchParams.get("signed_agreement_id")) ??
+      normalizeSignedAgreementId(url.searchParams.get("signedAgreementId"))
+    )
+  } catch {
+    return null
+  }
+}
+
+/** TOS accepted — not the end of KYC/KYB. */
+export function isBridgeTosAcceptedMessage(data: unknown): boolean {
+  const rec = asRecord(data)
+  if (!rec) return false
+  if (rec.type === "bridgeTosAccepted" || rec.bridgeTosAccepted === true) return true
+  return Boolean(signedAgreementIdFromUnknown(rec))
+}
+
 /** Parent `postMessage` from `/auth/onboarding-complete` or Persona's widget complete. */
 export function isHostedVerificationCompleteMessage(data: unknown): boolean {
   const rec = asRecord(data)
   if (!rec) return false
+  if (isBridgeTosAcceptedMessage(rec)) return false
   if (rec.hostedComplete === true || rec.kycCompleted === true || rec.type === "kycCompleted") {
     return true
   }
@@ -41,7 +78,8 @@ export function isBridgeHostedMessageOrigin(origin: string, appOrigin: string): 
   if (origin === appOrigin) return true
   try {
     const host = new URL(origin).hostname.toLowerCase()
-    return host === "withpersona.com" || host.endsWith(".withpersona.com")
+    if (host === "withpersona.com" || host.endsWith(".withpersona.com")) return true
+    return host === "bridge.xyz" || host.endsWith(".bridge.xyz")
   } catch {
     return false
   }
