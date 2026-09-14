@@ -83,6 +83,7 @@ export function isBridgeHostedMessageOrigin(origin: string, appOrigin: string): 
   try {
     const host = new URL(origin).hostname.toLowerCase()
     if (host === "withpersona.com" || host.endsWith(".withpersona.com")) return true
+    if (host === "easner.com" || host.endsWith(".easner.com")) return true
     return host === "bridge.xyz" || host.endsWith(".bridge.xyz")
   } catch {
     return false

@@ -27,20 +27,22 @@ export function OnboardingCompleteView() {
       params.get("signed_agreement_id")?.trim() || params.get("signedAgreementId")?.trim() || undefined
     const embedded = window.parent !== window
     const tosReturn = context === "bridge-tos" || Boolean(signedAgreementId)
+    const tosPayload = {
+      type: "bridgeTosAccepted",
+      bridgeTosAccepted: true,
+      ...(signedAgreementId
+        ? { signed_agreement_id: signedAgreementId, signedAgreementId }
+        : {}),
+    }
+    const rnWebView = (window as Window & { ReactNativeWebView?: { postMessage: (m: string) => void } })
+      .ReactNativeWebView
     if (tosReturn) {
+      rnWebView?.postMessage(JSON.stringify(tosPayload))
       if (embedded) {
-        window.parent.postMessage(
-          {
-            type: "bridgeTosAccepted",
-            bridgeTosAccepted: true,
-            ...(signedAgreementId
-              ? { signed_agreement_id: signedAgreementId, signedAgreementId }
-              : {}),
-          },
-          window.location.origin,
-        )
+        window.parent.postMessage(tosPayload, "*")
         return
       }
+      if (rnWebView) return
       void (async () => {
         if (signedAgreementId) await attachSignedAgreement(signedAgreementId)
         window.location.replace(SETTINGS_BRIDGE_FLOW_HREF)
@@ -57,7 +59,7 @@ export function OnboardingCompleteView() {
           gridHostedComplete: true,
           context,
         },
-        window.location.origin,
+        "*",
       )
       return
     }

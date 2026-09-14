@@ -82,6 +82,7 @@ describe("isBridgeHostedMessageOrigin", () => {
     expect(isBridgeHostedMessageOrigin("https://business.easner.com", "https://business.easner.com")).toBe(true)
     expect(isBridgeHostedMessageOrigin("https://bridge.withpersona.com", "https://business.easner.com")).toBe(true)
     expect(isBridgeHostedMessageOrigin("https://dashboard.bridge.xyz", "https://business.easner.com")).toBe(true)
+    expect(isBridgeHostedMessageOrigin("https://app.easner.com", "https://business.easner.com")).toBe(true)
     expect(isBridgeHostedMessageOrigin("https://evil.example", "https://business.easner.com")).toBe(false)
   })
 })

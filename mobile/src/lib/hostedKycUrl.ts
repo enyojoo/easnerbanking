@@ -67,16 +67,19 @@ export function isHostedVerificationCompleteMessage(data: unknown): boolean {
 
 /** TOS vs KYC return from `/auth/onboarding-complete`. */
 export function hostedOnboardingReturnKind(href: string): 'tos' | 'complete' | null {
+  const signed = signedAgreementIdFromUrl(href)
   try {
     const url = new URL(href)
-    if (!url.pathname.includes('/auth/onboarding-complete')) return null
-    return url.searchParams.get('context') === 'bridge-tos' ? 'tos' : 'complete'
+    if (url.pathname.includes('/auth/onboarding-complete')) {
+      if (url.searchParams.get('context') === 'bridge-tos' || signed) return 'tos'
+      return 'complete'
+    }
+    return signed ? 'tos' : null
   } catch {
-    return href.includes('/auth/onboarding-complete')
-      ? href.includes('bridge-tos')
-        ? 'tos'
-        : 'complete'
-      : null
+    if (href.includes('/auth/onboarding-complete')) {
+      return href.includes('bridge-tos') || Boolean(signed) ? 'tos' : 'complete'
+    }
+    return signed ? 'tos' : null
   }
 }
 
@@ -88,7 +91,9 @@ export function isHostedKycMessageOrigin(origin: string, appOrigin: string): boo
       host === 'withpersona.com' ||
       host.endsWith('.withpersona.com') ||
       host.includes('noah.com') ||
-      host.includes('bridge.xyz')
+      host.includes('bridge.xyz') ||
+      host === 'easner.com' ||
+      host.endsWith('.easner.com')
     )
   } catch {
     return false

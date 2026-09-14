@@ -49,5 +49,10 @@ describe('hosted onboarding return + TOS messages', () => {
         'https://business.easner.com/auth/onboarding-complete?context=bridge-tos&signed_agreement_id=agr_1',
       ),
     ).toBe('agr_1')
+    expect(
+      hostedOnboardingReturnKind(
+        'https://business.easner.com/auth/onboarding-complete?signed_agreement_id=agr_1',
+      ),
+    ).toBe('tos')
   })
 })
