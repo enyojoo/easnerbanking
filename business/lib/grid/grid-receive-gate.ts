@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { readCorridorSurfaceRouting, type CorridorRoutingSurface } from "@easner/shared"
+import { loadUserRoutingSurface } from "@/lib/corridor-routing-surface"
 export {
   corridorGridReceiveEnabled,
   corridorSupportsGridReceive,
@@ -38,16 +40,17 @@ export async function isGridLocalPayInEnabledForCorridor(
     countryCode: string
     currencyCode: string
     rail?: "bank_transfer" | "mobile_money"
+    userId?: string | null
+    surface?: CorridorRoutingSurface
   },
 ): Promise<boolean> {
-  const { corridorGridReceiveEnabled } = await import("@/lib/yellowcard/yc-receive-gate")
   const country = input.countryCode.trim().toUpperCase()
   const currency = input.currencyCode.trim().toUpperCase()
   if (!country || !currency) return false
 
   let q = admin
     .from("payout_corridors")
-    .select("metadata,enabled,rail")
+    .select("metadata,enabled,rail,provider_routing")
     .eq("country_code", country)
     .eq("currency_code", currency)
     .eq("enabled", true)
@@ -55,8 +58,14 @@ export async function isGridLocalPayInEnabledForCorridor(
   if (input.rail) q = q.eq("rail", input.rail)
 
   const { data } = await q.limit(10)
+  const surface =
+    input.surface ?? (await loadUserRoutingSurface(admin, input.userId))
   for (const row of data ?? []) {
-    if (corridorGridReceiveEnabled(row.metadata)) return true
+    const overlay = readCorridorSurfaceRouting(
+      { provider_routing: row.provider_routing, metadata: row.metadata },
+      surface,
+    )
+    if (overlay.pay_in === "grid") return true
   }
   return false
 }

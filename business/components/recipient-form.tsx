@@ -218,7 +218,7 @@ export function RecipientForm({
     loading: bankCorridorsLoading,
     error: sendDestinationsError,
     refresh: refreshSendDestinations,
-  } = useSendDestinations()
+  } = useSendDestinations({ poll: true })
 
   useEffect(() => {
     void refreshSendDestinations()

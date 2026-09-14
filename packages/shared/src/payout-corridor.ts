@@ -1,6 +1,10 @@
+import {
+  type CorridorRoutingSurface,
+  readCorridorSurfaceRouting,
+  surfaceHasCustomerFacingRouting,
+} from "./corridor-surface-routing"
 import { isGridDigitalAssetJurisdiction } from "./jurisdiction-blocked-countries"
 import type { ProviderHealthStatus, ProviderRoutingEntry } from "./send-destinations"
-import { resolveUsPayInMode } from "./us-pay-in-mode"
 
 export type PayoutProviderId = "noah" | "yellowcard" | "grid"
 
@@ -179,15 +183,17 @@ export function corridorMatchesCountryCurrency(
 /** True when balance payout routes through Yellowcard direct settlement. */
 export function isYcBalancePayoutCorridor(
   corridor: Pick<PayoutCorridorPublic, "provider_routing" | "metadata"> | null | undefined,
+  surface: CorridorRoutingSurface = "business",
 ): boolean {
-  return resolveOfficePayoutProvider(corridor ?? {}) === "yellowcard"
+  return resolveOfficePayoutProvider(corridor ?? {}, surface) === "yellowcard"
 }
 
 /** True when balance payout routes through Grid quote lock + execute. */
 export function isGridBalancePayoutCorridor(
   corridor: Pick<PayoutCorridorPublic, "provider_routing" | "metadata"> | null | undefined,
+  surface: CorridorRoutingSurface = "business",
 ): boolean {
-  return resolveOfficePayoutProvider(corridor ?? {}) === "grid"
+  return resolveOfficePayoutProvider(corridor ?? {}, surface) === "grid"
 }
 
 /** Primary Office provider for USD balance → local fiat payout on this corridor. */
@@ -198,56 +204,52 @@ export function resolveBalancePayoutProvider(
   return resolvePrimaryPayoutProvider(corridor.provider_routing)
 }
 
-function corridorMetadataRecord(metadata: unknown): PayoutCorridorPayInMetadata {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return {}
-  return metadata as PayoutCorridorPayInMetadata
-}
-
 /** Office-selected payout provider when routing + live send flags agree; null when payout is off. */
-export function resolveOfficePayoutProvider(input: {
-  provider_routing?: ProviderRoutingEntry[] | null
-  metadata?: unknown
-}): PayoutProviderId | null {
-  if (!input.provider_routing?.length) return null
-  const primary = resolvePrimaryPayoutProvider(input.provider_routing)
-  const meta = corridorMetadataRecord(input.metadata)
-  if (primary === "grid" && meta.grid_send_enabled !== true) return null
-  if (primary === "yellowcard" && meta.yc_send_enabled !== true) return null
-  if (primary === "noah" && meta.noah_send_enabled !== true) return null
-  return primary
+export function resolveOfficePayoutProvider(
+  input: {
+    provider_routing?: ProviderRoutingEntry[] | null
+    metadata?: unknown
+  },
+  surface: CorridorRoutingSurface = "business",
+): PayoutProviderId | null {
+  return readCorridorSurfaceRouting(input, surface).payout
 }
 
 /** Office-selected pay-in provider from receive flags; null when pay-in is off. */
-export function resolveOfficePayInProvider(metadata: unknown): PayoutProviderId | null {
-  const meta = corridorMetadataRecord(metadata)
-  if (meta.grid_receive_enabled === true) return "grid"
-  if (meta.yc_receive_enabled === true) return "yellowcard"
-  if (meta.noah_receive_enabled === true) return "noah"
-  return null
+export function resolveOfficePayInProvider(
+  metadata: unknown,
+  surface: CorridorRoutingSurface = "business",
+): PayoutProviderId | null {
+  return readCorridorSurfaceRouting({ metadata }, surface).pay_in
 }
 
 /**
  * True when Office has enabled this corridor row and selected payout or pay-in on this rail.
- * Used to hide orphan rows (e.g. bank_transfer with no routed provider) from customer catalogs.
+ * Pass `surface` for a product catalog. Omit it to treat the row as live if either product is routed
+ * (legacy / ops cleanup).
  */
-export function isCustomerFacingFiatCorridorLive(input: {
-  enabled?: boolean | null
-  provider_routing?: ProviderRoutingEntry[] | null
-  metadata?: unknown
-}): boolean {
+export function isCustomerFacingFiatCorridorLive(
+  input: {
+    enabled?: boolean | null
+    provider_routing?: ProviderRoutingEntry[] | null
+    metadata?: unknown
+  },
+  surface?: CorridorRoutingSurface,
+): boolean {
   if (input.enabled !== true) return false
-  if (resolveOfficePayoutProvider(input)) return true
-  if (resolveOfficePayInProvider(input.metadata)) return true
-  const usMode = resolveUsPayInMode(input.metadata)
-  if (usMode === "va" || usMode === "va_express") return true
-  return false
+  if (surface) return surfaceHasCustomerFacingRouting(input, surface)
+  return (
+    surfaceHasCustomerFacingRouting(input, "business") ||
+    surfaceHasCustomerFacingRouting(input, "personal")
+  )
 }
 
 /** True when balance payout uses Noah sell/prepare (not YC direct or Grid quote lock). */
 export function isNoahBalancePayoutCorridor(
   corridor: Pick<PayoutCorridorPublic, "provider_routing" | "metadata"> | null | undefined,
+  surface: CorridorRoutingSurface = "business",
 ): boolean {
-  return resolveOfficePayoutProvider(corridor ?? {}) === "noah"
+  return resolveOfficePayoutProvider(corridor ?? {}, surface) === "noah"
 }
 
 /**
@@ -269,7 +271,7 @@ export function isBalancePayoutCorridorExecutable(
     | undefined,
 ): boolean {
   if (!corridor) return false
-  const primary = resolveOfficePayoutProvider(corridor)
+  const primary = resolveOfficePayoutProvider(corridor, "business")
   if (!primary) return false
 
   if (primary === "grid") {

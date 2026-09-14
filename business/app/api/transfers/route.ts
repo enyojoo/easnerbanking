@@ -141,6 +141,7 @@ export async function POST(request: Request) {
   }
   const corridorError = await payoutCorridorGate(admin, gateRow, {
     requireExecutableProviderChannel: requireExecutableProviderChannel(),
+    userId: user.id,
   })
   if (corridorError) return corridorError
 

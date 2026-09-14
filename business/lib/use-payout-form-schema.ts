@@ -14,7 +14,7 @@ export function usePayoutFormSchema(input: {
   currencyCode?: string | null
   rail?: PayoutRail
 }): { hints: PayoutFieldsSchemaHint | null; loading: boolean } {
-  const { bankCorridors, mobileCorridors, loading } = useSendDestinations()
+  const { bankCorridors, mobileCorridors, loading } = useSendDestinations({ poll: true })
   const cc = resolvePayoutCountryCode({
     countryCode: input.countryCode,
     currencyCode: input.currencyCode || "",

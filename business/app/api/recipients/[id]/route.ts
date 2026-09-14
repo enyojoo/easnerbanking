@@ -13,10 +13,12 @@ import {
   recipientFormNeedsBankCode,
   recipientFormNeedsEmail,
   recipientFormNeedsPhone,
+  projectCorridorForSurface,
   resolveCorridorRecipientOptions,
   resolvePrimaryPayoutProvider,
   unwrapNoahFieldsSchema,
 } from "@easner/shared"
+import { loadUserRoutingSurface } from "@/lib/corridor-routing-surface"
 import {
   looksLikeMissingStructuredColumn,
   toRecipientLegacyPayload,
@@ -73,8 +75,9 @@ export async function PATCH(request: Request, context: RouteContext) {
     wallet_network: payload.wallet_network ?? existing.wallet_network ?? null,
     bank_name: payload.bank_name ?? existing.bank_name ?? null,
   }
-  const gate = await payoutCorridorGate(admin, merged)
+  const gate = await payoutCorridorGate(admin, merged, { userId: user.id })
   if (gate) return gate
+  const routingSurface = await loadUserRoutingSurface(admin, user.id)
 
   const cc = String(merged.country_code || "").toUpperCase()
   const cur = String(merged.currency || "").toUpperCase()
@@ -85,14 +88,16 @@ export async function PATCH(request: Request, context: RouteContext) {
     const rail = isMobile ? "mobile_money" : "bank_transfer"
     const { data: corridor } = await admin
       .from("payout_corridors")
-      .select("fields_schema,providers,provider_routing")
+      .select("fields_schema,providers,provider_routing,metadata")
       .eq("country_code", cc)
       .eq("currency_code", cur)
       .eq("rail", rail)
       .maybeSingle()
-    const payoutProvider = resolvePrimaryPayoutProvider(
-      corridor?.provider_routing as import("@easner/shared").ProviderRoutingEntry[] | null | undefined,
+    const projected = projectCorridorForSurface(
+      { provider_routing: corridor?.provider_routing, metadata: corridor?.metadata },
+      routingSurface,
     )
+    const payoutProvider = resolvePrimaryPayoutProvider(projected.provider_routing)
     const recipientOptions = resolveCorridorRecipientOptions({
       countryCode: cc,
       currencyCode: cur,
@@ -173,11 +178,11 @@ export async function PATCH(request: Request, context: RouteContext) {
       sort_code: payload.sort_code ?? existing.sort_code ?? null,
       metadata: payload.metadata ?? existing.metadata ?? {},
     })
-    const ycErr = await validateRecipientYcExtrasForSave(admin, savePayload)
+    const ycErr = await validateRecipientYcExtrasForSave(admin, savePayload, user.id)
     if (ycErr) {
       return NextResponse.json({ error: ycErr }, { status: 400 })
     }
-    const gridErr = await validateRecipientGridExtrasForSave(admin, savePayload)
+    const gridErr = await validateRecipientGridExtrasForSave(admin, savePayload, user.id)
     if (gridErr) {
       return NextResponse.json({ error: gridErr }, { status: 400 })
     }

@@ -8,8 +8,8 @@ import {
   type PayoutCorridorCacheShape,
 } from './recipientCatalog'
 
-const STORAGE_KEY = 'easner_send_destinations_v2'
-const STORAGE_ETAG = 'easner_send_destinations_etag'
+const STORAGE_KEY = 'easner_send_destinations_v3_personal'
+const STORAGE_ETAG = 'easner_send_destinations_etag_v3_personal'
 
 const memory: { body?: SendDestinationsResponse; etag?: string } = {}
 

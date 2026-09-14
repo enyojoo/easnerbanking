@@ -3,9 +3,11 @@ import {
   defaultCrossBorderProvider,
   parseCrossBorderProvider,
   corridorOffersCrossBorder,
-  corridorOfficeCrossBorderEnabled,
+  readCorridorSurfaceRouting,
+  type CorridorRoutingSurface,
   type CrossBorderProviderId,
 } from "@easner/shared"
+import { loadUserRoutingSurface } from "@/lib/corridor-routing-surface"
 import { corridorHasGridPayout } from "@/lib/payout-providers/grid-provider"
 import { loadCorridorRouting } from "@/lib/payout-providers/router"
 import { corridorSupportsGridReceive, corridorGridReceiveEnabled } from "@/lib/yellowcard/yc-receive-gate"
@@ -42,6 +44,8 @@ export async function resolveCrossBorderProviderForDestination(
     countryCode: string
     currencyCode: string
     rail?: "bank_transfer" | "mobile_money"
+    userId?: string | null
+    surface?: CorridorRoutingSurface
   },
 ): Promise<CrossBorderProviderId | null> {
   const country = input.countryCode.trim().toUpperCase()
@@ -61,17 +65,26 @@ export async function resolveCrossBorderProviderForDestination(
   const { data } = await q.limit(20)
   const rows = data ?? []
   if (rows.length === 0) return null
+  const surface =
+    input.surface ?? (await loadUserRoutingSurface(admin, input.userId))
 
   let supportYellowcard = false
   let supportGrid = false
   let officeChoice: CrossBorderProviderId | null = null
 
   for (const row of rows) {
-    if (!corridorOfficeCrossBorderEnabled(row.metadata)) continue
+    const overlay = readCorridorSurfaceRouting(
+      { provider_routing: row.provider_routing, metadata: row.metadata },
+      surface,
+    )
+    if (!overlay.cross_border?.enabled) continue
+    if (overlay.cross_border.provider) {
+      officeChoice = officeChoice ?? overlay.cross_border.provider
+    }
     supportYellowcard =
       supportYellowcard || rowSupportsYcPayout(row.metadata, row.provider_routing)
     supportGrid = supportGrid || rowSupportsGridPayout(row.metadata, row.provider_routing)
-    officeChoice = officeChoice ?? parseCrossBorderProvider(row.metadata)
+    officeChoice = officeChoice ?? overlay.cross_border.provider ?? parseCrossBorderProvider(row.metadata)
   }
 
   const preferred = officeChoice ?? defaultCrossBorderProvider({ supportYellowcard, supportGrid })
@@ -82,6 +95,8 @@ export async function resolveCrossBorderProviderForDestination(
     countryCode: country,
     currencyCode: currency,
     rail,
+    surface,
+    userId: input.userId,
   })
 
   if (preferred === "grid") {
@@ -114,6 +129,8 @@ export async function resolveCrossBorderSourcePayInEnabled(
     sourceCountry: string
     sourceCurrency: string
     rail?: "bank_transfer" | "mobile_money"
+    userId?: string | null
+    surface?: CorridorRoutingSurface
   },
 ): Promise<boolean> {
   const country = input.sourceCountry.trim().toUpperCase()
@@ -123,13 +140,23 @@ export async function resolveCrossBorderSourcePayInEnabled(
 
   let sourceQ = admin
     .from("payout_corridors")
-    .select("metadata")
+    .select("metadata,provider_routing")
     .eq("country_code", country)
     .eq("currency_code", currency)
     .eq("enabled", true)
   if (input.rail) sourceQ = sourceQ.eq("rail", input.rail)
   const { data: sourceRows } = await sourceQ.limit(20)
-  if (!(sourceRows ?? []).some((row) => corridorOfficeCrossBorderEnabled(row.metadata))) {
+  const surface =
+    input.surface ?? (await loadUserRoutingSurface(admin, input.userId))
+  if (
+    !(sourceRows ?? []).some((row) => {
+      const overlay = readCorridorSurfaceRouting(
+        { provider_routing: row.provider_routing, metadata: row.metadata },
+        surface,
+      )
+      return overlay.cross_border?.enabled === true
+    })
+  ) {
     return false
   }
 
@@ -139,6 +166,8 @@ export async function resolveCrossBorderSourcePayInEnabled(
       countryCode: country,
       currencyCode: currency,
       rail: input.rail,
+      surface,
+      userId: input.userId,
     })
   }
 
@@ -147,6 +176,8 @@ export async function resolveCrossBorderSourcePayInEnabled(
     countryCode: country,
     currencyCode: currency,
     rail: input.rail,
+    surface,
+    userId: input.userId,
   })
 }
 

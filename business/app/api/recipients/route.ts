@@ -7,7 +7,8 @@ import {
   validateRecipientGridExtrasForSave,
 } from "@/lib/recipients-grid-validation"
 import { attachProviderBindingsToPayload } from "@/lib/recipients-provider-bindings"
-import { recipientFormNeedsBankCode, recipientFormNeedsEmail, recipientFormNeedsPhone, isBankNameAllowedForCorridor, resolveCorridorRecipientOptions, resolvePrimaryPayoutProvider, unwrapNoahFieldsSchema } from "@easner/shared"
+import { recipientFormNeedsBankCode, recipientFormNeedsEmail, recipientFormNeedsPhone, isBankNameAllowedForCorridor, projectCorridorForSurface, resolveCorridorRecipientOptions, resolvePrimaryPayoutProvider, unwrapNoahFieldsSchema } from "@easner/shared"
+import { loadUserRoutingSurface } from "@/lib/corridor-routing-surface"
 import type { RecipientWritePayload } from "@/lib/recipients-write-payload"
 import { findOrCreateRecipient } from "@/lib/recipients-find-or-create"
 
@@ -47,8 +48,11 @@ export async function POST(request: Request) {
   }
 
   const admin = createSupabaseAdmin()
-  const gate = await payoutCorridorGate(admin, payload as Parameters<typeof payoutCorridorGate>[1])
+  const gate = await payoutCorridorGate(admin, payload as Parameters<typeof payoutCorridorGate>[1], {
+    userId: user.id,
+  })
   if (gate) return gate
+  const routingSurface = await loadUserRoutingSurface(admin, user.id)
 
   const cc = String(payload.country_code || "").toUpperCase()
   const cur = String(payload.currency || "").toUpperCase()
@@ -59,14 +63,16 @@ export async function POST(request: Request) {
     const rail = isMobile ? "mobile_money" : "bank_transfer"
     const { data: corridor } = await admin
       .from("payout_corridors")
-      .select("fields_schema,providers,provider_routing")
+      .select("fields_schema,providers,provider_routing,metadata")
       .eq("country_code", cc)
       .eq("currency_code", cur)
       .eq("rail", rail)
       .maybeSingle()
-    const payoutProvider = resolvePrimaryPayoutProvider(
-      corridor?.provider_routing as import("@easner/shared").ProviderRoutingEntry[] | null | undefined,
+    const projected = projectCorridorForSurface(
+      { provider_routing: corridor?.provider_routing, metadata: corridor?.metadata },
+      routingSurface,
     )
+    const payoutProvider = resolvePrimaryPayoutProvider(projected.provider_routing)
     const recipientOptions = resolveCorridorRecipientOptions({
       countryCode: cc,
       currencyCode: cur,
@@ -120,13 +126,13 @@ export async function POST(request: Request) {
       }
     }
 
-    const ycErr = await validateRecipientYcExtrasForSave(admin, payload)
+    const ycErr = await validateRecipientYcExtrasForSave(admin, payload, user.id)
     if (ycErr) {
       return NextResponse.json({ error: ycErr }, { status: 400 })
     }
     const mappedCad = applyCadRoutingToRecipientMetadata(payload)
     payload.metadata = mappedCad.metadata
-    const gridErr = await validateRecipientGridExtrasForSave(admin, mappedCad)
+    const gridErr = await validateRecipientGridExtrasForSave(admin, mappedCad, user.id)
     if (gridErr) {
       return NextResponse.json({ error: gridErr }, { status: 400 })
     }

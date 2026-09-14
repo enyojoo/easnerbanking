@@ -94,6 +94,7 @@ export async function POST(request: Request) {
     countryCode: String(rec.country_code || "").toUpperCase(),
     currencyCode: String(rec.currency || "").toUpperCase(),
     rail,
+    userId: user.id,
   })
   const primary = resolvePrimaryPayoutProvider(routing)
   if (!primary) {

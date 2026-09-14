@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { AppState, type AppStateStatus } from 'react-native'
 import type { SendDestinationsResponse } from '@easner/shared'
 import {
   getSendDestinationsCatalogRevision,
@@ -11,7 +12,10 @@ import {
  * Keeps recipient-form catalog in sync with office fiat/crypto (Platform Control).
  * Data is prefetched at login and read from memory – no loading UI; lists render when ready.
  */
-export function useSendDestinations() {
+const POLL_MS = 15_000
+
+export function useSendDestinations(options?: { poll?: boolean }) {
+  const poll = options?.poll === true
   const [data, setData] = useState<SendDestinationsResponse | null>(() => getSendDestinationsMemory())
   const [revision, setRevision] = useState(() => getSendDestinationsCatalogRevision())
 
@@ -49,6 +53,22 @@ export function useSendDestinations() {
       cancelled = true
     }
   }, [refresh])
+
+  useEffect(() => {
+    const onChange = (state: AppStateStatus) => {
+      if (state === 'active') void refresh()
+    }
+    const sub = AppState.addEventListener('change', onChange)
+    return () => sub.remove()
+  }, [refresh])
+
+  useEffect(() => {
+    if (!poll) return
+    const id = setInterval(() => {
+      void refresh()
+    }, POLL_MS)
+    return () => clearInterval(id)
+  }, [poll, refresh])
 
   const bankCorridors = useMemo(() => data?.fiat.bank_transfer ?? [], [data])
   const mobileCorridors = useMemo(() => data?.fiat.mobile_money ?? [], [data])

@@ -4,12 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { SendDestinationsResponse } from "@easner/shared"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 
+const CATALOG_STORAGE_KEY = "easner_send_destinations_v3_business"
+const POLL_MS = 15_000
 const memory: { etag?: string; body?: SendDestinationsResponse } = {}
 
 function readSession(): SendDestinationsResponse | null {
   if (typeof window === "undefined" || typeof sessionStorage === "undefined") return null
   try {
-    const raw = sessionStorage.getItem("easner_send_destinations_v2")
+    const raw = sessionStorage.getItem(CATALOG_STORAGE_KEY)
     if (!raw) return null
     return JSON.parse(raw) as SendDestinationsResponse
   } catch {
@@ -20,7 +22,7 @@ function readSession(): SendDestinationsResponse | null {
 function writeSession(body: SendDestinationsResponse) {
   if (typeof window === "undefined" || typeof sessionStorage === "undefined") return
   try {
-    sessionStorage.setItem("easner_send_destinations_v2", JSON.stringify(body))
+    sessionStorage.setItem(CATALOG_STORAGE_KEY, JSON.stringify(body))
   } catch {
     // ignore
   }
@@ -47,7 +49,8 @@ function initialBody(): SendDestinationsResponse | null {
   return memory.body ?? readSession()
 }
 
-export function useSendDestinations() {
+export function useSendDestinations(options?: { poll?: boolean }) {
+  const poll = options?.poll === true
   const [data, setData] = useState<SendDestinationsResponse | null>(() => initialBody())
   const [loading, setLoading] = useState(() => !initialBody())
   const [error, setError] = useState<string | null>(null)
@@ -79,6 +82,26 @@ export function useSendDestinations() {
     void refresh()
   }, [refresh])
 
+  useEffect(() => {
+    const onFocus = () => {
+      void refresh()
+    }
+    window.addEventListener("focus", onFocus)
+    document.addEventListener("visibilitychange", onFocus)
+    return () => {
+      window.removeEventListener("focus", onFocus)
+      document.removeEventListener("visibilitychange", onFocus)
+    }
+  }, [refresh])
+
+  useEffect(() => {
+    if (!poll) return
+    const id = window.setInterval(() => {
+      void refresh()
+    }, POLL_MS)
+    return () => window.clearInterval(id)
+  }, [poll, refresh])
+
   const bankCorridors = useMemo(() => data?.fiat.bank_transfer ?? [], [data])
   const mobileCorridors = useMemo(() => data?.fiat.mobile_money ?? [], [data])
   const cryptoDestinations = useMemo(() => data?.crypto ?? [], [data])
@@ -101,7 +124,7 @@ export function useSendDestinations() {
  * hovering "Send" repeatedly fired a round trip per hover (even a 304 is a
  * full network RTT) competing with the actual navigation.
  */
-const PREFETCH_FRESH_MS = 60_000
+const PREFETCH_FRESH_MS = 15_000
 let prefetchInflight: Promise<void> | null = null
 let lastPrefetchedAt = 0
 

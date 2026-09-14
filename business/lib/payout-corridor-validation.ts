@@ -35,6 +35,7 @@ function isMobileRow(row: RecipientLike): boolean {
 }
 
 export type PayoutCorridorGateOptions = {
+  userId?: string | null
   /**
    * When true, require a live executable provider for this corridor (Noah sell,
    * Grid discovery, or YC send channel – whichever Office routes first).
@@ -108,6 +109,7 @@ export async function payoutCorridorGate(
         rail,
         mobileProvider: row.mobile_provider,
         bankName: row.bank_name,
+        userId: options?.userId,
       })
     } catch (e) {
       if (e instanceof NoProviderForCorridorError) {

@@ -126,6 +126,7 @@ export async function previewGridFundBalanceQuote(input: {
     currencyCode: currency,
     rail: input.rail,
     localPayIn: provisional.localPayIn,
+    userId: input.userId,
   })
   if (!limitCheck.ok) {
     throw new Error(limitCheck.message)

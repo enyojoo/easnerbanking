@@ -6,7 +6,13 @@ import type {
   SendDestinationsResponse,
 } from "@easner/shared"
 import type { PayoutCorridorPublic, PayoutFieldsSchemaHint, PayoutRail } from "@easner/shared"
-import { isBalancePayoutCorridorExecutable, isCustomerFacingFiatCorridorLive, pickPublicPayInMetadata } from "@easner/shared"
+import {
+  isBalancePayoutCorridorExecutable,
+  isCustomerFacingFiatCorridorLive,
+  pickPublicPayInMetadata,
+  projectCorridorForSurface,
+  type CorridorRoutingSurface,
+} from "@easner/shared"
 import { annotateCorridorsWithGridAvailability } from "@/lib/grid/corridor-availability"
 import { annotateCorridorsWithNoahAvailability } from "@/lib/noah/channel-availability"
 import { annotateCorridorsWithYcAvailability } from "@/lib/yellowcard/channel-availability"
@@ -68,7 +74,12 @@ function publicCorridor(
     yc_receive_available?: boolean
     provider_health?: Record<string, ProviderHealthStatus>
   },
+  surface: CorridorRoutingSurface,
 ): PayoutCorridorPublic {
+  const projected = projectCorridorForSurface(
+    { provider_routing: row.provider_routing, metadata: row.metadata },
+    surface,
+  )
   return {
     id: row.id,
     rail: row.rail as PayoutRail,
@@ -78,7 +89,7 @@ function publicCorridor(
     currency_name: row.currency_name,
     sort_order: row.sort_order,
     providers: row.providers,
-    provider_routing: parseProviderRouting(row.provider_routing),
+    provider_routing: projected.provider_routing,
     ...(typeof row.noah_sell_available === "boolean" ? { noah_sell_available: row.noah_sell_available } : {}),
     ...(typeof row.grid_send_available === "boolean" ? { grid_send_available: row.grid_send_available } : {}),
     ...(typeof row.yc_send_available === "boolean" ? { yc_send_available: row.yc_send_available } : {}),
@@ -90,7 +101,7 @@ function publicCorridor(
     ...(row.fields_schema != null
       ? { fields_schema: row.fields_schema as PayoutFieldsSchemaHint }
       : {}),
-    ...(row.metadata != null ? { metadata: pickPublicPayInMetadata(row.metadata) } : {}),
+    ...(row.metadata != null ? { metadata: pickPublicPayInMetadata(projected.metadata) } : {}),
   }
 }
 
@@ -126,10 +137,12 @@ function weakEtag(body: SendDestinationsResponse): string {
 export async function buildSendDestinationsCatalog(input?: {
   annotateProviders?: boolean
   executableOnly?: boolean
+  surface?: CorridorRoutingSurface
 }): Promise<{ body: SendDestinationsResponse; etag: string }> {
   const admin = createSupabaseAdmin()
   const annotateProviders = input?.annotateProviders === true
   const executableOnly = input?.executableOnly === true
+  const surface = input?.surface ?? "business"
 
   const [corridorsRes, cryptoRes, policies] = await Promise.all([
     admin
@@ -177,28 +190,35 @@ export async function buildSendDestinationsCatalog(input?: {
     })
   }
   if (executableOnly) {
-    fiatRows = fiatRows.filter((row) =>
-      isBalancePayoutCorridorExecutable({
-        provider_routing: parseProviderRouting(row.provider_routing),
-        metadata: pickPublicPayInMetadata(row.metadata),
+    fiatRows = fiatRows.filter((row) => {
+      const projected = projectCorridorForSurface(
+        { provider_routing: row.provider_routing, metadata: row.metadata },
+        surface,
+      )
+      return isBalancePayoutCorridorExecutable({
+        provider_routing: projected.provider_routing,
+        metadata: pickPublicPayInMetadata(projected.metadata),
         noah_sell_available: row.noah_sell_available,
         grid_send_available: row.grid_send_available,
         yc_send_available: row.yc_send_available,
         provider_health: row.provider_health,
-      }),
-    )
+      })
+    })
   }
 
   fiatRows = fiatRows.filter((row) =>
-    isCustomerFacingFiatCorridorLive({
-      enabled: true,
-      provider_routing: parseProviderRouting(row.provider_routing),
-      metadata: row.metadata,
-    }),
+    isCustomerFacingFiatCorridorLive(
+      {
+        enabled: true,
+        provider_routing: parseProviderRouting(row.provider_routing),
+        metadata: row.metadata,
+      },
+      surface,
+    ),
   )
 
-  const bank = fiatRows.filter((r) => r.rail === "bank_transfer").map(publicCorridor)
-  const mobile = fiatRows.filter((r) => r.rail === "mobile_money").map(publicCorridor)
+  const bank = fiatRows.filter((r) => r.rail === "bank_transfer").map((row) => publicCorridor(row, surface))
+  const mobile = fiatRows.filter((r) => r.rail === "mobile_money").map((row) => publicCorridor(row, surface))
   const cryptoByAsset = new Map<string, CryptoDestinationPublic>()
   for (const row of (cryptoRes.data ?? []) as CryptoRow[]) {
     const pub = publicCrypto(row)
@@ -226,7 +246,7 @@ export async function buildSendDestinationsCatalog(input?: {
   ]
 
   const body: SendDestinationsResponse = {
-    catalog_version: catalogVersion(versionParts),
+    catalog_version: `${surface}:${catalogVersion(versionParts)}`,
     balance_currencies,
     fiat: { bank_transfer: bank, mobile_money: mobile },
     crypto,

@@ -278,6 +278,19 @@ export {
   resolvePayoutProviderForHolderAddress,
 } from "./payout-corridor"
 export {
+  CORRIDOR_ROUTING_SURFACES,
+  hydrateCorridorSurfacesMetadata,
+  mergeCorridorMetadataSurfaces,
+  patchCorridorSurfaceRouting,
+  projectCorridorForSurface,
+  readCorridorSurfaceRouting,
+  readCorridorSurfacesMap,
+  routingSurfaceFromUserRole,
+  surfaceHasCustomerFacingRouting,
+  type CorridorRoutingSurface,
+  type CorridorSurfaceRouting,
+} from "./corridor-surface-routing"
+export {
   US_BANK_TRANSFER_SPEED_LABEL,
   US_BANK_TRANSFER_TYPES,
   coerceUsTransferTypeForProvider,
@@ -554,6 +567,19 @@ export type {
   ExpressCashKind,
   ResolveCashPayInMethodsInput,
 } from "./cash-pay-in-methods"
+export {
+  BUSINESS_VERIFICATION_PRODUCTS,
+  CONSUMER_VERIFICATION_PRODUCTS,
+  USD_VERIFICATION_REQUIRED_COPY,
+  VERIFICATION_COMING_LATER_LABEL,
+  verificationTierLabel,
+} from "./compliance-verification-products"
+export type {
+  VerificationLadderTier,
+  VerificationProduct,
+  VerificationProductAvailability,
+  VerificationProductId,
+} from "./compliance-verification-products"
 export {
   EXPRESS_DEPOSITS_COPY,
   EXPRESS_US_SSN_ID_TYPE,

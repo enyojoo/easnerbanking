@@ -144,6 +144,19 @@ describe("isCustomerFacingFiatCorridorLive", () => {
       }),
     ).toBe(false)
   })
+
+  it("defaults omitted surface to either-product live and accepts an explicit surface", () => {
+    expect(
+      isCustomerFacingFiatCorridorLive(
+        {
+          enabled: true,
+          provider_routing: [{ provider: "grid", priority: 1 }],
+          metadata: { grid_send_enabled: true },
+        },
+        "business",
+      ),
+    ).toBe(true)
+  })
 })
 
 describe("pickPublicPayInMetadata", () => {

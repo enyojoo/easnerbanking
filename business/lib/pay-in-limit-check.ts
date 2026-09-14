@@ -7,6 +7,7 @@ import {
   validatePayInAmountForProvider,
   type PayoutRail,
 } from "@easner/shared"
+import { loadUserRoutingSurface } from "@/lib/corridor-routing-surface"
 import { loadCorridorRouting } from "@/lib/payout-providers"
 import { findYcReceiveChannel } from "@/lib/yellowcard/receive-rails"
 import { listYellowcardChannels } from "@/lib/yellowcard/channels"
@@ -17,6 +18,7 @@ export async function validateFundBalancePayInAmountLimits(input: {
   currencyCode: string
   rail: PayoutRail
   localPayIn: number
+  userId?: string | null
 }): Promise<{ ok: true } | { ok: false; message: string }> {
   const countryCode = input.countryCode.trim().toUpperCase()
   const currencyCode = input.currencyCode.trim().toUpperCase()
@@ -26,6 +28,7 @@ export async function validateFundBalancePayInAmountLimits(input: {
     countryCode,
     currencyCode,
     rail,
+    userId: input.userId,
   })
 
   const { data: corridor } = await input.admin
@@ -40,7 +43,8 @@ export async function validateFundBalancePayInAmountLimits(input: {
     ? providerRouting
     : ((corridor?.provider_routing as typeof providerRouting | null) ?? [])
   const metadata = (corridor?.metadata ?? {}) as Record<string, unknown>
-  const provider = resolvePayInProvider({ providerRouting: routing, metadata })
+  const surface = await loadUserRoutingSurface(input.admin, input.userId)
+  const provider = resolvePayInProvider({ providerRouting: routing, metadata, surface })
   const noahHints = unwrapNoahFieldsSchema(corridor?.fields_schema)
 
   let ycLimits = null

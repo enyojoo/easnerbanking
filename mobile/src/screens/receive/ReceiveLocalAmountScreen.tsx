@@ -151,7 +151,7 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     )
   }, [residenceCountry, localPayInCurrency, payInRail])
 
-  const { catalogRevision } = useSendDestinations()
+  const { catalogRevision } = useSendDestinations({ poll: true })
   const payInProvider = useMemo(
     () =>
       residenceCountry && localPayInCurrency

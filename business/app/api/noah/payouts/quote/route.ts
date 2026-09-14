@@ -97,7 +97,7 @@ export async function POST(request: Request) {
         bank_name: gateRow.bank_name,
         mobile_provider: gateRow.mobile_provider,
       },
-      { requireExecutableProviderChannel: true },
+      { requireExecutableProviderChannel: true, userId: user.id },
     )
     if (gate) return gate
 
@@ -108,6 +108,7 @@ export async function POST(request: Request) {
       sourceBalanceCurrency,
       amountEntryMode,
       sendBudget,
+      userId: user.id,
     })
     if (!limitCheck.ok) {
       return NextResponse.json({ error: limitCheck.message }, { status: 400 })

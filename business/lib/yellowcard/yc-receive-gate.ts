@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { readCorridorSurfaceRouting, type CorridorRoutingSurface } from "@easner/shared"
+import { loadUserRoutingSurface } from "@/lib/corridor-routing-surface"
 
 type CorridorMeta = Record<string, unknown>
 
@@ -88,6 +90,8 @@ export async function isYcLocalPayInEnabledForCorridor(
     countryCode: string
     currencyCode: string
     rail?: "bank_transfer" | "mobile_money"
+    userId?: string | null
+    surface?: CorridorRoutingSurface
   },
 ): Promise<boolean> {
   const country = input.countryCode.trim().toUpperCase()
@@ -96,7 +100,7 @@ export async function isYcLocalPayInEnabledForCorridor(
 
   let q = admin
     .from("payout_corridors")
-    .select("metadata,enabled,rail")
+    .select("metadata,enabled,rail,provider_routing")
     .eq("country_code", country)
     .eq("currency_code", currency)
     .eq("enabled", true)
@@ -106,8 +110,14 @@ export async function isYcLocalPayInEnabledForCorridor(
   }
 
   const { data } = await q.limit(10)
+  const surface =
+    input.surface ?? (await loadUserRoutingSurface(admin, input.userId))
   for (const row of data ?? []) {
-    if (corridorYcReceiveEnabled(row.metadata)) return true
+    const overlay = readCorridorSurfaceRouting(
+      { provider_routing: row.provider_routing, metadata: row.metadata },
+      surface,
+    )
+    if (overlay.pay_in === "yellowcard") return true
   }
   return false
 }

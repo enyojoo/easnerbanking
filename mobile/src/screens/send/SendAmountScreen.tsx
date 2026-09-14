@@ -439,7 +439,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       ? residenceCountryFromPayInCurrency(residenceLocalPayInCurrency)
       : null
 
-  const { catalogRevision } = useSendDestinations()
+  const { catalogRevision } = useSendDestinations({ poll: true })
   const payInProvider = useMemo(
     () =>
       tlcPayInCountry && residenceLocalPayInCurrency

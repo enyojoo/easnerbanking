@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { ProviderRoutingEntry } from "@easner/shared"
-import { filterProviderRoutingForSender, isGridDigitalAssetJurisdiction } from "@easner/shared"
+import type { CorridorRoutingSurface, ProviderRoutingEntry } from "@easner/shared"
+import {
+  filterProviderRoutingForSender,
+  isGridDigitalAssetJurisdiction,
+  projectCorridorForSurface,
+} from "@easner/shared"
+import { loadUserRoutingSurface } from "@/lib/corridor-routing-surface"
 import { gridPayoutProvider } from "./grid-provider"
 import { noahPayoutProvider } from "./noah-provider"
 import { yellowcardPayoutProvider } from "./yellowcard-provider"
@@ -71,20 +76,33 @@ export async function selectProvider(ctx: CorridorContext): Promise<PayoutProvid
  */
 export async function loadCorridorRouting(
   admin: SupabaseClient,
-  input: { countryCode: string; currencyCode: string; rail: PayoutRailKind },
+  input: {
+    countryCode: string
+    currencyCode: string
+    rail: PayoutRailKind
+    surface?: CorridorRoutingSurface
+    userId?: string | null
+  },
 ): Promise<ProviderRoutingEntry[]> {
   const cc = input.countryCode.trim().toUpperCase()
   const cur = input.currencyCode.trim().toUpperCase()
   const { data } = await admin
     .from("payout_corridors")
-    .select("provider_routing,enabled")
+    .select("provider_routing,enabled,metadata")
     .eq("rail", input.rail)
     .eq("country_code", cc)
     .eq("currency_code", cur)
     .maybeSingle()
 
   if (!data?.enabled) return []
-  return parseRouting(data.provider_routing)
+  const surface =
+    input.surface ?? (await loadUserRoutingSurface(admin, input.userId))
+  return parseRouting(
+    projectCorridorForSurface(
+      { provider_routing: data.provider_routing, metadata: data.metadata },
+      surface,
+    ).provider_routing,
+  )
 }
 
 export async function selectProviderForCorridor(
@@ -98,6 +116,7 @@ export async function selectProviderForCorridor(
     senderCountryCode?: string | null
     businessId?: string | null
     userId?: string | null
+    surface?: CorridorRoutingSurface
   },
 ): Promise<PayoutProvider> {
   const rail: PayoutRailKind =
@@ -109,6 +128,8 @@ export async function selectProviderForCorridor(
     countryCode: input.countryCode,
     currencyCode: input.currencyCode,
     rail,
+    surface: input.surface,
+    userId: input.userId,
   })
 
   let senderCountryCode = input.senderCountryCode ?? null
@@ -135,6 +156,8 @@ export async function corridorHasYellowcardPayout(
     countryCode: string
     currencyCode: string
     rail: PayoutRailKind
+    surface?: CorridorRoutingSurface
+    userId?: string | null
   },
 ): Promise<boolean> {
   const cc = input.countryCode.trim().toUpperCase()
@@ -143,6 +166,8 @@ export async function corridorHasYellowcardPayout(
     countryCode: cc,
     currencyCode: cur,
     rail: input.rail,
+    surface: input.surface,
+    userId: input.userId,
   })
   const primary = routing[0]?.provider
   if (primary !== "yellowcard") return false

@@ -213,7 +213,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
   const residenceCountry = String(userProfile?.residence_country ?? '').trim().toUpperCase()
 
-  const { catalogRevision } = useSendDestinations()
+  const { catalogRevision } = useSendDestinations({ poll: true })
 
   const payInProvider = useMemo(
     () =>

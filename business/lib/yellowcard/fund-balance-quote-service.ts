@@ -201,6 +201,7 @@ async function prepareFundBalanceQuote(ctx: FundBalanceQuoteInput) {
     currencyCode: currency,
     rail,
     localPayIn: provisional.localPayIn,
+    userId: kycUserId,
   })
   if (!amountCheck.ok) {
     const belowMin =

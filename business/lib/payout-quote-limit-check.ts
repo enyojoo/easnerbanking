@@ -21,6 +21,7 @@ export async function validatePayoutQuoteAmountLimits(input: {
   sourceBalanceCurrency: string
   amountEntryMode: "send" | "receive"
   sendBudget?: number
+  userId?: string | null
 }): Promise<{ ok: true } | { ok: false; message: string }> {
   const isMobile =
     Boolean(input.gateRow.mobile_provider) ||
@@ -36,6 +37,7 @@ export async function validatePayoutQuoteAmountLimits(input: {
           countryCode,
           currencyCode,
           rail,
+          userId: input.userId,
         })
       : Promise.resolve([] as Awaited<ReturnType<typeof loadCorridorRouting>>),
     countryCode && currencyCode

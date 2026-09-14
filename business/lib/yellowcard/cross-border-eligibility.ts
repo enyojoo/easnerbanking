@@ -39,6 +39,7 @@ async function resolveYellowcardThroughLocalCurrency(
       mobile_provider?: string | null
       bank_name?: string | null
     }
+    userId?: string | null
   },
 ): Promise<ThroughLocalCurrencyEligibility> {
   const payInCurrency = input.payInCurrency
@@ -51,6 +52,7 @@ async function resolveYellowcardThroughLocalCurrency(
     provider: "yellowcard",
     sourceCountry: input.residenceCountry,
     sourceCurrency: payInCurrency,
+    userId: input.userId,
   })
   if (!payInEnabled) {
     return {
@@ -109,6 +111,7 @@ async function resolveGridThroughLocalCurrency(
       mobile_provider?: string | null
       bank_name?: string | null
     }
+    userId?: string | null
   },
 ): Promise<ThroughLocalCurrencyEligibility> {
   const payInCurrency = input.payInCurrency
@@ -123,6 +126,7 @@ async function resolveGridThroughLocalCurrency(
     sourceCountry: input.residenceCountry,
     sourceCurrency: payInCurrency,
     rail: sendRail,
+    userId: input.userId,
   })
   if (!payInEnabled) {
     return {
@@ -160,6 +164,7 @@ async function resolveGridThroughLocalCurrency(
     countryCode: receiveCountry,
     currencyCode: receiveCurrency,
     rail: sendRail,
+    userId: input.userId,
   })
   const payoutOk = await corridorHasGridPayout(admin, {
     countryCode: receiveCountry,
@@ -190,6 +195,7 @@ export async function resolveThroughLocalCurrencyEligibility(
       mobile_provider?: string | null
       bank_name?: string | null
     }
+    userId?: string | null
   },
 ): Promise<ThroughLocalCurrencyEligibility> {
   const payInCurrency = input.payInCurrency
@@ -212,6 +218,7 @@ export async function resolveThroughLocalCurrencyEligibility(
           countryCode: receiveCountry,
           currencyCode: receiveCurrency,
           rail: sendRail,
+          userId: input.userId,
         })
       : null
 
@@ -224,6 +231,7 @@ export async function resolveThroughLocalCurrencyEligibility(
       residenceCountry: input.residenceCountry,
       payInCurrency,
       recipient: input.recipient,
+      userId: input.userId,
     })
   }
 
@@ -231,5 +239,6 @@ export async function resolveThroughLocalCurrencyEligibility(
     residenceCountry: input.residenceCountry,
     payInCurrency,
     recipient: input.recipient,
+    userId: input.userId,
   })
 }

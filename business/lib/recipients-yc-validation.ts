@@ -4,16 +4,18 @@ import {
   isMomoProviderAllowedForCorridor,
   normalizeRecipientYcMetadata,
   resolveCorridorRecipientOptions,
+  projectCorridorForSurface,
   resolvePrimaryPayoutProvider,
   resolveYcCorridorSchema,
   validateYcRecipientForCorridor,
-  type ProviderRoutingEntry,
 } from "@easner/shared"
+import { loadUserRoutingSurface } from "@/lib/corridor-routing-surface"
 import type { RecipientWritePayload } from "@/lib/recipients-write-payload"
 
 export async function validateRecipientYcExtrasForSave(
   admin: SupabaseClient,
   payload: RecipientWritePayload,
+  userId?: string | null,
 ): Promise<string | null> {
   const cc = String(payload.country_code || "").trim().toUpperCase()
   const cur = String(payload.currency || "").trim().toUpperCase()
@@ -26,15 +28,18 @@ export async function validateRecipientYcExtrasForSave(
   const rail = isMobile ? "mobile_money" : "bank_transfer"
   const { data: corridor } = await admin
     .from("payout_corridors")
-    .select("fields_schema,providers,provider_routing")
+    .select("fields_schema,providers,provider_routing,metadata")
     .eq("country_code", cc)
     .eq("currency_code", cur)
     .eq("rail", rail)
     .maybeSingle()
 
-  const payoutProvider = resolvePrimaryPayoutProvider(
-    corridor?.provider_routing as ProviderRoutingEntry[] | null | undefined,
+  const surface = await loadUserRoutingSurface(admin, userId)
+  const projected = projectCorridorForSurface(
+    { provider_routing: corridor?.provider_routing, metadata: corridor?.metadata },
+    surface,
   )
+  const payoutProvider = resolvePrimaryPayoutProvider(projected.provider_routing)
 
   const recipientOptions = resolveCorridorRecipientOptions({
     countryCode: cc,

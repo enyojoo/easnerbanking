@@ -336,7 +336,7 @@ export default function SendPage() {
     [residenceCountry],
   )
 
-  const { bankCorridors, mobileCorridors, catalogVersion } = useSendDestinations()
+  const { bankCorridors, mobileCorridors, catalogVersion } = useSendDestinations({ poll: true })
 
   const payoutRail = recipient
     ? resolveRecipientPayoutRail({

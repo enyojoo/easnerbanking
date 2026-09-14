@@ -20,6 +20,19 @@ describe("corridor-office-ops-guard", () => {
     expect(merged.yc_send_enabled).toBe(true)
   })
 
+  it("merge keeps surfaces.personal when syncing capability flags", () => {
+    const surfaces = {
+      business: { payout: "noah", pay_in: null, cross_border: null },
+      personal: { payout: "yellowcard", pay_in: "yellowcard", cross_border: null },
+    }
+    const merged = mergeYcCapabilityMetadataForSync(
+      { yc_receive_enabled: false, surfaces },
+      { ycSend: true, ycReceive: false },
+    )
+    expect(merged.surfaces).toEqual(surfaces)
+    expect((merged.surfaces as { personal: { payout: string } }).personal.payout).toBe("yellowcard")
+  })
+
   it("mergeYcCapabilityMetadataForSync only marks supported ramps", () => {
     const merged = mergeYcCapabilityMetadataForSync(
       { yc_receive_enabled: false },

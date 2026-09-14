@@ -265,6 +265,7 @@ async function prepareCrossBorderQuote(input: CrossBorderTransferInput) {
     currencyCode: payInCurrency,
     rail: input.payInRail,
     localPayIn: pricing.localPayIn,
+    userId: input.userId,
   })
   if (!amountCheck.ok) {
     throw new Error(

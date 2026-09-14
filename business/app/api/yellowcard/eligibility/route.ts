@@ -76,6 +76,7 @@ export async function GET(request: Request) {
     residenceCountry: String(userRow?.residence_country ?? ""),
     payInCurrency,
     recipient,
+    userId: user.id,
   })
 
   return NextResponse.json({

@@ -189,7 +189,7 @@ function RecipientsContent({ navigation, route }: NavigationProps) {
     cryptoDestinations,
     catalogRevision,
     refresh: refreshCatalog,
-  } = useSendDestinations()
+  } = useSendDestinations({ poll: true })
 
   const {
     selectedBankCorridor,

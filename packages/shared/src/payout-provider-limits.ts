@@ -1,3 +1,5 @@
+import type { CorridorRoutingSurface } from "./corridor-surface-routing"
+import { projectCorridorForSurface } from "./corridor-surface-routing"
 import type { ProviderRoutingEntry } from "./send-destinations"
 import type {
   PayoutCorridorPayInMetadata,
@@ -70,18 +72,24 @@ function resolvePayInProviderFromCaps(input: {
 export function resolvePayInProvider(input: {
   providerRouting?: ProviderRoutingEntry[] | null
   metadata?: Record<string, unknown> | null
+  surface?: CorridorRoutingSurface
 }): PayInProviderId {
-  const explicit = String(input.metadata?.pay_in_provider ?? "").trim().toLowerCase()
+  const projected = projectCorridorForSurface(
+    { provider_routing: input.providerRouting, metadata: input.metadata },
+    input.surface ?? "business",
+  )
+  const metadata = projected.metadata
+  const explicit = String(metadata.pay_in_provider ?? "").trim().toLowerCase()
   if (explicit === "yellowcard" || explicit === "noah" || explicit === "grid") return explicit
 
-  const meta = input.metadata ?? {}
+  const meta = metadata
 
   // Match Office Platform Control toggles – capability flags alone must not activate pay-in.
   if (meta.noah_receive_enabled === true) return "noah"
   if (meta.yc_receive_enabled === true) return "yellowcard"
   if (meta.grid_receive_enabled === true) return "grid"
 
-  const routing = input.providerRouting ?? []
+  const routing = projected.provider_routing
   const payoutProvider = resolvePrimaryPayoutProvider(routing)
   const supportYcPayIn = meta.yc_receive === true && meta.yc_receive_enabled === true
   const supportNoahPayIn = meta.noah_receive === true && meta.noah_receive_enabled === true

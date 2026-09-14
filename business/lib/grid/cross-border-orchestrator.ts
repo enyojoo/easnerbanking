@@ -126,6 +126,7 @@ async function prepareGridCrossBorderQuote(input: GridCrossBorderTransferInput) 
     currencyCode: sourceCurrency,
     rail: payInRail,
     localPayIn: pricing.localPayIn,
+    userId: input.userId,
   })
   if (!payInLimitCheck.ok) {
     throw new Error(payInLimitCheck.message)

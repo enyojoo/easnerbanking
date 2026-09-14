@@ -1,6 +1,13 @@
 import { createHash } from "crypto"
 import { NextResponse } from "next/server"
-import { isBalancePayoutCorridorExecutable, isCustomerFacingFiatCorridorLive, pickPublicPayInMetadata, type ProviderRoutingEntry } from "@easner/shared"
+import {
+  isBalancePayoutCorridorExecutable,
+  isCustomerFacingFiatCorridorLive,
+  pickPublicPayInMetadata,
+  projectCorridorForSurface,
+  type ProviderRoutingEntry,
+} from "@easner/shared"
+import { loadUserRoutingSurface } from "@/lib/corridor-routing-surface"
 import { annotateCorridorsWithGridAvailability } from "@/lib/grid/corridor-availability"
 import { annotateCorridorsWithNoahAvailability } from "@/lib/noah/channel-availability"
 import { annotateCorridorsWithYcAvailability } from "@/lib/yellowcard/channel-availability"
@@ -47,7 +54,11 @@ function parseProviderRouting(raw: unknown): ProviderRoutingEntry[] {
   return out.sort((a, b) => a.priority - b.priority)
 }
 
-function publicCorridorPayload(row: AnnotatedCorridorRow) {
+function publicCorridorPayload(row: AnnotatedCorridorRow, surface: "business" | "personal") {
+  const projected = projectCorridorForSurface(
+    { provider_routing: row.provider_routing, metadata: row.metadata },
+    surface,
+  )
   return {
     id: row.id,
     rail: row.rail,
@@ -57,7 +68,7 @@ function publicCorridorPayload(row: AnnotatedCorridorRow) {
     currency_name: row.currency_name,
     sort_order: row.sort_order,
     providers: row.providers,
-    provider_routing: parseProviderRouting(row.provider_routing),
+    provider_routing: projected.provider_routing,
     ...(typeof row.noah_sell_available === "boolean"
       ? { noah_sell_available: row.noah_sell_available }
       : {}),
@@ -67,12 +78,13 @@ function publicCorridorPayload(row: AnnotatedCorridorRow) {
     ...(typeof row.yc_send_available === "boolean"
       ? { yc_send_available: row.yc_send_available }
       : {}),
-    ...(row.metadata != null ? { metadata: pickPublicPayInMetadata(row.metadata) } : {}),
+    ...(row.metadata != null ? { metadata: pickPublicPayInMetadata(projected.metadata) } : {}),
   }
 }
 
-function weakEtagFromRows(rows: PayoutCorridorRow[]): string {
+function weakEtagFromRows(rows: PayoutCorridorRow[], surface: "business" | "personal"): string {
   const h = createHash("sha256")
+  h.update(`${surface}|`)
   for (const r of rows) {
     h.update(`${r.id}:${r.updated_at}|`)
   }
@@ -108,6 +120,7 @@ export async function GET(request: Request) {
   }
 
   const admin = createSupabaseAdmin()
+  const surface = await loadUserRoutingSurface(admin, user.id)
   let q = admin
     .from("payout_corridors")
     .select(
@@ -134,44 +147,51 @@ export async function GET(request: Request) {
     rows = await annotateCorridorsWithGridAvailability(ycAnnotated)
   }
   if (executableOnly) {
-    rows = (rows as AnnotatedCorridorRow[]).filter((row) =>
-      isBalancePayoutCorridorExecutable({
-        provider_routing: parseProviderRouting(row.provider_routing),
+    rows = (rows as AnnotatedCorridorRow[]).filter((row) => {
+      const projected = projectCorridorForSurface(
+        { provider_routing: row.provider_routing, metadata: row.metadata },
+        surface,
+      )
+      return isBalancePayoutCorridorExecutable({
+        provider_routing: projected.provider_routing,
         metadata: row.metadata,
         noah_sell_available: row.noah_sell_available,
         grid_send_available: row.grid_send_available,
         yc_send_available: row.yc_send_available,
-      }),
-    )
+      })
+    })
   }
   rows = (rows as AnnotatedCorridorRow[]).filter((row) =>
-    isCustomerFacingFiatCorridorLive({
-      enabled: true,
-      provider_routing: parseProviderRouting(row.provider_routing),
-      metadata: row.metadata,
-    }),
+    isCustomerFacingFiatCorridorLive(
+      {
+        enabled: true,
+        provider_routing: parseProviderRouting(row.provider_routing),
+        metadata: row.metadata,
+      },
+      surface,
+    ),
   )
-  const etag = weakEtagFromRows(rows)
+  const etag = weakEtagFromRows(rows, surface)
   const inm = request.headers.get("if-none-match")
   if (inm && inm === etag) {
     return new NextResponse(null, {
       status: 304,
       headers: {
         ETag: etag,
-        "Cache-Control": "private, max-age=60, stale-while-revalidate=300",
+        "Cache-Control": "no-store",
       },
     })
   }
 
   const body = {
-    catalog_version: catalogVersion(rows),
-    corridors: (rows as AnnotatedCorridorRow[]).map(publicCorridorPayload),
+    catalog_version: `${surface}:${catalogVersion(rows)}`,
+    corridors: (rows as AnnotatedCorridorRow[]).map((row) => publicCorridorPayload(row, surface)),
   }
 
   return NextResponse.json(body, {
     headers: {
       ETag: etag,
-      "Cache-Control": "private, max-age=60, stale-while-revalidate=300",
+      "Cache-Control": "no-store",
     },
   })
 }

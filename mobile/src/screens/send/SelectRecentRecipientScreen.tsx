@@ -206,7 +206,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
     cryptoDestinations,
     catalogRevision,
     refresh: refreshCatalog,
-  } = useSendDestinations()
+  } = useSendDestinations({ poll: true })
 
   const {
     usTransferMethods,
