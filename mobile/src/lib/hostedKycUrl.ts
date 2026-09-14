@@ -22,3 +22,33 @@ export function hostedKycUrlForWebEmbed(link: string, iframeOrigin: string): str
     return link
   }
 }
+
+function asRecord(data: unknown): Record<string, unknown> | null {
+  if (!data || typeof data !== 'object') return null
+  return data as Record<string, unknown>
+}
+
+export function isHostedVerificationCompleteMessage(data: unknown): boolean {
+  const rec = asRecord(data)
+  if (!rec) return false
+  if (rec.hostedComplete === true || rec.kycCompleted === true || rec.type === 'kycCompleted') {
+    return true
+  }
+  const name = String(rec.name ?? rec.event ?? '').toLowerCase()
+  return name === 'complete' || name === 'inquiry-complete' || name === 'complete-inquiry'
+}
+
+export function isHostedKycMessageOrigin(origin: string, appOrigin: string): boolean {
+  if (origin === appOrigin) return true
+  try {
+    const host = new URL(origin).hostname.toLowerCase()
+    return (
+      host === 'withpersona.com' ||
+      host.endsWith('.withpersona.com') ||
+      host.includes('noah.com') ||
+      host.includes('bridge.xyz')
+    )
+  } catch {
+    return false
+  }
+}
