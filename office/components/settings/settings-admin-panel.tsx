@@ -17,6 +17,13 @@ import {
   type OfficeSystemSetting,
 } from "@/hooks/queries"
 import { CurrencyFlag } from "@/components/flags"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { PlatformControlTabShell } from "@/components/platform-control/platform-tab-shell"
 
 interface SystemSetting extends OfficeSystemSetting {}
@@ -62,6 +69,7 @@ export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection
     registrationEnabled: true,
     emailVerificationRequired: true,
     walletSendComplianceEnabled: true,
+    emailProvider: "ses",
   })
 
   // Security settings derived from system settings
@@ -93,6 +101,7 @@ export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection
       registrationEnabled: true,
       emailVerificationRequired: true,
       walletSendComplianceEnabled: true,
+      emailProvider: "ses",
     }
     const newSecuritySettings = {
       sessionTimeout: 30,
@@ -120,6 +129,9 @@ export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection
           break
         case "wallet_send_compliance_enabled":
           newPlatformConfig.walletSendComplianceEnabled = setting.value === "true"
+          break
+        case "email_provider":
+          newPlatformConfig.emailProvider = setting.value === "sendgrid" ? "sendgrid" : "ses"
           break
         case "session_timeout":
           newSecuritySettings.sessionTimeout = Number.parseInt(setting.value)
@@ -376,6 +388,26 @@ export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection
             handlePlatformConfigChange("walletSendComplianceEnabled", checked)
           }
         />
+      </div>
+      <div className="flex items-center justify-between gap-6">
+        <div>
+          <Label htmlFor="emailProvider">Email provider</Label>
+          <p className="text-sm text-gray-500">
+            Transactional mail backend. SES is default; switch to SendGrid only as fallback.
+          </p>
+        </div>
+        <Select
+          value={platformConfig.emailProvider}
+          onValueChange={(value) => handlePlatformConfigChange("emailProvider", value)}
+        >
+          <SelectTrigger id="emailProvider" className="w-[160px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ses">AWS SES</SelectItem>
+            <SelectItem value="sendgrid">SendGrid</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
     </div>
   )

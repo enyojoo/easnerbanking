@@ -5,6 +5,7 @@ import {
   generateTransactionDetailsTable,
   EASNER_COMPANY_ADDRESS,
   EASNER_COMPANY_LEGAL_NAME,
+  resolveEmailReplyTo,
 } from "@easner/server"
 import { formatTransactionWhen } from "@easner/shared"
 import { formatCurrency } from "@/lib/utils"
@@ -40,7 +41,7 @@ export function getCheckoutPayerReceiptEmailSubject(businessName: string): strin
 function contactFooter(businessReplyEmail?: string): { html: string; text: string } {
   const merchantEmail = businessReplyEmail?.trim()
   if (!merchantEmail) {
-    const support = process.env.SENDGRID_REPLY_TO?.trim() || "support@easner.com"
+    const support = resolveEmailReplyTo()
     return {
       html: `If you have any questions or think an error was made, email <a href="mailto:${support}" style="color: #007ACC; text-decoration: none; word-break: break-all;">${support}</a>.`,
       text: `If you have any questions or think an error was made, email ${support}.`,

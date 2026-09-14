@@ -1,4 +1,4 @@
-import sgMail from "@sendgrid/mail"
+import { sendMail } from "@easner/server"
 import {
   generateInvoiceCustomerRefundEmailHtml,
   generateInvoiceCustomerRefundEmailText,
@@ -23,19 +23,6 @@ import {
 import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
 import { resolveInvoiceFromEmail } from "@/lib/invoices/invoice-from-email"
 import type { Invoice } from "@/lib/b2b/types"
-
-let apiKeyInitialized = false
-
-function ensureSendGridInitialized() {
-  if (!apiKeyInitialized) {
-    const key = process.env.SENDGRID_API_KEY
-    if (!key) {
-      throw new Error("SENDGRID_API_KEY environment variable is required")
-    }
-    sgMail.setApiKey(key)
-    apiKeyInitialized = true
-  }
-}
 
 export interface SendInvoiceEmailResult {
   success: boolean
@@ -69,8 +56,6 @@ export async function sendInvoiceEmail(
   }
 
   try {
-    ensureSendGridInitialized()
-
     const { email: fromEmail, name: fromName } = resolveInvoiceFromEmail()
     const businessName = options?.businessName?.trim() || options?.issuer?.name?.trim() || "Business"
     const issuer: InvoicePdfIssuer = options?.issuer ?? {
@@ -97,17 +82,13 @@ export async function sendInvoiceEmail(
       reminderType: options?.reminderType,
     }
 
-    const html = generateInvoiceEmailHtml(data)
-    const text = generateInvoiceEmailText(data)
-    const subject = getInvoiceEmailSubject(data)
-
-    const msg = {
+    const result = await sendMail({
       to: invoice.customerEmail,
       from: { email: fromEmail, name: fromName },
       replyTo: replyEmail,
-      subject,
-      html,
-      text,
+      subject: getInvoiceEmailSubject(data),
+      html: generateInvoiceEmailHtml(data),
+      text: generateInvoiceEmailText(data),
       attachments: [
         {
           content: pdfBuffer.toString("base64"),
@@ -116,12 +97,9 @@ export async function sendInvoiceEmail(
           disposition: "attachment",
         },
       ],
-    }
-
-    const [response] = await sgMail.send(msg)
-    const messageId = response.headers["x-message-id"] as string | undefined
-
-    return { success: true, messageId }
+    })
+    if (!result.success) return { success: false, error: result.error }
+    return { success: true, messageId: result.messageId }
   } catch (err) {
     console.error("Failed to send invoice email:", err)
     return {
@@ -139,7 +117,6 @@ export async function sendInvoiceViewNotificationEmail(input: {
   recipientFirstName?: string
 }): Promise<SendInvoiceEmailResult> {
   try {
-    ensureSendGridInitialized()
     const { email: fromEmail, name: fromName } = resolveInvoiceFromEmail()
     const templateData = {
       invoice: input.invoice,
@@ -148,14 +125,15 @@ export async function sendInvoiceViewNotificationEmail(input: {
       recipientFirstName: input.recipientFirstName,
     }
 
-    await sgMail.send({
+    const result = await sendMail({
       to: input.to,
       from: { email: fromEmail, name: fromName },
       subject: getInvoiceViewedNotificationSubject(input.invoice.invoiceNumber),
       text: generateInvoiceViewedNotificationText(templateData),
       html: generateInvoiceViewedNotificationHtml(templateData),
     })
-    return { success: true }
+    if (!result.success) return { success: false, error: result.error }
+    return { success: true, messageId: result.messageId }
   } catch (err) {
     console.error("Failed to send invoice view notification:", err)
     return {
@@ -174,7 +152,6 @@ export async function sendInvoicePaidNotificationEmail(input: {
   paymentMethodLabel?: string
 }): Promise<SendInvoiceEmailResult> {
   try {
-    ensureSendGridInitialized()
     const { email: fromEmail, name: fromName } = resolveInvoiceFromEmail()
     const templateData = {
       invoice: input.invoice,
@@ -184,14 +161,15 @@ export async function sendInvoicePaidNotificationEmail(input: {
       paymentMethodLabel: input.paymentMethodLabel,
     }
 
-    await sgMail.send({
+    const result = await sendMail({
       to: input.to,
       from: { email: fromEmail, name: fromName },
       subject: getInvoicePaidNotificationSubject(input.invoice.invoiceNumber),
       text: generateInvoicePaidNotificationText(templateData),
       html: generateInvoicePaidNotificationHtml(templateData),
     })
-    return { success: true }
+    if (!result.success) return { success: false, error: result.error }
+    return { success: true, messageId: result.messageId }
   } catch (err) {
     console.error("Failed to send invoice paid notification:", err)
     return {
@@ -209,7 +187,6 @@ export async function sendInvoiceRefundedNotificationEmail(input: {
   recipientFirstName?: string
 }): Promise<SendInvoiceEmailResult> {
   try {
-    ensureSendGridInitialized()
     const { email: fromEmail, name: fromName } = resolveInvoiceFromEmail()
     const templateData = {
       invoice: input.invoice,
@@ -218,14 +195,15 @@ export async function sendInvoiceRefundedNotificationEmail(input: {
       recipientFirstName: input.recipientFirstName,
     }
 
-    await sgMail.send({
+    const result = await sendMail({
       to: input.to,
       from: { email: fromEmail, name: fromName },
       subject: getInvoiceRefundedNotificationSubject(input.invoice.invoiceNumber),
       text: generateInvoiceRefundedNotificationText(templateData),
       html: generateInvoiceRefundedNotificationHtml(templateData),
     })
-    return { success: true }
+    if (!result.success) return { success: false, error: result.error }
+    return { success: true, messageId: result.messageId }
   } catch (err) {
     console.error("Failed to send invoice refunded notification:", err)
     return {
@@ -247,7 +225,6 @@ export async function sendInvoiceCustomerRefundEmail(input: {
   }
 
   try {
-    ensureSendGridInitialized()
     const { email: fromEmail, name: fromName } = resolveInvoiceFromEmail()
     const businessName = input.businessName?.trim() || input.issuer?.name?.trim() || "Business"
     const invoiceViewUrl = input.invoiceViewUrl?.trim() || ""
@@ -271,7 +248,7 @@ export async function sendInvoiceCustomerRefundEmail(input: {
       issuer: { ...issuer, name: issuer.name?.trim() || businessName, email: input.businessReplyEmail },
     }
 
-    await sgMail.send({
+    const result = await sendMail({
       to: input.invoice.customerEmail,
       from: { email: fromEmail, name: fromName },
       replyTo: input.businessReplyEmail,
@@ -279,7 +256,8 @@ export async function sendInvoiceCustomerRefundEmail(input: {
       text: generateInvoiceCustomerRefundEmailText(templateData),
       html: generateInvoiceCustomerRefundEmailHtml(templateData),
     })
-    return { success: true }
+    if (!result.success) return { success: false, error: result.error }
+    return { success: true, messageId: result.messageId }
   } catch (err) {
     console.error("Failed to send customer refund email:", err)
     return {
@@ -302,7 +280,6 @@ export async function sendInvoiceReceiptEmail(input: {
   }
 
   try {
-    ensureSendGridInitialized()
     const { email: fromEmail, name: fromName } = resolveInvoiceFromEmail()
     const businessName = input.businessName?.trim() || input.issuer?.name?.trim() || "Business"
     const invoiceViewUrl = input.invoiceViewUrl?.trim() || ""
@@ -326,7 +303,7 @@ export async function sendInvoiceReceiptEmail(input: {
       issuer: { ...issuer, name: issuer.name?.trim() || businessName, email: input.businessReplyEmail },
     }
 
-    await sgMail.send({
+    const result = await sendMail({
       to: input.invoice.customerEmail,
       from: { email: fromEmail, name: fromName },
       replyTo: input.businessReplyEmail,
@@ -342,7 +319,8 @@ export async function sendInvoiceReceiptEmail(input: {
         },
       ],
     })
-    return { success: true }
+    if (!result.success) return { success: false, error: result.error }
+    return { success: true, messageId: result.messageId }
   } catch (err) {
     console.error("Failed to send receipt email:", err)
     return {

@@ -1,6 +1,3 @@
-// Main email service using SendGrid API
-
-import sgMail from "@sendgrid/mail"
 import { emailTemplates } from "./email-templates"
 import { shouldSendTemplatedEmail } from "./communication-email-guard"
 import {
@@ -8,24 +5,21 @@ import {
   resolveEmailAudienceFromData,
   type EmailAudience,
 } from "./email-audience"
+import {
+  resolveBusinessFromEmail,
+  resolveEmailReplyTo,
+  resolvePersonalFromEmail,
+  resolvePersonalFromName,
+} from "./email-from"
+import { sendMail } from "./mailer"
 import type {
   AppDownloadLinkEmailData,
   EmailData,
   EmailServiceConfig,
-  SendGridResponse,
+  SendEmailResult,
   TransactionEmailData,
   WelcomeEmailData,
 } from "./email-types"
-
-let apiKeyInitialized = false
-function ensureSendGridInitialized() {
-  if (!apiKeyInitialized) {
-    const key = process.env.SENDGRID_API_KEY
-    if (!key) throw new Error("SENDGRID_API_KEY environment variable is required")
-    sgMail.setApiKey(key)
-    apiKeyInitialized = true
-  }
-}
 
 function resolveAudience(emailData: EmailData): EmailAudience {
   if (emailData.audience) return emailData.audience
@@ -37,26 +31,23 @@ export class EmailService {
 
   constructor(config?: Partial<EmailServiceConfig>) {
     this.config = {
-      fromEmail: process.env.SENDGRID_FROM_EMAIL || "noreply@easner.com",
-      fromName: process.env.SENDGRID_FROM_NAME || "Easner",
-      replyTo: process.env.SENDGRID_REPLY_TO || "support@easner.com",
+      fromEmail: resolvePersonalFromEmail(),
+      fromName: resolvePersonalFromName(),
+      replyTo: resolveEmailReplyTo(),
       ...config,
     }
   }
 
   private fromForAudience(audience: EmailAudience) {
     const profile = getEmailAudienceProfile(audience)
-    const email =
-      audience === "business"
-        ? process.env.SENDGRID_FROM_EMAIL_BUSINESS || process.env.SENDGRID_FROM_EMAIL || "invoices@easner.com"
-        : this.config.fromEmail
+    const email = audience === "business" ? resolveBusinessFromEmail() : this.config.fromEmail
     return { email, name: profile.fromName }
   }
 
   async sendEmail(
     emailData: EmailData,
     communicationPreferences?: unknown,
-  ): Promise<SendGridResponse> {
+  ): Promise<SendEmailResult> {
     try {
       const { send, reason } = shouldSendTemplatedEmail(
         emailData.template,
@@ -69,7 +60,6 @@ export class EmailService {
         return { success: true, skipped: true, skipReason: reason }
       }
 
-      ensureSendGridInitialized()
       const template = emailTemplates[emailData.template]
       if (!template) {
         throw new Error(`Email template '${emailData.template}' not found`)
@@ -81,28 +71,15 @@ export class EmailService {
           ? template.subject(emailData.data, audience)
           : template.subject
 
-      const msg: Record<string, unknown> = {
+      return await sendMail({
         to: emailData.to,
         from: this.fromForAudience(audience),
         replyTo: this.config.replyTo,
         subject,
         html: template.html(emailData.data, audience),
         text: template.text(emailData.data, audience),
-      }
-      if (emailData.attachments?.length) {
-        msg.attachments = emailData.attachments.map((a) => ({
-          content: a.content,
-          filename: a.filename,
-          type: a.type,
-          disposition: a.disposition ?? "attachment",
-        }))
-      }
-
-      const response = await sgMail.send(msg)
-      return {
-        success: true,
-        messageId: response[0].headers["x-message-id"] as string,
-      }
+        attachments: emailData.attachments,
+      })
     } catch (error) {
       console.error("Email sending failed:", error)
       return {
@@ -115,7 +92,7 @@ export class EmailService {
   async sendWelcomeEmail(
     userData: WelcomeEmailData,
     communicationPreferences?: unknown,
-  ): Promise<SendGridResponse> {
+  ): Promise<SendEmailResult> {
     const audience = userData.audience ?? "personal"
     return this.sendEmail(
       {
@@ -132,7 +109,7 @@ export class EmailService {
     userEmail: string,
     data: TransactionEmailData,
     communicationPreferences?: unknown,
-  ): Promise<SendGridResponse> {
+  ): Promise<SendEmailResult> {
     const template =
       data.outcome === "failed"
         ? "transactionFailed"
@@ -150,7 +127,7 @@ export class EmailService {
     )
   }
 
-  async sendTestEmail(to: string, audience: EmailAudience = "personal"): Promise<SendGridResponse> {
+  async sendTestEmail(to: string, audience: EmailAudience = "personal"): Promise<SendEmailResult> {
     const profile = getEmailAudienceProfile(audience)
     return this.sendEmail({
       to,
@@ -167,7 +144,7 @@ export class EmailService {
 
   async sendAppDownloadLinkEmail(
     data: AppDownloadLinkEmailData,
-  ): Promise<SendGridResponse> {
+  ): Promise<SendEmailResult> {
     return this.sendEmail(
       {
         to: data.email,

@@ -1,5 +1,22 @@
 export { EmailNotificationService } from "./email-notification-service"
 export { emailService } from "./email-service"
+export { sendMail } from "./mailer"
+export type { SendMailInput } from "./mailer-types"
+export type { EmailProvider } from "./email-provider"
+export {
+  EMAIL_PROVIDER_SETTING_KEY,
+  isEmailProviderCredentialsConfigured,
+  isSesCredentialsConfigured,
+  isSendGridCredentialsConfigured,
+} from "./email-provider"
+export {
+  resolvePersonalFromEmail,
+  resolveInvoiceFromEmailAddress,
+  resolveInvoiceFromName,
+  resolveReceiptFromEmailAddress,
+  resolveBusinessFromName,
+  resolveEmailReplyTo,
+} from "./email-from"
 export type {
   TransactionEmailData,
   WelcomeEmailData,
@@ -10,6 +27,7 @@ export type {
   AccountRestrictionEmailData,
   AccountRestrictionOpsEmailData,
   WalletSendVelocityOpsEmailData,
+  SendEmailResult,
 } from "./email-types"
 export type { EmailAudience } from "./email-audience"
 export { getEmailAudienceProfile, resolveEmailAudienceFromData } from "./email-audience"
@@ -38,3 +56,8 @@ export {
   EASNER_COMPANY_ADDRESS,
   EASNER_CONTACT_URL,
 } from "./email-theme"
+export {
+  parseSesNotificationMessage,
+  parseSnsEnvelope,
+  verifySnsSignature,
+} from "./ses-sns"

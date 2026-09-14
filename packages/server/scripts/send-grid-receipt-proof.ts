@@ -119,9 +119,11 @@ function buildProofs(): TransactionEmailData[] {
 
 async function main() {
   const to = parseTo(process.argv.slice(2))
-  if (!process.env.SENDGRID_API_KEY?.trim()) {
-    console.error("ERROR: SENDGRID_API_KEY required (business/.env.local)")
-    process.exit(1)
+  if (!process.env.AWS_ACCESS_KEY_ID?.trim() || !process.env.AWS_SECRET_ACCESS_KEY?.trim()) {
+    if (!process.env.SENDGRID_API_KEY?.trim()) {
+      console.error("ERROR: AWS SES credentials or SENDGRID_API_KEY required (business/.env.local)")
+      process.exit(1)
+    }
   }
 
   for (const data of buildProofs()) {

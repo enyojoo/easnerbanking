@@ -7,7 +7,7 @@ function asMeta(value: unknown): Record<string, unknown> {
 }
 
 /**
- * Confirm receipt delivery to Grid after SendGrid succeeds.
+ * Confirm receipt delivery to Grid after the payer receipt email succeeds.
  * Never confirm a failed or refunded Grid payout.
  * @see https://docs.lightspark.com/payouts-and-b2b/payment-flow/receipts
  */

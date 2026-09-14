@@ -262,10 +262,13 @@ export interface EmailServiceConfig {
   replyTo?: string
 }
 
-export interface SendGridResponse {
+export interface SendEmailResult {
   success: boolean
   messageId?: string
   error?: string
   skipped?: boolean
   skipReason?: string
 }
+
+/** @deprecated Use SendEmailResult */
+export type SendGridResponse = SendEmailResult

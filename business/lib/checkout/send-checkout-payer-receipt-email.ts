@@ -1,4 +1,4 @@
-import sgMail from "@sendgrid/mail"
+import { sendMail } from "@easner/server"
 import { resolveReceiptFromEmail } from "@/lib/invoices/invoice-from-email"
 import {
   generateCheckoutPayerReceiptEmailHtml,
@@ -6,19 +6,6 @@ import {
   getCheckoutPayerReceiptEmailSubject,
   type CheckoutPayerReceiptEmailData,
 } from "@/lib/checkout/checkout-payer-receipt-template"
-
-let apiKeyInitialized = false
-
-function ensureSendGridInitialized() {
-  if (!apiKeyInitialized) {
-    const key = process.env.SENDGRID_API_KEY
-    if (!key) {
-      throw new Error("SENDGRID_API_KEY environment variable is required")
-    }
-    sgMail.setApiKey(key)
-    apiKeyInitialized = true
-  }
-}
 
 export async function sendCheckoutPayerReceiptEmail(
   to: string,
@@ -30,12 +17,11 @@ export async function sendCheckoutPayerReceiptEmail(
   }
 
   try {
-    ensureSendGridInitialized()
     const { email: fromEmail, name: fromName } = resolveReceiptFromEmail()
     const businessName = data.businessName.trim() || "Business"
     const replyTo = data.businessReplyEmail.trim() || fromEmail
 
-    await sgMail.send({
+    const result = await sendMail({
       to: recipient,
       from: { email: fromEmail, name: fromName },
       replyTo,
@@ -43,6 +29,7 @@ export async function sendCheckoutPayerReceiptEmail(
       html: generateCheckoutPayerReceiptEmailHtml({ ...data, businessName, businessReplyEmail: replyTo }),
       text: generateCheckoutPayerReceiptEmailText({ ...data, businessName, businessReplyEmail: replyTo }),
     })
+    if (!result.success) return { success: false, error: result.error }
     return { success: true }
   } catch (err) {
     console.error("Failed to send checkout payer receipt:", err)

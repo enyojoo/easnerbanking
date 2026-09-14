@@ -10,6 +10,9 @@ vi.mock("@easner/server", () => ({
   emailService: {
     sendAppDownloadLinkEmail: vi.fn(async () => ({ success: true, messageId: "msg-1" })),
   },
+  isSesCredentialsConfigured: () =>
+    Boolean(process.env.AWS_ACCESS_KEY_ID?.trim() && process.env.AWS_SECRET_ACCESS_KEY?.trim()),
+  isSendGridCredentialsConfigured: () => Boolean(process.env.SENDGRID_API_KEY?.trim()),
 }))
 
 vi.mock("@/lib/payroll/rate-limit", () => ({
@@ -24,7 +27,8 @@ const admin = {} as never
 describe("app-download-link marketing", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    process.env.SENDGRID_API_KEY = "sg.test"
+    process.env.AWS_ACCESS_KEY_ID = "akid"
+    process.env.AWS_SECRET_ACCESS_KEY = "secret"
     delete process.env.MARKETING_APP_DOWNLOAD_EMAIL_ENABLED
   })
 

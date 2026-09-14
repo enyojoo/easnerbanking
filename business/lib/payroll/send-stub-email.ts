@@ -1,6 +1,5 @@
-import sgMail from "@sendgrid/mail"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { emailService } from "@easner/server"
+import { emailService, resolvePersonalFromEmail, sendMail } from "@easner/server"
 import { createHash } from "node:crypto"
 import { generatePayrollStubPdfBuffer } from "@/lib/payroll/generate-payroll-stub-pdf"
 import { railLabel } from "@/lib/payroll/helpers"
@@ -12,17 +11,6 @@ import type { PayrollLineRow, PayrollRunRow } from "@/lib/payroll/map-payroll"
 import type { PayrollRail } from "@/lib/payroll/types"
 import { formatCurrency } from "@/lib/utils"
 import { formatPayrollZonedDateTime } from "@/lib/payroll/schedule-preview"
-
-let apiKeyInitialized = false
-
-function ensureSendGrid() {
-  if (!apiKeyInitialized) {
-    const key = process.env.SENDGRID_API_KEY
-    if (!key) throw new Error("SENDGRID_API_KEY required")
-    sgMail.setApiKey(key)
-    apiKeyInitialized = true
-  }
-}
 
 export async function sendPayrollStubForLine(
   admin: SupabaseClient,
@@ -235,11 +223,10 @@ export async function sendPayrollStubForLine(
       }).select("id").single()
   const nextAttempt = Number(options.deliveryAttempts ?? 0) + 1
 
-  ensureSendGrid()
   try {
-    await sgMail.send({
+    const result = await sendMail({
       to: email,
-      from: process.env.SENDGRID_FROM_EMAIL || "noreply@easner.com",
+      from: resolvePersonalFromEmail(),
       subject: isReversal
         ? `Payroll payment reversed by ${businessName}`
         : `You've been paid by ${businessName}`,
@@ -256,6 +243,9 @@ export async function sendPayrollStubForLine(
         disposition: "attachment",
       }],
     })
+    if (!result.success) {
+      throw new Error(result.error || "Email failed")
+    }
     if (delivery.data?.id) {
       await admin.from("payroll_document_deliveries").update({
         status: "sent",

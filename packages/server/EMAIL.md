@@ -1,6 +1,10 @@
 # Email entry points (Easner monorepo)
 
-Consumer-facing HTML templates live under **`packages/server/lib/`** (`email-templates.ts`, `email-generator.ts`, `email-service.ts`, `email-theme.ts`, `email-audience.ts`). The **business** app adds invoice PDF delivery via `business/lib/invoice-email-service.ts` (SendGrid, not the shared template registry).
+Consumer-facing HTML templates live under **`packages/server/lib/`** (`email-templates.ts`, `email-generator.ts`, `email-service.ts`, `mailer.ts`, `email-theme.ts`, `email-audience.ts`). Invoice PDF, payroll stub, and checkout receipt mail also go through **`sendMail`**. Supabase Auth OTP/password-reset stays on Supabase (not this mailer).
+
+**Provider:** AWS SES (`eu-west-2`) is the default. Office → Platform Control → **Email provider** stores `system_settings.email_provider` (`ses` | `sendgrid`). Leave `EMAIL_PROVIDER` unset in production so Office owns the switch; set it only as a local/break-glass override. There is no silent failover — missing creds for the selected provider fail the send.
+
+Bounces/complaints from SES land on `POST /api/internal/ses/events` (SNS signature verified) and upsert `email_suppressions`. The mailer skips suppressed addresses for both providers.
 
 ## Architecture (ledger-aligned)
 
@@ -22,16 +26,17 @@ Welcome, KYB/KYC, team invite, security, and invoice emails are always subject t
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `SENDGRID_API_KEY` | Yes | SendGrid API authentication |
-| `SENDGRID_FROM_EMAIL` | Recommended | Personal / default from address |
-| `SENDGRID_FROM_NAME` | Recommended | Personal from display name |
-| `SENDGRID_FROM_EMAIL_BUSINESS` | Recommended | Business from address (falls back to `SENDGRID_FROM_EMAIL`) |
-| `SENDGRID_FROM_NAME_BUSINESS` | Recommended | Business from display name |
-| `SENDGRID_FROM_EMAIL_INVOICES` | Optional | Invoice to-customer from address (default **`invoices@easner.com`**). Not required in env. |
-| `SENDGRID_FROM_NAME_INVOICES` | Optional | Invoice from display name (defaults to `SENDGRID_FROM_NAME_BUSINESS`) |
-| `SENDGRID_FROM_EMAIL_RECEIPTS` | Optional | Checkout / Payment Link receipt from (default **`receipt@easner.com`**). Not required in env; same pattern as invoices. |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Yes (SES default) | IAM user keys for SESv2 `SendEmail` |
+| `SES_REGION` | Recommended | Default **`eu-west-2`** (`AWS_REGION` also accepted) |
+| `EMAIL_PROVIDER` | No | Break-glass override (`ses` \| `sendgrid`). Unset in production |
+| `EMAIL_FROM` / `EMAIL_FROM_NAME` | Recommended | Personal / default from (`noreply@easner.com` / Easner). Falls back to `SENDGRID_FROM_*` |
+| `BUSINESS_EMAIL_FROM` / `BUSINESS_EMAIL_FROM_NAME` | Recommended | Business from (`business@easner.com` / Easner Business) |
+| `INVOICE_EMAIL_FROM` / `INVOICE_EMAIL_FROM_NAME` | Optional | Invoice from (default **`invoices@easner.com`**) |
+| `RECEIPT_EMAIL_FROM` | Optional | Checkout / Payment Link receipt from (default **`receipt@easner.com`**) |
+| `EMAIL_REPLY_TO` | Recommended | Platform reply-to / support (default **`support@easner.com`**) |
+| `SENDGRID_API_KEY` | For SendGrid fallback | Required only when Office (or `EMAIL_PROVIDER`) selects SendGrid |
+| `SENDGRID_FROM_*` / `SENDGRID_REPLY_TO` | Optional | Legacy fallbacks for from/reply names |
 | `EASNER_RECEIPT_TIMEZONE` | Optional | IANA zone for checkout/link receipt “When” (else Stripe Dashboard timezone, else UTC) |
-| `SENDGRID_REPLY_TO` | Recommended | Reply-to / support routing |
 | `EASNER_COMPLIANCE_OPS_EMAIL` | Optional | Internal KYB/KYC lifecycle alerts and outbound velocity ops (default **`compliance@easner.com`**; `EASNER_KYB_OPS_EMAIL` still supported) |
 | `WALLET_SEND_VELOCITY_SHADOW_MODE` | Optional | Default **false** (velocity caps outbound sends). Set `true` locally to log/email triggers without capping |
 | `WALLET_SEND_DAILY_LIMIT_YOUNG_USD` / `_STANDARD_USD` / `_ESTABLISHED_USD` | Optional | Rolling 24h stablecoin send tiers |
@@ -41,35 +46,38 @@ Welcome, KYB/KYC, team invite, security, and invoice emails are always subject t
 | `EASNER_APP_STORE_URL` | Optional | iOS App Store listing for download emails / marketing |
 | `EASNER_PLAY_STORE_URL` | Optional | Google Play listing for download emails / marketing |
 | `EASNER_DOWNLOAD_PAGE_URL` | Optional | QR + smart redirect page (default **`https://www.easner.com/app`**) |
-| `MARKETING_APP_DOWNLOAD_EMAIL_ENABLED` | Optional | Default **on** when `SENDGRID_API_KEY` is set. Set `false` to disable easner.com popup sends |
+| `MARKETING_APP_DOWNLOAD_EMAIL_ENABLED` | Optional | Default **on** when SES or SendGrid credentials are set. Set `false` to disable easner.com popup sends |
 
 Before deploy, run:
 
 ```bash
-node packages/server/scripts/verify-sendgrid-env.mjs
+node packages/server/scripts/verify-email-env.mjs
 ```
 
-### Preview all templates (SendGrid)
+### Preview all templates
 
-Send one real message per template to a test inbox (uses fixture data, not live ledger events):
+Send one real message per template to a test inbox (uses fixture data, not live ledger events). Honors `EMAIL_PROVIDER` if set; otherwise SES.
 
 ```bash
-# from repo root – loads business/.env.local for SENDGRID_API_KEY
+# from repo root – loads business/.env.local for AWS keys
 npx tsx packages/server/scripts/send-all-email-previews.ts --to enyocreative@gmail.com
 
 # optional: use first_name from public.users for that email
 npx tsx packages/server/scripts/send-all-email-previews.ts --to enyocreative@gmail.com --from-db
 
-# single template / dry run
+# single template / dry run / SendGrid override
 npx tsx packages/server/scripts/send-all-email-previews.ts --template welcomePersonal --to you@example.com
 npx tsx packages/server/scripts/send-all-email-previews.ts --dry-run
+EMAIL_PROVIDER=sendgrid npx tsx packages/server/scripts/send-all-email-previews.ts --to you@example.com
 ```
+
+**Cutover:** set AWS + `EMAIL_*` on Vercel (leave `EMAIL_PROVIDER` unset) → apply `email_provider` / `email_suppressions` migrations → deploy → smoke previews + one invoice PDF + one payroll stub → attach SES bounce/complaint SNS to `https://<api>/api/internal/ses/events` → confirm Office shows Email provider = SES.
 
 Ledger **transaction** emails in production are **on by default**; set `LEDGER_TRANSACTION_EMAIL_ENABLED=false` to turn them off. This script sends template previews directly and bypasses that flag.
 
 ## Supabase Auth emails (OTP / password reset)
 
-Supabase sends signup verification and password-reset OTP mail from **Auth → Email Templates** (not SendGrid). HTML is generated from the same frame as transactional mail:
+Supabase sends signup verification and password-reset OTP mail from **Auth → Email Templates** (not SES/SendGrid). HTML is generated from the same frame as transactional mail:
 
 ```bash
 npm run email:render-supabase-auth
@@ -81,7 +89,7 @@ Output: [`packages/server/supabase-auth-templates/`](supabase-auth-templates/) �
 
 ## Business team invites
 
-Flow: owner invites via **Settings → Team** → `POST /api/settings/team` upserts `business_memberships` (`status: invited`) → SendGrid **`teamInvitation`** email → invitee opens **`/auth/join/{membershipId}`** → signup or login → **`POST /api/auth/bootstrap`** with `membershipId` claims the invite (links `users.easner_business_id`, activates membership) → SendGrid **`teamMemberJoined`** email to org owner and admins. New invitees still receive Supabase **Confirm signup** OTP mail; that is separate from the team invite email. Legacy query links (`/auth/join?membership=…`) redirect to the path form.
+Flow: owner invites via **Settings → Team** → `POST /api/settings/team` upserts `business_memberships` (`status: invited`) → **`teamInvitation`** email → invitee opens **`/auth/join/{membershipId}`** → signup or login → **`POST /api/auth/bootstrap`** with `membershipId` claims the invite (links `users.easner_business_id`, activates membership) → **`teamMemberJoined`** email to org owner and admins. New invitees still receive Supabase **Confirm signup** OTP mail; that is separate from the team invite email. Legacy query links (`/auth/join?membership=…`) redirect to the path form.
 
 ## Business geo personal rails (Express / local pay-in)
 
@@ -117,7 +125,7 @@ Mobile sets `EXPO_PUBLIC_API_URL` to the business app origin and must send `Auth
 
 ## Personal (Easner Mobile) email links
 
-Personal SendGrid templates use **`https://app.easner.com/user/*`** universal links (see `packages/shared/src/mobile-personal-links.ts`):
+Personal templates use **`https://app.easner.com/user/*`** universal links (see `packages/shared/src/mobile-personal-links.ts`):
 
 | Email CTA | URL |
 |-----------|-----|
@@ -134,7 +142,7 @@ Template key: **`appDownloadLink`** (`packages/server/lib/email-templates.ts`).
 | Field | Value |
 |-------|--------|
 | **Trigger** | `POST /api/marketing/app-download-link` with `{ "email": "visitor@example.com" }` |
-| **From** | `SENDGRID_FROM_EMAIL` / **Easner** (`noreply@easner.com`) |
+| **From** | `EMAIL_FROM` / **Easner** (`noreply@easner.com`) |
 | **Subject** | Your Easner app download link |
 | **CTAs** | Single **Get the app** button → `EASNER_DOWNLOAD_PAGE_URL` (`www.easner.com/app`; smart redirect on the website) |
 | **Rate limit** | 10 requests/hour per IP, 3/hour per email |
@@ -155,7 +163,7 @@ Preview: `npx tsx packages/server/scripts/send-all-email-previews.ts --template 
 ## Business email branding
 
 - Product name in profile: **Easner Business Banking** (`email-audience.ts`).
-- SendGrid from name: **Easner Business** (`SENDGRID_FROM_NAME_BUSINESS`).
+- From name: **Easner Business** (`BUSINESS_EMAIL_FROM_NAME`).
 - Subjects use **Easner Business** for security and welcome; **KYB** uses org name when available (**{businessName} KYB verification …**).
 - **KYB lifecycle** emails go to active org **Owner + Admin**, plus internal **`compliance@easner.com`** (override with `EASNER_COMPLIANCE_OPS_EMAIL` or legacy `EASNER_KYB_OPS_EMAIL`). Merchant recipients share org-centric copy; compliance receives a separate Office-linked ops template (`kybOpsNotification`).
 - **Personal KYC lifecycle** emails go to the mobile user, plus the same compliance inbox with `kycOpsNotification` (Office user link).
@@ -168,7 +176,7 @@ Separate from the shared template registry (`business/lib/invoice-email-service.
 
 | Field | Value |
 |-------|--------|
-| **From** | **Easner Business** – `SENDGRID_FROM_EMAIL_INVOICES` (default **`invoices@easner.com`**). Does **not** use `SENDGRID_FROM_EMAIL_BUSINESS` (`business@easner.com`). |
+| **From** | **Easner Business** – `INVOICE_EMAIL_FROM` (default **`invoices@easner.com`**). Does **not** use `BUSINESS_EMAIL_FROM` (`business@easner.com`). |
 | **Reply-To** | Org **Settings → Business → Support Email**; else org owner email; else sender’s account email |
 | **Subject** | `{Invoice from \| Reminder…} {businessName} – {invoiceNumber}` |
 | **Attachment** | Invoice PDF (contact block uses same Reply-To email) |
@@ -192,7 +200,7 @@ Separate from invoice mail (`business/lib/checkout/send-checkout-payer-receipt-e
 | **When** | Stripe `charge.created`, formatted in `EASNER_RECEIPT_TIMEZONE` or the platform Dashboard timezone |
 | **Trigger** | `checkout.session.completed` only (not also `payment_intent.succeeded`) |
 
-Platform mail to business users still uses **`SENDGRID_REPLY_TO`** (Easner support). Invoice Reply-To is per org, not env-based.
+Platform mail to business users still uses **`EMAIL_REPLY_TO`** (Easner support). Invoice Reply-To is per org, not env-based.
 
 Mobile security emails: **Change password** and **MFA enable/disable** call `POST /api/notifications/security-alert` after Supabase auth succeeds (`ChangePasswordScreen`, `MfaSetupScreen`).
 

@@ -1,9 +1,10 @@
 #!/usr/bin/env npx tsx
 /**
- * Send one preview of every registered email template via SendGrid.
+ * Send one preview of every registered email template via the shared mailer (SES default).
  *
- * Usage (from repo root, with business/.env.local containing SENDGRID_API_KEY):
+ * Usage (from repo root, with business/.env.local containing AWS SES creds):
  *   npx tsx packages/server/scripts/send-all-email-previews.ts
+ *   EMAIL_PROVIDER=sendgrid npx tsx packages/server/scripts/send-all-email-previews.ts
  *   npx tsx packages/server/scripts/send-all-email-previews.ts --to enyocreative@gmail.com
  *   npx tsx packages/server/scripts/send-all-email-previews.ts --dry-run
  *   npx tsx packages/server/scripts/send-all-email-previews.ts --template welcomePersonal
@@ -173,9 +174,20 @@ async function sendOne(
 async function main() {
   const { to, dryRun, fromDb, templateFilter, includeAdmin } = parseArgs(process.argv.slice(2))
 
-  if (!dryRun && !process.env.SENDGRID_API_KEY?.trim()) {
-    console.error("ERROR: SENDGRID_API_KEY is required (load business/.env.local or export it)")
-    process.exit(1)
+  if (!dryRun) {
+    const provider = (process.env.EMAIL_PROVIDER?.trim().toLowerCase() || "ses") === "sendgrid" ? "sendgrid" : "ses"
+    const ready =
+      provider === "sendgrid"
+        ? Boolean(process.env.SENDGRID_API_KEY?.trim())
+        : Boolean(process.env.AWS_ACCESS_KEY_ID?.trim() && process.env.AWS_SECRET_ACCESS_KEY?.trim())
+    if (!ready) {
+      console.error(
+        provider === "sendgrid"
+          ? "ERROR: SENDGRID_API_KEY is required when EMAIL_PROVIDER=sendgrid"
+          : "ERROR: AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are required for SES (or set EMAIL_PROVIDER=sendgrid)",
+      )
+      process.exit(1)
+    }
   }
 
   const profile = fromDb ? await loadUserProfile(to) : null

@@ -14,6 +14,7 @@
     "./lib/email-theme": "./lib/email-theme.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-sesv2": "^3.1131.0",
     "@easner/shared": "*",
     "@sendgrid/mail": "^8.1.6",
     "@supabase/supabase-js": "^2.57.2"

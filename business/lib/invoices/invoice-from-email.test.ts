@@ -8,6 +8,7 @@ describe("resolveInvoiceFromEmail", () => {
     delete process.env.SENDGRID_FROM_EMAIL_BUSINESS
     delete process.env.SENDGRID_FROM_NAME_INVOICES
     delete process.env.SENDGRID_FROM_NAME_BUSINESS
+    delete process.env.INVOICE_EMAIL_FROM
   })
 
   it("defaults to invoices@easner.com even when business from is set", () => {
@@ -19,6 +20,12 @@ describe("resolveInvoiceFromEmail", () => {
     process.env.SENDGRID_FROM_EMAIL_INVOICES = "billing@easner.com"
     expect(resolveInvoiceFromEmail().email).toBe("billing@easner.com")
   })
+
+  it("prefers INVOICE_EMAIL_FROM over SENDGRID_*", () => {
+    process.env.SENDGRID_FROM_EMAIL_INVOICES = "billing@easner.com"
+    process.env.INVOICE_EMAIL_FROM = "billing-ses@easner.com"
+    expect(resolveInvoiceFromEmail().email).toBe("billing-ses@easner.com")
+  })
 })
 
 describe("resolveReceiptFromEmail", () => {
@@ -27,6 +34,7 @@ describe("resolveReceiptFromEmail", () => {
     delete process.env.SENDGRID_FROM_EMAIL_INVOICES
     delete process.env.SENDGRID_FROM_EMAIL_BUSINESS
     delete process.env.SENDGRID_FROM_NAME_BUSINESS
+    delete process.env.RECEIPT_EMAIL_FROM
   })
 
   it("defaults to receipt@easner.com and does not use invoices@", () => {

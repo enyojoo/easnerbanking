@@ -6,6 +6,11 @@ import {
   personalMobileNotificationsUrl,
   resolvePersonalMobileAppOrigin,
 } from "@easner/shared/mobile-personal-links"
+import {
+  resolveBusinessFromName,
+  resolveEmailReplyTo,
+  resolvePersonalFromName,
+} from "./email-from"
 
 export type EmailAudience = "business" | "personal"
 
@@ -44,9 +49,9 @@ export function getEmailAudienceProfile(audience: EmailAudience): EmailAudienceP
     return {
       audience: "business",
       productName: "Easner Business Banking",
-      fromName: process.env.SENDGRID_FROM_NAME_BUSINESS || "Easner Business",
+      fromName: resolveBusinessFromName(),
       dashboardUrl: `${BUSINESS_BASE}/dashboard`,
-      supportEmail: process.env.SENDGRID_REPLY_TO || "support@easner.com",
+      supportEmail: resolveEmailReplyTo(),
       preferencesUrl: `${BUSINESS_BASE}/settings/communication`,
       signatureHtml: FOUNDER_SIGNATURE_HTML,
       signatureText: FOUNDER_SIGNATURE_TEXT,
@@ -56,9 +61,9 @@ export function getEmailAudienceProfile(audience: EmailAudience): EmailAudienceP
   return {
     audience: "personal",
     productName: "Easner Banking",
-    fromName: process.env.SENDGRID_FROM_NAME || "Easner",
+    fromName: resolvePersonalFromName(),
     dashboardUrl: personalMobileDashboardUrl(PERSONAL_MOBILE_ORIGIN),
-    supportEmail: process.env.SENDGRID_REPLY_TO || "support@easner.com",
+    supportEmail: resolveEmailReplyTo(),
     preferencesUrl: personalMobileNotificationsUrl(PERSONAL_MOBILE_ORIGIN),
     signatureHtml: FOUNDER_SIGNATURE_HTML,
     signatureText: FOUNDER_SIGNATURE_TEXT,

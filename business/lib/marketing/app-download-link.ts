@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { emailService } from "@easner/server"
+import { emailService, isSesCredentialsConfigured, isSendGridCredentialsConfigured } from "@easner/server"
 import { isDisposableEmail } from "@easner/shared"
 import { resolveMobileAppStoreUrls } from "@easner/shared/mobile-app-store-urls"
 import { enforcePayrollRateLimit } from "@/lib/payroll/rate-limit"
@@ -24,7 +24,7 @@ export function isValidMarketingEmail(email: string): boolean {
 export function isAppDownloadLinkEmailEnabled(): boolean {
   const flag = process.env.MARKETING_APP_DOWNLOAD_EMAIL_ENABLED?.trim().toLowerCase()
   if (flag === "false" || flag === "0") return false
-  return Boolean(process.env.SENDGRID_API_KEY?.trim())
+  return isSesCredentialsConfigured() || isSendGridCredentialsConfigured()
 }
 
 export async function requestAppDownloadLinkEmail(input: {
@@ -47,7 +47,7 @@ export async function requestAppDownloadLinkEmail(input: {
   }
 
   if (!isAppDownloadLinkEmailEnabled()) {
-    console.warn("[marketing] app download email skipped: disabled or SENDGRID_API_KEY missing")
+    console.warn("[marketing] app download email skipped: disabled or email provider credentials missing")
     return {
       ok: false,
       code: "EMAIL_DISABLED",
