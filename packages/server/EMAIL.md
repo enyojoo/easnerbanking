@@ -54,6 +54,68 @@ Before deploy, run:
 node packages/server/scripts/verify-email-env.mjs
 ```
 
+## SES authentication + BIMI (`easner.com`)
+
+Transactional mail is sent as `@easner.com` (`noreply@`, `business@`, `invoices@`, `receipt@`, `support@`). BIMI is not a send-path change — it is DNS + a public SVG. Gmail and Apple Mail also require a Verified Mark Certificate (VMC); Yahoo/Fastmail can show a self-asserted logo.
+
+Live DNS as of 2026-09-14 (Azure DNS):
+
+| Prerequisite | Status |
+|--------------|--------|
+| Custom MAIL FROM `mail.easner.com` (SES `eu-west-2`) | **Done** — MX `10 feedback-smtp.eu-west-2.amazonses.com`, TXT `v=spf1 include:amazonses.com ~all` |
+| Root SPF | Google Workspace only (`include:_spf.google.com`). Fine: SES Return-Path is `mail.easner.com`, which aligns SPF under DMARC relaxed alignment. Do not replace the Google SPF record. |
+| Easy DKIM on `easner.com` | **Missing** — only Google + SendGrid (`s1`/`s2`) selectors exist. Add the three SES Easy DKIM CNAMEs from the verified identity in SES `eu-west-2`. Some BIMI ESPs want both SPF and DKIM alignment. |
+| DMARC | **Broken** — `_dmarc.easner.com` currently has **three** TXT records (reject, quarantine pct=100, and a quoted quarantine). Receivers need **exactly one**. |
+| BIMI TXT | **Missing** — publish `default._bimi.easner.com` after the SVG is live and DMARC is a single enforcement record. |
+| VMC (`a=`) | Optional until DigiCert/Entrust/others issue a PEM. Without it, Gmail/Apple will not show the logo. |
+
+### 1. Collapse DMARC to one BIMI-eligible policy
+
+Delete the extra `_dmarc.easner.com` TXT records. Keep a single record, either:
+
+```
+v=DMARC1; p=reject; pct=100; rua=mailto:dmarcreports@easner.com
+```
+
+or:
+
+```
+v=DMARC1; p=quarantine; pct=100; rua=mailto:dmarcreports@easner.com
+```
+
+BIMI requires `p=quarantine` with `pct=100`, or `p=reject`. Subdomains inherit the parent policy; do not publish a weaker `_dmarc` on a sending subdomain.
+
+### 2. Easy DKIM (SES console)
+
+On the verified identity `easner.com` → Authentication → Easy DKIM: publish the three CNAMEs SES shows (`<token>._domainkey.easner.com` → `<token>.dkim.amazonses.com`). Wait until the identity shows DKIM successful.
+
+### 3. Logo file
+
+SVG Tiny P/S mark (square, solid `#007ACC`, graphite hourglass) is in-repo:
+
+- File: `business/public/bimi/easner.svg`
+- Public URL after deploy: `https://business.easner.com/bimi/easner.svg` (`EASNER_BIMI_LOGO_URL`)
+
+Do not host this on `api.easner.com` — that host redirects non-API paths to the business origin.
+
+After a VMC is issued, put the certificate PEM next to it as `business/public/bimi/easner.pem`.
+
+### 4. BIMI DNS record
+
+```
+Name:  default._bimi.easner.com
+Type:  TXT
+Value: v=BIMI1; l=https://business.easner.com/bimi/easner.svg;
+```
+
+With a VMC:
+
+```
+v=BIMI1; l=https://business.easner.com/bimi/easner.svg; a=https://business.easner.com/bimi/easner.pem;
+```
+
+Validate with the [BIMI Inspector](https://bimigroup.org/bimi-generator/). Logo placement still depends on sending reputation and cadence to Gmail/Yahoo/Apple.
+
 ### Preview all templates
 
 Send one real message per template to a test inbox (uses fixture data, not live ledger events). Honors `EMAIL_PROVIDER` if set; otherwise SES.

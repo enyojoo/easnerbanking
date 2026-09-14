@@ -137,6 +137,19 @@ const nextConfig = {
           },
         ],
       },
+      {
+        source: "/bimi/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=86400",
+          },
+          {
+            key: "X-Content-Type-Options",
+            value: "nosniff",
+          },
+        ],
+      },
     ]
   },
   typescript: {

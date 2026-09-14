@@ -39,6 +39,12 @@ export const EASNER_LOGO_URL_DARK =
 /** @deprecated Use EASNER_LOGO_URL_LIGHT */
 export const EASNER_LOGO_URL = EASNER_LOGO_URL_LIGHT
 
+/**
+ * BIMI SVG Tiny P/S mark (square, solid background). Hosted on the business app
+ * origin so mailbox providers can fetch it over HTTPS without the api.* redirect.
+ */
+export const EASNER_BIMI_LOGO_URL = "https://business.easner.com/bimi/easner.svg"
+
 export const EASNER_COMPANY_LEGAL_NAME = "Easner Group, Inc."
 
 /** Public contact / sales page – used for email “Contact Support” links. */
