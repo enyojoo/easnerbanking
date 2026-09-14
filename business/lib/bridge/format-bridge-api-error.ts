@@ -30,6 +30,34 @@ function messagesFromBody(body: unknown): string[] {
   return out
 }
 
+export function isBridgeExistingCustomerError(error: unknown): boolean {
+  const msg = formatBridgeApiError(error)
+  return /already|exists|duplicate/i.test(msg)
+}
+
+export function customerIdFromBridgeError(error: unknown): string | null {
+  if (!(error instanceof BridgeHttpError) || !error.body || typeof error.body !== "object") {
+    return null
+  }
+  const rec = error.body as Record<string, unknown>
+  for (const key of ["customer_id", "customerId", "existing_customer_id"]) {
+    const value = String(rec[key] ?? "").trim()
+    if (value) return value
+  }
+  const errors = rec.errors
+  if (Array.isArray(errors)) {
+    for (const row of errors) {
+      if (!row || typeof row !== "object") continue
+      const e = row as Record<string, unknown>
+      for (const key of ["customer_id", "customerId"]) {
+        const value = String(e[key] ?? "").trim()
+        if (value) return value
+      }
+    }
+  }
+  return null
+}
+
 export function formatBridgeApiError(error: unknown): string {
   if (error instanceof BridgeHttpError) {
     const fromBody = messagesFromBody(error.body)

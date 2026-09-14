@@ -1,15 +1,65 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { createBridgeKycLink, mapBridgeKycStatus, pickBridgeKycLinkFullName, bridgeCreateKycLinkIdempotencyKey, getBridgeCustomer, getBridgeHostedLinksForCustomer } from "@/lib/bridge/kyc-links"
-import { formatBridgeKycStartError } from "@/lib/bridge/format-bridge-api-error"
+import {
+  createBridgeKycLink,
+  mapBridgeKycStatus,
+  pickBridgeKycLinkFullName,
+  bridgeCreateKycLinkIdempotencyKey,
+  getBridgeCustomer,
+  getBridgeHostedLinksForCustomer,
+  findBridgeCustomerByEmail,
+} from "@/lib/bridge/kyc-links"
+import {
+  customerIdFromBridgeError,
+  formatBridgeKycStartError,
+  isBridgeExistingCustomerError,
+} from "@/lib/bridge/format-bridge-api-error"
 import { isBridgeOnboardableResidence } from "@/lib/bridge/geo"
 import { persistVerificationStatus } from "@/lib/compliance/verification-store"
+import { provisionBridgeVirtualAccounts } from "@/lib/bridge/provision-after-approval"
 import { requireAuth, requireBridgeEnv } from "../_helpers"
 import { readAccountScopeFromRequest } from "@/lib/noah/resolve-noah-context"
 import { resolveGridBusinessContextAsync } from "@/app/api/grid/_helpers"
 import { loadGridBusinessProfile } from "@/lib/grid/ensure-grid-business-customer"
 
 export const runtime = "nodejs"
+
+type HostedKycPayload = {
+  kyc_link?: string | null
+  tos_link?: string | null
+  kyc_status?: string | null
+  customer_id?: string | null
+  alreadyOnboarded?: boolean
+}
+
+async function hostedPayloadForExistingCustomer(
+  customerId: string,
+  fallbackStatus: string,
+): Promise<HostedKycPayload> {
+  const customer = await getBridgeCustomer(customerId).catch(() => null)
+  const rawStatus = customer?.kyc_status ?? customer?.status ?? fallbackStatus
+  const mapped = mapBridgeKycStatus(rawStatus)
+  if (mapped === "approved") {
+    return {
+      kyc_link: null,
+      tos_link: null,
+      kyc_status: rawStatus,
+      customer_id: customerId,
+      alreadyOnboarded: true,
+    }
+  }
+  const hosted = await getBridgeHostedLinksForCustomer(customerId).catch(() => ({
+    kyc_link: null,
+    tos_link: null,
+  }))
+  return {
+    kyc_link: hosted.tos_link || hosted.kyc_link,
+    tos_link: hosted.tos_link,
+    kyc_status: rawStatus,
+    customer_id: customerId,
+    alreadyOnboarded: mapped === "pending",
+  }
+}
 
 /**
  * Start hosted Bridge KYC (individuals) or KYB (business). Customer-facing copy never names Bridge.
@@ -93,15 +143,19 @@ export async function POST(request: Request) {
       tos_link: null,
       kyc_status: "approved",
       customer_id: existingCustomerId,
+      alreadyOnboarded: true,
     })
   }
 
-  let link: {
-    kyc_link?: string | null
-    tos_link?: string | null
-    kyc_status?: string | null
-    customer_id?: string | null
-  } | null = null
+  if (!existingCustomerId) {
+    const found = await findBridgeCustomerByEmail(email, type).catch(() => null)
+    if (found?.id) {
+      existingCustomerId = found.id
+      existingStatus = String(found.kyc_status ?? found.status ?? existingStatus).trim()
+    }
+  }
+
+  let link: HostedKycPayload | null = null
 
   if (existingCustomerId) {
     if (type === "business" && businessId) {
@@ -112,32 +166,34 @@ export async function POST(request: Request) {
         customerId: existingCustomerId,
       }).catch(() => undefined)
     }
-    const hosted = await getBridgeHostedLinksForCustomer(existingCustomerId).catch(() => ({
-      kyc_link: null,
-      tos_link: null,
-    }))
-    if (hosted.kyc_link || hosted.tos_link) {
-      const customer = await getBridgeCustomer(existingCustomerId).catch(() => null)
-      link = {
-        kyc_link: hosted.tos_link || hosted.kyc_link,
-        tos_link: hosted.tos_link,
-        kyc_status: customer?.kyc_status ?? customer?.status ?? existingStatus,
-        customer_id: existingCustomerId,
-      }
+    link = await hostedPayloadForExistingCustomer(existingCustomerId, existingStatus)
+    if (!link.kyc_link && !link.tos_link && !link.alreadyOnboarded) {
+      link = null
     }
   }
 
   if (!link) {
-    link = await createBridgeKycLink({
-      fullName,
-      email,
-      type,
-      idempotencyKey: bridgeCreateKycLinkIdempotencyKey({
-        type,
-        subjectId: businessId ?? user.id,
+    try {
+      link = await createBridgeKycLink({
         fullName,
-      }),
-    })
+        email,
+        type,
+        idempotencyKey: bridgeCreateKycLinkIdempotencyKey({
+          type,
+          subjectId: businessId ?? user.id,
+          fullName,
+        }),
+      })
+    } catch (createError) {
+      const recoveredId =
+        customerIdFromBridgeError(createError) ||
+        (isBridgeExistingCustomerError(createError)
+          ? (await findBridgeCustomerByEmail(email, type).catch(() => null))?.id
+          : null)
+      if (!recoveredId) throw createError
+      existingCustomerId = recoveredId
+      link = await hostedPayloadForExistingCustomer(recoveredId, existingStatus)
+    }
   }
 
   const customerId = String(link.customer_id ?? existingCustomerId).trim()
@@ -187,11 +243,23 @@ export async function POST(request: Request) {
     }
   }
 
+  if (status === "approved" && customerId) {
+    await provisionBridgeVirtualAccounts({
+      admin,
+      userId: user.id,
+      businessId,
+      customerId,
+    }).catch((error) => {
+      console.warn("[bridge/kyc-links] provision after existing customer attach failed:", error)
+    })
+  }
+
   return NextResponse.json({
     kyc_link: link.kyc_link ?? null,
     tos_link: link.tos_link ?? null,
     kyc_status: status,
     customer_id: customerId || null,
+    alreadyOnboarded: Boolean(link.alreadyOnboarded) || status === "approved",
   })
   } catch (e: unknown) {
     const msg = formatBridgeKycStartError(e)

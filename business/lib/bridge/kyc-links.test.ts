@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { pickBridgeKycLinkFullName, bridgeCreateKycLinkIdempotencyKey } from "./kyc-links"
+import { pickBridgeKycLinkFullName, bridgeCreateKycLinkIdempotencyKey, pickBridgeCustomerForEmail } from "./kyc-links"
 
 describe("pickBridgeKycLinkFullName", () => {
   it("sends the org legal name for business KYB, not the owner", () => {
@@ -65,5 +65,36 @@ describe("bridgeCreateKycLinkIdempotencyKey", () => {
     })
     expect(orgKey).not.toBe(ownerKey)
     expect(orgKey).toContain("easner group, inc")
+  })
+})
+
+describe("pickBridgeCustomerForEmail", () => {
+  it("prefers an approved individual with the same email", () => {
+    expect(
+      pickBridgeCustomerForEmail(
+        [
+          {
+            id: "cust_pending",
+            email: "enyocreative@gmail.com",
+            type: "individual",
+            kyc_status: "incomplete",
+          },
+          {
+            id: "23921f79-bef6-461a-89e3-26802bee52b6",
+            email: "enyocreative@gmail.com",
+            type: "individual",
+            kyc_status: "approved",
+          },
+          {
+            id: "cust_biz",
+            email: "enyocreative@gmail.com",
+            type: "business",
+            kyc_status: "approved",
+          },
+        ],
+        "EnyoCreative@gmail.com",
+        "individual",
+      )?.id,
+    ).toBe("23921f79-bef6-461a-89e3-26802bee52b6")
   })
 })

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { getBridgeCustomer, mapBridgeKycStatus } from "@/lib/bridge/kyc-links"
+import { getBridgeCustomer, mapBridgeKycStatus, findBridgeCustomerByEmail } from "@/lib/bridge/kyc-links"
 import { persistVerificationStatus } from "@/lib/compliance/verification-store"
 import { provisionBridgeVirtualAccounts } from "@/lib/bridge/provision-after-approval"
 import { requireAuth, requireBridgeEnv } from "../_helpers"
@@ -33,10 +33,17 @@ export async function POST(request: Request) {
   } else {
     const { data } = await admin
       .from("users")
-      .select("bridge_customer_id,bridge_kyc_status")
+      .select("bridge_customer_id,bridge_kyc_status,email")
       .eq("id", user.id)
       .maybeSingle()
     customerId = String(data?.bridge_customer_id ?? "").trim()
+    if (!customerId) {
+      const email = String(data?.email ?? user.email ?? "").trim()
+      const found = email
+        ? await findBridgeCustomerByEmail(email, "individual").catch(() => null)
+        : null
+      customerId = String(found?.id ?? "").trim()
+    }
   }
 
   if (!customerId) {

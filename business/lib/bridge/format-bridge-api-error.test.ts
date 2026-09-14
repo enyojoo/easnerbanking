@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { BridgeHttpError } from "./http"
-import { formatBridgeApiError, formatBridgeKycStartError } from "./format-bridge-api-error"
+import { formatBridgeApiError, formatBridgeKycStartError, customerIdFromBridgeError } from "./format-bridge-api-error"
 
 describe("formatBridgeApiError", () => {
   it("reads nested Bridge error messages", () => {
@@ -22,5 +22,15 @@ describe("formatBridgeKycStartError", () => {
       message: "A customer already exists with this email",
     })
     expect(formatBridgeKycStartError(err)).toMatch(/already in progress/i)
+  })
+})
+
+describe("customerIdFromBridgeError", () => {
+  it("reads customer_id from the error body", () => {
+    const err = new BridgeHttpError("exists", 400, {
+      message: "A customer already exists with this email",
+      customer_id: "23921f79-bef6-461a-89e3-26802bee52b6",
+    })
+    expect(customerIdFromBridgeError(err)).toBe("23921f79-bef6-461a-89e3-26802bee52b6")
   })
 })

@@ -500,7 +500,22 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
       if (shouldUseBridgeConsumerKyc(userProfile, residenceOverride)) {
         const response = await bridgeService.getKycLink(fullName, email, residenceOverride)
         const hosted = String(response.kyc_link || response.tos_link || '').trim()
+        const kycStatus = String(response.kyc_status || '').toLowerCase()
         if (!hosted) {
+          try {
+            await bridgeService.syncStatus()
+            if (refreshUserProfile) await refreshUserProfile()
+          } catch {
+            // Non-blocking
+          }
+          if (response.alreadyOnboarded || kycStatus === 'approved') {
+            showSuccess('Verification is already complete.', 4000)
+            return
+          }
+          if (kycStatus === 'pending' || kycStatus === 'in_progress' || kycStatus === 'under_review') {
+            showWarning('Verification is already in progress. Check back shortly.')
+            return
+          }
           showError('Unable to load verification. Please try again or contact support.')
           return
         }

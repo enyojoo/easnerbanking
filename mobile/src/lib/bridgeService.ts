@@ -23,6 +23,7 @@ export type BridgeKycLink = {
   tos_link?: string | null
   kyc_status?: string
   customer_id?: string | null
+  alreadyOnboarded?: boolean
 }
 
 export type BridgeSyncStatus = {

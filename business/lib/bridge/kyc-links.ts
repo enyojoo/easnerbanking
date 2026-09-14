@@ -114,6 +114,75 @@ export async function getBridgeHostedLinksForCustomer(customerId: string): Promi
   return { kyc_link: kyc, tos_link: tos }
 }
 
+export type BridgeCustomerSummary = {
+  id: string
+  email?: string
+  type?: BridgeCustomerType
+  status?: string
+  kyc_status?: string
+}
+
+function asCustomerSummary(row: unknown): BridgeCustomerSummary | null {
+  if (!row || typeof row !== "object") return null
+  const rec = row as Record<string, unknown>
+  const id = String(rec.id ?? rec.customer_id ?? "").trim()
+  if (!id) return null
+  const typeRaw = String(rec.type ?? "").trim().toLowerCase()
+  const type: BridgeCustomerType | undefined =
+    typeRaw === "business" || typeRaw === "individual" ? typeRaw : undefined
+  return {
+    id,
+    email: String(rec.email ?? "").trim() || undefined,
+    type,
+    status: String(rec.status ?? "").trim() || undefined,
+    kyc_status: String(rec.kyc_status ?? "").trim() || undefined,
+  }
+}
+
+export function parseBridgeCustomerList(payload: unknown): BridgeCustomerSummary[] {
+  if (Array.isArray(payload)) {
+    return payload.map(asCustomerSummary).filter((row): row is BridgeCustomerSummary => Boolean(row))
+  }
+  if (!payload || typeof payload !== "object") return []
+  const rec = payload as { data?: unknown; customers?: unknown }
+  const rows = Array.isArray(rec.data) ? rec.data : Array.isArray(rec.customers) ? rec.customers : []
+  return rows.map(asCustomerSummary).filter((row): row is BridgeCustomerSummary => Boolean(row))
+}
+
+export function pickBridgeCustomerForEmail(
+  rows: BridgeCustomerSummary[],
+  email: string,
+  type: BridgeCustomerType,
+): BridgeCustomerSummary | null {
+  const wanted = email.trim().toLowerCase()
+  if (!wanted) return null
+  const matches = rows.filter((row) => {
+    if (row.type && row.type !== type) return false
+    const rowEmail = String(row.email ?? "").trim().toLowerCase()
+    return !rowEmail || rowEmail === wanted
+  })
+  if (matches.length === 0) return null
+  return (
+    matches.find((row) => mapBridgeKycStatus(row.kyc_status ?? row.status) === "approved") ??
+    matches[0] ??
+    null
+  )
+}
+
+export async function findBridgeCustomerByEmail(
+  email: string,
+  type: BridgeCustomerType,
+): Promise<BridgeCustomerSummary | null> {
+  const trimmed = email.trim()
+  if (!trimmed) return null
+  const query = new URLSearchParams({ email: trimmed, limit: "20" })
+  const payload = await bridgeFetch<unknown>({
+    method: "GET",
+    path: `/customers?${query.toString()}`,
+  })
+  return pickBridgeCustomerForEmail(parseBridgeCustomerList(payload), trimmed, type)
+}
+
 export async function getBridgeCustomer(customerId: string): Promise<{
   id: string
   status?: string
