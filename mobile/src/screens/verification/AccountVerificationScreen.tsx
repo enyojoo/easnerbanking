@@ -504,6 +504,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
           showError('Unable to load verification. Please try again or contact support.')
           return
         }
+        // Hosted KYC; redirect_uri is /auth/onboarding-complete?context=kyc.
         await externalLink.openLink(hosted, 'Verification for bank accounts')
         try {
           await syncNoahStatus(false, true)
@@ -559,14 +560,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
           // This is expected for new users, continue with KYC link creation
         }
       }
-      
-      // `public.users.full_name` (set at sign-up / profile edit); fallback to email local-part
-      const fullName =
-        userProfile?.profile?.full_name?.trim() ||
-        [userProfile?.profile?.first_name, userProfile?.profile?.last_name].filter(Boolean).join(' ').trim() ||
-        email.split('@')[0] ||
-        'Account holder'
-      
+
       let response
       try {
         response = await noahService.getKycLink(fullName, email, 'individual', {
@@ -666,7 +660,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
       
       // Noah HostedURL (checkout.noah.com/kyc?session=…) – same in-app browser as Legal
       // (SFSafariViewController / Chrome Custom Tabs via useExternalLink).
-      // ReturnURL (NOAH_ONBOARDING_RETURN_URL) should be /auth/noah-complete?context=kyc on the business web app.
+      // ReturnURL should be /auth/onboarding-complete?context=kyc on the business web app.
       await externalLink.openLink(response.kyc_link, 'Verification for global banking')
       try {
         await syncNoahStatus(false, true)
