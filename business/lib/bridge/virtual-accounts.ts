@@ -52,6 +52,49 @@ async function resolveTurnkeyVault(input: {
   }
 }
 
+export function bridgeVaSourceCurrency(va: BridgeVirtualAccount): "usd" | "eur" | "gbp" | null {
+  const src = String(va.source_deposit_instructions?.currency ?? "").trim().toLowerCase()
+  if (src === "usd" || src === "eur" || src === "gbp") return src
+  const dest = String(va.destination?.currency ?? "").trim().toLowerCase()
+  if (dest === "usdc" || dest === "usd") return "usd"
+  if (dest === "eurc" || dest === "eur") return "eur"
+  return null
+}
+
+export function isBridgeVaLinkedToTurnkeyVault(
+  va: BridgeVirtualAccount,
+  vault: { vaultAddress: string; destCurrency: "usdc" | "eurc" },
+): boolean {
+  const dest = String(va.destination?.address ?? "").trim()
+  const rail = String(va.destination?.payment_rail ?? "").trim().toLowerCase()
+  const currency = String(va.destination?.currency ?? "").trim().toLowerCase()
+  return (
+    Boolean(dest) &&
+    dest === vault.vaultAddress &&
+    rail === "solana" &&
+    currency === vault.destCurrency
+  )
+}
+
+export async function updateBridgeVirtualAccountDestination(input: {
+  customerId: string
+  virtualAccountId: string
+  destCurrency: "usdc" | "eurc"
+  vaultAddress: string
+}): Promise<BridgeVirtualAccount> {
+  return bridgeFetch<BridgeVirtualAccount>({
+    method: "PUT",
+    path: `/customers/${encodeURIComponent(input.customerId)}/virtual_accounts/${encodeURIComponent(input.virtualAccountId)}`,
+    json: {
+      destination: {
+        payment_rail: "solana",
+        currency: input.destCurrency,
+        address: input.vaultAddress,
+      },
+    },
+  })
+}
+
 export async function createBridgeVirtualAccount(input: {
   admin: SupabaseClient
   customerId: string

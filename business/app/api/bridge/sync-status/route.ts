@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
-import { getBridgeCustomer, mapBridgeKycStatus, findBridgeCustomerByEmail } from "@/lib/bridge/kyc-links"
+import { getBridgeCustomer, findBridgeCustomerByEmail, resolveBridgeCustomerKycStatus } from "@/lib/bridge/kyc-links"
 import { persistVerificationStatus } from "@/lib/compliance/verification-store"
 import { provisionBridgeVirtualAccounts } from "@/lib/bridge/provision-after-approval"
 import { requireAuth, requireBridgeEnv } from "../_helpers"
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
   }
 
   const customer = await getBridgeCustomer(customerId)
-  const status = mapBridgeKycStatus(customer.kyc_status ?? customer.status)
+  const status = resolveBridgeCustomerKycStatus(customer)
 
   if (businessId) {
     await admin

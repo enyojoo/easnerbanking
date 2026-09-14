@@ -19,13 +19,22 @@ import { enqueueVaultProvisioningJobs, upsertWalletOwnerFromNoah } from "@/lib/w
 const MAX_ATTEMPTS = 5
 const BACKOFF_MS = 5000
 
-/** Skip Noah fiat onramp for business orgs on Grid or Bridge. */
+/** Skip Noah fiat onramp for business orgs on Grid or Bridge. Surface Bridge customer for VA retarget. */
 async function ownerSkipsNoahFiatOnramp(
   admin: ReturnType<typeof createSupabaseAdmin>,
   owner: { owner_type: string; owner_ref: string },
 ): Promise<{ skipNoah: boolean; bridgeCustomerId: string; gridCustomerId: string }> {
   if (owner.owner_type !== "business") {
-    return { skipNoah: false, bridgeCustomerId: "", gridCustomerId: "" }
+    const { data } = await admin
+      .from("users")
+      .select("bridge_customer_id")
+      .eq("id", owner.owner_ref)
+      .maybeSingle()
+    return {
+      skipNoah: false,
+      bridgeCustomerId: String(data?.bridge_customer_id ?? "").trim(),
+      gridCustomerId: "",
+    }
   }
   const { data } = await admin
     .from("businesses")
@@ -224,33 +233,41 @@ export async function processNextWalletProvisioningJob(opts?: {
       }
     }
 
-    if (skip.skipNoah && owner.owner_type === "business") {
+    if (skip.skipNoah && owner.owner_type === "business" && skip.gridCustomerId && ledger === "USD") {
       try {
         const businessId = String(owner.owner_ref ?? "").trim()
         if (businessId) {
           const userId = await resolveBusinessOrgOwnerUserId(admin, businessId, businessId)
-          if (skip.gridCustomerId && ledger === "USD") {
-            await refreshGridBusinessReceiveRails({
-              admin,
-              businessId,
-              userId,
-            })
-          }
-          if (skip.bridgeCustomerId) {
-            const { provisionBridgeVirtualAccounts } = await import(
-              "@/lib/bridge/provision-after-approval"
-            )
-            await provisionBridgeVirtualAccounts({
-              admin,
-              userId,
-              businessId,
-              customerId: skip.bridgeCustomerId,
-              ensureTurnkey: false,
-            })
-          }
+          await refreshGridBusinessReceiveRails({
+            admin,
+            businessId,
+            userId,
+          })
         }
       } catch (e) {
-        console.warn("[turnkey-provisioning] receive rails after vault:", e)
+        console.warn("[turnkey-provisioning] Grid receive rails after vault:", e)
+      }
+    }
+
+    if (skip.bridgeCustomerId) {
+      try {
+        const { provisionBridgeVirtualAccounts } = await import(
+          "@/lib/bridge/provision-after-approval"
+        )
+        const isBusiness = owner.owner_type === "business"
+        const businessId = isBusiness ? String(owner.owner_ref ?? "").trim() : null
+        const userId = isBusiness && businessId
+          ? await resolveBusinessOrgOwnerUserId(admin, businessId, businessId)
+          : String(owner.owner_ref)
+        await provisionBridgeVirtualAccounts({
+          admin,
+          userId,
+          businessId,
+          customerId: skip.bridgeCustomerId,
+          ensureTurnkey: false,
+        })
+      } catch (e) {
+        console.warn("[turnkey-provisioning] Bridge receive rails after vault:", e)
       }
     }
 

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { persistVerificationStatus } from "@/lib/compliance/verification-store"
-import { mapBridgeKycStatus } from "./kyc-links"
+import { resolveBridgeCustomerKycStatus } from "./kyc-links"
 import { provisionBridgeVirtualAccounts } from "./provision-after-approval"
 import { handleBridgeVaInboundActivity, resolveBridgeSubject } from "./va-inbound-webhook"
 
@@ -33,7 +33,14 @@ async function handleBridgeKycWebhook(
 ): Promise<void> {
   const customerId = String(data.customer_id ?? payload.customer_id ?? data.id ?? "").trim()
   if (!customerId) return
-  const status = mapBridgeKycStatus(String(data.kyc_status ?? data.status ?? ""))
+  const endorsements = Array.isArray(data.endorsements)
+    ? data.endorsements.filter((row): row is { name?: string; status?: string } => Boolean(row) && typeof row === "object")
+    : undefined
+  const status = resolveBridgeCustomerKycStatus({
+    kyc_status: String(data.kyc_status ?? ""),
+    status: String(data.status ?? ""),
+    endorsements,
+  })
   const subject = await resolveBridgeSubject(admin, customerId)
   if (!subject) return
 

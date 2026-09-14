@@ -87,18 +87,25 @@ export async function getBridgeKycLink(kycLinkId: string): Promise<BridgeKycLink
   })
 }
 
+function hostedRedirectQuery(): string {
+  const redirect = canonicalizeHostedOnboardingReturnUrl(getBridgeKycReturnUrl())
+  return redirect ? `redirect_uri=${encodeURIComponent(redirect)}` : ""
+}
+
 export async function getBridgeCustomerKycLink(customerId: string): Promise<string | null> {
+  const redirect = hostedRedirectQuery()
   const payload = await bridgeFetch<unknown>({
     method: "GET",
-    path: `/customers/${encodeURIComponent(customerId)}/kyc_link?endorsement=sepa`,
+    path: `/customers/${encodeURIComponent(customerId)}/kyc_link?endorsement=sepa${redirect ? `&${redirect}` : ""}`,
   })
   return hostedUrlFromPayload(payload)
 }
 
 export async function getBridgeCustomerTosLink(customerId: string): Promise<string | null> {
+  const redirect = hostedRedirectQuery()
   const payload = await bridgeFetch<unknown>({
     method: "GET",
-    path: `/customers/${encodeURIComponent(customerId)}/tos_acceptance_link`,
+    path: `/customers/${encodeURIComponent(customerId)}/tos_acceptance_link${redirect ? `?${redirect}` : ""}`,
   })
   return hostedUrlFromPayload(payload)
 }
@@ -120,6 +127,8 @@ export type BridgeCustomerSummary = {
   type?: BridgeCustomerType
   status?: string
   kyc_status?: string
+  tos_status?: string
+  endorsements?: Array<{ name?: string; status?: string }>
 }
 
 function asCustomerSummary(row: unknown): BridgeCustomerSummary | null {
@@ -130,12 +139,25 @@ function asCustomerSummary(row: unknown): BridgeCustomerSummary | null {
   const typeRaw = String(rec.type ?? "").trim().toLowerCase()
   const type: BridgeCustomerType | undefined =
     typeRaw === "business" || typeRaw === "individual" ? typeRaw : undefined
+  const endorsements = Array.isArray(rec.endorsements)
+    ? rec.endorsements
+        .map((row) => {
+          if (!row || typeof row !== "object") return null
+          const e = row as { name?: unknown; status?: unknown }
+          const name = String(e.name ?? "").trim()
+          const status = String(e.status ?? "").trim()
+          return name || status ? { name, status } : null
+        })
+        .filter((row): row is { name: string; status: string } => Boolean(row))
+    : undefined
   return {
     id,
     email: String(rec.email ?? "").trim() || undefined,
     type,
     status: String(rec.status ?? "").trim() || undefined,
     kyc_status: String(rec.kyc_status ?? "").trim() || undefined,
+    tos_status: String(rec.tos_status ?? "").trim() || undefined,
+    endorsements,
   }
 }
 
@@ -163,7 +185,7 @@ export function pickBridgeCustomerForEmail(
   })
   if (matches.length === 0) return null
   return (
-    matches.find((row) => mapBridgeKycStatus(row.kyc_status ?? row.status) === "approved") ??
+    matches.find((row) => resolveBridgeCustomerKycStatus(row) === "approved") ??
     matches[0] ??
     null
   )
@@ -180,13 +202,17 @@ export async function findBridgeCustomerByEmail(
     method: "GET",
     path: `/customers?${query.toString()}`,
   })
-  return pickBridgeCustomerForEmail(parseBridgeCustomerList(payload), trimmed, type)
+  const picked = pickBridgeCustomerForEmail(parseBridgeCustomerList(payload), trimmed, type)
+  if (!picked?.id) return null
+  const full = await getBridgeCustomer(picked.id).catch(() => null)
+  return full ? { ...picked, ...asCustomerSummary(full) } : picked
 }
 
 export async function getBridgeCustomer(customerId: string): Promise<{
   id: string
   status?: string
   kyc_status?: string
+  tos_status?: string
   type?: BridgeCustomerType
   endorsements?: Array<{ name?: string; status?: string }>
 }> {
@@ -194,6 +220,69 @@ export async function getBridgeCustomer(customerId: string): Promise<{
     method: "GET",
     path: `/customers/${encodeURIComponent(customerId)}`,
   })
+}
+
+export function isBridgeTosApproved(customer: {
+  tos_status?: string | null
+}): boolean {
+  return String(customer.tos_status ?? "").trim().toLowerCase() === "approved"
+}
+
+/** Prefer KYC/endorsement fields. Never treat platform `active` as in-progress KYC. */
+export function resolveBridgeCustomerKycStatus(customer: {
+  kyc_status?: string | null
+  status?: string | null
+  endorsements?: Array<{ name?: string; status?: string }> | null
+}): ReturnType<typeof mapBridgeKycStatus> {
+  const fromKyc = mapBridgeKycStatus(customer.kyc_status)
+  if (fromKyc === "approved") return "approved"
+  const endorsed = (customer.endorsements ?? []).some((row) => {
+    const name = String(row.name ?? "").trim().toLowerCase()
+    const status = String(row.status ?? "").trim().toLowerCase()
+    return status === "approved" && (name === "base" || name === "sepa" || name === "cards")
+  })
+  if (endorsed) return "approved"
+  if (String(customer.kyc_status ?? "").trim()) return fromKyc
+  return "not_started"
+}
+
+export function hostedLinksForExistingCustomer(input: {
+  customerId: string
+  customer: {
+    kyc_status?: string | null
+    status?: string | null
+    tos_status?: string | null
+    endorsements?: Array<{ name?: string; status?: string }> | null
+  } | null
+  fallbackStatus?: string
+  hosted: { kyc_link: string | null; tos_link: string | null }
+}): {
+  kyc_link: string | null
+  tos_link: string | null
+  kyc_status: string
+  customer_id: string
+  alreadyOnboarded: boolean
+} {
+  const mapped = resolveBridgeCustomerKycStatus(
+    input.customer ?? { kyc_status: input.fallbackStatus ?? null },
+  )
+  const tosOk = isBridgeTosApproved(input.customer ?? {})
+  if (mapped === "approved") {
+    return {
+      kyc_link: null,
+      tos_link: null,
+      kyc_status: "approved",
+      customer_id: input.customerId,
+      alreadyOnboarded: true,
+    }
+  }
+  return {
+    kyc_link: input.hosted.kyc_link,
+    tos_link: tosOk ? null : input.hosted.tos_link,
+    kyc_status: mapped,
+    customer_id: input.customerId,
+    alreadyOnboarded: false,
+  }
 }
 
 export function mapBridgeKycStatus(raw: string | null | undefined):

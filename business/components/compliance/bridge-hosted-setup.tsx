@@ -27,6 +27,7 @@ export function BridgeHostedSetup({ onClose }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [frameReady, setFrameReady] = useState(false)
   const finishedRef = useRef(false)
+  const pendingKycUrl = useRef<string | null>(null)
 
   const iframeSrc = useMemo(() => {
     if (!hostedUrl) return null
@@ -52,8 +53,11 @@ export function BridgeHostedSetup({ onClose }: Props) {
       error?: string
     }
     if (!res.ok) throw new Error(json.error || "Could not start verification")
-    const hosted = String(json.kyc_link || json.tos_link || "").trim()
+    const tos = String(json.tos_link || "").trim()
+    const kyc = String(json.kyc_link || "").trim()
+    const hosted = tos || kyc
     if (!hosted) throw new Error("Could not start verification")
+    pendingKycUrl.current = tos && kyc ? kyc : null
     setHostedUrl(hosted)
   }, [])
 
@@ -69,6 +73,13 @@ export function BridgeHostedSetup({ onClose }: Props) {
   }, [loadHosted])
 
   const finish = useCallback(() => {
+    const next = pendingKycUrl.current
+    if (next) {
+      pendingKycUrl.current = null
+      setFrameReady(false)
+      setHostedUrl(next)
+      return
+    }
     if (finishedRef.current) return
     finishedRef.current = true
     onClose()

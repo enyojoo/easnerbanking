@@ -499,9 +499,10 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
 
       if (shouldUseBridgeConsumerKyc(userProfile, residenceOverride)) {
         const response = await bridgeService.getKycLink(fullName, email, residenceOverride)
-        const hosted = String(response.kyc_link || response.tos_link || '').trim()
+        const tosUrl = String(response.tos_link || '').trim()
+        const kycUrl = String(response.kyc_link || '').trim()
         const kycStatus = String(response.kyc_status || '').toLowerCase()
-        if (!hosted) {
+        if (!tosUrl && !kycUrl) {
           try {
             await bridgeService.syncStatus()
             if (refreshUserProfile) await refreshUserProfile()
@@ -519,8 +520,20 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
           showError('Unable to load verification. Please try again or contact support.')
           return
         }
-        // Same as Noah: hosted URL → iOS Safari View / Android Custom Tab; Expo web iframe modal.
-        await externalLink.openLink(hosted, 'Verification for bank accounts')
+        let skipKyc = Boolean(response.alreadyOnboarded) || kycStatus === 'approved'
+        if (tosUrl) {
+          await externalLink.openLink(tosUrl, 'Verification for bank accounts')
+          try {
+            const synced = await bridgeService.syncStatus()
+            if (String(synced.kyc_status || '').toLowerCase() === 'approved') skipKyc = true
+            if (refreshUserProfile) await refreshUserProfile()
+          } catch {
+            // Non-blocking
+          }
+        }
+        if (kycUrl && !skipKyc) {
+          await externalLink.openLink(kycUrl, 'Verification for bank accounts')
+        }
         try {
           await syncNoahStatus(false, true)
           if (refreshUserProfile) await refreshUserProfile()

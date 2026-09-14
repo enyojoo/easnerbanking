@@ -8,6 +8,8 @@ import {
   getBridgeCustomer,
   getBridgeHostedLinksForCustomer,
   findBridgeCustomerByEmail,
+  hostedLinksForExistingCustomer,
+  resolveBridgeCustomerKycStatus,
 } from "@/lib/bridge/kyc-links"
 import {
   customerIdFromBridgeError,
@@ -37,28 +39,16 @@ async function hostedPayloadForExistingCustomer(
   fallbackStatus: string,
 ): Promise<HostedKycPayload> {
   const customer = await getBridgeCustomer(customerId).catch(() => null)
-  const rawStatus = customer?.kyc_status ?? customer?.status ?? fallbackStatus
-  const mapped = mapBridgeKycStatus(rawStatus)
-  if (mapped === "approved") {
-    return {
-      kyc_link: null,
-      tos_link: null,
-      kyc_status: rawStatus,
-      customer_id: customerId,
-      alreadyOnboarded: true,
-    }
-  }
   const hosted = await getBridgeHostedLinksForCustomer(customerId).catch(() => ({
     kyc_link: null,
     tos_link: null,
   }))
-  return {
-    kyc_link: hosted.tos_link || hosted.kyc_link,
-    tos_link: hosted.tos_link,
-    kyc_status: rawStatus,
-    customer_id: customerId,
-    alreadyOnboarded: mapped === "pending",
-  }
+  return hostedLinksForExistingCustomer({
+    customerId,
+    customer,
+    fallbackStatus,
+    hosted,
+  })
 }
 
 /**
@@ -151,7 +141,7 @@ export async function POST(request: Request) {
     const found = await findBridgeCustomerByEmail(email, type).catch(() => null)
     if (found?.id) {
       existingCustomerId = found.id
-      existingStatus = String(found.kyc_status ?? found.status ?? existingStatus).trim()
+      existingStatus = resolveBridgeCustomerKycStatus(found)
     }
   }
 
@@ -205,7 +195,7 @@ export async function POST(request: Request) {
       customerId,
     }).catch(() => undefined)
   }
-  const status = mapBridgeKycStatus(link.kyc_status)
+  const status = resolveBridgeCustomerKycStatus({ kyc_status: link.kyc_status })
   if (type === "business" && businessId) {
     const { error } = await admin
       .from("businesses")

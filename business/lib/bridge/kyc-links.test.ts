@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { pickBridgeKycLinkFullName, bridgeCreateKycLinkIdempotencyKey, pickBridgeCustomerForEmail } from "./kyc-links"
+import {
+  pickBridgeKycLinkFullName,
+  bridgeCreateKycLinkIdempotencyKey,
+  pickBridgeCustomerForEmail,
+  resolveBridgeCustomerKycStatus,
+  hostedLinksForExistingCustomer,
+} from "./kyc-links"
 
 describe("pickBridgeKycLinkFullName", () => {
   it("sends the org legal name for business KYB, not the owner", () => {
@@ -96,5 +102,56 @@ describe("pickBridgeCustomerForEmail", () => {
         "individual",
       )?.id,
     ).toBe("23921f79-bef6-461a-89e3-26802bee52b6")
+  })
+})
+
+describe("resolveBridgeCustomerKycStatus", () => {
+  it("does not treat platform active as KYC in progress", () => {
+    expect(resolveBridgeCustomerKycStatus({ status: "active" })).toBe("not_started")
+  })
+
+  it("treats approved endorsements as approved KYC", () => {
+    expect(
+      resolveBridgeCustomerKycStatus({
+        status: "active",
+        endorsements: [{ name: "base", status: "approved" }],
+      }),
+    ).toBe("approved")
+  })
+})
+
+describe("hostedLinksForExistingCustomer", () => {
+  it("keeps TOS and KYC as separate links", () => {
+    expect(
+      hostedLinksForExistingCustomer({
+        customerId: "23921f79-bef6-461a-89e3-26802bee52b6",
+        customer: { kyc_status: "incomplete", tos_status: "pending" },
+        hosted: { kyc_link: "https://kyc.example", tos_link: "https://tos.example" },
+      }),
+    ).toEqual({
+      kyc_link: "https://kyc.example",
+      tos_link: "https://tos.example",
+      kyc_status: "in_progress",
+      customer_id: "23921f79-bef6-461a-89e3-26802bee52b6",
+      alreadyOnboarded: false,
+    })
+  })
+
+  it("treats approved endorsements as already onboarded even when tos_status is empty", () => {
+    expect(
+      hostedLinksForExistingCustomer({
+        customerId: "23921f79-bef6-461a-89e3-26802bee52b6",
+        customer: {
+          status: "active",
+          endorsements: [{ name: "sepa", status: "approved" }],
+        },
+        hosted: { kyc_link: "https://kyc.example", tos_link: "https://tos.example" },
+      }),
+    ).toMatchObject({
+      kyc_link: null,
+      tos_link: null,
+      alreadyOnboarded: true,
+      kyc_status: "approved",
+    })
   })
 })

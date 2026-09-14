@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { Platform } from 'react-native'
 import { openEasnerInAppBrowser } from '../lib/inAppBrowser'
 import { hostedKycUrlForWebEmbed } from '../lib/hostedKycUrl'
@@ -11,6 +11,7 @@ export function useExternalLink(options: UseExternalLinkOptions = {}) {
   const [isVisible, setIsVisible] = useState(false)
   const [url, setUrl] = useState<string>('')
   const [title, setTitle] = useState<string>('')
+  const waitCloseRef = useRef<(() => void) | null>(null)
 
   const openLink = useCallback(async (linkUrl: string, linkTitle?: string) => {
     const webOrigin = typeof window !== 'undefined' ? window.location.origin : ''
@@ -22,6 +23,9 @@ export function useExternalLink(options: UseExternalLinkOptions = {}) {
     // Expo web: same in-app hosted sheet Noah used (iframe WebView modal).
     if (Platform.OS === 'web') {
       setIsVisible(true)
+      await new Promise<void>((resolve) => {
+        waitCloseRef.current = resolve
+      })
       return
     }
 
@@ -37,6 +41,8 @@ export function useExternalLink(options: UseExternalLinkOptions = {}) {
 
   const closeLink = useCallback(() => {
     setIsVisible(false)
+    waitCloseRef.current?.()
+    waitCloseRef.current = null
     setTimeout(() => {
       setUrl('')
       setTitle('')

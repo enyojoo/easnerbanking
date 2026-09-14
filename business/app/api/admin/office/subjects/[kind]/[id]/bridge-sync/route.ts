@@ -3,7 +3,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireOfficeAdmin } from "@/lib/api/admin-auth"
 import { logAdminAction } from "@/lib/admin-audit"
 import { persistVerificationStatus } from "@/lib/compliance/verification-store"
-import { getBridgeCustomer, mapBridgeKycStatus } from "@/lib/bridge/kyc-links"
+import { getBridgeCustomer, findBridgeCustomerByEmail, resolveBridgeCustomerKycStatus } from "@/lib/bridge/kyc-links"
 import { provisionBridgeVirtualAccounts } from "@/lib/bridge/provision-after-approval"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { requireBridgeEnv } from "@/app/api/bridge/_helpers"
@@ -43,10 +43,43 @@ export async function POST(
   } else {
     const { data } = await admin
       .from("users")
-      .select("bridge_customer_id")
+      .select("bridge_customer_id,email")
       .eq("id", id)
       .maybeSingle()
     customerId = String(data?.bridge_customer_id ?? "").trim()
+    if (!customerId) {
+      const email = String(data?.email ?? "").trim()
+      const found = email
+        ? await findBridgeCustomerByEmail(email, "individual").catch(() => null)
+        : null
+      customerId = String(found?.id ?? "").trim()
+    }
+    if (!customerId) {
+      const { data: byBridge } = await admin
+        .from("users")
+        .select("id,bridge_customer_id")
+        .eq("bridge_customer_id", id)
+        .maybeSingle()
+      if (byBridge?.id) {
+        userId = byBridge.id
+        customerId = String(byBridge.bridge_customer_id ?? id).trim()
+      }
+    }
+    if (!customerId) {
+      const remote = await getBridgeCustomer(id).catch(() => null)
+      if (remote?.id) {
+        customerId = remote.id
+        const email = String((remote as { email?: string }).email ?? "").trim()
+        if (email) {
+          const { data: byEmail } = await admin
+            .from("users")
+            .select("id")
+            .eq("email", email)
+            .maybeSingle()
+          if (byEmail?.id) userId = byEmail.id
+        }
+      }
+    }
   }
 
   if (!customerId) {
@@ -54,7 +87,7 @@ export async function POST(
   }
 
   const customer = await getBridgeCustomer(customerId)
-  const status = mapBridgeKycStatus(customer.kyc_status ?? customer.status)
+  const status = resolveBridgeCustomerKycStatus(customer)
 
   if (kind === "business") {
     await admin
@@ -68,7 +101,7 @@ export async function POST(
   } else {
     await persistVerificationStatus(admin, {
       kind: "individual",
-      userId: id,
+      userId,
       provider: "bridge",
       status,
       bridgeCustomerId: customerId,
@@ -80,7 +113,7 @@ export async function POST(
         bridge_kyc_status: status,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", id)
+      .eq("id", userId)
   }
 
   let provisioned = false
