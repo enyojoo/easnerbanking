@@ -66,11 +66,6 @@ type FiatDestinationRow = {
   supportNoahPayIn: boolean
   supportGridPayIn: boolean
   crossBorderSupported: boolean
-  /** Stable provider discovery badges – not affected by routing or enable toggles. */
-  showNoahBadge: boolean
-  showYcBadge: boolean
-  showGridBadge: boolean
-  showStripeBadge: boolean
   sample: PayoutCorridorAdminRow
 }
 
@@ -143,38 +138,6 @@ function rowSupportsNoahPayIn(row: PayoutCorridorAdminRow): boolean {
 }
 
 /** Provider badges: discovery / capability only – never routing or *_enabled flags. */
-function corridorShowsNoahBadge(row: PayoutCorridorAdminRow): boolean {
-  const meta = rowMetadata(row)
-  return (
-    row.noah_sell_available === true ||
-    meta.noah_receive === true ||
-    meta.noah_send_enabled === true ||
-    routingPrimaryProvider(row.provider_routing) === "noah" ||
-    String(row.settlement_backend ?? "").toLowerCase() === "noah"
-  )
-}
-
-function corridorShowsYcBadge(row: PayoutCorridorAdminRow): boolean {
-  if (isUsUsdCorridor(row.country_code, row.currency_code)) return false
-  const meta = rowMetadata(row)
-  return (
-    row.yc_send_available === true ||
-    row.yc_receive_available === true ||
-    meta.yc_send === true ||
-    meta.yc_receive === true
-  )
-}
-
-function corridorShowsGridBadge(row: PayoutCorridorAdminRow): boolean {
-  const meta = rowMetadata(row)
-  return (
-    row.grid_send_available === true ||
-    row.grid_receive_available === true ||
-    meta.grid_send === true ||
-    meta.grid_receive === true
-  )
-}
-
 function rowPayInEnabledForProvider(row: PayoutCorridorAdminRow, provider: ProviderId): boolean {
   const meta = rowMetadata(row)
   if (provider === "yellowcard" && rowSupportsYcPayIn(row)) return meta.yc_receive_enabled === true
@@ -679,11 +642,6 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
       : (business.payInProvider !== null &&
           railRows.some((row) => rowPayInEnabledForProvider(row, business.payInProvider))) ||
         personal.payInProvider !== null
-    const showNoahBadge = usCorridor ? true : corridorShowsNoahBadge(r)
-    const showYcBadge = usCorridor ? false : corridorShowsYcBadge(r)
-    const showGridBadge = usCorridor ? true : corridorShowsGridBadge(r)
-    const showStripeBadge = usCorridor
-
     if (!existing) {
       map.set(key, {
         key,
@@ -710,10 +668,6 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
         supportNoahPayIn,
         supportGridPayIn,
         crossBorderSupported,
-        showNoahBadge,
-        showYcBadge,
-        showGridBadge,
-        showStripeBadge,
         sample: r,
       })
       continue
@@ -738,10 +692,6 @@ function groupFiatDestinations(filteredRows: PayoutCorridorAdminRow[]): FiatDest
           ? payInCorridorIdsForProvider(railRows, personal.payInProvider)
           : []
     existing.crossBorderSupported = crossBorderSupported
-    existing.showNoahBadge = usCorridor ? true : existing.showNoahBadge || corridorShowsNoahBadge(r)
-    existing.showYcBadge = usCorridor ? false : existing.showYcBadge || corridorShowsYcBadge(r)
-    existing.showGridBadge = usCorridor ? true : existing.showGridBadge || corridorShowsGridBadge(r)
-    existing.showStripeBadge = existing.showStripeBadge || showStripeBadge
   }
 
   return [...map.values()].sort(
@@ -1055,15 +1005,14 @@ export function PayoutCorridorsAdminPanel() {
               provision from provider coverage.
             </p>
           ) : (
-            <Table className="min-w-[1100px]">
+            <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="sticky left-0 z-20 w-[240px] bg-background">Country</TableHead>
-                  <TableHead className="w-[140px]">Providers</TableHead>
+                  <TableHead className="sticky left-0 z-20 w-[220px] bg-background">Country</TableHead>
                   <TableHead className="w-[200px]">Payout</TableHead>
                   <TableHead className="w-[200px]">Pay-in</TableHead>
                   <TableHead className="w-[200px]">Cross-border</TableHead>
-                  <TableHead className="w-[100px] text-right">Live</TableHead>
+                  <TableHead className="w-[88px] text-right">Live</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1090,25 +1039,6 @@ export function PayoutCorridorsAdminPanel() {
                           <CountryFlag code={r.country_code} size={20} />
                           <span className="truncate font-medium">{r.country_name}</span>
                           <span className="text-muted-foreground text-xs shrink-0">{r.currency_code}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1 flex-wrap">
-                          {r.showNoahBadge ? (
-                            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">Noah</span>
-                          ) : null}
-                          {r.showYcBadge ? (
-                            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">YC</span>
-                          ) : null}
-                          {r.showGridBadge ? (
-                            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">Grid</span>
-                          ) : null}
-                          {r.showStripeBadge ? (
-                            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">Stripe</span>
-                          ) : null}
-                          {!r.showNoahBadge && !r.showYcBadge && !r.showGridBadge && !r.showStripeBadge ? (
-                            <span className="text-muted-foreground text-xs">–</span>
-                          ) : null}
                         </div>
                       </TableCell>
                       <StackedRoutingCell mismatch={payoutMismatch} liveOff={liveOff}>
