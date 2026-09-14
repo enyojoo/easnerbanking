@@ -45,8 +45,8 @@ import {
   SETTINGS_VERIFICATION_FLOW_PARAM,
   type SettingsVerificationEmbeddedFlow,
 } from "@/lib/compliance/cutover-comms"
-import { fetchWithSession } from "@/lib/fetch-with-session"
 import { ExpressDepositsSetup } from "@/components/compliance/express-deposits-setup"
+import { BridgeHostedSetup } from "@/components/compliance/bridge-hosted-setup"
 import { EXPRESS_DEPOSITS_COPY, expressDepositsVerificationCta } from "@easner/shared"
 import { peekBusinessExpressOnrampStatus } from "@/lib/express-onramp-status-cache"
 import { loadExpressOnramp, prefetchExpressOnramp } from "@/lib/stripe/load-crypto-onramp"
@@ -171,7 +171,7 @@ export function BusinessVerificationSection({
   }, [onFlowOpenChange, searchParams])
 
   useEffect(() => {
-    if (hostedFlowActive || connectFlowActive || expressFlowActive) {
+    if (hostedFlowActive || connectFlowActive || expressFlowActive || bridgeFlowActive) {
       document.documentElement.dataset.verificationFlowOpen = "true"
       document.querySelector("main")?.scrollTo({ top: 0 })
     } else {
@@ -180,7 +180,7 @@ export function BusinessVerificationSection({
     return () => {
       delete document.documentElement.dataset.verificationFlowOpen
     }
-  }, [hostedFlowActive, connectFlowActive, expressFlowActive])
+  }, [hostedFlowActive, connectFlowActive, expressFlowActive, bridgeFlowActive])
 
   const syncBusinessTier1FromGrid = useCallback(async (): Promise<boolean> => {
     const result = await syncBusinessGridStatusUntilAccountsReady()
@@ -221,46 +221,44 @@ export function BusinessVerificationSection({
     pushVerificationFlowUrl()
   }, [accountRestricted, businessId, kybPacket, kybPacketQuery, pushVerificationFlowUrl])
 
-  const openBridgeVerification = useCallback(async () => {
+  const openBridgeVerification = useCallback(() => {
     if (accountRestricted) return
     if (!tier1Complete) {
       setInfo(USD_VERIFICATION_REQUIRED_COPY)
       return
     }
-    setOpening(true)
     setError(null)
-    try {
-      const res = await fetchWithSession("/api/bridge/kyc-links", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Easner-Account-Scope": "business",
-        },
-        body: JSON.stringify({ type: "business" }),
-      })
-      const json = (await res.json().catch(() => ({}))) as {
-        kyc_link?: string | null
-        tos_link?: string | null
-        error?: string
-      }
-      if (!res.ok) throw new Error(json.error || "Could not start verification")
-      const hosted = String(json.kyc_link || json.tos_link || "").trim()
-      if (!hosted) throw new Error("Could not start verification")
-      window.location.assign(hosted)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not start verification")
-    } finally {
-      setOpening(false)
-    }
-  }, [accountRestricted, tier1Complete])
+    analytics.trackKybStarted({ provider: "bridge" })
+    onFlowOpenChange?.(true, "bridge")
+    const next = new URLSearchParams(searchParams.toString())
+    next.set("tab", "verification")
+    next.set("flow", SETTINGS_BRIDGE_FLOW_PARAM)
+    window.history.replaceState(null, "", `/settings?${next.toString()}`)
+  }, [accountRestricted, onFlowOpenChange, searchParams, tier1Complete])
+
+  const closeBridgeAndSync = useCallback(() => {
+    onFlowOpenChange?.(false)
+    const next = new URLSearchParams(searchParams.toString())
+    next.set("tab", "verification")
+    next.delete("flow")
+    window.history.replaceState(null, "", `/settings?${next.toString()}`)
+  }, [onFlowOpenChange, searchParams])
 
   useEffect(() => {
     if (!accountRestricted) return
-    if (!flowFromUrl && !connectFromUrl && !expressFromUrl) return
+    if (!flowFromUrl && !connectFromUrl && !expressFromUrl && !bridgeFromUrl) return
     clearVerificationFlowUrl()
     setHostedOpen(false)
     onFlowOpenChange?.(false)
-  }, [accountRestricted, clearVerificationFlowUrl, connectFromUrl, expressFromUrl, flowFromUrl, onFlowOpenChange])
+  }, [
+    accountRestricted,
+    bridgeFromUrl,
+    clearVerificationFlowUrl,
+    connectFromUrl,
+    expressFromUrl,
+    flowFromUrl,
+    onFlowOpenChange,
+  ])
 
   useEffect(() => {
     if (!flowFromUrl || accountRestricted) {
@@ -350,9 +348,10 @@ export function BusinessVerificationSection({
         : VERIFICATION_SECTION_COPY.beginVerificationCta
 
   /** Full-page flow fills remaining main; in-tab fallback keeps title/tabs chrome. */
-  const verificationFlowPanelClass = hostedFlowActive || expressFlowActive
-    ? "flex min-h-0 flex-1 flex-col"
-    : "h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))] max-h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))]"
+  const verificationFlowPanelClass =
+    hostedFlowActive || expressFlowActive || bridgeFlowActive
+      ? "flex min-h-0 flex-1 flex-col"
+      : "h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))] max-h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))]"
 
   const hostedFlowPanel = kybPacket ? (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
@@ -366,6 +365,18 @@ export function BusinessVerificationSection({
       </div>
     </div>
   ) : null
+
+  if (bridgeFlowActive) {
+    return (
+      <div
+        id="business-verification"
+        className={verificationFlowPanelClass}
+        data-verification-flow="open"
+      >
+        <BridgeHostedSetup onClose={closeBridgeAndSync} />
+      </div>
+    )
+  }
 
   if (expressFlowActive) {
     return (
@@ -560,7 +571,7 @@ export function BusinessVerificationSection({
                                         <Button
                                           size="sm"
                                           disabled={!tier1Complete || opening || !businessId}
-                                          onClick={() => void openBridgeVerification()}
+                                          onClick={openBridgeVerification}
                                         >
                                           {opening ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
                                           {eurStatus === "in_progress" || eurStatus === "pending"
