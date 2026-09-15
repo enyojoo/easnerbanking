@@ -30,6 +30,13 @@ export async function POST(request: Request) {
       .eq("id", businessId)
       .maybeSingle()
     customerId = String(data?.bridge_customer_id ?? "").trim()
+    if (!customerId) {
+      const email = String(user.email ?? "").trim()
+      const found = email
+        ? await findBridgeCustomerByEmail(email, "business").catch(() => null)
+        : null
+      customerId = String(found?.id ?? "").trim()
+    }
   } else {
     const { data } = await admin
       .from("users")
@@ -59,6 +66,9 @@ export async function POST(request: Request) {
       .update({
         bridge_customer_id: customerId,
         bridge_kyc_status: status,
+        ...(String(customer.tos_status ?? "").toLowerCase() === "approved"
+          ? { bridge_tos_status: "approved" }
+          : {}),
         updated_at: new Date().toISOString(),
       })
       .eq("id", businessId)

@@ -40,6 +40,14 @@ export async function POST(
       .maybeSingle()
     customerId = String(data?.bridge_customer_id ?? "").trim()
     userId = await resolveOrgOwnerUserId(admin, id, "")
+    if (!customerId && userId) {
+      const { data: owner } = await admin.from("users").select("email").eq("id", userId).maybeSingle()
+      const email = String(owner?.email ?? "").trim()
+      const found = email
+        ? await findBridgeCustomerByEmail(email, "business").catch(() => null)
+        : null
+      customerId = String(found?.id ?? "").trim()
+    }
   } else {
     const { data } = await admin
       .from("users")
