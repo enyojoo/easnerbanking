@@ -33,6 +33,7 @@ import {
 import type { InvoicePaymentDefaults } from "@/lib/b2b/types"
 import { validateOperationalAddress } from "@easner/shared/postal-address-form"
 import { resolveOnlinePaymentsEnabled } from "@/lib/stripe/resolve-online-payments-enabled"
+import { publicBridgeKycHubStatus } from "@/lib/bridge/kyc-links"
 
 type UpdateBody = {
   businessName?: string
@@ -300,6 +301,11 @@ async function getBusinessProfileResponse(request: Request) {
   const tier1RejectionType = tier1RejectionDisplay.rejectType
   const tier1CanResubmit = tier1RejectionDisplay.canResubmit
   const tier1RetryGuidance = tier1RejectionDisplay.guidanceLines
+  const bridgeCustomerId = String(orgKyb?.bridge_customer_id ?? "").trim() || null
+  const bridgeHub = publicBridgeKycHubStatus({
+    rawStatus: orgKyb?.bridge_kyc_status,
+    customerId: bridgeCustomerId,
+  })
 
   return NextResponse.json({
     profile: {
@@ -347,8 +353,9 @@ async function getBusinessProfileResponse(request: Request) {
       tier1CanResubmit,
       tier1RetryGuidance,
       noahKybCustomerId,
-      bridgeKycStatus: String(orgKyb?.bridge_kyc_status ?? "").trim() || null,
-      bridgeKycComplete: String(orgKyb?.bridge_kyc_status ?? "").toLowerCase() === "approved",
+      bridgeKycStatus: bridgeHub.status,
+      bridgeCustomerId,
+      bridgeKycComplete: bridgeHub.complete,
       canManageBusinessVerification,
       businessRole,
       residenceCountry: actorResidenceCountry,

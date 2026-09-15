@@ -7,6 +7,9 @@ import {
   hostedLinksForExistingCustomer,
   applyBridgeHostedRedirect,
   isBridgeTosApproved,
+  shouldPrefillBridgeBusinessCustomer,
+  shouldRequestSepaKycEndorsement,
+  publicBridgeKycHubStatus,
 } from "./kyc-links"
 
 describe("pickBridgeKycLinkFullName", () => {
@@ -127,6 +130,34 @@ describe("pickBridgeCustomerForEmail", () => {
 describe("resolveBridgeCustomerKycStatus", () => {
   it("does not treat platform active as KYC in progress", () => {
     expect(resolveBridgeCustomerKycStatus({ status: "active" })).toBe("not_started")
+  })
+
+  it("treats awaiting UBO as in-progress KYB", () => {
+    expect(resolveBridgeCustomerKycStatus({ kyc_status: "awaiting_ubo" })).toBe("in_progress")
+    expect(resolveBridgeCustomerKycStatus({ status: "awaiting_ubo" })).toBe("in_progress")
+  })
+
+  it("surfaces Continue-ready hub status when a customer exists", () => {
+    expect(publicBridgeKycHubStatus({ rawStatus: "awaiting_ubo" })).toEqual({
+      status: "in_progress",
+      complete: false,
+    })
+    expect(publicBridgeKycHubStatus({ rawStatus: null, customerId: "cust_1" })).toEqual({
+      status: "in_progress",
+      complete: false,
+    })
+  })
+
+  it("does not prefill or request SEPA once KYB has started", () => {
+    expect(shouldPrefillBridgeBusinessCustomer("awaiting_ubo")).toBe(false)
+    expect(shouldPrefillBridgeBusinessCustomer("not_started")).toBe(true)
+    expect(shouldRequestSepaKycEndorsement({ kyc_status: "awaiting_ubo" })).toBe(false)
+    expect(
+      shouldRequestSepaKycEndorsement({
+        kyc_status: "approved",
+        endorsements: [{ name: "sepa", status: "incomplete" }],
+      }),
+    ).toBe(true)
   })
 
   it("treats approved endorsements as approved KYC", () => {

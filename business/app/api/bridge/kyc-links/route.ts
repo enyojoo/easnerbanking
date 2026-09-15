@@ -12,6 +12,7 @@ import {
   hostedLinksForExistingCustomer,
   isBridgeTosApproved,
   resolveBridgeCustomerKycStatus,
+  shouldPrefillBridgeBusinessCustomer,
 } from "@/lib/bridge/kyc-links"
 import { getBridgeTosReturnUrl } from "@/lib/bridge/config"
 import {
@@ -41,9 +42,10 @@ async function hostedPayloadForExistingCustomer(
   customerId: string,
   fallbackStatus: string,
   localTosApproved = false,
+  type: "individual" | "business" = "individual",
 ): Promise<HostedKycPayload> {
   const customer = await getBridgeCustomer(customerId).catch(() => null)
-  const hosted = await getBridgeHostedLinksForCustomer(customerId).catch(() => ({
+  const hosted = await getBridgeHostedLinksForCustomer(customerId, { type, customer }).catch(() => ({
     kyc_link: null,
     tos_link: null,
   }))
@@ -166,7 +168,7 @@ export async function POST(request: Request) {
   let link: HostedKycPayload | null = null
 
   if (existingCustomerId) {
-    if (type === "business" && businessId) {
+    if (type === "business" && businessId && shouldPrefillBridgeBusinessCustomer(existingStatus)) {
       const { prefillBridgeBusinessCustomer } = await import("@/lib/bridge/prefill-from-grid")
       await prefillBridgeBusinessCustomer({
         admin,
@@ -174,10 +176,12 @@ export async function POST(request: Request) {
         customerId: existingCustomerId,
       }).catch(() => undefined)
     }
-    link = await hostedPayloadForExistingCustomer(existingCustomerId, existingStatus, localTosApproved)
-    if (!link.kyc_link && !link.tos_link && !link.alreadyOnboarded) {
-      link = null
-    }
+    link = await hostedPayloadForExistingCustomer(
+      existingCustomerId,
+      existingStatus,
+      localTosApproved,
+      type,
+    )
   }
 
   if (!link) {
@@ -200,12 +204,22 @@ export async function POST(request: Request) {
           : null)
       if (!recoveredId) throw createError
       existingCustomerId = recoveredId
-      link = await hostedPayloadForExistingCustomer(recoveredId, existingStatus, localTosApproved)
+      link = await hostedPayloadForExistingCustomer(
+        recoveredId,
+        existingStatus,
+        localTosApproved,
+        type,
+      )
     }
   }
 
   const customerId = String(link.customer_id ?? existingCustomerId).trim()
-  if (type === "business" && businessId && customerId && !existingCustomerId) {
+  if (
+    type === "business" &&
+    businessId &&
+    customerId &&
+    shouldPrefillBridgeBusinessCustomer(existingStatus)
+  ) {
     const { prefillBridgeBusinessCustomer } = await import("@/lib/bridge/prefill-from-grid")
     await prefillBridgeBusinessCustomer({
       admin,
@@ -214,12 +228,13 @@ export async function POST(request: Request) {
     }).catch(() => undefined)
   }
   const status = resolveBridgeCustomerKycStatus({ kyc_status: link.kyc_status })
+  const persistStatus = status === "not_started" && customerId ? "in_progress" : status
   if (type === "business" && businessId) {
     const { error } = await admin
       .from("businesses")
       .update({
         ...(customerId ? { bridge_customer_id: customerId } : {}),
-        bridge_kyc_status: status,
+        bridge_kyc_status: persistStatus,
         updated_at: new Date().toISOString(),
       })
       .eq("id", businessId)
@@ -232,7 +247,7 @@ export async function POST(request: Request) {
         kind: "individual",
         userId: user.id,
         provider: "bridge",
-        status: status === "not_started" ? "in_progress" : status,
+        status: persistStatus,
         bridgeCustomerId: customerId || null,
       })
     } catch (persistError) {
@@ -242,7 +257,7 @@ export async function POST(request: Request) {
       .from("users")
       .update({
         ...(customerId ? { bridge_customer_id: customerId } : {}),
-        bridge_kyc_status: status === "not_started" ? "in_progress" : status,
+        bridge_kyc_status: persistStatus,
         updated_at: new Date().toISOString(),
       })
       .eq("id", user.id)
@@ -268,7 +283,7 @@ export async function POST(request: Request) {
     tos_link: tosApproved
       ? null
       : applyBridgeHostedRedirect(link.tos_link, getBridgeTosReturnUrl(), { overwrite: true }),
-    kyc_status: status,
+    kyc_status: persistStatus,
     customer_id: customerId || null,
     alreadyOnboarded: Boolean(link.alreadyOnboarded) || status === "approved",
   })

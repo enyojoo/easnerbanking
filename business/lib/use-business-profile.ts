@@ -62,6 +62,8 @@ export type BusinessProfile = {
   noahKybCustomerId: string | null
   /** Additional EUR/USD bank KYB (hosted). */
   bridgeKycStatus: string | null
+  /** Present after hosted EUR KYB has created a Bridge customer. */
+  bridgeCustomerId: string | null
   bridgeKycComplete: boolean
   /** Whether the signed-in user may start or refresh hosted business verification. */
   canManageBusinessVerification: boolean
@@ -117,6 +119,7 @@ const DEFAULT_PROFILE: BusinessProfile = {
   tier1RetryGuidance: [],
   noahKybCustomerId: null,
   bridgeKycStatus: null,
+  bridgeCustomerId: null,
   bridgeKycComplete: false,
   canManageBusinessVerification: true,
   businessRole: "Owner",
@@ -236,8 +239,12 @@ export function useBusinessProfile() {
         tabVisible,
         realtimeHealth,
       )
+      const bridgeStatusForPoll =
+        query.state.data?.bridgeCustomerId && !query.state.data?.bridgeKycComplete
+          ? query.state.data.bridgeKycStatus || "in_progress"
+          : query.state.data?.bridgeKycStatus
       const bridge = verificationLiveRefetchIntervalMs(
-        query.state.data?.bridgeKycStatus,
+        bridgeStatusForPoll,
         tabVisible,
         realtimeHealth,
       )
@@ -247,10 +254,12 @@ export function useBusinessProfile() {
     },
     refetchOnWindowFocus: (query) =>
       verificationStatusNeedsLiveUpdates(query.state.data?.tier1VerificationStatus) ||
-      verificationStatusNeedsLiveUpdates(query.state.data?.bridgeKycStatus),
+      verificationStatusNeedsLiveUpdates(query.state.data?.bridgeKycStatus) ||
+      Boolean(query.state.data?.bridgeCustomerId && !query.state.data?.bridgeKycComplete),
     refetchOnMount: (query) =>
       (verificationStatusNeedsLiveUpdates(query.state.data?.tier1VerificationStatus) ||
-        verificationStatusNeedsLiveUpdates(query.state.data?.bridgeKycStatus))
+        verificationStatusNeedsLiveUpdates(query.state.data?.bridgeKycStatus) ||
+        Boolean(query.state.data?.bridgeCustomerId && !query.state.data?.bridgeKycComplete))
         ? "always"
         : true,
     fetcher: async () => {

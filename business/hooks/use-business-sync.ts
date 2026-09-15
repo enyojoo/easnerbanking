@@ -61,6 +61,7 @@ export function useBusinessSync(): void {
     tier1Complete,
     tier1VerificationStatus,
     bridgeKycStatus,
+    bridgeCustomerId,
     bridgeKycComplete,
     canManageBusinessVerification,
     isLoading,
@@ -98,9 +99,9 @@ export function useBusinessSync(): void {
   const profileSlice = useMemo(() => ({ tier1Complete }), [tier1Complete])
 
   const bridgeKycStarted =
-    Boolean(bridgeKycStatus) &&
-    String(bridgeKycStatus).toLowerCase() !== "not_started" &&
-    !bridgeKycComplete
+    !bridgeKycComplete &&
+    (Boolean(bridgeCustomerId?.trim()) ||
+      (Boolean(bridgeKycStatus) && String(bridgeKycStatus).toLowerCase() !== "not_started"))
 
   const gridApproved = String(tier1VerificationStatus ?? "").toLowerCase() === "approved"
   const gridInFlight =

@@ -119,11 +119,46 @@ function hostedRedirectQuery(redirectUrl: string): string {
   return redirect ? `redirect_uri=${encodeURIComponent(redirect)}` : ""
 }
 
-export async function getBridgeCustomerKycLink(customerId: string): Promise<string | null> {
-  const redirect = hostedRedirectQuery(getBridgeKycReturnUrl())
+/** Mid-flow KYB must not request the SEPA add-on inquiry — that restarts Persona. */
+export function shouldRequestSepaKycEndorsement(customer: {
+  kyc_status?: string | null
+  status?: string | null
+  endorsements?: Array<{ name?: string; status?: string }> | null
+} | null | undefined): boolean {
+  if (!customer) return false
+  const mapped = resolveBridgeCustomerKycStatus(customer)
+  if (mapped !== "approved" && mapped !== "pending") return false
+  const sepa = (customer.endorsements ?? []).find(
+    (row) => String(row.name ?? "").trim().toLowerCase() === "sepa",
+  )
+  return String(sepa?.status ?? "").trim().toLowerCase() !== "approved"
+}
+
+/** PUT company/people only on a brand-new Bridge customer. Later PUTs reset Persona. */
+export function shouldPrefillBridgeBusinessCustomer(status: string | null | undefined): boolean {
+  return mapBridgeKycStatus(status) === "not_started"
+}
+
+export async function getBridgeCustomerKycLink(
+  customerId: string,
+  opts?: {
+    type?: BridgeCustomerType
+    customer?: {
+      kyc_status?: string | null
+      status?: string | null
+      endorsements?: Array<{ name?: string; status?: string }> | null
+    } | null
+  },
+): Promise<string | null> {
+  const type = opts?.type ?? "individual"
+  const redirect = hostedRedirectQuery(
+    type === "business" ? getBridgeBusinessKybReturnUrl() : getBridgeKycReturnUrl(),
+  )
+  const sepa = shouldRequestSepaKycEndorsement(opts?.customer)
+  const query = [sepa ? "endorsement=sepa" : "", redirect].filter(Boolean).join("&")
   const payload = await bridgeFetch<unknown>({
     method: "GET",
-    path: `/customers/${encodeURIComponent(customerId)}/kyc_link?endorsement=sepa${redirect ? `&${redirect}` : ""}`,
+    path: `/customers/${encodeURIComponent(customerId)}/kyc_link${query ? `?${query}` : ""}`,
   })
   return hostedUrlFromPayload(payload)
 }
@@ -153,12 +188,22 @@ export async function getBridgeCustomerTosLink(customerId: string): Promise<stri
   return hostedUrlFromPayload(payload)
 }
 
-export async function getBridgeHostedLinksForCustomer(customerId: string): Promise<{
+export async function getBridgeHostedLinksForCustomer(
+  customerId: string,
+  opts?: {
+    type?: BridgeCustomerType
+    customer?: {
+      kyc_status?: string | null
+      status?: string | null
+      endorsements?: Array<{ name?: string; status?: string }> | null
+    } | null
+  },
+): Promise<{
   kyc_link: string | null
   tos_link: string | null
 }> {
   const [kyc, tos] = await Promise.all([
-    getBridgeCustomerKycLink(customerId).catch(() => null),
+    getBridgeCustomerKycLink(customerId, opts).catch(() => null),
     getBridgeCustomerTosLink(customerId).catch(() => null),
   ])
   return { kyc_link: kyc, tos_link: tos }
@@ -292,6 +337,18 @@ export function resolveBridgeCustomerKycStatus(customer: {
   })
   if (endorsed) return "approved"
   if (String(customer.kyc_status ?? "").trim()) return fromKyc
+  const platform = String(customer.status ?? "").trim().toLowerCase()
+  if (
+    platform === "incomplete" ||
+    platform === "awaiting_questionnaire" ||
+    platform === "awaiting_ubo" ||
+    platform === "awaiting_ubo_kyc" ||
+    platform === "under_review" ||
+    platform === "rejected" ||
+    platform === "approved"
+  ) {
+    return mapBridgeKycStatus(platform)
+  }
   return "not_started"
 }
 
@@ -336,6 +393,22 @@ export function hostedLinksForExistingCustomer(input: {
   }
 }
 
+/** Hub/profile status: map Bridge raw values and treat an attached customer as started. */
+export function publicBridgeKycHubStatus(input: {
+  rawStatus?: string | null
+  customerId?: string | null
+}): { status: string | null; complete: boolean } {
+  const mapped = mapBridgeKycStatus(input.rawStatus)
+  if (mapped === "approved") return { status: "approved", complete: true }
+  if (mapped === "not_started") {
+    return {
+      status: input.customerId?.trim() ? "in_progress" : String(input.rawStatus ?? "").trim() || null,
+      complete: false,
+    }
+  }
+  return { status: mapped, complete: false }
+}
+
 export function mapBridgeKycStatus(raw: string | null | undefined):
   | "not_started"
   | "in_progress"
@@ -346,8 +419,14 @@ export function mapBridgeKycStatus(raw: string | null | undefined):
   if (s === "approved") return "approved"
   if (s === "rejected" || s === "denied") return "rejected"
   if (s === "under_review" || s === "pending") return "pending"
-  if (s === "incomplete" || s === "awaiting_questionnaire" || s === "not_started") {
-    return s === "not_started" ? "not_started" : "in_progress"
+  if (s === "not_started") return "not_started"
+  if (
+    s === "incomplete" ||
+    s === "awaiting_questionnaire" ||
+    s === "awaiting_ubo" ||
+    s === "awaiting_ubo_kyc"
+  ) {
+    return "in_progress"
   }
   if (!s) return "not_started"
   return "in_progress"

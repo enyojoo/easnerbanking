@@ -82,7 +82,7 @@ export async function POST(request: Request) {
     }
 
     const customer = await getBridgeCustomer(customerId).catch(() => null)
-    const kycLink = await getBridgeCustomerKycLink(customerId).catch(() => null)
+    const kycLink = await getBridgeCustomerKycLink(customerId, { type, customer }).catch(() => null)
 
     return NextResponse.json({
       ok: true,

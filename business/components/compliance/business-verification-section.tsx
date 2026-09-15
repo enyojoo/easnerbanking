@@ -89,6 +89,7 @@ export function BusinessVerificationSection({
     businessId,
     noahKybCustomerId,
     bridgeKycStatus,
+    bridgeCustomerId,
     bridgeKycComplete,
     onlinePaymentsEnabled,
     name,
@@ -343,10 +344,15 @@ export function BusinessVerificationSection({
     canResubmit: tier1CanResubmit,
     finalReject: tier1FinalReject,
   })
+  const eurStartedNotSubmitted =
+    !eurRejected &&
+    !eurAwaitingReview &&
+    (eurStatus === "in_progress" ||
+      (eurStatus === "not_started" && Boolean(bridgeCustomerId?.trim())))
   const eurCtaLabel = businessHubKybCtaLabel({
     status: eurStatus,
     complete: bridgeKycComplete,
-    startedNotSubmitted: eurStatus === "in_progress",
+    startedNotSubmitted: eurStartedNotSubmitted,
   })
   const showGridCta = Boolean(gridCtaLabel) && canManageBusinessVerification && !accountRestricted
   const showEurCta = Boolean(eurCtaLabel) && canManageBusinessVerification && !accountRestricted
