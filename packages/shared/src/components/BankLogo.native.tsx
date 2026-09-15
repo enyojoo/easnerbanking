@@ -1,4 +1,5 @@
-import { Image, StyleSheet, Text, View, type ImageStyle, type StyleProp, type ViewStyle } from "react-native"
+import { Image } from "expo-image"
+import { StyleSheet, Text, View, type ImageStyle, type StyleProp, type ViewStyle } from "react-native"
 import { BANK_LOGO_ASSETS } from "../bank-assets.manifest"
 import { normalizeBankLogoKey } from "../bank-icons"
 
@@ -33,7 +34,11 @@ export function BankLogo({ bankName, size = 18, style, title }: BankLogoProps) {
   return (
     <Image
       source={source}
+      recyclingKey={key}
       style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: "#fff" }, style as StyleProp<ImageStyle>]}
+      contentFit="cover"
+      cachePolicy="memory-disk"
+      transition={0}
       accessibilityLabel={title ?? bankName}
     />
   )

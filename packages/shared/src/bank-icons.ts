@@ -249,4 +249,8 @@ export function getBankLogoPublicUrl(label: string): string | undefined {
   return `/banks/${key}.png`
 }
 
+export function listBankLogoPublicUrls(): string[] {
+  return [...BANK_LOGO_KEYS].map((key) => `/banks/${key}.png`)
+}
+
 export { BANK_LOGO_KEYS }

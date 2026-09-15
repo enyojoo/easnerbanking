@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   getMobileMoneyProviderPublicUrl,
   hasMobileMoneyProviderIcon,
+  listMobileMoneyIconPublicUrls,
   normalizeMobileMoneyProviderKey,
 } from "./mobile-money-icons"
 
@@ -38,5 +39,6 @@ describe("mobile-money-icons", () => {
     expect(hasMobileMoneyProviderIcon("Vodafone")).toBe(true)
     expect(hasMobileMoneyProviderIcon("TNM")).toBe(true)
     expect(hasMobileMoneyProviderIcon("Unknown")).toBe(false)
+    expect(listMobileMoneyIconPublicUrls()).toContain("/mobile-money/mtn.png")
   })
 })

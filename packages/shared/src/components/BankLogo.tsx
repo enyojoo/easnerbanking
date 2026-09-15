@@ -1,6 +1,9 @@
+"use client"
+
 import type { CSSProperties } from "react"
 import { cn } from "../utils/cn"
 import { getBankLogoPublicUrl, normalizeBankLogoKey } from "../bank-icons"
+import { StableImage } from "./StableImage"
 
 export type BankLogoProps = {
   bankName: string
@@ -32,10 +35,15 @@ export function BankLogo({ bankName, size = 18, className, style, title }: BankL
   }
 
   return (
-    <img
+    <StableImage
       src={src}
       alt=""
       title={title ?? bankName}
+      width={px}
+      height={px}
+      decoding="async"
+      loading="eager"
+      retainPrevious
       className={cn("shrink-0 rounded-full object-cover bg-white", className)}
       style={{ width: px, height: px, ...style }}
     />

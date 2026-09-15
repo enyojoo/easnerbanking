@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { getBankLogoPublicUrl, hasBankLogo, normalizeBankLogoKey } from "./bank-icons"
+import { getBankLogoPublicUrl, hasBankLogo, listBankLogoPublicUrls, normalizeBankLogoKey } from "./bank-icons"
 
 describe("bank-icons", () => {
   it("maps Yellow Card bank names to logo keys", () => {
@@ -28,6 +28,8 @@ describe("bank-icons", () => {
     expect(getBankLogoPublicUrl("Zenith Bank")).toBe("/banks/zenith.png")
     expect(hasBankLogo("Equity BANK")).toBe(true)
     expect(hasBankLogo("Unknown Credit Union")).toBe(false)
+    expect(listBankLogoPublicUrls()).toContain("/banks/gtbank.png")
+    expect(listBankLogoPublicUrls().length).toBeGreaterThan(50)
   })
 
   it("covers Yellow Card KE/GH/ZA names that have assets", () => {

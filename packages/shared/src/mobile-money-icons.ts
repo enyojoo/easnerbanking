@@ -47,3 +47,7 @@ export function getMobileMoneyProviderPublicUrl(label: string): string | undefin
   if (!key || !MOBILE_MONEY_ICON_KEYS.has(key)) return undefined
   return `/mobile-money/${key}.png`
 }
+
+export function listMobileMoneyIconPublicUrls(): string[] {
+  return [...MOBILE_MONEY_ICON_KEYS].map((key) => `/mobile-money/${key}.png`)
+}

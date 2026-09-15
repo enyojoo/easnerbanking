@@ -1,7 +1,7 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { BankLogo } from "@easner/shared"
+import { useEffect, useMemo, useState } from "react"
+import { BankLogo, warmWebPayoutIconLabels } from "@easner/shared"
 import { Check, ChevronsUpDown } from "lucide-react"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -27,6 +27,10 @@ export function PayoutBankCombobox({
 }: Props) {
   const [open, setOpen] = useState(false)
   const sorted = useMemo(() => [...banks].sort((a, b) => a.localeCompare(b)), [banks])
+
+  useEffect(() => {
+    warmWebPayoutIconLabels({ banks: sorted })
+  }, [sorted])
 
   return (
     <div className="w-full min-w-0 max-w-full">

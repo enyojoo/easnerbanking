@@ -1,3 +1,5 @@
+"use client"
+
 import type { CSSProperties } from "react"
 import { cn } from "../utils/cn"
 import {
@@ -5,6 +7,7 @@ import {
   hasMobileMoneyProviderIcon,
   normalizeMobileMoneyProviderKey,
 } from "../mobile-money-icons"
+import { StableImage } from "./StableImage"
 
 export type MobileMoneyProviderIconProps = {
   provider: string
@@ -42,10 +45,15 @@ export function MobileMoneyProviderIcon({
   }
 
   return (
-    <img
+    <StableImage
       src={src}
       alt=""
       title={title ?? provider}
+      width={px}
+      height={px}
+      decoding="async"
+      loading="eager"
+      retainPrevious
       className={cn("shrink-0 rounded-full object-cover", className)}
       style={{ width: px, height: px, ...style }}
     />

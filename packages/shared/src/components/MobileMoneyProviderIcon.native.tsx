@@ -1,4 +1,5 @@
-import { Image, StyleSheet, Text, View, type ImageStyle, type StyleProp, type ViewStyle } from "react-native"
+import { Image } from "expo-image"
+import { StyleSheet, Text, View, type ImageStyle, type StyleProp, type ViewStyle } from "react-native"
 import { MOBILE_MONEY_ICON_ASSETS } from "../mobile-money-assets.manifest"
 import {
   hasMobileMoneyProviderIcon,
@@ -41,7 +42,11 @@ export function MobileMoneyProviderIcon({
   return (
     <Image
       source={source}
+      recyclingKey={key}
       style={[{ width: size, height: size, borderRadius: size / 2 }, style as StyleProp<ImageStyle>]}
+      contentFit="cover"
+      cachePolicy="memory-disk"
+      transition={0}
       accessibilityLabel={title ?? provider}
     />
   )

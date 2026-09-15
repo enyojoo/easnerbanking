@@ -138,6 +138,24 @@ const nextConfig = {
         ],
       },
       {
+        source: "/banks/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      {
+        source: "/mobile-money/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      {
         source: "/bimi/:path*",
         headers: [
           {

@@ -99,3 +99,34 @@ export function warmImageUrl(url: string | null | undefined, onReady?: () => voi
 export function warmImageUrls(urls: Iterable<string | null | undefined>): void {
   for (const url of urls) warmImageUrl(url)
 }
+
+/** Prefetch in idle chunks so pickers paint from HTTP/memory cache on first open. */
+export function warmImageUrlsAtIdle(
+  urls: Iterable<string | null | undefined>,
+  chunkSize = 12,
+): void {
+  if (typeof window === "undefined") return
+  const pending = [...urls]
+    .map((url) => String(url ?? "").trim())
+    .filter((url) => url.length > 0 && !isImageWarm(url))
+  if (pending.length === 0) return
+
+  let index = 0
+  const w = window as Window & {
+    requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number
+  }
+  const scheduleNext = () => {
+    if (index >= pending.length) return
+    const run = () => {
+      warmImageUrls(pending.slice(index, index + chunkSize))
+      index += chunkSize
+      scheduleNext()
+    }
+    if (typeof w.requestIdleCallback === "function") {
+      w.requestIdleCallback(run, { timeout: 5_000 })
+    } else {
+      setTimeout(run, 250)
+    }
+  }
+  scheduleNext()
+}

@@ -27,6 +27,7 @@ import {
   validateGridRecipientForCorridor,
   mapCadRoutingToGridMetadata,
   ycAccountNumberLabel,
+  warmWebPayoutIconLabels,
   type RecipientYcMetadata,
 } from "@easner/shared"
 import {
@@ -552,6 +553,13 @@ export function RecipientForm({
     mobileCorridors,
     currency,
   ])
+
+  useEffect(() => {
+    warmWebPayoutIconLabels({
+      banks: bankEnumOptions,
+      providers: mobileProviderChoices,
+    })
+  }, [bankEnumOptions.join("\0"), mobileProviderChoices.join("\0")])
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}

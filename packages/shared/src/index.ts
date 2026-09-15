@@ -204,6 +204,7 @@ export { getTokenIconUrl, getNetworkIconUrl } from "./crypto-icons"
 export {
   getMobileMoneyProviderPublicUrl,
   hasMobileMoneyProviderIcon,
+  listMobileMoneyIconPublicUrls,
   normalizeMobileMoneyProviderKey,
 } from "./mobile-money-icons"
 export { MobileMoneyProviderIcon } from "./components/MobileMoneyProviderIcon"
@@ -211,6 +212,7 @@ export type { MobileMoneyProviderIconProps } from "./components/MobileMoneyProvi
 export {
   getBankLogoPublicUrl,
   hasBankLogo,
+  listBankLogoPublicUrls,
   normalizeBankLogoKey,
 } from "./bank-icons"
 export { BankLogo } from "./components/BankLogo"
@@ -227,8 +229,9 @@ export { CountryFlag, CurrencyFlag } from "./components/CountryFlag"
 export type { CountryFlagProps, CurrencyFlagProps } from "./components/CountryFlag"
 export { StableImage } from "./components/StableImage"
 export type { StableImageProps } from "./components/StableImage"
-export { isImageWarm, markImageWarm, warmImageUrl, warmImageUrls } from "./image/image-warm-cache.web"
+export { isImageWarm, markImageWarm, warmImageUrl, warmImageUrls, warmImageUrlsAtIdle } from "./image/image-warm-cache.web"
 export { warmWebFlagCache, warmAllWebFlagAssets, warmWebCurrencyFlag } from "./flags/warm-flags.web"
+export { warmWebPayoutIcons, warmWebPayoutIconLabels } from "./payout-icons/warm-payout-icons.web"
 export { currencyToCountryCode, getCountryCodeForCurrency, normalizeCode } from "./flags/currency-mapping"
 export { getCurrencyCatalog, currencyDisplayName } from "./currencies/catalog"
 export type { CurrencyCatalogEntry } from "./currencies/catalog"
