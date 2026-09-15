@@ -12,7 +12,7 @@ export type VirtualAccountJson = {
   bankName?: string
   bankAddress?: string
   accountHolderName?: string
-  provider?: "grid" | "noah"
+  provider?: "grid" | "noah" | "bridge"
 }
 
 function maskTail(s: string | undefined, visible = 4): string {
@@ -67,7 +67,10 @@ export function buildPayInAccountsFromSources(opts: {
       iban: code === "EUR" ? va?.iban : undefined,
       bic: code === "EUR" ? va?.bic : undefined,
       bankAddress: va?.bankAddress,
-      depositProvider: va?.provider === "grid" ? "grid" : va?.provider === "noah" ? "noah" : undefined,
+      depositProvider:
+        va?.provider === "grid" || va?.provider === "noah" || va?.provider === "bridge"
+          ? va.provider
+          : undefined,
       balance,
       availableBalance: balance,
       status: "active",

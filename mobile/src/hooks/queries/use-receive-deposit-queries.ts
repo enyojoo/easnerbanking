@@ -18,6 +18,7 @@ export type NoahVirtualAccountDisplayJson = {
   bankAddress?: string
   accountHolderName?: string
   status?: string
+  provider?: "grid" | "noah" | "bridge"
 }
 
 export type TurnkeyDepositLineJson = {

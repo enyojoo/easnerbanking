@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
-import { qk, isVaAnswerSettled, receiveInternationalBankTitle } from '@easner/shared'
+import { qk, isVaAnswerSettled, receiveInternationalBankTitle, bankReceivePaymentNotes } from '@easner/shared'
 import {
   View,
   Text,
@@ -85,6 +85,7 @@ export default function ReceiveBankDetailsScreen({ navigation, route }: Navigati
       bankName: vaRecord.bankName,
       bankAddress: vaRecord.bankAddress,
       accountHolderName: vaRecord.accountHolderName,
+      provider: vaRecord.provider,
     }
   }, [currency, vaRecord])
 
@@ -261,17 +262,10 @@ export default function ReceiveBankDetailsScreen({ navigation, route }: Navigati
 
   const aboutSheetTitle = `About your ${currency} Account`
   const aboutSheetIntro = `Please, take note of the following when sending money to your ${currency} account:`
-  const aboutPaymentNotes =
-    currency === 'USD'
-      ? [
-          'Only send ACH or Fedwire.',
-          'SWIFT is not supported.',
-          'Processing time: within a few minutes and up to 48 hours.',
-        ]
-      : [
-          'Only send SEPA and SEPA Instant.',
-          'Processing time: within a few minutes and up to 48 hours.',
-        ]
+  const aboutPaymentNotes = bankReceivePaymentNotes({
+    currency,
+    provider: virtualAccount?.provider ?? vaRecord?.provider,
+  })
 
   const handleCopy = async (text: string, key: string) => {
     const ok = await copyToClipboard(text)

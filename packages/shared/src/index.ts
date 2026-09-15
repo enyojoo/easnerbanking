@@ -326,6 +326,14 @@ export {
   type UsBankTransferType,
 } from "./us-bank-transfer-type"
 export {
+  bankReceivePaymentNotes,
+  eurBankReceivePaymentNotes,
+  gbpBankReceivePaymentNotes,
+  ngnBankReceivePaymentNotes,
+  usdBankReceivePaymentNotes,
+  type BankReceiveProvider,
+} from "./bank-receive-payment-notes"
+export {
   EUR_BANK_TRANSFER_SPEED_LABEL,
   EUR_BANK_TRANSFER_TYPES,
   coerceEurTransferTypeForProvider,

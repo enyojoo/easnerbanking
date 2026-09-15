@@ -90,16 +90,20 @@ function PaymentInstructions({
   type,
   stablecoinToken,
   gridUsd = false,
+  usdProvider,
 }: {
   currency: string
   type: "bank" | "stablecoin"
   /** When set (e.g. live Noah wallet), overrides USD→USDC / EUR→EURC default. */
   stablecoinToken?: string
   gridUsd?: boolean
+  usdProvider?: "grid" | "noah" | "bridge" | null
 }) {
   const lines =
     type === "bank"
-      ? getPaymentInstructions(currency, "bank", { gridUsd })
+      ? getPaymentInstructions(currency, "bank", {
+          usdProvider: usdProvider ?? (gridUsd ? "grid" : undefined),
+        })
       : stablecoinToken === "USDT"
         ? getStablecoinPaymentInstructions("USDT")
         : getPaymentInstructions(currency, "stablecoin")
@@ -311,7 +315,7 @@ function BankDepositDetailsPanel({
         <PaymentInstructions
           currency={account.currency}
           type="bank"
-          gridUsd={account.currency === "USD" && account.depositProvider === "grid"}
+          usdProvider={account.currency === "USD" ? account.depositProvider : undefined}
         />
       </div>
     </div>

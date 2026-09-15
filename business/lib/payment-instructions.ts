@@ -1,46 +1,25 @@
-import { receiveStablecoinPaymentNotes } from "@easner/shared"
+import {
+  bankReceivePaymentNotes,
+  receiveStablecoinPaymentNotes,
+  usdBankReceivePaymentNotes,
+  type BankReceiveProvider,
+} from "@easner/shared"
 
 /** Grid business USD receive rails (Cross River sponsor bank). */
 export function getGridUsdBankPaymentInstructions(): string[] {
-  return [
-    "Only send via ACH, Wire, RTP, or FedNow.",
-    "SWIFT is not supported.",
-    "Processing: RTP & FedNow (instant), ACH & Wire (up to 48 hours).",
-  ]
+  return usdBankReceivePaymentNotes("grid")
 }
 
 /** Returns payment instruction strings for a given currency and type (for PDF or text) */
 export function getPaymentInstructions(
   currency: string,
   type: "bank" | "stablecoin",
-  opts?: { gridUsd?: boolean },
+  opts?: { gridUsd?: boolean; usdProvider?: BankReceiveProvider | null },
 ): string[] {
   if (type === "bank") {
-    if (currency === "USD" && opts?.gridUsd) {
-      return getGridUsdBankPaymentInstructions()
-    }
-    if (currency === "USD") {
-      return [
-        "Only send ACH or Fedwire.",
-        "SWIFT is not supported.",
-        "Processing time: within a few minutes and up to 48 hours.",
-      ]
-    }
-    if (currency === "EUR") {
-      return [
-        "Only send SEPA and SEPA Instant.",
-        "Processing time: within a few minutes and up to 48 hours.",
-      ]
-    }
-    if (currency === "GBP") {
-      return [
-        "Only send Faster Payments or BACS",
-        "Processing time: same day or 1–2 business days",
-      ]
-    }
-    if (currency === "NGN") {
-      return ["Processing time: within 24 hours"]
-    }
+    const usdProvider: BankReceiveProvider | null | undefined =
+      opts?.usdProvider ?? (opts?.gridUsd ? "grid" : undefined)
+    return bankReceivePaymentNotes({ currency, provider: usdProvider })
   }
   if (type === "stablecoin") {
     const stablecoin =

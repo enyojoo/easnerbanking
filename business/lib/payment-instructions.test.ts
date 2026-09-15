@@ -21,7 +21,13 @@ describe("getPaymentInstructions", () => {
     )
   })
 
-  it("keeps legacy Noah USD copy when gridUsd is not set", () => {
+  it("uses Bridge USD copy when usdProvider is bridge", () => {
+    expect(getPaymentInstructions("USD", "bank", { usdProvider: "bridge" })).toContain(
+      "Only send via ACH, Wire, or FedNow.",
+    )
+  })
+
+  it("keeps legacy Noah USD copy when no USD provider is set", () => {
     expect(getPaymentInstructions("USD", "bank")).toContain("Only send ACH or Fedwire.")
   })
 })
