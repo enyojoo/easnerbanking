@@ -39,13 +39,13 @@ describe("formatPayoutArrivalHint", () => {
 })
 
 describe("resolvePayoutProcessingSeconds", () => {
-  it("passes through Noah seconds for all corridors", () => {
-    expect(resolvePayoutProcessingSeconds({ countryCode: "ZA", rail: "bank_transfer", fromNoah: 86400 })).toBe(86400)
+  it("uses the fast NG bank tier for ZA Instant EFT", () => {
+    expect(resolvePayoutProcessingSeconds({ countryCode: "ZA", rail: "bank_transfer", fromNoah: 86400 })).toBe(50)
     expect(resolvePayoutProcessingSeconds({ countryCode: "NG", rail: "bank_transfer", fromNoah: 50 })).toBe(50)
     expect(resolvePayoutProcessingSeconds({ countryCode: "RW", rail: "mobile_money", fromNoah: 50 })).toBe(50)
   })
 
-  it("does not rewrite stored seconds in findPayoutFieldsSchema", () => {
+  it("rewrites stored ZA bank seconds to the fast tier in findPayoutFieldsSchema", () => {
     const corridors = [
       {
         id: "za",
@@ -62,7 +62,7 @@ describe("resolvePayoutProcessingSeconds", () => {
     expect(
       findPayoutFieldsSchema(corridors, { countryCode: "ZA", currencyCode: "ZAR", rail: "bank_transfer" })
         ?.processing_seconds,
-    ).toBe(86400)
+    ).toBe(50)
   })
 })
 
@@ -90,7 +90,7 @@ describe("resolveSendConfirmArrivalHint", () => {
         rail: "bank_transfer",
         processingSeconds: 86400,
       }),
-    ).toBe("1 business day")
+    ).toBe(SEND_ARRIVAL_WITHIN_MINUTES)
     expect(
       resolveSendConfirmArrivalHint({
         countryCode: "GH",
@@ -142,7 +142,7 @@ describe("resolveSendConfirmArrivalHint", () => {
         rail: "bank_transfer",
         processingSeconds: 86400,
       }),
-    ).toBe("1 business day")
+    ).toBe(SEND_ARRIVAL_WITHIN_MINUTES)
   })
 })
 

@@ -49,14 +49,19 @@ export function isWithinMinutesBankPayoutCorridor(_input: {
   return false
 }
 
-/** Pass through Noah `ProcessingSeconds` – confirm copy comes from `formatPayoutArrivalHint`. */
+/**
+ * Confirm copy comes from `formatPayoutArrivalHint`.
+ * ZA Instant EFT settles like NG bank (minutes), not Noah's leftover 1-day bank estimate.
+ */
 export function resolvePayoutProcessingSeconds(input: {
   countryCode: string
   rail: PayoutRail
   fromNoah?: number
 }): number | undefined {
-  void input.countryCode
-  void input.rail
+  const country = String(input.countryCode || "").trim().toUpperCase()
+  if (country === "ZA" && input.rail === "bank_transfer") {
+    return NG_BANK_ARRIVAL_PROCESSING_SECONDS
+  }
   return input.fromNoah
 }
 
@@ -435,5 +440,14 @@ export function resolveSendConfirmArrivalHint(input: {
   rail?: PayoutRail
 }): string | null {
   if (input.isEasetag || input.isWalletSend) return SEND_ARRIVAL_WITHIN_SECONDS
-  return formatPayoutArrivalHint(input.processingSeconds ?? undefined)
+  const countryCode = resolvePayoutCountryCode({
+    countryCode: input.countryCode,
+    currencyCode: input.currencyCode ?? "",
+  })
+  const processingSeconds = resolvePayoutProcessingSeconds({
+    countryCode,
+    rail: input.rail ?? "bank_transfer",
+    fromNoah: input.processingSeconds ?? undefined,
+  })
+  return formatPayoutArrivalHint(processingSeconds)
 }
