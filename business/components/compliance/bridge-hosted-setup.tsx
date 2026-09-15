@@ -4,7 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ArrowLeft } from "lucide-react"
 import { BUSINESS_VERIFICATION_PRODUCTS, verificationStatusLabel } from "@easner/shared"
 import { Button } from "@/components/ui/button"
-import { DelayedOpeningVerificationWait } from "@/components/compliance/opening-verification-wait"
+import {
+  DelayedOpeningVerificationWait,
+  OpeningVerificationWait,
+} from "@/components/compliance/opening-verification-wait"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import {
   buildBridgeHostedIframeUrl,
@@ -262,7 +265,7 @@ export function BridgeHostedSetup({ onClose }: Props) {
         ) : null}
         {!error && !frameReady ? (
           <div className="absolute inset-0 z-10 bg-background">
-            <DelayedOpeningVerificationWait />
+            {phase === "kyc" ? <OpeningVerificationWait /> : <DelayedOpeningVerificationWait />}
           </div>
         ) : null}
       </div>

@@ -111,6 +111,7 @@ export default function BridgeHostedVerificationModal({
       if (!kind) return false
       if (handedOffRef.current) return true
       handedOffRef.current = true
+      setLoading(true)
       onHostedEvent(
         kind === 'tos' || phase === 'tos' ? 'tos' : 'complete',
         signedAgreementIdFromUrl(href),
@@ -128,12 +129,14 @@ export default function BridgeHostedVerificationModal({
       if (isBridgeTosAcceptedMessage(event.data)) {
         if (handedOffRef.current) return
         handedOffRef.current = true
+        setLoading(true)
         onHostedEvent('tos', signedAgreementIdFromUnknown(event.data))
         return
       }
       if (isHostedVerificationCompleteMessage(event.data)) {
         if (handedOffRef.current) return
         handedOffRef.current = true
+        setLoading(true)
         onHostedEvent(phase === 'tos' ? 'tos' : 'complete', signedAgreementIdFromUnknown(event.data))
       }
     }

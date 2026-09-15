@@ -2,6 +2,7 @@
 
 import { useEffect } from "react"
 import { SETTINGS_BRIDGE_FLOW_HREF, SETTINGS_VERIFICATION_HREF } from "@/lib/compliance/cutover-comms"
+import { OpeningVerificationWait } from "@/components/compliance/opening-verification-wait"
 
 async function attachSignedAgreement(signedAgreementId: string) {
   for (const scope of ["business", "individual"] as const) {
@@ -18,8 +19,19 @@ async function attachSignedAgreement(signedAgreementId: string) {
   }
 }
 
+function isTosReturnSearch(search: string): boolean {
+  const params = new URLSearchParams(search)
+  return (
+    params.get("context") === "bridge-tos" ||
+    Boolean(params.get("signed_agreement_id")?.trim() || params.get("signedAgreementId")?.trim())
+  )
+}
+
 /** Minimal ReturnURL target for hosted KYC/KYB (iframe or in-app browser). */
 export function OnboardingCompleteView() {
+  const tosReturnOnLoad =
+    typeof window !== "undefined" && isTosReturnSearch(window.location.search)
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const context = params.get("context") ?? undefined
@@ -67,6 +79,14 @@ export function OnboardingCompleteView() {
       window.location.replace(SETTINGS_VERIFICATION_HREF)
     }
   }, [])
+
+  if (tosReturnOnLoad) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background p-6">
+        <OpeningVerificationWait />
+      </main>
+    )
+  }
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background p-6">
