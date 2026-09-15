@@ -1,0 +1,6 @@
+• Live bank and mobile money lists with official logos that appear instantly
+• Cleaner Nigeria bank list — no duplicate names, more logos, and corrected marks
+• Bank verification stays in the app through terms, then continues to identity check
+• Skip terms if you’ve already accepted, and resume verification where you left off
+• USD and EUR virtual accounts, including Express pay-in for EUR
+• Sign out on one device without signing out everywhere; changing your password still signs out all devices
