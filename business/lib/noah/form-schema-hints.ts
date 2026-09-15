@@ -105,7 +105,7 @@ export function labelFromNoahIssuer(issuer: string, countryCode?: string): strin
     if (cc === "RW") return "Airtel Money"
     return undefined
   }
-  if (i === "AIRTELTIGO") return "AirtelTigo"
+  if (i === "AIRTELTIGO" || i === "AT") return "AirtelTigo"
   if (i === "MTN") return mtnProviderLabel(cc)
   if (i === "VODAFONE") return "Vodafone"
   if (i.includes("AIRTEL")) return "Airtel Money"

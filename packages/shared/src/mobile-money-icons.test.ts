@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  displayMobileMoneyProviderLabel,
   getMobileMoneyProviderPublicUrl,
   hasMobileMoneyProviderIcon,
   listMobileMoneyIconPublicUrls,
@@ -17,6 +18,8 @@ describe("mobile-money-icons", () => {
     expect(normalizeMobileMoneyProviderKey("TELECEL")).toBe("vodafone")
     expect(normalizeMobileMoneyProviderKey("Telecel Cash")).toBe("vodafone")
     expect(normalizeMobileMoneyProviderKey("AT")).toBe("airteltigo")
+    expect(displayMobileMoneyProviderLabel("AT")).toBe("AirtelTigo")
+    expect(displayMobileMoneyProviderLabel("AirtelTigo")).toBe("AirtelTigo")
     expect(normalizeMobileMoneyProviderKey("Mobile Wallet (M-PESA)")).toBe("mpesa")
     expect(normalizeMobileMoneyProviderKey("M PESA")).toBe("mpesa")
     expect(normalizeMobileMoneyProviderKey("MTN_Rwanda")).toBe("mtn")

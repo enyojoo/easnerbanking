@@ -7,6 +7,8 @@ export const CORRIDOR_BANK_NAME_ALIASES: Record<string, string> = {
   MPESA: "M-Pesa",
   Mpesa: "M-Pesa",
   "Airtel Money": "Airtel Money",
+  AT: "AirtelTigo",
+  AirtelTigo: "AirtelTigo",
   // Nigeria – Noah short names → Grid discoveries
   Kuda: "Kuda Microfinance Bank",
   GTBank: "GT Bank",

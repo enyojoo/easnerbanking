@@ -21,6 +21,14 @@ export function normalizeMobileMoneyProviderKey(label: string): string | undefin
   return undefined
 }
 
+/** Yellow Card Ghana uses network code `AT` for AirtelTigo. */
+export function displayMobileMoneyProviderLabel(label: string): string {
+  const p = String(label || "").trim()
+  if (!p) return p
+  if (/^at$/i.test(p) || /^airtel[\s-]?tigo$/i.test(p)) return "AirtelTigo"
+  return p
+}
+
 const MOBILE_MONEY_ICON_KEYS = new Set([
   "mtn",
   "mpesa",

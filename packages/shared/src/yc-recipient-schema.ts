@@ -9,6 +9,7 @@ import {
   type GridMomoProviderOption,
 } from "./grid-bank-resolve"
 import { normalizeYcMomoPhone } from "./yc-momo-phone"
+import { displayMobileMoneyProviderLabel, normalizeMobileMoneyProviderKey } from "./mobile-money-icons"
 
 export {
   CORRIDOR_BANK_NAME_ALIASES,
@@ -1208,7 +1209,10 @@ export function mergeYcMomoNetworksIntoSchema(
   return {
     ...schema,
     channel_type: "momo",
-    momo_provider_enum: unique.map((name) => ({ value: name, label: name })),
+    momo_provider_enum: unique.map((name) => ({
+      value: name,
+      label: displayMobileMoneyProviderLabel(name),
+    })),
   }
 }
 
@@ -1220,7 +1224,8 @@ export type CorridorRecipientCandidates = {
 
 function momoOption(value: string, label?: string): GridMomoProviderOption {
   const v = value.trim()
-  return { value: v, label: (label ?? v).trim() || v }
+  const raw = (label ?? v).trim() || v
+  return { value: v, label: displayMobileMoneyProviderLabel(raw) }
 }
 
 function appendMomoOptions(
@@ -1232,9 +1237,21 @@ function appendMomoOptions(
     if (!value || isGenericYcMomoNetworkName(value) || isGenericYcMomoNetworkName(String(entry.label ?? ""))) {
       continue
     }
-    const label = String(entry.label ?? value).trim() || value
+    const label = displayMobileMoneyProviderLabel(String(entry.label ?? value).trim() || value)
     if (isGenericYcMomoNetworkName(label)) continue
-    out.set(value.toLowerCase(), { value, label })
+    const key =
+      normalizeMobileMoneyProviderKey(value) ||
+      normalizeMobileMoneyProviderKey(label) ||
+      value.toLowerCase()
+    const existing = out.get(key)
+    if (existing) {
+      out.set(key, {
+        value: existing.value.length <= value.length ? existing.value : value,
+        label: existing.label.length >= label.length ? existing.label : label,
+      })
+      continue
+    }
+    out.set(key, { value, label })
   }
 }
 
@@ -1301,21 +1318,9 @@ export function extractCorridorRecipientCandidates(input: {
   }
 
   const momoCandidates = [...momoMap.values()].sort((a, b) => a.label.localeCompare(b.label))
-  const momoLabels = uniqueStrings([
-    ...(!primary || primary === "noah" || primary === "grid"
-      ? Array.isArray(input.providers)
-        ? (input.providers as unknown[]).map((p) => String(p))
-        : []
-      : []),
-    ...(!primary || primary === "noah" ? noah?.mobile_provider_labels ?? [] : []),
-    ...(!primary || primary === "yellowcard"
-      ? (yc?.momo_provider_enum ?? []).map((entry) => entry.label || entry.value)
-      : []),
-    ...(!primary || primary === "grid"
-      ? (grid?.momo_provider_enum ?? []).map((entry) => entry.label || entry.value)
-      : []),
-    ...momoCandidates.map((entry) => entry.label),
-  ]).filter((name) => !isGenericYcMomoNetworkName(name))
+  const momoLabels = uniqueStrings(momoCandidates.map((entry) => entry.label)).filter(
+    (name) => !isGenericYcMomoNetworkName(name),
+  )
 
   return { bankNames, momoLabels, momoCandidates }
 }

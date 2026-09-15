@@ -206,6 +206,7 @@ export {
   hasMobileMoneyProviderIcon,
   listMobileMoneyIconPublicUrls,
   normalizeMobileMoneyProviderKey,
+  displayMobileMoneyProviderLabel,
 } from "./mobile-money-icons"
 export { MobileMoneyProviderIcon } from "./components/MobileMoneyProviderIcon"
 export type { MobileMoneyProviderIconProps } from "./components/MobileMoneyProviderIcon"

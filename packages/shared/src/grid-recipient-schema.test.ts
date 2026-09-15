@@ -310,8 +310,8 @@ describe("resolveCorridorRecipientOptions", () => {
       },
     })
     expect(options.momoOptions).toContain("M-PESA")
-    expect(options.momoOptions).toContain("M-Pesa")
     expect(options.momoOptions).toContain("Airtel Money")
+    expect(options.momoOptions.some((label) => /m-?pesa/i.test(label))).toBe(true)
   })
 
   it("scopes momo labels to Yellow Card when it is the primary provider", () => {
@@ -331,6 +331,27 @@ describe("resolveCorridorRecipientOptions", () => {
       },
     })
     expect(options.momoOptions).toEqual(["MTN_Rwanda"])
+  })
+
+  it("shows Ghana AT as AirtelTigo in the picker", () => {
+    const options = resolveCorridorRecipientOptions({
+      countryCode: "GH",
+      currencyCode: "GHS",
+      rail: "mobile_money",
+      payoutProvider: "yellowcard",
+      fieldsSchema: {
+        yellowcard: {
+          status: "ready",
+          channel_type: "momo",
+          momo_provider_enum: [
+            { value: "AT", label: "AT" },
+            { value: "MTN", label: "MTN" },
+          ],
+        },
+      },
+    })
+    expect(options.momoOptions).toEqual(["AirtelTigo", "MTN"])
+    expect(options.momoCandidates.find((c) => c.label === "AirtelTigo")?.value).toBe("AT")
   })
 })
 
