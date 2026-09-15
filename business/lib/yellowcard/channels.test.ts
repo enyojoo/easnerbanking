@@ -9,13 +9,14 @@ describe("toYcChannelType", () => {
 })
 
 describe("ycSubmitChannelTypeFromChannel", () => {
-  it("maps live Instant EFT channels to eft", () => {
-    expect(ycSubmitChannelTypeFromChannel({ channelType: "eft" }, "bank_transfer")).toBe("eft")
+  it("submits bank or momo, not catalog p2p/eft labels", () => {
+    expect(ycSubmitChannelTypeFromChannel({ channelType: "eft" }, "bank_transfer")).toBe("bank")
     expect(ycSubmitChannelTypeFromChannel({ channelType: "bank" }, "bank_transfer")).toBe("bank")
-    expect(ycSubmitChannelTypeFromChannel({ channelType: "p2p" }, "bank_transfer")).toBe("p2p")
+    expect(ycSubmitChannelTypeFromChannel({ channelType: "p2p" }, "bank_transfer")).toBe("bank")
     expect(ycSubmitChannelTypeFromChannel({ channelType: "p2pmomo" }, "mobile_money")).toBe("momo")
     expect(ycSubmitChannelTypeFromChannel({ channelType: "momo" }, "mobile_money")).toBe("momo")
     expect(ycSubmitChannelTypeFromChannel({}, "bank_transfer")).toBe("bank")
+    expect(ycSubmitChannelTypeFromChannel({}, "mobile_money")).toBe("momo")
   })
 })
 

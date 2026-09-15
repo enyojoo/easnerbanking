@@ -117,10 +117,10 @@ describe("lockYcBalancePayoutSend", () => {
     )
   })
 
-  it("locks South Africa Instant EFT with live channelType and channelId", async () => {
+  it("locks South Africa Instant EFT with live channelId and submit type bank", async () => {
     vi.mocked(resolveYcSendSubmitChannel).mockResolvedValue({
       channelId: "za-eft-1",
-      channelType: "eft",
+      channelType: "bank",
     })
     vi.mocked(submitYcSend).mockImplementation(async (input) => {
       const cryptoAmount = Number(input.settlementCryptoAmount)
@@ -157,7 +157,7 @@ describe("lockYcBalancePayoutSend", () => {
 
     expect(submitYcSend).toHaveBeenCalledWith(
       expect.objectContaining({
-        channelType: "eft",
+        channelType: "bank",
         channelId: "za-eft-1",
         country: "ZA",
         currency: "ZAR",

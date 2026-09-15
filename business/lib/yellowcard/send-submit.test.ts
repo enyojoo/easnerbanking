@@ -63,11 +63,11 @@ describe("buildYcSendSubmitBody", () => {
     expect((body.settlementInfo as { cryptoAmount?: number }).cryptoAmount).toBe(1.468537)
   })
 
-  it("pins Instant EFT sends to the live channel id and type", () => {
+  it("pins Instant EFT sends to the live channel id with submit type bank", () => {
     const body = buildYcSendSubmitBody({
       sequenceId: "seq-za",
       customerUID: "user-1",
-      channelType: "eft",
+      channelType: "bank",
       channelId: "za-eft-1",
       currency: "ZAR",
       country: "ZA",
@@ -76,7 +76,7 @@ describe("buildYcSendSubmitBody", () => {
       settlementCryptoAmount: 12.4,
       destination: { accountNumber: "63099950123", accountType: "bank", networkId: "n", accountName: "A" },
     })
-    expect(body.channelType).toBe("eft")
+    expect(body.channelType).toBe("bank")
     expect(body.channelId).toBe("za-eft-1")
     expect(body.country).toBe("ZA")
   })

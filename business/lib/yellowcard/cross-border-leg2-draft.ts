@@ -19,7 +19,7 @@ export type CrossBorderLeg2DraftPayload = {
   payInRail: "bank_transfer" | "mobile_money"
   receiveChannelId: string
   sendChannelId: string
-  sendChannelType?: "bank" | "momo" | "eft"
+  sendChannelType?: "bank" | "momo"
   sendRail: "bank_transfer" | "mobile_money"
   ycBuyTo: number
   ycSellFrom: number
