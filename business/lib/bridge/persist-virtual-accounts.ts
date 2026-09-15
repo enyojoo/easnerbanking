@@ -1,6 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { BridgeVirtualAccount } from "./virtual-accounts"
 
+function firstNonEmpty(...values: unknown[]): string | null {
+  for (const value of values) {
+    const text = String(value ?? "").trim()
+    if (text) return text
+  }
+  return null
+}
+
 function sourceCurrency(va: BridgeVirtualAccount): "USD" | "EUR" | null {
   const fromDest = String(va.destination?.currency ?? "").toLowerCase()
   if (fromDest === "eurc") return "EUR"
@@ -11,6 +19,30 @@ function sourceCurrency(va: BridgeVirtualAccount): "USD" | "EUR" | null {
   return null
 }
 
+/** Bridge USD uses `bank_account_number` / `bank_routing_number`; EUR uses `iban`. */
+export function bridgeVaBankDetails(va: BridgeVirtualAccount): {
+  currency: "USD" | "EUR" | null
+  accountNumber: string | null
+  routingNumber: string | null
+  iban: string | null
+  bic: string | null
+  bankName: string | null
+  bankAddress: string | null
+  accountHolderName: string | null
+} {
+  const inst = va.source_deposit_instructions ?? {}
+  return {
+    currency: sourceCurrency(va),
+    accountNumber: firstNonEmpty(inst.account_number, inst.bank_account_number),
+    routingNumber: firstNonEmpty(inst.routing_number, inst.bank_routing_number),
+    iban: firstNonEmpty(inst.iban),
+    bic: firstNonEmpty(inst.bic, inst.swift),
+    bankName: firstNonEmpty(inst.bank_name),
+    bankAddress: firstNonEmpty(inst.bank_address),
+    accountHolderName: firstNonEmpty(inst.account_holder_name, inst.bank_beneficiary_name),
+  }
+}
+
 export async function persistBridgeVirtualAccount(input: {
   admin: SupabaseClient
   userId: string
@@ -18,12 +50,15 @@ export async function persistBridgeVirtualAccount(input: {
   customerId: string
   account: BridgeVirtualAccount
 }): Promise<boolean> {
-  const currency = sourceCurrency(input.account)
-  if (!currency) return false
-  const inst = input.account.source_deposit_instructions ?? {}
-  const accountNumber = String(inst.account_number ?? "").trim() || null
-  const iban = String(inst.iban ?? "").trim() || null
-  if (!accountNumber && !iban) return false
+  const details = bridgeVaBankDetails(input.account)
+  if (!details.currency) return false
+  if (!details.accountNumber && !details.iban) {
+    console.warn("[bridge] skip persist: missing account number/iban", {
+      vaId: input.account.id,
+      currency: details.currency,
+    })
+    return false
+  }
 
   const now = new Date().toISOString()
   const patch = {
@@ -34,15 +69,15 @@ export async function persistBridgeVirtualAccount(input: {
     settlement_target: "turnkey" as const,
     provider_virtual_account_id: input.account.id,
     provider_customer_id: input.customerId,
-    currency,
-    account_number: accountNumber,
-    routing_number: String(inst.routing_number ?? "").trim() || null,
-    iban,
-    bic: String(inst.bic ?? inst.swift ?? "").trim() || null,
+    currency: details.currency,
+    account_number: details.accountNumber,
+    routing_number: details.routingNumber,
+    iban: details.iban,
+    bic: details.bic,
     sort_code: null as string | null,
-    bank_name: String(inst.bank_name ?? "").trim() || null,
-    bank_address: String(inst.bank_address ?? "").trim() || null,
-    account_holder_name: String(inst.account_holder_name ?? "").trim() || null,
+    bank_name: details.bankName,
+    bank_address: details.bankAddress,
+    account_holder_name: details.accountHolderName,
     updated_at: now,
   }
 
@@ -58,8 +93,16 @@ export async function persistBridgeVirtualAccount(input: {
 
   if (existing?.id) {
     const { error } = await input.admin.from("virtual_accounts").update(patch).eq("id", existing.id)
-    return !error
+    if (error) {
+      console.warn("[bridge] persist virtual account update failed", error.message)
+      return false
+    }
+    return true
   }
   const { error } = await input.admin.from("virtual_accounts").insert(patch)
-  return !error
+  if (error) {
+    console.warn("[bridge] persist virtual account insert failed", error.message)
+    return false
+  }
+  return true
 }

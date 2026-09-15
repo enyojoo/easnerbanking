@@ -11,8 +11,11 @@ export type BridgeVirtualAccount = {
     bank_name?: string
     bank_address?: string
     account_holder_name?: string
+    bank_beneficiary_name?: string
     account_number?: string
+    bank_account_number?: string
     routing_number?: string
+    bank_routing_number?: string
     iban?: string
     bic?: string
     swift?: string

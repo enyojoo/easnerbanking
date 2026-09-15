@@ -171,6 +171,12 @@ export async function provisionBridgeVirtualAccounts(input: {
       customerId,
       account,
     })
+    if (!ok) {
+      console.warn("[bridge] persist virtual account skipped or failed", {
+        vaId: account.id,
+        source: bridgeVaSourceCurrency(account),
+      })
+    }
     const cur = bridgeVaSourceCurrency(account)
     if (ok && cur === "usd") usd = true
     if (ok && cur === "eur") eur = true
