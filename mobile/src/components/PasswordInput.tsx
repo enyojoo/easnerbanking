@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { View, TextInput, Pressable, Platform, StyleSheet } from 'react-native'
 import { Eye, EyeOff } from 'lucide-react-native'
+import { PostHogMaskView } from 'posthog-react-native'
 import { colors } from '../theme'
 import { ripple } from '../lib/androidRipple'
 import { authScreenStyles } from '../theme/authScreen'
@@ -24,22 +25,24 @@ export default function PasswordInput({
 
   return (
     <View style={[authScreenStyles.passwordOuter, containerStyle]}>
-      <TextInput
-        style={[authScreenStyles.passwordInner, style]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        secureTextEntry={!showPassword}
-        autoCapitalize="none"
-        autoCorrect={false}
-        textContentType="password"
-        passwordRules="minlength: 6;"
-        importantForAutofill="yes"
-        underlineColorAndroid="transparent"
-        selectionColor={colors.primary.main}
-        placeholderTextColor={colors.text.secondary}
-        returnKeyType="done"
-      />
+      <PostHogMaskView style={styles.inputMask}>
+        <TextInput
+          style={[authScreenStyles.passwordInner, style]}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          secureTextEntry={!showPassword}
+          autoCapitalize="none"
+          autoCorrect={false}
+          textContentType="password"
+          passwordRules="minlength: 6;"
+          importantForAutofill="yes"
+          underlineColorAndroid="transparent"
+          selectionColor={colors.primary.main}
+          placeholderTextColor={colors.text.secondary}
+          returnKeyType="done"
+        />
+      </PostHogMaskView>
       <Pressable
         style={({ pressed }) => [
           styles.eyeButton,
@@ -59,6 +62,9 @@ export default function PasswordInput({
 }
 
 const styles = StyleSheet.create({
+  inputMask: {
+    flex: 1,
+  },
   eyeButton: {
     padding: 12,
     justifyContent: 'center',

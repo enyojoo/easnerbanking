@@ -8,6 +8,7 @@ import {
   StyleProp,
   ViewStyle,
 } from 'react-native'
+import { PostHogMaskView } from 'posthog-react-native'
 import { colors, textStyles, borderRadius, spacing, standardInputMetrics } from '../../theme'
 
 export type TextFieldProps = {
@@ -37,13 +38,15 @@ export function TextField({
       <View style={[styles.container, containerStyle]}>
         <Text style={styles.label}>{label}</Text>
         <View style={[styles.row, { borderColor }]}>
-          <TextInput
-            editable={editable}
-            placeholderTextColor={colors.semantic.mutedForeground}
-            selectionColor={colors.primary.main}
-            {...inputProps}
-            style={[styles.inputInRow, inputProps.style]}
-          />
+          <PostHogMaskView style={styles.inputMask}>
+            <TextInput
+              editable={editable}
+              placeholderTextColor={colors.semantic.mutedForeground}
+              selectionColor={colors.primary.main}
+              {...inputProps}
+              style={[styles.inputInRow, inputProps.style]}
+            />
+          </PostHogMaskView>
           {rightAccessory}
         </View>
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -54,13 +57,15 @@ export function TextField({
   return (
     <View style={[styles.container, containerStyle]}>
       <Text style={styles.label}>{label}</Text>
-      <TextInput
-        editable={editable}
-        placeholderTextColor={colors.semantic.mutedForeground}
-        selectionColor={colors.primary.main}
-        {...inputProps}
-        style={[styles.input, { borderColor }, inputProps.style]}
-      />
+      <PostHogMaskView>
+        <TextInput
+          editable={editable}
+          placeholderTextColor={colors.semantic.mutedForeground}
+          selectionColor={colors.primary.main}
+          {...inputProps}
+          style={[styles.input, { borderColor }, inputProps.style]}
+        />
+      </PostHogMaskView>
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   )
@@ -94,6 +99,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.semantic.background,
     textAlignVertical: 'center',
     ...standardInputMetrics,
+  },
+  inputMask: {
+    flex: 1,
   },
   inputInRow: {
     flex: 1,

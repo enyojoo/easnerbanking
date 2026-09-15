@@ -212,7 +212,7 @@ export default function SendPinScreen({ navigation }: NavigationProps) {
           </View>
         </View>
 
-        <PostHogMaskView style={styles.content}>
+        <View style={styles.content}>
           <View style={styles.topBlock}>
             <View style={styles.pinDotsWrapper}>
               {showDotsSpinner ? (
@@ -220,6 +220,7 @@ export default function SendPinScreen({ navigation }: NavigationProps) {
                   <ActivityIndicator size="small" color={palette.primary.main} />
                 </View>
               ) : (
+                <PostHogMaskView>
                 <Animated.View
                   style={[styles.pinDotsContainer, { transform: [{ translateX: shakeAnim }] }]}
                 >
@@ -234,6 +235,7 @@ export default function SendPinScreen({ navigation }: NavigationProps) {
                     />
                   ))}
                 </Animated.View>
+                </PostHogMaskView>
               )}
             </View>
 
@@ -248,7 +250,7 @@ export default function SendPinScreen({ navigation }: NavigationProps) {
               filledCount={filledCount}
             />
           </View>
-        </PostHogMaskView>
+        </View>
       </KeyboardAvoidingView>
     </View>
   )

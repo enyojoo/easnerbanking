@@ -172,12 +172,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!active) return
       const nextUser = data.session?.user ?? null
       if (!nextUser) {
+        analytics.resetIfIdentified()
         clearBrowserQueryClient()
         clearAllBusinessBrowserState()
         setIsLoading(false)
         redirectToWorkspaceLogin()
         return
       }
+      analytics.identify(nextUser.id, personPropertiesFromUser(nextUser))
       setUser(nextUser)
       setIsLoading(false)
     })()
@@ -191,8 +193,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         resetSessionActivity()
       }
       idleAuthUserIdRef.current = nextUserId
-      if (event === "SIGNED_IN" && session?.user) {
+      if (session?.user && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
         analytics.identify(session.user.id, personPropertiesFromUser(session.user))
+      }
+      if (event === "SIGNED_IN" && session?.user) {
         const oauthProvider = (session.user.identities ?? []).find(
           (i) => i.provider === "google" || i.provider === "apple",
         )?.provider
@@ -202,6 +206,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           analytics.trackSignIn(oauthProvider, { userId: session.user.id })
         }
+      }
+      if (event === "SIGNED_OUT" || (!session && event !== "TOKEN_REFRESHED")) {
+        analytics.resetIfIdentified()
       }
       setUser((prev) => {
         const nextUser = session?.user ?? null

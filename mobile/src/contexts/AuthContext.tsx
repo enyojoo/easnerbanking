@@ -54,6 +54,7 @@ import { isAppleWebSignInCanceled, signInWithAppleWeb } from '../lib/appleSignIn
 import {
   applePrivateRelayFromIdToken,
   isApplePrivateRelayEmail,
+  personPropertiesFromUser,
   SIGNUP_EMAIL_BLOCK_MESSAGES,
 } from '@easner/shared'
 
@@ -70,6 +71,11 @@ function dismissOAuthBrowserIfNeeded(): void {
   } catch {
     // ignore
   }
+}
+
+function identifyAnalyticsUser(authUser: SupabaseUser, extras?: { email?: string; name?: string }) {
+  if (!authUser.id) return
+  analytics.identify(authUser.id, personPropertiesFromUser(authUser, extras))
 }
 
 function mapSessionUserToAppUser(authUser: SupabaseUser, emailFallback?: string): User {
@@ -857,6 +863,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             })
           })
           void syncIntercomSession(session)
+          identifyAnalyticsUser(session.user)
         }
       } catch (error) {
         console.error('Error getting initial session:', error)
@@ -900,6 +907,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
        */
       if (event === 'TOKEN_REFRESHED' && session?.user) {
         void syncIntercomSession(session)
+        identifyAnalyticsUser(session.user)
         if (mounted && mfaHydratedUserIdRef.current === session.user.id) {
           setLoading(false)
         }
@@ -914,6 +922,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         !mfaPendingRef.current
       ) {
         void syncIntercomSession(session)
+        identifyAnalyticsUser(session.user)
         void fetchUserProfile(session.user.id, mapSessionUser(session.user), {
           sourceEvent: event,
         }).catch((error) => {
@@ -971,6 +980,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             })
           })
           void syncIntercomSession(session)
+          identifyAnalyticsUser(session.user)
           if (mounted) {
             if (Platform.OS === 'web') {
               setLoading(false)
@@ -990,6 +1000,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setMfaGateResolved(true)
           setLoading(false) // Ensure loading is false so AppNavigator doesn't wait
           void syncIntercomSession(null)
+          analytics.resetIfIdentified()
         }
       } catch (error) {
         console.error('Error handling auth state change:', error)
@@ -1095,10 +1106,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         userId: data.user?.id,
       })
       if (data.user?.id) {
-        analytics.identify(data.user.id, {
-          email: data.user.email || email.trim(),
-          authMethod: 'email',
-        })
+        identifyAnalyticsUser(data.user, { email: data.user.email || email.trim() })
       }
 
       return { error: null }
@@ -1373,10 +1381,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setLoading(false)
           void syncMfaGateFromSession()
         }
-        analytics.identify(data.user.id, {
+        identifyAnalyticsUser(data.user, {
           email: data.user.email || email.trim(),
           name: name.trim(),
-          authMethod: 'email',
         })
         analytics.trackSignUp('email', {
           userId: data.user.id,

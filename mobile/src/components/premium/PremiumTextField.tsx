@@ -1,5 +1,6 @@
 import React from 'react'
 import { TextInput, View, StyleSheet, type TextInputProps, type StyleProp, type ViewStyle } from 'react-native'
+import { PostHogMaskView } from 'posthog-react-native'
 import { borderRadius, spacing, textStyles, useThemeColors, inlinePillInputMetrics } from '../../theme'
 
 type PremiumTextFieldProps = TextInputProps & {
@@ -26,12 +27,14 @@ export default function PremiumTextField({
         containerStyle,
       ]}
     >
-      <TextInput
-        {...props}
-        placeholderTextColor={palette.text.tertiary}
-        selectionColor={palette.primary.main}
-        style={[styles.input, { color: palette.text.primary }, style]}
-      />
+      <PostHogMaskView>
+        <TextInput
+          {...props}
+          placeholderTextColor={palette.text.tertiary}
+          selectionColor={palette.primary.main}
+          style={[styles.input, { color: palette.text.primary }, style]}
+        />
+      </PostHogMaskView>
     </View>
   )
 }

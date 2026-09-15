@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { View, Text, StyleSheet, Pressable, Platform, Animated, ActivityIndicator } from 'react-native'
-import { PostHogMaskView } from 'posthog-react-native'
 import { getLockoutState, verifyPin } from '../../lib/pinAuth'
 import { appPinStrings } from '../../constants/app-pin-en'
 import { colors, textStyles, borderRadius, spacing, useThemeColors } from '../../theme'
@@ -121,7 +120,7 @@ export function PinChallengePanel({
   }
 
   return (
-    <PostHogMaskView style={styles.wrap}>
+    <View style={styles.wrap}>
       {!hideTitles ? (
         <>
           <Text style={styles.title}>{appPinStrings.dialogAuthorizeTitle}</Text>
@@ -171,7 +170,7 @@ export function PinChallengePanel({
           <Text style={styles.cancelText}>{cancelLabel}</Text>
         </Pressable>
       ) : null}
-    </PostHogMaskView>
+    </View>
   )
 }
 

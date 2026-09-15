@@ -171,7 +171,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <PostHogMaskView style={styles.content}>
+        <View style={styles.content}>
           <AuthFlowContainer>
           <View style={styles.helpRow}>
             <Pressable
@@ -198,6 +198,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
                   <ActivityIndicator size="small" color={palette.primary.main} />
                 </View>
               ) : (
+                <PostHogMaskView>
                 <View style={styles.pinDotsContainer}>
                   {currentPin.map((digit, index) => (
                     <View
@@ -209,6 +210,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
                     />
                   ))}
                 </View>
+                </PostHogMaskView>
               )}
             </View>
 
@@ -242,7 +244,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
             </Pressable>
           )}
           </AuthFlowContainer>
-        </PostHogMaskView>
+        </View>
       </KeyboardAvoidingView>
 
       <EasnerAlertSheet

@@ -81,4 +81,15 @@ describe("analytics conversion events", () => {
     )
     vi.unstubAllGlobals()
   })
+
+  it("identifies with person properties and ignores empty ids", async () => {
+    const { analytics } = await import("@/lib/analytics")
+    analytics.identify("  ", { email: "skip@example.com" })
+    expect(identify).not.toHaveBeenCalled()
+    analytics.identify("user-1", { email: "ada@example.com" })
+    expect(identify).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({ email: "ada@example.com", platform: "business_web" }),
+    )
+  })
 })

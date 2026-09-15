@@ -362,11 +362,14 @@ export function useBusinessProfile() {
       country: profileData.countryCode ?? profileData.country,
       kyb_status: profileData.tier1VerificationStatus,
     })
-    analytics.identify(user?.id ?? sessionUserId ?? "", {
-      role: profileData.role,
-      kyb_status: profileData.tier1VerificationStatus,
-      country: profileData.countryCode ?? profileData.country,
-    })
+    const personId = user?.id ?? sessionUserId
+    if (personId) {
+      analytics.identify(personId, {
+        role: profileData.role,
+        kyb_status: profileData.tier1VerificationStatus,
+        country: profileData.countryCode ?? profileData.country,
+      })
+    }
   }, [
     profileData.businessId,
     profileData.name,

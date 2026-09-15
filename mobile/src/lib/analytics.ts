@@ -1,12 +1,15 @@
+import { Platform } from 'react-native'
+import { consumerPlatformFromOs } from '@easner/shared'
 import { getPostHog } from './posthog'
 
 type Props = Record<string, any>
 type ScreenTrackingMode = 'manual' | 'auto'
 
 let screenTrackingMode: ScreenTrackingMode = 'manual'
+let identifiedUserId: string | null = null
 
 const withDefaults = (properties?: Props): Props => ({
-  platform: 'mobile',
+  platform: Platform.OS === 'web' ? consumerPlatformFromOs('web') : 'mobile',
   environment: __DEV__ ? 'development' : 'production',
   ...properties,
 })
@@ -24,9 +27,12 @@ export const analytics = {
 
   // User identification and authentication
   identify: (userId: string, properties?: Props) => {
+    const id = typeof userId === 'string' ? userId.trim() : ''
+    if (!id) return
     const posthog = getPostHog()
     if (!posthog) return
-    posthog.identify(userId, withDefaults(properties))
+    identifiedUserId = id
+    posthog.identify(id, withDefaults(properties))
   },
 
   // Track user registration
@@ -42,7 +48,7 @@ export const analytics = {
   // Track user logout
   trackSignOut: () => {
     capture('user_signed_out')
-    getPostHog()?.reset()
+    analytics.reset()
   },
 
   // Transaction tracking
@@ -180,6 +186,12 @@ export const analytics = {
   },
 
   reset: () => {
+    identifiedUserId = null
     getPostHog()?.reset()
+  },
+
+  resetIfIdentified: () => {
+    if (!identifiedUserId) return
+    analytics.reset()
   },
 }

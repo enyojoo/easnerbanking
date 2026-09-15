@@ -1,5 +1,6 @@
 import React from 'react'
 import { View, StyleSheet, Animated, type StyleProp, type ViewStyle } from 'react-native'
+import { PostHogMaskView } from 'posthog-react-native'
 import { EaseView } from 'react-native-ease'
 import { colors, spacing } from '../../theme'
 
@@ -13,28 +14,30 @@ type Props = {
 /** Four PIN indicator dots (same layout as unlock screen). */
 export function PinDotsRow({ filledLength, hasError, disabled, shakeStyle }: Props) {
   return (
-    <Animated.View style={[styles.row, shakeStyle]}>
-      {[0, 1, 2, 3].map((i) => {
-        const filled = i < filledLength
-        return (
-          <EaseView
-            key={i}
-            initialAnimate={{ scale: filled ? 0.85 : 1 }}
-            animate={{ scale: filled ? 1 : 1 }}
-            transition={{ type: 'spring', damping: 22, stiffness: 320 }}
-          >
-            <View
-              style={[
-                styles.dot,
-                filled && styles.dotFilled,
-                hasError && styles.dotError,
-                disabled && styles.dotDisabled,
-              ]}
-            />
-          </EaseView>
-        )
-      })}
-    </Animated.View>
+    <PostHogMaskView>
+      <Animated.View style={[styles.row, shakeStyle]}>
+        {[0, 1, 2, 3].map((i) => {
+          const filled = i < filledLength
+          return (
+            <EaseView
+              key={i}
+              initialAnimate={{ scale: filled ? 0.85 : 1 }}
+              animate={{ scale: filled ? 1 : 1 }}
+              transition={{ type: 'spring', damping: 22, stiffness: 320 }}
+            >
+              <View
+                style={[
+                  styles.dot,
+                  filled && styles.dotFilled,
+                  hasError && styles.dotError,
+                  disabled && styles.dotDisabled,
+                ]}
+              />
+            </EaseView>
+          )
+        })}
+      </Animated.View>
+    </PostHogMaskView>
   )
 }
 

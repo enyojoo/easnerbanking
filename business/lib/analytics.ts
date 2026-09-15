@@ -47,10 +47,14 @@ function capturePayer(event: string, properties?: Props) {
   posthog.capture(event, withPayerDefaults(properties))
 }
 
+let identifiedUserId: string | null = null
+
 export const analytics = {
   identify: (userId: string, properties?: Props) => {
-    const posthog = getPostHog()
-    posthog.identify(userId, withDefaults(properties))
+    const id = userId.trim()
+    if (!id) return
+    identifiedUserId = id
+    getPostHog().identify(id, withDefaults(properties))
   },
 
   group: (businessId: string, properties?: Props) => {
@@ -68,8 +72,14 @@ export const analytics = {
   },
 
   reset: () => {
-    const posthog = getPostHog()
-    posthog.reset()
+    identifiedUserId = null
+    getPostHog().reset()
+  },
+
+  /** Drop the person link when the auth session is gone, without resetting never-identified visitors. */
+  resetIfIdentified: () => {
+    if (!identifiedUserId) return
+    analytics.reset()
   },
 
   trackSignupPageViewed: (properties?: Props) => {

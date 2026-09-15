@@ -180,7 +180,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <PostHogMaskView style={styles.content}>
+        <View style={styles.content}>
           <AuthFlowContainer>
           <EaseEnter enabled={shouldAnimateEnter}>
           <View style={styles.helpRow}>
@@ -215,6 +215,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
                   <ActivityIndicator size="small" color={palette.primary.main} />
                 </View>
               ) : (
+                <PostHogMaskView>
                 <Animated.View
                   style={[styles.pinDotsContainer, { transform: [{ translateX: shakeAnim }] }]}
                 >
@@ -230,6 +231,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
                     />
                   ))}
                 </Animated.View>
+                </PostHogMaskView>
               )}
             </View>
 
@@ -272,7 +274,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
           </Pressable>
           </EaseEnter>
           </AuthFlowContainer>
-        </PostHogMaskView>
+        </View>
       </KeyboardAvoidingView>
 
       <EasnerAlertSheet
