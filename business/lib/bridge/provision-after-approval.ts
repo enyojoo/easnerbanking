@@ -86,6 +86,8 @@ async function ensureLinkedBridgeVa(input: {
       if (isBridgeVaLinkedToTurnkeyVault(updated, vault)) return updated
     } catch (error) {
       console.warn(`[bridge] ${input.sourceCurrency} virtual account retarget failed`, error)
+      const msg = error instanceof Error ? error.message : ""
+      if (msg.toLowerCase().includes("not authorized")) return null
     }
   }
 
@@ -135,16 +137,28 @@ export async function provisionBridgeVirtualAccounts(input: {
   const linked: BridgeVirtualAccount[] = []
 
   for (const sourceCurrency of ["usd", "eur"] as const) {
-    const current = existing.find((va) => bridgeVaSourceCurrency(va) === sourceCurrency)
+    const matches = existing.filter((va) => bridgeVaSourceCurrency(va) === sourceCurrency)
+    const first = matches[0]
     const account = await ensureLinkedBridgeVa({
       admin: input.admin,
       customerId,
       userId: input.userId,
       businessId: input.businessId,
       sourceCurrency,
-      existing: current,
+      existing: first,
     })
     if (account) linked.push(account)
+    for (const extra of matches.slice(1)) {
+      const extraLinked = await ensureLinkedBridgeVa({
+        admin: input.admin,
+        customerId,
+        userId: input.userId,
+        businessId: input.businessId,
+        sourceCurrency,
+        existing: extra,
+      })
+      if (extraLinked) linked.push(extraLinked)
+    }
   }
 
   let usd = false
