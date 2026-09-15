@@ -13,10 +13,25 @@ export type BridgeWebhookVerifyDiagnostic = {
   bodyBytes: number
 }
 
+/** Vercel often stores PEMs with `\n`, CRLF, or a `KEY=` prefix in the value. */
 export function normalizeBridgeWebhookPublicKeyPem(pem: string): string {
-  const unescaped = pem.trim().replace(/\\n/g, "\n")
-  if (unescaped.includes("BEGIN PUBLIC KEY")) return unescaped
-  return `-----BEGIN PUBLIC KEY-----\n${unescaped}\n-----END PUBLIC KEY-----`
+  let raw = pem.trim()
+  if (
+    (raw.startsWith('"') && raw.endsWith('"')) ||
+    (raw.startsWith("'") && raw.endsWith("'"))
+  ) {
+    raw = raw.slice(1, -1).trim()
+  }
+  raw = raw.replace(/^BRIDGE_WEBHOOK_PUBLIC_KEY\s*=\s*/i, "").trim()
+  raw = raw.replace(/\\n/g, "\n").replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+
+  const b64 = raw
+    .replace(/-----BEGIN PUBLIC KEY-----/g, "")
+    .replace(/-----END PUBLIC KEY-----/g, "")
+    .replace(/\s+/g, "")
+  if (!b64) return raw
+  const lines = b64.match(/.{1,64}/g) ?? [b64]
+  return `-----BEGIN PUBLIC KEY-----\n${lines.join("\n")}\n-----END PUBLIC KEY-----`
 }
 
 export function readBridgeWebhookSignatureHeader(request: Request): string | null {
@@ -25,6 +40,14 @@ export function readBridgeWebhookSignatureHeader(request: Request): string | nul
     request.headers.get("x-webhook-signature")?.trim() ||
     null
   )
+}
+
+function verifyRsaSha256(key: string, data: Buffer, signature: Buffer): boolean {
+  try {
+    return crypto.verify("sha256", data, { key }, signature)
+  } catch {
+    return false
+  }
 }
 
 function parseTimestampAndSignature(header: string): { timestamp: string; signature: string } | null {
@@ -56,34 +79,33 @@ export function diagnoseBridgeWebhookVerification(
   const parsed = parseTimestampAndSignature(header)
   if (!parsed) return { ok: false, code: "INVALID_SIGNATURE", bodyBytes }
 
-  const payload = parsed.timestamp
+  const signedBytes = parsed.timestamp
     ? Buffer.concat([Buffer.from(`${parsed.timestamp}.`, "utf8"), rawBody])
     : rawBody
 
   const pem = publicKeyPem ?? getBridgeWebhookPublicKey()
   if (pem) {
-    try {
-      const ok = crypto.verify(
-        "sha256",
-        payload,
-        { key: normalizeBridgeWebhookPublicKeyPem(pem) },
-        Buffer.from(parsed.signature, "base64"),
-      )
-      return ok ? { ok: true, bodyBytes } : { ok: false, code: "INVALID_SIGNATURE", bodyBytes }
-    } catch {
-      return { ok: false, code: "INVALID_SIGNATURE", bodyBytes }
-    }
+    const key = normalizeBridgeWebhookPublicKeyPem(pem)
+    const signature = Buffer.from(parsed.signature, "base64")
+    // Bridge signs SHA256(`${t}.${rawBody}`), then RSA-SHA256 over that digest.
+    // https://apidocs.bridge.xyz/get-started/introduction/quick-start/setting-up-webhooks
+    const digest = crypto.createHash("sha256").update(signedBytes).digest()
+    const official = verifyRsaSha256(key, digest, signature)
+    const singleHash = official ? true : verifyRsaSha256(key, signedBytes, signature)
+    return official || singleHash
+      ? { ok: true, bodyBytes }
+      : { ok: false, code: "INVALID_SIGNATURE", bodyBytes }
   }
 
   const secret = hmacSecret ?? getBridgeWebhookSecret()
   if (!secret) return { ok: false, code: "PUBLIC_KEY_MISSING", bodyBytes }
 
-  const expected = crypto.createHmac("sha256", secret).update(payload).digest("hex")
+  const expected = crypto.createHmac("sha256", secret).update(signedBytes).digest("hex")
   const given = parsed.signature.replace(/^sha256=/i, "")
   const a = Buffer.from(expected, "hex")
   const b = Buffer.from(given, "hex")
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-    const expectedB64 = crypto.createHmac("sha256", secret).update(payload).digest("base64")
+    const expectedB64 = crypto.createHmac("sha256", secret).update(signedBytes).digest("base64")
     if (expectedB64 !== given) {
       return { ok: false, code: "INVALID_SIGNATURE", bodyBytes }
     }
