@@ -29,4 +29,28 @@ describe("mapRecipientToYcSend provider bindings", () => {
     const destination = mapped.destination as Record<string, unknown>
     expect(destination.accountBank).toBe("Kuda Microfinance Bank")
   })
+
+  it("attaches ZA FNB universal branch code from the YC network", async () => {
+    const { listYellowcardNetworks } = await import("@/lib/yellowcard/networks")
+    vi.mocked(listYellowcardNetworks).mockResolvedValueOnce([
+      {
+        id: "fnb-za",
+        name: "First National Bank (South Africa)",
+        code: "250655",
+        status: "active",
+      },
+    ] as never)
+
+    const mapped = await mapRecipientToYcSend({
+      country_code: "ZA",
+      currency: "ZAR",
+      full_name: "Akpomedaye Ambrose",
+      account_number: "6309 9950 123",
+      bank_name: "First National Bank (South Africa)",
+    })
+    const destination = mapped.destination as Record<string, unknown>
+    expect(destination.networkId).toBe("fnb-za")
+    expect(destination.branchCode).toBe("250655")
+    expect(destination.accountNumber).toBe("63099950123")
+  })
 })

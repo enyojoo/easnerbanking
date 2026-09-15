@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
+  mergeYcMomoNetworksIntoSchema,
   mergeYcNetworksIntoSchema,
+  resolvePrimaryPayoutProvider,
   synthesizeYcSchemaFromNoah,
   unwrapGridFieldsSchema,
   unwrapNoahFieldsSchema,
@@ -9,6 +11,7 @@ import {
   type YcCorridorSchemaHint,
 } from "@easner/shared"
 import { listYellowcardNetworks } from "@/lib/yellowcard/networks"
+import { findYcCorridorChannel } from "@/lib/payout-providers/yellowcard-provider"
 import type { ProviderSchemaSyncResult } from "@/lib/fx/provider-schema-sync-types"
 import { mergeCorridorProvidersColumn } from "@/lib/fx/corridor-providers-merge"
 
@@ -36,74 +39,48 @@ function genericBankSchema(countryCode: string, currencyCode: string): YcCorrido
   }
 }
 
-function momoLabelsFromProviders(providers: unknown): { value: string; label: string }[] {
-  if (!Array.isArray(providers)) return []
-  return [...new Set(providers.map((p) => String(p ?? "").trim()).filter(Boolean))].map((label) => ({
-    value: label,
-    label,
-  }))
-}
-
 async function buildYcMomoSchema(input: {
-  providers?: unknown
-  fieldsSchema?: unknown
   countryCode: string
   currencyCode: string
-}): Promise<YcCorridorSchemaHint | null> {
-  const momoMap = new Map<string, { value: string; label: string }>()
-  for (const entry of momoLabelsFromProviders(input.providers)) {
-    momoMap.set(entry.value.toLowerCase(), entry)
-  }
-  const noah = unwrapNoahFieldsSchema(input.fieldsSchema)
-  for (const label of noah?.mobile_provider_labels ?? []) {
-    const trimmed = String(label).trim()
-    if (trimmed) momoMap.set(trimmed.toLowerCase(), { value: trimmed, label: trimmed })
-  }
-  const grid = unwrapGridFieldsSchema(input.fieldsSchema)
-  for (const entry of grid?.momo_provider_enum ?? []) {
-    const value = String(entry.value ?? "").trim()
-    if (!value) continue
-    momoMap.set(value.toLowerCase(), {
-      value,
-      label: String(entry.label ?? value).trim() || value,
-    })
-  }
-
+}): Promise<YcCorridorSchemaHint> {
   const cc = input.countryCode.trim().toUpperCase()
   const cur = input.currencyCode.trim().toUpperCase()
-
-  try {
-    const networks = await listYellowcardNetworks({ country: cc, currency: cur })
-    for (const network of networks) {
-      const name = String(network.name ?? network.code ?? "").trim()
-      if (!name) continue
-      if (!/mobile|momo|m-pesa|mpesa|airtel|mtn|orange|wave|vodafone|tigo|tnm/i.test(name)) {
-        continue
-      }
-      momoMap.set(name.toLowerCase(), { value: name, label: name })
-    }
-  } catch {
-    // keep corridor-derived momo labels
-  }
-
-  const momo = [...momoMap.values()]
-  if (!momo.length) return null
-  return {
-    status: "ready",
-    channel_type: "momo",
-    momo_provider_enum: momo,
-    note: "Synced from YC/Noah/Grid MoMo sources",
-  }
+  const networks = await listYellowcardNetworks({ country: cc, currency: cur })
+  const sendChannel = await findYcCorridorChannel({
+    countryCode: cc,
+    currencyCode: cur,
+    rail: "mobile_money",
+    includeInactive: true,
+    networks,
+  })
+  const channelId = String(sendChannel?.id ?? sendChannel?.channelId ?? "").trim()
+  return mergeYcMomoNetworksIntoSchema(
+    {
+      status: "ready",
+      channel_type: "momo",
+      extra_fields: [],
+    },
+    networks,
+    { channelId },
+  )
 }
 
 function nestedFieldsSchema(
   prior: unknown,
   yellowcard: YcCorridorSchemaHint,
+  stripNoahProviderLists: boolean,
 ): { noah: unknown; yellowcard: YcCorridorSchemaHint; grid: unknown } {
   const priorNoah = unwrapNoahFieldsSchema(prior)
+  let noah: unknown = priorNoah ?? null
+  if (stripNoahProviderLists && priorNoah && typeof priorNoah === "object") {
+    const rest = { ...(priorNoah as Record<string, unknown>) }
+    delete rest.bank_enum
+    delete rest.mobile_provider_labels
+    noah = rest
+  }
   const priorGrid = unwrapGridFieldsSchema(prior)
   return {
-    noah: priorNoah ?? null,
+    noah,
     yellowcard,
     grid: priorGrid ?? null,
   }
@@ -117,7 +94,17 @@ export async function syncYcCorridorSchemas(admin: SupabaseClient): Promise<Prov
 
   if (error) return { ok: false, updated: 0, skipped: 0, error: error.message }
 
-  const targets = (rows ?? []).filter((row) => corridorUsesYc(row))
+  const countryFilter = new Set(
+    String(process.env.YC_SCHEMA_SYNC_COUNTRY ?? "")
+      .split(",")
+      .map((code) => code.trim().toUpperCase())
+      .filter(Boolean),
+  )
+  const targets = (rows ?? []).filter((row) => {
+    if (!corridorUsesYc(row)) return false
+    if (!countryFilter.size) return true
+    return countryFilter.has(String(row.country_code ?? "").trim().toUpperCase())
+  })
   if (!targets.length) return { ok: true, updated: 0, skipped: 0 }
 
   let updated = 0
@@ -132,12 +119,19 @@ export async function syncYcCorridorSchemas(admin: SupabaseClient): Promise<Prov
     let ycSchema: YcCorridorSchemaHint | null = null
 
     if (rail === "mobile_money") {
-      ycSchema = await buildYcMomoSchema({
-        providers: row.providers,
-        fieldsSchema: row.fields_schema,
-        countryCode: cc,
-        currencyCode: cur,
-      })
+      try {
+        ycSchema = await buildYcMomoSchema({
+          countryCode: cc,
+          currencyCode: cur,
+        })
+      } catch {
+        ycSchema = {
+          status: "ready",
+          channel_type: "momo",
+          momo_provider_enum: [],
+          extra_fields: [],
+        }
+      }
     } else {
       ycSchema =
         YC_STATIC_CORRIDOR_SCHEMAS[key] ??
@@ -145,9 +139,16 @@ export async function syncYcCorridorSchemas(admin: SupabaseClient): Promise<Prov
         genericBankSchema(cc, cur)
 
       try {
+        const sendChannel = await findYcCorridorChannel({
+          countryCode: cc,
+          currencyCode: cur,
+          rail,
+          includeInactive: true,
+        })
+        const channelId = String(sendChannel?.id ?? sendChannel?.channelId ?? "").trim()
         const networks = await listYellowcardNetworks({ country: cc, currency: cur })
         if (networks.length > 0) {
-          ycSchema = mergeYcNetworksIntoSchema(ycSchema, networks)
+          ycSchema = mergeYcNetworksIntoSchema(ycSchema, networks, { channelId })
         }
       } catch {
         // keep synthesized schema
@@ -159,10 +160,14 @@ export async function syncYcCorridorSchemas(admin: SupabaseClient): Promise<Prov
       continue
     }
 
-    const fields_schema = nestedFieldsSchema(row.fields_schema, {
-      ...ycSchema,
-      status: "ready",
-    })
+    const fields_schema = nestedFieldsSchema(
+      row.fields_schema,
+      {
+        ...ycSchema,
+        status: "ready",
+      },
+      resolvePrimaryPayoutProvider(row.provider_routing) === "yellowcard",
+    )
 
     const priorMeta =
       row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
@@ -181,11 +186,14 @@ export async function syncYcCorridorSchemas(admin: SupabaseClient): Promise<Prov
       updated_at: new Date().toISOString(),
     }
 
-    if (rail === "mobile_money" && ycSchema.momo_provider_enum?.length) {
-      updates.providers = mergeCorridorProvidersColumn(
-        row.providers,
-        ycSchema.momo_provider_enum.map((e) => e.label || e.value),
-      )
+    if (rail === "mobile_money") {
+      const labels = (ycSchema.momo_provider_enum ?? [])
+        .map((e) => String(e.label || e.value || "").trim())
+        .filter(Boolean)
+      updates.providers =
+        resolvePrimaryPayoutProvider(row.provider_routing) === "yellowcard"
+          ? [...new Set(labels)].sort((a, b) => a.localeCompare(b))
+          : mergeCorridorProvidersColumn(row.providers, labels)
     }
 
     const { error: upErr } = await admin.from("payout_corridors").update(updates).eq("id", row.id)

@@ -20,7 +20,10 @@ import {
   resolveRecipientPayoutCountry,
   type RecipientSellPrepareRow,
 } from "@/lib/terminal/recipient-sell-prepare"
-import { findYcSendChannel, resolveYcSendChannelId } from "@/lib/payout-providers/yellowcard-provider"
+import {
+  findYcSendChannel,
+  resolveYcSendSubmitChannel,
+} from "@/lib/payout-providers/yellowcard-provider"
 import { mapRecipientToYcSend } from "@/lib/yellowcard/map-recipient-to-yc-send"
 import { submitYcSend, type YcSendSubmitResult } from "@/lib/yellowcard/send-submit"
 import { submitYcSendWithDestinationAmountLock } from "@/lib/yellowcard/yc-send-leg-lock"
@@ -35,7 +38,7 @@ import {
 } from "@easner/shared"
 import { buildPayoutQuoteKey } from "@/lib/payout/payout-quote-key"
 import { quoteFiatProcessingFeeBps } from "@/lib/processing-fee/quote-processing-fee-bps"
-import { readYcResponseChannelId, toYcChannelType } from "@/lib/yellowcard/channels"
+import { readYcResponseChannelId, ycSubmitChannelTypeFromChannel } from "@/lib/yellowcard/channels"
 
 function roundUsdc(n: number): number {
   if (!Number.isFinite(n)) return 0
@@ -139,7 +142,7 @@ export async function buildYcPayoutQuote(input: {
     fetchYcSendServiceFeeConfig({
       country: countryCode,
       currency: receiveCurrency,
-      channelType: rail === "mobile_money" ? "momo" : "bank",
+      channelType: ycSubmitChannelTypeFromChannel(sendChannel, rail),
       directSettlement: true,
     }),
     quoteFiatProcessingFeeBps(
@@ -365,29 +368,29 @@ export async function lockYcBalancePayoutSend(input: {
       : ("bank_transfer" as const)
 
   const admin = createSupabaseAdmin()
-  const channelPromise = String(input.channelId || "").trim()
-    ? Promise.resolve(String(input.channelId).trim())
-    : resolveYcSendChannelId({
-      countryCode,
-      currencyCode: receiveCurrency,
-      rail,
-    }).then((value) => value ?? "")
-  const ratesPromise = listYcRates(admin, { destinations: [receiveCurrency], status: "active" })
-  const feeConfigPromise = fetchYcSendServiceFeeConfig({
-    country: countryCode,
-    currency: receiveCurrency,
-    channelType: rail === "mobile_money" ? "momo" : "bank",
-    directSettlement: true,
-    fresh: true,
+  const submitChannelPromise = resolveYcSendSubmitChannel({
+    countryCode,
+    currencyCode: receiveCurrency,
+    rail,
+    channelId: input.channelId,
   })
+  const ratesPromise = listYcRates(admin, { destinations: [receiveCurrency], status: "active" })
 
-  const channelId = await channelPromise
-  if (!channelId) throw new Error("No Yellowcard send channel for this corridor.")
+  const submitChannel = await submitChannelPromise
+  const channelId = submitChannel?.channelId ?? ""
+  const channelType = submitChannel?.channelType
+  if (!channelId || !channelType) throw new Error("No Yellowcard send channel for this corridor.")
 
   const recipientMappedPromise = mapRecipientToYcSend(input.recipient, { channelId })
   const [rates, ycFeeConfig, recipientMapped] = await Promise.all([
     ratesPromise,
-    feeConfigPromise,
+    fetchYcSendServiceFeeConfig({
+      country: countryCode,
+      currency: receiveCurrency,
+      channelType,
+      directSettlement: true,
+      fresh: true,
+    }),
     recipientMappedPromise,
   ])
   const payoutRate = findYcBalancePayoutRate(rates, receiveCurrency)
@@ -444,7 +447,8 @@ export async function lockYcBalancePayoutSend(input: {
         sequenceId: lockSequenceId,
         customerUID: input.customerUID,
         customerType: "retail",
-        channelType: toYcChannelType(rail),
+        channelType,
+        channelId,
         currency: receiveCurrency,
         country: countryCode,
         settlementCryptoAmount: settlementCryptoUsd,

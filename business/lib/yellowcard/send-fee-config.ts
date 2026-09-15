@@ -4,7 +4,7 @@ import type { YcServiceFeeConfig } from "@easner/shared"
 export type YcFeeConfigQuery = {
   country: string
   currency: string
-  channelType: "bank" | "momo"
+  channelType: "bank" | "momo" | "eft" | "p2p"
   directSettlement: boolean
   txType?: "send" | "receive"
   /** Locked payouts bypass the indicative cache so fee guarantees use current YC config. */

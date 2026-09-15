@@ -37,6 +37,7 @@ export async function mapRecipientToYcSend(
     Boolean(phone && !accountNumber)
 
   let networkId: string | undefined
+  let branchCode: string | undefined
   let resolvedBankName = bankName
   let resolvedMobileProvider = mobileProvider
   if (isMomo || (country && currency)) {
@@ -62,6 +63,14 @@ export async function mapRecipientToYcSend(
         isMomo,
         fallbackToFirst: country === "BR" && !isMomo,
       })
+      const matched = networkId
+        ? networks.find((n) => String(n.id ?? n.networkId ?? "").trim() === networkId)
+        : undefined
+      const networkCode = String(matched?.code ?? "").trim()
+      // ZA Instant EFT uses the network `code` as the universal branch code.
+      if (country === "ZA" && /^\d{4,8}$/.test(networkCode)) {
+        branchCode = networkCode
+      }
     } catch {
       // best-effort network resolution
     }
@@ -73,5 +82,5 @@ export async function mapRecipientToYcSend(
     ...(resolvedMobileProvider ? { mobile_provider: resolvedMobileProvider } : {}),
   }
 
-  return buildYcSendMappingFromRecipient(mappedRow, { networkId })
+  return buildYcSendMappingFromRecipient(mappedRow, { networkId, branchCode })
 }

@@ -209,6 +209,13 @@ export {
 export { MobileMoneyProviderIcon } from "./components/MobileMoneyProviderIcon"
 export type { MobileMoneyProviderIconProps } from "./components/MobileMoneyProviderIcon"
 export {
+  getBankLogoPublicUrl,
+  hasBankLogo,
+  normalizeBankLogoKey,
+} from "./bank-icons"
+export { BankLogo } from "./components/BankLogo"
+export type { BankLogoProps } from "./components/BankLogo"
+export {
   pickBestWalletInferenceCandidate,
   resolveInferredWalletAssetNetwork,
   type WalletAddressInferenceCandidate,
@@ -366,6 +373,7 @@ export {
   isBankNameAllowedForCorridor,
   isMomoProviderAllowedForCorridor,
   isNestedPayoutFieldsSchema,
+  mergeYcMomoNetworksIntoSchema,
   mergeYcNetworksIntoSchema,
   normalizeRecipientYcMetadata,
   resolveCorridorBankName,
@@ -859,6 +867,9 @@ export {
   formatAccountRestrictionDeadline,
   ACCOUNT_RESTRICTION_WIND_DOWN_BANNER,
   ACCOUNT_RESTRICTION_WIND_DOWN_CONTACT_CTA,
+  ACCOUNT_RESTRICTION_LOCKED_LEAD,
+  ACCOUNT_RESTRICTION_LOCKED_CONTACT_CTA,
+  ACCOUNT_RESTRICTION_LOCKED_TRAIL,
   accountRestrictionWindDownBannerCopy,
   accountRestrictionLockedCopy,
   accountRestrictionDepositsBlockedCopy,

@@ -1,10 +1,21 @@
 import { describe, expect, it } from "vitest"
-import { readYcResponseChannelId, toYcChannelType } from "./channels"
+import { readYcResponseChannelId, toYcChannelType, ycSubmitChannelTypeFromChannel } from "./channels"
 
 describe("toYcChannelType", () => {
   it("maps supported rails to Yellowcard channel types", () => {
     expect(toYcChannelType("bank_transfer")).toBe("bank")
     expect(toYcChannelType("mobile_money")).toBe("momo")
+  })
+})
+
+describe("ycSubmitChannelTypeFromChannel", () => {
+  it("maps live Instant EFT channels to eft", () => {
+    expect(ycSubmitChannelTypeFromChannel({ channelType: "eft" }, "bank_transfer")).toBe("eft")
+    expect(ycSubmitChannelTypeFromChannel({ channelType: "bank" }, "bank_transfer")).toBe("bank")
+    expect(ycSubmitChannelTypeFromChannel({ channelType: "p2p" }, "bank_transfer")).toBe("p2p")
+    expect(ycSubmitChannelTypeFromChannel({ channelType: "p2pmomo" }, "mobile_money")).toBe("momo")
+    expect(ycSubmitChannelTypeFromChannel({ channelType: "momo" }, "mobile_money")).toBe("momo")
+    expect(ycSubmitChannelTypeFromChannel({}, "bank_transfer")).toBe("bank")
   })
 })
 

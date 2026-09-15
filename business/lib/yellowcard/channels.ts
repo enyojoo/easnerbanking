@@ -1,10 +1,34 @@
 import { yellowcardFetch } from "./http"
 
-export type YcChannelType = "bank" | "momo"
+export type YcChannelType = "bank" | "momo" | "eft" | "p2p"
 export type YcChannelRail = "bank_transfer" | "mobile_money"
 
 export function toYcChannelType(rail: YcChannelRail): YcChannelType {
   return rail === "mobile_money" ? "momo" : "bank"
+}
+
+export function readYcChannelId(channel: { id?: unknown; channelId?: unknown } | null | undefined): string | null {
+  if (!channel) return null
+  const channelId = String(channel.id ?? channel.channelId ?? "").trim()
+  return channelId || null
+}
+
+/**
+ * Live YC channelType for POST /send and /receive.
+ * ZA withdraw is Instant EFT (`eft`); NG withdraw is `p2p` (bank channels are inactive).
+ */
+export function ycSubmitChannelTypeFromChannel(
+  channel: { channelType?: unknown } | null | undefined,
+  rail: YcChannelRail,
+): YcChannelType {
+  const raw = String(channel?.channelType ?? "")
+    .trim()
+    .toLowerCase()
+  if (raw === "eft" || raw.includes("eft")) return "eft"
+  if (raw.includes("momo") || raw.includes("mobile")) return "momo"
+  if (raw === "p2p" || raw.includes("p2p")) return "p2p"
+  if (raw === "bank" || raw.includes("bank")) return "bank"
+  return toYcChannelType(rail)
 }
 
 export function readYcResponseChannelId(

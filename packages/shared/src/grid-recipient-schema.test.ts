@@ -275,6 +275,25 @@ describe("resolveCorridorRecipientOptions", () => {
     expect(options.momoOptions).toContain("M-Pesa")
     expect(options.momoOptions).toContain("Airtel Money")
   })
+
+  it("scopes momo labels to Yellow Card when it is the primary provider", () => {
+    const options = resolveCorridorRecipientOptions({
+      countryCode: "RW",
+      currencyCode: "RWF",
+      rail: "mobile_money",
+      payoutProvider: "yellowcard",
+      providers: ["Airtel Money", "MTN_Rwanda"],
+      fieldsSchema: {
+        noah: { mobile_provider_labels: ["Airtel Money"] },
+        yellowcard: {
+          status: "ready",
+          channel_type: "momo",
+          momo_provider_enum: [{ value: "MTN_Rwanda", label: "MTN_Rwanda" }],
+        },
+      },
+    })
+    expect(options.momoOptions).toEqual(["MTN_Rwanda"])
+  })
 })
 
 describe("resolveGridBankName", () => {

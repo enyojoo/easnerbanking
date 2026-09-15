@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 import { View, Text, TextInput, Pressable, StyleSheet, Platform } from 'react-native'
 import { Check, ChevronDown, ChevronUp, Search } from 'lucide-react-native'
-import RecipientFormDropdownList from './RecipientFormDropdownList'
+import { BankLogo } from '@easner/shared'
 import { RegisterRecipientDropdownSheet } from './RecipientFormDropdownHost'
 import {
   colors,
@@ -89,6 +89,7 @@ export function RecipientBankNameField({
         disabled={disabled}
       >
         <View style={styles.selectorContent}>
+          {value ? <BankLogo bankName={value} size={22} /> : null}
           <Text
             style={value ? styles.valueText : styles.placeholderText}
             numberOfLines={1}
@@ -134,6 +135,7 @@ export function RecipientBankNameField({
                   close()
                 }}
               >
+                <BankLogo bankName={bank} size={22} />
                 <Text style={styles.itemLabel}>{bank}</Text>
                 {value === bank ? (
                   <Check size={18} color={colors.primary.main} strokeWidth={2.5} />

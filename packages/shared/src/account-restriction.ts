@@ -110,8 +110,12 @@ export function accountRestrictionSendBlockedCopy(): string {
   return "Transfers are not available while your account is restricted. Contact Easner support if you have questions."
 }
 
+export const ACCOUNT_RESTRICTION_LOCKED_LEAD = "Your account has been suspended."
+export const ACCOUNT_RESTRICTION_LOCKED_CONTACT_CTA = "Contact support"
+export const ACCOUNT_RESTRICTION_LOCKED_TRAIL = "if you have questions."
+
 export function accountRestrictionLockedCopy(): string {
-  return "Your account has been suspended. Contact support if you have questions."
+  return `${ACCOUNT_RESTRICTION_LOCKED_LEAD} ${ACCOUNT_RESTRICTION_LOCKED_CONTACT_CTA} ${ACCOUNT_RESTRICTION_LOCKED_TRAIL}`
 }
 
 export function accountRestrictionDepositsBlockedCopy(): string {

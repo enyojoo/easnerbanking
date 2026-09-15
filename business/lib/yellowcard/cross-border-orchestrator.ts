@@ -29,7 +29,7 @@ import { submitYcSendWithDestinationAmountLock } from "@/lib/yellowcard/yc-send-
 import { fetchYcSendServiceFeeConfig } from "@/lib/yellowcard/send-fee-config"
 import { executeYcCryptoDeposit } from "@/lib/yellowcard/execute-yc-crypto-deposit"
 import { buildYcKycPersonMetadata } from "@/lib/yellowcard/kyc-metadata"
-import { resolveYcSendChannelId } from "@/lib/payout-providers/yellowcard-provider"
+import { resolveYcSendSubmitChannel } from "@/lib/payout-providers/yellowcard-provider"
 import { mapRecipientToYcSend } from "@/lib/yellowcard/map-recipient-to-yc-send"
 import {
   listYellowcardChannels,
@@ -485,14 +485,16 @@ async function resolveCrossBorderSendContext(input: CrossBorderTransferInput, pr
     String(input.recipient.bank_name || "").toLowerCase().includes("mobile money")
       ? ("mobile_money" as const)
       : ("bank_transfer" as const)
-  const sendChannelId = await resolveYcSendChannelId({
+  const sendTarget = await resolveYcSendSubmitChannel({
     countryCode: receiveCountry,
     currencyCode: receiveCurrency,
     rail: sendRail,
   })
-  if (!receiveChannelId || !sendChannelId) {
+  if (!receiveChannelId || !sendTarget) {
     throw new Error("Yellowcard channels unavailable for this corridor")
   }
+  const sendChannelId = sendTarget.channelId
+  const sendChannelType = sendTarget.channelType
 
   const { data: corridorRow } = await admin
     .from("payout_corridors")
@@ -526,6 +528,7 @@ async function resolveCrossBorderSendContext(input: CrossBorderTransferInput, pr
     receiveCountry,
     receiveChannelId,
     sendChannelId,
+    sendChannelType,
     sendRail,
     sender,
     recipientMapped,
@@ -614,7 +617,7 @@ export async function lockCrossBorderLeg2(
   const sendFeeConfig = await fetchYcSendServiceFeeConfig({
     country: ctx.receiveCountry,
     currency: ctx.receiveCurrency,
-    channelType: ctx.sendRail === "mobile_money" ? "momo" : "bank",
+    channelType: ctx.sendChannelType,
     directSettlement: true,
     fresh: true,
   })
@@ -637,7 +640,8 @@ export async function lockCrossBorderLeg2(
       submitYcSend({
         sequenceId,
         customerUID: input.customerUID,
-        channelType: toYcChannelType(ctx.sendRail),
+        channelType: ctx.sendChannelType,
+        channelId: ctx.sendChannelId,
         currency: ctx.receiveCurrency,
         country: ctx.receiveCountry,
         settlementCryptoAmount: settlementCryptoUsd,
@@ -690,6 +694,7 @@ export async function lockCrossBorderLeg2(
     payInRail: input.payInRail,
     receiveChannelId: ctx.receiveChannelId,
     sendChannelId: ctx.sendChannelId,
+    sendChannelType: ctx.sendChannelType,
     sendRail: ctx.sendRail,
     ycBuyTo,
     ycSellFrom: Number(ctx.fromLeg?.yc_buy ?? 0),
@@ -1274,14 +1279,15 @@ export async function createCrossBorderDraft(input: {
     String(input.recipient.bank_name || "").toLowerCase().includes("mobile money")
       ? ("mobile_money" as const)
       : ("bank_transfer" as const)
-  const sendChannelId = await resolveYcSendChannelId({
+  const sendTarget = await resolveYcSendSubmitChannel({
     countryCode: receiveCountry,
     currencyCode: receiveCurrency,
     rail: sendRail,
   })
-  if (!receiveChannelId || !sendChannelId) {
+  if (!receiveChannelId || !sendTarget) {
     throw new Error("Yellowcard channels unavailable for this corridor")
   }
+  const sendChannelId = sendTarget.channelId
 
   const fromLeg = findYcPayInLeg(rates, payInCurrency) ?? findYcRate(rates, payInCurrency, "USDC")
   const toLeg = findYcPayInLeg(rates, receiveCurrency) ?? findYcRate(rates, receiveCurrency, "USDC")
@@ -1459,6 +1465,14 @@ export async function authorizeCrossBorderDraft(input: {
     throw new Error("Yellowcard could not resolve a payout network for this recipient")
   }
 
+  const sendTarget = await resolveYcSendSubmitChannel({
+    countryCode: receiveCountry,
+    currencyCode: receiveCurrency,
+    rail: recipientPayoutRail(recipient as RecipientSellPrepareRow),
+    channelId: sendChannelId,
+  })
+  if (!sendTarget) throw new Error("Yellowcard send channel unavailable for this corridor")
+
   const fromLeg = findYcPayInLeg(rates, payInCurrency) ?? findYcRate(rates, payInCurrency, "USDC")
   const toLeg = findYcPayInLeg(rates, receiveCurrency) ?? findYcRate(rates, receiveCurrency, "USDC")
   const ycBuyTo = Number(toLeg?.yc_sell ?? 0)
@@ -1467,10 +1481,7 @@ export async function authorizeCrossBorderDraft(input: {
   const sendFeeConfig = await fetchYcSendServiceFeeConfig({
     country: receiveCountry,
     currency: receiveCurrency,
-    channelType:
-      recipientPayoutRail(recipient as RecipientSellPrepareRow) === "mobile_money"
-        ? "momo"
-        : "bank",
+    channelType: sendTarget.channelType,
     directSettlement: true,
     fresh: true,
   })
@@ -1493,9 +1504,8 @@ export async function authorizeCrossBorderDraft(input: {
       submitYcSend({
         sequenceId,
         customerUID: input.customerUID,
-        channelType: toYcChannelType(
-          recipientPayoutRail(recipient as RecipientSellPrepareRow),
-        ),
+        channelType: sendTarget.channelType,
+        channelId: sendTarget.channelId,
         currency: receiveCurrency,
         country: receiveCountry,
         settlementCryptoAmount: settlementCryptoUsd,
@@ -1827,10 +1837,19 @@ export async function maybeExecuteCrossBorderLeg2(
       return
     }
 
+    const sendTarget = await resolveYcSendSubmitChannel({
+      countryCode: draft.receiveCountry,
+      currencyCode: draft.receiveCurrency,
+      rail: draft.sendRail,
+      channelId: draft.sendChannelId,
+    })
+    if (!sendTarget) {
+      throw new Error("Yellowcard send channel unavailable for this corridor")
+    }
     const feeConfig = await fetchYcSendServiceFeeConfig({
       country: draft.receiveCountry,
       currency: draft.receiveCurrency,
-      channelType: draft.sendRail === "mobile_money" ? "momo" : "bank",
+      channelType: sendTarget.channelType,
       directSettlement: true,
       fresh: true,
     })
@@ -1850,7 +1869,8 @@ export async function maybeExecuteCrossBorderLeg2(
           submitYcSend({
             sequenceId,
             customerUID: String(transfer.user_id),
-            channelType: toYcChannelType(draft.sendRail),
+            channelType: sendTarget.channelType,
+            channelId: sendTarget.channelId,
             currency: draft.receiveCurrency,
             country: draft.receiveCountry,
             settlementCryptoAmount: settlementCryptoUsd,

@@ -29,6 +29,7 @@ vi.mock("@/lib/payout-providers/yellowcard-provider", async (importOriginal) => 
   return {
     ...actual,
     resolveYcSendChannelId: vi.fn(),
+    resolveYcSendSubmitChannel: vi.fn(),
   }
 })
 

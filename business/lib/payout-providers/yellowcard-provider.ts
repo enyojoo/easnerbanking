@@ -1,4 +1,10 @@
-import { listYellowcardChannels, type YcChannel } from "@/lib/yellowcard/channels"
+import {
+  listYellowcardChannels,
+  readYcChannelId,
+  ycSubmitChannelTypeFromChannel,
+  type YcChannel,
+  type YcChannelType,
+} from "@/lib/yellowcard/channels"
 import type { CorridorContext, PayoutProvider } from "./types"
 
 let channelCache: { at: number; channels: YcChannel[] } | null = null
@@ -40,7 +46,46 @@ function matchesCorridor(ch: YcChannel, ctx: CorridorContext): boolean {
   if (ctx.rail === "mobile_money") {
     return channelType.includes("momo") || channelType.includes("mobile")
   }
-  return channelType.includes("bank") || channelType === "" || !channelType.includes("momo")
+  // p2pmomo is a momo rail, not bank P2P (NG).
+  if (channelType.includes("momo") || channelType.includes("mobile")) return false
+  // ZA Instant EFT / NG P2P are live bank-rail withdraw types.
+  return (
+    channelType.includes("bank") ||
+    channelType.includes("eft") ||
+    channelType.includes("p2p") ||
+    channelType === ""
+  )
+}
+
+/** Prefer classic momo, then p2pmomo; bank then Instant EFT (ZA), then P2P (NG). */
+function sendChannelPreference(ch: YcChannel, rail: CorridorContext["rail"]): number {
+  const t = String(ch.channelType ?? "").trim().toLowerCase()
+  if (rail === "mobile_money") {
+    if (t === "momo") return 0
+    if (t.includes("p2pmomo")) return 1
+    if (t.includes("momo") || t.includes("mobile")) return 2
+    return 9
+  }
+  if (t === "bank" || (t.includes("bank") && !t.includes("eft"))) return 0
+  if (t === "eft" || t.includes("eft")) return 1
+  if (t === "p2p" || t.includes("p2p")) return 2
+  return 3
+}
+
+function pickerNetworkCount(
+  ch: YcChannel,
+  networks: Array<{ name?: string; status?: string; channelIds?: string[] }> | undefined,
+): number {
+  if (!networks?.length) return 0
+  const channelId = readYcChannelId(ch)
+  if (!channelId) return 0
+  return networks.filter((n) => {
+    const status = String(n.status ?? "").trim().toLowerCase()
+    if (status === "inactive" || status === "disabled") return false
+    const name = String(n.name ?? "").trim()
+    if (!name || name.toLowerCase().includes("manual input")) return false
+    return Array.isArray(n.channelIds) && n.channelIds.some((id) => String(id).trim() === channelId)
+  }).length
 }
 
 export const yellowcardPayoutProvider: PayoutProvider = {
@@ -59,7 +104,39 @@ export async function resolveYcSendChannelId(ctx: {
 }): Promise<string | null> {
   const channel = await findYcSendChannel(ctx)
   if (!channel) return null
-  return String(channel.id ?? channel.channelId ?? "").trim() || null
+  return readYcChannelId(channel)
+}
+
+export type YcSendSubmitChannel = {
+  channelId: string
+  channelType: YcChannelType
+}
+
+/** Live send channel id + YC channelType for POST /send. */
+export async function resolveYcSendSubmitChannel(ctx: {
+  countryCode: string
+  currencyCode: string
+  rail: "bank_transfer" | "mobile_money"
+  channelId?: string | null
+}): Promise<YcSendSubmitChannel | null> {
+  const channels = await loadChannels()
+  const hinted = String(ctx.channelId ?? "").trim()
+  if (hinted) {
+    const byId = channels.find((ch) => readYcChannelId(ch) === hinted)
+    if (byId && channelActive(byId)) {
+      return {
+        channelId: hinted,
+        channelType: ycSubmitChannelTypeFromChannel(byId, ctx.rail),
+      }
+    }
+  }
+  const channel = await findYcSendChannel(ctx)
+  const channelId = readYcChannelId(channel)
+  if (!channel || !channelId) return null
+  return {
+    channelId,
+    channelType: ycSubmitChannelTypeFromChannel(channel, ctx.rail),
+  }
 }
 
 /** Full YC send channel row for corridor (limits, ids). */
@@ -68,16 +145,34 @@ export async function findYcSendChannel(ctx: {
   currencyCode: string
   rail: "bank_transfer" | "mobile_money"
 }): Promise<YcChannel | null> {
+  return findYcCorridorChannel({ ...ctx, includeInactive: false })
+}
+
+/** Schema sync: live send channel, or matching inactive withdraw if YC paused the rail. */
+export async function findYcCorridorChannel(ctx: {
+  countryCode: string
+  currencyCode: string
+  rail: "bank_transfer" | "mobile_money"
+  includeInactive?: boolean
+  networks?: Array<{ name?: string; status?: string; channelIds?: string[] }>
+}): Promise<YcChannel | null> {
   const channels = await loadChannels()
-  const match = channels.find(
-    (ch) =>
-      channelActive(ch) &&
-      matchesCorridor(ch, {
-        countryCode: ctx.countryCode,
-        currencyCode: ctx.currencyCode,
-        rail: ctx.rail,
-        providerRouting: [],
-      }),
-  )
-  return match ?? null
+  const matches = channels.filter((ch) => {
+    if (!ctx.includeInactive && !channelActive(ch)) return false
+    return matchesCorridor(ch, {
+      countryCode: ctx.countryCode,
+      currencyCode: ctx.currencyCode,
+      rail: ctx.rail,
+      providerRouting: [],
+    })
+  })
+  if (!matches.length) return null
+  matches.sort((a, b) => {
+    const activeDelta = Number(channelActive(b)) - Number(channelActive(a))
+    if (activeDelta !== 0) return activeDelta
+    const pref = sendChannelPreference(a, ctx.rail) - sendChannelPreference(b, ctx.rail)
+    if (pref !== 0) return pref
+    return pickerNetworkCount(b, ctx.networks) - pickerNetworkCount(a, ctx.networks)
+  })
+  return matches[0] ?? null
 }

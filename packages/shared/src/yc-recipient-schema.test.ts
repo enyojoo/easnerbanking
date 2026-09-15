@@ -10,6 +10,8 @@ import {
   toGridPixKeyType,
   validateYcRecipientForCorridor,
   YC_STATIC_CORRIDOR_SCHEMAS,
+  mergeYcMomoNetworksIntoSchema,
+  mergeYcNetworksIntoSchema,
 } from "./yc-recipient-schema"
 
 describe("validateYcRecipientForCorridor", () => {
@@ -115,6 +117,22 @@ describe("buildYcSendMappingFromRecipient", () => {
     })
     expect(mapped.destination.accountNumber).toBe("0000000000000000000011")
     expect(mapped.root?.cuit).toBe("20123456789")
+  })
+
+  it("attaches ZA Instant EFT branchCode on the destination", () => {
+    const mapped = buildYcSendMappingFromRecipient(
+      {
+        country_code: "ZA",
+        currency: "ZAR",
+        full_name: "Akpomedaye Ambrose",
+        account_number: "63099950123",
+        bank_name: "First National Bank (South Africa)",
+      },
+      { networkId: "fnb-za", branchCode: "250655" },
+    )
+    expect(mapped.destination.networkId).toBe("fnb-za")
+    expect(mapped.destination.branchCode).toBe("250655")
+    expect(mapped.destination.accountNumber).toBe("63099950123")
   })
 
   it("maps Brazil pixKeyType on destination", () => {
@@ -330,5 +348,100 @@ describe("validateYcRecipientForCorridor – Noah-only schema", () => {
       },
     })
     expect(res.ok).toBe(true)
+  })
+})
+
+describe("mergeYcNetworksIntoSchema", () => {
+  const base = {
+    status: "ready" as const,
+    channel_type: "bank" as const,
+    extra_fields: [],
+  }
+
+  it("keeps only active networks on the live send channel", () => {
+    const merged = mergeYcNetworksIntoSchema(
+      base,
+      [
+        {
+          name: "First National Bank (South Africa)",
+          status: "active",
+          channelIds: ["za-eft"],
+        },
+        {
+          name: "First National Bank Lesotho",
+          status: "active",
+          channelIds: ["za-old-bank"],
+        },
+        {
+          name: "Absa Bank",
+          status: "inactive",
+          channelIds: ["za-eft"],
+        },
+        {
+          name: "Manual Input",
+          status: "active",
+          channelIds: ["za-eft"],
+        },
+      ],
+      { channelId: "za-eft" },
+    )
+    expect(merged.bank_enum).toEqual(["First National Bank (South Africa)"])
+  })
+
+  it("clears bank_enum when the live send channel has no networks", () => {
+    const merged = mergeYcNetworksIntoSchema(
+      { ...base, bank_enum: ["MTN_Rwanda"] },
+      [
+        {
+          name: "MTN_Rwanda",
+          status: "active",
+          channelIds: ["rw-momo"],
+        },
+      ],
+      { channelId: "rw-bank" },
+    )
+    expect(merged.bank_enum).toEqual([])
+  })
+
+  it("falls back to all active networks only when no send channel is provided", () => {
+    const merged = mergeYcNetworksIntoSchema(base, [
+      { name: "Absa Bank", status: "active" },
+      { name: "Capitec Bank", status: "active" },
+    ])
+    expect(merged.bank_enum).toEqual(["Absa Bank", "Capitec Bank"])
+  })
+})
+
+describe("mergeYcMomoNetworksIntoSchema", () => {
+  it("keeps only live send-channel MoMo networks", () => {
+    const merged = mergeYcMomoNetworksIntoSchema(
+      {
+        status: "ready",
+        channel_type: "momo",
+        momo_provider_enum: [{ value: "Airtel Money", label: "Airtel Money" }],
+      },
+      [
+        { name: "MTN_Rwanda", status: "active", channelIds: ["rw-momo"] },
+        { name: "Airtel Money", status: "active", channelIds: ["other"] },
+      ],
+      { channelId: "rw-momo" },
+    )
+    expect(merged.momo_provider_enum).toEqual([{ value: "MTN_Rwanda", label: "MTN_Rwanda" }])
+  })
+
+  it("drops generic Mobile Money catch-all networks", () => {
+    const merged = mergeYcMomoNetworksIntoSchema(
+      { status: "ready", channel_type: "momo" },
+      [
+        { name: "Airtel Mobile Money", status: "active", channelIds: ["ug-momo"] },
+        { name: "MTN Mobile Money", status: "active", channelIds: ["ug-momo"] },
+        { name: "Mobile Money", status: "active", channelIds: ["ug-momo"] },
+      ],
+      { channelId: "ug-momo" },
+    )
+    expect(merged.momo_provider_enum?.map((e) => e.label)).toEqual([
+      "Airtel Mobile Money",
+      "MTN Mobile Money",
+    ])
   })
 })

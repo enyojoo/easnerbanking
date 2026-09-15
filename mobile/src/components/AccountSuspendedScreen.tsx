@@ -1,6 +1,11 @@
 import React from 'react'
-import { View, Text, StyleSheet, Pressable } from 'react-native'
-import { accountRestrictionLockedCopy } from '@easner/shared'
+import { View, Text, StyleSheet, Pressable, Linking } from 'react-native'
+import {
+  ACCOUNT_RESTRICTION_LOCKED_CONTACT_CTA,
+  ACCOUNT_RESTRICTION_LOCKED_LEAD,
+  ACCOUNT_RESTRICTION_LOCKED_TRAIL,
+  APP_URLS,
+} from '@easner/shared'
 import { colors, spacing, textStyles } from '../theme'
 import { ripple } from '../lib/androidRipple'
 
@@ -8,7 +13,19 @@ export function AccountSuspendedScreen({ onLogout }: { onLogout: () => void }) {
   return (
     <View style={styles.root}>
       <Text style={styles.title}>Account suspended</Text>
-      <Text style={styles.body}>{accountRestrictionLockedCopy()}</Text>
+      <Text style={styles.body}>
+        {ACCOUNT_RESTRICTION_LOCKED_LEAD}{' '}
+        <Text
+          accessibilityRole="link"
+          onPress={() => {
+            void Linking.openURL(APP_URLS.contact)
+          }}
+          style={styles.link}
+        >
+          {ACCOUNT_RESTRICTION_LOCKED_CONTACT_CTA}
+        </Text>{' '}
+        {ACCOUNT_RESTRICTION_LOCKED_TRAIL}
+      </Text>
       <Pressable
         accessibilityRole="button"
         onPress={onLogout}
@@ -39,6 +56,11 @@ const styles = StyleSheet.create({
     color: colors.semantic.mutedForeground,
     textAlign: 'center',
     marginTop: spacing.md,
+  },
+  link: {
+    ...textStyles.body,
+    color: colors.semantic.foreground,
+    textDecorationLine: 'underline',
   },
   button: {
     marginTop: spacing.xl,

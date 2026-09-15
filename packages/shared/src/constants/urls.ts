@@ -1,6 +1,7 @@
 export const APP_URLS = {
   website: "https://www.easner.com",
   app: "https://app.easner.com",
+  contact: "https://www.easner.com/contact",
   /** Canonical marketing install page (QR, email, smart redirect). */
   appDownload: "https://www.easner.com/app",
 } as const

@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { BankLogo } from "@easner/shared"
 import { Check, ChevronsUpDown } from "lucide-react"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -45,7 +46,10 @@ export function PayoutBankCombobox({
               error && "border-red-500",
             )}
           >
-            <span className="min-w-0 flex-1 truncate text-left">{value || placeholder}</span>
+            <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
+              {value ? <BankLogo bankName={value} size={18} /> : null}
+              <span className="min-w-0 flex-1 truncate">{value || placeholder}</span>
+            </span>
             <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
           </button>
         </PopoverTrigger>
@@ -75,6 +79,7 @@ export function PayoutBankCombobox({
                     }}
                   >
                     <Check className={cn("mr-2 mt-0.5 h-4 w-4 shrink-0", value === bank ? "opacity-100" : "opacity-0")} />
+                    <BankLogo bankName={bank} size={18} className="mt-0.5" />
                     <span className="min-w-0 flex-1 whitespace-normal break-words leading-snug">{bank}</span>
                   </CommandItem>
                 ))}

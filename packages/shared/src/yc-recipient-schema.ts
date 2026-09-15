@@ -993,7 +993,7 @@ export function resolveYcRecipientCountry(row: {
 /** Build YC /send destination + root-level LatAm fields from a saved recipient row. */
 export function buildYcSendMappingFromRecipient(
   row: YcRecipientRowLike,
-  input?: { networkId?: string | null },
+  input?: { networkId?: string | null; branchCode?: string | null },
 ): YcSendMapping {
   const country = resolveYcRecipientCountry(row)
   const currency = String(row.currency || "").trim().toUpperCase()
@@ -1043,6 +1043,8 @@ export function buildYcSendMappingFromRecipient(
   }
 
   if (input?.networkId) destination.networkId = input.networkId
+  const branchCode = String(input?.branchCode ?? metadata.branch_code ?? "").trim()
+  if (branchCode) destination.branchCode = branchCode
   if (bankName && !bankName.toLowerCase().includes("mobile money")) {
     destination.accountBank = bankName
   }
@@ -1073,17 +1075,92 @@ export function buildYcSendMappingFromRecipient(
 /** Merge YC network list into corridor schema bank_enum + default network hints. */
 export function mergeYcNetworksIntoSchema(
   schema: YcCorridorSchemaHint,
-  networks: Array<{ id?: string; networkId?: string; code?: string; name?: string; status?: string }>,
+  networks: Array<{
+    id?: string
+    networkId?: string
+    code?: string
+    name?: string
+    status?: string
+    channelIds?: string[]
+  }>,
+  opts?: { channelId?: string | null },
 ): YcCorridorSchemaHint {
-  const active = networks.filter((n) => String(n.status ?? "").toLowerCase() !== "inactive")
-  const bankNames = active
-    .map((n) => String(n.name ?? n.code ?? "").trim())
-    .filter(Boolean)
-  const unique = [...new Set(bankNames)]
+  let rows = networks.filter((n) => {
+    const status = String(n.status ?? "").trim().toLowerCase()
+    if (status === "inactive" || status === "disabled") return false
+    const name = String(n.name ?? n.code ?? "").trim()
+    if (!name) return false
+    return !name.toLowerCase().includes("manual input")
+  })
+  const channelId = String(opts?.channelId ?? "").trim()
+  if (channelId) {
+    rows = rows.filter(
+      (n) =>
+        Array.isArray(n.channelIds) &&
+        n.channelIds.some((id) => String(id).trim() === channelId),
+    )
+  }
+  const unique = [...new Set(rows.map((n) => String(n.name ?? n.code ?? "").trim()).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b),
+  )
+  if (channelId) {
+    return {
+      ...schema,
+      bank_enum: unique,
+    }
+  }
   if (!unique.length) return schema
   return {
     ...schema,
     bank_enum: unique,
+  }
+}
+
+function isGenericYcMomoNetworkName(name: string): boolean {
+  const n = String(name ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+  return n === "mobile money" || n === "mobile wallet" || n === "mobile" || n === "momo"
+}
+
+/** Merge YC MoMo networks into corridor schema momo_provider_enum. */
+export function mergeYcMomoNetworksIntoSchema(
+  schema: YcCorridorSchemaHint,
+  networks: Array<{
+    id?: string
+    networkId?: string
+    code?: string
+    name?: string
+    status?: string
+    channelIds?: string[]
+  }>,
+  opts?: { channelId?: string | null },
+): YcCorridorSchemaHint {
+  let rows = networks.filter((n) => {
+    const status = String(n.status ?? "").trim().toLowerCase()
+    if (status === "inactive" || status === "disabled") return false
+    const name = String(n.name ?? n.code ?? "").trim()
+    if (!name) return false
+    if (name.toLowerCase().includes("manual input")) return false
+    return !isGenericYcMomoNetworkName(name)
+  })
+  const channelId = String(opts?.channelId ?? "").trim()
+  if (channelId) {
+    rows = rows.filter(
+      (n) =>
+        Array.isArray(n.channelIds) &&
+        n.channelIds.some((id) => String(id).trim() === channelId),
+    )
+  }
+  const unique = [...new Set(rows.map((n) => String(n.name ?? n.code ?? "").trim()).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b),
+  )
+  return {
+    ...schema,
+    channel_type: "momo",
+    momo_provider_enum: unique.map((name) => ({ value: name, label: name })),
   }
 }
 
@@ -1151,7 +1228,7 @@ export function extractCorridorRecipientCandidates(input: {
   ])
 
   const momoMap = new Map<string, GridMomoProviderOption>()
-  if (!primary || primary === "noah" || primary === "yellowcard" || primary === "grid") {
+  if (!primary || primary === "noah" || primary === "grid") {
     appendMomoOptions(
       momoMap,
       (Array.isArray(input.providers) ? input.providers : []).map((p) =>
@@ -1174,14 +1251,18 @@ export function extractCorridorRecipientCandidates(input: {
 
   const momoCandidates = [...momoMap.values()].sort((a, b) => a.label.localeCompare(b.label))
   const momoLabels = uniqueStrings([
-    ...(!primary || primary === "noah" || primary === "yellowcard" || primary === "grid"
+    ...(!primary || primary === "noah" || primary === "grid"
       ? Array.isArray(input.providers)
         ? (input.providers as unknown[]).map((p) => String(p))
         : []
       : []),
-    ...(noah?.mobile_provider_labels ?? []),
-    ...(yc?.momo_provider_enum ?? []).map((entry) => entry.label || entry.value),
-    ...(grid?.momo_provider_enum ?? []).map((entry) => entry.label || entry.value),
+    ...(!primary || primary === "noah" ? noah?.mobile_provider_labels ?? [] : []),
+    ...(!primary || primary === "yellowcard"
+      ? (yc?.momo_provider_enum ?? []).map((entry) => entry.label || entry.value)
+      : []),
+    ...(!primary || primary === "grid"
+      ? (grid?.momo_provider_enum ?? []).map((entry) => entry.label || entry.value)
+      : []),
     ...momoCandidates.map((entry) => entry.label),
   ])
 

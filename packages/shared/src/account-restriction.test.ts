@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   ACCOUNT_RESTRICTION_WIND_DOWN_MS,
+  accountRestrictionLockedCopy,
   accountRestrictionOfficeCanLift,
   computeAccountRestrictionPhase,
   formatAccountRestrictionDeadline,
@@ -40,6 +41,12 @@ describe("account restriction shared", () => {
 
   it("review window is 7 days", () => {
     expect(ACCOUNT_RESTRICTION_WIND_DOWN_MS).toBe(7 * 24 * 60 * 60 * 1000)
+  })
+
+  it("locked copy points to contact support", () => {
+    expect(accountRestrictionLockedCopy()).toBe(
+      "Your account has been suspended. Contact support if you have questions.",
+    )
   })
 
   it("maps restriction rows including lifts", () => {

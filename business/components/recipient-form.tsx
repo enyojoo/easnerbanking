@@ -522,9 +522,11 @@ export function RecipientForm({
   }, [selectedCountry, currency, selectedCorridorRow])
   const bankEnumOptions = corridorRecipientOptions.bankOptions.length
     ? corridorRecipientOptions.bankOptions
-    : ycCorridorSchema?.bank_enum?.length
-      ? ycCorridorSchema.bank_enum
-      : (payoutFormHints?.bank_enum ?? [])
+    : payoutProvider === "yellowcard"
+      ? (ycCorridorSchema?.bank_enum ?? [])
+      : ycCorridorSchema?.bank_enum?.length
+        ? ycCorridorSchema.bank_enum
+        : (payoutFormHints?.bank_enum ?? [])
 
   const mobileProviderChoices = useMemo(() => {
     if (formData.recipientType !== "mobile") return [] as string[]

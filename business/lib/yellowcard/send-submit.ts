@@ -13,6 +13,8 @@ export type YcSendSubmitInput = {
   customerUID: string
   customerType?: "retail" | "institution"
   channelType: YcChannelType
+  /** Live YC channel id – required when country has EFT vs bank (e.g. ZA). */
+  channelId?: string | null
   currency: string
   country: string
   localAmount?: number
@@ -83,6 +85,7 @@ export function buildYcSendSubmitBody(input: YcSendSubmitInput): Record<string, 
     settlementInfo.cryptoAmount = roundYcSettlementCryptoUp(input.settlementCryptoAmount)
   }
 
+  const channelId = String(input.channelId ?? "").trim()
   const body: Record<string, unknown> = {
     sequenceId: input.sequenceId,
     customerUID: input.customerUID,
@@ -93,6 +96,7 @@ export function buildYcSendSubmitBody(input: YcSendSubmitInput): Record<string, 
     forceAccept: input.forceAccept ?? true,
     directSettlement,
     settlementInfo,
+    ...(channelId ? { channelId } : {}),
   }
   if (!directSettlement) {
     if (input.localAmount != null) body.localAmount = input.localAmount
