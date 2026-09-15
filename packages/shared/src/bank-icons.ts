@@ -87,7 +87,29 @@ export function normalizeBankLogoKey(label: string): string | undefined {
   if (p.includes("parallex")) return "parallex"
   if (p.includes("suntrust")) return "suntrust"
   if (p.includes("taj bank") || p === "taj bank") return "taj"
+  if (p.includes("titan") && p.includes("paystack")) return "paystack"
   if (p.includes("titan")) return "titan"
+  if (p.includes("premium") && p.includes("trust")) return "premiumtrust"
+  if (p.includes("fairmoney")) return "fairmoney"
+  if (p.includes("paga")) return "paga"
+  if (p.includes("unity bank")) return "unity"
+  if (p.includes("optimus")) return "optimus"
+  if (p.includes("accion")) return "accion"
+  if (p.includes("momo psb") || p.includes("mtn momo")) return "momopsb"
+  if (p.includes("nomba")) return "nomba"
+  if (p.includes("gomoney") || p === "go money") return "gomoney"
+  if (p.includes("9japay") || p.includes("9ja pay")) return "ninejapay"
+  if (p.includes("nownow") || p.includes("contec")) return "nownow"
+  if (p.includes("mint") && p.includes("finex")) return "mintfinex"
+  if (p.includes("alternative bank")) return "alternative"
+  if (p.includes("bellbank") || p.includes("bell bank")) return "bellbank"
+  if (p.includes("boost mfb") || p === "boost") return "boost"
+  if (p.includes("bowen")) return "bowen"
+  if (p.includes("net mfb")) return "netmfb"
+  if (p.includes("nova mb") || p === "nova mb" || p.includes("nova merchant")) return "nova"
+  if (p.includes("aku microfinance")) return "aku"
+  if (p.includes("enterprise bank")) return "enterprise"
+  if (p.includes("mainstreet")) return "mainstreet"
   if (p.includes("vfd")) return "vfd"
   if (p.includes("bidvest")) return "bidvest"
   if (p.includes("albaraka")) return "albaraka"
@@ -108,16 +130,20 @@ const BANK_LOGO_KEYS = new Set([
   "abc",
   "absa",
   "access",
+  "accion",
   "adb",
   "affinity",
   "africanbank",
   "albaraka",
+  "alternative",
   "arbapex",
   "bankofindia",
   "bankzero",
   "baroda",
+  "bellbank",
   "bidvest",
   "boa",
+  "bowen",
   "cal",
   "capitec",
   "cbg",
@@ -132,6 +158,7 @@ const BANK_LOGO_KEYS = new Set([
   "ecobank",
   "equity",
   "etranzact",
+  "fairmoney",
   "familybank",
   "fcmb",
   "fidelity",
@@ -143,6 +170,7 @@ const BANK_LOGO_KEYS = new Set([
   "ghanapay",
   "globus",
   "gmoney",
+  "gomoney",
   "gtbank",
   "guardian",
   "gulf",
@@ -159,18 +187,27 @@ const BANK_LOGO_KEYS = new Set([
   "kuda",
   "lotus",
   "meb",
+  "momopsb",
   "moniepoint",
   "nbk",
   "ncba",
   "nedbank",
+  "netmfb",
   "nib",
+  "ninejapay",
+  "nomba",
+  "nova",
   "oldmutual",
   "omni",
   "opay",
+  "optimus",
+  "paga",
   "palmpay",
   "parallex",
   "paramount",
+  "paystack",
   "polaris",
+  "premiumtrust",
   "primebank",
   "providus",
   "prudential",
@@ -193,6 +230,7 @@ const BANK_LOGO_KEYS = new Set([
   "ubank",
   "umb",
   "union",
+  "unity",
   "vcb",
   "vfd",
   "wema",

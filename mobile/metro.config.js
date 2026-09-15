@@ -36,6 +36,8 @@ config.resolver.nodeModulesPaths = [
 
 const sharedRoot = path.resolve(monorepoRoot, 'packages/shared')
 const sharedCurrencyFlagNative = path.join(sharedRoot, 'src/components/CountryFlag.native.tsx')
+const sharedBankLogoNative = path.join(sharedRoot, 'src/components/BankLogo.native.tsx')
+const sharedMomoIconNative = path.join(sharedRoot, 'src/components/MobileMoneyProviderIcon.native.tsx')
 const extraNodeModules = {
   '@easner/shared': sharedRoot,
   // Metro extraNodeModules points at the package dir, not package.json exports subpaths.
@@ -120,6 +122,21 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
       moduleName.endsWith('/components/CountryFlag'))
   ) {
     return { type: 'sourceFile', filePath: sharedCurrencyFlagNative }
+  }
+  // Expo web resolves the default `.tsx` (Next `<img>` + `/banks/` URLs). Use RN assets instead.
+  if (
+    moduleName === './components/BankLogo' ||
+    moduleName.endsWith('/components/BankLogo') ||
+    moduleName === '@easner/shared/src/components/BankLogo'
+  ) {
+    return { type: 'sourceFile', filePath: sharedBankLogoNative }
+  }
+  if (
+    moduleName === './components/MobileMoneyProviderIcon' ||
+    moduleName.endsWith('/components/MobileMoneyProviderIcon') ||
+    moduleName === '@easner/shared/src/components/MobileMoneyProviderIcon'
+  ) {
+    return { type: 'sourceFile', filePath: sharedMomoIconNative }
   }
   if (defaultResolveRequest) {
     return defaultResolveRequest(context, moduleName, platform)

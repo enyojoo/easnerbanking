@@ -375,6 +375,7 @@ export {
   isNestedPayoutFieldsSchema,
   mergeYcMomoNetworksIntoSchema,
   mergeYcNetworksIntoSchema,
+  collapseYcBankDisplayNames,
   normalizeRecipientYcMetadata,
   resolveCorridorBankName,
   resolveCorridorMomoProvider,

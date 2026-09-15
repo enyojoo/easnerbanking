@@ -410,6 +410,27 @@ describe("mergeYcNetworksIntoSchema", () => {
     ])
     expect(merged.bank_enum).toEqual(["Absa Bank", "Capitec Bank"])
   })
+
+  it("collapses Nigeria alias spellings into one picker label", () => {
+    const merged = mergeYcNetworksIntoSchema(
+      base,
+      [
+        { name: "GT Bank", status: "active", channelIds: ["ng-p2p"] },
+        { name: "Guaranty Trust Bank", status: "active", channelIds: ["ng-p2p"] },
+        { name: "Premium Trust bank", status: "active", channelIds: ["ng-p2p"] },
+        { name: "PremiumTrust Bank", status: "active", channelIds: ["ng-p2p"] },
+        { name: "Access Bank", status: "active", channelIds: ["ng-p2p"] },
+        { name: "Access Bank (Diamond)", status: "active", channelIds: ["ng-p2p"] },
+      ],
+      { channelId: "ng-p2p" },
+    )
+    expect(merged.bank_enum).toEqual([
+      "Access Bank",
+      "Access Bank (Diamond)",
+      "GT Bank",
+      "Premium Trust Bank",
+    ])
+  })
 })
 
 describe("mergeYcMomoNetworksIntoSchema", () => {

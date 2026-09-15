@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, StyleSheet, Platform } from 'react-na
 import { Check, ChevronDown, ChevronUp, Search } from 'lucide-react-native'
 import { BankLogo } from '@easner/shared'
 import { RegisterRecipientDropdownSheet } from './RecipientFormDropdownHost'
+import RecipientFormDropdownList from './RecipientFormDropdownList'
 import {
   colors,
   spacing,

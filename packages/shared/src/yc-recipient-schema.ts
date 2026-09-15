@@ -1072,6 +1072,54 @@ export function buildYcSendMappingFromRecipient(
   }
 }
 
+/**
+ * Collapse Yellow Card alias spellings so the picker does not list the same bank twice.
+ * Send still fuzzy-matches the dropped labels via corridor bank aliases.
+ */
+export function collapseYcBankDisplayNames(names: string[]): string[] {
+  const groups = new Map<string, string[]>()
+  for (const name of names) {
+    const trimmed = name.trim()
+    if (!trimmed) continue
+    const key = ycBankIdentityKey(trimmed)
+    const list = groups.get(key) ?? []
+    list.push(trimmed)
+    groups.set(key, list)
+  }
+  return [...groups.values()]
+    .map((group) => preferredYcBankLabel(group))
+    .sort((a, b) => a.localeCompare(b))
+}
+
+function ycBankIdentityKey(name: string): string {
+  const p = name
+    .toLowerCase()
+    .replace(/（/g, "(")
+    .replace(/）/g, ")")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+  if (p.includes("guaranty trust") || /\bgt bank\b/.test(p) || p === "gtbank") return "gtbank"
+  if (p.includes("premium") && p.includes("trust")) return "premiumtrust"
+  if (p.includes("nomba")) return "nomba"
+  if (p.includes("access") && p.includes("diamond")) return "access-diamond"
+  if (p.includes("titan") && p.includes("paystack")) return "titan-paystack"
+  if (p.includes("titan")) return "titan-trust"
+  return p
+    .replace(/\b(ltd|limited|plc|nigeria|nig|microfinance|mfb|the)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function preferredYcBankLabel(names: string[]): string {
+  const prefer = ["GT Bank", "Premium Trust Bank", "Nomba Bank"]
+  for (const label of prefer) {
+    const hit = names.find((n) => n.toLowerCase() === label.toLowerCase())
+    if (hit) return label
+  }
+  return [...names].sort((a, b) => b.length - a.length || a.localeCompare(b))[0] ?? names[0] ?? ""
+}
+
 /** Merge YC network list into corridor schema bank_enum + default network hints. */
 export function mergeYcNetworksIntoSchema(
   schema: YcCorridorSchemaHint,
@@ -1100,8 +1148,8 @@ export function mergeYcNetworksIntoSchema(
         n.channelIds.some((id) => String(id).trim() === channelId),
     )
   }
-  const unique = [...new Set(rows.map((n) => String(n.name ?? n.code ?? "").trim()).filter(Boolean))].sort((a, b) =>
-    a.localeCompare(b),
+  const unique = collapseYcBankDisplayNames(
+    [...new Set(rows.map((n) => String(n.name ?? n.code ?? "").trim()).filter(Boolean))],
   )
   if (channelId) {
     return {
