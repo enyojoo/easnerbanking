@@ -60,13 +60,34 @@ export async function POST(request: Request) {
 
     await attachBridgeSignedAgreement({ customerId, signedAgreementId })
 
+    if (type === "business") {
+      const ctx = await resolveGridBusinessContextAsync(user.id)
+      if (ctx.ok) {
+        await admin
+          .from("businesses")
+          .update({ bridge_tos_status: "approved", updated_at: new Date().toISOString() })
+          .eq("id", ctx.businessId)
+          .then(({ error }) => {
+            if (error) console.warn("[bridge/tos-accept] persist business TOS:", error.message)
+          })
+      }
+    } else {
+      await admin
+        .from("users")
+        .update({ bridge_tos_status: "approved", updated_at: new Date().toISOString() })
+        .eq("id", user.id)
+        .then(({ error }) => {
+          if (error) console.warn("[bridge/tos-accept] persist user TOS:", error.message)
+        })
+    }
+
     const customer = await getBridgeCustomer(customerId).catch(() => null)
     const kycLink = await getBridgeCustomerKycLink(customerId).catch(() => null)
 
     return NextResponse.json({
       ok: true,
       customer_id: customerId,
-      tos_status: customer?.tos_status ?? null,
+      tos_status: "approved",
       kyc_link: kycLink,
     })
   } catch (e: unknown) {

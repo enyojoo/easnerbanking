@@ -6,6 +6,7 @@ import {
   resolveBridgeCustomerKycStatus,
   hostedLinksForExistingCustomer,
   applyBridgeHostedRedirect,
+  isBridgeTosApproved,
 } from "./kyc-links"
 
 describe("pickBridgeKycLinkFullName", () => {
@@ -138,6 +139,14 @@ describe("resolveBridgeCustomerKycStatus", () => {
   })
 })
 
+describe("isBridgeTosApproved", () => {
+  it("treats Bridge accepted flags as done", () => {
+    expect(isBridgeTosApproved({ tos_status: "approved" })).toBe(true)
+    expect(isBridgeTosApproved({ has_accepted_terms_of_service: true })).toBe(true)
+    expect(isBridgeTosApproved({ tos_status: "pending" })).toBe(false)
+  })
+})
+
 describe("applyBridgeHostedRedirect", () => {
   it("adds redirect_uri to a Bridge TOS link that has none", () => {
     const out = applyBridgeHostedRedirect(
@@ -173,6 +182,20 @@ describe("hostedLinksForExistingCustomer", () => {
       kyc_status: "in_progress",
       customer_id: "23921f79-bef6-461a-89e3-26802bee52b6",
       alreadyOnboarded: false,
+    })
+  })
+
+  it("omits TOS when we already recorded acceptance locally", () => {
+    expect(
+      hostedLinksForExistingCustomer({
+        customerId: "23921f79-bef6-461a-89e3-26802bee52b6",
+        customer: { kyc_status: "incomplete", tos_status: "pending" },
+        localTosApproved: true,
+        hosted: { kyc_link: "https://kyc.example", tos_link: "https://tos.example" },
+      }),
+    ).toMatchObject({
+      kyc_link: "https://kyc.example",
+      tos_link: null,
     })
   })
 

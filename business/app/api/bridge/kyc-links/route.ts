@@ -10,6 +10,7 @@ import {
   getBridgeHostedLinksForCustomer,
   findBridgeCustomerByEmail,
   hostedLinksForExistingCustomer,
+  isBridgeTosApproved,
   resolveBridgeCustomerKycStatus,
 } from "@/lib/bridge/kyc-links"
 import { getBridgeTosReturnUrl } from "@/lib/bridge/config"
@@ -39,6 +40,7 @@ type HostedKycPayload = {
 async function hostedPayloadForExistingCustomer(
   customerId: string,
   fallbackStatus: string,
+  localTosApproved = false,
 ): Promise<HostedKycPayload> {
   const customer = await getBridgeCustomer(customerId).catch(() => null)
   const hosted = await getBridgeHostedLinksForCustomer(customerId).catch(() => ({
@@ -49,6 +51,7 @@ async function hostedPayloadForExistingCustomer(
     customerId,
     customer,
     fallbackStatus,
+    localTosApproved,
     hosted,
   })
 }
@@ -77,7 +80,7 @@ export async function POST(request: Request) {
   try {
   const { data: userRow } = await admin
     .from("users")
-    .select("full_name,email,residence_country,kyc_address_state,kyc_address_country,bridge_customer_id,bridge_kyc_status")
+    .select("full_name,email,residence_country,kyc_address_state,kyc_address_country,bridge_customer_id,bridge_kyc_status,bridge_tos_status")
     .eq("id", user.id)
     .maybeSingle()
 
@@ -101,6 +104,9 @@ export async function POST(request: Request) {
   let businessLegalName: string | null = null
   let existingCustomerId = String(userRow?.bridge_customer_id ?? "").trim()
   let existingStatus = ""
+  let localTosApproved = isBridgeTosApproved({
+    tos_status: (userRow as { bridge_tos_status?: string | null } | null)?.bridge_tos_status,
+  })
   if (type === "business") {
     const ctx = await resolveGridBusinessContextAsync(user.id)
     if (!ctx.ok) return ctx.response
@@ -108,11 +114,12 @@ export async function POST(request: Request) {
     const profile = await loadGridBusinessProfile(admin, businessId).catch(() => null)
     const { data: biz } = await admin
       .from("businesses")
-      .select("bridge_customer_id,bridge_kyc_status,name")
+      .select("bridge_customer_id,bridge_kyc_status,bridge_tos_status,name")
       .eq("id", businessId)
       .maybeSingle()
     existingCustomerId = String(biz?.bridge_customer_id ?? "").trim()
     existingStatus = String(biz?.bridge_kyc_status ?? "").trim()
+    localTosApproved = isBridgeTosApproved({ tos_status: biz?.bridge_tos_status })
     businessLegalName =
       String(profile?.legalName ?? "").trim() || String(biz?.name ?? "").trim() || null
   } else {
@@ -167,7 +174,7 @@ export async function POST(request: Request) {
         customerId: existingCustomerId,
       }).catch(() => undefined)
     }
-    link = await hostedPayloadForExistingCustomer(existingCustomerId, existingStatus)
+    link = await hostedPayloadForExistingCustomer(existingCustomerId, existingStatus, localTosApproved)
     if (!link.kyc_link && !link.tos_link && !link.alreadyOnboarded) {
       link = null
     }
@@ -193,7 +200,7 @@ export async function POST(request: Request) {
           : null)
       if (!recoveredId) throw createError
       existingCustomerId = recoveredId
-      link = await hostedPayloadForExistingCustomer(recoveredId, existingStatus)
+      link = await hostedPayloadForExistingCustomer(recoveredId, existingStatus, localTosApproved)
     }
   }
 
@@ -255,9 +262,12 @@ export async function POST(request: Request) {
     })
   }
 
+  const tosApproved = localTosApproved || isBridgeTosApproved(link)
   return NextResponse.json({
     kyc_link: link.kyc_link ?? null,
-    tos_link: applyBridgeHostedRedirect(link.tos_link, getBridgeTosReturnUrl(), { overwrite: true }),
+    tos_link: tosApproved
+      ? null
+      : applyBridgeHostedRedirect(link.tos_link, getBridgeTosReturnUrl(), { overwrite: true }),
     kyc_status: status,
     customer_id: customerId || null,
     alreadyOnboarded: Boolean(link.alreadyOnboarded) || status === "approved",

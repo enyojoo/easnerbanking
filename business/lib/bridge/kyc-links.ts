@@ -101,7 +101,9 @@ export async function createBridgeKycLink(input: {
   })
   return {
     ...created,
-    tos_link: applyBridgeHostedRedirect(created.tos_link, getBridgeTosReturnUrl(), { overwrite: true }),
+    tos_link: isBridgeTosApproved(created)
+      ? null
+      : applyBridgeHostedRedirect(created.tos_link, getBridgeTosReturnUrl(), { overwrite: true }),
   }
 }
 
@@ -169,6 +171,7 @@ export type BridgeCustomerSummary = {
   status?: string
   kyc_status?: string
   tos_status?: string
+  has_accepted_terms_of_service?: boolean
   endorsements?: Array<{ name?: string; status?: string }>
 }
 
@@ -198,6 +201,7 @@ function asCustomerSummary(row: unknown): BridgeCustomerSummary | null {
     status: String(rec.status ?? "").trim() || undefined,
     kyc_status: String(rec.kyc_status ?? "").trim() || undefined,
     tos_status: String(rec.tos_status ?? "").trim() || undefined,
+    has_accepted_terms_of_service: rec.has_accepted_terms_of_service === true,
     endorsements,
   }
 }
@@ -254,6 +258,7 @@ export async function getBridgeCustomer(customerId: string): Promise<{
   status?: string
   kyc_status?: string
   tos_status?: string
+  has_accepted_terms_of_service?: boolean
   type?: BridgeCustomerType
   endorsements?: Array<{ name?: string; status?: string }>
 }> {
@@ -265,8 +270,11 @@ export async function getBridgeCustomer(customerId: string): Promise<{
 
 export function isBridgeTosApproved(customer: {
   tos_status?: string | null
+  has_accepted_terms_of_service?: boolean | null
 }): boolean {
-  return String(customer.tos_status ?? "").trim().toLowerCase() === "approved"
+  if (customer.has_accepted_terms_of_service === true) return true
+  const s = String(customer.tos_status ?? "").trim().toLowerCase()
+  return s === "approved" || s === "accepted" || s === "complete" || s === "completed"
 }
 
 /** Prefer KYC/endorsement fields. Never treat platform `active` as in-progress KYC. */
@@ -293,9 +301,11 @@ export function hostedLinksForExistingCustomer(input: {
     kyc_status?: string | null
     status?: string | null
     tos_status?: string | null
+    has_accepted_terms_of_service?: boolean | null
     endorsements?: Array<{ name?: string; status?: string }> | null
   } | null
   fallbackStatus?: string
+  localTosApproved?: boolean
   hosted: { kyc_link: string | null; tos_link: string | null }
 }): {
   kyc_link: string | null
@@ -307,7 +317,7 @@ export function hostedLinksForExistingCustomer(input: {
   const mapped = resolveBridgeCustomerKycStatus(
     input.customer ?? { kyc_status: input.fallbackStatus ?? null },
   )
-  const tosOk = isBridgeTosApproved(input.customer ?? {})
+  const tosOk = Boolean(input.localTosApproved) || isBridgeTosApproved(input.customer ?? {})
   if (mapped === "approved") {
     return {
       kyc_link: null,
