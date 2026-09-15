@@ -1542,21 +1542,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       ? currentBalance - (balanceDebitEstimate > 0 ? balanceDebitEstimate : 0)
       : 0
 
-  const shortfallAmount =
-    hasInsufficientBalance && selectedPaymentMethod === 'balance'
-      ? Math.max(0, balanceDebitEstimate - currentBalance)
-      : 0
-
   const insufficientBalanceMessage =
     hasInsufficientBalance && selectedPaymentMethod === 'balance'
-      ? insufficientSourceBalanceDetail(
-          selectedBalanceCurrency,
-          shortfallAmount,
-          `${getCurrencySymbol(selectedBalanceCurrency)}${shortfallAmount.toLocaleString('en-US', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}`,
-        )
+      ? insufficientSourceBalanceDetail()
       : amountFieldError
         ? customerFacingSendAmountError(amountFieldError, selectedBalanceCurrency) ?? amountFieldError
         : null
@@ -2123,7 +2111,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       currencyPaymentMethods={{}}
       sourceDisplayLabel={sourceDisplayLabel}
       hasInsufficientBalance={hasInsufficientBalance}
-      shortfallAmount={shortfallAmount}
       isWalletRecipient={isWalletRecipient}
       amountFieldMode={amountFieldMode}
       noteFieldUi={noteFieldUi}
@@ -2384,9 +2371,18 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     />
                   </View>
                 ) : null}
-                {insufficientBalanceMessage ? (
-                  <Text style={styles.amountFieldError}>{insufficientBalanceMessage}</Text>
-                ) : null}
+                <View style={styles.amountFieldErrorSlot}>
+                  {insufficientBalanceMessage ? (
+                    <Text
+                      style={styles.amountFieldError}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.85}
+                    >
+                      {insufficientBalanceMessage}
+                    </Text>
+                  ) : null}
+                </View>
 
                 {/* Numeric Keypad - 3x4 grid */}
                 <View style={styles.keypadContainer}>
@@ -2965,17 +2961,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[4],
     ...pillRowWrapperStyle,
     gap: spacing[2],
-    marginBottom: 20,
+    marginBottom: 0,
   },
   noteInput: {
     ...pillNoteInputStyle,
     color: colors.text.primary,
   },
+  amountFieldErrorSlot: {
+    minHeight: 20,
+    height: 20,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing[1],
+    marginBottom: 0,
+    overflow: 'hidden',
+  },
   amountFieldError: {
     ...textStyles.caption,
+    fontSize: 11,
+    lineHeight: 16,
     color: colors.error.main,
-    marginTop: spacing[1],
-    paddingHorizontal: spacing[1],
+    textAlign: 'center',
+    width: '100%',
   },
   keypadContainer: {
     width: '100%',

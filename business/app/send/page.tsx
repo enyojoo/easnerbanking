@@ -1354,11 +1354,6 @@ export default function SendPage() {
   const amountPrefixLineHeight = wideAmountFieldSymbol
     ? scaleSendAmountPrefixLineHeight(52, amountFieldSymbol)
     : 52
-  const shortfallAmount =
-    hasInsufficientBalance && sourceAccount
-      ? previewBalanceDebitAmount - sourceAccount.availableBalance
-      : 0
-
   const getSourceDisplayLabel = () => {
     if (paymentMethod === "balance" && sourceAccount) {
       const fig = displayBalanceForSource.toLocaleString("en-US", {
@@ -2053,22 +2048,17 @@ export default function SendPage() {
               className="w-full min-w-0 bg-transparent border-0 outline-none font-black text-foreground text-5xl placeholder:text-muted-foreground/50 focus:ring-0 focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
           </div>
-          {hasInsufficientBalance && sourceAccount ? (
-            <p className="text-sm text-destructive">
-              {insufficientSourceBalanceDetail(
-                sourceAccount.currency,
-                shortfallAmount,
-                `${getCurrencySymbol(sourceAccount.currency)}${shortfallAmount.toLocaleString("en-US", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}`,
-              )}
-            </p>
-          ) : amountFieldError ? (
-            <p className="text-sm text-destructive">
-              {customerFacingSendAmountError(amountFieldError, sendCurrency) ?? amountFieldError}
-            </p>
-          ) : null}
+          <div className="flex h-5 min-h-5 items-center overflow-hidden">
+            {hasInsufficientBalance && sourceAccount ? (
+              <p className="truncate text-xs leading-4 text-destructive">
+                {insufficientSourceBalanceDetail()}
+              </p>
+            ) : amountFieldError ? (
+              <p className="truncate text-xs leading-4 text-destructive">
+                {customerFacingSendAmountError(amountFieldError, sendCurrency) ?? amountFieldError}
+              </p>
+            ) : null}
+          </div>
         </div>
       )}
 

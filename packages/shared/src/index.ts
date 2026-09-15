@@ -1039,6 +1039,7 @@ export {
   customerFacingSendAmountError,
   insufficientSourceBalanceCopy,
   insufficientSourceBalanceDetail,
+  insufficientSourceBalanceMoveCopy,
   isInsufficientBalanceError,
 } from "./send/insufficient-balance-copy"
 export {

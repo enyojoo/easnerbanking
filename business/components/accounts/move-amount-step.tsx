@@ -5,6 +5,7 @@ import {
   BALANCE_CONVERT_MIN_SOURCE_AMOUNT,
   formatMoneyDisplay,
   formatSendRateLabel,
+  insufficientSourceBalanceMoveCopy,
 } from "@easner/shared"
 import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
 import { Button } from "@/components/ui/button"
@@ -127,12 +128,6 @@ export function MoveAmountStep({
     enteredAmount > 0 &&
     Boolean(sourceAccount) &&
     debitAmount > sourceAccount!.availableBalance
-  const shortfallAmount = Math.max(
-    0,
-    (sourceAccount?.availableBalance ?? 0) > 0
-      ? debitAmount - sourceAccount!.availableBalance
-      : 0,
-  )
 
   const forwardRate = matchedQuote
     ? resolveMoveQuoteRate(matchedQuote)
@@ -266,15 +261,13 @@ export function MoveAmountStep({
           />
         </div>
 
-        {hasInsufficientBalance ? (
-          <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>
-              Insufficient {sourceCurrency} balance. You need{" "}
-              {formatMoneyDisplay(shortfallAmount, sourceCurrency)} more.
-            </span>
-          </div>
-        ) : null}
+        <div className="flex h-5 min-h-5 items-center overflow-hidden">
+          {hasInsufficientBalance ? (
+            <p className="truncate text-xs leading-4 text-destructive">
+              {insufficientSourceBalanceMoveCopy()}
+            </p>
+          ) : null}
+        </div>
 
         {minAmountError ? (
           <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">

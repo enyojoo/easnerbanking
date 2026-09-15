@@ -31,14 +31,12 @@ export function isInsufficientBalanceError(raw: unknown): boolean {
   return /insufficient(?:\s+[a-z]{3})?\s+balance/i.test(s)
 }
 
-export function insufficientSourceBalanceDetail(
-  sourceCurrency: string,
-  shortfall: number,
-  formattedShortfall: string,
-): string {
-  const head = insufficientSourceBalanceCopy(sourceCurrency)
-  if (!Number.isFinite(shortfall) || shortfall <= 0) return head
-  return `${head}. You need ${formattedShortfall} more, or choose another source.`
+export function insufficientSourceBalanceDetail(): string {
+  return "Not enough balance for send + fees"
+}
+
+export function insufficientSourceBalanceMoveCopy(): string {
+  return "Not enough balance for this move"
 }
 
 /** Map API/quote errors to send-amount copy. Snake_case tokens are never shown raw. */

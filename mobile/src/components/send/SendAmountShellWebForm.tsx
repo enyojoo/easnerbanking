@@ -30,7 +30,6 @@ import {
 } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { CurrencyFlag } from '../flags/CurrencyFlag'
-import { getCurrencySymbol } from '../../utils/formatters'
 import { getSendAmountFieldSymbol } from '../../lib/sendAmountFieldSymbol'
 import { formatMoneyDisplay, formatSendRateLabel, isWideSendAmountSymbol, scaleSendAmountPrefixFontSize, scaleSendAmountPrefixLineHeight, SEND_AMOUNT_CONTINUE_CTA, customerFacingSendAmountError, insufficientSourceBalanceDetail } from '@easner/shared'
 import type { Recipient } from '../../types'
@@ -85,7 +84,6 @@ export type SendAmountShellWebFormProps = {
   >
   sourceDisplayLabel: string
   hasInsufficientBalance: boolean
-  shortfallAmount: number
   isWalletRecipient: boolean
   amountFieldMode: string
   noteFieldUi: { label: string; placeholder: string }
@@ -135,7 +133,6 @@ export function SendAmountShellWebForm({
   currencyPaymentMethods,
   sourceDisplayLabel,
   hasInsufficientBalance,
-  shortfallAmount,
   isWalletRecipient,
   amountFieldMode,
   noteFieldUi,
@@ -296,22 +293,17 @@ export function SendAmountShellWebForm({
           />
         </View>
 
-        {hasInsufficientBalance ? (
-          <Text style={styles.insufficientText}>
-            {insufficientSourceBalanceDetail(
-              selectedBalanceCurrency,
-              shortfallAmount,
-              `${getCurrencySymbol(selectedBalanceCurrency)}${shortfallAmount.toLocaleString('en-US', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}`,
-            )}
-          </Text>
-        ) : amountFieldError ? (
-          <Text style={styles.insufficientText}>
-            {customerFacingSendAmountError(amountFieldError, selectedBalanceCurrency) ?? amountFieldError}
-          </Text>
-        ) : null}
+        <View style={styles.amountErrorSlot}>
+          {hasInsufficientBalance ? (
+            <Text style={styles.insufficientText} numberOfLines={1}>
+              {insufficientSourceBalanceDetail()}
+            </Text>
+          ) : amountFieldError ? (
+            <Text style={styles.insufficientText} numberOfLines={1}>
+              {customerFacingSendAmountError(amountFieldError, selectedBalanceCurrency) ?? amountFieldError}
+            </Text>
+          ) : null}
+        </View>
       </View>
 
       <View style={styles.section}>
@@ -576,19 +568,18 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  insufficientBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing[2],
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.error.background,
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
+  amountErrorSlot: {
+    minHeight: 20,
+    height: 20,
+    justifyContent: 'center',
+    width: '100%',
+    overflow: 'hidden',
   },
   insufficientText: {
-    ...textStyles.bodySmall,
+    ...textStyles.caption,
+    fontSize: 11,
+    lineHeight: 16,
     color: colors.error.main,
-    flex: 1,
   },
   sourceSelector: {
     flexDirection: 'row',

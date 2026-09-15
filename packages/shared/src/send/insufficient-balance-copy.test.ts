@@ -3,6 +3,7 @@ import {
   customerFacingSendAmountError,
   insufficientSourceBalanceCopy,
   insufficientSourceBalanceDetail,
+  insufficientSourceBalanceMoveCopy,
   isInsufficientBalanceError,
 } from "./insufficient-balance-copy"
 
@@ -32,9 +33,11 @@ describe("insufficient balance copy", () => {
     )
   })
 
-  it("includes shortfall as a sentence, not a code", () => {
-    expect(insufficientSourceBalanceDetail("USD", 0.12, "$0.12")).toBe(
-      "Insufficient USD balance. You need $0.12 more, or choose another source.",
-    )
+  it("uses send+fees copy without a competing shortfall amount", () => {
+    expect(insufficientSourceBalanceDetail()).toBe("Not enough balance for send + fees")
+  })
+
+  it("uses move copy without send+fees", () => {
+    expect(insufficientSourceBalanceMoveCopy()).toBe("Not enough balance for this move")
   })
 })
