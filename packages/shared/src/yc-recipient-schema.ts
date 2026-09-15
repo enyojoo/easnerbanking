@@ -1229,8 +1229,11 @@ function appendMomoOptions(
 ): void {
   for (const entry of entries) {
     const value = String(entry.value ?? "").trim()
-    if (!value) continue
+    if (!value || isGenericYcMomoNetworkName(value) || isGenericYcMomoNetworkName(String(entry.label ?? ""))) {
+      continue
+    }
     const label = String(entry.label ?? value).trim() || value
+    if (isGenericYcMomoNetworkName(label)) continue
     out.set(value.toLowerCase(), { value, label })
   }
 }
@@ -1269,7 +1272,7 @@ export function extractCorridorRecipientCandidates(input: {
         : unwrapGridFieldsSchema(input.fieldsSchema)
       : null
 
-  const bankNames = uniqueStrings([
+  const bankNames = collapseYcBankDisplayNames([
     ...(noah?.bank_enum ?? []),
     ...(yc?.bank_enum ?? []),
     ...(grid?.bank_enum ?? []),
@@ -1312,7 +1315,7 @@ export function extractCorridorRecipientCandidates(input: {
       ? (grid?.momo_provider_enum ?? []).map((entry) => entry.label || entry.value)
       : []),
     ...momoCandidates.map((entry) => entry.label),
-  ])
+  ]).filter((name) => !isGenericYcMomoNetworkName(name))
 
   return { bankNames, momoLabels, momoCandidates }
 }

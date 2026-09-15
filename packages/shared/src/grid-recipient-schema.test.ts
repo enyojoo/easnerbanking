@@ -239,7 +239,7 @@ describe("resolveCorridorRecipientOptions", () => {
         grid: { status: "ready", channel_type: "bank", bank_enum: ["Zenith Bank"] },
       },
     })
-    expect(options.bankOptions).toEqual(["GTBank", "Access Bank", "Zenith Bank"])
+    expect(options.bankOptions).toEqual(["Access Bank", "GTBank", "Zenith Bank"])
   })
 
   it("scopes bank enums to Office primary payout provider", () => {
@@ -255,6 +255,44 @@ describe("resolveCorridorRecipientOptions", () => {
       },
     })
     expect(options.bankOptions).toEqual(["Access Bank"])
+  })
+
+  it("collapses Nigeria alias bank names even when Noah still lists the duplicate", () => {
+    const options = resolveCorridorRecipientOptions({
+      countryCode: "NG",
+      currencyCode: "NGN",
+      rail: "bank_transfer",
+      payoutProvider: "yellowcard",
+      fieldsSchema: {
+        yellowcard: {
+          status: "ready",
+          channel_type: "bank",
+          bank_enum: ["GT Bank", "Guaranty Trust Bank", "Access Bank", "Access Bank (Diamond)"],
+        },
+      },
+    })
+    expect(options.bankOptions).toEqual(["Access Bank", "Access Bank (Diamond)", "GT Bank"])
+  })
+
+  it("drops generic Mobile Money catch-alls from the picker", () => {
+    const options = resolveCorridorRecipientOptions({
+      countryCode: "UG",
+      currencyCode: "UGX",
+      rail: "mobile_money",
+      payoutProvider: "yellowcard",
+      providers: ["Mobile Money", "MTN Mobile Money"],
+      fieldsSchema: {
+        yellowcard: {
+          status: "ready",
+          channel_type: "momo",
+          momo_provider_enum: [
+            { value: "Mobile Money", label: "Mobile Money" },
+            { value: "Airtel Mobile Money", label: "Airtel Mobile Money" },
+          ],
+        },
+      },
+    })
+    expect(options.momoOptions).toEqual(["Airtel Mobile Money"])
   })
 
   it("unions mobile provider labels from providers column and grid schema", () => {
