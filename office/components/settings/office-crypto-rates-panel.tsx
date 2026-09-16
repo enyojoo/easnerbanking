@@ -39,8 +39,7 @@ import {
 import { cryptoRatesApi, type CryptoRateAdminRow } from "@/lib/crypto-rates-api"
 import { officeKeys } from "@/lib/query/keys"
 import { useOfficeCurrencies, useOfficeCryptoRates, useQueryInitialLoading } from "@/hooks/queries"
-import { CurrencyFlag } from "@/components/flags"
-import { getNetworkIconUrl, getTokenIconUrl } from "@/lib/crypto-icons"
+import { CurrencyFlag, getNetworkIconUrl, getTokenIconUrl, StableImage } from "@easner/shared"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Edit, Loader2, MoreHorizontal } from "lucide-react"
 
@@ -50,14 +49,12 @@ type WalletSourceCode = (typeof WALLET_SOURCES)[number]
 function CryptoIcon({ src, label, size = 18 }: { src?: string; label: string; size?: number }) {
   if (src) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
+      <StableImage
         src={src}
         alt=""
         width={size}
         height={size}
         className="rounded-full object-cover shrink-0"
-        loading="lazy"
       />
     )
   }

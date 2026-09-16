@@ -185,6 +185,7 @@ export function BusinessCase({ businessId }: { businessId: string }) {
         backHref="/businesses"
         backLabel="Businesses"
         avatarUrl={business.logo_url}
+        avatarKind="logo"
         title={business.name?.trim() || "Business"}
         subtitle={easetag ? `@${easetag}` : undefined}
         chips={chips}

@@ -5,12 +5,14 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { OfficeStablePhoto } from "@/components/office-stable-photo"
 import type { OfficeCaseChip } from "@/lib/case/types"
 
 export function OfficeCaseHeader({
   backHref,
   backLabel,
   avatarUrl,
+  avatarKind = "profile",
   title,
   subtitle,
   chips,
@@ -21,6 +23,7 @@ export function OfficeCaseHeader({
   backHref: string
   backLabel: string
   avatarUrl?: string | null
+  avatarKind?: "profile" | "logo"
   title: string
   subtitle?: ReactNode
   chips: OfficeCaseChip[]
@@ -40,7 +43,11 @@ export function OfficeCaseHeader({
           </Button>
           <div className="flex min-w-0 items-center gap-3">
             {avatarUrl ? (
-              <img src={avatarUrl} alt="" className="h-10 w-10 shrink-0 rounded-xl border object-cover" />
+              <OfficeStablePhoto
+                src={avatarUrl}
+                kind={avatarKind}
+                className="h-10 w-10 shrink-0 rounded-xl border"
+              />
             ) : (
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-muted text-xs font-medium text-muted-foreground">
                 {title.slice(0, 1).toUpperCase()}

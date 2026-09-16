@@ -1,12 +1,11 @@
 /**
- * Re-export for Metro – web uses warm-flags.web via babel alias.
+ * Re-export for Metro – web uses shared warmers via babel alias.
  */
-import { warmWebFlagCache, warmWebCurrencyFlag } from '../../../packages/shared/src/flags/warm-flags.web'
-import { warmWebPayoutIcons } from '../../../packages/shared/src/payout-icons/warm-payout-icons.web'
+import { warmWebCurrencyFlag } from '../../../packages/shared/src/flags/warm-flags.web'
+import { warmWebBankingImages } from '../../../packages/shared/src/image/warm-web-banking-images'
 
 export function warmBundledFlagCache(): void {
-  warmWebFlagCache()
-  warmWebPayoutIcons()
+  warmWebBankingImages()
 }
 
 export { warmWebCurrencyFlag as warmNativeCurrencyAssets }

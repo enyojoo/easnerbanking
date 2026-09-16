@@ -1,20 +1,18 @@
 "use client"
 
-import { getTokenIconUrl } from "@/lib/crypto-icons"
+import { StableImage, getTokenIconUrl } from "@easner/shared"
 
 export function CryptoAssetIcon({ code, size = 22 }: { code: string; size?: number }) {
   const upper = code.toUpperCase()
   const src = getTokenIconUrl(upper)
   if (src) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
+      <StableImage
         src={src}
         alt=""
         width={size}
         height={size}
         className="rounded-full object-cover shrink-0"
-        loading="lazy"
       />
     )
   }

@@ -5,6 +5,7 @@ import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools"
 import { getBrowserQueryClient } from "@/lib/query/query-client"
 import { OfficeRealtimeBridge } from "@/lib/query/attach-office-realtime-bridge"
+import { ImageWarmBootstrap } from "@/components/image-warm-bootstrap"
 import { useAuth } from "@/lib/auth-context"
 import {
   OFFICE_WEB_QUERY_CACHE_BUSTER,
@@ -45,6 +46,7 @@ export function OfficeQueryProvider({ children }: { children: React.ReactNode })
         },
       }}
     >
+      <ImageWarmBootstrap />
       <OfficeRealtimeBridge>
         {children}
       </OfficeRealtimeBridge>
