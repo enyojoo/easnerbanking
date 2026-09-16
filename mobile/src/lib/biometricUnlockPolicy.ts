@@ -3,10 +3,20 @@ export type BiometricKind = 'face' | 'fingerprint' | 'iris'
 export type BiometricAvailability = {
   available: boolean
   kind: BiometricKind | null
+  /** False when iOS has not reported Face ID/Touch ID types yet — show the button, do not auto-prompt. */
+  autoPrompt: boolean
+}
+
+export const UNAVAILABLE_BIOMETRIC: BiometricAvailability = {
+  available: false,
+  kind: null,
+  autoPrompt: false,
 }
 
 /**
- * iOS: Face ID if present, else Touch ID.
+ * iOS: Face ID if present, else Touch ID. If types are empty but strong biometrics
+ * are enrolled, default to Face ID (supportedAuthenticationTypes can be empty
+ * before the first Face ID prompt).
  * Android: fingerprint first (Class 3), then iris, then strong face.
  * Weak 2D Android face unlock is excluded by `strongEnrolled`.
  */
@@ -18,17 +28,17 @@ export function pickUnlockBiometric(input: {
   iris: boolean
 }): BiometricAvailability {
   if (input.platform === 'web' || !input.strongEnrolled) {
-    return { available: false, kind: null }
+    return UNAVAILABLE_BIOMETRIC
   }
   if (input.platform === 'ios') {
-    if (input.face) return { available: true, kind: 'face' }
-    if (input.fingerprint) return { available: true, kind: 'fingerprint' }
-    return { available: false, kind: null }
+    if (input.face) return { available: true, kind: 'face', autoPrompt: true }
+    if (input.fingerprint) return { available: true, kind: 'fingerprint', autoPrompt: true }
+    return { available: true, kind: 'face', autoPrompt: false }
   }
-  if (input.fingerprint) return { available: true, kind: 'fingerprint' }
-  if (input.iris) return { available: true, kind: 'iris' }
-  if (input.face) return { available: true, kind: 'face' }
-  return { available: false, kind: null }
+  if (input.fingerprint) return { available: true, kind: 'fingerprint', autoPrompt: true }
+  if (input.iris) return { available: true, kind: 'iris', autoPrompt: true }
+  if (input.face) return { available: true, kind: 'face', autoPrompt: true }
+  return UNAVAILABLE_BIOMETRIC
 }
 
 export function biometricUnlockTitle(

@@ -14,7 +14,19 @@ describe('pickUnlockBiometric', () => {
         face: true,
         iris: false,
       }),
-    ).toEqual({ available: true, kind: 'face' })
+    ).toEqual({ available: true, kind: 'face', autoPrompt: true })
+  })
+
+  it('uses Face ID on iOS when enrolled even if types are not reported, without auto-prompt', () => {
+    expect(
+      pickUnlockBiometric({
+        platform: 'ios',
+        strongEnrolled: true,
+        fingerprint: false,
+        face: false,
+        iris: false,
+      }),
+    ).toEqual({ available: true, kind: 'face', autoPrompt: false })
   })
 
   it('uses Touch ID on older iPhones', () => {
@@ -26,7 +38,7 @@ describe('pickUnlockBiometric', () => {
         face: false,
         iris: false,
       }),
-    ).toEqual({ available: true, kind: 'fingerprint' })
+    ).toEqual({ available: true, kind: 'fingerprint', autoPrompt: true })
   })
 
   it('prefers fingerprint over face on Android', () => {
@@ -38,7 +50,7 @@ describe('pickUnlockBiometric', () => {
         face: true,
         iris: false,
       }),
-    ).toEqual({ available: true, kind: 'fingerprint' })
+    ).toEqual({ available: true, kind: 'fingerprint', autoPrompt: true })
   })
 
   it('rejects weak Android face when strong biometrics are not enrolled', () => {
@@ -50,7 +62,7 @@ describe('pickUnlockBiometric', () => {
         face: true,
         iris: false,
       }),
-    ).toEqual({ available: false, kind: null })
+    ).toEqual({ available: false, kind: null, autoPrompt: false })
   })
 
   it('labels Face ID vs Fingerprint for settings copy', () => {

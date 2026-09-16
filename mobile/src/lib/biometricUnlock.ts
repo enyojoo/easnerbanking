@@ -4,6 +4,7 @@ import {
   biometricPromptMessage,
   biometricUnlockTitle,
   pickUnlockBiometric,
+  UNAVAILABLE_BIOMETRIC,
   type BiometricAvailability,
   type BiometricKind,
   type BiometricPromptPurpose,
@@ -14,6 +15,9 @@ export type { BiometricAvailability, BiometricKind }
 type LocalAuth = typeof import('expo-local-authentication')
 
 const PREF_PREFIX = '@easner_unlock_with_biometrics_'
+const AVAILABILITY_TTL_MS = 30_000
+
+let availabilityCache: { at: number; value: BiometricAvailability } | null = null
 
 function getLocalAuth(): LocalAuth | null {
   if (Platform.OS === 'web') return null
@@ -35,28 +39,55 @@ export function biometricUnlockLabel(kind: BiometricKind | null): string {
 }
 
 export async function getBiometricAvailability(): Promise<BiometricAvailability> {
+  const now = Date.now()
+  if (availabilityCache && now - availabilityCache.at < AVAILABILITY_TTL_MS) {
+    return availabilityCache.value
+  }
   const LocalAuthentication = getLocalAuth()
-  if (!LocalAuthentication) return { available: false, kind: null }
+  if (!LocalAuthentication) {
+    availabilityCache = { at: now, value: UNAVAILABLE_BIOMETRIC }
+    return UNAVAILABLE_BIOMETRIC
+  }
   try {
-    const [hasHardware, enrolled, types, enrolledLevel] = await Promise.all([
-      LocalAuthentication.hasHardwareAsync(),
-      LocalAuthentication.isEnrolledAsync(),
-      LocalAuthentication.supportedAuthenticationTypesAsync(),
-      LocalAuthentication.getEnrolledLevelAsync(),
-    ])
+    const platform = platformKind()
     const AuthType = LocalAuthentication.AuthenticationType
-    const strongEnrolled =
-      Boolean(hasHardware && enrolled) &&
-      enrolledLevel >= LocalAuthentication.SecurityLevel.BIOMETRIC_STRONG
-    return pickUnlockBiometric({
-      platform: platformKind(),
+    let hasHardware = false
+    let enrolled = false
+    let types: number[] = []
+    let strongEnrolled = false
+    if (platform === 'ios') {
+      ;[hasHardware, enrolled, types] = await Promise.all([
+        LocalAuthentication.hasHardwareAsync(),
+        LocalAuthentication.isEnrolledAsync(),
+        LocalAuthentication.supportedAuthenticationTypesAsync(),
+      ])
+      strongEnrolled = Boolean(hasHardware && enrolled)
+    } else {
+      const probed = await Promise.all([
+        LocalAuthentication.hasHardwareAsync(),
+        LocalAuthentication.isEnrolledAsync(),
+        LocalAuthentication.supportedAuthenticationTypesAsync(),
+        LocalAuthentication.getEnrolledLevelAsync(),
+      ])
+      hasHardware = probed[0]
+      enrolled = probed[1]
+      types = probed[2]
+      strongEnrolled =
+        Boolean(hasHardware && enrolled) &&
+        probed[3] >= LocalAuthentication.SecurityLevel.BIOMETRIC_STRONG
+    }
+    const value = pickUnlockBiometric({
+      platform,
       strongEnrolled,
       fingerprint: types.includes(AuthType.FINGERPRINT),
       face: types.includes(AuthType.FACIAL_RECOGNITION),
       iris: types.includes(AuthType.IRIS),
     })
+    availabilityCache = { at: Date.now(), value }
+    return value
   } catch {
-    return { available: false, kind: null }
+    availabilityCache = { at: Date.now(), value: UNAVAILABLE_BIOMETRIC }
+    return UNAVAILABLE_BIOMETRIC
   }
 }
 
@@ -94,6 +125,7 @@ export async function authenticateWithBiometrics(
       requireConfirmation: false,
       biometricsSecurityLevel: 'strong',
     })
+    availabilityCache = null
     if (result.success) return 'success'
     if (result.error === 'lockout') return 'lockout'
     if (
@@ -106,6 +138,7 @@ export async function authenticateWithBiometrics(
     }
     return 'fail'
   } catch {
+    availabilityCache = null
     return 'unavailable'
   }
 }

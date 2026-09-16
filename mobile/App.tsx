@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native'
 import Constants from 'expo-constants'
 import { StatusBar } from 'expo-status-bar'
-import { View, Text, StyleSheet, Animated, Platform } from 'react-native'
+import { View, Text, StyleSheet, Platform } from 'react-native'
 import * as BackgroundTask from 'expo-background-task'
 import * as TaskManager from 'expo-task-manager'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -68,8 +68,8 @@ import { supabaseConfigError } from './src/lib/supabase'
 import { warmBundledFlagCache } from './src/lib/warmBundledFlagCache'
 import { hydrateWarmImageUrls } from './src/lib/imageCache'
 import { prefetchIntercomModule } from './src/lib/intercom'
-import { USE_NATIVE_DRIVER } from './src/lib/animation'
 import { ExpressStripeProvider } from './src/components/ExpressStripeProvider'
+import { markSplashReady, waitForSplashReady } from './src/lib/splashReady'
 
 // Keep the splash screen visible while we load fonts
 SplashScreen.preventAutoHideAsync()
@@ -92,7 +92,6 @@ function AppContent() {
   const [navReady, setNavReady] = useState(false)
   /** Leaf route name – used so status bar stays light on dark chrome (e.g. onboarding) after splash hides. */
   const [activeRouteName, setActiveRouteName] = useState('')
-  const appFadeAnim = useRef(new Animated.Value(0)).current
 
   // Expose navigation ref globally for logout navigation
   useEffect(() => {
@@ -136,47 +135,32 @@ function AppContent() {
     setPreserveUserPathOverAuth(authLoading && !authUser)
   }, [authLoading, authUser])
 
-  // Single native splash (`app.json` + `expo-splash-screen`): keep it visible until:
-  // - Supabase session restore has resolved (`authLoading` false)
-  // - React Navigation has mounted (`navReady` true)
-  //
-  // Web skips the opacity gate below; loading shells and PIN render immediately on the themed canvas.
+  // Native splash stays until:
+  // - Session is known (restored user, or confirmed logged-out)
+  // - React Navigation has mounted (`navReady`)
+  // Hide as soon as `user` exists even if auth `loading` is still finishing MFA/profile work,
+  // so PIN can paint instead of waiting behind the branded splash.
+  // Do not wait for Face ID — the lock screen prompts after splash is gone.
   useEffect(() => {
     if (Platform.OS === 'web') return
     if (splashFinished) return
-    if (authLoading) return
     if (!navReady) return
-    let cancelled = false
+    if (authLoading && !authUser) return
     void (async () => {
-      if (cancelled) return
       try {
         await SplashScreen.hideAsync()
       } catch (e) {
         console.warn('SplashScreen.hideAsync', e)
       }
-      if (!cancelled) setSplashFinished(true)
+      markSplashReady()
+      setSplashFinished(true)
     })()
-    return () => {
-      cancelled = true
-    }
-  }, [authLoading, navReady, splashFinished])
+  }, [authLoading, authUser, navReady, splashFinished])
 
-  // Cold-open from notification: stash intent + flush when main stack is ready (PIN may still be showing).
   useEffect(() => {
     if (!navReady || Platform.OS === 'web') return
     void bootstrapPushNotificationDeepLink()
   }, [navReady])
-
-  // Fade in app content when splash finishes
-  useEffect(() => {
-    if (splashFinished) {
-      Animated.timing(appFadeAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: USE_NATIVE_DRIVER,
-      }).start()
-    }
-  }, [splashFinished, appFadeAnim])
 
   const nav = (
     <NavigationContainer
@@ -257,11 +241,11 @@ function AppContent() {
   )
 
   return (
-    <Animated.View
+    <View
       style={[
         styles.appRoot,
         {
-          opacity: Platform.OS === 'web' ? 1 : splashFinished ? appFadeAnim : 0,
+          opacity: Platform.OS === 'web' || splashFinished ? 1 : 0,
         },
       ]}
     >
@@ -284,7 +268,7 @@ function AppContent() {
       ) : (
         nav
       )}
-    </Animated.View>
+    </View>
   )
 }
 
@@ -330,13 +314,16 @@ export default function App() {
       return () => window.clearTimeout(timeout)
     }
 
-    void hydrateWarmImageUrls()
-    warmBundledFlagCache()
-  }, [])
-
-  useEffect(() => {
-    if (Platform.OS === 'web') return
-    prefetchIntercomModule()
+    let cancelled = false
+    void waitForSplashReady().then(() => {
+      if (cancelled) return
+      void hydrateWarmImageUrls()
+      warmBundledFlagCache()
+      prefetchIntercomModule()
+    })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   // Edge-to-edge: match root window / nav bar scrim to app background; supports `userInterfaceStyle` with expo-system-ui.
@@ -349,7 +336,7 @@ export default function App() {
     void SplashScreen.hideAsync().catch((e) => {
       console.warn('SplashScreen.hideAsync', e)
     })
-  }, [fontsLoaded, supabaseConfigError])
+    markSplashReady()
 
   // Foreground/tap listeners only; token registration is gated on user prefs in PushNotificationBootstrap
   useEffect(() => {

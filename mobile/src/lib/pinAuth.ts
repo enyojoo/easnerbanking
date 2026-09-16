@@ -126,6 +126,25 @@ export async function applyColdStartPinLockIfNeeded(userId: string): Promise<voi
   await setAppLocked(userId, true)
 }
 
+/**
+ * PIN stack for this session. Native cold start with a PIN always locks — skip extra
+ * idle/lock storage reads so PIN can paint immediately after splash.
+ */
+export async function resolvePinGateForSession(
+  userId: string,
+): Promise<'setup' | 'pin' | 'main' | 'signed_out'> {
+  const alreadyHandledColdStart = coldStartPinLockUserId === userId
+  await applyColdStartPinLockIfNeeded(userId)
+  if (!(await hasPin(userId))) return 'setup'
+  if (!alreadyHandledColdStart && Platform.OS !== 'web') {
+    return 'pin'
+  }
+  const idle = await evaluateIdleLock(userId)
+  if (idle === 'signed_out') return 'signed_out'
+  if (idle === 'locked' || (await isAppLocked(userId))) return 'pin'
+  return 'main'
+}
+
 export interface PinAuthResult {
   success: boolean
   error?: string

@@ -72,6 +72,7 @@ import {
   setBiometricUnlockEnabled,
   type BiometricAvailability,
 } from '../../lib/biometricUnlock'
+import { UNAVAILABLE_BIOMETRIC } from '../../lib/biometricUnlockPolicy'
 
 type TierBadge = { label: string; tone: 'green' | 'yellow' }
 
@@ -126,7 +127,7 @@ function MoreContent({ navigation }: NavigationProps) {
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [mfaStatusLine, setMfaStatusLine] = useState('')
-  const [biometric, setBiometric] = useState<BiometricAvailability>({ available: false, kind: null })
+  const [biometric, setBiometric] = useState<BiometricAvailability>(UNAVAILABLE_BIOMETRIC)
   const [biometricOn, setBiometricOn] = useState(false)
   /** False until MFA status is read from cache or `listFactors` – avoids showing the MFA banner while loading or on errors. */
   const [mfaStatusResolved, setMfaStatusResolved] = useState(false)
@@ -143,7 +144,7 @@ function MoreContent({ navigation }: NavigationProps) {
     if (!user?.id) {
       setMfaStatusLine('')
       setMfaStatusResolved(false)
-      setBiometric({ available: false, kind: null })
+      setBiometric(UNAVAILABLE_BIOMETRIC)
       setBiometricOn(false)
     }
   }, [user?.id])

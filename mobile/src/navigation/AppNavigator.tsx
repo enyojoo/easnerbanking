@@ -9,13 +9,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useAuth } from '../contexts/AuthContext'
 import { useThemeColors, spacing, layout, fontFamily } from '../theme'
 import {
-  isPinSetup,
-  isAppLocked,
   dismissPinPrompt,
   markSessionInteraction,
   updateSessionActivity,
   evaluateIdleLock,
-  applyColdStartPinLockIfNeeded,
+  resolvePinGateForSession,
   markWebPinSessionUnlocked,
 } from '../lib/pinAuth'
 import { flushPendingDeepLinkNavigation } from '../lib/pendingDeepLinkNavigation'
@@ -516,6 +514,8 @@ export default function AppNavigator() {
   const restrictionLoading = Boolean(user?.id) && restrictionQuery.isLoading && !restrictionQuery.data
   const [lockTick, setLockTick] = useState(0)
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(Platform.OS === 'web' ? true : null)
+  /** Web: keep MainStack mounted after the first unlock so idle PIN does not reset navigation. */
+  const [webMainMounted, setWebMainMounted] = useState(false)
   // PIN TEMPORARILY DISABLED - keeping state variables for easy re-enable
   // const [pinSetup, setPinSetup] = useState<boolean | null>(null)
   // const [sessionValid, setSessionValid] = useState<boolean | null>(null)
@@ -654,29 +654,26 @@ export default function AppNavigator() {
   useEffect(() => {
     if (!user) {
       setPinGate('loading')
+      setWebMainMounted(false)
     }
   }, [user])
+
+  useEffect(() => {
+    if (pinGate === 'main') setWebMainMounted(true)
+  }, [pinGate])
 
   useEffect(() => {
     // Resolve PIN setup vs entry only after MFA gate is known and not required.
     if (!user?.id || !mfaGateResolved || mfaPending) return
     let cancelled = false
     void (async () => {
-      await applyColdStartPinLockIfNeeded(user.id)
-      const setup = await isPinSetup(user.id)
+      const next = await resolvePinGateForSession(user.id)
       if (cancelled) return
-      if (!setup) {
-        setPinGate('setup')
-        return
-      }
-      const idle = await evaluateIdleLock(user.id)
-      if (cancelled) return
-      if (idle === 'signed_out') {
+      if (next === 'signed_out') {
         await signOutRef.current()
         return
       }
-      const locked = idle === 'locked' || (await isAppLocked(user.id))
-      setPinGate(locked ? 'pin' : 'main')
+      setPinGate(next)
     })()
     return () => {
       cancelled = true
@@ -853,16 +850,15 @@ export default function AppNavigator() {
   //   }
   // }, [pinSetup])
 
-  // Onboarding key read – match app background so the chain onboarding → auth → PIN → main never flashes empty.
-  if (onboardingCompleted === null || checkingAuth) {
-    return <AuthFlowLoadingShell palette={palette} testId="Bootstrapping app" />
-  }
-
-  // If onboarding not completed, show onboarding screen FIRST (before checking user)
-  // This ensures new users see onboarding even if they're not logged in
   const skipOnboarding = Platform.OS === 'web'
-  if (!skipOnboarding && !onboardingCompleted) {
+  // Known incomplete onboarding wins even if a session exists.
+  if (!skipOnboarding && onboardingCompleted === false) {
     return <OnboardingStack key="onboarding-stack" />
+  }
+  // Logged-out only: wait for the onboarding key so we don't flash login vs carousel.
+  // Signed-in cold start skips this spinner and goes to MFA / PIN.
+  if (!user && (onboardingCompleted === null || checkingAuth)) {
+    return <AuthFlowLoadingShell palette={palette} testId="Bootstrapping app" />
   }
 
   // After onboarding is completed, check user authentication
@@ -893,10 +889,6 @@ export default function AppNavigator() {
     return <MfaStack key="mfa-stack" />
   }
 
-  if (user && restrictionLoading) {
-    return <AuthFlowLoadingShell palette={palette} testId="Checking account status" />
-  }
-
   if (user && accountRestriction.active && accountRestriction.phase === "locked") {
     return <AccountSuspendedScreen onLogout={() => void signOut()} />
   }
@@ -914,18 +906,36 @@ export default function AppNavigator() {
     return <PinGateSetupStack key="pin-gate-setup" />
   }
 
-  if (Platform.OS === 'web' && (pinGate === 'main' || pinGate === 'pin')) {
+  if (Platform.OS === 'web' && pinGate === 'pin') {
     return (
-      <MobileAppLockShell locked={pinGate === 'pin'}>
-        <ResponsiveAppShell>
-          <MainStack />
-        </ResponsiveAppShell>
+      <MobileAppLockShell locked>
+        {webMainMounted ? (
+          <ResponsiveAppShell>
+            <MainStack />
+          </ResponsiveAppShell>
+        ) : (
+          <View style={{ flex: 1, backgroundColor: palette.semantic.background }} />
+        )}
       </MobileAppLockShell>
     )
   }
 
   if (user && pinGate === 'pin') {
     return <PinGateEntryStack key="pin-gate-entry" />
+  }
+
+  if (user && pinGate === 'main' && restrictionLoading) {
+    return <AuthFlowLoadingShell palette={palette} testId="Checking account status" />
+  }
+
+  if (Platform.OS === 'web' && pinGate === 'main') {
+    return (
+      <MobileAppLockShell locked={false}>
+        <ResponsiveAppShell>
+          <MainStack />
+        </ResponsiveAppShell>
+      </MobileAppLockShell>
+    )
   }
 
   if (user && pinGate === 'main') {

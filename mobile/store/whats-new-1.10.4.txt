@@ -1,0 +1,3 @@
+• Faster launch — you land on PIN right away, then Face ID or fingerprint on top of that screen
+• More reliable Face ID and fingerprint unlock on iPhone and Android
+• App opens without sitting on the splash screen while unlock is ready

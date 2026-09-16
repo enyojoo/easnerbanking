@@ -4,6 +4,7 @@ import type { CommunicationPreferences } from '@easner/shared'
 import { useAuth } from '../contexts/AuthContext'
 import { apiGet, apiPost } from '../lib/apiClient'
 import { pushNotificationService } from '../lib/pushNotificationService'
+import { waitUntilMainAppReady } from '../lib/pendingPushNavigation'
 
 /**
  * After sign-in, sync Expo token with the business API when `channels.push` is on;
@@ -21,7 +22,8 @@ export function PushNotificationBootstrap() {
     let cancelled = false
 
     const run = async () => {
-      if (inFlight.current) return
+      await waitUntilMainAppReady()
+      if (cancelled || inFlight.current) return
       inFlight.current = true
       try {
         const res = await apiGet('/api/settings/communication')

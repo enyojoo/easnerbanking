@@ -23,6 +23,8 @@ import {
   isBiometricUnlockEnabled,
   type BiometricAvailability,
 } from '../../lib/biometricUnlock'
+import { UNAVAILABLE_BIOMETRIC } from '../../lib/biometricUnlockPolicy'
+import { waitForBiometricPromptSafe } from '../../lib/splashReady'
 import { useAuth } from '../../contexts/AuthContext'
 import { appPinStrings } from '../../constants/app-pin-en'
 import { displayFirstNameFromFullName, initialsFromFullName } from '../../lib/userProfileHelpers'
@@ -49,7 +51,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
   const [lockedUntil, setLockedUntil] = useState<number | null>(null)
   const [forgotSheetVisible, setForgotSheetVisible] = useState(false)
   const [logoutSheetVisible, setLogoutSheetVisible] = useState(false)
-  const [biometric, setBiometric] = useState<BiometricAvailability>({ available: false, kind: null })
+  const [biometric, setBiometric] = useState<BiometricAvailability>(UNAVAILABLE_BIOMETRIC)
   const [biometricEnabled, setBiometricEnabled] = useState(false)
   const biometricPromptedRef = useRef(false)
   const shakeAnim = useRef(new Animated.Value(0)).current
@@ -160,13 +162,20 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
   const canUseBiometrics = biometric.available && biometricEnabled
 
   useEffect(() => {
-    if (!canUseBiometrics || locked || loading || biometricPromptedRef.current) return
+    if (!canUseBiometrics || !biometric.autoPrompt || locked || loading || biometricPromptedRef.current) {
+      return
+    }
     biometricPromptedRef.current = true
-    const timer = setTimeout(() => {
-      void handleBiometricUnlock()
-    }, 400)
-    return () => clearTimeout(timer)
-  }, [canUseBiometrics, locked, loading])
+    let cancelled = false
+    void (async () => {
+      await waitForBiometricPromptSafe()
+      if (cancelled) return
+      await handleBiometricUnlock()
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [canUseBiometrics, biometric.autoPrompt, locked, loading])
 
   const handleVerifyPin = async (pinString?: string) => {
     const pinToVerify = pinString || pin.join('')

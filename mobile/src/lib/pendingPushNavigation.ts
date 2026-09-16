@@ -25,12 +25,26 @@ export type PendingPushPayload =
   | { at: number; screen: 'PayrollApproval'; invitationId: string }
   | { at: number; screen: 'InAppNotifications' }
 
+const mainReadyWaiters = new Set<() => void>()
+
 export function setPushNavMainReady(ready: boolean): void {
   ;(global as any).easnerPushNavReady = ready
+  if (ready) {
+    for (const notify of mainReadyWaiters) notify()
+    mainReadyWaiters.clear()
+  }
 }
 
 function isPushNavMainReady(): boolean {
   return Boolean((global as any).easnerPushNavReady)
+}
+
+/** Resolves when the main (unlocked) stack is showing — not PIN / splash. */
+export function waitUntilMainAppReady(): Promise<void> {
+  if (isPushNavMainReady()) return Promise.resolve()
+  return new Promise((resolve) => {
+    mainReadyWaiters.add(resolve)
+  })
 }
 
 function parsePushData(data: Record<string, unknown> | undefined): PendingPushPayload | null {

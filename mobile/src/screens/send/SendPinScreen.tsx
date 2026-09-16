@@ -34,6 +34,8 @@ import {
   isBiometricUnlockEnabled,
   type BiometricAvailability,
 } from '../../lib/biometricUnlock'
+import { UNAVAILABLE_BIOMETRIC } from '../../lib/biometricUnlockPolicy'
+import { waitForBiometricPromptSafe } from '../../lib/splashReady'
 import { haptics } from '../../lib/haptics'
 import { USE_NATIVE_DRIVER } from '../../lib/animation'
 import { PostHogMaskView } from 'posthog-react-native'
@@ -54,7 +56,7 @@ export default function SendPinScreen({ navigation }: NavigationProps) {
   const lastTryRef = useRef('')
   const shakeAnim = useRef(new Animated.Value(0)).current
   const verifySpinnerDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [biometric, setBiometric] = useState<BiometricAvailability>({ available: false, kind: null })
+  const [biometric, setBiometric] = useState<BiometricAvailability>(UNAVAILABLE_BIOMETRIC)
   const [biometricEnabled, setBiometricEnabled] = useState(false)
   const biometricPromptedRef = useRef(false)
 
@@ -175,13 +177,20 @@ export default function SendPinScreen({ navigation }: NavigationProps) {
   const canUseBiometrics = biometric.available && biometricEnabled
 
   useEffect(() => {
-    if (!canUseBiometrics || lockedOut || verifyingPin || biometricPromptedRef.current) return
+    if (!canUseBiometrics || !biometric.autoPrompt || lockedOut || verifyingPin || biometricPromptedRef.current) {
+      return
+    }
     biometricPromptedRef.current = true
-    const timer = setTimeout(() => {
-      void handleBiometricConfirm()
-    }, 400)
-    return () => clearTimeout(timer)
-  }, [canUseBiometrics, lockedOut, verifyingPin])
+    let cancelled = false
+    void (async () => {
+      await waitForBiometricPromptSafe()
+      if (cancelled) return
+      await handleBiometricConfirm()
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [canUseBiometrics, biometric.autoPrompt, lockedOut, verifyingPin, handleBiometricConfirm])
 
   const filledCount = pin.length
   const keypadDisabled = verifyingPin || lockedOut
