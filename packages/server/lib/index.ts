@@ -1,6 +1,7 @@
 export { EmailNotificationService } from "./email-notification-service"
 export { emailService } from "./email-service"
 export { sendMail } from "./mailer"
+export { emailAnchorOpenTag, shouldSkipSesClickTracking } from "./email-anchor"
 export type { SendMailInput } from "./mailer-types"
 export type { EmailProvider } from "./email-provider"
 export {

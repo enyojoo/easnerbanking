@@ -235,7 +235,7 @@ export async function sendPayrollStubForLine(
         : `Payroll payment received. You received ${formatCurrency(amount, currency)} from ${businessName}. Your pay stub is attached.`,
       html: isReversal
         ? `<h1>Payroll payment reversed</h1><p>A payroll payment of <strong>${formatCurrency(amount, currency)}</strong> from <strong>${businessName}</strong> was reversed.</p><p>Your reversal document is attached.</p>`
-        : `<h1>Payroll payment received</h1><p>You received <strong>${formatCurrency(amount, currency)}</strong> from <strong>${businessName}</strong>.</p><p>Your pay stub is attached.</p><p><a href="https://app.easner.com/payroll">View payroll payment</a></p>`,
+        : `<h1>Payroll payment received</h1><p>You received <strong>${formatCurrency(amount, currency)}</strong> from <strong>${businessName}</strong>.</p><p>Your pay stub is attached.</p><p><a ses:no-track href="https://app.easner.com/payroll">View payroll payment</a></p>`,
       attachments: [{
         content: pdf.toString("base64"),
         filename,

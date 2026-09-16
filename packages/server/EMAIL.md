@@ -28,6 +28,7 @@ Welcome, KYB/KYC (including `kycVerificationUpdate` / `kybVerificationUpdate` re
 |----------|----------|---------|
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Yes (SES default) | IAM user keys for SESv2 `SendEmail` |
 | `SES_REGION` | Recommended | Default **`eu-west-2`** (`AWS_REGION` also accepted) |
+| `SES_CONFIGURATION_SET` | Optional | SES configuration set name. Use a set with **click tracking off** (VDM engagement metrics disabled). Do not point this at a set that rewrites links onto `awstrack.me`. |
 | `EMAIL_PROVIDER` | No | Break-glass override (`ses` \| `sendgrid`). Unset in production |
 | `EMAIL_FROM` / `EMAIL_FROM_NAME` | Recommended | Personal / default from (`noreply@easner.com` / Easner). Falls back to `SENDGRID_FROM_*` |
 | `BUSINESS_EMAIL_FROM` / `BUSINESS_EMAIL_FROM_NAME` | Recommended | Business from (`business@easner.com` / Easner Business) |
@@ -213,7 +214,11 @@ Mobile sets `EXPO_PUBLIC_API_URL` to the business app origin and must send `Auth
 
 ## Personal (Easner Mobile) email links
 
-Personal templates use **`https://app.easner.com/user/*`** universal links (see `packages/shared/src/mobile-personal-links.ts`):
+Personal templates use **`https://app.easner.com/user/*`** universal links (see `packages/shared/src/mobile-personal-links.ts`).
+
+**SES click tracking / `awstrack.me`:** Virtual Deliverability Manager engagement tracking wraps every `href` onto `*.r.eu-west-2.awstrack.me`. iOS Universal Links and Android App Links only match `app.easner.com`, so the wrapped URL opens the browser (and a later 302 does **not** reopen the app). CTA and preference links on `app.easner.com` are emitted with `ses:no-track` so SES leaves the original href. SendGrid click tracking is disabled for the same reason. In SES console, turn **Virtual Deliverability Manager → Engagement tracking** off (or exclude Click events on the configuration set) so opens/clicks do not rewrite remaining links.
+
+Existing messages already in inboxes still use `awstrack.me`. After that redirect, `app.easner.com` hops into the installed app via `easner://` on iPhone/Android (add `?web=1` to stay in the browser).
 
 | Email CTA | URL |
 |-----------|-----|

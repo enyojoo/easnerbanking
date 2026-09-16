@@ -30,6 +30,7 @@ describe("sendViaSes", () => {
     const simpleCmd = send.mock.calls[0]?.[0] as SendEmailCommand
     expect(simpleCmd.input.Content?.Simple).toBeTruthy()
     expect(simpleCmd.input.Content?.Raw).toBeUndefined()
+    expect(simpleCmd.input.ConfigurationSetName).toBeUndefined()
 
     await sendViaSes({
       to: "user@example.com",
@@ -51,6 +52,29 @@ describe("sendViaSes", () => {
 
     delete process.env.AWS_ACCESS_KEY_ID
     delete process.env.AWS_SECRET_ACCESS_KEY
+    resetSesClientForTests()
+  })
+
+  it("passes SES_CONFIGURATION_SET when set", async () => {
+    process.env.AWS_ACCESS_KEY_ID = "akid"
+    process.env.AWS_SECRET_ACCESS_KEY = "secret"
+    process.env.SES_CONFIGURATION_SET = "easner-transactional"
+    resetSesClientForTests()
+    send.mockClear()
+
+    await sendViaSes({
+      to: "user@example.com",
+      from: "noreply@easner.com",
+      subject: "Hello",
+      html: "<p>Hello</p>",
+      text: "Hello",
+    })
+    const cmd = send.mock.calls[0]?.[0] as SendEmailCommand
+    expect(cmd.input.ConfigurationSetName).toBe("easner-transactional")
+
+    delete process.env.AWS_ACCESS_KEY_ID
+    delete process.env.AWS_SECRET_ACCESS_KEY
+    delete process.env.SES_CONFIGURATION_SET
     resetSesClientForTests()
   })
 })

@@ -15,6 +15,7 @@ import {
   resolveEmailAudienceFromData,
   type EmailAudience,
 } from "./email-audience"
+import { emailAnchorOpenTag } from "./email-anchor"
 
 export type EmailTemplateOptions = {
   audience?: EmailAudience
@@ -383,7 +384,7 @@ export function generateBaseEmailTemplate(
   const preferencesBlock =
     !minimalFooter && options?.showPreferencesLink !== false
       ? `<p class="footer-text" style="margin-top: 12px;">
-          <a href="${profile.preferencesUrl}" style="color: ${t.primary}; text-decoration: none; font-size: 13px;">Manage email preferences</a>
+          ${emailAnchorOpenTag(profile.preferencesUrl, `style="color: ${t.primary}; text-decoration: none; font-size: 13px;"`)}Manage email preferences</a>
         </p>`
       : ""
 
@@ -429,7 +430,7 @@ export function generateBaseEmailTemplate(
         </div>
         <div class="email-body">
             ${content}
-            ${ctaButton ? `<div class="cta-wrap"><a href="${escapeHtml(ctaButton.url)}" class="cta-button">${escapeHtml(ctaButton.text)}</a></div>` : ""}
+            ${ctaButton ? `<div class="cta-wrap">${emailAnchorOpenTag(ctaButton.url, 'class="cta-button"')}${escapeHtml(ctaButton.text)}</a></div>` : ""}
         </div>
         <div class="email-footer">
             ${helpBlock}

@@ -30,10 +30,16 @@ function asMimeAddress(value: SendMailInput["from"]): MimeAddress {
   return value
 }
 
+function resolveSesConfigurationSetName(): string | undefined {
+  const name = process.env.SES_CONFIGURATION_SET?.trim()
+  return name || undefined
+}
+
 export async function sendViaSes(input: SendMailInput): Promise<SendEmailResult> {
   const from = asMimeAddress(input.from)
   const fromHeader = formatMimeAddress(from)
   const hasAttachments = Boolean(input.attachments?.length)
+  const configurationSetName = resolveSesConfigurationSetName()
   const command = hasAttachments
     ? new SendEmailCommand({
         FromEmailAddress: fromHeader,
@@ -41,6 +47,7 @@ export async function sendViaSes(input: SendMailInput): Promise<SendEmailResult>
         ReplyToAddresses: input.replyTo
           ? [typeof input.replyTo === "string" ? input.replyTo : formatMimeAddress(input.replyTo)]
           : undefined,
+        ...(configurationSetName ? { ConfigurationSetName: configurationSetName } : {}),
         Content: {
           Raw: { Data: buildRawMimeMessage(input) },
         },
@@ -51,6 +58,7 @@ export async function sendViaSes(input: SendMailInput): Promise<SendEmailResult>
         ReplyToAddresses: input.replyTo
           ? [typeof input.replyTo === "string" ? input.replyTo : formatMimeAddress(input.replyTo)]
           : undefined,
+        ...(configurationSetName ? { ConfigurationSetName: configurationSetName } : {}),
         Content: {
           Simple: {
             Subject: { Data: input.subject, Charset: "UTF-8" },

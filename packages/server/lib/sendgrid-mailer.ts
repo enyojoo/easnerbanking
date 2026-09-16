@@ -35,6 +35,9 @@ export async function sendViaSendGrid(input: SendMailInput): Promise<SendEmailRe
     subject: input.subject,
     html: input.html,
     text: input.text,
+    trackingSettings: {
+      clickTracking: { enable: false, enableText: false },
+    },
   }
   if (replyTo) msg.replyTo = replyTo
   if (input.attachments?.length) {

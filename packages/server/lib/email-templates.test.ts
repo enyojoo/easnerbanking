@@ -59,7 +59,7 @@ describe("emailTemplates", () => {
     expect(html).toContain("Hey Sam,")
     expect(html).toContain("$99.95 credited to your USD Balance")
     expect(html).toContain("ET-1001")
-    expect(html).toContain("https://app.easner.com/user/transactions/ET-1001")
+    expect(html).toContain('ses:no-track href="https://app.easner.com/user/transactions/ET-1001"')
   })
 
   it("failed transfer email omits duplicate Amount row and uses contact page CTA", () => {

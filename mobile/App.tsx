@@ -42,6 +42,7 @@ import { PlatformAccessGate } from './src/components/PlatformAccessGate'
 import { webLinking } from './src/navigation/linking'
 import { setPreserveUserPathOverAuth } from './src/navigation/webLinkingGuard'
 import { formatWebDocumentTitle, setWebDocumentTitle } from './src/navigation/webDocumentTitle'
+import { maybeHandoffHttpsToNativeApp } from './src/lib/nativeAppHandoff'
 import { WebIdleSessionBridge } from './src/components/WebIdleSessionBridge'
 import { markWebBfcacheRestore } from './src/lib/pinAuth'
 import { ResponsiveLayoutProvider } from './src/contexts/ResponsiveLayoutContext'
@@ -300,6 +301,7 @@ export default function App() {
   
   // Initialize deep linking
   useEffect(() => {
+    if (Platform.OS === 'web') maybeHandoffHttpsToNativeApp()
     deepLinkService.initialize()
   }, [])
 
