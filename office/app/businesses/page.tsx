@@ -16,7 +16,6 @@ import { businessTypeDisplayText } from "@/lib/business-type-label"
 import { OfficeQueryError } from "@/components/data/office-data-status"
 import { VERIFICATION_STATUS_COPY, verificationStatusLabel, WALLET_SEND_COMPLIANCE_STATUS_LABEL } from "@easner/shared"
 import { prefetchOfficeBusinessCase } from "@/components/case/business-case"
-import { OfficeStablePhoto } from "@/components/office-stable-photo"
 import type { OfficeBusinessRow } from "@/lib/case/types"
 
 function verificationBadgeVariant(rawStatus: string): "emerald" | "amber" | "oxblood" | "slate" {
@@ -214,11 +213,7 @@ function BusinessesPageInner() {
                       </TableCell>
                       <TableCell>
                         {o.logo_url ? (
-                          <OfficeStablePhoto
-                            src={o.logo_url}
-                            kind="logo"
-                            className="h-8 w-8 rounded border"
-                          />
+                          <img src={o.logo_url} alt="" className="h-8 w-8 rounded object-cover border" />
                         ) : (
                           "–"
                         )}
