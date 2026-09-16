@@ -6,4 +6,4 @@ export {
   profileImageSrc,
   warmBusinessLogoUrl,
   warmProfileImageUrl,
-} from "@easner/shared"
+} from "@easner/shared/image/versioned-image-url"

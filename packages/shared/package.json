@@ -66,6 +66,16 @@
       "import": "./src/mobile-app-store-urls.ts",
       "require": "./src/mobile-app-store-urls.ts"
     },
+    "./image/versioned-image-url": {
+      "types": "./src/image/versioned-image-url.ts",
+      "import": "./src/image/versioned-image-url.ts",
+      "require": "./src/image/versioned-image-url.ts"
+    },
+    "./image/warm-web-banking-images": {
+      "types": "./src/image/warm-web-banking-images.ts",
+      "import": "./src/image/warm-web-banking-images.ts",
+      "require": "./src/image/warm-web-banking-images.ts"
+    },
     "./warm-flags": {
       "types": "./src/flags/warm-flags.native.ts",
       "import": "./src/flags/warm-flags.native.ts",

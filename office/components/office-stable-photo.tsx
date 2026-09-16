@@ -1,6 +1,7 @@
 "use client"
 
-import { StableImage, normalizeBusinessLogoUrl, normalizeProfileImageUrl } from "@easner/shared"
+import { StableImage } from "@easner/shared"
+import { normalizeBusinessLogoUrl, normalizeProfileImageUrl } from "@easner/shared/image/versioned-image-url"
 import { cn } from "@/lib/utils"
 
 type OfficeStablePhotoProps = {
