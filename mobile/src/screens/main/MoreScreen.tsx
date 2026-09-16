@@ -61,6 +61,10 @@ import { useScope } from '../../query/scope'
 import { useQueryClient } from '@tanstack/react-query'
 import { prefetchPayrollConnections } from '../../features/payroll/queries'
 import {
+  loadPayrollActivityVisible,
+  peekPayrollActivityVisible,
+} from '../../lib/payrollActivityVisibility'
+import {
   authenticateAppUnlock,
   biometricUnlockLabel,
   getBiometricAvailability,
