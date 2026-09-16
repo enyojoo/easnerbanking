@@ -1,9 +1,10 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { officeKeys } from "@/lib/query/keys"
@@ -89,11 +90,29 @@ export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection
       registrationPersonal: settingBool(rows, "registration_enabled_personal", true),
       walletSendComplianceEnabled: settingBool(rows, "wallet_send_compliance_enabled", true),
       emailProvider: settingString(rows, "email_provider", "ses") === "sendgrid" ? "sendgrid" : "ses",
+      minNativeVersionPersonal: settingString(rows, "min_native_version_personal", ""),
       usdActive: settingBool(rows, "currency_active_USD", true),
       eurActive: settingBool(rows, "currency_active_EUR", true),
     }),
     [rows],
   )
+
+  const [minNativeDraft, setMinNativeDraft] = useState(access.minNativeVersionPersonal)
+
+  useEffect(() => {
+    setMinNativeDraft(access.minNativeVersionPersonal)
+  }, [access.minNativeVersionPersonal])
+
+  const persistMinNativeVersion = () => {
+    const next = minNativeDraft.trim()
+    if (next === access.minNativeVersionPersonal) return
+    if (next && !/^\d+\.\d+(\.\d+)?$/.test(next)) {
+      toast.error("Minimum app version must look like 1.10.2")
+      setMinNativeDraft(access.minNativeVersionPersonal)
+      return
+    }
+    void persistSetting("min_native_version_personal", next, "string", "platform")
+  }
 
   const persistSetting = async (key: string, value: string | boolean, dataType: string, category: string) => {
     const previous = queryClient.getQueryData<OfficeSystemSetting[]>(officeKeys.systemSettings())
@@ -204,6 +223,25 @@ export function SettingsAdminPanel({ section }: { section?: SettingsAdminSection
                   onCheckedChange={(checked) =>
                     void persistSetting("registration_enabled_personal", checked, "boolean", "platform")
                   }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="min-native-mobile">Minimum app version</Label>
+                <p className="text-sm text-gray-500">
+                  Block older native binaries with an Update required screen. Leave blank to skip.
+                </p>
+                <Input
+                  id="min-native-mobile"
+                  value={minNativeDraft}
+                  placeholder="1.10.2"
+                  disabled={pendingKey === "min_native_version_personal"}
+                  onChange={(event) => setMinNativeDraft(event.target.value)}
+                  onBlur={persistMinNativeVersion}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.currentTarget.blur()
+                    }
+                  }}
                 />
               </div>
             </div>

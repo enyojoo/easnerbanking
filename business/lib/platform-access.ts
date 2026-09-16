@@ -6,9 +6,23 @@ export const MAINTENANCE_MODE_BUSINESS_KEY = "maintenance_mode_business"
 export const MAINTENANCE_MODE_PERSONAL_KEY = "maintenance_mode_personal"
 export const REGISTRATION_ENABLED_BUSINESS_KEY = "registration_enabled_business"
 export const REGISTRATION_ENABLED_PERSONAL_KEY = "registration_enabled_personal"
+export const MIN_NATIVE_VERSION_PERSONAL_KEY = "min_native_version_personal"
 
 export const PLATFORM_MAINTENANCE_CODE = "PLATFORM_MAINTENANCE"
 export const REGISTRATION_CLOSED_CODE = "REGISTRATION_CLOSED"
+
+const MIN_NATIVE_VERSION_PATTERN = /^\d+\.\d+(\.\d+)?$/
+
+export function parseMinNativeVersion(value: unknown): string {
+  const s = String(value ?? "").trim()
+  if (!s) return ""
+  return MIN_NATIVE_VERSION_PATTERN.test(s) ? s : ""
+}
+
+export function isValidMinNativeVersionInput(value: string): boolean {
+  const s = value.trim()
+  return s === "" || MIN_NATIVE_VERSION_PATTERN.test(s)
+}
 
 export type ProductAccessFlags = {
   maintenance: boolean
@@ -18,6 +32,8 @@ export type ProductAccessFlags = {
 export type PlatformAccess = {
   business: ProductAccessFlags
   personal: ProductAccessFlags
+  /** Empty string means no native version gate. */
+  minNativeVersionPersonal: string
 }
 
 function parseSettingBool(value: unknown, fallback: boolean): boolean {
@@ -33,6 +49,7 @@ const ACCESS_KEYS = [
   MAINTENANCE_MODE_PERSONAL_KEY,
   REGISTRATION_ENABLED_BUSINESS_KEY,
   REGISTRATION_ENABLED_PERSONAL_KEY,
+  MIN_NATIVE_VERSION_PERSONAL_KEY,
 ] as const
 
 /** Uncached Office access flags. Defaults: maintenance off, registration on. */
@@ -57,6 +74,7 @@ export async function readPlatformAccess(admin: SupabaseClient): Promise<Platfor
       maintenance: parseSettingBool(map.get(MAINTENANCE_MODE_PERSONAL_KEY), false),
       registration: parseSettingBool(map.get(REGISTRATION_ENABLED_PERSONAL_KEY), true),
     },
+    minNativeVersionPersonal: parseMinNativeVersion(map.get(MIN_NATIVE_VERSION_PERSONAL_KEY)),
   }
 }
 

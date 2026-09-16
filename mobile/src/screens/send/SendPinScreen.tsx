@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Animated,
 } from 'react-native'
-import { ArrowLeft } from 'lucide-react-native'
+import { ArrowLeft, Fingerprint, ScanFace } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NavigationProps } from '../../types'
 import {
@@ -27,6 +27,13 @@ import { getLockoutState, verifyPin } from '../../lib/pinAuth'
 import { PinKeypad } from '../../components/pin'
 import { PinLockedHintText } from '../../components/pin/PinLockedHintText'
 import { markBalanceSendPinVerified } from '../../lib/sendFlowPostPinGate'
+import {
+  authenticatePaymentConfirm,
+  biometricUnlockLabel,
+  getBiometricAvailability,
+  isBiometricUnlockEnabled,
+  type BiometricAvailability,
+} from '../../lib/biometricUnlock'
 import { haptics } from '../../lib/haptics'
 import { USE_NATIVE_DRIVER } from '../../lib/animation'
 import { PostHogMaskView } from 'posthog-react-native'
@@ -47,8 +54,16 @@ export default function SendPinScreen({ navigation }: NavigationProps) {
   const lastTryRef = useRef('')
   const shakeAnim = useRef(new Animated.Value(0)).current
   const verifySpinnerDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [biometric, setBiometric] = useState<BiometricAvailability>({ available: false, kind: null })
+  const [biometricEnabled, setBiometricEnabled] = useState(false)
+  const biometricPromptedRef = useRef(false)
 
   const canVerifyPin = Boolean(user?.id) && !lockedOut
+
+  const completeSendConfirm = useCallback(() => {
+    markBalanceSendPinVerified()
+    navigation.goBack()
+  }, [navigation])
 
   const refreshLock = useCallback(async () => {
     if (!user?.id) return
@@ -107,8 +122,7 @@ export default function SendPinScreen({ navigation }: NavigationProps) {
       setVerifyingPin(false)
       if (res.success) {
         setPin('')
-        markBalanceSendPinVerified()
-        navigation.goBack()
+        completeSendConfirm()
         return
       }
       haptics.error()
@@ -130,7 +144,44 @@ export default function SendPinScreen({ navigation }: NavigationProps) {
       ]).start()
       setPin('')
     })()
-  }, [pin, canVerifyPin, verifyingPin, user?.id, shakeAnim, navigation])
+  }, [pin, canVerifyPin, verifyingPin, user?.id, shakeAnim, completeSendConfirm])
+
+  const handleBiometricConfirm = useCallback(async () => {
+    if (verifyingPin || lockedOut || !biometricEnabled) return
+    const result = await authenticatePaymentConfirm(biometric.kind)
+    if (result === 'lockout') {
+      setError(`Use your PIN. ${biometricUnlockLabel(biometric.kind)} is temporarily locked.`)
+      return
+    }
+    if (result !== 'success') return
+    haptics.success()
+    completeSendConfirm()
+  }, [verifyingPin, lockedOut, biometricEnabled, biometric.kind, completeSendConfirm])
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const next = await getBiometricAvailability()
+      const enabled = user?.id ? await isBiometricUnlockEnabled(user.id) : false
+      if (cancelled) return
+      setBiometric(next)
+      setBiometricEnabled(Boolean(next.available && enabled))
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
+
+  const canUseBiometrics = biometric.available && biometricEnabled
+
+  useEffect(() => {
+    if (!canUseBiometrics || lockedOut || verifyingPin || biometricPromptedRef.current) return
+    biometricPromptedRef.current = true
+    const timer = setTimeout(() => {
+      void handleBiometricConfirm()
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [canUseBiometrics, lockedOut, verifyingPin])
 
   const filledCount = pin.length
   const keypadDisabled = verifyingPin || lockedOut
@@ -248,6 +299,22 @@ export default function SendPinScreen({ navigation }: NavigationProps) {
               onBackspace={onBackspace}
               disabled={keypadDisabled}
               filledCount={filledCount}
+              leadingAction={
+                canUseBiometrics
+                  ? {
+                      accessibilityLabel: `Confirm with ${biometricUnlockLabel(biometric.kind)}`,
+                      onPress: () => {
+                        void handleBiometricConfirm()
+                      },
+                      icon:
+                        biometric.kind === 'face' ? (
+                          <ScanFace size={24} color={palette.text.primary} strokeWidth={2} />
+                        ) : (
+                          <Fingerprint size={24} color={palette.text.primary} strokeWidth={2} />
+                        ),
+                    }
+                  : null
+              }
             />
           </View>
         </View>

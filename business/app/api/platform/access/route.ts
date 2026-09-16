@@ -47,7 +47,8 @@ export async function GET(request: NextRequest) {
   }
 
   const admin = createSupabaseAdmin()
-  const flags = accessForSurface(await readPlatformAccess(admin), surface)
+  const access = await readPlatformAccess(admin)
+  const flags = accessForSurface(access, surface)
   return noStore(
     applyCorsHeaders(
       NextResponse.json({
@@ -56,6 +57,7 @@ export async function GET(request: NextRequest) {
         registration: flags.registration,
         maintenanceMessage: platformMaintenanceMessage(surface),
         registrationMessage: registrationClosedMessage(surface),
+        minNativeVersion: surface === "consumer_mobile" ? access.minNativeVersionPersonal : "",
       }),
       request,
       allowed,

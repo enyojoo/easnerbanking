@@ -9,6 +9,7 @@ export type PlatformAccessSnapshot = {
   registration: boolean
   maintenanceMessage: string
   registrationMessage: string
+  minNativeVersion: string
 }
 
 const POLL_MS = 15_000
@@ -27,6 +28,7 @@ async function fetchPlatformAccess(surface: AppSurface): Promise<PlatformAccessS
     registration: data.registration !== false,
     maintenanceMessage: data.maintenanceMessage || "This product is temporarily unavailable.",
     registrationMessage: data.registrationMessage || "New accounts are not being accepted right now.",
+    minNativeVersion: typeof data.minNativeVersion === "string" ? data.minNativeVersion : "",
   }
 }
 

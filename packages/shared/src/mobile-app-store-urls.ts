@@ -1,5 +1,17 @@
 import { APP_URLS } from "./constants/urls"
 
+/** Apple App Store listing (App Store Connect id 6762069433). */
+export const EASNER_IOS_APP_STORE_ID = "6762069433"
+export const EASNER_IOS_APP_STORE_URL = `https://apps.apple.com/app/id${EASNER_IOS_APP_STORE_ID}`
+
+/** Google Play listing (`android.package` in mobile/app.json). */
+export const EASNER_ANDROID_PACKAGE_ID = "com.easner.android"
+export const EASNER_PLAY_STORE_URL = `https://play.google.com/store/apps/details?id=${EASNER_ANDROID_PACKAGE_ID}`
+
+export function nativeStoreListingUrl(platform: "ios" | "android"): string {
+  return platform === "ios" ? EASNER_IOS_APP_STORE_URL : EASNER_PLAY_STORE_URL
+}
+
 export type MobileAppStoreUrls = {
   /** Marketing-site download page (QR target, platform redirects). */
   downloadPage: string

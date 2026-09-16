@@ -2332,7 +2332,18 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                   )}
                   <ChevronDown size={16} color={colors.text.primary} strokeWidth={2} />
                 </Pressable>
-
+                <View style={styles.amountFieldErrorSlot}>
+                  {insufficientBalanceMessage ? (
+                    <Text
+                      style={styles.amountFieldError}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.85}
+                    >
+                      {insufficientBalanceMessage}
+                    </Text>
+                  ) : null}
+                </View>
           </View>
 
               {/* Note and Keypad Wrapper */}
@@ -2371,18 +2382,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                     />
                   </View>
                 ) : null}
-                <View style={styles.amountFieldErrorSlot}>
-                  {insufficientBalanceMessage ? (
-                    <Text
-                      style={styles.amountFieldError}
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                      minimumFontScale={0.85}
-                    >
-                      {insufficientBalanceMessage}
-                    </Text>
-                  ) : null}
-                </View>
 
                 {/* Numeric Keypad - 3x4 grid */}
                 <View style={styles.keypadContainer}>
@@ -2916,7 +2915,7 @@ const styles = StyleSheet.create({
     ...surfaceFrameStyle(colors, { shadow: 'none', radius: 100 }),
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],
-    marginBottom: spacing[2],
+    marginBottom: 0,
     gap: spacing[2],
     minWidth: 180,
     minHeight: 48,
@@ -2961,7 +2960,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[4],
     ...pillRowWrapperStyle,
     gap: spacing[2],
-    marginBottom: 0,
+    marginBottom: 20,
   },
   noteInput: {
     ...pillNoteInputStyle,

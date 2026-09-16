@@ -4,6 +4,14 @@
     "slug": "easner",
     "scheme": "easner",
     "version": "1.10.2",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/b1e3438a-faea-4359-a86f-6b279ebe2743",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "orientation": "portrait",
     "icon": "./assets/icons/ios-light.png",
     "userInterfaceStyle": "light",
@@ -18,6 +26,7 @@
       },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
+        "NSFaceIDUsageDescription": "Easner uses Face ID to unlock the app.",
         "UIViewControllerBasedStatusBarAppearance": false,
         "UIStatusBarStyle": "UIStatusBarStyleLightContent",
         "UIBackgroundModes": [
@@ -103,6 +112,13 @@
         }
       ],
       "expo-system-ui",
+      "expo-updates",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Easner uses Face ID to unlock the app."
+        }
+      ],
       "expo-secure-store",
       "expo-image-picker",
       "expo-document-picker",

@@ -14,6 +14,7 @@ export type SettingsRowProps = {
   rightComponent?: React.ReactNode
   isDestructive?: boolean
   isLast?: boolean
+  showChevron?: boolean
 }
 
 /** More / settings list row with spring press feedback. */
@@ -25,6 +26,7 @@ export function SettingsRow({
   rightComponent,
   isDestructive = false,
   isLast = false,
+  showChevron = true,
 }: SettingsRowProps) {
   return (
     <PressableScale
@@ -49,7 +51,7 @@ export function SettingsRow({
       </View>
       <View style={styles.menuItemRight}>
         {rightComponent}
-        <ChevronRight size={18} color={colors.text.tertiary} strokeWidth={2} />
+        {showChevron ? <ChevronRight size={18} color={colors.text.tertiary} strokeWidth={2} /> : null}
       </View>
     </PressableScale>
   )

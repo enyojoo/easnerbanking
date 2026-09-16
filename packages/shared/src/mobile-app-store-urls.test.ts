@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest"
-import { resolveMobileAppStoreUrls } from "./mobile-app-store-urls"
+import {
+  EASNER_ANDROID_PACKAGE_ID,
+  EASNER_IOS_APP_STORE_ID,
+  nativeStoreListingUrl,
+  resolveMobileAppStoreUrls,
+} from "./mobile-app-store-urls"
 
 describe("resolveMobileAppStoreUrls", () => {
   const env = { ...process.env }
@@ -32,5 +37,12 @@ describe("resolveMobileAppStoreUrls", () => {
     expect(urls.playStore).toBe(
       "https://github.com/enyojoo/easner/releases/latest/download/Easner-Beta.apk",
     )
+  })
+
+  it("returns canonical App Store and Play listings for in-app update CTAs", () => {
+    expect(nativeStoreListingUrl("ios")).toBe(
+      `https://apps.apple.com/app/id${EASNER_IOS_APP_STORE_ID}`,
+    )
+    expect(nativeStoreListingUrl("android")).toContain(EASNER_ANDROID_PACKAGE_ID)
   })
 })

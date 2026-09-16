@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from 'react-native'
+import { View, Text, StyleSheet, ScrollView, Pressable, Platform, Switch } from 'react-native'
 import Constants from 'expo-constants'
 import { haptics } from '../../lib/haptics'
 import type { LucideIcon } from 'lucide-react-native'
@@ -11,10 +11,12 @@ import {
   ChevronRight,
   Copy,
   FileText,
+  Fingerprint,
   HelpCircle,
   Key,
   Lock,
   LogOut,
+  ScanFace,
   Shield,
   ShieldCheck,
   Users,
@@ -59,10 +61,13 @@ import { useScope } from '../../query/scope'
 import { useQueryClient } from '@tanstack/react-query'
 import { prefetchPayrollConnections } from '../../features/payroll/queries'
 import {
-  loadPayrollActivityVisible,
-  markPayrollActivityVisible,
-  peekPayrollActivityVisible,
-} from '../../lib/payrollActivityVisibility'
+  authenticateAppUnlock,
+  biometricUnlockLabel,
+  getBiometricAvailability,
+  isBiometricUnlockEnabled,
+  setBiometricUnlockEnabled,
+  type BiometricAvailability,
+} from '../../lib/biometricUnlock'
 
 type TierBadge = { label: string; tone: 'green' | 'yellow' }
 
@@ -117,6 +122,8 @@ function MoreContent({ navigation }: NavigationProps) {
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [mfaStatusLine, setMfaStatusLine] = useState('')
+  const [biometric, setBiometric] = useState<BiometricAvailability>({ available: false, kind: null })
+  const [biometricOn, setBiometricOn] = useState(false)
   /** False until MFA status is read from cache or `listFactors` – avoids showing the MFA banner while loading or on errors. */
   const [mfaStatusResolved, setMfaStatusResolved] = useState(false)
   const [pendingPayrollCount, setPendingPayrollCount] = useState(0)
@@ -132,6 +139,23 @@ function MoreContent({ navigation }: NavigationProps) {
     if (!user?.id) {
       setMfaStatusLine('')
       setMfaStatusResolved(false)
+      setBiometric({ available: false, kind: null })
+      setBiometricOn(false)
+    }
+  }, [user?.id])
+
+  useEffect(() => {
+    if (Platform.OS === 'web' || !user?.id) return
+    let cancelled = false
+    void (async () => {
+      const next = await getBiometricAvailability()
+      const enabled = await isBiometricUnlockEnabled(user.id)
+      if (cancelled) return
+      setBiometric(next)
+      setBiometricOn(Boolean(next.available && enabled))
+    })()
+    return () => {
+      cancelled = true
     }
   }, [user?.id])
 
@@ -354,6 +378,21 @@ function MoreContent({ navigation }: NavigationProps) {
       autoStartEnroll: mfaStatusLine !== 'On',
       mfaVerifiedOnCard: mfaStatusLine === 'On',
     })
+  }
+
+  const handleBiometricToggle = async (next: boolean) => {
+    if (!user?.id || !biometric.available) return
+    haptics.tap()
+    if (next) {
+      const result = await authenticateAppUnlock(biometric.kind)
+      if (result !== 'success') return
+      await setBiometricUnlockEnabled(user.id, true)
+      setBiometricOn(true)
+      haptics.success()
+      return
+    }
+    await setBiometricUnlockEnabled(user.id, false)
+    setBiometricOn(false)
   }
 
   const renderMenuItem = (
@@ -632,6 +671,27 @@ function MoreContent({ navigation }: NavigationProps) {
             <View style={styles.sectionGroup}>
               <Text style={styles.sectionLabel}>SECURITY</Text>
               <SectionCard style={styles.sectionCard} flush>
+                {biometric.available ? (
+                  <SettingsRow
+                    title={biometricUnlockLabel(biometric.kind)}
+                    subtitle="Unlock the app and confirm sends without typing your PIN"
+                    onPress={() => {
+                      void handleBiometricToggle(!biometricOn)
+                    }}
+                    icon={biometric.kind === 'face' ? ScanFace : Fingerprint}
+                    showChevron={false}
+                    rightComponent={
+                      <Switch
+                        pointerEvents="none"
+                        value={biometricOn}
+                        trackColor={{ false: colors.border.dark, true: colors.primary.main }}
+                        thumbColor={colors.neutral.white}
+                        ios_backgroundColor={colors.border.dark}
+                      />
+                    }
+                    isLast={false}
+                  />
+                ) : null}
                 {renderMenuItem(
                   'Change PIN',
                   'Update your app unlock PIN',

@@ -68,7 +68,7 @@
     <key>NSCameraUsageDescription</key>
     <string>Allow Easner to access your camera to scan wallet address QR codes.</string>
     <key>NSFaceIDUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
+    <string>Easner uses Face ID to unlock the app.</string>
     <key>NSLocalNetworkUsageDescription</key>
     <string>Expo Dev Launcher uses the local network to discover and connect to development servers running on your computer.</string>
     <key>NSMicrophoneUsageDescription</key>

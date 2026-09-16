@@ -292,18 +292,6 @@ export function SendAmountShellWebForm({
             accessibilityLabel={`Amount ${amountSymbol}${sendAmount}`}
           />
         </View>
-
-        <View style={styles.amountErrorSlot}>
-          {hasInsufficientBalance ? (
-            <Text style={styles.insufficientText} numberOfLines={1}>
-              {insufficientSourceBalanceDetail()}
-            </Text>
-          ) : amountFieldError ? (
-            <Text style={styles.insufficientText} numberOfLines={1}>
-              {customerFacingSendAmountError(amountFieldError, selectedBalanceCurrency) ?? amountFieldError}
-            </Text>
-          ) : null}
-        </View>
       </View>
 
       <View style={styles.section}>
@@ -346,6 +334,17 @@ export function SendAmountShellWebForm({
           </View>
           <ChevronDown size={16} color={colors.text.secondary} strokeWidth={2} />
         </Pressable>
+        <View style={styles.amountErrorSlot}>
+          {hasInsufficientBalance ? (
+            <Text style={styles.insufficientText} numberOfLines={1}>
+              {insufficientSourceBalanceDetail()}
+            </Text>
+          ) : amountFieldError ? (
+            <Text style={styles.insufficientText} numberOfLines={1}>
+              {customerFacingSendAmountError(amountFieldError, selectedBalanceCurrency) ?? amountFieldError}
+            </Text>
+          ) : null}
+        </View>
       </View>
 
       {!isWalletRecipient && amountFieldMode === 'payment_purpose' ? (

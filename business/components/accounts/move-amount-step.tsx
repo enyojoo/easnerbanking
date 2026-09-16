@@ -192,6 +192,13 @@ export function MoveAmountStep({
           </div>
         </div>
       </div>
+      <div className="flex h-5 min-h-5 items-center overflow-hidden">
+        {hasInsufficientBalance ? (
+          <p className="truncate text-xs leading-4 text-destructive">
+            {insufficientSourceBalanceMoveCopy()}
+          </p>
+        ) : null}
+      </div>
 
       <div className="space-y-2">
         <div className="flex min-h-[2.5rem] items-center justify-between gap-3">
@@ -259,14 +266,6 @@ export function MoveAmountStep({
             }}
             className="w-full min-w-0 border-0 bg-transparent text-4xl font-black text-foreground outline-none placeholder:text-muted-foreground/50 focus:outline-none focus:ring-0"
           />
-        </div>
-
-        <div className="flex h-5 min-h-5 items-center overflow-hidden">
-          {hasInsufficientBalance ? (
-            <p className="truncate text-xs leading-4 text-destructive">
-              {insufficientSourceBalanceMoveCopy()}
-            </p>
-          ) : null}
         </div>
 
         {minAmountError ? (

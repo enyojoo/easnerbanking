@@ -2048,17 +2048,6 @@ export default function SendPage() {
               className="w-full min-w-0 bg-transparent border-0 outline-none font-black text-foreground text-5xl placeholder:text-muted-foreground/50 focus:ring-0 focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
           </div>
-          <div className="flex h-5 min-h-5 items-center overflow-hidden">
-            {hasInsufficientBalance && sourceAccount ? (
-              <p className="truncate text-xs leading-4 text-destructive">
-                {insufficientSourceBalanceDetail()}
-              </p>
-            ) : amountFieldError ? (
-              <p className="truncate text-xs leading-4 text-destructive">
-                {customerFacingSendAmountError(amountFieldError, sendCurrency) ?? amountFieldError}
-              </p>
-            ) : null}
-          </div>
         </div>
       )}
 
@@ -2099,6 +2088,17 @@ export default function SendPage() {
             </div>
             <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
           </button>
+          <div className="flex h-5 min-h-5 items-center overflow-hidden">
+            {hasInsufficientBalance && sourceAccount ? (
+              <p className="truncate text-xs leading-4 text-destructive">
+                {insufficientSourceBalanceDetail()}
+              </p>
+            ) : amountFieldError ? (
+              <p className="truncate text-xs leading-4 text-destructive">
+                {customerFacingSendAmountError(amountFieldError, sendCurrency) ?? amountFieldError}
+              </p>
+            ) : null}
+          </div>
         </div>
       )}
 

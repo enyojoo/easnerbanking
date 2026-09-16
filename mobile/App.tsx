@@ -39,6 +39,9 @@ import { warmTransactionDetailForNavigation } from './src/hooks/queries/use-tran
 import { getMobileQueryClient } from './src/query/client'
 import AppNavigator from './src/navigation/AppNavigator'
 import { PlatformAccessGate } from './src/components/PlatformAccessGate'
+import { AppUpdateBootstrap } from './src/components/AppUpdateBootstrap'
+import { OfflineBanner } from './src/components/OfflineBanner'
+import { RootErrorBoundary } from './src/components/RootErrorBoundary'
 import { webLinking } from './src/navigation/linking'
 import { setPreserveUserPathOverAuth } from './src/navigation/webLinkingGuard'
 import { formatWebDocumentTitle, setWebDocumentTitle } from './src/navigation/webDocumentTitle'
@@ -244,7 +247,11 @@ function AppContent() {
       />
       <WebIdleSessionBridge />
       <PlatformAccessGate>
-        <AppNavigator />
+        <View style={styles.appRoot}>
+          <AppNavigator />
+          <AppUpdateBootstrap routeName={activeRouteName} />
+          <OfflineBanner />
+        </View>
       </PlatformAccessGate>
     </NavigationContainer>
   )
@@ -464,6 +471,7 @@ export default function App() {
       >
         {/* Global safe areas (react-native-safe-area-context). Expo Router not used – React Navigation + stack/tabs. */}
         <SafeAreaProvider>
+          <RootErrorBoundary>
           <ResponsiveLayoutProvider>
           <ShellAwareSafeArea>
           <ThemePaletteProvider>
@@ -486,6 +494,7 @@ export default function App() {
           </ThemePaletteProvider>
           </ShellAwareSafeArea>
           </ResponsiveLayoutProvider>
+          </RootErrorBoundary>
         </SafeAreaProvider>
       </PressablesConfig>
       </GestureHandlerRootView>

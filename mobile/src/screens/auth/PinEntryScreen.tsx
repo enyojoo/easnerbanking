@@ -9,13 +9,20 @@ import {
   Animated,
   ActivityIndicator,
 } from 'react-native'
-import { HelpCircle } from 'lucide-react-native'
+import { HelpCircle, Fingerprint, ScanFace } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NavigationProps } from '../../types'
 import { colors, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, userAvatarStyles, useThemeColors } from '../../theme'
 import { ripple } from '../../lib/androidRipple'
 import { verifyPin, getPinLockTimeRemaining, updateSessionActivity, setAppLocked } from '../../lib/pinAuth'
 import { emitAppLocked } from '../../lib/app-lock-bus'
+import {
+  authenticateAppUnlock,
+  biometricUnlockLabel,
+  getBiometricAvailability,
+  isBiometricUnlockEnabled,
+  type BiometricAvailability,
+} from '../../lib/biometricUnlock'
 import { useAuth } from '../../contexts/AuthContext'
 import { appPinStrings } from '../../constants/app-pin-en'
 import { displayFirstNameFromFullName, initialsFromFullName } from '../../lib/userProfileHelpers'
@@ -42,6 +49,9 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
   const [lockedUntil, setLockedUntil] = useState<number | null>(null)
   const [forgotSheetVisible, setForgotSheetVisible] = useState(false)
   const [logoutSheetVisible, setLogoutSheetVisible] = useState(false)
+  const [biometric, setBiometric] = useState<BiometricAvailability>({ available: false, kind: null })
+  const [biometricEnabled, setBiometricEnabled] = useState(false)
+  const biometricPromptedRef = useRef(false)
   const shakeAnim = useRef(new Animated.Value(0)).current
   const insets = useSafeAreaInsets()
 
@@ -112,6 +122,52 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
     haptics.tap()
   }
 
+  const completeUnlock = async () => {
+    if (!user?.id) return
+    await setAppLocked(user.id, false)
+    await updateSessionActivity()
+    emitAppLocked('unlocked')
+    haptics.success()
+  }
+
+  const handleBiometricUnlock = async () => {
+    if (loading || locked || !biometricEnabled) return
+    const result = await authenticateAppUnlock(biometric.kind)
+    if (result === 'lockout') {
+      setError(`Use your PIN. ${biometricUnlockLabel(biometric.kind)} is temporarily locked.`)
+      return
+    }
+    if (result !== 'success') return
+    setLoading(true)
+    await completeUnlock()
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const next = await getBiometricAvailability()
+      const enabled = user?.id ? await isBiometricUnlockEnabled(user.id) : false
+      if (cancelled) return
+      setBiometric(next)
+      setBiometricEnabled(Boolean(next.available && enabled))
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
+
+  const canUseBiometrics = biometric.available && biometricEnabled
+
+  useEffect(() => {
+    if (!canUseBiometrics || locked || loading || biometricPromptedRef.current) return
+    biometricPromptedRef.current = true
+    const timer = setTimeout(() => {
+      void handleBiometricUnlock()
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [canUseBiometrics, locked, loading])
+
   const handleVerifyPin = async (pinString?: string) => {
     const pinToVerify = pinString || pin.join('')
     
@@ -125,13 +181,7 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
     const result = await verifyPin(pinToVerify, user?.id)
 
     if (result.success) {
-      if (user?.id) {
-        await setAppLocked(user.id, false)
-        await updateSessionActivity()
-        emitAppLocked('unlocked')
-      }
-
-      haptics.success()
+      await completeUnlock()
       setLoading(false)
     } else {
       haptics.error()
@@ -257,6 +307,22 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
               onBackspace={handleBackspace}
               disabled={loading || locked}
               filledCount={filledCount}
+              leadingAction={
+                canUseBiometrics
+                  ? {
+                      accessibilityLabel: `Unlock with ${biometricUnlockLabel(biometric.kind)}`,
+                      onPress: () => {
+                        void handleBiometricUnlock()
+                      },
+                      icon:
+                        biometric.kind === 'face' ? (
+                          <ScanFace size={24} color={palette.text.primary} strokeWidth={2} />
+                        ) : (
+                          <Fingerprint size={24} color={palette.text.primary} strokeWidth={2} />
+                        ),
+                    }
+                  : null
+              }
             />
           </View>
 

@@ -1,6 +1,7 @@
 import React from 'react'
 import { AppState, AppStateStatus, Platform } from 'react-native'
-import { focusManager, useIsRestoring } from '@tanstack/react-query'
+import { onlineManager, focusManager, useIsRestoring } from '@tanstack/react-query'
+import NetInfo from '@react-native-community/netinfo'
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import { qk, type PersonalScope } from '@easner/shared'
 import { getMobileQueryClient } from './client'
@@ -48,6 +49,22 @@ focusManager.setEventListener((handleFocus) => {
     handleFocus(status === 'active')
   })
   return () => sub.remove()
+})
+
+onlineManager.setEventListener((setOnline) => {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const emit = () => setOnline(window.navigator.onLine)
+    emit()
+    window.addEventListener('online', emit)
+    window.addEventListener('offline', emit)
+    return () => {
+      window.removeEventListener('online', emit)
+      window.removeEventListener('offline', emit)
+    }
+  }
+  return NetInfo.addEventListener((state) => {
+    setOnline(state.isConnected !== false)
+  })
 })
 
 const qc = getMobileQueryClient()

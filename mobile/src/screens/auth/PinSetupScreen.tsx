@@ -22,6 +22,7 @@ import {
   skipColdStartPinLockForUser,
 } from '../../lib/pinAuth'
 import { emitAppLocked } from '../../lib/app-lock-bus'
+import { offerBiometricAfterPinSetup } from '../../lib/biometricUnlock'
 import { useAuth } from '../../contexts/AuthContext'
 import { appPinStrings } from '../../constants/app-pin-en'
 import { PinKeypad } from '../../components/pin'
@@ -128,6 +129,9 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
 
       emitAppLocked('unlocked')
 
+      setLoading(false)
+      if (uid) await offerBiometricAfterPinSetup(uid)
+
       haptics.success()
 
       // Optional flow: opened from main stack (e.g. More) – gate is already "main"
@@ -135,6 +139,7 @@ export default function PinSetupScreen({ navigation, route }: NavigationProps) {
         navigation.goBack()
       }
     } else {
+      setLoading(false)
       setSetupFailMessage(result.error || appPinStrings.setupFailed)
       setSetupFailSheetOpen(true)
     }

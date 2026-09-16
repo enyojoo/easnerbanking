@@ -25,6 +25,7 @@
     },
     "preview": {
       "extends": "base",
+      "channel": "preview",
       "env": {
         "NODE_ENV": "production"
       },
@@ -35,6 +36,7 @@
     },
     "production": {
       "extends": "base",
+      "channel": "production",
       "env": {
         "NODE_ENV": "production"
       },

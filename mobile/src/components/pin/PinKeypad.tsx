@@ -20,6 +20,11 @@ type Props = {
   filledCount: number
   backspaceActiveColor?: string
   maxButtonSize?: number
+  leadingAction?: {
+    accessibilityLabel: string
+    onPress: () => void
+    icon: React.ReactNode
+  } | null
 }
 
 /** 3×4 numeric keypad + backspace (matches unlock / app-lock spec). */
@@ -30,6 +35,7 @@ export function PinKeypad({
   filledCount,
   backspaceActiveColor,
   maxButtonSize = 92,
+  leadingAction,
 }: Props) {
   const palette = useThemeColors()
   const { width } = useWindowDimensions()
@@ -80,7 +86,20 @@ export function PinKeypad({
         )}
       </View>
       <View style={[styles.keypadBottomRow, { width: keypadSizing.rowWidth }]}>
-        <View style={[styles.keypadButtonSpacer, { width: keypadSizing.buttonWidth }]} />
+        {leadingAction ? (
+          <PressableScale
+            accessibilityRole="button"
+            accessibilityLabel={leadingAction.accessibilityLabel}
+            style={cellStyle()}
+            onPress={leadingAction.onPress}
+            onPressIn={() => haptics.tap()}
+            enabled={!disabled}
+          >
+            {leadingAction.icon}
+          </PressableScale>
+        ) : (
+          <View style={[styles.keypadButtonSpacer, { width: keypadSizing.buttonWidth }]} />
+        )}
         {renderKey(
           '0',
           () => onDigit('0'),

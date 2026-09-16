@@ -5,6 +5,7 @@ export type MobilePlatformAccess = {
   registration: boolean
   maintenanceMessage: string
   registrationMessage: string
+  minNativeVersion: string
 }
 
 export const PLATFORM_MAINTENANCE_CODE = 'PLATFORM_MAINTENANCE'
@@ -24,6 +25,7 @@ export async function fetchMobilePlatformAccess(): Promise<MobilePlatformAccess 
         data.maintenanceMessage || 'The Easner app is temporarily unavailable.',
       registrationMessage:
         data.registrationMessage || 'New Easner app accounts are not being accepted right now.',
+      minNativeVersion: typeof data.minNativeVersion === 'string' ? data.minNativeVersion.trim() : '',
     }
   } catch {
     return null

@@ -2,8 +2,10 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { clearEmailProviderCache, EMAIL_PROVIDER_SETTING_KEY, parseEmailProvider } from "@easner/server"
 import { WALLET_SEND_COMPLIANCE_PLATFORM_KEY } from "@/lib/wallet-send-compliance/platform-enabled"
 import {
+  isValidMinNativeVersionInput,
   MAINTENANCE_MODE_BUSINESS_KEY,
   MAINTENANCE_MODE_PERSONAL_KEY,
+  MIN_NATIVE_VERSION_PERSONAL_KEY,
   REGISTRATION_ENABLED_BUSINESS_KEY,
   REGISTRATION_ENABLED_PERSONAL_KEY,
 } from "@/lib/platform-access"
@@ -32,6 +34,7 @@ export const SYSTEM_SETTING_ALLOWLIST: Record<string, SettingSpec> = {
   [REGISTRATION_ENABLED_PERSONAL_KEY]: { dataType: "boolean", category: "platform" },
   [WALLET_SEND_COMPLIANCE_PLATFORM_KEY]: { dataType: "boolean", category: "platform" },
   [EMAIL_PROVIDER_SETTING_KEY]: { dataType: "string", category: "platform" },
+  [MIN_NATIVE_VERSION_PERSONAL_KEY]: { dataType: "string", category: "platform" },
   currency_active_USD: { dataType: "boolean", category: "currency" },
   currency_active_EUR: { dataType: "boolean", category: "currency" },
 }
@@ -57,6 +60,13 @@ export function normalizeSystemSettingValue(key: string, value: unknown): { valu
       throw new Error("email_provider must be ses or sendgrid")
     }
     return { value: provider, spec }
+  }
+  if (key === MIN_NATIVE_VERSION_PERSONAL_KEY) {
+    const version = String(value ?? "").trim()
+    if (!isValidMinNativeVersionInput(version)) {
+      throw new Error("Minimum app version must be empty or look like 1.10.2")
+    }
+    return { value: version, spec }
   }
   if (spec.dataType === "boolean") {
     return { value: parseBooleanValue(value), spec }

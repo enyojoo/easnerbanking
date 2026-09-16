@@ -1,10 +1,22 @@
 import React from 'react'
-import { View, Text, StyleSheet } from 'react-native'
+import { Platform, View, Text, StyleSheet } from 'react-native'
+import * as Application from 'expo-application'
 import { usePlatformAccess } from '../hooks/usePlatformAccess'
+import { isNativeVersionBelowMin } from '../lib/appVersion'
+import { UpdateRequiredScreen } from './UpdateRequiredScreen'
 import { colors, spacing } from '../theme'
 
 export function PlatformAccessGate({ children }: { children: React.ReactNode }) {
   const access = usePlatformAccess()
+  const nativeVersion = Platform.OS === 'web' ? null : Application.nativeApplicationVersion
+  const needsStoreUpdate =
+    Platform.OS !== 'web' &&
+    isNativeVersionBelowMin(nativeVersion, access.data?.minNativeVersion)
+
+  if (needsStoreUpdate) {
+    return <UpdateRequiredScreen />
+  }
+
   if (access.data?.maintenance) {
     return (
       <View style={styles.wrap}>
@@ -21,7 +33,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing[8],
     backgroundColor: colors.background.primary,
   },
   title: {
@@ -31,7 +43,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   body: {
-    marginTop: spacing.md,
+    marginTop: spacing[4],
     fontSize: 15,
     lineHeight: 22,
     color: colors.text.secondary,

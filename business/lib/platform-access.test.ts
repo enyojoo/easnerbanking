@@ -25,6 +25,7 @@ describe("readPlatformAccess", () => {
     expect(access).toEqual({
       business: { maintenance: false, registration: true },
       personal: { maintenance: false, registration: true },
+      minNativeVersionPersonal: "",
     })
   })
 
@@ -41,6 +42,17 @@ describe("readPlatformAccess", () => {
     expect(access.personal.registration).toBe(false)
     expect(accessForSurface(access, "business_web").maintenance).toBe(true)
     expect(accessForSurface(access, "consumer_mobile").registration).toBe(false)
+  })
+
+  it("reads a valid personal min native version and ignores garbage", async () => {
+    const valid = await readPlatformAccess(
+      adminWithRows([{ key: "min_native_version_personal", value: "1.10.2" }]) as never,
+    )
+    expect(valid.minNativeVersionPersonal).toBe("1.10.2")
+    const invalid = await readPlatformAccess(
+      adminWithRows([{ key: "min_native_version_personal", value: "latest" }]) as never,
+    )
+    expect(invalid.minNativeVersionPersonal).toBe("")
   })
 
   it("reads system_settings on every call", async () => {
