@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
-import { warmWebBankingImages } from "@easner/shared/image/warm-web-banking-images"
+import { warmWebBankingImages } from "@easner/shared"
 import { useAuth } from "@/lib/auth-context"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 import { usePersonalProfileAvatar } from "@/lib/use-personal-profile-avatar"

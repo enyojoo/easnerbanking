@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
-import { warmWebBankingImages } from "@easner/shared/image/warm-web-banking-images"
+import { warmWebBankingImages } from "@easner/shared"
 
 /** Prefetch flags, tokens, and chain logos so office tables and corridors paint complete. */
 export function ImageWarmBootstrap() {

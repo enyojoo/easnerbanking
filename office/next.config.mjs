@@ -53,7 +53,8 @@ const nextConfig = {
   webpack: (config, { isServer }) => {
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
-      "@easner/shared": resolve(__dirname, "../packages/shared/src/index.ts"),
+      // Exact match only – a bare `@easner/shared` prefix swallows subpath imports.
+      "@easner/shared$": resolve(__dirname, "../packages/shared/src/index.ts"),
     }
     config.resolve.modules.unshift(resolve(__dirname, "../node_modules"))
     if (!isServer) {
