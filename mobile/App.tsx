@@ -337,6 +337,7 @@ export default function App() {
       console.warn('SplashScreen.hideAsync', e)
     })
     markSplashReady()
+  }, [fontsLoaded, supabaseConfigError])
 
   // Foreground/tap listeners only; token registration is gated on user prefs in PushNotificationBootstrap
   useEffect(() => {
