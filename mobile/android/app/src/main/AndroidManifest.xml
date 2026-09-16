@@ -23,7 +23,7 @@
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATE_URL" android:value="https://u.expo.dev/b1e3438a-faea-4359-a86f-6b279ebe2743"/>
-    <meta-data android:name="expo.modules.updates.EXPO_RUNTIME_VERSION" android:value="1.10.2"/>
+    <meta-data android:name="expo.modules.updates.EXPO_RUNTIME_VERSION" android:value="@string/expo_runtime_version"/>
     <meta-data android:name="io.intercom.android.sdk.server.region" android:value="@integer/intercom_server_region_us"/>
     <service android:name=".IntercomFirebaseMessagingService" android:exported="false">
       <intent-filter android:priority="10">

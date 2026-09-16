@@ -3,10 +3,8 @@
     "name": "Easner",
     "slug": "easner",
     "scheme": "easner",
-    "version": "1.10.2",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "version": "1.10.3",
+    "runtimeVersion": "1.10.3",
     "updates": {
       "url": "https://u.expo.dev/b1e3438a-faea-4359-a86f-6b279ebe2743",
       "checkAutomatically": "ON_LOAD",

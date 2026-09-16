@@ -1,0 +1,3 @@
+• Unlock and confirm sends with Face ID or fingerprint, with PIN as the fallback
+• App stays current with in-app updates, and asks you to update from the store when a new native version is required
+• Clearer offline and error recovery if the connection drops

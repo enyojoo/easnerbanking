@@ -210,6 +210,8 @@ module.exports = ({ config }) => {
 
   const merged = {
     ...config,
+    // Bare workflow (committed ios/android) cannot use runtimeVersion policies.
+    runtimeVersion: config.version,
     web: {
       ...(config.web || {}),
       orientation: 'portrait',
