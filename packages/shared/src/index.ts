@@ -242,7 +242,6 @@ export {
 } from "./image/versioned-image-url"
 export { warmWebBankingImages } from "./image/warm-web-banking-images"
 export { warmWebFlagCache, warmAllWebFlagAssets, warmWebCurrencyFlag } from "./flags/warm-flags.web"
-export { warmWebFlagCache, warmAllWebFlagAssets, warmWebCurrencyFlag } from "./flags/warm-flags.web"
 export { warmWebPayoutIcons, warmWebPayoutIconLabels } from "./payout-icons/warm-payout-icons.web"
 export { currencyToCountryCode, getCountryCodeForCurrency, normalizeCode } from "./flags/currency-mapping"
 export { getCurrencyCatalog, currencyDisplayName } from "./currencies/catalog"
