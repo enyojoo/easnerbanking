@@ -117,6 +117,44 @@
     "typescript": "~6.0.3"
   },
   "expo": {
+    "install": {
+      "exclude": [
+        "@expo/metro-runtime",
+        "expo",
+        "expo-apple-authentication",
+        "expo-application",
+        "expo-asset",
+        "expo-auth-session",
+        "expo-background-task",
+        "expo-blur",
+        "expo-build-properties",
+        "expo-camera",
+        "expo-clipboard",
+        "expo-constants",
+        "expo-crypto",
+        "expo-dev-client",
+        "expo-device",
+        "expo-document-picker",
+        "expo-file-system",
+        "expo-font",
+        "expo-haptics",
+        "expo-image",
+        "expo-image-manipulator",
+        "expo-image-picker",
+        "expo-keep-awake",
+        "expo-linear-gradient",
+        "expo-linking",
+        "expo-localization",
+        "expo-media-library",
+        "expo-notifications",
+        "expo-secure-store",
+        "expo-sharing",
+        "expo-splash-screen",
+        "expo-system-ui",
+        "expo-task-manager",
+        "expo-web-browser"
+      ]
+    },
     "doctor": {
       "appConfigFieldsNotSyncedCheck": {
         "enabled": false
