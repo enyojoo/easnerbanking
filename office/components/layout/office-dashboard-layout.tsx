@@ -87,7 +87,7 @@ export function OfficeDashboardLayout({ children }: OfficeDashboardLayoutProps) 
   const PlatformNavIcon = officeNavPlatformLink.icon
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-dvh overflow-hidden bg-background">
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div
@@ -99,7 +99,7 @@ export function OfficeDashboardLayout({ children }: OfficeDashboardLayoutProps) 
 
       <div
         className={cn(
-          "fixed left-0 top-0 z-50 h-screen w-64 border-r border-sidebar-border bg-sidebar flex flex-col transform transition-transform duration-300 ease-in-out lg:translate-x-0",
+          "fixed left-0 top-0 z-50 h-dvh w-64 border-r border-sidebar-border bg-sidebar flex flex-col transform transition-transform duration-300 ease-in-out lg:translate-x-0",
           sidebarOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -212,8 +212,8 @@ export function OfficeDashboardLayout({ children }: OfficeDashboardLayoutProps) 
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col overflow-hidden lg:ml-64">
-        <div className="flex h-16 items-center border-b border-border/60 bg-background/80 px-4 backdrop-blur sm:px-6 lg:px-8">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:ml-64">
+        <div className="flex h-16 min-h-16 shrink-0 items-center border-b border-border/60 bg-background/80 px-4 backdrop-blur sm:px-6 lg:px-8">
           <Button
             variant="ghost"
             size="icon-sm"
@@ -226,8 +226,8 @@ export function OfficeDashboardLayout({ children }: OfficeDashboardLayoutProps) 
           <div className="flex-1" />
         </div>
 
-        <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">{children}</div>
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <div className="mx-auto w-full max-w-[1440px] px-4 pb-10 pt-6 sm:px-6 lg:px-8">{children}</div>
         </main>
       </div>
     </div>

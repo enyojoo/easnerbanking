@@ -167,11 +167,14 @@
   }
 
   html {
-    scroll-behavior: smooth;
+    height: 100%;
+    overflow-x: hidden;
   }
 
   body {
     @apply bg-background text-foreground;
+    min-height: 100%;
+    overflow-x: hidden;
     font-feature-settings: "cv11", "ss01", "ss03";
     transition: background-color 0.2s ease, color 0.2s ease;
   }
