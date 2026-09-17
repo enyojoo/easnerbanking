@@ -511,7 +511,6 @@ export default function AppNavigator() {
   const [pinGate, setPinGate] = useState<'loading' | 'setup' | 'pin' | 'main'>('loading')
   const restrictionQuery = useAccountRestriction(Boolean(user?.id))
   const accountRestriction = restrictionQuery.data ?? emptyAccountRestriction()
-  const restrictionLoading = Boolean(user?.id) && restrictionQuery.isLoading && !restrictionQuery.data
   const [lockTick, setLockTick] = useState(0)
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(Platform.OS === 'web' ? true : null)
   /** Web: keep MainStack mounted after the first unlock so idle PIN does not reset navigation. */
@@ -922,10 +921,6 @@ export default function AppNavigator() {
 
   if (user && pinGate === 'pin') {
     return <PinGateEntryStack key="pin-gate-entry" />
-  }
-
-  if (user && pinGate === 'main' && restrictionLoading) {
-    return <AuthFlowLoadingShell palette={palette} testId="Checking account status" />
   }
 
   if (Platform.OS === 'web' && pinGate === 'main') {

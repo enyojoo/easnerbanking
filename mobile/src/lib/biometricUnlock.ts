@@ -51,31 +51,17 @@ export async function getBiometricAvailability(): Promise<BiometricAvailability>
   try {
     const platform = platformKind()
     const AuthType = LocalAuthentication.AuthenticationType
-    let hasHardware = false
-    let enrolled = false
-    let types: number[] = []
-    let strongEnrolled = false
-    if (platform === 'ios') {
-      ;[hasHardware, enrolled, types] = await Promise.all([
-        LocalAuthentication.hasHardwareAsync(),
-        LocalAuthentication.isEnrolledAsync(),
-        LocalAuthentication.supportedAuthenticationTypesAsync(),
-      ])
-      strongEnrolled = Boolean(hasHardware && enrolled)
-    } else {
-      const probed = await Promise.all([
-        LocalAuthentication.hasHardwareAsync(),
-        LocalAuthentication.isEnrolledAsync(),
-        LocalAuthentication.supportedAuthenticationTypesAsync(),
-        LocalAuthentication.getEnrolledLevelAsync(),
-      ])
-      hasHardware = probed[0]
-      enrolled = probed[1]
-      types = probed[2]
-      strongEnrolled =
-        Boolean(hasHardware && enrolled) &&
-        probed[3] >= LocalAuthentication.SecurityLevel.BIOMETRIC_STRONG
-    }
+    const [hasHardware, enrolled, types, enrolledLevel] = await Promise.all([
+      LocalAuthentication.hasHardwareAsync(),
+      LocalAuthentication.isEnrolledAsync(),
+      LocalAuthentication.supportedAuthenticationTypesAsync(),
+      LocalAuthentication.getEnrolledLevelAsync(),
+    ])
+    const enrolledBiometrics = Boolean(hasHardware && enrolled)
+    const strongEnrolled =
+      platform === 'ios'
+        ? enrolledBiometrics
+        : enrolledBiometrics && enrolledLevel >= LocalAuthentication.SecurityLevel.BIOMETRIC_STRONG
     const value = pickUnlockBiometric({
       platform,
       strongEnrolled,

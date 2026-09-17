@@ -53,6 +53,18 @@ describe('pickUnlockBiometric', () => {
     ).toEqual({ available: true, kind: 'fingerprint', autoPrompt: true })
   })
 
+  it('allows Class 3 Android face when that is the strong biometric', () => {
+    expect(
+      pickUnlockBiometric({
+        platform: 'android',
+        strongEnrolled: true,
+        fingerprint: false,
+        face: true,
+        iris: false,
+      }),
+    ).toEqual({ available: true, kind: 'face', autoPrompt: true })
+  })
+
   it('rejects weak Android face when strong biometrics are not enrolled', () => {
     expect(
       pickUnlockBiometric({

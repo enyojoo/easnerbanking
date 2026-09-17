@@ -14,11 +14,11 @@ export const UNAVAILABLE_BIOMETRIC: BiometricAvailability = {
 }
 
 /**
- * iOS: Face ID if present, else Touch ID. If types are empty but strong biometrics
+ * iOS: Face ID if present, else Touch ID. If types are empty but biometrics
  * are enrolled, default to Face ID (supportedAuthenticationTypes can be empty
  * before the first Face ID prompt).
- * Android: fingerprint first (Class 3), then iris, then strong face.
- * Weak 2D Android face unlock is excluded by `strongEnrolled`.
+ * Android: Class 3 only (fingerprint, iris, or strong face). Weak 2D camera
+ * face is excluded so unlock and send confirm stay at the same bar as iOS.
  */
 export function pickUnlockBiometric(input: {
   platform: 'ios' | 'android' | 'web'
