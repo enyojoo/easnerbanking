@@ -1,0 +1,3 @@
+• Faster unlock — PIN or Face ID / fingerprint, then straight to Home
+• More reliable Face ID on iPhone and fingerprint on Android
+• App opens without sitting on the splash screen

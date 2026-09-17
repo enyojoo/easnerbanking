@@ -3,8 +3,8 @@
     "name": "Easner",
     "slug": "easner",
     "scheme": "easner",
-    "version": "1.10.4",
-    "runtimeVersion": "1.10.4",
+    "version": "1.10.5",
+    "runtimeVersion": "1.10.5",
     "updates": {
       "url": "https://u.expo.dev/b1e3438a-faea-4359-a86f-6b279ebe2743",
       "checkAutomatically": "ON_LOAD",
@@ -14,7 +14,7 @@
     "icon": "./assets/icons/ios-light.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "buildNumber": "8",
+      "buildNumber": "9",
       "supportsTablet": false,
       "deploymentTarget": "16.4",
       "bundleIdentifier": "com.easner.mobile",
@@ -49,7 +49,7 @@
       }
     },
     "android": {
-      "versionCode": 8,
+      "versionCode": 9,
       "softwareKeyboardLayoutMode": "resize",
       "icon": "./assets/icons/adaptive-icon.png",
       "adaptiveIcon": {

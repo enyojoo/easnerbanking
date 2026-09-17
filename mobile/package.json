@@ -1,6 +1,6 @@
 {
   "name": "easner-mobile",
-  "version": "1.10.4",
+  "version": "1.10.5",
   "main": "index.ts",
   "scripts": {
     "postinstall": "node -e \"if(process.env.EAS_BUILD!=='true'){require('child_process').execSync('node scripts/linkWorkspaceDeps.js',{stdio:'inherit'})}\"",
