@@ -166,7 +166,7 @@ export function UserCase({ userId }: { userId: string }) {
   }
 
   return (
-    <Tabs value={tab.value} onValueChange={tab.onValueChange} className="-mx-4 -my-6 sm:-mx-6 lg:-mx-8">
+    <Tabs value={tab.value} onValueChange={tab.onValueChange} className="-mx-4 -mt-6 sm:-mx-6 lg:-mx-8">
       <OfficeCaseHeader
         backHref="/users"
         backLabel="Users"
@@ -203,7 +203,7 @@ export function UserCase({ userId }: { userId: string }) {
         }
         tabs={<OfficeCaseTabBar tabs={[...tabs]} onTabHover={prefetchTab} />}
       />
-      <div className="px-6 py-5">
+      <div className="px-6 pb-8 pt-5">
           <OfficeCaseTabPanel value="profile">
             <OfficeIdentityPanel user={user} showBankRail={!orgLinked} />
           </OfficeCaseTabPanel>

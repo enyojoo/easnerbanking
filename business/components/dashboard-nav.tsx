@@ -66,8 +66,7 @@ export function DashboardNav() {
     logoUrl: businessLogoUrl,
     isLoading: businessProfileLoading,
     hasData: businessProfileHasData,
-    tier1Complete,
-    tier1VerificationStatus,
+    headlineVerificationStatus,
   } = useBusinessProfile()
 
   const restrictionQuery = useAccountRestriction()
@@ -189,9 +188,10 @@ export function DashboardNav() {
         ) : (
           <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
             <span className="w-full truncate text-sm font-semibold leading-tight tracking-tight">{businessName}</span>
+            {/* Org-complete must not force Verified: a later other-rail status still leads. */}
             <Tier1VerificationBadge
-              tier1Complete={tier1Complete}
-              tier1VerificationStatus={tier1VerificationStatus}
+              tier1Complete={headlineVerificationStatus === "approved"}
+              tier1VerificationStatus={headlineVerificationStatus}
               accountRestricted={accountRestricted}
               compact
             />

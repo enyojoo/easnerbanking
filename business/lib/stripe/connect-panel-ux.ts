@@ -265,5 +265,6 @@ export function connectPanelBadgeLabel(phase: ConnectPanelPhase, ready: boolean)
   if (status === "in_progress") return VERIFICATION_STATUS_COPY.inProgress
   if (status === "pending") return VERIFICATION_STATUS_COPY.inReview
   if (status === "hold") return VERIFICATION_STATUS_COPY.actionNeeded
+  if (status === "rejected") return VERIFICATION_STATUS_COPY.rejected
   return VERIFICATION_STATUS_COPY.notStarted
 }

@@ -16,6 +16,7 @@ import type { BusinessRole } from "@/lib/b2b/require-role"
 import { isChannelHealthy, pollingIntervalFor } from "@easner/shared"
 import { useDocumentVisibility } from "@/lib/query/use-document-visibility"
 import { useRealtimeHealth } from "@/lib/query/realtime-health-context"
+import { resolveBusinessHeadlineKybStatus } from "@/lib/compliance/business-tier1"
 
 export type BusinessProfile = {
   businessId: string | null
@@ -53,6 +54,15 @@ export type BusinessProfile = {
   tier1Complete: boolean
   /** US banking status from profile API (Grid `verification_status` only). */
   tier1VerificationStatus: string | null
+  /**
+   * Compact sidebar KYB status across Grid and Bridge.
+   * Approved leads until the other rail has a later status change.
+   */
+  headlineVerificationStatus: string | null
+  /** Last time Grid `verification_status` changed. Used to pick the sidebar headline. */
+  gridKybStatusUpdatedAt?: string | null
+  /** Last time Bridge `bridge_kyc_status` changed. Used to pick the sidebar headline. */
+  bridgeKycStatusUpdatedAt?: string | null
   /** Decline reasons from Noah when org KYB is rejected. */
   tier1RejectionReasons: unknown[] | null
   tier1RejectionType: string | null
@@ -113,6 +123,9 @@ const DEFAULT_PROFILE: BusinessProfile = {
   ownerName: "",
   tier1Complete: false,
   tier1VerificationStatus: null,
+  headlineVerificationStatus: null,
+  gridKybStatusUpdatedAt: null,
+  bridgeKycStatusUpdatedAt: null,
   tier1RejectionReasons: null,
   tier1RejectionType: null,
   tier1CanResubmit: true,
@@ -199,6 +212,12 @@ export async function updateBusinessProfile(payload: {
     }
   }
   return json.profile ?? null
+}
+
+/** Latest in-memory business profile for the signed-in user, if cached. */
+export function peekCachedBusinessProfile(userId: string | null | undefined): BusinessProfile | null {
+  if (!userId) return null
+  return dataCache.get<BusinessProfile>(CACHE_KEYS.BUSINESS_PROFILE(userId))
 }
 
 /** Merge fields into the cached profile so Settings updates without a refetch. */
@@ -341,6 +360,14 @@ export function useBusinessProfile() {
       registrationCountryCode:
         profileData.registrationCountryCode ??
         countryCodeFromName(profileData.registrationCountry ?? profileData.country),
+      headlineVerificationStatus:
+        profileData.headlineVerificationStatus ??
+        resolveBusinessHeadlineKybStatus({
+          gridStatus: profileData.tier1VerificationStatus,
+          bridgeStatus: profileData.bridgeKycStatus,
+          gridUpdatedAt: profileData.gridKybStatusUpdatedAt,
+          bridgeUpdatedAt: profileData.bridgeKycStatusUpdatedAt,
+        }),
     }),
     [profileData],
   )

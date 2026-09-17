@@ -59,6 +59,25 @@ function isProgressedVerificationStatus(status: string): status is VerificationS
   )
 }
 
+export type KybRailTimestampColumn = "grid_kyb_status_updated_at" | "bridge_kyc_status_updated_at"
+
+export function normalizeStoredKybStatus(raw: string | null | undefined): string {
+  return String(raw ?? "").toLowerCase().trim() || "not_started"
+}
+
+/** Timestamp patch only when the stored rail status actually changes. */
+export function kybStatusTimestampPatch(input: {
+  previous: string | null | undefined
+  next: string | null | undefined
+  now: string
+  column: KybRailTimestampColumn
+}): Record<string, string> {
+  if (normalizeStoredKybStatus(input.previous) === normalizeStoredKybStatus(input.next)) {
+    return {}
+  }
+  return { [input.column]: input.now }
+}
+
 /**
  * Canonical KYC/KYB for money-movement gates.
  *
@@ -99,35 +118,79 @@ export async function persistVerificationStatus(
     verifiedAt?: string | null
     gridCustomerId?: string | null
     bridgeCustomerId?: string | null
+    extra?: Record<string, unknown>
   },
 ): Promise<void> {
   const now = new Date().toISOString()
-  if (input.kind === "business" && input.provider === "bridge" && input.businessId) {
-    const { error } = await admin
+  if (input.kind === "business" && input.businessId) {
+    const { data: current } = await admin
       .from("businesses")
-      .update({
+      .select("verification_status,bridge_kyc_status")
+      .eq("id", input.businessId)
+      .maybeSingle()
+
+    if (input.provider === "bridge") {
+      const patch: Record<string, unknown> = {
         ...(input.bridgeCustomerId ? { bridge_customer_id: input.bridgeCustomerId } : {}),
         bridge_kyc_status: input.status,
         updated_at: now,
-      })
-      .eq("id", input.businessId)
-    if (error) throw new Error(`persistVerificationStatus(business-bridge): ${error.message}`)
+        ...(input.extra ?? {}),
+        ...kybStatusTimestampPatch({
+          previous: current?.bridge_kyc_status as string | null | undefined,
+          next: input.status,
+          now,
+          column: "bridge_kyc_status_updated_at",
+        }),
+      }
+      const { error } = await admin.from("businesses").update(patch).eq("id", input.businessId)
+      if (error) throw new Error(`persistVerificationStatus(business-bridge): ${error.message}`)
+      return
+    }
+
+    if (input.status === "not_started") {
+      if (normalizeStoredKybStatus(current?.verification_status as string | null | undefined) === "approved") {
+        return
+      }
+    }
+
+    const patch: Record<string, unknown> = {
+      verification_provider: input.provider,
+      verification_status: input.status,
+      verification_rejection_reasons: input.rejectionReasons ?? null,
+      updated_at: now,
+      ...(input.extra ?? {}),
+      ...kybStatusTimestampPatch({
+        previous: current?.verification_status as string | null | undefined,
+        next: input.status,
+        now,
+        column: "grid_kyb_status_updated_at",
+      }),
+    }
+    if (input.status === "approved") {
+      patch.kyb_verified_at = input.verifiedAt ?? now
+    } else {
+      patch.kyb_verified_at = null
+    }
+    if (input.gridCustomerId) {
+      patch.grid_customer_id = input.gridCustomerId
+    }
+    if (input.bridgeCustomerId) {
+      patch.bridge_customer_id = input.bridgeCustomerId
+    }
+    const { error } = await admin.from("businesses").update(patch).eq("id", input.businessId)
+    if (error) throw new Error(`persistVerificationStatus(business): ${error.message}`)
     return
   }
+
   const patch: Record<string, unknown> = {
     verification_provider: input.provider,
     verification_status: input.status,
     verification_rejection_reasons: input.rejectionReasons ?? null,
     updated_at: now,
+    ...(input.extra ?? {}),
   }
   if (input.status === "approved") {
-    if (input.kind === "business") {
-      patch.kyb_verified_at = input.verifiedAt ?? now
-    } else {
-      patch.kyc_verified_at = input.verifiedAt ?? now
-    }
-  } else if (input.kind === "business") {
-    patch.kyb_verified_at = null
+    patch.kyc_verified_at = input.verifiedAt ?? now
   }
   if (input.gridCustomerId) {
     patch.grid_customer_id = input.gridCustomerId
@@ -137,22 +200,6 @@ export async function persistVerificationStatus(
   }
   if (input.provider === "bridge") {
     patch.bridge_kyc_status = input.status
-  }
-
-  if (input.kind === "business" && input.businessId) {
-    if (input.status === "not_started") {
-      const { data: current } = await admin
-        .from("businesses")
-        .select("verification_status")
-        .eq("id", input.businessId)
-        .maybeSingle()
-      if (String(current?.verification_status ?? "").toLowerCase() === "approved") {
-        return
-      }
-    }
-    const { error } = await admin.from("businesses").update(patch).eq("id", input.businessId)
-    if (error) throw new Error(`persistVerificationStatus(business): ${error.message}`)
-    return
   }
   const { error } = await admin.from("users").update(patch).eq("id", input.userId)
   if (error) throw new Error(`persistVerificationStatus(user): ${error.message}`)
@@ -164,6 +211,11 @@ export async function resetBusinessKybToNotStarted(
   businessId: string,
 ): Promise<void> {
   const now = new Date().toISOString()
+  const { data: current } = await admin
+    .from("businesses")
+    .select("verification_status")
+    .eq("id", businessId)
+    .maybeSingle()
   const { error } = await admin
     .from("businesses")
     .update({
@@ -172,6 +224,12 @@ export async function resetBusinessKybToNotStarted(
       verification_rejection_reasons: null,
       kyb_verified_at: null,
       updated_at: now,
+      ...kybStatusTimestampPatch({
+        previous: current?.verification_status as string | null | undefined,
+        next: "not_started",
+        now,
+        column: "grid_kyb_status_updated_at",
+      }),
     })
     .eq("id", businessId)
   if (error) throw new Error(`resetBusinessKybToNotStarted: ${error.message}`)

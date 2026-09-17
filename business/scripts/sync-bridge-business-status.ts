@@ -4,6 +4,7 @@
  */
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { findBridgeCustomerByEmail, getBridgeCustomer, resolveBridgeCustomerKycStatus } from "@/lib/bridge/kyc-links"
+import { persistVerificationStatus } from "@/lib/compliance/verification-store"
 import { provisionBridgeVirtualAccounts } from "@/lib/bridge/provision-after-approval"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 
@@ -58,23 +59,24 @@ async function main() {
     String(customer.tos_status ?? "").trim().toLowerCase() === "approved" ||
     (customer as { has_accepted_terms_of_service?: boolean }).has_accepted_terms_of_service === true
 
-  const { error: updateError } = await admin
-    .from("businesses")
-    .update({
-      bridge_customer_id: customerId,
-      bridge_kyc_status: mapped,
-      ...(tosOk ? { bridge_tos_status: "approved" } : {}),
-      updated_at: new Date().toISOString(),
+  const ownerId = await resolveOrgOwnerUserId(admin, businessId, "")
+  try {
+    await persistVerificationStatus(admin, {
+      kind: "business",
+      businessId,
+      userId: ownerId || businessId,
+      provider: "bridge",
+      status: mapped,
+      bridgeCustomerId: customerId,
+      extra: tosOk ? { bridge_tos_status: "approved" } : undefined,
     })
-    .eq("id", businessId)
-  if (updateError) {
-    console.error("persist_failed", updateError.message)
+  } catch (error) {
+    console.error("persist_failed", error instanceof Error ? error.message : error)
     process.exit(3)
   }
 
   let provisioned = false
   if (mapped === "approved") {
-    const ownerId = await resolveOrgOwnerUserId(admin, businessId, "")
     const vas = await provisionBridgeVirtualAccounts({
       admin,
       userId: ownerId,

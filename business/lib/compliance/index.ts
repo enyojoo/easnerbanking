@@ -30,6 +30,7 @@ export {
   isBusinessBridgeKybApproved,
   businessTier1Status,
   businessUsesGridVerification,
+  resolveBusinessHeadlineKybStatus,
 } from "./business-tier1"
 export {
   needsBusinessProvisionAfterApproval,

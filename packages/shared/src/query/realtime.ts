@@ -363,11 +363,14 @@ function scheduleTransactionRowPatch(
 
 const IDENTITY_STATUS_FIELDS = [
   "verification_status",
+  "bridge_kyc_status",
   "noah_kyc_status",
   "verification_rejection_reasons",
   "kyb_verified_at",
   "kyc_verified_at",
   "grid_customer_id",
+  "grid_kyb_status_updated_at",
+  "bridge_kyc_status_updated_at",
   "status",
   "last_errors",
 ] as const

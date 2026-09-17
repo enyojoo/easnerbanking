@@ -61,17 +61,18 @@ export async function POST(request: Request) {
   const status = resolveBridgeCustomerKycStatus(customer)
 
   if (businessId) {
-    await admin
-      .from("businesses")
-      .update({
-        bridge_customer_id: customerId,
-        bridge_kyc_status: status,
-        ...(String(customer.tos_status ?? "").toLowerCase() === "approved"
+    await persistVerificationStatus(admin, {
+      kind: "business",
+      businessId,
+      userId: user.id,
+      provider: "bridge",
+      status,
+      bridgeCustomerId: customerId,
+      extra:
+        String(customer.tos_status ?? "").toLowerCase() === "approved"
           ? { bridge_tos_status: "approved" }
-          : {}),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", businessId)
+          : undefined,
+    })
   } else {
     await persistVerificationStatus(admin, {
       kind: "individual",

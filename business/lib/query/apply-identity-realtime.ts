@@ -7,11 +7,21 @@ import {
   type IdentityChangeEvent,
   type Scope,
 } from "@easner/shared"
+import { mergeBusinessHeadlineKybFromRealtime } from "@/lib/query/merge-business-headline-kyb"
 import { CACHE_KEYS } from "@/lib/cache"
-import { patchCachedBusinessProfile, type BusinessProfile } from "@/lib/use-business-profile"
+import {
+  patchCachedBusinessProfile,
+  peekCachedBusinessProfile,
+  type BusinessProfile,
+} from "@/lib/use-business-profile"
 import { KYB_PACKET_QUERY_KEY } from "@/lib/grid/kyb-packet-query"
 import type { KybPacket } from "@/lib/grid/kyb-packet-types"
 import { fetchAndCacheConnectStatus } from "@/lib/stripe/connect-status-cache"
+
+function readNonEmptyStatus(value: unknown): string | null {
+  const status = String(value ?? "").trim()
+  return status || null
+}
 
 /**
  * Bridge Grid KYB webhook writes into the business profile cache and KYB packet
@@ -25,9 +35,15 @@ export function applyBusinessIdentityRealtime(
   userId?: string | null,
 ): void {
   if (event.table === "businesses") {
-    const status = String(event.row.verification_status ?? "").trim()
-    const bridgeStatus = String(event.row.bridge_kyc_status ?? "").trim()
-    const patch: Partial<BusinessProfile> = {}
+    const cached = peekCachedBusinessProfile(userId)
+    const merged = mergeBusinessHeadlineKybFromRealtime(event.row, cached)
+    const status = readNonEmptyStatus(event.row.verification_status)
+    const bridgeStatus = readNonEmptyStatus(event.row.bridge_kyc_status)
+    const patch: Partial<BusinessProfile> = {
+      headlineVerificationStatus: merged.headlineVerificationStatus,
+      gridKybStatusUpdatedAt: merged.gridUpdatedAt,
+      bridgeKycStatusUpdatedAt: merged.bridgeUpdatedAt,
+    }
     if (status) {
       const gridCustomerId = event.row.grid_customer_id
       const reasons = event.row.verification_rejection_reasons
@@ -50,8 +66,9 @@ export function applyBusinessIdentityRealtime(
       if (status === "approved") patch.tier1Complete = true
     }
     if (bridgeStatus) {
-      patch.bridgeKycStatus = bridgeStatus
-      if (bridgeStatus.toLowerCase() === "approved") {
+      patch.bridgeKycStatus = merged.bridgeHubStatus
+      patch.bridgeCustomerId = merged.bridgeCustomerId
+      if (merged.bridgeHubStatus?.toLowerCase() === "approved") {
         patch.bridgeKycComplete = true
         patch.tier1Complete = true
       }

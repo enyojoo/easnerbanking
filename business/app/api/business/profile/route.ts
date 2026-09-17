@@ -19,6 +19,7 @@ import {
   businessTier1RejectionReasons,
   businessTier1Status,
   isBusinessTier1Complete,
+  resolveBusinessHeadlineKybStatus,
 } from "@/lib/compliance/business-tier1"
 import { validateEasetag, normalizeEasetag } from "@/lib/easetag-validation"
 import { isEasetagGloballyAvailable } from "@/lib/easetag-global"
@@ -248,7 +249,7 @@ async function getBusinessProfileResponse(request: Request) {
       admin
         .from("businesses")
         .select(
-          "verification_status,verification_provider,verification_rejection_reasons,grid_customer_id,kyb_verified_at,bridge_customer_id,bridge_kyc_status",
+          "verification_status,verification_provider,verification_rejection_reasons,grid_customer_id,kyb_verified_at,bridge_customer_id,bridge_kyc_status,grid_kyb_status_updated_at,bridge_kyc_status_updated_at",
         )
         .eq("id", orgId)
         .maybeSingle(),
@@ -309,6 +310,16 @@ async function getBusinessProfileResponse(request: Request) {
     rawStatus: orgKyb?.bridge_kyc_status,
     customerId: bridgeCustomerId,
   })
+  const headlineVerificationStatus = resolveBusinessHeadlineKybStatus({
+    gridStatus: tier1VerificationStatus,
+    bridgeStatus: bridgeHub.status,
+    gridUpdatedAt:
+      typeof orgKyb?.grid_kyb_status_updated_at === "string" ? orgKyb.grid_kyb_status_updated_at : null,
+    bridgeUpdatedAt:
+      typeof orgKyb?.bridge_kyc_status_updated_at === "string"
+        ? orgKyb.bridge_kyc_status_updated_at
+        : null,
+  })
 
   return NextResponse.json({
     profile: {
@@ -351,6 +362,13 @@ async function getBusinessProfileResponse(request: Request) {
       ownerName,
       tier1Complete,
       tier1VerificationStatus,
+      headlineVerificationStatus,
+      gridKybStatusUpdatedAt:
+        typeof orgKyb?.grid_kyb_status_updated_at === "string" ? orgKyb.grid_kyb_status_updated_at : null,
+      bridgeKycStatusUpdatedAt:
+        typeof orgKyb?.bridge_kyc_status_updated_at === "string"
+          ? orgKyb.bridge_kyc_status_updated_at
+          : null,
       tier1RejectionReasons,
       tier1RejectionType,
       tier1CanResubmit,

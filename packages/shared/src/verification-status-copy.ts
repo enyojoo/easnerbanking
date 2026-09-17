@@ -7,6 +7,7 @@ export const VERIFICATION_STATUS_COPY = {
   inProgress: "In progress",
   inReview: "In review",
   actionNeeded: "Action needed",
+  rejected: "Rejected",
   unverified: "Unverified",
   notStarted: "Not started",
 } as const
@@ -45,8 +46,12 @@ export function verificationStatusLabel(
     return VERIFICATION_STATUS_COPY.inReview
   }
 
-  if (s === "rejected" || s === "hold") {
+  if (s === "hold") {
     return VERIFICATION_STATUS_COPY.actionNeeded
+  }
+
+  if (s === "rejected") {
+    return VERIFICATION_STATUS_COPY.rejected
   }
 
   if (!s || s === "not_started") {

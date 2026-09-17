@@ -11,7 +11,12 @@ export function officeVerificationBadgeVariant(
   const label = verificationStatusLabel(rawStatus || null, { detail: true })
   if (label === VERIFICATION_STATUS_COPY.verified) return "emerald"
   if (label === VERIFICATION_STATUS_COPY.inReview) return "slate"
-  if (label === VERIFICATION_STATUS_COPY.actionNeeded) return "oxblood"
+  if (
+    label === VERIFICATION_STATUS_COPY.actionNeeded ||
+    label === VERIFICATION_STATUS_COPY.rejected
+  ) {
+    return "oxblood"
+  }
   return "amber"
 }
 

@@ -112,10 +112,11 @@ export function DashboardShell({ children }: DashboardShellProps) {
     isLoading: profileLoading,
     hasData: profileHasData,
     tier1Complete,
-    tier1VerificationStatus,
+    headlineVerificationStatus,
     tier1CanResubmit,
     businessId,
     noahKybCustomerId,
+    bridgeCustomerId,
     canManageBusinessVerification,
   } = useBusinessProfile()
   const { avatarUrl: profileImageUrl } = usePersonalProfileAvatar()
@@ -212,14 +213,17 @@ export function DashboardShell({ children }: DashboardShellProps) {
               className="z-20 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[hsl(var(--warning)/0.3)] bg-[hsl(var(--warning)/0.12)] px-8 py-2.5 text-sm text-[hsl(var(--warning))] backdrop-blur-sm"
               role="status"
             >
-              <span>{verificationBannerCopy(tier1VerificationStatus)}</span>
-              {verificationBannerHasCta(tier1VerificationStatus) ? (
+              <span>{verificationBannerCopy(headlineVerificationStatus)}</span>
+              {verificationBannerHasCta(headlineVerificationStatus) ? (
                 <Link
                   href="/settings?tab=verification"
                   className="font-semibold text-[hsl(var(--warning))] underline underline-offset-2"
                 >
-                  {verificationBannerCta(tier1VerificationStatus, {
-                    started: verificationBannerStarted(tier1VerificationStatus, noahKybCustomerId),
+                  {verificationBannerCta(headlineVerificationStatus, {
+                    started: verificationBannerStarted(
+                      headlineVerificationStatus,
+                      noahKybCustomerId || bridgeCustomerId,
+                    ),
                     canManage: canManageBusinessVerification,
                   })}
                 </Link>

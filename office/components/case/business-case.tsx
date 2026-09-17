@@ -180,7 +180,7 @@ export function BusinessCase({ businessId }: { businessId: string }) {
     .join(", ")
 
   return (
-    <Tabs value={tab.value} onValueChange={tab.onValueChange} className="-mx-4 -my-6 sm:-mx-6 lg:-mx-8">
+    <Tabs value={tab.value} onValueChange={tab.onValueChange} className="-mx-4 -mt-6 sm:-mx-6 lg:-mx-8">
       <OfficeCaseHeader
         backHref="/businesses"
         backLabel="Businesses"
@@ -214,7 +214,7 @@ export function BusinessCase({ businessId }: { businessId: string }) {
         }
         tabs={<OfficeCaseTabBar tabs={[...TABS]} onTabHover={prefetchTab} />}
       />
-      <div className="px-6 py-5">
+      <div className="px-6 pb-8 pt-5">
           <OfficeCaseTabPanel value="profile">
             <div className="grid gap-4 lg:grid-cols-2">
               <OfficeSection title="Business">

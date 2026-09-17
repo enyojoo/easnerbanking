@@ -771,7 +771,10 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         </View>
       )
     }
-    if (label === VERIFICATION_STATUS_COPY.actionNeeded) {
+    if (
+      label === VERIFICATION_STATUS_COPY.actionNeeded ||
+      label === VERIFICATION_STATUS_COPY.rejected
+    ) {
       return (
         <View style={styles.badgeRed}>
           <Text style={styles.badgeTextRed}>{label}</Text>

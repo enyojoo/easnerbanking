@@ -1,5 +1,58 @@
 import { describe, expect, it } from "vitest"
-import { canonicalVerificationStatus } from "./verification-store"
+import {
+  canonicalVerificationStatus,
+  kybStatusTimestampPatch,
+} from "./verification-store"
+
+describe("kybStatusTimestampPatch", () => {
+  const now = "2026-09-17T10:00:00.000Z"
+
+  it("bumps only when the stored status changes", () => {
+    expect(
+      kybStatusTimestampPatch({
+        previous: "pending",
+        next: "pending",
+        now,
+        column: "grid_kyb_status_updated_at",
+      }),
+    ).toEqual({})
+    expect(
+      kybStatusTimestampPatch({
+        previous: "PENDING",
+        next: "pending",
+        now,
+        column: "bridge_kyc_status_updated_at",
+      }),
+    ).toEqual({})
+    expect(
+      kybStatusTimestampPatch({
+        previous: "approved",
+        next: "in_progress",
+        now,
+        column: "bridge_kyc_status_updated_at",
+      }),
+    ).toEqual({ bridge_kyc_status_updated_at: now })
+  })
+
+  it("treats empty as not_started so the first idle write does not stamp", () => {
+    expect(
+      kybStatusTimestampPatch({
+        previous: null,
+        next: "not_started",
+        now,
+        column: "grid_kyb_status_updated_at",
+      }),
+    ).toEqual({})
+    expect(
+      kybStatusTimestampPatch({
+        previous: null,
+        next: "in_progress",
+        now,
+        column: "grid_kyb_status_updated_at",
+      }),
+    ).toEqual({ grid_kyb_status_updated_at: now })
+  })
+})
 
 describe("canonicalVerificationStatus", () => {
   it("Grid business KYB uses verification_status when Bridge is not approved", () => {

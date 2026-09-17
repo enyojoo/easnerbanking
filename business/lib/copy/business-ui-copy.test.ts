@@ -20,9 +20,14 @@ describe("verificationBannerCopy", () => {
     expect(verificationBannerCopy("in_review")).toBe(BANNER_COPY.verificationInReview)
   })
 
-  it("uses action-needed body for rejected and hold", () => {
-    expect(verificationBannerCopy("rejected")).toBe(BANNER_COPY.verificationActionNeeded)
+  it("uses declined body for rejected and action-needed body for hold", () => {
+    expect(verificationBannerCopy("rejected")).toBe(BANNER_COPY.verificationRejected)
     expect(verificationBannerCopy("hold")).toBe(BANNER_COPY.verificationActionNeeded)
+  })
+
+  it("follows headline status so Grid rejected plus later Bridge review is in-review copy", () => {
+    expect(verificationBannerCopy("pending")).toBe(BANNER_COPY.verificationInReview)
+    expect(verificationBannerCopy("rejected")).not.toBe(BANNER_COPY.verificationActionNeeded)
   })
 
   it("defaults to start body for not_started", () => {
@@ -32,7 +37,7 @@ describe("verificationBannerCopy", () => {
 })
 
 describe("verificationBannerStarted", () => {
-  it("is true when in progress or a Grid customer exists", () => {
+  it("is true when in progress or a provider customer exists", () => {
     expect(verificationBannerStarted("in_progress", null)).toBe(true)
     expect(verificationBannerStarted("not_started", "cust_123")).toBe(true)
     expect(verificationBannerStarted("not_started", null)).toBe(false)
@@ -62,8 +67,8 @@ describe("verificationBannerCta", () => {
     expect(verificationBannerHasCta("hold")).toBe(true)
   })
 
-  it("returns Retry for rejected and Continue for hold", () => {
-    expect(verificationBannerCta("rejected")).toBe(BANNER_CTA_COPY.retry)
+  it("returns Status for rejected and Continue for hold", () => {
+    expect(verificationBannerCta("rejected")).toBe(BANNER_CTA_COPY.status)
     expect(verificationBannerCta("hold")).toBe(BANNER_CTA_COPY.continue)
   })
 })

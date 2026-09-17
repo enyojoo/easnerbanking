@@ -437,7 +437,7 @@ export const ONBOARDING_STEP_COPY = {
   mfaComplete: "2FA enabled",
   verifyPending: "Complete business verification.",
   verifyComplete: VERIFICATION_STATUS_COPY.verified,
-  verifyRejected: VERIFICATION_STATUS_COPY.actionNeeded,
+  verifyRejected: VERIFICATION_STATUS_COPY.rejected,
   verifyReview: VERIFICATION_STATUS_COPY.inReview,
   fundAfterVerification: "Available after verification",
   fundPending: "Add money to start sending.",
@@ -453,6 +453,8 @@ export const BANNER_COPY = {
     "Verification is in progress. This usually completes within 1–3 business days.",
   verificationActionNeeded:
     "Verification needs your attention. Review the status in settings.",
+  verificationRejected:
+    "Verification could not be completed. Review the status in settings.",
   invoiceProfileTitle: "Finish your business profile to create invoices.",
 } as const
 
@@ -466,7 +468,7 @@ export const BANNER_CTA_COPY = {
 } as const
 
 export type VerificationBannerOpts = {
-  /** Hosted KYB started (in progress or Grid customer exists) but Tier 1 not complete. */
+  /** Hosted KYB started (in progress or a provider customer exists) but Tier 1 not complete. */
   started?: boolean
   /** False when the signed-in user cannot start hosted verification (non-owner). */
   canManage?: boolean
@@ -487,10 +489,10 @@ function verificationBannerIsInReview(status: string): boolean {
 
 export function verificationBannerStarted(
   status: string | null | undefined,
-  gridCustomerId: string | null | undefined,
+  startedCustomerId: string | null | undefined,
 ): boolean {
   return (
-    normalizeVerificationBannerStatus(status) === "in_progress" || Boolean(gridCustomerId?.trim())
+    normalizeVerificationBannerStatus(status) === "in_progress" || Boolean(startedCustomerId?.trim())
   )
 }
 
@@ -508,8 +510,11 @@ export function verificationBannerCopy(status: string | null | undefined): strin
   if (verificationBannerIsWaiting(s)) {
     return BANNER_COPY.verificationInReview
   }
-  if (s === "rejected" || s === "hold") {
+  if (s === "hold") {
     return BANNER_COPY.verificationActionNeeded
+  }
+  if (s === "rejected") {
+    return BANNER_COPY.verificationRejected
   }
   return BANNER_COPY.verification
 }
@@ -524,7 +529,7 @@ export function verificationBannerCta(
 
   const s = normalizeVerificationBannerStatus(status)
   if (s === "rejected") {
-    return BANNER_CTA_COPY.retry
+    return BANNER_CTA_COPY.status
   }
   if (s === "hold") {
     return BANNER_CTA_COPY.continue

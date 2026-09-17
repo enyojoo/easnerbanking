@@ -25,9 +25,9 @@ describe("verificationStatusLabel", () => {
     expect(verificationStatusLabel("under_review")).toBe(VERIFICATION_STATUS_COPY.inReview)
   })
 
-  it("maps rejected and hold to Action needed", () => {
-    expect(verificationStatusLabel("rejected")).toBe(VERIFICATION_STATUS_COPY.actionNeeded)
+  it("maps hold to Action needed and rejected to Rejected", () => {
     expect(verificationStatusLabel("hold")).toBe(VERIFICATION_STATUS_COPY.actionNeeded)
+    expect(verificationStatusLabel("rejected")).toBe(VERIFICATION_STATUS_COPY.rejected)
   })
 
   it("maps empty/not_started to Unverified or Not started", () => {

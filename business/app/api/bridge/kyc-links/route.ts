@@ -230,16 +230,17 @@ export async function POST(request: Request) {
   const status = resolveBridgeCustomerKycStatus({ kyc_status: link.kyc_status })
   const persistStatus = status === "not_started" && customerId ? "in_progress" : status
   if (type === "business" && businessId) {
-    const { error } = await admin
-      .from("businesses")
-      .update({
-        ...(customerId ? { bridge_customer_id: customerId } : {}),
-        bridge_kyc_status: persistStatus,
-        updated_at: new Date().toISOString(),
+    try {
+      await persistVerificationStatus(admin, {
+        kind: "business",
+        businessId,
+        userId: user.id,
+        provider: "bridge",
+        status: persistStatus,
+        bridgeCustomerId: customerId || null,
       })
-      .eq("id", businessId)
-    if (error) {
-      console.warn("[bridge/kyc-links] persist business KYB failed:", error.message)
+    } catch (persistError) {
+      console.warn("[bridge/kyc-links] persist business KYB failed:", persistError)
     }
   } else {
     try {

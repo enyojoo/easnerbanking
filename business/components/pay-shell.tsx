@@ -19,8 +19,9 @@ export function PayShell({ children }: { children: React.ReactNode }) {
   const {
     tier1Complete,
     isLoading: profileLoading,
-    tier1VerificationStatus,
+    headlineVerificationStatus,
     noahKybCustomerId,
+    bridgeCustomerId,
     canManageBusinessVerification,
   } = useBusinessProfile()
   const showTier1Banner = !profileLoading && !tier1Complete
@@ -33,14 +34,17 @@ export function PayShell({ children }: { children: React.ReactNode }) {
             className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200/80 bg-amber-50/90 px-4 py-2.5 text-sm text-amber-950 sm:px-6"
             role="status"
           >
-            <span>{verificationBannerCopy(tier1VerificationStatus)}</span>
-            {verificationBannerHasCta(tier1VerificationStatus) ? (
+            <span>{verificationBannerCopy(headlineVerificationStatus)}</span>
+            {verificationBannerHasCta(headlineVerificationStatus) ? (
               <Link
                 href="/settings?tab=verification"
                 className="font-semibold text-amber-950 underline underline-offset-2"
               >
-                {verificationBannerCta(tier1VerificationStatus, {
-                  started: verificationBannerStarted(tier1VerificationStatus, noahKybCustomerId),
+                {verificationBannerCta(headlineVerificationStatus, {
+                  started: verificationBannerStarted(
+                    headlineVerificationStatus,
+                    noahKybCustomerId || bridgeCustomerId,
+                  ),
                   canManage: canManageBusinessVerification,
                 })}
               </Link>

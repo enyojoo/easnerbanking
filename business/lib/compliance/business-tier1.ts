@@ -63,3 +63,85 @@ export function businessHostedKybCustomerId(
   const gridId = String(row.grid_customer_id ?? "").trim()
   return gridId || null
 }
+
+function normalizeHeadlineStatus(raw: string | null | undefined): string {
+  return String(raw ?? "").toLowerCase().trim() || "not_started"
+}
+
+function isIdleHeadlineStatus(status: string): boolean {
+  return status === "not_started"
+}
+
+function isApprovedHeadlineStatus(status: string): boolean {
+  return status === "approved"
+}
+
+function parseHeadlineTime(value: string | null | undefined): number | null {
+  const raw = String(value ?? "").trim()
+  if (!raw) return null
+  const ms = Date.parse(raw)
+  return Number.isFinite(ms) ? ms : null
+}
+
+function pickLegacyHeadlineStatus(grid: string, bridge: string): string {
+  if (isIdleHeadlineStatus(grid) && isIdleHeadlineStatus(bridge)) return "not_started"
+  if (isIdleHeadlineStatus(grid)) return bridge
+  if (isIdleHeadlineStatus(bridge)) return grid
+  if (grid === "rejected" && bridge !== "rejected") return bridge
+  if (bridge === "rejected" && grid !== "rejected") return grid
+  return grid
+}
+
+function pickLastChangedHeadlineStatus(
+  grid: string,
+  bridge: string,
+  gridMs: number | null,
+  bridgeMs: number | null,
+): string {
+  if (isIdleHeadlineStatus(grid) && isIdleHeadlineStatus(bridge)) return "not_started"
+  if (isIdleHeadlineStatus(grid)) return bridge
+  if (isIdleHeadlineStatus(bridge)) return grid
+  if (gridMs != null && bridgeMs != null) {
+    if (bridgeMs > gridMs) return bridge
+    if (gridMs > bridgeMs) return grid
+  } else if (gridMs != null) {
+    return grid
+  } else if (bridgeMs != null) {
+    return bridge
+  }
+  return pickLegacyHeadlineStatus(grid, bridge)
+}
+
+/**
+ * Compact sidebar KYB status across Grid and Bridge.
+ * Approved leads until the other rail has a later real status change.
+ */
+export function resolveBusinessHeadlineKybStatus(input: {
+  gridStatus: string | null | undefined
+  bridgeStatus: string | null | undefined
+  gridUpdatedAt?: string | null
+  bridgeUpdatedAt?: string | null
+}): string {
+  const grid = normalizeHeadlineStatus(input.gridStatus)
+  const bridge = normalizeHeadlineStatus(input.bridgeStatus)
+  const gridMs = parseHeadlineTime(input.gridUpdatedAt)
+  const bridgeMs = parseHeadlineTime(input.bridgeUpdatedAt)
+  const gridApproved = isApprovedHeadlineStatus(grid)
+  const bridgeApproved = isApprovedHeadlineStatus(bridge)
+
+  if (gridApproved || bridgeApproved) {
+    if (gridApproved && bridgeApproved) return "approved"
+    const other = gridApproved ? bridge : grid
+    const otherMs = gridApproved ? bridgeMs : gridMs
+    const approvedMs = gridApproved ? gridMs : bridgeMs
+    if (isIdleHeadlineStatus(other)) return "approved"
+    if (otherMs != null && approvedMs != null) {
+      return otherMs > approvedMs ? other : "approved"
+    }
+    if (otherMs != null && approvedMs == null) return other
+    if (otherMs == null && approvedMs != null) return "approved"
+    return other
+  }
+
+  return pickLastChangedHeadlineStatus(grid, bridge, gridMs, bridgeMs)
+}

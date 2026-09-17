@@ -45,14 +45,14 @@ async function handleBridgeKycWebhook(
   if (!subject) return
 
   if (subject.businessId) {
-    await admin
-      .from("businesses")
-      .update({
-        bridge_customer_id: customerId,
-        bridge_kyc_status: status,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", subject.businessId)
+    await persistVerificationStatus(admin, {
+      kind: "business",
+      businessId: subject.businessId,
+      userId: subject.userId,
+      provider: "bridge",
+      status,
+      bridgeCustomerId: customerId,
+    })
   } else {
     await persistVerificationStatus(admin, {
       kind: "individual",
