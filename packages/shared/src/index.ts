@@ -800,6 +800,7 @@ export {
   normalizeVerificationRejectionReasons,
   getVerificationRejectionDisplay,
   canResubmitVerification,
+  verificationStatusIsFinalReject,
 } from "./grid-rejection"
 export { KYC_REQUIRED_DOCUMENTS_DIALOG, KYC_HOSTED_QUESTIONNAIRE_FIELDS } from "./kyc-required-documents"
 export {

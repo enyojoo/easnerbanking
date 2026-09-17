@@ -1,5 +1,6 @@
 import {
   getNoahRejectionDisplay,
+  NOAH_FINAL_REJECTION_USER_MESSAGE,
   type NoahRejectionDisplay,
   type StoredNoahRejectionReason,
 } from "./noah-rejection"
@@ -110,15 +111,21 @@ export function extractGridCustomerRejectionReasons(
 
   if (status === "REJECTED" && !out.length) {
     out.push({
-      rejectType: "Retry",
-      message: "Verification was declined. Review your documents and details, then try again.",
-      reason: "Verification was declined. Review your documents and details, then try again.",
+      rejectType: "Final",
+      message: NOAH_FINAL_REJECTION_USER_MESSAGE,
+      reason: NOAH_FINAL_REJECTION_USER_MESSAGE,
     })
   }
 
   if (status === "HOLD") {
     for (const row of out) {
       if (row.rejectType !== "Final") row.rejectType = "Retry"
+    }
+  }
+
+  if (status === "REJECTED") {
+    for (const row of out) {
+      row.rejectType = "Final"
     }
   }
 
@@ -145,10 +152,27 @@ export function normalizeVerificationRejectionReasons(raw: unknown): unknown {
   return raw
 }
 
-export function getVerificationRejectionDisplay(raw: unknown): NoahRejectionDisplay {
+export function verificationStatusIsFinalReject(status: string | null | undefined): boolean {
+  return String(status ?? "").toLowerCase().trim() === "rejected"
+}
+
+export function getVerificationRejectionDisplay(
+  raw: unknown,
+  status?: string | null,
+): NoahRejectionDisplay {
+  if (verificationStatusIsFinalReject(status)) {
+    return {
+      rejectType: "Final",
+      canResubmit: false,
+      guidanceLines: [],
+      bodyText: NOAH_FINAL_REJECTION_USER_MESSAGE,
+      isFinal: true,
+      isRetry: false,
+    }
+  }
   return getNoahRejectionDisplay(normalizeVerificationRejectionReasons(raw))
 }
 
-export function canResubmitVerification(raw: unknown): boolean {
-  return getVerificationRejectionDisplay(raw).canResubmit
+export function canResubmitVerification(raw: unknown, status?: string | null): boolean {
+  return getVerificationRejectionDisplay(raw, status).canResubmit
 }

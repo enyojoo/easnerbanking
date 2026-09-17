@@ -53,6 +53,10 @@ function mergeGridKybRejectionReasons(
     }
     merged.push(row)
   }
+  if (localStatus === "rejected") {
+    const rows = merged.length > 0 ? merged : extractGridCustomerRejectionReasons({}, "REJECTED")
+    return rows.map((row) => ({ ...row, rejectType: "Final" }))
+  }
   if (merged.length > 0) return merged
   if (localStatus === "hold") return extractGridCustomerRejectionReasons({}, "HOLD")
   return fromCustomer

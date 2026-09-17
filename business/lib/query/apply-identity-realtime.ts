@@ -1,7 +1,12 @@
 "use client"
 
 import type { QueryClient } from "@tanstack/react-query"
-import { qk, type IdentityChangeEvent, type Scope } from "@easner/shared"
+import {
+  getVerificationRejectionDisplay,
+  qk,
+  type IdentityChangeEvent,
+  type Scope,
+} from "@easner/shared"
 import { CACHE_KEYS } from "@/lib/cache"
 import { patchCachedBusinessProfile, type BusinessProfile } from "@/lib/use-business-profile"
 import { KYB_PACKET_QUERY_KEY } from "@/lib/grid/kyb-packet-query"
@@ -32,7 +37,12 @@ export function applyBusinessIdentityRealtime(
         : reasons == null
           ? null
           : [reasons]
-      patch.tier1CanResubmit = status !== "approved"
+      const rejectionDisplay = getVerificationRejectionDisplay(
+        patch.tier1RejectionReasons,
+        status,
+      )
+      patch.tier1CanResubmit = rejectionDisplay.canResubmit
+      patch.tier1RejectionType = rejectionDisplay.rejectType
       if (gridCustomerId != null && gridCustomerId !== "") {
         patch.noahKybCustomerId = String(gridCustomerId)
       }

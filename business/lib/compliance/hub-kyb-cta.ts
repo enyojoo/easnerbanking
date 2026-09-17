@@ -16,7 +16,9 @@ export function businessHubKybCtaLabel(input: {
   if (input.complete || input.finalReject) return null
   const status = String(input.status ?? "").toLowerCase()
   if (statusIsInReview(status)) return null
-  if (status === "rejected" || status === "hold") {
+  // Grid REJECTED is terminal. HOLD is the retryable "need more info" state.
+  if (status === "rejected") return null
+  if (status === "hold") {
     if (input.canResubmit === false) return null
     return VERIFICATION_SECTION_COPY.reviewAndFixCta
   }

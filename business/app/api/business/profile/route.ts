@@ -297,7 +297,10 @@ async function getBusinessProfileResponse(request: Request) {
     invoiceSettings = parseBusinessInvoiceSettings(org.invoice_settings)
   }
 
-  const tier1RejectionDisplay = getVerificationRejectionDisplay(tier1RejectionReasons)
+  const tier1RejectionDisplay = getVerificationRejectionDisplay(
+    tier1RejectionReasons,
+    tier1VerificationStatus,
+  )
   const tier1RejectionType = tier1RejectionDisplay.rejectType
   const tier1CanResubmit = tier1RejectionDisplay.canResubmit
   const tier1RetryGuidance = tier1RejectionDisplay.guidanceLines

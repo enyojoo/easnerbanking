@@ -100,11 +100,15 @@ export function resolveGridBusinessKybLocalStatus(input: {
   documents?: GridDocumentSummary[]
 }): VerificationStatus {
   const raw = normStatus(String(input.customer.kybStatus ?? input.customer.kycStatus ?? ""))
+  if (raw === "REJECTED") return "rejected"
   if (raw !== "PENDING") {
     return mapGridPartnerStatus(raw)
   }
 
   const verifications = input.verifications ?? []
+  if (verifications.some((v) => normStatus(v.verificationStatus) === "REJECTED")) {
+    return "rejected"
+  }
   const documents = input.documents ?? []
 
   // Submitted docs failed Grid review – action-needed, even if an ID file exists.

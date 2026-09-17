@@ -318,9 +318,13 @@ export function BusinessVerificationSection({
   const tier1Rejected = tier1VerificationStatus === "rejected"
   const tier1OnHold = tier1VerificationStatus === "hold"
   const tier1ActionRequired = tier1Rejected || tier1OnHold
-  const rejectionDisplay =
-    tier1ActionRequired ? getVerificationRejectionDisplay(tier1RejectionReasons) : null
-  const tier1FinalReject = tier1RejectionType === "Final" || rejectionDisplay?.isFinal === true
+  const rejectionDisplay = tier1ActionRequired
+    ? getVerificationRejectionDisplay(tier1RejectionReasons, tier1VerificationStatus)
+    : null
+  const tier1FinalReject =
+    tier1Rejected ||
+    tier1RejectionType === "Final" ||
+    rejectionDisplay?.isFinal === true
   const tier1UnderReview = tier1StatusIsInReview(tier1VerificationStatus)
   const tier1InProgress = tier1VerificationStatus === "in_progress"
   const packetAwaitingReview =

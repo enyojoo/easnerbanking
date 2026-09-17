@@ -15,6 +15,15 @@ describe("resolveGridBusinessKybLocalStatus", () => {
     )
   })
 
+  it("treats a REJECTED verification as terminal even when the customer is still PENDING", () => {
+    expect(
+      resolveGridBusinessKybLocalStatus({
+        customer: { kybStatus: "PENDING" },
+        verifications: [{ verificationStatus: "REJECTED" }],
+      }),
+    ).toBe("rejected")
+  })
+
   it("treats PENDING with pending UBO and no verifications as in_progress", () => {
     expect(
       resolveGridBusinessKybLocalStatus({

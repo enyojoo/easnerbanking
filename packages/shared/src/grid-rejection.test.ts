@@ -17,16 +17,37 @@ describe("grid-rejection", () => {
     expect(reasons.some((r) => r.message?.includes("expired"))).toBe(true)
   })
 
-  it("unwraps legacy grid envelope for display", () => {
-    const display = getVerificationRejectionDisplay({
-      gridStatus: "REJECTED",
-      raw: {
+  it("treats Grid REJECTED as a final decline", () => {
+    const reasons = extractGridCustomerRejectionReasons(
+      {
         kybStatus: "REJECTED",
-        moderationComment: "Company registry document is unreadable",
+        verificationErrors: [{ reason: "Document is expired", type: "DOCUMENT" }],
       },
-    })
-    expect(display.isRetry).toBe(true)
-    expect(display.bodyText.toLowerCase()).toContain("unreadable")
+      "REJECTED",
+    )
+    expect(reasons.every((r) => r.rejectType === "Final")).toBe(true)
+
+    const display = getVerificationRejectionDisplay(
+      {
+        gridStatus: "REJECTED",
+        raw: {
+          kybStatus: "REJECTED",
+          moderationComment: "Company registry document is unreadable",
+        },
+      },
+      "rejected",
+    )
+    expect(display.isFinal).toBe(true)
+    expect(display.canResubmit).toBe(false)
+  })
+
+  it("treats stored retry reasons as final when status is rejected", () => {
+    const display = getVerificationRejectionDisplay(
+      [{ rejectType: "Retry", message: "Please upload a clearer document" }],
+      "rejected",
+    )
+    expect(display.isFinal).toBe(true)
+    expect(display.canResubmit).toBe(false)
   })
 
   it("normalizes hold status with default guidance", () => {

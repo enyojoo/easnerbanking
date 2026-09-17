@@ -30,9 +30,10 @@ export async function evaluateGridBusinessKycLinksPreflight(params: {
     .eq("id", businessId)
     .maybeSingle()
 
+  const status = String(biz?.verification_status ?? "not_started").toLowerCase()
   const rejectionReasons =
     (biz?.verification_rejection_reasons as unknown[] | null | undefined) ?? null
-  if (!canResubmitVerification(rejectionReasons)) {
+  if (!canResubmitVerification(rejectionReasons, status)) {
     return {
       action: "respond",
       response: NextResponse.json({
@@ -65,7 +66,6 @@ export async function evaluateGridBusinessKycLinksPreflight(params: {
     }
   }
 
-  const status = String(biz?.verification_status ?? "not_started").toLowerCase()
   if (isVerificationApproved(status)) {
     return { action: "skipHostedPost", kycStatus: status }
   }

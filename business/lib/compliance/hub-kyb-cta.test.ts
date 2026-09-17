@@ -27,10 +27,21 @@ describe("businessHubKybCtaLabel", () => {
     expect(businessHubKybCtaLabel({ status: "approved", complete: true })).toBeNull()
   })
 
-  it("uses Review and fix on hold or reject when resubmit is allowed", () => {
+  it("uses Review and fix on hold when resubmit is allowed", () => {
     expect(
       businessHubKybCtaLabel({ status: "hold", complete: false, canResubmit: true }),
     ).toBe(VERIFICATION_SECTION_COPY.reviewAndFixCta)
+  })
+
+  it("hides the button on rejected KYB even if stale retry flags remain", () => {
+    expect(businessHubKybCtaLabel({ status: "rejected", complete: false })).toBeNull()
+    expect(
+      businessHubKybCtaLabel({
+        status: "rejected",
+        complete: false,
+        canResubmit: true,
+      }),
+    ).toBeNull()
     expect(
       businessHubKybCtaLabel({ status: "rejected", complete: false, finalReject: true }),
     ).toBeNull()
