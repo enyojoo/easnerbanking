@@ -34,6 +34,61 @@ function shouldInvalidateTransactionUpdate(row: Record<string, unknown>): boolea
   )
 }
 
+type OfficeTransactionDetailCache = {
+  transaction: {
+    id: string
+    status: string
+    easner_transaction_id?: string | null
+    provider_transaction_id?: string | null
+    updated_at?: string
+    occurred_at?: string | null
+  }
+  ops: {
+    rawStatus: string
+    updatedAt?: string | null
+    occurredAt?: string | null
+  }
+}
+
+function patchOfficeTransactionDetailInCache(qc: QueryClient, row: Record<string, unknown>): boolean {
+  const ledgerId = row.id != null ? String(row.id) : ""
+  if (!ledgerId) return false
+  const etid = row.easner_transaction_id != null ? String(row.easner_transaction_id) : ""
+  const ptid = row.provider_transaction_id != null ? String(row.provider_transaction_id) : ""
+
+  let patched = false
+  const queries = qc.getQueriesData<OfficeTransactionDetailCache>({
+    queryKey: [...officeKeys.transactionsRoot(), "detail"],
+  })
+  for (const [queryKey, prev] of queries) {
+    if (!prev?.transaction || !prev.ops) continue
+    const tx = prev.transaction
+    const matches =
+      tx.id === ledgerId ||
+      (etid && tx.easner_transaction_id === etid) ||
+      (ptid && tx.provider_transaction_id === ptid)
+    if (!matches) continue
+    const status = row.status != null ? String(row.status) : tx.status
+    qc.setQueryData(queryKey, {
+      ...prev,
+      transaction: {
+        ...tx,
+        status,
+        updated_at: row.updated_at != null ? String(row.updated_at) : tx.updated_at,
+        occurred_at: row.occurred_at != null ? String(row.occurred_at) : tx.occurred_at,
+      },
+      ops: {
+        ...prev.ops,
+        rawStatus: status,
+        updatedAt: row.updated_at != null ? String(row.updated_at) : prev.ops.updatedAt,
+        occurredAt: row.occurred_at != null ? String(row.occurred_at) : prev.ops.occurredAt,
+      },
+    })
+    patched = true
+  }
+  return patched
+}
+
 function patchOfficeTransactionInCache(
   qc: QueryClient,
   row: Record<string, unknown>,
@@ -67,7 +122,8 @@ function patchOfficeTransactionInCache(
     qc.setQueryData(queryKey, transactions)
   }
 
-  return infinitePatched || flatPatched
+  const detailPatched = patchOfficeTransactionDetailInCache(qc, row)
+  return infinitePatched || flatPatched || detailPatched
 }
 
 function upsertOfficeDirectoryRow(

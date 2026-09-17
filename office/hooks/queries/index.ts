@@ -9,6 +9,7 @@ export {
 export { useOfficeAdminEnabled } from "./use-office-admin-enabled"
 export { useOfficeOverview } from "./use-office-overview"
 export { useOfficeTransactionsList } from "./use-office-transactions"
+export { useOfficeTransactionDetail, prefetchOfficeTransactionDetail } from "./use-office-transaction-detail"
 export { useOfficeUsersDirectory, type OfficeUserRow } from "./use-office-users"
 export { useOfficeUserTransactions } from "./use-office-user-transactions"
 export { useOfficeUserMfa } from "./use-office-user-mfa"

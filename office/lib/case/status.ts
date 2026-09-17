@@ -39,6 +39,9 @@ export function officeProviderLabel(provider: string | null | undefined): string
   if (raw === "bridge") return "Bridge"
   if (raw === "grid") return "Grid"
   if (raw === "noah") return "Noah"
+  if (raw === "turnkey") return "Turnkey"
+  if (raw === "stripe") return "Stripe"
+  if (raw === "relay") return "Relay"
   return raw
 }
 

@@ -100,6 +100,44 @@ describe("attachOfficeRealtime", () => {
     ).toBe(false)
   })
 
+  it("patches an open transaction detail cache on non-settlement UPDATE", async () => {
+    qc.setQueryData(officeKeys.transactionDetail("ETID00000001"), {
+      transaction: { id: "tx-1", status: "pending", easner_transaction_id: "ETID00000001" },
+      ops: { rawStatus: "pending" },
+    })
+    triggerUpdate({ id: "tx-1", status: "processing", updated_at: "2025-06-01T00:00:00.000Z" })
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    const cached = qc.getQueryData<{
+      transaction: { status: string }
+      ops: { rawStatus: string }
+    }>(officeKeys.transactionDetail("ETID00000001"))
+    expect(cached?.transaction.status).toBe("processing")
+    expect(cached?.ops.rawStatus).toBe("processing")
+  })
+
+  it("invalidates the open transaction detail on settlement UPDATE", async () => {
+    qc.setQueryData(officeKeys.transactionDetail("ETID00000001"), {
+      transaction: { id: "tx-1", status: "processing" },
+      ops: { rawStatus: "processing" },
+    })
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries")
+    triggerUpdate({
+      id: "tx-1",
+      status: "settled",
+      metadata: { reporting_usd_amount: 100 },
+      updated_at: "2025-06-01T00:00:00.000Z",
+    })
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    expect(
+      invalidateSpy.mock.calls.some(([args]) => {
+        const key = (args as { queryKey?: unknown[] }).queryKey
+        return Array.isArray(key) && key[0] === "office" && key[1] === "transactions"
+      }),
+    ).toBe(true)
+  })
+
   it("invalidates transaction queries on settlement UPDATE so enriched amounts refresh", async () => {
     const invalidateSpy = vi.spyOn(qc, "invalidateQueries")
     triggerUpdate({

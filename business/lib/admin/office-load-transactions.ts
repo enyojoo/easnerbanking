@@ -31,6 +31,7 @@ export type OfficeLedgerTransaction = {
   counterparty_address: string | null
   base_currency: string | null
   base_amount: number | null
+  hidden_from_feed?: boolean | null
   user?: {
     email: string | null
     full_name: string | null

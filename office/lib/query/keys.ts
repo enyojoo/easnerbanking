@@ -19,6 +19,8 @@ export const officeKeys = {
   transactionsRoot: () => [...officeKeys.root, "transactions"] as const,
   transactions: (filters?: OfficeTransactionFilters) =>
     [...officeKeys.root, "transactions", filters ?? {}] as const,
+  transactionDetail: (transactionId: string) =>
+    [...officeKeys.transactionsRoot(), "detail", transactionId] as const,
   eventInboxRoot: () => [...officeKeys.root, "event-inbox"] as const,
   eventInbox: (provider: string, status: string) =>
     [...officeKeys.root, "event-inbox", provider, status] as const,

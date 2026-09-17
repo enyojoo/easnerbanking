@@ -8,6 +8,7 @@ import {
   resolveAccountImpactAmount,
   resolveInboundReceiveDetail,
   toEasnerTransactionPrimaryLabel,
+  toEasnerTransactionProductCategory,
   type ReportingFxRate,
 } from "@easner/shared"
 import { resolveGlobalPayoutOffRampDetail } from "@/lib/transactions/resolve-global-payout-off-ramp"
@@ -158,12 +159,12 @@ export function resolveOfficeProductLabel(tx: TxRow): string {
   const provider = String(tx.provider ?? "").trim().toLowerCase()
   if (ycMode === "cross_border_send") return "Cross-border"
   if (ycMode === "balance_payout" && provider === "yellowcard") return "YC payout"
-  if (provider === "yellowcard") return "Yellowcard"
-  if (provider === "noah") {
-    return normalizeDirection(tx.direction) === "in" ? "Bank deposit" : "Noah payout"
-  }
-  if (provider === "easner_internal") return "Easetag"
-  return officeTxFlowLabel(tx)
+  return toEasnerTransactionProductCategory({
+    provider: provider || "unknown",
+    direction: normalizeDirection(tx.direction),
+    metadata: tx.metadata,
+    payload: tx.payload,
+  })
 }
 
 export function resolveOfficeReportingUsdAmount(tx: TxRow): number | null {

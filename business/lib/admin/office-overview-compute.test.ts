@@ -38,6 +38,7 @@ import {
   extractCurrencyBuckets,
   formatOfficeTxAmount,
   processRecentActivity,
+  resolveOfficeProductLabel,
   resolveOfficeTxPresentation,
   volumeUsdContribution,
 } from "./office-overview-compute"
@@ -623,5 +624,67 @@ describe("office-overview-compute", () => {
     expect(topCurrencies[0]?.usdValue).toBe(75)
     expect(topCurrencies[1]?.count).toBe(1)
     expect(topCurrencies[1]?.usdValue).toBe(500)
+  })
+
+  it("keeps YC fund-balance and cross-border product labels", () => {
+    expect(
+      resolveOfficeProductLabel({
+        id: "yc-fb",
+        direction: "in",
+        provider: "yellowcard",
+        metadata: { yc_mode: "fund_balance", usd_credit: 50 },
+      }),
+    ).toBe("Fund balance")
+    expect(
+      resolveOfficeProductLabel({
+        id: "yc-xb",
+        direction: "out",
+        provider: "yellowcard",
+        metadata: { yc_mode: "cross_border_send" },
+      }),
+    ).toBe("Cross-border")
+    expect(
+      resolveOfficeProductLabel({
+        id: "yc-po",
+        direction: "out",
+        provider: "yellowcard",
+        metadata: { yc_mode: "balance_payout" },
+      }),
+    ).toBe("YC payout")
+  })
+
+  it("names Grid, Turnkey, Stripe, and Easetag from the shared product catalog", () => {
+    expect(
+      resolveOfficeProductLabel({
+        id: "grid-in",
+        direction: "in",
+        provider: "grid",
+        metadata: { flow: "bank_onramp" },
+      }),
+    ).toBe("US Bank Deposit")
+    expect(
+      resolveOfficeProductLabel({
+        id: "tk-in",
+        direction: "in",
+        provider: "turnkey",
+        metadata: { source: "turnkey_webhook" },
+      }),
+    ).toBe("Stablecoin Deposit")
+    expect(
+      resolveOfficeProductLabel({
+        id: "stripe-in",
+        direction: "in",
+        provider: "stripe",
+        metadata: { source: "invoice_stripe" },
+      }),
+    ).toBe("Invoice payment")
+    expect(
+      resolveOfficeProductLabel({
+        id: "easetag-in",
+        direction: "in",
+        provider: "easner_internal",
+        metadata: { source: "easetag_p2p" },
+      }),
+    ).toBe("Easetag Received")
   })
 })
