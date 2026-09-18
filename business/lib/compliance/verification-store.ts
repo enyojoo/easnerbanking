@@ -61,6 +61,48 @@ function isProgressedVerificationStatus(status: string): status is VerificationS
 
 export type KybRailTimestampColumn = "grid_kyb_status_updated_at" | "bridge_kyc_status_updated_at"
 
+const KYB_RAIL_TIMESTAMP_COLUMNS: readonly KybRailTimestampColumn[] = [
+  "grid_kyb_status_updated_at",
+  "bridge_kyc_status_updated_at",
+]
+
+export function looksLikeMissingKybTimestampColumn(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false
+  const maybe = error as { message?: string; details?: string; code?: string }
+  const text = `${maybe.message || ""} ${maybe.details || ""}`.toLowerCase()
+  const mentionsColumn = KYB_RAIL_TIMESTAMP_COLUMNS.some((column) => text.includes(column))
+  return (
+    mentionsColumn &&
+    (maybe.code === "42703" ||
+      maybe.code === "PGRST204" ||
+      text.includes("schema cache") ||
+      text.includes("column"))
+  )
+}
+
+function withoutKybRailTimestamps(patch: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...patch }
+  for (const column of KYB_RAIL_TIMESTAMP_COLUMNS) {
+    delete next[column]
+  }
+  return next
+}
+
+async function updateBusinessesRow(
+  admin: SupabaseClient,
+  businessId: string,
+  patch: Record<string, unknown>,
+  label: string,
+): Promise<void> {
+  const first = await admin.from("businesses").update(patch).eq("id", businessId)
+  if (!first.error) return
+  if (!looksLikeMissingKybTimestampColumn(first.error)) {
+    throw new Error(`${label}: ${first.error.message}`)
+  }
+  const retry = await admin.from("businesses").update(withoutKybRailTimestamps(patch)).eq("id", businessId)
+  if (retry.error) throw new Error(`${label}: ${retry.error.message}`)
+}
+
 export function normalizeStoredKybStatus(raw: string | null | undefined): string {
   return String(raw ?? "").toLowerCase().trim() || "not_started"
 }
@@ -142,8 +184,7 @@ export async function persistVerificationStatus(
           column: "bridge_kyc_status_updated_at",
         }),
       }
-      const { error } = await admin.from("businesses").update(patch).eq("id", input.businessId)
-      if (error) throw new Error(`persistVerificationStatus(business-bridge): ${error.message}`)
+      await updateBusinessesRow(admin, input.businessId, patch, "persistVerificationStatus(business-bridge)")
       return
     }
 
@@ -177,8 +218,7 @@ export async function persistVerificationStatus(
     if (input.bridgeCustomerId) {
       patch.bridge_customer_id = input.bridgeCustomerId
     }
-    const { error } = await admin.from("businesses").update(patch).eq("id", input.businessId)
-    if (error) throw new Error(`persistVerificationStatus(business): ${error.message}`)
+    await updateBusinessesRow(admin, input.businessId, patch, "persistVerificationStatus(business)")
     return
   }
 
@@ -216,9 +256,10 @@ export async function resetBusinessKybToNotStarted(
     .select("verification_status")
     .eq("id", businessId)
     .maybeSingle()
-  const { error } = await admin
-    .from("businesses")
-    .update({
+  await updateBusinessesRow(
+    admin,
+    businessId,
+    {
       grid_customer_id: null,
       verification_status: "not_started",
       verification_rejection_reasons: null,
@@ -230,7 +271,7 @@ export async function resetBusinessKybToNotStarted(
         now,
         column: "grid_kyb_status_updated_at",
       }),
-    })
-    .eq("id", businessId)
-  if (error) throw new Error(`resetBusinessKybToNotStarted: ${error.message}`)
+    },
+    "resetBusinessKybToNotStarted",
+  )
 }

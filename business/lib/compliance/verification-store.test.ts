@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   canonicalVerificationStatus,
   kybStatusTimestampPatch,
+  looksLikeMissingKybTimestampColumn,
 } from "./verification-store"
 
 describe("kybStatusTimestampPatch", () => {
@@ -51,6 +52,29 @@ describe("kybStatusTimestampPatch", () => {
         column: "grid_kyb_status_updated_at",
       }),
     ).toEqual({ grid_kyb_status_updated_at: now })
+  })
+})
+
+describe("looksLikeMissingKybTimestampColumn", () => {
+  it("matches the PostgREST schema-cache error that blocked Bridge webhooks", () => {
+    expect(
+      looksLikeMissingKybTimestampColumn({
+        code: "PGRST204",
+        message:
+          "Could not find the 'bridge_kyc_status_updated_at' column of 'businesses' in the schema cache",
+      }),
+    ).toBe(true)
+    expect(
+      looksLikeMissingKybTimestampColumn({
+        code: "42703",
+        message: 'column "grid_kyb_status_updated_at" of relation "businesses" does not exist',
+      }),
+    ).toBe(true)
+    expect(
+      looksLikeMissingKybTimestampColumn({
+        message: "Could not find the 'updated_at' column of 'businesses' in the schema cache",
+      }),
+    ).toBe(false)
   })
 })
 
