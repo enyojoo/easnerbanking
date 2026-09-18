@@ -167,7 +167,7 @@ vi.mock("@easner/shared", () => ({
     ["invoice_stripe", "checkout_stripe"].includes(String(meta?.source ?? "").toLowerCase()),
   inferStripeSettlementRail: (meta?: Record<string, unknown> | null) => {
     const rail = String(meta?.settlement_rail ?? "").toLowerCase()
-    if (rail === "grid_va" || rail === "turnkey_stablecoin") return rail
+    if (rail === "grid_va" || rail === "bridge_va" || rail === "turnkey_stablecoin") return rail
     if (meta?.turnkey_inbound_matched === true) return "turnkey_stablecoin"
     if (
       String(meta?.stripe_connect_va_originator ?? "").toUpperCase() === "EASNER" ||
@@ -178,7 +178,11 @@ vi.mock("@easner/shared", () => ({
     return null
   },
   stripeSettlementRailLabel: (rail: string | null) =>
-    rail === "grid_va" ? "Bank account" : rail === "turnkey_stablecoin" ? "Stablecoin" : null,
+    rail === "grid_va" || rail === "bridge_va"
+      ? "Bank account"
+      : rail === "turnkey_stablecoin"
+        ? "Stablecoin"
+        : null,
   isStripeCollectionSettlementLifecycle: (lifecycle?: Array<{ id: string }> | null) =>
     Boolean(
       lifecycle?.some(

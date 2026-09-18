@@ -41,6 +41,7 @@ export async function POST(_request: Request, context: Ctx) {
   return NextResponse.json({
     clientSecret: result.clientSecret,
     publishableKey: result.publishableKey,
+    stripeAccountId: result.stripeAccountId,
     customerAmountCents: result.customerAmountCents,
     surchargeCents: result.surchargeCents,
   })

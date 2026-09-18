@@ -28,7 +28,7 @@ export type StripePaymentInfoInput = {
   feeCents: number
   netCents: number
   settlementPhase: "payment_received" | "payout_sent" | "credited" | "failed"
-  settlementRail?: "grid_va" | "turnkey_stablecoin"
+  settlementRail?: "grid_va" | "bridge_va" | "turnkey_stablecoin"
 }
 
 /**

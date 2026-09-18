@@ -187,3 +187,50 @@ describe("greedyPackSettlements", () => {
     expect(packed.map((p) => p.row.id)).toEqual(["old"])
   })
 })
+
+describe("inferSettlementRail", () => {
+  it("matches a Bridge VA last4 to bridge_va", async () => {
+    const admin = {
+      from: (table: string) => {
+        const builder: Record<string, unknown> = {
+          select: () => builder,
+          eq: () => builder,
+          in: () => builder,
+          neq: () => builder,
+          limit: () => builder,
+          maybeSingle: async () => ({
+            data:
+              table === "business_stripe_connect_accounts"
+                ? { default_settlement_rail: "bridge_va" }
+                : null,
+          }),
+        }
+        builder.then = (resolve: (value: unknown) => void) => {
+          resolve({
+            data:
+              table === "virtual_accounts"
+                ? [
+                    {
+                      id: "va_bridge",
+                      provider: "bridge",
+                      account_number: "5555666677",
+                      provider_virtual_account_id: "va_ext",
+                    },
+                  ]
+                : [],
+            error: null,
+          })
+        }
+        return builder
+      },
+    } as unknown as SupabaseClient
+
+    const { inferSettlementRail } = await import("./match-payout-to-settlements")
+    const result = await inferSettlementRail(admin, "biz_1", {
+      id: "po_1",
+      destination: { id: "ba_1", last4: "6677" },
+    } as never)
+    expect(result.rail).toBe("bridge_va")
+    expect(result.destinationRef).toBe("va_ext")
+  })
+})

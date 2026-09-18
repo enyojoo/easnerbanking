@@ -28,6 +28,8 @@ import { analytics } from "@/lib/analytics"
 
 type Props = {
   clientSecret: string
+  /** Connected account that owns this Direct Charge session. */
+  stripeAccountId: string
   amount: number
   currency: string
   /** Copy shown under "Payment received". */
@@ -362,12 +364,13 @@ function CheckoutSurface({
  */
 export function EasnerPaymentElementCheckout({
   clientSecret,
+  stripeAccountId,
   knownName,
   knownEmail,
   ...surface
 }: Props) {
   const elementsAppearance = useMemo(() => easnerStripeElementsAppearance(), [])
-  const stripePromise = useMemo(() => getStripeJs(), [])
+  const stripePromise = useMemo(() => getStripeJs(stripeAccountId), [stripeAccountId])
   const prefillName = String(knownName ?? "").trim()
 
   return (

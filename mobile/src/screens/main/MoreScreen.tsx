@@ -67,9 +67,10 @@ import {
 import {
   authenticateAppUnlock,
   biometricUnlockLabel,
-  getBiometricAvailability,
-  isBiometricUnlockEnabled,
+  clearUnlockBiometric,
+  peekUnlockBiometric,
   setBiometricUnlockEnabled,
+  warmUnlockBiometric,
   type BiometricAvailability,
 } from '../../lib/biometricUnlock'
 import { UNAVAILABLE_BIOMETRIC } from '../../lib/biometricUnlockPolicy'
@@ -123,14 +124,18 @@ function MoreContent({ navigation }: NavigationProps) {
     },
     [navigation],
   )
+  const peekedMfa = user?.id ? peekMfaVerified(user.id) : null
+  const peekedUnlock = user?.id ? peekUnlockBiometric(user.id) : null
   const [kycSubmissions, setKycSubmissions] = useState<KYCSubmission[]>([])
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
-  const [mfaStatusLine, setMfaStatusLine] = useState('')
-  const [biometric, setBiometric] = useState<BiometricAvailability>(UNAVAILABLE_BIOMETRIC)
-  const [biometricOn, setBiometricOn] = useState(false)
+  const [mfaStatusLine, setMfaStatusLine] = useState(() =>
+    peekedMfa === null ? '' : peekedMfa ? 'On' : 'Off',
+  )
+  const [biometric, setBiometric] = useState<BiometricAvailability>(peekedUnlock ?? UNAVAILABLE_BIOMETRIC)
+  const [biometricOn, setBiometricOn] = useState(Boolean(peekedUnlock?.enabled))
   /** False until MFA status is read from cache or `listFactors` – avoids showing the MFA banner while loading or on errors. */
-  const [mfaStatusResolved, setMfaStatusResolved] = useState(false)
+  const [mfaStatusResolved, setMfaStatusResolved] = useState(peekedMfa !== null)
   const [pendingPayrollCount, setPendingPayrollCount] = useState(0)
   const [payrollActivityVisible, setPayrollActivityVisible] = useState(() =>
     Boolean(user?.id && peekPayrollActivityVisible(user.id)),
@@ -146,6 +151,7 @@ function MoreContent({ navigation }: NavigationProps) {
       setMfaStatusResolved(false)
       setBiometric(UNAVAILABLE_BIOMETRIC)
       setBiometricOn(false)
+      clearUnlockBiometric()
     }
   }, [user?.id])
 
@@ -153,11 +159,10 @@ function MoreContent({ navigation }: NavigationProps) {
     if (Platform.OS === 'web' || !user?.id) return
     let cancelled = false
     void (async () => {
-      const next = await getBiometricAvailability()
-      const enabled = await isBiometricUnlockEnabled(user.id)
+      const snap = await warmUnlockBiometric(user.id)
       if (cancelled) return
-      setBiometric(next)
-      setBiometricOn(Boolean(next.available && enabled))
+      setBiometric(snap)
+      setBiometricOn(snap.enabled)
     })()
     return () => {
       cancelled = true
@@ -679,7 +684,7 @@ function MoreContent({ navigation }: NavigationProps) {
                 {biometric.available ? (
                   <SettingsRow
                     title={biometricUnlockLabel(biometric.kind)}
-                    subtitle="Unlock the app and confirm sends without typing your PIN"
+                    subtitle="Quick login and safe transfers"
                     onPress={() => {
                       void handleBiometricToggle(!biometricOn)
                     }}

@@ -1,4 +1,6 @@
 import type { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { getConnectAccountRow } from "@/lib/stripe/connect"
+import { ensureConnectedPaymentMethodDomains } from "@/lib/stripe/connect/payment-method-domains"
 
 type Admin = ReturnType<typeof createSupabaseAdmin>
 
@@ -24,4 +26,13 @@ export async function syncCheckoutAllowedOrigins(admin: Admin, businessId: strin
     },
     { onConflict: "business_id" },
   )
+
+  const connect = await getConnectAccountRow(admin, businessId)
+  const stripeAccountId = connect?.stripe_account_id?.trim()
+  if (stripeAccountId) {
+    await ensureConnectedPaymentMethodDomains({
+      stripeAccountId,
+      extraHosts: origins,
+    }).catch((e) => console.warn("[stripe-connect] site payment method domains:", e))
+  }
 }

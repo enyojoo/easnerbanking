@@ -5,6 +5,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 export type PublicPayStripeCheckout = {
   clientSecret: string
   publishableKey: string
+  stripeAccountId: string
 }
 
 export type PublicPayPageResult =

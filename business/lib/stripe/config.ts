@@ -1,4 +1,4 @@
-/** Stripe invoice Pay online (platform MoR + Connect destination charges). */
+/** Stripe invoice Pay online (Connect Direct Charges on the connected account). */
 
 /**
  * Enabled automatically when secret + publishable keys are set.
@@ -13,8 +13,8 @@ export function isStripeInvoicePaymentsEnabled(): boolean {
 }
 
 /**
- * Connect destination charges are built-in whenever invoice Pay online is enabled.
- * Merchants must complete Connect onboarding + Grid VA payout link before checkout.
+ * Direct Charges are built-in whenever invoice Pay online is enabled.
+ * Merchants must complete Connect onboarding + VA payout link before checkout.
  */
 export function isStripeConnectEnabled(): boolean {
   return isStripeInvoicePaymentsEnabled()

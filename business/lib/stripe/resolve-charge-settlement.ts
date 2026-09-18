@@ -1,4 +1,5 @@
 import type Stripe from "stripe"
+import { connectedAccountRequest } from "./connect-request"
 import {
   parsePaymentMethodDisplayFromCharge,
   parsePaymentMethodDisplayFromPaymentMethod,
@@ -74,18 +75,22 @@ function inferPaymentMethodTypeFromSession(types: string[] | null | undefined): 
 }
 
 /**
- * Processing fee, charge, payment method, and destination transfer for a payment intent.
+ * Processing fee, charge, payment method, and connected account for a payment intent.
  * Shared by invoice and checkout (Payment Links / embed) settlement handlers.
  */
 export async function resolveFeeAndTransfer(
   stripe: Stripe,
   paymentIntentId: string,
-  opts?: { sessionPaymentMethodTypes?: string[] | null },
+  opts?: { sessionPaymentMethodTypes?: string[] | null; stripeAccount?: string | null },
 ): Promise<ResolvedChargeSettlement> {
   try {
-    const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
-      expand: ["latest_charge.balance_transaction", "latest_charge.transfer", "payment_method"],
-    })
+    const pi = await stripe.paymentIntents.retrieve(
+      paymentIntentId,
+      {
+        expand: ["latest_charge.balance_transaction", "latest_charge.transfer", "payment_method"],
+      },
+      connectedAccountRequest(opts?.stripeAccount),
+    )
     const charge =
       typeof pi.latest_charge === "object" && pi.latest_charge ? pi.latest_charge : null
     const chargeId =
@@ -153,7 +158,7 @@ export async function resolveFeeAndTransfer(
       paymentMethodType,
       paymentMethod,
       transferId,
-      connectedAccountId: connectedFromPi || connectedFromMeta,
+      connectedAccountId: String(opts?.stripeAccount ?? "").trim() || connectedFromMeta || connectedFromPi,
       payerEmail,
       payerName,
     }

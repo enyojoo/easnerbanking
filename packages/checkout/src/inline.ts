@@ -68,16 +68,22 @@ function stripeCache(): Record<string, Promise<StripeLike>> {
   return window.__easnerStripeByKey
 }
 
-function loadStripe(platformKey: string): Promise<StripeLike> {
+function loadStripe(platformKey: string, stripeAccountId?: string): Promise<StripeLike> {
   const cache = stripeCache()
-  if (cache[platformKey]) return cache[platformKey]
-  cache[platformKey] = new Promise((resolve, reject) => {
+  const cacheKey = `${platformKey}:${stripeAccountId || ""}`
+  if (cache[cacheKey]) return cache[cacheKey]
+  cache[cacheKey] = new Promise((resolve, reject) => {
     const start = () => {
       if (!window.Stripe) {
         reject(new Error("Easner Checkout failed to load"))
         return
       }
-      resolve(window.Stripe(platformKey, { developerTools: STRIPE_DEVELOPER_TOOLS }))
+      resolve(
+        window.Stripe(platformKey, {
+          developerTools: STRIPE_DEVELOPER_TOOLS,
+          ...(stripeAccountId ? { stripeAccount: stripeAccountId } : {}),
+        }),
+      )
     }
     if (window.Stripe) {
       start()
@@ -90,7 +96,7 @@ function loadStripe(platformKey: string): Promise<StripeLike> {
     script.onerror = () => reject(new Error("Easner Checkout failed to load"))
     document.head.appendChild(script)
   })
-  return cache[platformKey]
+  return cache[cacheKey]
 }
 
 function platformStripeKey(
@@ -206,7 +212,10 @@ export async function mountInline(
   renderSkeleton(formSlot)
 
   const validatedKey = await assertPublishableKey(options.publishableKey, runtime.validateUrl)
-  const sdk = await loadStripe(platformStripeKey(options.publishableKey, runtime, validatedKey))
+  const sdk = await loadStripe(
+    platformStripeKey(options.publishableKey, runtime, validatedKey),
+    String(options.stripeAccountId || "").trim() || undefined,
+  )
   const mountEmail = String(options.customerEmail || "").trim()
   const mountName = String(options.customerName || "").trim()
   const initOptions: Record<string, unknown> = {

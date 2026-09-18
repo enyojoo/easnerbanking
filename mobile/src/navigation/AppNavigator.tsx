@@ -28,6 +28,8 @@ import { useToast } from '../components/ToastProvider'
 import type { PersonalScope } from '@easner/shared'
 import { emitAppLocked, registerAppLockListener } from '../lib/app-lock-bus'
 import { prefetchIntercomModule, prepareIntercomMessenger } from '../lib/intercom'
+import { loadMfaVerifiedPersisted } from '../lib/mfaStatusCache'
+import { warmUnlockBiometric } from '../lib/biometricUnlock'
 import { avatarImageUri, warmAvatarCacheAsync } from '../lib/avatarCache'
 import { useConsumerKycNoahSync } from '../hooks/useConsumerKycNoahSync'
 import { haptics } from '../lib/haptics'
@@ -647,6 +649,8 @@ export default function AppNavigator() {
         await warmPendingPushTransactionDetail(scope)
       }
     })()
+    void loadMfaVerifiedPersisted(user.id)
+    void warmUnlockBiometric(user.id)
     return () => clearTimeout(prefetchTimer)
   }, [user?.id, pinGate])
 

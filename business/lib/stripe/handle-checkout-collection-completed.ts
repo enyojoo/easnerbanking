@@ -28,6 +28,7 @@ type Input = {
   customerName: string | null
   sessionPaymentMethodTypes: string[] | null
   paymentLinkId: string | null
+  stripeAccountId?: string | null
 }
 
 function headlineFor(source: CheckoutCollectionSource, linkLabel: string | null): string {
@@ -189,6 +190,7 @@ export async function handleCheckoutCollectionCompleted(
     payerName,
   } = await resolveFeeAndTransfer(getStripe(event.livemode !== false), input.paymentIntentId, {
     sessionPaymentMethodTypes: input.sessionPaymentMethodTypes,
+    stripeAccount: input.stripeAccountId,
   })
 
   const customerEmail = input.customerEmail?.trim() || payerEmail

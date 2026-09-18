@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type Stripe from "stripe"
 import { getStripe } from "./client"
+import { last4Digits } from "./connect/grid-va-bank-match"
 import type { StripeSettlementRail } from "./types"
 
 /** Which settlement table a matched row belongs to. */
@@ -102,7 +103,7 @@ export async function matchPayoutToSettlements(
     )
 
     for (const bt of page.data) {
-      // Destination-charge transfers appear as "payment" on connected accounts.
+      // Direct Charges appear as "payment" on connected accounts.
       if (bt.type !== "charge" && bt.type !== "payment") continue
 
       let paymentIntentId = ""
@@ -138,7 +139,7 @@ export async function matchPayoutToSettlements(
     if (!startingAfter) break
   }
 
-  // Fallback for Connect destination charges: payout may not expose the payment intent on
+  // Fallback for Direct Charges: payout may not expose the payment intent on
   // connected balance txs. Greedily pack pending settlements whose nets sum to the payout.
   if (settlements.length === 0 && opts?.stripeAccountId) {
     const payoutAmount = typeof payout.amount === "number" ? payout.amount : 0
@@ -210,7 +211,7 @@ export async function listPendingSettlementsForBusiness(
   ].sort((a, b) => String(a.row.created_at ?? "").localeCompare(String(b.row.created_at ?? "")))
 }
 
-/** FIFO pack of open settlements whose nets sum to inbound cents (Connect Grid hop). */
+/** FIFO pack of open settlements whose nets sum to inbound cents (Connect VA hop). */
 export function greedyPackSettlements(
   pending: { source: SettlementSource; row: Record<string, unknown> }[],
   amountCents: number,
@@ -241,8 +242,11 @@ export async function inferSettlementRail(
 ): Promise<{ rail: StripeSettlementRail; destinationRef: string }> {
   const dest = payout.destination
   const destId = typeof dest === "string" ? dest : dest && typeof dest === "object" ? dest.id : null
+  const destLast4 =
+    dest && typeof dest === "object" && "last4" in dest
+      ? last4Digits(String((dest as { last4?: string | null }).last4 ?? ""))
+      : ""
 
-  // Temp crypto payouts (if present) → turnkey
   const method = String(payout.method || "").toLowerCase()
   const type = String(payout.type || "").toLowerCase()
   if (method.includes("crypto") || type.includes("crypto")) {
@@ -255,23 +259,49 @@ export async function inferSettlementRail(
     return { rail: "turnkey_stablecoin", destinationRef: addr }
   }
 
-  // Default fiat → Grid VA
-  const { data: va } = await admin
-    .from("virtual_accounts")
-    .select("id,provider_virtual_account_id,account_number,iban")
+  const { data: connect } = await admin
+    .from("business_stripe_connect_accounts")
+    .select("default_settlement_rail")
     .eq("business_id", businessId)
-    .eq("provider", "grid")
-    .eq("status", "active")
-    .limit(1)
     .maybeSingle()
 
-  const destinationRef =
+  const { data: vas } = await admin
+    .from("virtual_accounts")
+    .select("id,provider,provider_virtual_account_id,account_number,iban")
+    .eq("business_id", businessId)
+    .in("provider", ["grid", "bridge"])
+    .neq("status", "retired")
+    .neq("status", "inactive")
+    .limit(8)
+
+  const destinationRefFor = (va: Record<string, unknown> | null | undefined, fallbackRail: string) =>
     (va?.provider_virtual_account_id && String(va.provider_virtual_account_id)) ||
     (va?.iban && String(va.iban)) ||
     (va?.account_number && String(va.account_number)) ||
     (va?.id && String(va.id)) ||
     destId ||
-    "grid_va"
+    fallbackRail
 
-  return { rail: "grid_va", destinationRef }
+  const rows = (vas ?? []) as Record<string, unknown>[]
+  if (destLast4) {
+    const matched = rows.find((va) => {
+      const vaLast4 = last4Digits(String(va.iban || va.account_number || ""))
+      return Boolean(vaLast4) && vaLast4 === destLast4
+    })
+    if (matched) {
+      const rail: StripeSettlementRail = String(matched.provider ?? "") === "bridge" ? "bridge_va" : "grid_va"
+      return { rail, destinationRef: destinationRefFor(matched, rail) }
+    }
+  }
+
+  const storedRail = String(connect?.default_settlement_rail ?? "").trim()
+  if (storedRail === "bridge_va" || storedRail === "grid_va") {
+    const provider = storedRail === "bridge_va" ? "bridge" : "grid"
+    const matched = rows.find((va) => String(va.provider ?? "") === provider) ?? rows[0]
+    return { rail: storedRail, destinationRef: destinationRefFor(matched, storedRail) }
+  }
+
+  const first = rows[0]
+  const rail: StripeSettlementRail = String(first?.provider ?? "") === "bridge" ? "bridge_va" : "grid_va"
+  return { rail, destinationRef: destinationRefFor(first, rail) }
 }

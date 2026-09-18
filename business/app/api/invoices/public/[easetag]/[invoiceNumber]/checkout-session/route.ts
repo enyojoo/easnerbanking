@@ -74,6 +74,7 @@ export async function POST(
   return NextResponse.json({
     clientSecret: result.clientSecret,
     publishableKey: result.publishableKey,
+    stripeAccountId: result.stripeAccountId,
     checkoutSessionId: result.checkoutSessionId,
     settlementId: result.settlementId,
   })

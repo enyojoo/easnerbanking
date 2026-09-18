@@ -61,5 +61,5 @@ export function biometricPromptMessage(
   const label = biometricUnlockTitle(platform, kind)
   if (purpose === 'confirm') return `Confirm with ${label}`
   if (purpose === 'enable') return `Use ${label} to unlock and confirm payments`
-  return `Unlock Easner with ${label}`
+  return `Unlock with ${label}`
 }

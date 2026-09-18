@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { getVirtualAccountDisplayFromDb } from "@/lib/noah/virtual-accounts-db"
 import { reconcileGridVaPayoutDestination } from "./reconcile-grid-va-payout"
+import { resolveConnectPayoutVa } from "./resolve-connect-payout-va"
 import { getConnectAccountRow } from "./resolve-connect-account"
 
 export type LinkPayoutDestinationResult =
@@ -20,7 +20,7 @@ function maskLast4(value: string | undefined | null): string {
 }
 
 /**
- * Register the business Grid VA as the Stripe connected-account external payout bank.
+ * Register the Office-routed virtual account as the Stripe connected-account payout bank.
  * Verifies Stripe state and re-asserts when the default destination has drifted.
  */
 export async function linkGridVaExternalAccount(
@@ -28,7 +28,6 @@ export async function linkGridVaExternalAccount(
   input: { businessId: string; currency?: string },
 ): Promise<LinkPayoutDestinationResult> {
   const currency = (input.currency || "USD").trim().toUpperCase()
-  const fiat = currency === "EUR" ? "eur" : currency === "GBP" ? "gbp" : "usd"
 
   const row = await getConnectAccountRow(admin, input.businessId)
   if (!row?.stripe_account_id) {
@@ -45,15 +44,15 @@ export async function linkGridVaExternalAccount(
   })
 
   if (!reconciled.skipped && reconciled.ok) {
-    const va = await getVirtualAccountDisplayFromDb(admin, {
-      currency: fiat,
+    const payoutVa = await resolveConnectPayoutVa(admin, {
       businessId: input.businessId,
+      currency,
     })
     return {
       ok: true,
       stripeExternalAccountId: reconciled.stripeExternalAccountId,
       currency,
-      maskedDestination: maskLast4(va?.iban || va?.accountNumber),
+      maskedDestination: maskLast4(payoutVa?.va.iban || payoutVa?.va.accountNumber),
       payoutInterval:
         typeof row.stripe_payout_schedule === "object" &&
         row.stripe_payout_schedule &&

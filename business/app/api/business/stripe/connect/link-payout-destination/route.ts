@@ -7,7 +7,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-/** Link business Grid VA as Stripe connected-account payout destination. */
+/** Link the Office-routed virtual account as the Stripe connected-account payout destination. */
 export async function POST(request: Request) {
   if (!isStripeInvoicePaymentsEnabled()) {
     return NextResponse.json({ error: "Stripe invoice payments are not enabled" }, { status: 503 })

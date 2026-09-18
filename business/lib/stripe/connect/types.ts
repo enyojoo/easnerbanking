@@ -15,8 +15,9 @@ export type BusinessStripeConnectAccountRow = {
   payouts_enabled: boolean
   transfers_enabled: boolean
   details_submitted: boolean
-  default_settlement_rail: "grid_va" | "turnkey_stablecoin" | null
+  default_settlement_rail: "grid_va" | "bridge_va" | "turnkey_stablecoin" | null
   stripe_external_account_id: string | null
+  stripe_test_account_id?: string | null
   stripe_payout_schedule: Record<string, unknown> | null
   requirements_currently_due: unknown
   requirements_snapshot: Record<string, unknown> | null

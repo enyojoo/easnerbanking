@@ -4,6 +4,7 @@ import { markInvoicePaidStripe } from "@/lib/invoices/mark-invoice-paid-stripe"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
 import { getStripe } from "./client"
+import { stripeEventConnectedAccount } from "./connect-request"
 import type { StripePaymentMethodDisplay } from "@/lib/stripe/parse-payment-method-display"
 import { parsePaymentMethodDisplayFromCharge } from "@/lib/stripe/parse-payment-method-display"
 import { patchInvoiceStripeLedgerTransactionId } from "@/lib/invoices/patch-invoice-stripe-ledger-transaction-id"
@@ -165,6 +166,8 @@ export async function handleStripeCheckoutCompleted(
 
   const parsed = parseCheckoutSessionMetadata(metadata)
   const { settlementId, businessId } = parsed
+  const stripeAccount =
+    stripeEventConnectedAccount(event, parsed.connectedAccountId)
   const invoiceId = parsed.invoiceId ?? ""
   const invoiceNumber = parsed.invoiceNumber ?? ""
 
@@ -182,6 +185,7 @@ export async function handleStripeCheckoutCompleted(
       customerName,
       sessionPaymentMethodTypes,
       paymentLinkId: parsed.paymentLinkId,
+      stripeAccountId: stripeAccount,
     })
   }
 
@@ -190,7 +194,10 @@ export async function handleStripeCheckoutCompleted(
   }
 
   const { feeCents, chargeId, paymentMethodType, paymentMethod, transferId, connectedAccountId } =
-    await resolveFeeAndTransfer(stripe, paymentIntentId, { sessionPaymentMethodTypes })
+    await resolveFeeAndTransfer(stripe, paymentIntentId, {
+      sessionPaymentMethodTypes,
+      stripeAccount,
+    })
 
   // Idempotent: settlement already exists – enrich payment method on later webhooks.
   const { data: existingSettlement } = await admin

@@ -2,9 +2,8 @@ import { getStripePlatformFeeBps } from "./config"
 import type { CheckoutFeeMode } from "./checkout-fee-mode"
 
 /**
- * Processing estimate used to size `application_fee_amount` on destination charges.
- * Actual processing is settled against the platform balance; the estimate keeps the
- * merchant's net predictable and is reconciled by the margin report.
+ * Processing estimate used to size `application_fee_amount` on Direct Charges.
+ * The estimate keeps the merchant's net predictable and is reconciled by the margin report.
  */
 const PROCESSING_PERCENT = 0.029
 const PROCESSING_FIXED_CENTS = 30
@@ -48,7 +47,7 @@ function toPercent(feeCents: number, amountCents: number): number {
 /**
  * Amounts + platform fee wiring for one checkout collection.
  * `application_fee_amount` is always set (except when Easner absorbs) so the
- * destination transfer leaves the merchant with the net implied by the fee mode.
+ * Direct Charge leaves the merchant with the net implied by the fee mode.
  */
 export function computeCheckoutAmounts(input: {
   listedAmountCents: number

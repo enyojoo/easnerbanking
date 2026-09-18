@@ -2,25 +2,18 @@ import { describe, expect, it, vi, beforeEach } from "vitest"
 import { resolveConnectReadyForCheckout } from "./resolve-connect-account"
 
 vi.mock("@/lib/compliance/business-tier1", () => ({
-  businessUsesGridVerification: vi.fn(),
   isBusinessTier1Complete: vi.fn(),
 }))
 
-vi.mock("@/lib/noah/virtual-accounts-db", () => ({
-  hasActiveGridVirtualAccountForBusinessInDb: vi.fn(),
-  hasActiveVirtualAccountInDb: vi.fn(),
+vi.mock("./resolve-connect-payout-va", () => ({
+  resolveConnectPayoutVa: vi.fn(),
 }))
 
-import { businessUsesGridVerification, isBusinessTier1Complete } from "@/lib/compliance/business-tier1"
-import {
-  hasActiveGridVirtualAccountForBusinessInDb,
-  hasActiveVirtualAccountInDb,
-} from "@/lib/noah/virtual-accounts-db"
+import { isBusinessTier1Complete } from "@/lib/compliance/business-tier1"
+import { resolveConnectPayoutVa } from "./resolve-connect-payout-va"
 
 const tier1Mock = vi.mocked(isBusinessTier1Complete)
-const usesGridMock = vi.mocked(businessUsesGridVerification)
-const hasGridVaForBusinessMock = vi.mocked(hasActiveGridVirtualAccountForBusinessInDb)
-const hasVaMock = vi.mocked(hasActiveVirtualAccountInDb)
+const payoutVaMock = vi.mocked(resolveConnectPayoutVa)
 
 function adminWith(biz: Record<string, unknown> | null, connectRow: Record<string, unknown> | null) {
   return {
@@ -44,13 +37,15 @@ function adminWith(biz: Record<string, unknown> | null, connectRow: Record<strin
 beforeEach(() => {
   vi.clearAllMocks()
   tier1Mock.mockReturnValue(true)
-  usesGridMock.mockReturnValue(true)
-  hasGridVaForBusinessMock.mockResolvedValue(true)
-  hasVaMock.mockResolvedValue(false)
+  payoutVaMock.mockResolvedValue({
+    va: { hasAccount: true, accountNumber: "1234567890" },
+    provider: "grid",
+    rail: "grid_va",
+  } as never)
 })
 
 describe("resolveConnectReadyForCheckout", () => {
-  it("detects Grid VA from business_id without org owner resolution", async () => {
+  it("uses the Office-preferred VA without a Grid-only lookup", async () => {
     const admin = adminWith(
       { verification_status: "approved", verification_provider: "grid" },
       null,
@@ -58,16 +53,13 @@ describe("resolveConnectReadyForCheckout", () => {
 
     const result = await resolveConnectReadyForCheckout(admin, "biz-1")
 
-    expect(hasGridVaForBusinessMock).toHaveBeenCalledWith(admin, {
-      currency: "usd",
-      businessId: "biz-1",
-    })
+    expect(payoutVaMock).toHaveBeenCalledWith(admin, { businessId: "biz-1", currency: "USD" })
     expect(result.hasGridVa).toBe(true)
     expect(result.reason).toBe("Complete online payment setup")
   })
 
-  it("reports missing VA when no active Grid business row exists", async () => {
-    hasGridVaForBusinessMock.mockResolvedValue(false)
+  it("reports missing VA when the preferred provider has no account", async () => {
+    payoutVaMock.mockResolvedValue(null)
     const admin = adminWith(
       { verification_status: "approved", verification_provider: "grid" },
       { stripe_account_id: "acct_1", details_submitted: true },
@@ -79,9 +71,12 @@ describe("resolveConnectReadyForCheckout", () => {
     expect(result.reason).toBe("Your Easner USD account is needed before payouts can be linked")
   })
 
-  it("accepts a Bridge VA when Grid KYB is in progress", async () => {
-    hasGridVaForBusinessMock.mockResolvedValue(false)
-    hasVaMock.mockResolvedValue(true)
+  it("accepts a Bridge VA when Office pay-in is Bridge", async () => {
+    payoutVaMock.mockResolvedValue({
+      va: { hasAccount: true, accountNumber: "5555666677" },
+      provider: "bridge",
+      rail: "bridge_va",
+    } as never)
     const admin = adminWith(
       { verification_status: "in_progress", verification_provider: "grid" },
       null,
@@ -89,30 +84,33 @@ describe("resolveConnectReadyForCheckout", () => {
 
     const result = await resolveConnectReadyForCheckout(admin, "biz-1")
 
-    expect(hasVaMock).toHaveBeenCalledWith(admin, {
-      currency: "usd",
-      businessId: "biz-1",
-      provider: "bridge",
-    })
     expect(result.hasGridVa).toBe(true)
     expect(result.reason).toBe("Complete online payment setup")
   })
 
-  it("uses generic VA lookup for non-Grid businesses", async () => {
-    usesGridMock.mockReturnValue(false)
-    hasVaMock.mockResolvedValue(true)
+  it("treats a Grid-linked payout as unlinked when Office prefers Bridge", async () => {
+    payoutVaMock.mockResolvedValue({
+      va: { hasAccount: true, accountNumber: "5555666677" },
+      provider: "bridge",
+      rail: "bridge_va",
+    } as never)
     const admin = adminWith(
-      { verification_status: "approved", verification_provider: "noah" },
-      null,
+      { verification_status: "approved" },
+      {
+        stripe_account_id: "acct_1",
+        details_submitted: true,
+        transfers_enabled: true,
+        payouts_enabled: true,
+        stripe_external_account_id: "ba_grid",
+        default_settlement_rail: "grid_va",
+        requirements_currently_due: [],
+      },
     )
 
     const result = await resolveConnectReadyForCheckout(admin, "biz-1")
 
-    expect(hasVaMock).toHaveBeenCalledWith(admin, {
-      currency: "usd",
-      businessId: "biz-1",
-      provider: undefined,
-    })
-    expect(result.hasGridVa).toBe(true)
+    expect(result.externalAccountLinked).toBe(false)
+    expect(result.ready).toBe(false)
+    expect(result.reason).toBe("Link your virtual account as the payout destination")
   })
 })

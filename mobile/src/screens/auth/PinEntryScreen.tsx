@@ -19,8 +19,8 @@ import { emitAppLocked } from '../../lib/app-lock-bus'
 import {
   authenticateAppUnlock,
   biometricUnlockLabel,
-  getBiometricAvailability,
-  isBiometricUnlockEnabled,
+  peekUnlockBiometric,
+  warmUnlockBiometric,
   type BiometricAvailability,
 } from '../../lib/biometricUnlock'
 import { UNAVAILABLE_BIOMETRIC } from '../../lib/biometricUnlockPolicy'
@@ -51,8 +51,9 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
   const [lockedUntil, setLockedUntil] = useState<number | null>(null)
   const [forgotSheetVisible, setForgotSheetVisible] = useState(false)
   const [logoutSheetVisible, setLogoutSheetVisible] = useState(false)
-  const [biometric, setBiometric] = useState<BiometricAvailability>(UNAVAILABLE_BIOMETRIC)
-  const [biometricEnabled, setBiometricEnabled] = useState(false)
+  const peekedUnlock = user?.id ? peekUnlockBiometric(user.id) : null
+  const [biometric, setBiometric] = useState<BiometricAvailability>(peekedUnlock ?? UNAVAILABLE_BIOMETRIC)
+  const [biometricEnabled, setBiometricEnabled] = useState(Boolean(peekedUnlock?.enabled))
   const biometricPromptedRef = useRef(false)
   const shakeAnim = useRef(new Animated.Value(0)).current
   const insets = useSafeAreaInsets()
@@ -146,13 +147,13 @@ export default function PinEntryScreen({ navigation: navigationProp }: Navigatio
   }
 
   useEffect(() => {
+    if (!user?.id) return
     let cancelled = false
     void (async () => {
-      const next = await getBiometricAvailability()
-      const enabled = user?.id ? await isBiometricUnlockEnabled(user.id) : false
+      const snap = await warmUnlockBiometric(user.id)
       if (cancelled) return
-      setBiometric(next)
-      setBiometricEnabled(Boolean(next.available && enabled))
+      setBiometric(snap)
+      setBiometricEnabled(snap.enabled)
     })()
     return () => {
       cancelled = true

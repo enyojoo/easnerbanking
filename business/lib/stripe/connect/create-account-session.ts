@@ -10,7 +10,7 @@ export type CreateAccountSessionResult =
 
 /**
  * Create an Account Session for embedded Connect Account Onboarding.
- * External account collection is disabled – Easner links Grid VA via API.
+ * External account collection is disabled – Easner links the Office-routed VA via API.
  */
 export async function createConnectAccountSession(
   admin: SupabaseClient,
@@ -36,7 +36,7 @@ export async function createConnectAccountSession(
         account_onboarding: {
           enabled: true,
           features: {
-            // Easner links Grid VA as payout destination after onboarding.
+            // Easner links the business VA as payout destination after onboarding.
             external_account_collection: false,
           },
         },

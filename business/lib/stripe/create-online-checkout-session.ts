@@ -9,7 +9,10 @@ import {
   type OnlineCheckoutSource,
 } from "./checkout-session-metadata"
 import { getStripe } from "./client"
+import { connectedAccountRequest } from "./connect-request"
 import { resolveConnectReadyForCheckout } from "./connect"
+import { ensureTestConnectedAccount } from "./connect/create-connected-account"
+import { ensureConnectedPaymentMethodDomains } from "./connect/payment-method-domains"
 import { resolveOnlinePaymentsEnabled } from "./resolve-online-payments-enabled"
 import {
   getStripePublishableKey,
@@ -39,7 +42,7 @@ export type CreateOnlineCheckoutSessionInput = {
   invoiceId?: string | null
   invoiceNumber?: string | null
   paymentLinkId?: string | null
-  /** Recurring links: Price created on the platform account. */
+  /** Recurring links: Price created on the connected account. */
   stripePriceId?: string | null
   trialDays?: number | null
   metadata?: Record<string, string>
@@ -57,6 +60,7 @@ export type CreateOnlineCheckoutSessionResult =
       publishableKey: string
       checkoutSessionId: string
       settlementId: string
+      stripeAccountId: string
       amounts: CheckoutAmounts
     }
   | { ok: false; status: number; error: string }
@@ -84,9 +88,9 @@ async function expireSessionRows(
  * One Stripe session creator for every Collections surface (invoice Pay online,
  * Payment Links, website embed).
  *
- * Always a Connect destination charge with no `on_behalf_of`, so Easner stays
- * merchant of record, and always `application_fee_amount` sized by the business's
- * effective fee mode (except when Easner absorbs processing).
+ * Direct Charges on the connected account (connected business is merchant of
+ * record). `application_fee_amount` / percent sized by the business's effective
+ * fee mode (except when Easner absorbs processing).
  */
 export async function createOnlineCheckoutSession(
   admin: SupabaseClient,
@@ -145,11 +149,7 @@ export async function createOnlineCheckoutSession(
       error: connect.reason || "Complete online payment setup in Settings",
     }
   }
-  const connectedAccountId = connect.stripeAccountId
-
-  const reused = await reuseOpenOnlineSession(admin, input)
-  if (reused) return reused
-
+  const liveConnectedAccountId = connect.stripeAccountId
   const livemode = input.livemode !== false
   if (!livemode && !isStripeTestPaymentsConfigured()) {
     return {
@@ -159,6 +159,22 @@ export async function createOnlineCheckoutSession(
         "Test payments are not configured. Add STRIPE_TEST_SECRET_KEY and NEXT_PUBLIC_STRIPE_TEST_PUBLISHABLE_KEY.",
     }
   }
+
+  let connectedAccountId = liveConnectedAccountId
+  if (!livemode) {
+    try {
+      connectedAccountId = await ensureTestConnectedAccount(admin, { businessId: input.businessId })
+    } catch (e) {
+      return {
+        ok: false,
+        status: 502,
+        error: e instanceof Error ? e.message : "Could not create a test connected account",
+      }
+    }
+  }
+
+  const reused = await reuseOpenOnlineSession(admin, input, connectedAccountId)
+  if (reused) return reused
 
   const { feeMode } = await resolveCheckoutFeeMode(admin, input.businessId)
   const amounts = computeCheckoutAmounts({ listedAmountCents, feeMode })
@@ -264,8 +280,12 @@ export async function createOnlineCheckoutSession(
 
   try {
     const stripe = getStripe(livemode)
-    // Live: Connect destination charge. Test: platform test-mode charge only —
-    // live connected accounts cannot be used with Stripe test keys.
+    void ensureConnectedPaymentMethodDomains({
+      stripeAccountId: connectedAccountId,
+      extraHosts: [input.returnUrl],
+      livemode,
+    }).catch((e) => console.warn("[stripe-connect] payment method domains:", e))
+
     const session = await stripe.checkout.sessions.create(
       {
         ui_mode: "elements",
@@ -279,13 +299,8 @@ export async function createOnlineCheckoutSession(
           ? {
               subscription_data: {
                 metadata,
-                ...(livemode
-                  ? {
-                      transfer_data: { destination: connectedAccountId },
-                      ...(amounts.applicationFeePercent > 0
-                        ? { application_fee_percent: amounts.applicationFeePercent }
-                        : {}),
-                    }
+                ...(amounts.applicationFeePercent > 0
+                  ? { application_fee_percent: amounts.applicationFeePercent }
                   : {}),
                 ...(input.trialDays && input.trialDays > 0
                   ? { trial_period_days: input.trialDays }
@@ -295,13 +310,8 @@ export async function createOnlineCheckoutSession(
           : {
               payment_intent_data: {
                 metadata,
-                ...(livemode
-                  ? {
-                      transfer_data: { destination: connectedAccountId },
-                      ...(amounts.applicationFeeCents > 0
-                        ? { application_fee_amount: amounts.applicationFeeCents }
-                        : {}),
-                    }
+                ...(amounts.applicationFeeCents > 0
+                  ? { application_fee_amount: amounts.applicationFeeCents }
                   : {}),
                 ...(input.statementSuffix?.trim()
                   ? { statement_descriptor_suffix: input.statementSuffix.trim() }
@@ -309,7 +319,7 @@ export async function createOnlineCheckoutSession(
               },
             }),
       },
-      { idempotencyKey },
+      connectedAccountRequest(connectedAccountId, { idempotencyKey }),
     )
 
     if (!session.client_secret) {
@@ -356,6 +366,7 @@ export async function createOnlineCheckoutSession(
       publishableKey: getStripePublishableKey(livemode),
       checkoutSessionId: session.id,
       settlementId,
+      stripeAccountId: connectedAccountId,
       amounts,
     }
   } catch (e) {
@@ -377,6 +388,7 @@ export async function createOnlineCheckoutSession(
 async function reuseOpenOnlineSession(
   admin: SupabaseClient,
   input: CreateOnlineCheckoutSessionInput,
+  connectedAccountId: string,
 ): Promise<CreateOnlineCheckoutSessionResult | null> {
   const key = input.idempotencyKey?.trim()
   if (!key) return null
@@ -404,10 +416,20 @@ async function reuseOpenOnlineSession(
     })
   }
 
+  const existingConnected =
+    typeof existing.stripe_connected_account_id === "string"
+      ? existing.stripe_connected_account_id.trim()
+      : ""
+  if (existingConnected && existingConnected !== connectedAccountId) {
+    await expire("expired")
+    return null
+  }
+
   try {
     const livemode = input.livemode !== false
     const session = await getStripe(livemode).checkout.sessions.retrieve(
       String(existing.stripe_checkout_session_id),
+      connectedAccountRequest(connectedAccountId),
     )
     if (session.status === "open" && session.client_secret) {
       const { feeMode } = await resolveCheckoutFeeMode(admin, input.businessId)
@@ -419,6 +441,7 @@ async function reuseOpenOnlineSession(
         publishableKey: getStripePublishableKey(livemode),
         checkoutSessionId: session.id,
         settlementId: String(existing.easner_settlement_id),
+        stripeAccountId: connectedAccountId,
         amounts,
       }
     }

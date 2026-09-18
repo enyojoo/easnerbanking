@@ -1,8 +1,4 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
-import { upsertLedgerTransaction } from "@/lib/ledger/transactions"
-import { dispatchMerchantWebhook } from "@/lib/checkout/merchant-webhooks"
-import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { buildGridVaBankDepositCreditKey } from "./grid-bank-deposit-credit"
 import { isStripeConnectPayoutInbound } from "./stripe-connect-payout-inbound"
 import type { GridWebhookEvent } from "./types"
@@ -13,13 +9,15 @@ import {
   gridWebhookTransactionId,
 } from "./webhook-event-id"
 import {
-  greedyPackSettlements,
-  listPendingSettlementsForBusiness,
   SETTLEMENT_TABLES,
-  type SettlementSource,
 } from "@/lib/stripe/match-payout-to-settlements"
+import {
+  CONNECT_VA_AMOUNT_TOLERANCE_CENTS,
+  creditConnectVaInboundSettlements,
+  packPendingConnectSettlements,
+  type PackedConnectSettlement,
+} from "@/lib/stripe/connect-va-inbound-settlement"
 
-const AMOUNT_TOLERANCE_CENTS = 2
 const MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000
 
 function webhookData(event: GridWebhookEvent): Record<string, unknown> | undefined {
@@ -42,10 +40,7 @@ function isTerminalIncomingSuccess(event: GridWebhookEvent, status: string): boo
   )
 }
 
-type PackedSettlement = {
-  source: SettlementSource
-  row: Record<string, unknown>
-}
+type PackedSettlement = PackedConnectSettlement
 
 /**
  * Hop 3: Grid INCOMING from Connect originator (EASNER) → credit pending
@@ -92,21 +87,18 @@ export async function handleGridStripeSettlementWebhook(
   )
   const packed =
     fromExpectation ??
-    greedyPackSettlements(
-      await listPendingSettlementsForBusiness(admin, businessId),
-      amountCents,
-      AMOUNT_TOLERANCE_CENTS,
-    )
+    (await packPendingConnectSettlements(admin, businessId, amountCents))
   if (!packed.length) return { handled: false }
 
   const alreadyCredited = await inboundAlreadyCreditedWallet(admin, gridTransactionId)
   await deleteDuplicateVaInbound(admin, gridTransactionId)
 
-  await finalizeMatch(admin, {
+  await creditConnectVaInboundSettlements(admin, {
     packed,
     businessId,
     amountCents,
-    gridTransactionId,
+    inboundId: gridTransactionId,
+    rail: "grid_va",
     existingTransferId: fromExpectationTransferId(fromExpectation),
     skipWalletCredit: alreadyCredited,
     customerId,
@@ -140,7 +132,7 @@ async function matchPendingGridTransfer(
 
   const match = (candidates ?? []).find((row) => {
     const expected = Number(row.expected_amount_cents ?? 0)
-    return Math.abs(expected - amountCents) <= AMOUNT_TOLERANCE_CENTS
+    return Math.abs(expected - amountCents) <= CONNECT_VA_AMOUNT_TOLERANCE_CENTS
   })
   if (!match?.id) return null
 
@@ -219,154 +211,4 @@ async function deleteDuplicateVaInbound(
     .maybeSingle()
   if (!row?.id) return
   await admin.from("transactions").delete().eq("id", row.id)
-}
-
-async function finalizeMatch(
-  admin: SupabaseClient,
-  input: {
-    packed: PackedSettlement[]
-    businessId: string
-    amountCents: number
-    gridTransactionId: string
-    existingTransferId: string | null
-    skipWalletCredit: boolean
-    customerId: string
-  },
-): Promise<void> {
-  const now = new Date().toISOString()
-  const currency = String(input.packed[0]?.row.currency ?? "USD").toUpperCase()
-  const netMajor = input.amountCents / 100
-  const userId =
-    (await resolveBusinessOrgOwnerUserId(admin, input.businessId)) ??
-    String(input.packed[0]?.row.user_id ?? "")
-
-  if (!input.skipWalletCredit) {
-    await applyWalletBalanceDelta(admin, {
-      businessId: input.businessId,
-      userId: null,
-      currency,
-      delta: netMajor,
-    })
-  }
-
-  for (const item of input.packed) {
-    const table = SETTLEMENT_TABLES[item.source]
-    const settlement = item.row
-    if (String(settlement.phase) === "credited") continue
-
-    await admin
-      .from(table)
-      .update({
-        phase: "credited",
-        credited_at: now,
-        updated_at: now,
-      })
-      .eq("id", String(settlement.id))
-
-    if (settlement.ledger_transaction_id) {
-      const { data: tx } = await admin
-        .from("transactions")
-        .select("id,user_id,business_id,metadata,amount,currency,provider_transaction_id")
-        .eq("id", String(settlement.ledger_transaction_id))
-        .maybeSingle()
-      if (tx?.id) {
-        const prior =
-          tx.metadata && typeof tx.metadata === "object"
-            ? (tx.metadata as Record<string, unknown>)
-            : {}
-        await upsertLedgerTransaction(admin, {
-          userId: String(tx.user_id),
-          businessId: tx.business_id ? String(tx.business_id) : input.businessId,
-          provider: "stripe",
-          providerTransactionId: String(tx.provider_transaction_id),
-          status: "settled",
-          amount: Number(tx.amount ?? Number(settlement.net_cents ?? 0) / 100),
-          currency: String(tx.currency ?? settlement.currency ?? currency),
-          direction: "in",
-          settledAt: now,
-          metadata: {
-            ...prior,
-            settlement_phase: "credited",
-            settlement_rail: "grid_va",
-            credited_at: now,
-            grid_transaction_id: input.gridTransactionId,
-            stripe_connect_va_originator: "EASNER",
-          },
-        })
-      }
-    }
-
-    if (item.source === "checkout_stripe") {
-      await dispatchMerchantWebhook(admin, {
-        businessId: String(settlement.business_id ?? input.businessId),
-        event: "payment.available",
-        data: {
-          amount_cents: Number(settlement.net_cents ?? 0),
-          currency: String(settlement.currency ?? currency).toUpperCase(),
-          ...(settlement.payment_link_id
-            ? { payment_link_id: String(settlement.payment_link_id) }
-            : {}),
-          available_at: now,
-        },
-      })
-      continue
-    }
-
-    const invoiceId = settlement.invoice_id ? String(settlement.invoice_id) : null
-    if (!invoiceId) continue
-    const { data: inv } = await admin
-      .from("invoices")
-      .select("metadata")
-      .eq("id", invoiceId)
-      .maybeSingle()
-    if (inv?.metadata && typeof inv.metadata === "object") {
-      const meta = { ...(inv.metadata as Record<string, unknown>) }
-      const paymentInfo = (meta.paymentInfo ?? {}) as Record<string, unknown>
-      const stripeInfo = (paymentInfo.stripe ?? {}) as Record<string, unknown>
-      meta.paymentInfo = {
-        ...paymentInfo,
-        stripe: {
-          ...stripeInfo,
-          settlementPhase: "credited",
-        },
-      }
-      await admin.from("invoices").update({ metadata: meta }).eq("id", invoiceId)
-    }
-  }
-
-  const invoiceSettlementIds = input.packed
-    .filter((s) => s.source === "invoice_stripe")
-    .map((s) => String(s.row.id))
-  const checkoutSettlementIds = input.packed
-    .filter((s) => s.source === "checkout_stripe")
-    .map((s) => String(s.row.id))
-
-  if (input.existingTransferId) {
-    await admin
-      .from("grid_transfers")
-      .update({
-        status: "settled",
-        grid_transaction_id: input.gridTransactionId,
-        updated_at: now,
-      })
-      .eq("id", input.existingTransferId)
-    return
-  }
-
-  if (!userId) return
-  await admin.from("grid_transfers").insert({
-    user_id: userId,
-    business_id: input.businessId,
-    mode: "stripe_settlement",
-    status: "settled",
-    settlement_rail: "grid_va",
-    expected_amount_cents: input.amountCents,
-    invoice_settlement_ids: invoiceSettlementIds,
-    checkout_settlement_ids: checkoutSettlementIds,
-    grid_customer_id: input.customerId,
-    grid_transaction_id: input.gridTransactionId,
-    receive_currency: currency,
-    quoted_receive: netMajor,
-    metadata: { source: "grid_connect_inbound", originator: "EASNER" },
-  })
 }

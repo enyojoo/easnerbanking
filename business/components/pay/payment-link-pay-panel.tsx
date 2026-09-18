@@ -22,7 +22,7 @@ import { formatCurrency } from "@/lib/utils"
 type Resolution =
   | { kind: "loading" }
   | { kind: "not_found" }
-  | { kind: "payment_link"; payload: PublicPaymentLinkPayload; stripeCheckout: { clientSecret: string } | null }
+  | { kind: "payment_link"; payload: PublicPaymentLinkPayload; stripeCheckout: { clientSecret: string; stripeAccountId: string } | null }
   | { kind: "stablecoin_session"; sessionId: string }
 
 function resolutionFromInitial(initial: PublicPayPageResult | undefined): Resolution {
@@ -117,6 +117,7 @@ export function PaymentLinkPayPanel({
       payload={resolution.payload}
       path={path}
       initialClientSecret={resolution.stripeCheckout?.clientSecret ?? null}
+      initialStripeAccountId={resolution.stripeCheckout?.stripeAccountId ?? null}
     />
   )
 }
@@ -125,13 +126,16 @@ function PaymentLinkSurface({
   payload,
   path,
   initialClientSecret,
+  initialStripeAccountId,
 }: {
   payload: PublicPaymentLinkPayload
   path: string
   initialClientSecret: string | null
+  initialStripeAccountId: string | null
 }) {
   const { link, business } = payload
   const [clientSecret, setClientSecret] = useState<string | null>(initialClientSecret)
+  const [stripeAccountId, setStripeAccountId] = useState<string | null>(initialStripeAccountId)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(
     link.rail === "card_bank" && payload.onlinePaymentsEnabled && !initialClientSecret,
@@ -148,8 +152,9 @@ function PaymentLinkSurface({
 
   useEffect(() => {
     if (link.rail !== "card_bank" || !payload.onlinePaymentsEnabled || paid) return
-    if (initialClientSecret && attempt === 0) {
+    if (initialClientSecret && initialStripeAccountId && attempt === 0) {
       setClientSecret(initialClientSecret)
+      setStripeAccountId(initialStripeAccountId)
       setLoading(false)
       setError(null)
       return
@@ -163,13 +168,15 @@ function PaymentLinkSurface({
         const res = await fetch(`/api/payment-links/public/${path}`, { method: "POST" })
         const body = (await res.json().catch(() => ({}))) as {
           clientSecret?: string
+          stripeAccountId?: string
           error?: string
         }
         if (cancelled) return
-        if (!res.ok || !body.clientSecret) {
+        if (!res.ok || !body.clientSecret || !body.stripeAccountId) {
           throw new Error(body.error || "Could not start this payment")
         }
         setClientSecret(body.clientSecret)
+        setStripeAccountId(body.stripeAccountId)
         analytics.trackPayerCheckoutStarted({ path, rail: link.rail })
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Could not start this payment")
@@ -181,7 +188,7 @@ function PaymentLinkSurface({
     return () => {
       cancelled = true
     }
-  }, [link.rail, payload.onlinePaymentsEnabled, paid, path, attempt, initialClientSecret])
+  }, [link.rail, payload.onlinePaymentsEnabled, paid, path, attempt, initialClientSecret, initialStripeAccountId])
 
   const onPaid = useCallback(() => {
     setPaid(true)
@@ -238,7 +245,7 @@ function PaymentLinkSurface({
         </p>
       ) : loading && !clientSecret ? (
         <PaymentFormSkeleton />
-      ) : error || !clientSecret ? (
+      ) : error || !clientSecret || !stripeAccountId ? (
         <div className="space-y-3">
           <p className="text-sm text-destructive" role="alert">
             {error || "Unable to load the payment form"}
@@ -258,6 +265,7 @@ function PaymentLinkSurface({
       ) : (
         <EasnerPaymentElementCheckout
           clientSecret={clientSecret}
+          stripeAccountId={stripeAccountId}
           amount={payload.customerAmountCents / 100}
           currency={link.currency}
           successMessage={`Thank you. ${business.name} has been notified of your payment.`}

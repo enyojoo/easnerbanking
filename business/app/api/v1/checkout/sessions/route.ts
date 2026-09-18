@@ -150,12 +150,24 @@ export async function POST(request: Request) {
     if (!interval) {
       return jsonError(400, "invalid_interval", "interval must be month or year")
     }
+    const { getConnectAccountRow } = await import("@/lib/stripe/connect")
+    const { ensureTestConnectedAccount } = await import("@/lib/stripe/connect/create-connected-account")
+    const connectRow = await getConnectAccountRow(admin, auth.ctx.businessId)
+    let stripeAccountId = connectRow?.stripe_account_id?.trim() || ""
+    if (!livemode) {
+      try {
+        stripeAccountId = await ensureTestConnectedAccount(admin, { businessId: auth.ctx.businessId })
+      } catch (e) {
+        return jsonError(502, "price_create_failed", e instanceof Error ? e.message : "Test connected account failed")
+      }
+    }
     const price = await createRecurringPrice({
       label: productName,
       description: productDescription,
       amountCents,
       currency,
       interval,
+      stripeAccountId,
       livemode,
     })
     if (!price.ok) {
@@ -206,6 +218,7 @@ export async function POST(request: Request) {
     {
       client_secret: result.clientSecret,
       checkout_session_id: result.checkoutSessionId,
+      stripe_account_id: result.stripeAccountId,
       amount: result.amounts.customerAmountCents,
       currency,
       mode,

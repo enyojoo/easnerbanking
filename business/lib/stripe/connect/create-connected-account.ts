@@ -1,18 +1,63 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import type Stripe from "stripe"
 import { resolveBusinessCountryIso2 } from "@/lib/grid/business-profile-shell"
 import {
   connectReadyToStatusSnapshot,
   notifyOnlinePaymentsStatusChange,
 } from "@/lib/notifications/online-payments-notify"
 import { getStripe } from "../client"
+import { buildConnectedAccountStatementDescriptor } from "../statement-descriptor"
 import { ensureConnectAccountLinked } from "./discover-connect-account"
 import { resolveConnectReadyForCheckout } from "./resolve-connect-account"
 import { syncConnectAccountRow } from "./sync-account-from-stripe"
 import type { BusinessStripeConnectAccountRow } from "./types"
 
+function connectAccountCreateParams(biz: {
+  id: string
+  name?: string | null
+  easetag?: string | null
+  country?: string | null
+  website?: string | null
+  support_email?: string | null
+  email?: string
+}): Stripe.AccountCreateParams {
+  const name = typeof biz.name === "string" && biz.name.trim() ? biz.name.trim() : undefined
+  return {
+    country: resolveBusinessCountryIso2(biz.country as string | null) || "US",
+    email: biz.email || undefined,
+    business_type: "company",
+    company: { name },
+    business_profile: {
+      name,
+      url: typeof biz.website === "string" && biz.website.trim() ? biz.website.trim() : undefined,
+      product_description: "Invoice payments settled to Easner wallet via virtual account",
+    },
+    metadata: {
+      easner_business_id: biz.id,
+      easner_easetag: typeof biz.easetag === "string" ? biz.easetag : "",
+    },
+    // White-label Direct Charges: connected account is MoR. Platform can still
+    // absorb negative balances (losses) and Stripe fees as a commercial term.
+    controller: {
+      fees: { payer: "application" },
+      losses: { payments: "application" },
+      stripe_dashboard: { type: "none" },
+      requirement_collection: "application",
+    },
+    capabilities: {
+      transfers: { requested: true },
+      card_payments: { requested: true },
+    },
+    settings: {
+      payouts: { schedule: { interval: "daily" } },
+      payments: { statement_descriptor: buildConnectedAccountStatementDescriptor(name) },
+    },
+  }
+}
+
 /**
  * Create (or return existing) Stripe Connect account for a business.
- * Platform MoR destination charges: transfers capability, no Stripe Dashboard.
+ * Direct Charges: connected account is merchant of record; no seller Dashboard.
  */
 export async function ensureConnectedAccount(
   admin: SupabaseClient,
@@ -44,46 +89,22 @@ export async function ensureConnectedAccount(
     throw new Error(bizErr?.message || "Business not found")
   }
 
-  const country = resolveBusinessCountryIso2(biz.country as string | null) || "US"
   const email =
     input.email?.trim() ||
     (typeof biz.support_email === "string" ? biz.support_email.trim() : "") ||
     undefined
 
   const stripe = getStripe()
-  const account = await stripe.accounts.create({
-    country,
-    email: email || undefined,
-    business_type: "company",
-    company: {
-      name: typeof biz.name === "string" && biz.name.trim() ? biz.name.trim() : undefined,
-    },
-    business_profile: {
-      name: typeof biz.name === "string" && biz.name.trim() ? biz.name.trim() : undefined,
-      url: typeof biz.website === "string" && biz.website.trim() ? biz.website.trim() : undefined,
-      product_description: "Invoice payments settled to Easner wallet via virtual account",
-    },
-    metadata: {
-      easner_business_id: input.businessId,
-      easner_easetag: typeof biz.easetag === "string" ? biz.easetag : "",
-    },
-    // Platform MoR: platform liable for losses; no seller Stripe Dashboard.
-    controller: {
-      fees: { payer: "application" },
-      losses: { payments: "application" },
-      stripe_dashboard: { type: "none" },
-      requirement_collection: "application",
-    },
-    capabilities: {
-      transfers: { requested: true },
-      card_payments: { requested: true },
-    },
-    settings: {
-      payouts: {
-        schedule: { interval: "daily" },
-      },
-    },
-  })
+  const account = await stripe.accounts.create(
+    connectAccountCreateParams({
+      id: input.businessId,
+      name: biz.name as string | null,
+      easetag: biz.easetag as string | null,
+      country: biz.country as string | null,
+      website: biz.website as string | null,
+      email,
+    }),
+  )
 
   const now = new Date().toISOString()
   const { error: insertErr } = await admin.from("business_stripe_connect_accounts").insert({
@@ -134,4 +155,54 @@ export async function ensureConnectedAccount(
   }
 
   return row
+}
+
+/**
+ * Test-mode Direct Charges cannot use a live `acct_`. Create or reuse a test
+ * connected account keyed on the same business.
+ */
+export async function ensureTestConnectedAccount(
+  admin: SupabaseClient,
+  input: { businessId: string },
+): Promise<string> {
+  const { data: existing } = await admin
+    .from("business_stripe_connect_accounts")
+    .select("stripe_test_account_id")
+    .eq("business_id", input.businessId)
+    .maybeSingle()
+  const stored = String(existing?.stripe_test_account_id ?? "").trim()
+  if (stored) return stored
+
+  const { data: biz, error: bizErr } = await admin
+    .from("businesses")
+    .select("id,name,easetag,country,support_email,website")
+    .eq("id", input.businessId)
+    .maybeSingle()
+  if (bizErr || !biz?.id) {
+    throw new Error(bizErr?.message || "Business not found")
+  }
+
+  const email =
+    (typeof biz.support_email === "string" ? biz.support_email.trim() : "") || undefined
+  const stripe = getStripe(false)
+  const account = await stripe.accounts.create(
+    connectAccountCreateParams({
+      id: input.businessId,
+      name: biz.name as string | null,
+      easetag: biz.easetag as string | null,
+      country: biz.country as string | null,
+      website: biz.website as string | null,
+      email,
+    }),
+  )
+
+  await admin
+    .from("business_stripe_connect_accounts")
+    .update({
+      stripe_test_account_id: account.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("business_id", input.businessId)
+
+  return account.id
 }

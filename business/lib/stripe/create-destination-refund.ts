@@ -1,10 +1,11 @@
 import { getStripe } from "./client"
+import { connectedAccountRequest } from "./connect-request"
 
 export async function createStripeDestinationRefund(input: {
   paymentIntentId: string
   businessId: string
   settlementId: string
-  hasDestinationTransfer: boolean
+  stripeAccountId?: string | null
   idempotencyKey: string
   extraMetadata?: Record<string, string>
 }): Promise<{ ok: true; refundId: string; status: string } | { ok: false; error: string }> {
@@ -13,14 +14,13 @@ export async function createStripeDestinationRefund(input: {
       {
         payment_intent: input.paymentIntentId,
         reason: "requested_by_customer",
-        ...(input.hasDestinationTransfer ? { reverse_transfer: true } : {}),
         metadata: {
           business_id: input.businessId,
           easner_settlement_id: input.settlementId,
           ...(input.extraMetadata ?? {}),
         },
       },
-      { idempotencyKey: input.idempotencyKey },
+      connectedAccountRequest(input.stripeAccountId, { idempotencyKey: input.idempotencyKey }),
     )
     return { ok: true, refundId: refund.id, status: refund.status ?? "succeeded" }
   } catch (e) {

@@ -14,6 +14,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 export type PublicInvoiceStripeCheckout = {
   clientSecret: string
   publishableKey: string
+  stripeAccountId: string
 }
 
 export type PublicInvoicePayload = {
@@ -96,6 +97,7 @@ export async function jsonPublicInvoiceFromRow(
       stripeCheckout = {
         clientSecret: checkout.clientSecret,
         publishableKey: checkout.publishableKey,
+        stripeAccountId: checkout.stripeAccountId,
       }
     }
   }

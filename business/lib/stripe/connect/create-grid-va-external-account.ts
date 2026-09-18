@@ -40,7 +40,7 @@ async function findExistingGridVaBank(
   return pickCanonicalGridVaBank(matching)
 }
 
-/** Create or reuse Grid VA as default external payout account on Stripe. */
+/** Create or reuse the Office-routed fiat VA as the connected-account payout bank. */
 export async function createGridVaExternalAccountOnStripe(
   admin: SupabaseClient,
   input: {
@@ -48,6 +48,7 @@ export async function createGridVaExternalAccountOnStripe(
     stripeAccountId: string
     currency: string
     va: VaForLink
+    settlementRail?: "grid_va" | "bridge_va"
   },
 ): Promise<
   | { ok: true; stripeExternalAccountId: string; maskedDestination: string; payoutInterval: string }
@@ -56,9 +57,15 @@ export async function createGridVaExternalAccountOnStripe(
   const currency = input.currency.trim().toUpperCase()
   const fiat: FiatPayoutCurrency = currency === "EUR" ? "eur" : currency === "GBP" ? "gbp" : "usd"
   const va = input.va
+  const rail = input.settlementRail === "bridge_va" ? "bridge_va" : "grid_va"
   const stripe = getStripe()
   const country = fiat === "eur" ? "DE" : fiat === "gbp" ? "GB" : "US"
-  const routingNumber = va.routingNumber?.trim() || GRID_USD_SPONSOR_BANK.routingNumber
+  const vaRouting = va.routingNumber?.trim() || ""
+  // Grid USD can fall back to the known sponsor ABA. Bridge must use its own routing.
+  const routingNumber = vaRouting || (rail === "grid_va" ? GRID_USD_SPONSOR_BANK.routingNumber : "")
+  if (fiat === "usd" && !routingNumber) {
+    return { ok: false, error: "USD virtual account is missing routing number" }
+  }
   const idempotencyKey = stripeVaLinkIdempotencyKey(
     input.businessId,
     currency,
@@ -135,7 +142,7 @@ export async function createGridVaExternalAccountOnStripe(
     .from("business_stripe_connect_accounts")
     .update({
       stripe_external_account_id: externalAccount.id,
-      default_settlement_rail: "grid_va",
+      default_settlement_rail: rail,
       updated_at: now,
     })
     .eq("business_id", input.businessId)

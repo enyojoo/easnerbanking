@@ -3,6 +3,7 @@ import { buildPaymentThanksUrl } from "@/lib/payment-links/public-url"
 import { mapRowToPaymentLink } from "@/lib/payment-links/types"
 import { createOnlineCheckoutSession } from "@/lib/stripe/create-online-checkout-session"
 import { getStripe } from "@/lib/stripe/client"
+import { connectedAccountRequest } from "@/lib/stripe/connect-request"
 import { getStripePublishableKey } from "@/lib/stripe/config"
 import { buildEasnerStatementSuffix } from "@/lib/stripe/statement-descriptor"
 
@@ -11,6 +12,7 @@ export type StartPaymentLinkCheckoutResult =
       ok: true
       clientSecret: string
       publishableKey: string
+      stripeAccountId: string
       customerAmountCents: number
       surchargeCents: number
     }
@@ -68,6 +70,7 @@ export async function startPaymentLinkCheckout(
     ok: true,
     clientSecret: result.clientSecret,
     publishableKey: result.publishableKey,
+    stripeAccountId: result.stripeAccountId,
     customerAmountCents: result.amounts.customerAmountCents,
     surchargeCents: result.amounts.surchargeCents,
   }
@@ -80,7 +83,7 @@ async function reuseOpenPaymentLinkSession(
   const { data: existing } = await admin
     .from("online_checkout_sessions")
     .select(
-      "id, stripe_checkout_session_id, listed_amount_cents, gross_cents, application_fee_cents",
+      "id, stripe_checkout_session_id, stripe_connected_account_id, listed_amount_cents, gross_cents, application_fee_cents",
     )
     .eq("payment_link_id", paymentLinkId)
     .eq("status", "open")
@@ -98,8 +101,13 @@ async function reuseOpenPaymentLinkSession(
   }
 
   try {
+    const connectedAccountId =
+      typeof existing.stripe_connected_account_id === "string"
+        ? existing.stripe_connected_account_id.trim()
+        : ""
     const session = await getStripe().checkout.sessions.retrieve(
       String(existing.stripe_checkout_session_id),
+      connectedAccountRequest(connectedAccountId),
     )
     if (session.status === "open" && session.client_secret) {
       const listed = Number(existing.listed_amount_cents) || 0
@@ -108,6 +116,7 @@ async function reuseOpenPaymentLinkSession(
         ok: true,
         clientSecret: session.client_secret,
         publishableKey: getStripePublishableKey(),
+        stripeAccountId: connectedAccountId,
         customerAmountCents: gross,
         surchargeCents: Math.max(0, gross - listed),
       }

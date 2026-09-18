@@ -15,7 +15,7 @@ export type RefundInvoicePaymentResult =
   | { ok: false; error: string; status: number }
 
 /**
- * Full refund of a Stripe invoice payment on the platform account.
+ * Full refund of a Stripe invoice payment on the connected account.
  * Applies shared side effects: settlement failed, ledger failed, invoice payable again.
  */
 export async function refundInvoiceStripePayment(input: {
@@ -76,9 +76,7 @@ export async function refundInvoiceStripePayment(input: {
     paymentIntentId: settlement.stripe_payment_intent_id,
     businessId: input.businessId,
     settlementId: settlement.id,
-    hasDestinationTransfer: Boolean(
-      settlement.stripe_transfer_id || settlement.stripe_connected_account_id,
-    ),
+    stripeAccountId: settlement.stripe_connected_account_id,
     idempotencyKey: `stripe_refund_${settlement.id}`,
     extraMetadata: { invoice_id: input.invoiceId },
   })

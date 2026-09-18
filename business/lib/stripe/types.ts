@@ -4,6 +4,6 @@ export type StripeSettlementPhase =
   | "credited"
   | "failed"
 
-export type StripeSettlementRail = "grid_va" | "turnkey_stablecoin"
+export type StripeSettlementRail = "grid_va" | "bridge_va" | "turnkey_stablecoin"
 
 export type InvoiceCheckoutSessionStatus = "open" | "complete" | "expired" | "failed"

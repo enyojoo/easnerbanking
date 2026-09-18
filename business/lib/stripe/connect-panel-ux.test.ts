@@ -150,7 +150,7 @@ describe("resolveConnectPanelUx", () => {
     expect(ux.primary).toBeUndefined()
   })
 
-  it("shows Link Account when payouts still need the Grid VA", () => {
+  it("shows Link Account when payouts still need the virtual account", () => {
     const ux = resolveConnectPanelUx(
       base({
         stripeAccountId: "acct_1",

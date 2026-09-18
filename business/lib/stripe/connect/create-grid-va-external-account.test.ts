@@ -88,4 +88,51 @@ describe("createGridVaExternalAccountOnStripe", () => {
     })
     expect(createExternalAccount).toHaveBeenCalledTimes(1)
   })
+
+  it("does not fall back to Grid sponsor routing for a Bridge VA", async () => {
+    const result = await createGridVaExternalAccountOnStripe(admin, {
+      businessId: "biz_1",
+      stripeAccountId: "acct_1",
+      currency: "USD",
+      va: {
+        hasAccount: true,
+        accountNumber: "5555666677",
+        routingNumber: "",
+        accountHolderName: "Acme",
+      } as never,
+      settlementRail: "bridge_va",
+    })
+    expect(result).toEqual({ ok: false, error: "USD virtual account is missing routing number" })
+    expect(createExternalAccount).not.toHaveBeenCalled()
+  })
+
+  it("persists bridge_va when linking a Bridge virtual account", async () => {
+    createExternalAccount.mockResolvedValue({ id: "ba_bridge" })
+    const update = vi.fn(() => ({
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    }))
+    const adminWithUpdate = {
+      from: vi.fn(() => ({ update })),
+    } as never
+
+    await createGridVaExternalAccountOnStripe(adminWithUpdate, {
+      businessId: "biz_1",
+      stripeAccountId: "acct_1",
+      currency: "USD",
+      va: {
+        hasAccount: true,
+        accountNumber: "5555666677",
+        routingNumber: "101019644",
+        accountHolderName: "Acme",
+      } as never,
+      settlementRail: "bridge_va",
+    })
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stripe_external_account_id: "ba_bridge",
+        default_settlement_rail: "bridge_va",
+      }),
+    )
+  })
 })

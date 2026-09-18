@@ -42,4 +42,14 @@ describe("classifyGridPayoutInbound", () => {
       }),
     ).toBe("connect")
   })
+
+  it("treats Bridge sender_name EASNER as Connect", () => {
+    expect(
+      classifyGridPayoutInbound({
+        event_object: {
+          source: { sender_name: "EASNER", routing_number: "091000019" },
+        },
+      }),
+    ).toBe("connect")
+  })
 })

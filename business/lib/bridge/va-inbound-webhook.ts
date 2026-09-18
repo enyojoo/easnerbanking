@@ -4,6 +4,7 @@ import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { suppressTurnkeyGridVaChainMirrorRow } from "@/lib/grid/grid-va-turnkey-mirror"
 import { notifyGridBankDepositPayInSettledPush } from "@/lib/notifications/bank-deposit-settled-notify"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
+import { handleBridgeStripeSettlementWebhook } from "./stripe-settlement-webhook"
 
 export function buildBridgeVaDepositCreditKey(depositId: string): string {
   return `bridge_va_inbound:${String(depositId || "").trim()}`
@@ -54,6 +55,16 @@ export async function handleBridgeVaInboundActivity(
   if (!subject) return
 
   const processed = status.includes("payment_processed") || status.includes("funds_received") || status.includes("completed")
+  if (processed && subject.businessId) {
+    const connect = await handleBridgeStripeSettlementWebhook(admin, {
+      payload,
+      businessId: subject.businessId,
+      userId: subject.userId,
+      customerId,
+      depositId,
+    })
+    if (connect.handled) return
+  }
   const { transactionId } = await upsertLedgerTransaction(admin, {
     userId: subject.userId,
     businessId: subject.businessId,

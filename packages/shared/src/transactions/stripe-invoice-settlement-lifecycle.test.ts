@@ -21,6 +21,13 @@ describe("inferStripeSettlementRail", () => {
         grid_turnkey_sweep_status: "settled",
       }),
     ).toBe("grid_va")
+    expect(
+      inferStripeSettlementRail({
+        source: "checkout_stripe",
+        settlement_rail: "bridge_va",
+        bridge_deposit_id: "dep_1",
+      }),
+    ).toBe("bridge_va")
   })
 })
 

@@ -12,12 +12,15 @@ import {
 
 export type { BiometricAvailability, BiometricKind }
 
+export type UnlockBiometricSnapshot = BiometricAvailability & { enabled: boolean }
+
 type LocalAuth = typeof import('expo-local-authentication')
 
 const PREF_PREFIX = '@easner_unlock_with_biometrics_'
 const AVAILABILITY_TTL_MS = 30_000
 
 let availabilityCache: { at: number; value: BiometricAvailability } | null = null
+let unlockSnapshot: { userId: string; value: UnlockBiometricSnapshot } | null = null
 
 function getLocalAuth(): LocalAuth | null {
   if (Platform.OS === 'web') return null
@@ -36,6 +39,35 @@ function platformKind(): 'ios' | 'android' | 'web' {
 
 export function biometricUnlockLabel(kind: BiometricKind | null): string {
   return biometricUnlockTitle(platformKind(), kind)
+}
+
+export function peekUnlockBiometric(userId?: string): UnlockBiometricSnapshot | null {
+  if (!unlockSnapshot) return null
+  if (userId && unlockSnapshot.userId !== userId) return null
+  return unlockSnapshot.value
+}
+
+export function clearUnlockBiometric(): void {
+  unlockSnapshot = null
+}
+
+function rememberUnlockBiometric(
+  userId: string,
+  availability: BiometricAvailability,
+  enabled: boolean,
+): UnlockBiometricSnapshot {
+  const value: UnlockBiometricSnapshot = {
+    ...availability,
+    enabled: Boolean(availability.available && enabled),
+  }
+  unlockSnapshot = { userId, value }
+  return value
+}
+
+export async function warmUnlockBiometric(userId: string): Promise<UnlockBiometricSnapshot> {
+  const next = await getBiometricAvailability()
+  const enabled = await isBiometricUnlockEnabled(userId)
+  return rememberUnlockBiometric(userId, next, enabled)
 }
 
 export async function getBiometricAvailability(): Promise<BiometricAvailability> {
@@ -92,6 +124,8 @@ export async function setBiometricUnlockEnabled(userId: string, enabled: boolean
   } catch {
     // ignore
   }
+  const prev = peekUnlockBiometric(userId)
+  if (prev) rememberUnlockBiometric(userId, prev, enabled)
 }
 
 export type BiometricUnlockResult = 'success' | 'cancel' | 'fail' | 'lockout' | 'unavailable'
@@ -145,4 +179,5 @@ export async function offerBiometricAfterPinSetup(userId: string): Promise<void>
   if (!next.available) return
   const result = await authenticateWithBiometrics(next.kind, 'enable')
   await setBiometricUnlockEnabled(userId, result === 'success')
+  rememberUnlockBiometric(userId, next, result === 'success')
 }

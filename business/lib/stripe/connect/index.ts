@@ -1,4 +1,4 @@
-export { ensureConnectedAccount } from "./create-connected-account"
+export { ensureConnectedAccount, ensureTestConnectedAccount } from "./create-connected-account"
 export {
   discoverStripeConnectAccountId,
   ensureConnectAccountLinked,

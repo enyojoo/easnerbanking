@@ -10,8 +10,8 @@ export type RefundCheckoutPaymentResult =
 
 /**
  * Full refund of a collection settlement (Payment Link, website embed, or
- * dual-written invoice). Reverse the destination transfer, then fail the
- * settlement and its ledger entry.
+ * dual-written invoice). Refund the Direct Charge on the connected account,
+ * then fail the settlement and its ledger entry.
  */
 export async function refundCheckoutPayment(
   admin: SupabaseClient,
@@ -52,9 +52,9 @@ export async function refundCheckoutPayment(
     paymentIntentId: String(settlement.stripe_payment_intent_id),
     businessId: input.businessId,
     settlementId: String(settlement.id),
-    hasDestinationTransfer: Boolean(
-      settlement.stripe_transfer_id || settlement.stripe_connected_account_id,
-    ),
+    stripeAccountId: settlement.stripe_connected_account_id
+      ? String(settlement.stripe_connected_account_id)
+      : null,
     idempotencyKey: `checkout_refund_${settlement.id}`,
     extraMetadata:
       typeof settlement.invoice_id === "string" ? { invoice_id: settlement.invoice_id } : undefined,

@@ -39,6 +39,9 @@ export function InvoiceStripeCheckout({
   const [clientSecret, setClientSecret] = useState<string | null>(
     initialCheckout?.clientSecret ?? null,
   )
+  const [stripeAccountId, setStripeAccountId] = useState<string | null>(
+    initialCheckout?.stripeAccountId ?? null,
+  )
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loading, setLoading] = useState(!previewOnly && !initialCheckout?.clientSecret)
   const [reloadKey, setReloadKey] = useState(0)
@@ -47,6 +50,7 @@ export function InvoiceStripeCheckout({
     if (previewOnly || paid) return
     if (initialCheckout?.clientSecret && reloadKey === 0) {
       setClientSecret(initialCheckout.clientSecret)
+      setStripeAccountId(initialCheckout.stripeAccountId)
       setLoading(false)
       setLoadError(null)
       analytics.trackPayerCheckoutStarted({ invoiceId: invoice.id, currency: invoice.currency })
@@ -65,13 +69,15 @@ export function InvoiceStripeCheckout({
         )
         const json = (await res.json()) as {
           clientSecret?: string
+          stripeAccountId?: string
           error?: string
         }
         if (cancelled) return
-        if (!res.ok || !json.clientSecret) {
+        if (!res.ok || !json.clientSecret || !json.stripeAccountId) {
           throw new Error(json.error || "Failed to start checkout")
         }
         setClientSecret(json.clientSecret)
+        setStripeAccountId(json.stripeAccountId)
         analytics.trackPayerCheckoutStarted({ invoiceId: invoice.id, currency: invoice.currency })
       } catch (e) {
         if (!cancelled) {
@@ -118,7 +124,7 @@ export function InvoiceStripeCheckout({
     return <PaymentFormSkeleton />
   }
 
-  if (loadError || !clientSecret) {
+  if (loadError || !clientSecret || !stripeAccountId) {
     return (
       <div className="space-y-3">
         <p className="text-sm text-destructive" role="alert">
@@ -142,6 +148,7 @@ export function InvoiceStripeCheckout({
   return (
     <EasnerPaymentElementCheckout
       clientSecret={clientSecret}
+      stripeAccountId={stripeAccountId}
       amount={invoice.total}
       currency={invoice.currency}
       successMessage={`A receipt will be emailed to ${invoice.customerEmail || "the bill-to address"} shortly.`}

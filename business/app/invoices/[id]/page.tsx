@@ -1037,7 +1037,8 @@ export default function InvoiceDetailPage() {
                   : ""}
                 {stripeSettlement.settlement_rail === "turnkey_stablecoin"
                   ? " · Stablecoin rail"
-                  : stripeSettlement.settlement_rail === "grid_va"
+                  : stripeSettlement.settlement_rail === "grid_va" ||
+                      stripeSettlement.settlement_rail === "bridge_va"
                     ? " · Bank rail"
                     : ""}
               </p>

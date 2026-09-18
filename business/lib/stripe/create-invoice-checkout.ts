@@ -4,6 +4,7 @@ import { mapRowToInvoice } from "@/lib/b2b/map-invoice"
 import { buildInvoiceCustomerUrl } from "@/lib/invoice-public-url"
 import { createOnlineCheckoutSession } from "./create-online-checkout-session"
 import { getStripe } from "./client"
+import { connectedAccountRequest } from "./connect-request"
 import { getConnectAccountRow } from "./connect"
 import { getStripePublishableKey, isStripeInvoicePaymentsEnabled } from "./config"
 import { buildEasnerStatementSuffix } from "./statement-descriptor"
@@ -17,6 +18,7 @@ export type CreateInvoiceCheckoutResult =
       publishableKey: string
       checkoutSessionId: string
       settlementId: string
+      stripeAccountId: string
     }
   | { ok: false; status: number; error: string }
 
@@ -78,6 +80,7 @@ export async function createInvoiceCheckoutSession(
     publishableKey: result.publishableKey,
     checkoutSessionId: result.checkoutSessionId,
     settlementId: result.settlementId,
+    stripeAccountId: result.stripeAccountId,
   }
 }
 
@@ -136,6 +139,7 @@ async function reuseOpenInvoiceSession(
   try {
     const session = await getStripe().checkout.sessions.retrieve(
       String(existingOpen.stripe_checkout_session_id),
+      connectedAccountRequest(opts.connectedAccountId),
     )
     if (session.status === "open" && session.client_secret) {
       return {
@@ -144,6 +148,7 @@ async function reuseOpenInvoiceSession(
         publishableKey: getStripePublishableKey(),
         checkoutSessionId: session.id,
         settlementId: String(existingOpen.easner_settlement_id),
+        stripeAccountId: opts.connectedAccountId || existingConnected || "",
       }
     }
     await expire(session.status === "complete" ? "complete" : "expired")

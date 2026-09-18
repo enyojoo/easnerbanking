@@ -1,9 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import {
-  hasActiveGridVirtualAccountForBusinessInDb,
-  hasActiveVirtualAccountInDb,
-} from "@/lib/noah/virtual-accounts-db"
-import { businessUsesGridVerification, isBusinessTier1Complete } from "@/lib/compliance/business-tier1"
+import { isBusinessTier1Complete } from "@/lib/compliance/business-tier1"
+import { resolveConnectPayoutVa } from "./resolve-connect-payout-va"
 import type { BusinessStripeConnectAccountRow, ConnectReadyStatus } from "./types"
 
 export const CONNECT_KYB_REQUIRED_REASON =
@@ -27,8 +24,8 @@ export async function getConnectAccountRow(
 }
 
 /**
- * Whether the business can accept Pay online via Connect destination charges.
- * Requires: Tier-1 approved, Grid VA, transfers+payouts enabled, external account linked.
+ * Whether the business can accept Pay online via Connect Direct Charges.
+ * Requires: Tier-1 approved, Office-routed VA, transfers+payouts enabled, external account linked.
  */
 export async function resolveConnectReadyForCheckout(
   admin: SupabaseClient,
@@ -36,7 +33,6 @@ export async function resolveConnectReadyForCheckout(
   opts?: { currency?: string },
 ): Promise<ConnectReadyStatus> {
   const currency = (opts?.currency || "USD").trim().toUpperCase()
-  const fiat = currency === "EUR" ? "eur" : currency === "GBP" ? "gbp" : "usd"
 
   const { data: biz } = await admin
     .from("businesses")
@@ -46,26 +42,17 @@ export async function resolveConnectReadyForCheckout(
 
   const tier1Complete = isBusinessTier1Complete(biz)
 
-  const usesGrid = businessUsesGridVerification(biz as { verification_provider?: string | null } | null)
-  const hasGridVa = usesGrid
-    ? (await hasActiveGridVirtualAccountForBusinessInDb(admin, {
-        currency: fiat,
-        businessId,
-      })) ||
-      (await hasActiveVirtualAccountInDb(admin, {
-        currency: fiat,
-        businessId,
-        provider: "bridge",
-      }))
-    : await hasActiveVirtualAccountInDb(admin, {
-        currency: fiat,
-        businessId,
-        provider: undefined,
-      })
+  const payoutVa = await resolveConnectPayoutVa(admin, { businessId, currency })
+  const hasGridVa = Boolean(payoutVa?.va?.hasAccount)
 
   const row = await getConnectAccountRow(admin, businessId)
   const due = asDueList(row?.requirements_currently_due)
-  const externalAccountLinked = Boolean(row?.stripe_external_account_id?.trim())
+  const preferredRail = payoutVa?.rail
+  const linkedRail = row?.default_settlement_rail
+  const linkedMatchesPreferred =
+    !preferredRail || !linkedRail || linkedRail === preferredRail
+  const externalAccountLinked =
+    Boolean(row?.stripe_external_account_id?.trim()) && linkedMatchesPreferred
   const transfersEnabled = Boolean(row?.transfers_enabled)
   const payoutsEnabled = Boolean(row?.payouts_enabled)
   const detailsSubmitted = Boolean(row?.details_submitted)

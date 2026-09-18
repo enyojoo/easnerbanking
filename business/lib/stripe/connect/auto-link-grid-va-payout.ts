@@ -27,7 +27,7 @@ function mapSkippedReason(
 }
 
 /**
- * Ensure the Grid VA is the default payout destination when eligible.
+ * Ensure the Office-routed virtual account is the default payout destination when eligible.
  * Re-runs reconciliation even when a link already exists in DB.
  */
 export async function autoLinkGridVaPayoutIfEligible(

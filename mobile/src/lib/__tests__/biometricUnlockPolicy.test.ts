@@ -85,7 +85,7 @@ describe('pickUnlockBiometric', () => {
   })
 
   it('uses Face ID as a PIN shortcut for unlock, send, and first-time enable', () => {
-    expect(biometricPromptMessage('ios', 'face', 'unlock')).toBe('Unlock Easner with Face ID')
+    expect(biometricPromptMessage('ios', 'face', 'unlock')).toBe('Unlock with Face ID')
     expect(biometricPromptMessage('ios', 'face', 'confirm')).toBe('Confirm with Face ID')
     expect(biometricPromptMessage('ios', 'face', 'enable')).toBe(
       'Use Face ID to unlock and confirm payments',

@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type Stripe from "stripe"
-import { getVirtualAccountDisplayFromDb } from "@/lib/noah/virtual-accounts-db"
 import { getStripe } from "../client"
 import { createGridVaExternalAccountOnStripe } from "./create-grid-va-external-account"
+import { resolveConnectPayoutVa } from "./resolve-connect-payout-va"
 import {
   gridVaMatchesBankAccount,
   pickCanonicalGridVaBank,
@@ -37,13 +37,14 @@ async function persistExternalAccountId(
   admin: SupabaseClient,
   businessId: string,
   externalAccountId: string,
+  rail: "grid_va" | "bridge_va" = "grid_va",
 ): Promise<void> {
   const now = new Date().toISOString()
   await admin
     .from("business_stripe_connect_accounts")
     .update({
       stripe_external_account_id: externalAccountId,
-      default_settlement_rail: "grid_va",
+      default_settlement_rail: rail,
       updated_at: now,
     })
     .eq("business_id", businessId)
@@ -83,9 +84,8 @@ async function retrieveStoredBank(
 }
 
 /**
- * Ensure the connected account's default payout bank is the business Grid VA.
- * Concurrent callers for the same business share one in-flight run so we do not
- * attach the same virtual account twice.
+ * Ensure the connected account's default payout bank is the Office-routed VA
+ * (Grid or Bridge). Concurrent callers for the same business share one in-flight run.
  */
 export async function reconcileGridVaPayoutDestination(
   admin: SupabaseClient,
@@ -115,13 +115,15 @@ async function reconcileGridVaPayoutDestinationUnlocked(
     return { skipped: true, reason: "no_connect_account" }
   }
 
-  const va = await getVirtualAccountDisplayFromDb(admin, {
-    currency: fiat,
+  const payoutVa = await resolveConnectPayoutVa(admin, {
     businessId: input.businessId,
+    currency,
   })
+  const va = payoutVa?.va
   if (!va?.hasAccount) {
     return { skipped: true, reason: "no_grid_va" }
   }
+  const rail = payoutVa.rail
 
   if (fiat === "usd" && !va.accountNumber) {
     return { skipped: true, reason: "missing_va_details" }
@@ -145,7 +147,7 @@ async function reconcileGridVaPayoutDestinationUnlocked(
     const storedBank = await retrieveStoredBank(stripe, row.stripe_account_id, storedId)
     if (storedBank && gridVaMatchesBankAccount(vaSnapshot, fiat, storedBank)) {
       const action = await ensureDefaultBank(stripe, row.stripe_account_id, storedBank)
-      await persistExternalAccountId(admin, input.businessId, storedBank.id)
+      await persistExternalAccountId(admin, input.businessId, storedBank.id, rail)
       return { skipped: false, ok: true, action, stripeExternalAccountId: storedBank.id }
     }
   }
@@ -165,19 +167,19 @@ async function reconcileGridVaPayoutDestinationUnlocked(
   if (target) {
     if (matching.length > 1) {
       console.warn(
-        "[stripe-connect] duplicate Grid VA bank accounts on Connect; reusing one",
+        "[stripe-connect] duplicate VA bank accounts on Connect; reusing one",
         input.businessId,
         matching.map((bank) => bank.id),
       )
     }
     const action = await ensureDefaultBank(stripe, row.stripe_account_id, target)
-    await persistExternalAccountId(admin, input.businessId, target.id)
+    await persistExternalAccountId(admin, input.businessId, target.id, rail)
     return { skipped: false, ok: true, action, stripeExternalAccountId: target.id }
   }
 
   if (defaultBank && !gridVaMatchesBankAccount(vaSnapshot, fiat, defaultBank)) {
     console.warn(
-      "[stripe-connect] payout destination drift detected; re-linking Grid VA",
+      "[stripe-connect] payout destination drift detected; re-linking VA",
       input.businessId,
       defaultBank.id,
     )
@@ -188,6 +190,7 @@ async function reconcileGridVaPayoutDestinationUnlocked(
     stripeAccountId: row.stripe_account_id,
     currency,
     va,
+    settlementRail: rail,
   })
   if (!linked.ok) {
     return { skipped: false, ok: false, error: linked.error }

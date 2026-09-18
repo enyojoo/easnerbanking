@@ -9,6 +9,7 @@ import {
   parsePaymentLinkRail,
 } from "@/lib/payment-links/types"
 import { createRecurringPrice } from "@/lib/stripe/recurring-price"
+import { getConnectAccountRow } from "@/lib/stripe/connect"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { requireEasnerBusinessId } from "@/lib/terminal/context"
 
@@ -196,12 +197,14 @@ export async function POST(request: Request) {
 
   let stripePriceId: string | null = null
   if (mode === "subscription" && billingInterval) {
+    const connectRow = await getConnectAccountRow(admin, ctx.businessId)
     const price = await createRecurringPrice({
       label,
       description,
       amountCents,
       currency,
       interval: billingInterval,
+      stripeAccountId: connectRow?.stripe_account_id?.trim() || "",
     })
     if (!price.ok) {
       return NextResponse.json({ error: price.error }, { status: price.status })

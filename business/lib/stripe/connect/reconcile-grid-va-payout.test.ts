@@ -31,9 +31,14 @@ vi.mock("@/lib/noah/virtual-accounts-db", () => ({
   getVirtualAccountDisplayFromDb: vi.fn(),
 }))
 
+vi.mock("@/lib/bridge/va-prefer-provider", () => ({
+  resolveVirtualAccountPreferProvider: vi.fn(),
+}))
+
 import { getConnectAccountRow } from "./resolve-connect-account"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { getVirtualAccountDisplayFromDb } from "@/lib/noah/virtual-accounts-db"
+import { resolveVirtualAccountPreferProvider } from "@/lib/bridge/va-prefer-provider"
 import { createGridVaExternalAccountOnStripe } from "./create-grid-va-external-account"
 
 const admin = {
@@ -54,10 +59,12 @@ beforeEach(() => {
     stripe_external_account_id: "ba_old",
   } as never)
   vi.mocked(resolveBusinessOrgOwnerUserId).mockResolvedValue("user_1")
+  vi.mocked(resolveVirtualAccountPreferProvider).mockResolvedValue("grid")
   vi.mocked(getVirtualAccountDisplayFromDb).mockResolvedValue({
     hasAccount: true,
     accountNumber: "1234567890",
     routingNumber: "021000021",
+    provider: "grid",
   } as never)
 })
 
@@ -263,5 +270,41 @@ describe("reconcileGridVaPayoutDestination", () => {
       stripeExternalAccountId: "ba_new",
     })
     expect(createGridVaExternalAccountOnStripe).toHaveBeenCalled()
+  })
+
+  it("links the Bridge VA when Office pay-in is Bridge", async () => {
+    vi.mocked(resolveVirtualAccountPreferProvider).mockResolvedValue("bridge")
+    vi.mocked(getVirtualAccountDisplayFromDb).mockResolvedValue({
+      hasAccount: true,
+      accountNumber: "5555666677",
+      routingNumber: "101019644",
+      provider: "bridge",
+    } as never)
+    listExternalAccounts.mockResolvedValue({ data: [] })
+    vi.mocked(createGridVaExternalAccountOnStripe).mockResolvedValue({
+      ok: true,
+      stripeExternalAccountId: "ba_bridge",
+      maskedDestination: "····6677",
+      payoutInterval: "daily",
+    })
+
+    const result = await reconcileGridVaPayoutDestination(admin, { businessId: "biz_1" })
+    expect(result).toEqual({
+      skipped: false,
+      ok: true,
+      action: "linked",
+      stripeExternalAccountId: "ba_bridge",
+    })
+    expect(getVirtualAccountDisplayFromDb).toHaveBeenCalledWith(
+      admin,
+      expect.objectContaining({ provider: "bridge", businessId: "biz_1" }),
+    )
+    expect(createGridVaExternalAccountOnStripe).toHaveBeenCalledWith(
+      admin,
+      expect.objectContaining({
+        settlementRail: "bridge_va",
+        va: expect.objectContaining({ accountNumber: "5555666677" }),
+      }),
+    )
   })
 })

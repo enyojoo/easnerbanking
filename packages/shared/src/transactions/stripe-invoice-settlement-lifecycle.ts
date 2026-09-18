@@ -19,7 +19,7 @@ export type StripeInvoiceSettlementLifecycleStep = {
   occurredAt: string | null
 }
 
-export type StripeSettlementRail = "grid_va" | "turnkey_stablecoin"
+export type StripeSettlementRail = "grid_va" | "bridge_va" | "turnkey_stablecoin"
 
 function readIso(meta: Record<string, unknown>, key: string): string | null {
   const v = meta[key]
@@ -34,13 +34,13 @@ function isTruthyFlag(value: unknown): boolean {
   return s === "true" || s === "1"
 }
 
-/** Rail Stripe actually paid out on – not the later Grid VA → Turnkey sweep. */
+/** Rail Stripe actually paid out on – not the later VA → Turnkey sweep. */
 export function inferStripeSettlementRail(
   meta: Record<string, unknown> | null | undefined,
 ): StripeSettlementRail | null {
   if (!meta) return null
   const railRaw = String(meta.settlement_rail ?? "").trim().toLowerCase()
-  if (railRaw === "grid_va" || railRaw === "turnkey_stablecoin") {
+  if (railRaw === "grid_va" || railRaw === "bridge_va" || railRaw === "turnkey_stablecoin") {
     return railRaw
   }
   if (isTruthyFlag(meta.turnkey_inbound_matched)) {
@@ -48,6 +48,8 @@ export function inferStripeSettlementRail(
   }
   const originator = String(meta.stripe_connect_va_originator ?? "").trim().toUpperCase()
   const gridTx = String(meta.grid_transaction_id ?? "").trim()
+  const bridgeDeposit = String(meta.bridge_deposit_id ?? "").trim()
+  if (bridgeDeposit) return "bridge_va"
   if (originator === "EASNER" || gridTx) {
     return "grid_va"
   }
@@ -55,7 +57,7 @@ export function inferStripeSettlementRail(
 }
 
 export function stripeSettlementRailLabel(rail: StripeSettlementRail | null): string | null {
-  if (rail === "grid_va") return "Bank account"
+  if (rail === "grid_va" || rail === "bridge_va") return "Bank account"
   if (rail === "turnkey_stablecoin") return "Stablecoin"
   return null
 }
@@ -95,7 +97,7 @@ function clearingDescription(rail: StripeSettlementRail | null): string {
   if (rail === "turnkey_stablecoin") {
     return "Payout is on the way to your stablecoin deposit address."
   }
-  if (rail === "grid_va") {
+  if (rail === "grid_va" || rail === "bridge_va") {
     return "Payout is on the way to your bank account."
   }
   return "Payout is clearing to your Easner account."
