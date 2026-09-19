@@ -1,5 +1,6 @@
 "use client"
 
+import { apiUrl } from "@/lib/api-base-url"
 import { clearBusinessAppSessionCookie } from "@/lib/app-session-client"
 import type { createSupabaseBrowser } from "@/lib/supabase/browser"
 
@@ -13,11 +14,10 @@ export async function ensureBusinessWebSurface(supabase: SupabaseBrowser): Promi
   if (!session?.access_token) {
     throw new Error("No session")
   }
-  const origin = typeof window !== "undefined" ? window.location.origin : ""
   let res: Response
   try {
     // Omit cookies; put the JWT in the body so `Authorization` does not inflate headers (494 on Vercel).
-    res = await fetch(`${origin}/api/auth/validate-app-surface`, {
+    res = await fetch(apiUrl("/api/auth/validate-app-surface"), {
       method: "POST",
       credentials: "omit",
       headers: { "Content-Type": "application/json" },

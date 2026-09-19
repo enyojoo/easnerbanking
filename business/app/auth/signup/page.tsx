@@ -20,6 +20,7 @@ import {
 import { Eye, EyeOff, Info, MapPin, ChevronDown } from "lucide-react"
 import Link from "next/link"
 import { countries } from "@/lib/countries"
+import { apiUrl } from "@/lib/api-base-url"
 import { setOnboarding } from "@/lib/onboarding-store"
 import { filterCountriesForProductPicker } from "@easner/shared"
 import { CountryFlag } from "@/components/flags"
@@ -113,7 +114,7 @@ export default function SignupPage() {
     }
     try {
       setIsSubmitting(true)
-      const precheck = (await fetch("/api/auth/signup-precheck", {
+      const precheck = (await fetch(apiUrl("/api/auth/signup-precheck"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), surface: "business_web" }),

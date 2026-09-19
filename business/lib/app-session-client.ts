@@ -1,5 +1,6 @@
 "use client"
 
+import { apiUrl } from "@/lib/api-base-url"
 import { BUSINESS_APP_SESSION_COOKIE } from "@/lib/app-session-constants"
 import { clearLegacySupabaseAuthCookiesOnce } from "@/lib/supabase/clear-legacy-auth-cookies"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
@@ -49,7 +50,7 @@ export async function ensureBusinessAppSession(force = false): Promise<boolean> 
         return false
       }
 
-      const res = await fetch("/api/auth/session", {
+      const res = await fetch(apiUrl("/api/auth/session"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ accessToken }),

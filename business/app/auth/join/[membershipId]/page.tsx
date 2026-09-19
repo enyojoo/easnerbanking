@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { setPendingTeamInvite } from "@/lib/team-invite-storage"
 import { AUTH_COPY } from "@/lib/copy/business-ui-copy"
+import { apiUrl } from "@/lib/api-base-url"
 
 type InvitePreview = {
   businessName: string
@@ -35,7 +36,7 @@ export default function JoinTeamByIdPage() {
     let cancelled = false
     void (async () => {
       try {
-        const res = await fetch(`/api/auth/invite-preview?membership=${encodeURIComponent(membershipId)}`)
+        const res = await fetch(apiUrl(`/api/auth/invite-preview?membership=${encodeURIComponent(membershipId)}`))
         const json = (await res.json().catch(() => ({}))) as InvitePreview & { error?: string }
         if (cancelled) return
         if (!res.ok) {

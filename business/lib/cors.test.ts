@@ -31,6 +31,8 @@ describe("corsPreflightResponse", () => {
     expect(allowed.has("https://pay.easner.com")).toBe(true)
     expect(allowed.has("https://invoice.easner.com")).toBe(true)
     expect(allowed.has("https://bk.easner.com")).toBe(true)
+    expect(allowed.has("http://localhost:3000")).toBe(true)
+    expect(allowed.has("http://localhost:3001")).toBe(true)
 
     for (const origin of [
       "https://business.easner.com",

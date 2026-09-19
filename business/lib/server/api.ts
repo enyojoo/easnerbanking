@@ -1,5 +1,5 @@
 import "server-only"
-import { cookies, headers } from "next/headers"
+import { cookies } from "next/headers"
 import { getApiBaseUrl } from "@/lib/api-base-url"
 import { BUSINESS_APP_SESSION_COOKIE } from "@/lib/app-session"
 
@@ -14,20 +14,6 @@ import { BUSINESS_APP_SESSION_COOKIE } from "@/lib/app-session"
  * runs once per request and we let TanStack Query own the browser
  * freshness model after hydration.
  */
-
-async function resolveBaseUrl(): Promise<string> {
-  const explicit = process.env.NEXT_PUBLIC_API_URL?.trim()
-  if (explicit) return explicit.replace(/\/$/, "")
-  try {
-    const h = await headers()
-    const host = h.get("x-forwarded-host") ?? h.get("host")
-    const proto = h.get("x-forwarded-proto") ?? "https"
-    if (host) return `${proto}://${host}`
-  } catch {
-    // headers() may not be available outside of a request scope.
-  }
-  return getApiBaseUrl()
-}
 
 export interface ServerFetchOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
@@ -52,7 +38,7 @@ function buildUrl(path: string, query: ServerFetchOptions["query"]): string {
 
 export async function serverApiFetch<T>(path: string, options: ServerFetchOptions = {}): Promise<T> {
   const { method = "GET", body, query, signal, headers: extraHeaders } = options
-  const baseUrl = await resolveBaseUrl()
+  const baseUrl = getApiBaseUrl()
   const url = `${baseUrl}${buildUrl(path, query)}`
   const store = await cookies()
   const sessionJwt = store.get(BUSINESS_APP_SESSION_COOKIE)?.value

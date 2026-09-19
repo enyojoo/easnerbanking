@@ -1,9 +1,6 @@
 /**
- * Same `vercel.json` crons are registered on every Production deploy of
- * business / api / platform (shared `business/` root). Only the project with
- * `EASNER_CRONS_ENABLED=true` may execute them.
- *
- * Unset = enabled, so today’s business project keeps running crons until cutover.
+ * Crons are declared only on `api/vercel.json`. Unset = enabled.
+ * Set `EASNER_CRONS_ENABLED=false` to pause them on the api project.
  */
 export function cronJobsEnabledOnThisProject(): boolean {
   const raw = process.env.EASNER_CRONS_ENABLED?.trim().toLowerCase()

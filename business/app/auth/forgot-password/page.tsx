@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ArrowLeft } from "lucide-react"
 import { OtpCodeInput } from "@/components/otp-code-input"
 import { mapOtpVerifyErrorMessage } from "@easner/shared"
+import { apiUrl } from "@/lib/api-base-url"
 
 export default function ForgotPasswordPage() {
   const [step, setStep] = useState<"email" | "otp">("email")
@@ -38,7 +39,7 @@ export default function ForgotPasswordPage() {
     setMessage("")
 
     try {
-      const res = await fetch("/api/auth/forgot-password", {
+      const res = await fetch(apiUrl("/api/auth/forgot-password"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim() }),
@@ -67,7 +68,7 @@ export default function ForgotPasswordPage() {
         setError("Enter the 6-digit code from your email.")
         return
       }
-      const res = await fetch("/api/auth/verify-reset-otp", {
+      const res = await fetch(apiUrl("/api/auth/verify-reset-otp"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), otp: digits }),
@@ -95,7 +96,7 @@ export default function ForgotPasswordPage() {
     setError("")
     setMessage("")
     try {
-      const res = await fetch("/api/auth/forgot-password", {
+      const res = await fetch(apiUrl("/api/auth/forgot-password"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim() }),

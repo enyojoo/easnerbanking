@@ -8,6 +8,7 @@
     "website",
     "web",
     "business",
+    "api",
     "office",
     "mobile"
   ],
@@ -30,6 +31,9 @@
     "dev:business": "turbo run dev --filter=easner-business",
     "build:business": "turbo run build --filter=easner-business",
     "start:business": "turbo run start --filter=easner-business",
+    "dev:api": "turbo run dev --filter=easner-api",
+    "build:api": "turbo run build --filter=easner-api",
+    "start:api": "turbo run start --filter=easner-api",
     "test:login-pin-vectors": "node scripts/login-pin-test-vectors.mjs",
     "test:server": "npm run test --workspace=@easner/server",
     "email:preview-all": "npx tsx packages/server/scripts/send-all-email-previews.ts",

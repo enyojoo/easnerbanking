@@ -1,0 +1,14 @@
+Easner API — use today’s env-rich Vercel project (do not copy secrets onto a new one)
+
+1. Existing project (current business): Root Directory → api/. Keep every env.
+   Confirm NEXT_PUBLIC_API_URL=https://api.easner.com. Unset NEXT_PUBLIC_APP_SURFACE.
+2. Deploy. Smoke GET /api/health and GET /v1/checkout/sessions → 401 JSON.
+   Keep api.easner.com + js.easner.com on this project.
+3. New Vercel project for business UI: Root Directory business/. Only the slim
+   NEXT_PUBLIC_* list + BUSINESS_APP_SESSION_SECRET (same value). See
+   business/docs/platform-api-split.md step 2.
+4. Front Door: move business / pay / invoice to the new UI origin.
+   Leave api / js on this project.
+5. Office + Expo already use https://api.easner.com.
+
+Local: npm run dev:api (port 3002) + npm run dev:business (port 3000).

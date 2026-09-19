@@ -10,12 +10,12 @@ function parseAllowedOrigins(): Set<string> {
       .filter(Boolean) ?? []
   const single = process.env.EASNER_OFFICE_ORIGIN?.trim()
   const fromEnv = single ? [...fromList, single] : fromList
-  /** Local Office dev + production Easner Office on Vercel (pair with easnerbank.vercel.app). */
+  /** Local UI ports: business 3000, office 3001. API is 3002 (not a browser origin). */
   const defaults = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "http://localhost:3002",
-    "http://127.0.0.1:3002",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
     "http://localhost:8081",
     "http://127.0.0.1:8081",
     "http://localhost:19006",

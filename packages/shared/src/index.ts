@@ -32,7 +32,14 @@ export {
   LOGIN_PIN_LOCKOUT_MS,
   LOGIN_PIN_REGEX,
 } from "./constants/login-pin"
-export { APP_URLS, MOBILE_DEEP_LINK_HOSTS, isMobileDeepLinkHost } from "./constants/urls"
+export {
+  APP_URLS,
+  LOCAL_URLS,
+  joinApiPath,
+  resolveApiUrl,
+  MOBILE_DEEP_LINK_HOSTS,
+  isMobileDeepLinkHost,
+} from "./constants/urls"
 export {
   DISPOSABLE_EMAIL_DOMAINS,
   emailDomain,

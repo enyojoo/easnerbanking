@@ -1,9 +1,7 @@
+import { resolveApiUrl } from "@easner/shared"
 import { supabase } from "./supabase"
 
-const API_URL =
-  typeof window !== "undefined"
-    ? process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"
-    : process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"
+const API_URL = resolveApiUrl()
 
 /** Refresh the cached token when it has less than this long left. */
 const TOKEN_EXPIRY_MARGIN_MS = 60_000

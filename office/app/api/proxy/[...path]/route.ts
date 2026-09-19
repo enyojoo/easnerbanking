@@ -3,7 +3,7 @@ import { NextResponse } from "next/server"
 const BACKEND_API_URL =
   process.env.OFFICE_BACKEND_API_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:3000"
+  "http://localhost:3002"
 
 async function forward(request: Request, params: { path: string[] }) {
   const incomingUrl = new URL(request.url)

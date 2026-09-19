@@ -11,9 +11,16 @@ describe("getApiBaseUrl", () => {
     expect(getApiBaseUrl()).toBe("https://api.easner.com")
   })
 
-  it("falls back to localhost on the server when unset", () => {
+  it("falls back to the local api port when unset", () => {
     vi.stubEnv("NEXT_PUBLIC_API_URL", "")
-    expect(getApiBaseUrl()).toBe("http://localhost:3000")
+    vi.stubEnv("NODE_ENV", "development")
+    expect(getApiBaseUrl()).toBe("http://localhost:3002")
+  })
+
+  it("falls back to api.easner.com in production when unset", () => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "")
+    vi.stubEnv("NODE_ENV", "production")
+    expect(getApiBaseUrl()).toBe("https://api.easner.com")
   })
 })
 

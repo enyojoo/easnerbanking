@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
+import { apiUrl } from "@/lib/api-base-url"
 import { getPendingTeamInvite, setPendingTeamInvite } from "@/lib/team-invite-storage"
 
 export type TeamInvitePreview = {
@@ -33,7 +34,7 @@ export function useTeamInviteContext() {
     let cancelled = false
     void (async () => {
       try {
-        const res = await fetch(`/api/auth/invite-preview?membership=${encodeURIComponent(resolved)}`)
+        const res = await fetch(apiUrl(`/api/auth/invite-preview?membership=${encodeURIComponent(resolved)}`))
         const json = (await res.json().catch(() => ({}))) as Partial<TeamInvitePreview>
         if (
           !cancelled &&
