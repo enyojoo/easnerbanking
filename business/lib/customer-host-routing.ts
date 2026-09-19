@@ -1,10 +1,8 @@
 import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
+import { APP_URLS } from "@easner/shared"
 import { getInvoiceAppHostname, getPayAppHostname, isCustomerAppHostname } from "@/lib/customer-hosts"
-import {
-  collectHostnameCandidates,
-  getBusinessWebOriginForApiHostRedirect,
-} from "@/lib/api-subdomain-redirect"
+import { collectHostnameCandidates } from "@/lib/api-subdomain-redirect"
 
 /** Route trees that back each customer host inside this app. */
 const CUSTOMER_HOST_ROOTS = {
@@ -46,24 +44,16 @@ export function getCustomerRequestHostname(request: NextRequest): string {
 
 /**
  * Bare `invoice.easner.com/` and `pay.easner.com/` are not customer pages.
- * Send browsers to the operator app; keep every other path on these hosts.
+ * Send browsers to the marketing business page; keep payer paths on these hosts.
  */
-export function maybeRedirectCustomerHostRootToBusiness(request: NextRequest): NextResponse | null {
+export function maybeRedirectCustomerHostRootToMarketing(request: NextRequest): NextResponse | null {
   const pathname = request.nextUrl.pathname
   if (pathname !== "/") return null
 
   const hostname = getCustomerRequestHostname(request)
   if (!hostname || !isCustomerPublicHostname(hostname)) return null
 
-  let origin = getBusinessWebOriginForApiHostRedirect().replace(/\/$/, "")
-  try {
-    const businessHost = new URL(origin).hostname.toLowerCase()
-    if (businessHost === hostname.toLowerCase()) return null
-  } catch {
-    origin = "https://business.easner.com"
-  }
-
-  const res = NextResponse.redirect(`${origin}/`, 307)
+  const res = NextResponse.redirect(APP_URLS.businessMarketing, 307)
   res.headers.set("Cache-Control", "private, no-store")
   return res
 }

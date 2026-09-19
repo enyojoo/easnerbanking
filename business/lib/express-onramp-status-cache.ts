@@ -1,6 +1,6 @@
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { CACHE_KEYS, dataCache } from "@/lib/cache"
-import { loadExpressOnramp, prefetchExpressOnramp } from "@/lib/stripe/load-crypto-onramp"
+import { prefetchExpressOnramp } from "@/lib/stripe/load-crypto-onramp"
 import { expressDepositsStatusIsReady, keepExpressDepositsCachedReady } from "@easner/shared"
 
 export type BusinessExpressOnrampStatus = {
@@ -106,9 +106,8 @@ function loadStatus(userId?: string | null): Promise<BusinessExpressOnrampStatus
       const data = (await res.json().catch(() => ({}))) as BusinessExpressOnrampStatus
       if (res.ok) {
         cacheBusinessExpressOnrampStatus(data, userId)
-        if (data.publishableKey) {
-          void loadExpressOnramp(data.publishableKey, data.cryptoCustomerId).catch(() => undefined)
-        } else prefetchExpressOnramp()
+        /** Chunk only — full SDK init hits Stripe controller.html 403 / postMessage noise. */
+        prefetchExpressOnramp()
       }
       return data
     })

@@ -8,7 +8,7 @@ import {
 } from "@/lib/api-subdomain-redirect"
 import { applyCorsHeaders, corsPreflightResponse, getCorsAllowedOrigins } from "@/lib/cors"
 import {
-  maybeRedirectCustomerHostRootToBusiness,
+  maybeRedirectCustomerHostRootToMarketing,
   maybeRewriteCustomerHost,
 } from "@/lib/customer-host-routing"
 
@@ -40,7 +40,7 @@ export function proxy(request: NextRequest) {
   if (apiHostRedirect) return apiHostRedirect
 
   /** Bare invoice/pay hosts are not customer pages. */
-  const customerRootRedirect = maybeRedirectCustomerHostRootToBusiness(request)
+  const customerRootRedirect = maybeRedirectCustomerHostRootToMarketing(request)
   if (customerRootRedirect) return customerRootRedirect
 
   /** Customer hosts (invoice.easner.com, pay.easner.com) share this app. */

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { NextRequest } from "next/server"
 import {
-  maybeRedirectCustomerHostRootToBusiness,
+  maybeRedirectCustomerHostRootToMarketing,
   maybeRewriteCustomerHost,
 } from "./customer-host-routing"
 
@@ -28,7 +28,7 @@ function rewrittenPath(
 }
 
 function redirectLocation(host: string, pathname: string): string | null {
-  return maybeRedirectCustomerHostRootToBusiness(request(host, pathname))?.headers.get("location") ?? null
+  return maybeRedirectCustomerHostRootToMarketing(request(host, pathname))?.headers.get("location") ?? null
 }
 
 describe("customer host routing", () => {
@@ -43,9 +43,9 @@ describe("customer host routing", () => {
     expect(rewrittenPath("pay.easner.com", "/thanks")).toBe("/pay-customer/thanks")
   })
 
-  it("redirects only the customer-host root to the business app", () => {
-    expect(redirectLocation("invoice.easner.com", "/")).toBe("https://business.easner.com/")
-    expect(redirectLocation("pay.easner.com", "/")).toBe("https://business.easner.com/")
+  it("redirects only the customer-host root to the marketing business page", () => {
+    expect(redirectLocation("invoice.easner.com", "/")).toBe("https://www.easner.com/business")
+    expect(redirectLocation("pay.easner.com", "/")).toBe("https://www.easner.com/business")
     expect(redirectLocation("invoice.easner.com", "/acme/einv-1042")).toBeNull()
     expect(redirectLocation("pay.easner.com", "/thanks")).toBeNull()
     expect(redirectLocation("business.easner.com", "/")).toBeNull()

@@ -1,3 +1,5 @@
+import { APP_URLS } from "../constants/urls"
+
 const ATTRIBUTION_PARAM_RE =
   /^(utm_|__ph_id$|gclid$|fbclid$|msclkid$|ttclid$|li_fat_id$|ref$|mc_cid$|mc_eid$)/i
 
@@ -7,7 +9,7 @@ const AUTH_QUERY_PARAM_RE =
 /** Non-tracking params preserved when scrubbing auth or attribution query strings. */
 const PRESERVED_QUERY_PARAM_RE = /^(next|message|tab|invite|token|type)$/i
 
-export const EASNER_BUSINESS_MARKETING_BASE = "https://www.easner.com/business"
+export const EASNER_BUSINESS_MARKETING_BASE = APP_URLS.businessMarketing
 
 export type EasnerBusinessMarketingCampaign =
   | "powered_by"

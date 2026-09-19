@@ -10,6 +10,8 @@ export const APP_URLS = {
   contact: "https://www.easner.com/contact",
   /** Public developer docs — browser visits to api.* / js.* land here. */
   developers: "https://www.easner.com/developers",
+  /** Marketing business page — bare pay.* / invoice.* browser visits land here. */
+  businessMarketing: "https://www.easner.com/business",
   /** Canonical marketing install page (QR, email, smart redirect). */
   appDownload: "https://www.easner.com/app",
 } as const

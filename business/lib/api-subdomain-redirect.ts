@@ -40,10 +40,12 @@ export function collectHostnameCandidates(request: NextRequest): string[] {
     }
   }
   push(request.headers.get("host"))
-  const forwarded = request.headers.get("x-forwarded-host")
-  if (forwarded) {
-    for (const part of forwarded.split(",")) {
-      push(part.trim())
+  for (const header of ["x-forwarded-host", "x-original-host"] as const) {
+    const forwarded = request.headers.get(header)
+    if (forwarded) {
+      for (const part of forwarded.split(",")) {
+        push(part.trim())
+      }
     }
   }
   push(request.nextUrl.hostname)

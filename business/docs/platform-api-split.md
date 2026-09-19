@@ -99,7 +99,7 @@ Smoke:
 - `https://api.easner.com/v1/checkout/sessions` → 401 JSON
 - `https://js.easner.com/checkout.js` and `/v1/checkout.js` → JS
 - `https://business.easner.com` dashboard, Send, Invoices. Network: Bearer to `api.easner.com`
-- Pay / invoice payer pages
+- Pay / invoice payer pages. Bare `pay.easner.com` / `invoice.easner.com` → `https://www.easner.com/business`
 - One webhook + one cron log on the **api** project
 - Point any vendor webhook still hitting `business.easner.com/api/...` at `https://api.easner.com/api/...`
 
