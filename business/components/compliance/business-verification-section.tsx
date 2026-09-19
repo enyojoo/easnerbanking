@@ -472,11 +472,13 @@ export function BusinessVerificationSection({
                     : isEurAccounts
                       ? eurAwaitingReview
                       : false
-                  const kybFinalReject = isGlobalBanking && tier1Rejected && tier1FinalReject
+                  const kybFinalReject =
+                    (isGlobalBanking && tier1Rejected && tier1FinalReject) ||
+                    (isEurAccounts && eurRejected)
                   const kybActionRequired = isGlobalBanking
                     ? tier1ActionRequired
                     : isEurAccounts
-                      ? eurRejected || eurOnHold
+                      ? eurOnHold
                       : false
                   const showKybFooter =
                     isGlobalBanking || isEurAccounts
