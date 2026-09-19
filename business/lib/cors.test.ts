@@ -24,6 +24,29 @@ describe("corsPreflightResponse", () => {
     expect(response?.headers.get("Access-Control-Allow-Origin")).toBe("https://app.easner.com")
   })
 
+  it("allows the new business Vercel production and unique hosts", () => {
+    const allowed = getCorsAllowedOrigins()
+    expect(allowed.has("https://easnerbank.vercel.app")).toBe(true)
+    for (const origin of [
+      "https://easnerbank.vercel.app",
+      "https://easnerbank-abc123-easner.vercel.app",
+      "https://easner-business.vercel.app",
+      "https://easner-business-m9kn60wrk-easner.vercel.app",
+    ] as const) {
+      const request = new NextRequest("https://api.easner.com/api/business/profile", {
+        method: "OPTIONS",
+        headers: {
+          origin,
+          "access-control-request-method": "GET",
+          "access-control-request-headers": "authorization,content-type",
+        },
+      })
+      const response = corsPreflightResponse(request, allowed)
+      expect(response?.status).toBe(204)
+      expect(response?.headers.get("Access-Control-Allow-Origin")).toBe(origin)
+    }
+  })
+
   it("allows Business, Platform, payer, and Office origins", () => {
     const allowed = getCorsAllowedOrigins()
     expect(allowed.has("https://business.easner.com")).toBe(true)

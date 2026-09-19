@@ -38,13 +38,29 @@ function parseAllowedOrigins(): Set<string> {
     /** Marketing site – app download popup email capture. */
     "https://www.easner.com",
     "https://easner.com",
+    /** New business UI project production alias. */
+    "https://easnerbank.vercel.app",
   ]
   return new Set([...defaults, ...fromEnv])
 }
 
+/**
+ * Business UI Vercel hosts: production alias `easnerbank.vercel.app`, plus unique
+ * / preview hosts from that project or `easner-business` (`*-easner.vercel.app`).
+ */
+function isBusinessVercelOrigin(origin: string): boolean {
+  try {
+    const url = new URL(origin)
+    if (url.protocol !== "https:") return false
+    return /^(easnerbank|easner-business)(?:-[a-z0-9-]+)*\.vercel\.app$/i.test(url.hostname)
+  } catch {
+    return false
+  }
+}
+
 export function isCorsAllowedOrigin(origin: string | null, allowed: Set<string>): boolean {
   if (!origin) return false
-  return allowed.has(origin)
+  return allowed.has(origin) || isBusinessVercelOrigin(origin)
 }
 
 export function getCorsAllowedOrigins(): Set<string> {

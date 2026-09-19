@@ -13,7 +13,7 @@ Write down once:
 | `<fd-endpoint>` | Front Door endpoint host, e.g. `easner-xxxx.z01.azurefd.net` |
 | `<fd-profile>` | Front Door profile that already serves `business.easner.com` |
 | `<api-origin>` | Api project `*.vercel.app` (already live) |
-| `<new-business-origin>` | New business UI project `*.vercel.app` |
+| `<new-business-origin>` | `easnerbank.vercel.app` (new business UI project) |
 | `<platform-origin>` | New platform project `*.vercel.app` |
 
 ---
@@ -60,13 +60,15 @@ Do **not** set:
 - `BUSINESS_APP_SESSION_SECRET` / `SUPABASE_SERVICE_ROLE_KEY` / any webhook or cron secret
 - `NEXT_PUBLIC_PLATFORM_APP_URL` — wait until platform is live (step 4)
 
-Redeploy after saving env. Copy `<new-business-origin>`.
+Redeploy after saving env. Production alias is `https://easnerbank.vercel.app`.
 
-Smoke the `*.vercel.app` URL (not `business.easner.com` yet):
+Smoke **`https://easnerbank.vercel.app`** (not `business.easner.com` yet):
 
 - Login
 - Dashboard
 - Network: Bearer to `https://api.easner.com`
+
+**Active on Domains does not mean a deploy is bound.** `easnerbank.vercel.app` 404 `NOT_FOUND` means Vercel never reached Next — `/`, `/dashboard`, and `/api/health` all fail the same way. Assign a **Production** deployment (Deployments → newest Ready on the production branch → Promote, or Redeploy to Production). Preview URLs like `easner-business-*-easner.vercel.app` can SSO even while the alias 404s. If `easnerbank.vercel.app` still lives on the old/api project, remove it there first so only this UI project owns it.
 
 ### 1b. Attach UI hosts on the new project
 
