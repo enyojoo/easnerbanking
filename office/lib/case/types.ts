@@ -40,6 +40,7 @@ export type OfficeBusinessRow = {
   velocitySentUsd?: number | null
   velocityTriggerReason?: string | null
   velocityMode?: string | null
+  dev_platform_enabled?: boolean | null
 }
 
 export type OfficeCaseChip = {

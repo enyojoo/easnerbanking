@@ -13,6 +13,7 @@ import { PlatformAccessGate } from "@/components/platform-access-gate"
 const DASHBOARD_SHELL_ROOTS = [
   "/accounts",
   "/cards",
+  "/customers",
   "/dashboard",
   "/developers",
   "/invoices",

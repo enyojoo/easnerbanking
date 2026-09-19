@@ -27,6 +27,8 @@ Implemented in `proxy.ts` (`maybeRewriteApiV1ToAppApi`) so `/v1/*` is **not** re
 
 Hosts: `api.easner.com` plus `EASNER_API_HOST` / `NEXT_PUBLIC_EASNER_API_HOST` / `EASNER_API_HOSTS`.
 
+After the Vercel api project cutover (see `docs/platform-api-split.md`), `api.easner.com` and `js.easner.com` attach to the **api** project. Crons run only there.
+
 ## Webhook signatures
 
 Checkout events are POSTed to the merchant URL with:

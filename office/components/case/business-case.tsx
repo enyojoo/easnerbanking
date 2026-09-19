@@ -11,6 +11,7 @@ import { OfficeActivityPane } from "./office-activity-pane"
 import { OfficeAuditPanel } from "./office-audit-panel"
 import { OfficeTeamPanel } from "./office-team-panel"
 import { OfficeRestrictionControls } from "./office-restriction-controls"
+import { OfficeDevPlatformToggle } from "./office-dev-platform-toggle"
 import { OfficeCopyChip, OfficeCopyValue } from "./office-copy-value"
 import { OfficePartnerSync } from "./office-partner-sync"
 import { OfficeDetailRow, OfficeSection } from "./office-detail-grid"
@@ -113,6 +114,10 @@ export function BusinessCase({ businessId }: { businessId: string }) {
   const accessUnlocked = officeStatusIsApproved(gridStatus) || officeStatusIsApproved(bridgeStatus)
   const chips: OfficeCaseChip[] = [
     { label: accessUnlocked ? "Unlocked" : "Locked", variant: accessUnlocked ? "emerald" : "slate" },
+    {
+      label: business.dev_platform_enabled ? "Dev Platform" : "Banking only",
+      variant: business.dev_platform_enabled ? "emerald" : "outline",
+    },
     {
       label: `Global · ${verificationStatusLabel(gridStatus, { detail: true })}`,
       variant: officeVerificationBadgeVariant(gridStatus),
@@ -236,6 +241,16 @@ export function BusinessCase({ businessId }: { businessId: string }) {
                     "–"
                   )}
                 </OfficeDetailRow>
+              </OfficeSection>
+              <OfficeSection
+                title="Platform"
+                description="Office-gated access to Checkout, Developers, and the product switcher."
+                divide={false}
+              >
+                <OfficeDevPlatformToggle
+                  businessId={business.id}
+                  enabled={Boolean(business.dev_platform_enabled)}
+                />
               </OfficeSection>
               <OfficeSection title="Description">
                 <p className="whitespace-pre-wrap text-sm text-foreground">

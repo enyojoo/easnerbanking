@@ -10,6 +10,7 @@ import {
 } from "@/lib/invoices/invoice-query-cache"
 import { isAccountRestrictionFetchError } from "@/lib/query/fetch-errors"
 import { apiFetch } from "@/lib/query/api-client"
+import { getClientAppSurface } from "@/lib/app-surface"
 import {
   BUSINESS_TRANSACTIONS_LIST_PAGE_SIZE,
   type TransactionsPage,
@@ -365,6 +366,12 @@ export async function prefetchAllNavWorkspaceData(
       setTimeout(resolve, 500)
     }
   })
+
+  if (getClientAppSurface() === "platform") {
+    const { prefetchCheckoutSettings } = await import("@/hooks/queries/use-checkout-settings-query")
+    await Promise.allSettled([prefetchCheckoutSettings(queryClient, scope)])
+    return
+  }
 
   const { payrollOverviewQueryOptions, payrollPeopleQueryOptions } = await import(
     "@/hooks/queries/use-payroll"

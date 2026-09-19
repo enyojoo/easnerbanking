@@ -217,7 +217,7 @@ export function SettingsPersonalTab() {
       setTurnOffMfaOpen(false)
       setTurnOffMfaCode("")
       setTurnOffMfaError(null)
-      void fetch("/api/notifications/security-alert", {
+      void fetchWithSession("/api/notifications/security-alert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ alertType: "mfa_disabled" }),

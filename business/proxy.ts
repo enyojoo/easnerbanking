@@ -11,6 +11,7 @@ import {
   maybeRedirectCustomerHostRootToBusiness,
   maybeRewriteCustomerHost,
 } from "@/lib/customer-host-routing"
+import { cronJobsEnabledOnThisProject, isScheduledCronPath } from "@/lib/api/cron-project"
 
 function getClientIp(request: NextRequest): string {
   const forwarded = request.headers.get("x-forwarded-for")
@@ -22,6 +23,14 @@ function getClientIp(request: NextRequest): string {
 
 export function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
+
+  if (isScheduledCronPath(pathname) && !cronJobsEnabledOnThisProject()) {
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      reason: "EASNER_CRONS_ENABLED=false",
+    })
+  }
 
   /** Versioned embed first so `/v1/checkout.js` is not treated as an API path. */
   const jsCheckoutRewrite = maybeRewriteJsCheckoutScript(request)

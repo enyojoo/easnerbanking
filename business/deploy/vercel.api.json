@@ -1,0 +1,123 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["lhr1"],
+  "installCommand": "bash ./scripts/vercel-install.sh",
+  "build": {
+    "env": {
+      "NODE_OPTIONS": "--no-deprecation",
+      "VERCEL_PREVIEW_COMMENTS_ENABLED": "0",
+      "VERCEL_PREVIEW_COMMENTS_OPT_IN": "0"
+    }
+  },
+  "env": {
+    "NODE_OPTIONS": "--no-deprecation --max-http-header-size=1048576",
+    "VERCEL_PREVIEW_COMMENTS_ENABLED": "0",
+    "VERCEL_PREVIEW_COMMENTS_OPT_IN": "0"
+  },
+  "crons": [
+    {
+      "path": "/api/internal/wallet-provisioning/process",
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/internal/relay-deposits/reconcile",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-exchange-rates",
+      "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/sync-noah-rates",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-crypto-rates",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-yc-rates",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-grid-rates",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-grid-schemas",
+      "schedule": "0 3 * * 0"
+    },
+    {
+      "path": "/api/cron/sync-grid-corridors",
+      "schedule": "0 4 * * 0"
+    },
+    {
+      "path": "/api/cron/process-grid-fund-balance-stuck",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/process-deposit-splits",
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/cron/process-global-payout-reversal-repair",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/reconcile-stuck-payouts",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/internal/health/realtime-publication",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/internal/invoices/mark-past-due",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/internal/invoices/send-reminders",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/internal/invoices/generate-recurring",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/internal/checkout/deliver-webhooks",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/internal/payroll/generate-drafts",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/internal/payroll/send-funding-alerts",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/internal/payroll/reconcile-stuck",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/internal/payroll/execute-scheduled",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/internal/payroll/process-execution-jobs",
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/internal/payroll/retry-document-deliveries",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/internal/payroll/process-reversals",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/process-account-deletions",
+      "schedule": "0 * * * *"
+    }
+  ]
+}

@@ -3,12 +3,12 @@
 import { useEffect } from "react"
 import { SETTINGS_BRIDGE_FLOW_HREF, SETTINGS_VERIFICATION_HREF } from "@/lib/compliance/cutover-comms"
 import { OpeningVerificationWait } from "@/components/compliance/opening-verification-wait"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 
 async function attachSignedAgreement(signedAgreementId: string) {
   for (const scope of ["business", "individual"] as const) {
-    const res = await fetch("/api/bridge/tos-accept", {
+    const res = await fetchWithSession("/api/bridge/tos-accept", {
       method: "POST",
-      credentials: "include",
       headers: {
         "Content-Type": "application/json",
         "X-Easner-Account-Scope": scope,

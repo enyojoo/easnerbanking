@@ -1,14 +1,14 @@
 import "server-only"
 import { cookies, headers } from "next/headers"
+import { getApiBaseUrl } from "@/lib/api-base-url"
 import { BUSINESS_APP_SESSION_COOKIE } from "@/lib/app-session"
 
 /**
  * Server-side `/api/*` client for RSC prefetching.
  *
- * We hit the same Next.js API routes the browser uses, carrying the
- * business app session cookie forward. This keeps the shape of server
- * prefetched data identical to what client components would receive –
- * which is what makes the dehydrated cache hydrate cleanly.
+ * Hits the API origin with the app-session JWT as Bearer (not a host-only
+ * Cookie header). After the api split, UI and API are different hosts;
+ * `getUserFromApiRequest` accepts this JWT via `getUserFromBearer`.
  *
  * All server fetches are `cache: "no-store"` by default: RSC prefetch
  * runs once per request and we let TanStack Query own the browser
@@ -16,9 +16,8 @@ import { BUSINESS_APP_SESSION_COOKIE } from "@/lib/app-session"
  */
 
 async function resolveBaseUrl(): Promise<string> {
-  const explicit = process.env.BUSINESS_APP_URL ?? process.env.NEXT_PUBLIC_BUSINESS_APP_URL
+  const explicit = process.env.NEXT_PUBLIC_API_URL?.trim()
   if (explicit) return explicit.replace(/\/$/, "")
-  // Derive from the incoming request when possible (handles preview deploys).
   try {
     const h = await headers()
     const host = h.get("x-forwarded-host") ?? h.get("host")
@@ -27,7 +26,7 @@ async function resolveBaseUrl(): Promise<string> {
   } catch {
     // headers() may not be available outside of a request scope.
   }
-  return "http://localhost:3000"
+  return getApiBaseUrl()
 }
 
 export interface ServerFetchOptions {
@@ -35,7 +34,7 @@ export interface ServerFetchOptions {
   body?: unknown
   query?: Record<string, string | number | boolean | null | undefined>
   signal?: AbortSignal
-  /** Merged into the outgoing fetch (after JSON Accept / cookies). */
+  /** Merged into the outgoing fetch (after JSON Accept / Bearer). */
   headers?: Record<string, string>
 }
 
@@ -56,7 +55,7 @@ export async function serverApiFetch<T>(path: string, options: ServerFetchOption
   const baseUrl = await resolveBaseUrl()
   const url = `${baseUrl}${buildUrl(path, query)}`
   const store = await cookies()
-  const sessionCookie = store.get(BUSINESS_APP_SESSION_COOKIE)?.value
+  const sessionJwt = store.get(BUSINESS_APP_SESSION_COOKIE)?.value
 
   const res = await fetch(url, {
     method,
@@ -65,7 +64,7 @@ export async function serverApiFetch<T>(path: string, options: ServerFetchOption
     headers: {
       Accept: "application/json",
       ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-      ...(sessionCookie ? { Cookie: `${BUSINESS_APP_SESSION_COOKIE}=${sessionCookie}` } : {}),
+      ...(sessionJwt ? { Authorization: `Bearer ${sessionJwt}` } : {}),
       ...extraHeaders,
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,

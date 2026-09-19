@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { QRCodeSVG } from "qrcode.react"
 import { Button } from "@/components/ui/button"
 import { fetchWithSession } from "@/lib/fetch-with-session"
+import { apiUrl } from "@/lib/api-base-url"
 import { analytics } from "@/lib/analytics"
 import { toast } from "sonner"
 import { CheckCircle2, Copy, ExternalLink, XCircle } from "lucide-react"
@@ -113,7 +114,9 @@ export function StablecoinChargePanel({
 
     const tick = async (): Promise<boolean> => {
       const res =
-        variant === "customer" ? await fetch(endpoint) : await fetchWithSession(endpoint)
+        variant === "customer"
+          ? await fetch(apiUrl(endpoint), { credentials: "omit" })
+          : await fetchWithSession(endpoint)
       const body = (await res.json().catch(() => ({}))) as {
         session?: StablecoinChargeSession
         error?: string

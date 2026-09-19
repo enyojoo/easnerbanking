@@ -1,6 +1,7 @@
 "use client"
 
 import { useQuery } from "@tanstack/react-query"
+import { apiUrl } from "@/lib/api-base-url"
 import type { AppSurface } from "@/lib/auth/app-surface-access"
 
 export type PlatformAccessSnapshot = {
@@ -15,8 +16,9 @@ export type PlatformAccessSnapshot = {
 const POLL_MS = 15_000
 
 async function fetchPlatformAccess(surface: AppSurface): Promise<PlatformAccessSnapshot> {
-  const res = await fetch(`/api/platform/access?surface=${encodeURIComponent(surface)}`, {
+  const res = await fetch(apiUrl(`/api/platform/access?surface=${encodeURIComponent(surface)}`), {
     cache: "no-store",
+    credentials: "omit",
   })
   const data = (await res.json().catch(() => ({}))) as Partial<PlatformAccessSnapshot> & { error?: string }
   if (!res.ok) {

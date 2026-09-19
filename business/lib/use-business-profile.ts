@@ -90,6 +90,8 @@ export type BusinessProfile = {
   invoiceSettings?: InvoicePaymentDefaults
   /** Master switch for card/bank collections (`business_checkout_settings`). */
   onlinePaymentsEnabled?: boolean
+  /** Office-gated Easner Platform access (Checkout, Developers). Default off. */
+  devPlatformEnabled?: boolean
 }
 
 const DEFAULT_PROFILE: BusinessProfile = {
@@ -142,6 +144,7 @@ const DEFAULT_PROFILE: BusinessProfile = {
   invoiceReplyEmailSource: null,
   invoiceSettings: undefined,
   onlinePaymentsEnabled: true,
+  devPlatformEnabled: false,
 }
 
 function countryCodeFromName(name: string | null | undefined): string | null {

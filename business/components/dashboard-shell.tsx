@@ -12,6 +12,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
 import { MessageCircle } from "lucide-react"
 import { DashboardNav } from "@/components/dashboard-nav"
+import { DevPlatformAccessGate } from "@/components/dev-platform-access-gate"
 import { BusinessDropdown } from "@/components/business-dropdown"
 import { AppLockProvider } from "@/components/app-lock/app-lock-provider"
 import { Button } from "@/components/ui/button"
@@ -266,7 +267,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
               when html[data-verification-flow-open] makes main a flex column.
             */}
             <div className={clientDetailId ? "hidden" : "flex min-h-0 flex-1 flex-col"}>
-              {children}
+              <DevPlatformAccessGate>{children}</DevPlatformAccessGate>
             </div>
             {clientDetailId ? <TransactionDetailView rawId={clientDetailId} /> : null}
           </main>

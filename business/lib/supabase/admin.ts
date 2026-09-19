@@ -35,7 +35,11 @@ export function createSupabaseAdmin() {
 export async function getUserFromBearer(request: Request): Promise<User | null> {
   const auth = request.headers.get("authorization")
   if (!auth?.startsWith("Bearer ")) return null
-  const token = auth.slice(7)
+  const token = auth.slice(7).trim()
+  if (!token) return null
+  // RSC `serverApiFetch` sends the lightweight app-session JWT (not a Supabase access token).
+  const appSessionUser = getBusinessAppSessionUser(token)
+  if (appSessionUser) return appSessionUser
   const admin = createSupabaseAdmin()
   const { data, error } = await admin.auth.getUser(token)
   if (error || !data.user) return null
@@ -44,7 +48,7 @@ export async function getUserFromBearer(request: Request): Promise<User | null> 
 
 /**
  * Resolves the user for Route Handlers. Prefer the lightweight Easner app session cookie,
- * then Bearer for cross-origin callers, then Supabase SSR cookies as a final fallback.
+ * then Bearer (Supabase access token or app-session JWT), then Supabase SSR cookies.
  */
 export async function getUserFromApiRequest(request: Request): Promise<User | null> {
   try {

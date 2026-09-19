@@ -18,6 +18,7 @@ import type { PublicPaymentLinkPayload } from "@/lib/payment-links/public-payloa
 import type { PublicPayPageResult } from "@/lib/payment-links/load-public-pay-page"
 import { recurringDisclosure } from "@/lib/payment-links/types"
 import { formatCurrency } from "@/lib/utils"
+import { apiUrl } from "@/lib/api-base-url"
 
 type Resolution =
   | { kind: "loading" }
@@ -62,7 +63,7 @@ export function PaymentLinkPayPanel({
 
     void (async () => {
       try {
-        const res = await fetch(`/api/payment-links/public/${path}`)
+        const res = await fetch(apiUrl(`/api/payment-links/public/${path}`), { credentials: "omit" })
         const body = (await res.json().catch(() => ({}))) as
           | PublicPaymentLinkPayload
           | { kind: "stablecoin_session"; sessionId: string }
@@ -165,7 +166,10 @@ function PaymentLinkSurface({
       setLoading(true)
       setError(null)
       try {
-        const res = await fetch(`/api/payment-links/public/${path}`, { method: "POST" })
+        const res = await fetch(apiUrl(`/api/payment-links/public/${path}`), {
+          method: "POST",
+          credentials: "omit",
+        })
         const body = (await res.json().catch(() => ({}))) as {
           clientSecret?: string
           stripeAccountId?: string

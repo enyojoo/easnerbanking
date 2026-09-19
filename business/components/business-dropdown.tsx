@@ -10,6 +10,9 @@ import {
   LogOut,
   Building2,
   User,
+  Code2,
+  Landmark,
+  MessageCircle,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -24,6 +27,10 @@ import { normalizeBusinessLogoUrl, normalizeProfileImageUrl } from "@/lib/image-
 import { StableAvatar } from "@/components/stable-avatar"
 import { useScope } from "@/lib/query/scope"
 import { prefetchRouteWorkspaceData } from "@/lib/query/workspace-prefetch"
+import { getProductSwitchUrl, prefetchProductOrigin } from "@/lib/app-surface"
+import { useAppSurface } from "@/lib/use-app-surface"
+import { useBusinessProfile } from "@/lib/use-business-profile"
+import { openBusinessSupport } from "@/lib/intercom-messenger"
 
 interface BusinessDropdownProps {
   businessName: string
@@ -50,6 +57,13 @@ export function BusinessDropdown({
   const [isOpen, setIsOpen] = useState(false)
   const queryClient = useQueryClient()
   const { scope } = useScope()
+  const surface = useAppSurface()
+  const { devPlatformEnabled } = useBusinessProfile()
+  const platformEnabled = Boolean(devPlatformEnabled)
+  const switchHref =
+    surface === "platform"
+      ? getProductSwitchUrl("business", "/dashboard")
+      : getProductSwitchUrl("platform", "/checkout")
   const normalizedProfileImageUrl = normalizeProfileImageUrl(profileImageUrl)
   const normalizedBusinessLogoUrl = normalizeBusinessLogoUrl(businessLogoUrl)
   const hasBusinessLogo = Boolean(normalizedBusinessLogoUrl)
@@ -59,7 +73,13 @@ export function BusinessDropdown({
       open={isOpen}
       onOpenChange={(open) => {
         setIsOpen(open)
-        if (open && scope) void prefetchRouteWorkspaceData(queryClient, scope, "/settings")
+        if (!open) return
+        if (scope) void prefetchRouteWorkspaceData(queryClient, scope, "/settings")
+        if (platformEnabled || surface === "platform") {
+          prefetchProductOrigin(switchHref)
+          const localPath = surface === "platform" ? "/dashboard" : "/checkout"
+          if (scope) void prefetchRouteWorkspaceData(queryClient, scope, localPath)
+        }
       }}
     >
       <DropdownMenuTrigger asChild>
@@ -159,6 +179,50 @@ export function BusinessDropdown({
             <DropdownMenuSeparator />
           </>
         )}
+        {surface === "business" && platformEnabled ? (
+          <DropdownMenuItem
+            className="items-start gap-2 py-2"
+            onMouseEnter={() => prefetchProductOrigin(switchHref)}
+            onSelect={() => {
+              window.location.assign(switchHref)
+            }}
+          >
+            <Code2 className="mt-0.5 h-4 w-4 shrink-0" />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium">Switch to Dev Platform</span>
+              <span className="block text-xs text-muted-foreground">Checkout, APIs, and developers</span>
+            </span>
+          </DropdownMenuItem>
+        ) : null}
+        {surface === "platform" ? (
+          <DropdownMenuItem
+            className="items-start gap-2 py-2"
+            onMouseEnter={() => prefetchProductOrigin(switchHref)}
+            onSelect={() => {
+              window.location.assign(switchHref)
+            }}
+          >
+            <Landmark className="mt-0.5 h-4 w-4 shrink-0" />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium">Switch to Banking Account</span>
+              <span className="block text-xs text-muted-foreground">Accounts, send, and collections</span>
+            </span>
+          </DropdownMenuItem>
+        ) : null}
+        {surface === "business" && !platformEnabled ? (
+          <DropdownMenuItem
+            className="items-start gap-2 py-2"
+            onSelect={() => {
+              void openBusinessSupport()
+            }}
+          >
+            <MessageCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium">Need a Developer Account?</span>
+              <span className="block text-xs text-muted-foreground">Contact support to get access</span>
+            </span>
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem asChild className="gap-2">
           <Link
             href="/settings"

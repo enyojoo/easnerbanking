@@ -25,6 +25,7 @@ import type { InvoicePdfIssuer } from "@/lib/invoices/issuer"
 import type { InvoicePayInPayload } from "@/lib/invoices/resolve-pay-in-for-business"
 import { analytics } from "@/lib/analytics"
 import { fetchWithSession } from "@/lib/fetch-with-session"
+import { apiUrl } from "@/lib/api-base-url"
 import { INVOICE_CUSTOMER_VIEW_COPY } from "@/lib/copy/business-ui-copy"
 import { InvoiceCustomerPageSkeleton } from "@/components/invoice/invoice-customer-page-skeleton"
 import { InvoiceIssuerLogo } from "@/components/invoice/invoice-issuer-logo"
@@ -154,7 +155,7 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
     if (!fetchConfig.valid || !fetchConfig.url) return null
     const res = fetchConfig.authenticated
       ? await fetchWithSession(fetchConfig.url)
-      : await fetch(fetchConfig.url)
+      : await fetch(apiUrl(fetchConfig.url), { credentials: "omit" })
     const data = (await res.json().catch(() => ({}))) as PublicInvoicePayloadPartial
     if (!res.ok || !data.invoice) return null
     applyPublicPayload(data)
@@ -230,7 +231,7 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
       try {
         const res = fetchConfig.authenticated
           ? await fetchWithSession(fetchConfig.url)
-          : await fetch(fetchConfig.url)
+          : await fetch(apiUrl(fetchConfig.url), { credentials: "omit" })
         const data = (await res.json().catch(() => ({}))) as PublicInvoicePayloadPartial
         if (cancelled) return
         if (res.status === 401) {
@@ -297,7 +298,7 @@ export function InvoiceCustomerViewPage(props: InvoiceCustomerViewPageProps) {
   useEffect(() => {
     if (mode !== "public" || !invoice?.id) return
     analytics.trackPayerInvoiceViewed({ invoiceId: invoice.id, currency: invoice.currency })
-    fetch(`/api/invoices/${invoice.id}/record-view`, { method: "POST" }).catch(() => {})
+    fetch(apiUrl(`/api/invoices/${invoice.id}/record-view`), { method: "POST", credentials: "omit" }).catch(() => {})
   }, [mode, invoice?.id, invoice?.currency])
 
   const copyToClipboard = async (text: string, field?: string) => {

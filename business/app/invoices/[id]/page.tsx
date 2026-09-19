@@ -523,7 +523,7 @@ export default function InvoiceDetailPage() {
 
   useEffect(() => {
     if (!invoice?.id) return
-    fetch(`/api/invoices/${invoice.id}/views`)
+    fetchWithSession(`/api/invoices/${invoice.id}/views`)
       .then((res) => res.json())
       .then((data) => setCustomerViews(data.views ?? []))
       .catch(() => {})

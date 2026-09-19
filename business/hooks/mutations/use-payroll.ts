@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { qk } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 import { refetchBusinessMoneyQueries } from "@/lib/query/refresh-after-money-move"
 import { useScope } from "@/lib/query/scope"
 import type {
@@ -261,10 +262,9 @@ export function useImportPayrollPeople() {
     mutationFn: (file: File) => {
       const form = new FormData()
       form.append("file", file)
-      return fetch("/api/business/payroll/people/import", {
+      return fetchWithSession("/api/business/payroll/people/import", {
         method: "POST",
         body: form,
-        credentials: "include",
       }).then(async (r) => {
         const data = await r.json()
         if (!r.ok) throw new Error(data.error || "Import failed")

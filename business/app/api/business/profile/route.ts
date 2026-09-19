@@ -115,7 +115,7 @@ async function resolveCanManageBusinessVerification(
 
 async function fetchBusinessProfile(admin: ReturnType<typeof createSupabaseAdmin>, businessId: string) {
   const richSelect =
-    "id,name,easetag,logo_url,business_type,registration_number,tax_id,base_currency,description,website,support_email,support_phone,address_line1,city,state,postal_code,registered_address_line1,registered_address_city,registered_address_state,registered_address_postal_code,country,registration_country,verification_status,kyb_verified_at,invoice_settings"
+    "id,name,easetag,logo_url,business_type,registration_number,tax_id,base_currency,description,website,support_email,support_phone,address_line1,city,state,postal_code,registered_address_line1,registered_address_city,registered_address_state,registered_address_postal_code,country,registration_country,verification_status,kyb_verified_at,invoice_settings,dev_platform_enabled"
   const baseSelect = "id,name,easetag,logo_url,business_type,base_currency,description,country"
   const minimalSelect = "id,name,easetag,country"
 
@@ -386,6 +386,12 @@ async function getBusinessProfileResponse(request: Request) {
       invoiceReplyEmailSource,
       invoiceSettings,
       onlinePaymentsEnabled,
+      devPlatformEnabled: Boolean(
+        org &&
+          typeof org === "object" &&
+          "dev_platform_enabled" in org &&
+          (org as { dev_platform_enabled?: unknown }).dev_platform_enabled === true,
+      ),
     },
   })
 }

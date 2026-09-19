@@ -5,8 +5,8 @@ import { fetchWithSession } from "@/lib/fetch-with-session"
 /**
  * Typed `/api/*` client used by every query/mutation hook.
  *
- * Layers on top of `fetchWithSession` (which handles the short-lived
- * `BUSINESS_APP_SESSION_COOKIE` + silent refresh on 401) with:
+ * Layers on top of `fetchWithSession` (Bearer to the API origin + silent
+ * refresh on 401) with:
  *   - automatic JSON body encoding
  *   - query-string serialization
  *   - structured error objects so `isClientError` / `isAuthError`

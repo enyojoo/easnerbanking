@@ -5,6 +5,7 @@ import type { AppRouterInstance } from "next/dist/shared/lib/app-router-context.
 import type { Scope } from "@easner/shared"
 import { prefetchAllNavWorkspaceData } from "@/lib/query/workspace-prefetch"
 import { primeConnectStatus } from "@/lib/stripe/connect-status-cache"
+import { getClientAppSurface } from "@/lib/app-surface"
 
 export const WORKSPACE_WARM_EVENT = "easner-prime-workspace-nav"
 
@@ -20,6 +21,14 @@ export const WORKSPACE_NAV_HREFS = [
   "/settings",
 ] as const
 
+const PLATFORM_NAV_HREFS = [
+  "/customers",
+  "/transactions",
+  "/checkout",
+  "/developers",
+  "/settings",
+] as const
+
 const SECONDARY_NAV_HREFS = [
   "/checkout",
   "/links",
@@ -27,6 +36,14 @@ const SECONDARY_NAV_HREFS = [
   "/send/confirm",
   "/send/momo-setup",
 ] as const
+
+function navHrefsForSurface(): readonly string[] {
+  return getClientAppSurface() === "platform" ? PLATFORM_NAV_HREFS : WORKSPACE_NAV_HREFS
+}
+
+function secondaryHrefsForSurface(): readonly string[] {
+  return getClientAppSurface() === "platform" ? ["/developers"] : SECONDARY_NAV_HREFS
+}
 
 let warmInflight: Promise<void> | null = null
 
@@ -54,13 +71,13 @@ export function primeWorkspaceNav(options: {
   const { queryClient, scope, router, businessId } = options
 
   warmInflight = (async () => {
-    for (const href of WORKSPACE_NAV_HREFS) prefetchHref(router, href)
+    for (const href of navHrefsForSurface()) prefetchHref(router, href)
 
     const idle = window as Window & {
       requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number
     }
     const prefetchSecondary = () => {
-      for (const href of SECONDARY_NAV_HREFS) prefetchHref(router, href)
+      for (const href of secondaryHrefsForSurface()) prefetchHref(router, href)
     }
     if (typeof idle.requestIdleCallback === "function") {
       idle.requestIdleCallback(prefetchSecondary, { timeout: 2000 })

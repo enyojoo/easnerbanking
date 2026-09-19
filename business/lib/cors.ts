@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
+import { getInvoiceAppPublicOrigin, getPayAppPublicOrigin } from "@/lib/customer-hosts"
 
 /** Origins allowed to call the business API from a browser (e.g. Easner Office on another host/port). */
 function parseAllowedOrigins(): Set<string> {
@@ -11,6 +12,8 @@ function parseAllowedOrigins(): Set<string> {
   const fromEnv = single ? [...fromList, single] : fromList
   /** Local Office dev + production Easner Office on Vercel (pair with easnerbank.vercel.app). */
   const defaults = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
     "http://localhost:3002",
     "http://127.0.0.1:3002",
     "http://localhost:8081",
@@ -21,6 +24,16 @@ function parseAllowedOrigins(): Set<string> {
     /** Expo web consumer app (browser calls api.easner.com with Bearer + account scope header). */
     "https://app.easner.com",
     "https://easner-web.vercel.app",
+    /** Business + Platform dashboards (Bearer, credentials omit). */
+    "https://business.easner.com",
+    "https://platform.easner.com",
+    /** Payer hosts stay on the business UI project and call api.easner.com after the split. */
+    "https://pay.easner.com",
+    "https://invoice.easner.com",
+    getPayAppPublicOrigin(),
+    getInvoiceAppPublicOrigin(),
+    /** Easner Office production. */
+    "https://bk.easner.com",
     /** Marketing site – app download popup email capture. */
     "https://www.easner.com",
     "https://easner.com",

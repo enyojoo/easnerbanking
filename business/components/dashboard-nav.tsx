@@ -31,6 +31,7 @@ import { normalizeBusinessLogoUrl, warmBusinessLogoUrl } from "@/lib/image-cache
 import { isNavPathActive } from "@/lib/navigation/is-nav-path-active"
 import { useScope } from "@/lib/query/scope"
 import { prefetchRouteWorkspaceData } from "@/lib/query/workspace-prefetch"
+import { useAppSurface } from "@/lib/use-app-surface"
 import { useState, useEffect, useRef } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
@@ -46,7 +47,6 @@ function deriveOpenGroups(pathname: string) {
   }
   if (
     pathname.startsWith("/invoices") ||
-    pathname.startsWith("/checkout") ||
     pathname.startsWith("/links") ||
     pathname.startsWith("/terminal")
   ) {
@@ -99,34 +99,42 @@ export function DashboardNav() {
     })
   }
 
-  const menuItems = [
-    { href: "/dashboard", label: "Home", icon: LayoutDashboard, type: "single" as const },
-    {
-      key: "spending",
-      label: "Spending",
-      icon: CircleDollarSign,
-      type: "group" as const,
-      items: [
-        { href: "/send", label: "Send", icon: Send },
-        { href: "/cards", label: "Cards", icon: CreditCard },
-        { href: "/payroll", label: "Payroll", icon: Users },
-      ],
-    },
-    {
-      key: "collections",
-      label: "Collections",
-      icon: Inbox,
-      type: "group" as const,
-      items: [
-        { href: "/invoices", label: "Invoices", icon: ReceiptText },
-        { href: "/checkout", label: "Checkout", icon: Code },
-        { href: "/links", label: "Links", icon: Link2 },
-        { href: "/terminal", label: "Terminal", icon: SmartphoneNfc },
-      ],
-    },
-    { href: "/transactions", label: "Transactions", icon: List, type: "single" as const },
-    { href: "/accounts", label: "Accounts", icon: Wallet, type: "single" as const },
-  ]
+  const surface = useAppSurface()
+  const menuItems =
+    surface === "platform"
+      ? [
+          { href: "/customers", label: "Customers", icon: Users, type: "single" as const },
+          { href: "/transactions", label: "Transactions", icon: List, type: "single" as const },
+          { href: "/checkout", label: "Checkout", icon: CircleDollarSign, type: "single" as const },
+          { href: "/developers", label: "Developers", icon: Code, type: "single" as const },
+        ]
+      : [
+          { href: "/dashboard", label: "Home", icon: LayoutDashboard, type: "single" as const },
+          {
+            key: "spending",
+            label: "Spending",
+            icon: CircleDollarSign,
+            type: "group" as const,
+            items: [
+              { href: "/send", label: "Send", icon: Send },
+              { href: "/cards", label: "Cards", icon: CreditCard },
+              { href: "/payroll", label: "Payroll", icon: Users },
+            ],
+          },
+          {
+            key: "collections",
+            label: "Collections",
+            icon: Inbox,
+            type: "group" as const,
+            items: [
+              { href: "/invoices", label: "Invoices", icon: ReceiptText },
+              { href: "/links", label: "Links", icon: Link2 },
+              { href: "/terminal", label: "Terminal", icon: SmartphoneNfc },
+            ],
+          },
+          { href: "/transactions", label: "Transactions", icon: List, type: "single" as const },
+          { href: "/accounts", label: "Accounts", icon: Wallet, type: "single" as const },
+        ]
 
   const navItemBase =
     "w-full justify-start gap-3 px-3 py-2.5 min-h-11 h-auto text-sm font-medium rounded-xl transition-[background-color,color,box-shadow,border-color] duration-200 stroke-[1.5]"

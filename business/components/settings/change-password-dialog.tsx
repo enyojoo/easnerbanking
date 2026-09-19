@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 import { useAuth } from "@/lib/auth-context"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 
 const MIN_PASSWORD_LEN = 8
 const PASSWORD_UPDATED_LOGIN_MESSAGE =
@@ -98,7 +99,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialo
         return
       }
 
-      void fetch("/api/notifications/security-alert", {
+      void fetchWithSession("/api/notifications/security-alert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ alertType: "password_changed" }),

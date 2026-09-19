@@ -13,6 +13,7 @@ import {
 } from "@/lib/intercom-messenger"
 import { scheduleAfterIdle } from "@/lib/schedule-after-idle"
 import { useAppSoftLocked } from "@/hooks/use-app-soft-locked"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 
 type IntercomRegion = "us" | "eu" | "ap"
 
@@ -37,7 +38,7 @@ type IntercomAuthResult =
   | { ok: false; status: number }
 
 async function fetchIntercomAuth(): Promise<IntercomAuthResult> {
-  const res = await fetch("/api/intercom/jwt", { credentials: "include", cache: "no-store" })
+  const res = await fetchWithSession("/api/intercom/jwt", { cache: "no-store" })
   if (res.status === 503) return { ok: true, mode: "legacy" }
   if (res.status === 401) return { ok: false, status: 401 }
   if (!res.ok) return { ok: false, status: res.status }

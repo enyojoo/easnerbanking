@@ -11,6 +11,7 @@ import {
 import type { PublicInvoiceStripeCheckout } from "@/lib/invoices/json-public-invoice-from-row"
 import type { Invoice } from "@/lib/b2b/types"
 import { analytics } from "@/lib/analytics"
+import { apiUrl } from "@/lib/api-base-url"
 
 type Props = {
   invoice: Invoice
@@ -64,8 +65,10 @@ export function InvoiceStripeCheckout({
       setLoadError(null)
       try {
         const res = await fetch(
-          `/api/invoices/public/${encodeURIComponent(easetag)}/${encodeURIComponent(invoice.invoiceNumber)}/checkout-session`,
-          { method: "POST" },
+          apiUrl(
+            `/api/invoices/public/${encodeURIComponent(easetag)}/${encodeURIComponent(invoice.invoiceNumber)}/checkout-session`,
+          ),
+          { method: "POST", credentials: "omit" },
         )
         const json = (await res.json()) as {
           clientSecret?: string

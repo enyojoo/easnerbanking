@@ -18,6 +18,7 @@ import {
   ngSupplementInlinePrompt,
   type NgLocalIdType,
 } from "@easner/shared"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 
 type Props = {
   /** IDs still needed – one field each, or both when neither is on file. */
@@ -77,7 +78,7 @@ export function NgLocalVerificationNotice({ missingTypes, className, onSaved }: 
           ? { ngLocalIdType: "NIN", ngLocalIdNumber: nin.trim() }
           : { ngLocalIdType: "BVN", ngLocalIdNumber: bvn.trim() }
 
-      const res = await fetch("/api/compliance/ng-local-verification", {
+      const res = await fetchWithSession("/api/compliance/ng-local-verification", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

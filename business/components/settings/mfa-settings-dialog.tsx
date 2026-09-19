@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 import {
   beginTotpEnrollment,
   discardUnverifiedTotpEnrollment,
@@ -302,7 +303,7 @@ export function MfaSettingsDialog({
         setError(vErr.message || "Invalid code.")
         return
       }
-      void fetch("/api/notifications/security-alert", {
+      void fetchWithSession("/api/notifications/security-alert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ alertType: "mfa_enabled" }),

@@ -23,4 +23,34 @@ describe("corsPreflightResponse", () => {
     )
     expect(response?.headers.get("Access-Control-Allow-Origin")).toBe("https://app.easner.com")
   })
+
+  it("allows Business, Platform, payer, and Office origins", () => {
+    const allowed = getCorsAllowedOrigins()
+    expect(allowed.has("https://business.easner.com")).toBe(true)
+    expect(allowed.has("https://platform.easner.com")).toBe(true)
+    expect(allowed.has("https://pay.easner.com")).toBe(true)
+    expect(allowed.has("https://invoice.easner.com")).toBe(true)
+    expect(allowed.has("https://bk.easner.com")).toBe(true)
+
+    for (const origin of [
+      "https://business.easner.com",
+      "https://platform.easner.com",
+      "https://pay.easner.com",
+      "https://invoice.easner.com",
+      "https://bk.easner.com",
+    ] as const) {
+      const request = new NextRequest("https://api.easner.com/api/business/profile", {
+        method: "OPTIONS",
+        headers: {
+          origin,
+          "access-control-request-method": "GET",
+          "access-control-request-headers": "authorization,content-type",
+        },
+      })
+      const response = corsPreflightResponse(request, allowed)
+      expect(response?.status).toBe(204)
+      expect(response?.headers.get("Access-Control-Allow-Origin")).toBe(origin)
+      expect(response?.headers.get("Access-Control-Allow-Headers")).toContain("Authorization")
+    }
+  })
 })
