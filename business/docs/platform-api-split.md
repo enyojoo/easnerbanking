@@ -1,10 +1,10 @@
-# Good to go — keep today’s env-rich project as `api`, create a slim new `business`
+# Next: slim env on the new business Vercel project
 
-Do **not** copy every business secret onto a new api project. Today’s Vercel project already has them. That project becomes **api**. The new **business** project only needs the few vars that talk to the API and render the UI.
+**Api is done.** The existing env-rich project is `api` (Root `api/`, region `lhr1`). Secrets, treasury, webhooks, and crons stay there. Host URLs default in code. Do not add them back.
 
-`api/` is the Next.js API app. `business/` is UI (plus leftover `/api/*` 308). Crons stay on the api project.
+`business/` is UI only (leftover `/api/*` 308s to api). Next you set **only the public UI env** on the new business project, deploy, then switch Front Door for `business` / `pay` / `invoice`. Leave `api` / `js` on the api origin.
 
-Azure DNS for `api` / `js` / `business` / `pay` / `invoice` already CNAMEs to Front Door. You switch **Front Door origins** for the UI hosts. `platform` is the only new DNS record. Do not CNAME production hosts to `cname.vercel-dns.com`.
+Azure DNS already CNAMEs those hosts to Front Door. Do not CNAME production hosts to `cname.vercel-dns.com`.
 
 Write down once:
 
@@ -12,57 +12,71 @@ Write down once:
 |---|---|
 | `<fd-endpoint>` | Front Door endpoint host, e.g. `easner-xxxx.z01.azurefd.net` |
 | `<fd-profile>` | Front Door profile that already serves `business.easner.com` |
-| `<existing-origin>` | Today’s business project `*.vercel.app` (this becomes api) |
+| `<api-origin>` | Api project `*.vercel.app` (already live) |
 | `<new-business-origin>` | New business UI project `*.vercel.app` |
 | `<platform-origin>` | New platform project `*.vercel.app` |
 
 ---
 
-## 1. Today’s Vercel project → `api` (keep every env)
+## Done — api
 
-This is the project that already has Noah / Grid / Stripe / Turnkey / webhooks / service role / cron secrets.
+- Root Directory `api/`, region `lhr1`, install `bash ./scripts/vercel-install.sh`
+- Env cleaned: keys + treasury kept; host / store / Intercom-public / Easetag flags omitted (code defaults)
+- Domains: keep `api.easner.com` and `js.easner.com` on this project
+- Smoke when you want: `GET https://api.easner.com/api/health` → 200; `GET https://api.easner.com/v1/checkout/sessions` → 401 JSON
 
-1. Vercel → that project → Settings → General → **Root Directory:** `api/` (was `business/`). Region stays `lhr1`. Install stays `bash ./scripts/vercel-install.sh`.
-2. Rename the project to `api` if you want the Vercel UI to match.
-3. **Leave all existing env in place.** Unset `NEXT_PUBLIC_APP_SURFACE` if it is set. API / business / pay / invoice / office URLs default in code — do not add them.
-
-4. Domains: keep `api.easner.com` and `js.easner.com` on this project. You will remove `business.easner.com` / `pay.easner.com` / `invoice.easner.com` in step 3.
-5. Deploy Production. Smoke on **this same** `*.vercel.app` URL:
-   - `GET /api/health` → 200
-   - `GET /v1/checkout/sessions` → 401 JSON, not HTML
-
-Until step 3, `business.easner.com` still hits this origin, so the dashboard may look empty. `api.easner.com` / `js.easner.com` are the ones that matter here.
+Until Front Door switches UI hosts, `business.easner.com` may still hit the api origin (empty dashboard). That is expected.
 
 ---
 
-## 2. New Vercel project `business` (few env only)
+## 1. New business project — env, then deploy
 
-1. Vercel → Add Project → this repo. **Root Directory:** `business/`. **Region:** `lhr1`. Install: `bash ./scripts/vercel-install.sh`.
-2. Env — Production + Preview. **Only these.** No service role, no webhooks, no provider keys, no cron secrets.
+Vercel → Add Project → this repo (or the project you already created).
+
+- **Root Directory:** `business/`
+- **Region:** `lhr1`
+- **Install:** `bash ./scripts/vercel-install.sh`
+
+### Env (Production + Preview). Only these.
+
+Copy the **same values** that are already on api for the public keys. No service role, no webhooks, no provider secrets, no cron secrets.
 
 | Name | Value |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | same as today |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | same as today |
-| `NEXT_PUBLIC_INTERCOM_APP_ID` / `NEXT_PUBLIC_INTERCOM_REGION` | same as today |
-| `NEXT_PUBLIC_POSTHOG_KEY` / `NEXT_PUBLIC_POSTHOG_HOST` | same as today |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | same as today |
+| `NEXT_PUBLIC_SUPABASE_URL` | same as api |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | same as api |
+| `NEXT_PUBLIC_INTERCOM_APP_ID` | same workspace app id as today |
+| `NEXT_PUBLIC_INTERCOM_REGION` | omit if `us`; set only for `eu` / `ap` |
+| `NEXT_PUBLIC_POSTHOG_KEY` | same as api |
+| `NEXT_PUBLIC_POSTHOG_HOST` | same as api (keep if it is not `https://us.i.posthog.com`) |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | same as api (live pk) |
 
-Do **not** set `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_APP_SURFACE`, `NEXT_PUBLIC_BUSINESS_APP_URL`, `NEXT_PUBLIC_PAY_APP_URL`, `NEXT_PUBLIC_INVOICE_APP_URL`, or `EASNER_OFFICE_ORIGIN` — those default in code (`https://api.easner.com`, `business`, host URLs, `https://bk.easner.com`). Local without env uses `http://localhost:3002`. Hostname still flips Platform after mount.
+Do **not** set:
 
-Do **not** set `NEXT_PUBLIC_PLATFORM_APP_URL` until step 5.
+- `NEXT_PUBLIC_API_URL` — defaults to `https://api.easner.com`
+- `NEXT_PUBLIC_APP_SURFACE` — defaults to `business`
+- `NEXT_PUBLIC_BUSINESS_APP_URL` / `NEXT_PUBLIC_PAY_APP_URL` / `NEXT_PUBLIC_INVOICE_APP_URL`
+- `EASNER_OFFICE_ORIGIN` — CORS already has `https://bk.easner.com`
+- `BUSINESS_APP_SESSION_SECRET` / `SUPABASE_SERVICE_ROLE_KEY` / any webhook or cron secret
+- `NEXT_PUBLIC_PLATFORM_APP_URL` — wait until platform is live (step 4)
 
-3. Deploy. Copy `<new-business-origin>`. Smoke the `*.vercel.app` URL (login, dashboard, Bearer to `api.easner.com`).
+Redeploy after saving env. Copy `<new-business-origin>`.
 
-### 2b. Attach UI hosts on the new project
+Smoke the `*.vercel.app` URL (not `business.easner.com` yet):
+
+- Login
+- Dashboard
+- Network: Bearer to `https://api.easner.com`
+
+### 1b. Attach UI hosts on the new project
 
 Vercel → new business → Domains → add `business.easner.com`, `pay.easner.com`, `invoice.easner.com`. Azure DNS **TXT** only (`_vercel.business` / `_vercel.pay` / `_vercel.invoice` as Vercel prints). Do not change those CNAMEs.
 
 ---
 
-## 3. Front Door — point UI hosts at the new business origin
+## 2. Front Door — point UI hosts at the new business origin
 
-`api` / `js` already hit `<existing-origin>`. That origin is now the api app. **Do not move api/js.**
+`api` / `js` already hit `<api-origin>`. **Do not move api/js.**
 
 `<fd-profile>` → Origin groups → add `vercel-business`:
 
@@ -74,7 +88,7 @@ Then in one sitting:
 1. Route **`business.easner.com`** → `vercel-business`. Keep `Host: business.easner.com`.
 2. Route **`pay.easner.com`** → same new origin. Keep `Host: pay.easner.com`.
 3. Route **`invoice.easner.com`** → same new origin. Keep `Host: invoice.easner.com`.
-4. Vercel → **api** (old project) → Domains → remove `business.easner.com`, `pay.easner.com`, `invoice.easner.com`.
+4. Vercel → **api** → Domains → remove `business.easner.com`, `pay.easner.com`, `invoice.easner.com`.
 
 Smoke:
 
@@ -86,11 +100,11 @@ Smoke:
 - One webhook + one cron log on the **api** project
 - Point any vendor webhook still hitting `business.easner.com/api/...` at `https://api.easner.com/api/...`
 
-**Rollback:** Front Door `business` / `pay` / `invoice` back to `<existing-origin>`. Re-add those domains on the old project. Api/js unchanged. Azure DNS unchanged.
+**Rollback:** Front Door `business` / `pay` / `invoice` back to `<api-origin>`. Re-add those domains on the api project. Api/js unchanged. Azure DNS unchanged.
 
 ---
 
-## 4. Office / Expo
+## 3. Office / Expo
 
 Production defaults to `https://api.easner.com` if unset. Leave existing `EXPO_PUBLIC_API_URL` / `NEXT_PUBLIC_API_URL` as-is if they already say that.
 
@@ -100,9 +114,9 @@ Apply `business/supabase/migrations/20260919133000_dev_platform_enabled.sql`. Of
 
 ---
 
-## 5. Create Vercel project `platform`
+## 4. Create Vercel project `platform` (after business cutover)
 
-Same slim env shape as the new business project.
+Same slim env shape as business, plus surface.
 
 1. Add Project → this repo. Root `business/`. Region `lhr1`.
 2. Env (public only — **no** service role, webhooks, cron secrets):
@@ -111,11 +125,11 @@ Same slim env shape as the new business project.
 |---|---|
 | `NEXT_PUBLIC_APP_SURFACE` | `platform` (needed for SSR; hostname alone is too late) |
 | `NEXT_PUBLIC_PLATFORM_APP_URL` | `https://platform.easner.com` |
-| `NEXT_PUBLIC_SUPABASE_URL` | same |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | same |
-| `NEXT_PUBLIC_INTERCOM_APP_ID` / `NEXT_PUBLIC_INTERCOM_REGION` | same |
-| `NEXT_PUBLIC_POSTHOG_KEY` / `NEXT_PUBLIC_POSTHOG_HOST` | same |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | same |
+| `NEXT_PUBLIC_SUPABASE_URL` | same as business |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | same as business |
+| `NEXT_PUBLIC_INTERCOM_APP_ID` / `NEXT_PUBLIC_INTERCOM_REGION` | same as business |
+| `NEXT_PUBLIC_POSTHOG_KEY` / `NEXT_PUBLIC_POSTHOG_HOST` | same as business |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | same as business |
 
 3. Deploy. Copy `<platform-origin>`.
 4. Vercel domain `platform.easner.com`. Azure DNS **TXT** only (`_vercel.platform`).
@@ -123,7 +137,7 @@ Same slim env shape as the new business project.
 
 ---
 
-## 6. Supabase + Business switcher
+## 5. Supabase + Business switcher (with platform)
 
 Supabase → Authentication → URL Configuration. Keep existing URLs. Add:
 
@@ -133,7 +147,7 @@ Supabase → Authentication → URL Configuration. Keep existing URLs. Add:
 
 Do not change Site URL.
 
-On the **new business** project (and **api** if emails need it):
+On the **new business** project:
 
 | Name | Value |
 |---|---|
@@ -147,85 +161,13 @@ Redeploy business. First switch may show login (per-host Supabase localStorage).
 
 ## Env cheat sheet
 
-| Name | api (today’s project) | new business | platform |
+| Name | api (done) | new business (now) | platform (later) |
 |---|---|---|---|
-| Provider keys / webhooks / cron / service role | **keep** | never | never |
-| Host URLs / surface / office origin | **omit** (code defaults) | omit | omit except `NEXT_PUBLIC_APP_SURFACE=platform` |
-| Publishable Supabase | yes | yes | yes |
-| Intercom / PostHog / Stripe pk | PostHog + Stripe pk yes; Intercom public **omit** | yes | yes |
-| `NEXT_PUBLIC_PLATFORM_APP_URL` | after step 6 | after step 6 | yes |
-
----
-
-## Api Vercel cleanup (today’s project)
-
-Rule: **keys and treasury stay on env. Hosts, store links, and known provider URLs live in code.** Delete a var only after you confirm its value matches the default below (or is unused on api). Redeploy after deletes.
-
-### Delete from api now
-
-These already default in code. Api does not need the UI-only ones.
-
-| Name | Why |
-|---|---|
-| `NEXT_PUBLIC_API_URL` | Production default `https://api.easner.com` |
-| `NEXT_PUBLIC_APP_SURFACE` | UI-only. Api is not a product shell |
-| `EASNER_OFFICE_ORIGIN` | `https://bk.easner.com` is already in CORS |
-| `NEXT_PUBLIC_BUSINESS_APP_URL` | `https://business.easner.com` |
-| `NOAH_ONBOARDING_RETURN_URL` | `https://business.easner.com/auth/onboarding-complete?context=kyc` |
-| `NOAH_BUSINESS_ONBOARDING_RETURN_URL` | same path, `context=business` |
-| `EASNER_DOWNLOAD_PAGE_URL` | `https://www.easner.com/app` |
-| `EASNER_APP_STORE_URL` | derived from the download page |
-| `EASNER_PLAY_STORE_URL` | derived from the download page |
-| `NEXT_PUBLIC_APPLE_WEB_CLIENT_ID` | UI-only; default `com.easner.business.web` |
-| `NEXT_PUBLIC_APPLE_WEB_REDIRECT_URI` | UI-only; built from the page origin |
-| `NEXT_PUBLIC_INTERCOM_APP_ID` | UI-only. Keep `INTERCOM_MESSENGER_API_SECRET` |
-| `NEXT_PUBLIC_INTERCOM_REGION` | UI-only |
-| `EASETAG_LEDGER_P2P_ENABLED` | on in code; set `false` only to kill-switch |
-| `NEXT_PUBLIC_EASETAG_LEDGER_P2P_ENABLED` | same |
-| `EASETAG_CHAIN_SETTLEMENT_ENABLED` | on in code; set `false` only to kill-switch |
-
-### Delete only if the value matches the code default
-
-Open the var in Vercel and compare. If it is something else, keep it.
-
-| Name | Safe to delete when value is |
-|---|---|
-| `BRIDGE_BASE_URL` | `https://api.bridge.xyz` |
-| `YELLOWCARD_API_BASE_URL` | `https://api.yellowcard.io` (prod) or `https://sandbox.api.yellowcard.io` (sandbox) — must match `YELLOWCARD_ENVIRONMENT` |
-| `STRIPE_ONRAMP_API_VERSION` | `2026-07-29.dahlia;crypto_onramp_beta=v2` |
-| `AWS_REGION` / `SES_REGION` | `eu-west-2` |
-| `EMAIL_FROM` / `SENDGRID_FROM_EMAIL` | `hello@easner.com` — delete `noreply@` too so this default wins |
-| `EMAIL_FROM_NAME` | `Easner` |
-| `BUSINESS_EMAIL_FROM` / `SENDGRID_FROM_EMAIL_BUSINESS` | `business@easner.com` |
-| `BUSINESS_EMAIL_FROM_NAME` | `Easner Business` |
-| `INVOICE_EMAIL_FROM` | `invoices@easner.com` |
-| `RECEIPT_EMAIL_FROM` | `receipt@easner.com` |
-| `EMAIL_REPLY_TO` | `support@easner.com` |
-| `SOLANA_RPC_URL` | `https://api.mainnet-beta.solana.com` — **keep** a paid Helius/Alchemy URL |
-| `NEXT_PUBLIC_POSTHOG_HOST` | `https://us.i.posthog.com` — keep if you use another host |
-
-If both `EMAIL_*` and `SENDGRID_FROM_*` exist, delete the SendGrid from-address aliases after `EMAIL_*` match (or after you switch to the defaults).
-
-### Keep on api (do not delete)
-
-Secrets, provider credentials, and treasury. Vercel **Needs Attention** on some of these is a Preview/Sensitive warning, not a missing value.
-
-- Supabase: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
-- Auth: `JWT_SECRET` (password-reset OTP)
-- Crons: `CRON_SECRET`, `EASNER_INTERNAL_CRON_SECRET`
-- AWS SES: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` — keep `SENDGRID_API_KEY` only if you still fall back to SendGrid
-- Bridge: `BRIDGE_API_KEY`, `BRIDGE_WEBHOOK_PUBLIC_KEY`
-- Stripe: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_TEST_SECRET_KEY` (+ test webhook if present), `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_LINK_OAUTH_CLIENT_ID`, `STRIPE_LINK_OAUTH_CLIENT_SECRET`
-- Grid: `GRID_CLIENT_ID`, `GRID_CLIENT_SECRET`, `GRID_WEBHOOK_PUBLIC_KEY`, `GRID_ENVIRONMENT` (defaults to **sandbox** if unset — keep `production`)
-- Relay: `RELAY_API_KEY`, `RELAY_TRON_PLATFORM_ADDRESS`
-- Turnkey: `TURNKEY_ORG_ID`, `TURNKEY_API_PUBLIC_KEY`, `TURNKEY_API_PRIVATE_KEY`, `TURNKEY_DA_API_PUBLIC_KEY`, `TURNKEY_DA_API_PRIVATE_KEY`, `TURNKEY_PARENT_DA_USER_ID`, `TURNKEY_WEBHOOK_SECRET`, `TURNKEY_WEBHOOK_SIGNING_PUBLIC_KEY`, `TURNKEY_BALANCE_WEBHOOK_ENDPOINT_ID`
-- Yellowcard: `YELLOWCARD_API_KEY`, `YELLOWCARD_API_SECRET`, `YELLOWCARD_ENVIRONMENT` (same sandbox default), `YELLOWCARD_RELAY_URL`, `YELLOWCARD_RELAY_SECRET`
-- Noah: `NOAH_API_KEY`, `NOAH_SIGNING_PRIVATE_KEY`
-- Treasury: `WALLET_SEND_FEE_SOLANA_ADDRESS_USD` / `_EUR`, `DEPOSIT_OMNIBUS_SOLANA_ADDRESS_USD` / `_EUR`
-- Intercom JWT: `INTERCOM_MESSENGER_API_SECRET`
-- PostHog server events (checkout webhooks): `NEXT_PUBLIC_POSTHOG_KEY`
-
-Do not put provider keys or treasury addresses in the repo.
+| Provider keys / webhooks / cron / service role | **set** | never | never |
+| Host URLs / office origin | omit | omit | omit |
+| `NEXT_PUBLIC_APP_SURFACE` | unset | omit (defaults to business) | `platform` |
+| Publishable Supabase / Intercom / PostHog / Stripe pk | PostHog + Stripe pk + Supabase; Intercom public omit | **set** | **set** |
+| `NEXT_PUBLIC_PLATFORM_APP_URL` | omit | after step 5 | yes |
 
 ---
 
@@ -233,7 +175,7 @@ Do not put provider keys or treasury addresses in the repo.
 
 | Surface | Expect |
 |---|---|
-| api / js | health, `/v1` JSON, `checkout.js`, crons + webhooks on **today’s project** (now api) |
+| api / js | health, `/v1` JSON, `checkout.js`, crons + webhooks on **api** |
 | Business | Accounts, Send, Invoices on the **new** project. Bearer to `api.easner.com` |
 | Platform | Checkout, Developers, switcher |
 | Pay / invoice | Payer pages on the new business origin |
@@ -246,10 +188,10 @@ Do not put provider keys or treasury addresses in the repo.
 | Name | Type | Value | You change? |
 |---|---|---|---|
 | `business`, `pay`, `invoice`, `api`, `js`, `app`, `bk` | CNAME | `<fd-endpoint>` | No |
-| `platform` | CNAME | `<fd-endpoint>` | **Add in step 5** |
-| `_vercel.business`, `_vercel.pay`, `_vercel.invoice` | TXT | Vercel verify (new UI project) | Add in step 2b |
-| `_vercel.api`, `_vercel.js` | TXT | already on today’s project | Only if Vercel asks again |
-| `_vercel.platform` | TXT | Vercel verify | Add in step 5 |
-| `_dnsauth.platform` | TXT | Front Door cert | Add in step 5 |
+| `platform` | CNAME | `<fd-endpoint>` | **Add in step 4** |
+| `_vercel.business`, `_vercel.pay`, `_vercel.invoice` | TXT | Vercel verify (new UI project) | Add in step 1b |
+| `_vercel.api`, `_vercel.js` | TXT | already on api | Only if Vercel asks again |
+| `_vercel.platform` | TXT | Vercel verify | Add in step 4 |
+| `_dnsauth.platform` | TXT | Front Door cert | Add in step 4 |
 
 Do not edit mail / DKIM / DMARC / BIMI for this split.
