@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import {
-  maybeRedirectApiHostToBusiness,
-  maybeRedirectJsHostToBusiness,
+  maybeRedirectApiOnlyHostToDevelopers,
+  maybeRedirectJsOnlyHostToDevelopers,
   maybeRewriteApiV1ToAppApi,
   maybeRewriteJsCheckoutScript,
 } from "@/lib/api-subdomain-redirect"
@@ -27,16 +27,16 @@ export function proxy(request: NextRequest) {
   const jsCheckoutRewrite = maybeRewriteJsCheckoutScript(request)
   if (jsCheckoutRewrite) return jsCheckoutRewrite
 
-  /** `js.*` domain: only checkout.js paths; send browsers to the business web origin. */
-  const jsHostRedirect = maybeRedirectJsHostToBusiness(request)
+  /** `js.*` in a browser → marketing developers page; embed paths stay. */
+  const jsHostRedirect = maybeRedirectJsOnlyHostToDevelopers(request)
   if (jsHostRedirect) return jsHostRedirect
 
   /** `/v1/*` is the public Checkout API; rewrite onto `/api/v1/*`. */
   const apiV1Rewrite = maybeRewriteApiV1ToAppApi(request)
   if (apiV1Rewrite) return apiV1Rewrite
 
-  /** `api.*` domain: only `/api/*` (and `/v1/*`) is meant for clients; send browsers to the business web origin. */
-  const apiHostRedirect = maybeRedirectApiHostToBusiness(request)
+  /** `api.*` in a browser → marketing developers page; `/api/*` stays. */
+  const apiHostRedirect = maybeRedirectApiOnlyHostToDevelopers(request)
   if (apiHostRedirect) return apiHostRedirect
 
   /** Bare invoice/pay hosts are not customer pages. */

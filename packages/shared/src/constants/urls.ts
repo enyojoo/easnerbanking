@@ -8,6 +8,8 @@ export const APP_URLS = {
   invoice: "https://invoice.easner.com",
   office: "https://bk.easner.com",
   contact: "https://www.easner.com/contact",
+  /** Public developer docs — browser visits to api.* / js.* land here. */
+  developers: "https://www.easner.com/developers",
   /** Canonical marketing install page (QR, email, smart redirect). */
   appDownload: "https://www.easner.com/app",
 } as const

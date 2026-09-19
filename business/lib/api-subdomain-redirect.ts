@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
+import { APP_URLS } from "@easner/shared"
 import { getBusinessAppPublicOrigin } from "@/lib/business-app-public-url"
 
 const DEFAULT_API_HOST = "api.easner.com"
@@ -153,60 +154,39 @@ export function getBusinessWebOriginForApiHostRedirect(): string {
   return `https://${DEFAULT_BUSINESS_HOST}`
 }
 
-/**
- * If the request hits the API-only host with a path that is not an API route (and not Next internals),
- * send users to the business web app on the same path (so deep links can be preserved when useful).
- */
-export function maybeRedirectApiHostToBusiness(request: NextRequest): NextResponse | null {
-  const pathname = request.nextUrl.pathname
-  if (isBusinessAppApiPath(pathname)) return null
-  if (isPublicCheckoutApiPath(pathname)) return null
-  if (isCheckoutJsPath(pathname)) return null
-  if (pathname.startsWith("/_next")) return null
+function isServedOnApiOrJsHost(pathname: string): boolean {
+  return (
+    isBusinessAppApiPath(pathname) ||
+    isPublicCheckoutApiPath(pathname) ||
+    isCheckoutJsPath(pathname) ||
+    pathname.startsWith("/_next")
+  )
+}
 
-  const host = getRequestHostname(request)
-  if (!host || !isApiOnlyHostname(host)) return null
-
-  let origin = getBusinessWebOriginForApiHostRedirect().replace(/\/$/, "")
-  try {
-    const businessHost = new URL(origin).hostname.toLowerCase()
-    if (businessHost === host) {
-      origin = `https://${DEFAULT_BUSINESS_HOST}`
-    }
-  } catch {
-    origin = `https://${DEFAULT_BUSINESS_HOST}`
-  }
-
-  const target = `${origin}${pathname}${request.nextUrl.search}`
-  const res = NextResponse.redirect(target, 307)
+function redirectBrowserToDevelopers(): NextResponse {
+  const res = NextResponse.redirect(APP_URLS.developers, 307)
   res.headers.set("Cache-Control", "private, no-store")
   return res
 }
 
 /**
- * If the request hits the Checkout embed host with a path that is not the embed script (and not Next internals),
- * send browsers to the business web app — same as api.easner.com for non-API paths.
+ * Typing api.easner.com in a browser goes to the public developers page.
+ * `/api/*`, `/v1/*`, and checkout.js stay on this host (no bounce to business).
  */
-export function maybeRedirectJsHostToBusiness(request: NextRequest): NextResponse | null {
-  const pathname = request.nextUrl.pathname
-  if (isCheckoutJsPath(pathname)) return null
-  if (pathname.startsWith("/_next")) return null
+export function maybeRedirectApiOnlyHostToDevelopers(request: NextRequest): NextResponse | null {
+  if (isServedOnApiOrJsHost(request.nextUrl.pathname)) return null
+  const host = getRequestHostname(request)
+  if (!host || !isApiOnlyHostname(host)) return null
+  return redirectBrowserToDevelopers()
+}
 
+/**
+ * Typing js.easner.com in a browser goes to the public developers page.
+ * The embed script (and leftover `/api` / `/v1`) stay on this host.
+ */
+export function maybeRedirectJsOnlyHostToDevelopers(request: NextRequest): NextResponse | null {
+  if (isServedOnApiOrJsHost(request.nextUrl.pathname)) return null
   const host = getJsRequestHostname(request)
   if (!host || !isJsCheckoutHostname(host)) return null
-
-  let origin = getBusinessWebOriginForApiHostRedirect().replace(/\/$/, "")
-  try {
-    const businessHost = new URL(origin).hostname.toLowerCase()
-    if (businessHost === host.toLowerCase()) {
-      origin = `https://${DEFAULT_BUSINESS_HOST}`
-    }
-  } catch {
-    origin = `https://${DEFAULT_BUSINESS_HOST}`
-  }
-
-  const target = `${origin}${pathname}${request.nextUrl.search}`
-  const res = NextResponse.redirect(target, 307)
-  res.headers.set("Cache-Control", "private, no-store")
-  return res
+  return redirectBrowserToDevelopers()
 }

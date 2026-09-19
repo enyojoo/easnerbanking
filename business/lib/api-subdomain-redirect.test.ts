@@ -3,8 +3,8 @@ import type { NextRequest } from "next/server"
 import {
   isCheckoutJsPath,
   isPublicCheckoutApiPath,
-  maybeRedirectApiHostToBusiness,
-  maybeRedirectJsHostToBusiness,
+  maybeRedirectApiOnlyHostToDevelopers,
+  maybeRedirectJsOnlyHostToDevelopers,
   maybeRewriteApiV1ToAppApi,
   maybeRewriteJsCheckoutScript,
 } from "./api-subdomain-redirect"
@@ -50,7 +50,8 @@ describe("checkout edge routing", () => {
     expect(rewrittenPath("business.easner.com", "/v1/checkout/publishable-keys/validate")).toBe(
       "/api/v1/checkout/publishable-keys/validate",
     )
-    expect(maybeRedirectApiHostToBusiness(request("api.easner.com", "/v1/checkout/sessions"))).toBeNull()
+    expect(maybeRedirectApiOnlyHostToDevelopers(request("api.easner.com", "/v1/checkout/sessions"))).toBeNull()
+    expect(maybeRedirectApiOnlyHostToDevelopers(request("api.easner.com", "/api/business/profile"))).toBeNull()
   })
 
   it("rewrites versioned scripts onto /checkout.js on any host", () => {
@@ -60,26 +61,25 @@ describe("checkout edge routing", () => {
     expect(rewrittenPath("js.easner.com", "/checkout.js")).toBeNull()
   })
 
-  it("still redirects non-API browser paths on the API host", () => {
+  it("sends bare api/js browser visits to the public developers page", () => {
+    const developers = "https://www.easner.com/developers"
+    expect(maybeRedirectApiOnlyHostToDevelopers(request("api.easner.com", "/"))?.headers.get("location")).toBe(
+      developers,
+    )
     expect(
-      maybeRedirectApiHostToBusiness(request("api.easner.com", "/checkout"))?.headers.get(
-        "location",
-      ),
-    ).toBe("https://business.easner.com/checkout")
-  })
-
-  it("redirects non-embed browser paths on the js host", () => {
-    expect(
-      maybeRedirectJsHostToBusiness(request("js.easner.com", "/"))?.headers.get("location"),
-    ).toBe("https://business.easner.com/")
-    expect(
-      maybeRedirectJsHostToBusiness(request("js.easner.com", "/dashboard"))?.headers.get(
-        "location",
-      ),
-    ).toBe("https://business.easner.com/dashboard")
-    expect(maybeRedirectJsHostToBusiness(request("js.easner.com", "/v1/checkout.js"))).toBeNull()
-    expect(maybeRedirectJsHostToBusiness(request("js.easner.com", "/checkout.js"))).toBeNull()
-    expect(maybeRedirectJsHostToBusiness(request("js.easner.com", "/v1.0.0/checkout.js"))).toBeNull()
-    expect(maybeRedirectJsHostToBusiness(request("business.easner.com", "/"))).toBeNull()
+      maybeRedirectApiOnlyHostToDevelopers(request("api.easner.com", "/dashboard"))?.headers.get("location"),
+    ).toBe(developers)
+    expect(maybeRedirectJsOnlyHostToDevelopers(request("js.easner.com", "/"))?.headers.get("location")).toBe(
+      developers,
+    )
+    expect(maybeRedirectJsOnlyHostToDevelopers(request("js.easner.com", "/dashboard"))?.headers.get("location")).toBe(
+      developers,
+    )
+    expect(maybeRedirectJsOnlyHostToDevelopers(request("js.easner.com", "/api/business/profile"))).toBeNull()
+    expect(maybeRedirectJsOnlyHostToDevelopers(request("js.easner.com", "/v1/checkout.js"))).toBeNull()
+    expect(maybeRedirectJsOnlyHostToDevelopers(request("js.easner.com", "/checkout.js"))).toBeNull()
+    expect(maybeRedirectJsOnlyHostToDevelopers(request("js.easner.com", "/v1.0.0/checkout.js"))).toBeNull()
+    expect(maybeRedirectJsOnlyHostToDevelopers(request("business.easner.com", "/"))).toBeNull()
+    expect(maybeRedirectApiOnlyHostToDevelopers(request("business.easner.com", "/dashboard"))).toBeNull()
   })
 })

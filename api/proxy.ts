@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import {
-  maybeRedirectApiHostToBusiness,
-  maybeRedirectJsHostToBusiness,
+  maybeRedirectApiOnlyHostToDevelopers,
+  maybeRedirectJsOnlyHostToDevelopers,
   maybeRewriteApiV1ToAppApi,
   maybeRewriteJsCheckoutScript,
 } from "@/lib/api-subdomain-redirect"
@@ -23,13 +23,13 @@ export function proxy(request: NextRequest) {
   const jsCheckoutRewrite = maybeRewriteJsCheckoutScript(request)
   if (jsCheckoutRewrite) return jsCheckoutRewrite
 
-  const jsHostRedirect = maybeRedirectJsHostToBusiness(request)
+  const jsHostRedirect = maybeRedirectJsOnlyHostToDevelopers(request)
   if (jsHostRedirect) return jsHostRedirect
 
   const apiV1Rewrite = maybeRewriteApiV1ToAppApi(request)
   if (apiV1Rewrite) return apiV1Rewrite
 
-  const apiHostRedirect = maybeRedirectApiHostToBusiness(request)
+  const apiHostRedirect = maybeRedirectApiOnlyHostToDevelopers(request)
   if (apiHostRedirect) return apiHostRedirect
 
   if (pathname.startsWith("/api/") || pathname.startsWith("/v1/")) {

@@ -22,7 +22,8 @@ Write down once:
 
 - Root Directory `api/`, region `lhr1`, install `bash ./scripts/vercel-install.sh`
 - Env cleaned: keys + treasury kept; host / store / Intercom-public / Easetag flags omitted (code defaults)
-- Domains: keep `api.easner.com` and `js.easner.com` on this project
+- Domains: keep `api.easner.com` and `js.easner.com` **only** on this project (never on the business UI project)
+- Those hosts do not redirect to `business.easner.com`. `/api/*` and `checkout.js` stay on api; opening them in a browser goes to `https://www.easner.com/developers`
 - Smoke when you want: `GET https://api.easner.com/api/health` → 200; `GET https://api.easner.com/v1/checkout/sessions` → 401 JSON
 
 Until Front Door switches UI hosts, `business.easner.com` may still hit the api origin (empty dashboard). That is expected.
