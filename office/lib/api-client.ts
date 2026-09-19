@@ -70,13 +70,12 @@ export async function officeFetch(
   const normalizedPath = path.startsWith("/") ? path : `/${path}`
   const isAbsolute = normalizedPath.startsWith("http://") || normalizedPath.startsWith("https://")
   const isApiPath = !isAbsolute && normalizedPath.startsWith("/api/")
-  const hasDirectOrigin = Boolean(process.env.NEXT_PUBLIC_API_URL)
   const proxyUrl = `/api/proxy${normalizedPath}`
   const directUrl = `${API_URL}${normalizedPath}`
-  const preferDirect = isApiPath && hasDirectOrigin && !directApiBlocked
+  const preferDirect = isApiPath && !directApiBlocked
 
   const resolveUrl = () =>
-    isAbsolute ? normalizedPath : isApiPath ? (directApiBlocked || !hasDirectOrigin ? proxyUrl : directUrl) : directUrl
+    isAbsolute ? normalizedPath : isApiPath ? (directApiBlocked ? proxyUrl : directUrl) : directUrl
 
   const headers = new Headers(options.headers || {})
 

@@ -263,17 +263,21 @@ export async function executeEasetagTransfer(
   }
 }
 
-export function isEasetagLedgerP2PEnabled(): boolean {
-  const a = String(process.env.EASETAG_LEDGER_P2P_ENABLED || "").trim().toLowerCase()
-  const b = String(process.env.NEXT_PUBLIC_EASETAG_LEDGER_P2P_ENABLED || "").trim().toLowerCase()
-  return a === "true" || b === "true"
+function envOff(...keys: string[]): boolean {
+  return keys.some((key) => {
+    const v = String(process.env[key] || "").trim().toLowerCase()
+    return v === "false" || v === "0" || v === "off"
+  })
 }
 
-/** When true, Easetag P2P also triggers Turnkey Solana SPL settlement (`EASETAG_CHAIN_SETTLEMENT_ENABLED`). */
+/** Instant Easetag P2P. On unless explicitly set to false. */
+export function isEasetagLedgerP2PEnabled(): boolean {
+  return !envOff("EASETAG_LEDGER_P2P_ENABLED", "NEXT_PUBLIC_EASETAG_LEDGER_P2P_ENABLED")
+}
+
+/** Turnkey Solana SPL follow-up after ledger P2P. On unless explicitly set to false. */
 export function isEasetagChainSettlementEnabled(): boolean {
-  const a = String(process.env.EASETAG_CHAIN_SETTLEMENT_ENABLED || "").trim().toLowerCase()
-  const b = String(process.env.NEXT_PUBLIC_EASETAG_CHAIN_SETTLEMENT_ENABLED || "").trim().toLowerCase()
-  return a === "true" || b === "true"
+  return !envOff("EASETAG_CHAIN_SETTLEMENT_ENABLED", "NEXT_PUBLIC_EASETAG_CHAIN_SETTLEMENT_ENABLED")
 }
 
 /**

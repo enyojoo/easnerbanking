@@ -4,6 +4,8 @@ export const APP_URLS = {
   api: "https://api.easner.com",
   business: "https://business.easner.com",
   platform: "https://platform.easner.com",
+  pay: "https://pay.easner.com",
+  invoice: "https://invoice.easner.com",
   office: "https://bk.easner.com",
   contact: "https://www.easner.com/contact",
   /** Canonical marketing install page (QR, email, smart redirect). */

@@ -9,7 +9,7 @@ function firstEnv(...keys: string[]): string | undefined {
 }
 
 export function resolvePersonalFromEmail(): string {
-  return firstEnv("EMAIL_FROM", "SENDGRID_FROM_EMAIL") || "noreply@easner.com"
+  return firstEnv("EMAIL_FROM", "SENDGRID_FROM_EMAIL") || "hello@easner.com"
 }
 
 export function resolvePersonalFromName(): string {

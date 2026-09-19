@@ -1,8 +1,8 @@
-const DEFAULT_BUSINESS_APP_ORIGIN = "https://business.easner.com"
+import { APP_URLS } from "@easner/shared"
 
 /**
- * Public origin for links shown to operators (counter URL, etc.).
- * Falls back to production Business URL when env is unset (needed for metadataBase).
+ * Public origin for links shown to operators (counter URL, metadataBase).
+ * Env override is optional — production default is business.easner.com.
  */
 export function getBusinessAppPublicOrigin(): string {
   const env =
@@ -17,5 +17,5 @@ export function getBusinessAppPublicOrigin(): string {
       return env.replace(/\/$/, "")
     }
   }
-  return DEFAULT_BUSINESS_APP_ORIGIN
+  return APP_URLS.business
 }

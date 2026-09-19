@@ -2,7 +2,7 @@
 
 import type { QueryClient } from "@tanstack/react-query"
 import { useAuth } from "@/lib/auth-context"
-import { CACHE_KEYS } from "@/lib/cache"
+import { CACHE_KEYS, dataCache } from "@/lib/cache"
 import { listRecipients } from "@/lib/recipients-store"
 import type { Beneficiary } from "@/lib/recipient-types"
 import { useCachedData } from "@/lib/use-cached-data"
@@ -15,6 +15,18 @@ export function recipientsCompatQueryKey(userId: string) {
 
 export function recipientsCachePersistKey(userId: string) {
   return `recipients_cache_v2_${userId}`
+}
+
+export function invalidateRecipientsCache(queryClient: QueryClient, userId: string) {
+  void queryClient.invalidateQueries({ queryKey: recipientsCompatQueryKey(userId) })
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.removeItem(recipientsCachePersistKey(userId))
+    } catch {
+      // Ignore storage errors.
+    }
+  }
+  dataCache.invalidate(CACHE_KEYS.RECIPIENTS(userId))
 }
 
 export function rememberSavedRecipient(queryClient: QueryClient, userId: string, beneficiary: Beneficiary) {

@@ -8,6 +8,7 @@ function parseAllowedOrigins(): Set<string> {
     process.env.CORS_ALLOWED_ORIGINS?.split(",")
       .map((s) => s.trim())
       .filter(Boolean) ?? []
+  /** Optional extra Office origin. Production `https://bk.easner.com` is already in defaults. */
   const single = process.env.EASNER_OFFICE_ORIGIN?.trim()
   const fromEnv = single ? [...fromList, single] : fromList
   /** Local UI ports: business 3000, office 3001. API is 3002 (not a browser origin). */

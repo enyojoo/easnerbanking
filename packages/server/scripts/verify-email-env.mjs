@@ -60,7 +60,7 @@ if (process.env.SENDGRID_API_KEY?.trim()) {
   warn("SENDGRID_API_KEY missing — Office cannot fall back to SendGrid until it is set")
 }
 
-const personalFrom = first("EMAIL_FROM", "SENDGRID_FROM_EMAIL") || "noreply@easner.com"
+const personalFrom = first("EMAIL_FROM", "SENDGRID_FROM_EMAIL") || "hello@easner.com"
 const personalName = first("EMAIL_FROM_NAME", "SENDGRID_FROM_NAME") || "Easner"
 const businessFrom =
   first("BUSINESS_EMAIL_FROM", "SENDGRID_FROM_EMAIL_BUSINESS", "EMAIL_FROM", "SENDGRID_FROM_EMAIL") ||

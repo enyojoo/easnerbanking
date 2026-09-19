@@ -47,6 +47,18 @@ export function createBusinessAppSession(user: Pick<User, "id" | "email" | "user
   return { token, expiresIn: BUSINESS_APP_SESSION_TTL_SECONDS }
 }
 
+/** UI-only: read `sub` without verifying. Auth still happens on the API. */
+export function readBusinessAppSessionUserId(token: string): string | null {
+  try {
+    const decoded = jwt.decode(token) as BusinessAppSessionClaims | null
+    if (!decoded || decoded.type !== "business-app-session" || !decoded.sub) return null
+    if (typeof decoded.exp === "number" && decoded.exp * 1000 <= Date.now()) return null
+    return decoded.sub
+  } catch {
+    return null
+  }
+}
+
 export function getBusinessAppSessionUser(token: string): User | null {
   try {
     const decoded = jwt.verify(token, getSessionSecret(), { algorithms: ["HS256"] }) as BusinessAppSessionClaims

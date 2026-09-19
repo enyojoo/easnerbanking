@@ -19,7 +19,7 @@ describe("email-from", () => {
   })
 
   it("defaults personal/business/invoice/receipt addresses", () => {
-    expect(resolvePersonalFromEmail()).toBe("noreply@easner.com")
+    expect(resolvePersonalFromEmail()).toBe("hello@easner.com")
     expect(resolveBusinessFromEmail()).toBe("business@easner.com")
     expect(resolveInvoiceFromEmailAddress()).toBe("invoices@easner.com")
     expect(resolveReceiptFromEmailAddress()).toBe("receipt@easner.com")

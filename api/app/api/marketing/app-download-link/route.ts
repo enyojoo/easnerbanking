@@ -20,7 +20,7 @@ function getClientIp(request: NextRequest): string {
  * Public endpoint for easner.com “Get the app” popup email capture.
  *
  * POST { "email": "visitor@example.com" }
- * → sends `appDownloadLink` template from noreply@easner.com
+ * → sends `appDownloadLink` template from hello@easner.com
  */
 export async function OPTIONS(request: NextRequest) {
   const allowed = getCorsAllowedOrigins()

@@ -3,6 +3,8 @@
  * @see https://docs.turnkey.com/getting-started/quickstart
  */
 
+import { APP_URLS } from "@easner/shared"
+
 function isProductionDeploy(): boolean {
   const vercelEnv = (process.env.VERCEL_ENV || "").trim().toLowerCase()
   if (vercelEnv === "production") return true
@@ -182,13 +184,11 @@ export function getTurnkeyBalanceWebhookEndpointId(): string {
 export function getTurnkeyWebhookFeatureUrl(): string {
   const explicit = (process.env.TURNKEY_WEBHOOK_URL || "").trim()
   if (explicit) return explicit
-  const vercel = (process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL || "").trim()
   const base =
-    (process.env.BUSINESS_APP_URL ||
-      process.env.NEXT_PUBLIC_BUSINESS_APP_URL ||
-      process.env.NEXT_PUBLIC_SITE_URL ||
-      (vercel ? `https://${vercel.replace(/^https?:\/\//, "")}` : "")).trim()
-  if (!base) return ""
+    process.env.BUSINESS_APP_URL?.trim() ||
+    process.env.NEXT_PUBLIC_BUSINESS_APP_URL?.trim() ||
+    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+    APP_URLS.api
   try {
     const u = new URL(base)
     u.pathname = "/api/webhooks/turnkey"
@@ -196,7 +196,7 @@ export function getTurnkeyWebhookFeatureUrl(): string {
     u.hash = ""
     return u.toString().replace(/\/$/, "")
   } catch {
-    return ""
+    return `${APP_URLS.api}/api/webhooks/turnkey`
   }
 }
 

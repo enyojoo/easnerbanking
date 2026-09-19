@@ -30,7 +30,7 @@ Welcome, KYB/KYC (including `kycVerificationUpdate` / `kybVerificationUpdate` re
 | `SES_REGION` | Recommended | Default **`eu-west-2`** (`AWS_REGION` also accepted) |
 | `SES_CONFIGURATION_SET` | Optional | SES configuration set name. Use a set with **click tracking off** (VDM engagement metrics disabled). Do not point this at a set that rewrites links onto `awstrack.me`. |
 | `EMAIL_PROVIDER` | No | Break-glass override (`ses` \| `sendgrid`). Unset in production |
-| `EMAIL_FROM` / `EMAIL_FROM_NAME` | Recommended | Personal / default from (`noreply@easner.com` / Easner). Falls back to `SENDGRID_FROM_*` |
+| `EMAIL_FROM` / `EMAIL_FROM_NAME` | Recommended | Personal / default from (`hello@easner.com` / Easner). Falls back to `SENDGRID_FROM_*` |
 | `BUSINESS_EMAIL_FROM` / `BUSINESS_EMAIL_FROM_NAME` | Recommended | Business from (`business@easner.com` / Easner Business) |
 | `INVOICE_EMAIL_FROM` / `INVOICE_EMAIL_FROM_NAME` | Optional | Invoice from (default **`invoices@easner.com`**) |
 | `RECEIPT_EMAIL_FROM` | Optional | Checkout / Payment Link receipt from (default **`receipt@easner.com`**) |
@@ -235,7 +235,7 @@ Template key: **`appDownloadLink`** (`packages/server/lib/email-templates.ts`).
 | Field | Value |
 |-------|--------|
 | **Trigger** | `POST /api/marketing/app-download-link` with `{ "email": "visitor@example.com" }` |
-| **From** | `EMAIL_FROM` / **Easner** (`noreply@easner.com`) |
+| **From** | `EMAIL_FROM` / **Easner** (`hello@easner.com`) |
 | **Subject** | Your Easner app download link |
 | **CTAs** | Single **Get the app** button → `EASNER_DOWNLOAD_PAGE_URL` (`www.easner.com/app`; smart redirect on the website) |
 | **Rate limit** | 10 requests/hour per IP, 3/hour per email |
