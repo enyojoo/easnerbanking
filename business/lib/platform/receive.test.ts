@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   createKyc: vi.fn(),
   depositAddrs: vi.fn(),
   createVa: vi.fn(),
+  createHostedSession: vi.fn(),
+  retrieveSession: vi.fn(),
 }))
 
 vi.mock("@/lib/checkout/merchant-webhooks", () => ({
@@ -23,6 +25,18 @@ vi.mock("@/lib/bridge/virtual-accounts", () => ({
 }))
 vi.mock("@/lib/business-app-public-url", () => ({
   getBusinessAppPublicOrigin: () => "https://business.easner.com",
+}))
+vi.mock("@/lib/stripe/onramp-client", () => ({
+  stripeOnramp: {
+    createHostedSession: mocks.createHostedSession,
+    retrieveSession: mocks.retrieveSession,
+  },
+}))
+vi.mock("@/lib/stripe/config", () => ({
+  getStripePublishableKey: () => "pk_live_test",
+}))
+vi.mock("@/lib/platform/wallet-owner", () => ({
+  provisionPlatformCustomerVaults: vi.fn().mockResolvedValue(undefined),
 }))
 
 import {
@@ -320,7 +334,38 @@ describe("onramp sessions", () => {
     })
   })
 
-  it("rejects live complete from the hosted page", async () => {
+  it("creates a live hosted card session onto the vault", async () => {
+    mocks.depositAddrs.mockResolvedValue({
+      USD: { address: "So111", ownerAddress: "So111", chain: "solana", stablecoin: "USDC" },
+      EUR: { address: "", ownerAddress: "", chain: "solana", stablecoin: "EURC" },
+    })
+    mocks.createHostedSession.mockResolvedValue({
+      id: "cos_live",
+      client_secret: "cos_live_secret",
+    })
+    const admin = createAdmin({
+      platform_accounts: [{ data: { ...issuedAccount, livemode: true } }],
+      platform_customers: [{ data: { ...customer, livemode: true, verification_status: "approved" } }],
+      platform_onramp_sessions: [
+        { data: { id: "ors_live", status: "open", amount_cents: 2500, currency: "USD", livemode: true, return_url: null } },
+      ],
+    })
+    const session = await createPlatformOnrampSession(admin as never, {
+      businessId: "biz-1",
+      livemode: true,
+      accountId: "acct_1",
+      amountCents: 2500,
+    })
+    expect(mocks.createHostedSession).toHaveBeenCalled()
+    expect(session).toMatchObject({
+      id: "ors_live",
+      livemode: true,
+      url: "https://business.easner.com/receive/onramp/ors_live",
+    })
+  })
+
+  it("completes a fulfilled live session onto the issued account", async () => {
+    mocks.retrieveSession.mockResolvedValue({ id: "cos_live", status: "fulfillment_complete" })
     const admin = createAdmin({
       platform_onramp_sessions: [
         {
@@ -331,13 +376,40 @@ describe("onramp sessions", () => {
             currency: "USD",
             status: "open",
             livemode: true,
-            return_url: null,
+            return_url: "https://app.example/done",
+            stripe_session_id: "cos_live",
+          },
+        },
+      ],
+      platform_transactions: [{ data: null }, { data: { id: "txn_onramp_live" } }],
+      platform_accounts: [
+        {
+          data: {
+            id: "acct_1",
+            business_id: "biz-1",
+            livemode: true,
+            currency: "USD",
+            available_cents: 0,
+            pending_cents: 0,
+            customer_id: "cus_1",
+          },
+        },
+        {
+          data: {
+            id: "acct_1",
+            business_id: "biz-1",
+            livemode: true,
+            currency: "USD",
+            available_cents: 2500,
+            pending_cents: 0,
+            customer_id: "cus_1",
           },
         },
       ],
     })
-    await expect(completePlatformOnrampSession(admin as never, "ors_live")).rejects.toMatchObject({
-      code: "not_available",
+    await expect(completePlatformOnrampSession(admin as never, "ors_live")).resolves.toEqual({
+      status: "completed",
+      return_url: "https://app.example/done",
     })
   })
 })

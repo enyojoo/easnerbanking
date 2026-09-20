@@ -1,10 +1,12 @@
 ---
 title: Destinations
-description: Where a send can land — bank, mobile money, wallet, or Easetag.
+description: Payment methods for a send — bank, mobile money, wallet, or Easetag.
 icon: map-pin
 ---
 
-A destination is where a transfer can land. It is not an account. Accounts hold funds. Destinations receive them.
+A destination is a **payment method**. It is not an account. Accounts (vaults) hold funds. Destinations receive them.
+
+See [Send](/send) for when to use each method.
 
 <Note>
   **Scope:** `GET` needs `accounts.read`. `POST` needs `transfers.write`.
@@ -12,12 +14,12 @@ A destination is where a transfer can land. It is not an account. Accounts hold 
 
 ## Types
 
-| `type` | Use |
+| `type` | Payment method |
 |---|---|
-| `easetag` | An Easner tag |
-| `wallet` | On-chain address |
-| `bank` | Bank account |
+| `bank` | ACH, SEPA, Faster Payments, or local bank credit |
 | `mobile_money` | Mobile-money wallet |
+| `wallet` | On-chain stablecoin address |
+| `easetag` | In-network Easner tag |
 
 ## Object
 
@@ -26,7 +28,7 @@ A destination is where a transfer can land. It is not an account. Accounts hold 
 | `id` | string | `dest_…` |
 | `type` | string | One of the types above |
 | `customer` | string \| null | `cus_…` if attached |
-| `details` | object | Type-specific. Never log full account numbers in your app logs if you can avoid it |
+| `details` | object | Method-specific. Do not log full account numbers |
 | `livemode` | boolean | |
 | `created` | ISO-8601 | |
 
@@ -54,13 +56,53 @@ curl https://api.easner.com/v1/destinations \
 
 ## Details by type
 
-Pass what you have. These are the expected keys:
-
 <AccordionGroup>
-  <Accordion title="Easetag" icon="at-sign">
+  <Accordion title="Bank" icon="landmark">
+    **US / ACH**
+
     ```json
-    { "type": "easetag", "details": { "easetag": "ada" } }
+    {
+      "type": "bank",
+      "details": {
+        "account_number": "…",
+        "routing_number": "…",
+        "bank_name": "…",
+        "country": "US",
+        "checking_or_savings": "checking"
+      }
+    }
     ```
+
+    **EUR / SEPA**
+
+    ```json
+    {
+      "type": "bank",
+      "details": {
+        "iban": "…",
+        "bic": "…",
+        "account_holder": "…",
+        "bank_name": "…",
+        "country": "DE"
+      }
+    }
+    ```
+
+    Also used when the corridor needs them: `sort_code`, `swift_bic`.
+  </Accordion>
+  <Accordion title="Mobile money" icon="smartphone">
+    ```json
+    {
+      "type": "mobile_money",
+      "details": {
+        "phone": "+2547…",
+        "network": "mpesa",
+        "country": "KE"
+      }
+    }
+    ```
+
+    `network` is the operator. `country` is ISO-2.
   </Accordion>
   <Accordion title="Wallet" icon="globe">
     ```json
@@ -74,32 +116,20 @@ Pass what you have. These are the expected keys:
     }
     ```
 
-    Live wallet destinations can be priced on the quote (send may include fees). Test stays 1:1.
+    | Asset | Networks |
+    |---|---|
+    | `USDC` | `solana`, `ethereum`, `base` |
+    | `USDT` | `tron`, `ethereum`, `solana` |
+    | `EURC` | `solana` |
+
+    Live wallet destinations can be priced on the quote. Test stays 1:1.
   </Accordion>
-  <Accordion title="Bank" icon="landmark">
+  <Accordion title="Easetag" icon="at-sign">
     ```json
-    {
-      "type": "bank",
-      "details": {
-        "account_number": "…",
-        "routing_number": "…",
-        "bank_name": "…",
-        "country": "US"
-      }
-    }
+    { "type": "easetag", "details": { "easetag": "ada" } }
     ```
-  </Accordion>
-  <Accordion title="Mobile money" icon="smartphone">
-    ```json
-    {
-      "type": "mobile_money",
-      "details": {
-        "phone": "+2547…",
-        "network": "mpesa",
-        "country": "KE"
-      }
-    }
-    ```
+
+    In-network. Pays a first-party `@tag` or another customer `easetag`. See [Receive](/receive#easetag).
   </Accordion>
 </AccordionGroup>
 
@@ -111,9 +141,9 @@ Newest first. Up to 100.
 
 ## Expected
 
-- Create one destination per payout rail you support.
+- One destination per payout rail you support.
 - Pass `destination` on the quote. Do not send internal ids (`recipientId`, form sessions). Those are not public.
 
 <Card title="Quotes" icon="tag" href="/quotes">
-  Lock send and receive amounts before you transfer. `source` is required.
+  Lock send and receive. `source` is required.
 </Card>

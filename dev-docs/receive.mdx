@@ -1,12 +1,31 @@
 ---
 title: Receive money
-description: Fund a customer account — verification, bank details, chain addresses, onramp.
+description: Fund a customer vault — virtual account, wallet address, card onramp, Easetag.
 icon: download
 ---
 
-Receive credits an issued customer `acct_`. It is not Checkout. Checkout collects onto **your** business balance.
+Receive credits your customer’s **stablecoin vault**. The `acct_` `available` balance is that vault.
 
-Live bank details, live chain addresses, and onramp require hosted customer verification. A `cus_` with only email and name cannot hold named bank details or card onramp. Test skips verification.
+It is not Checkout. Checkout collects onto **your** business balance.
+
+```mermaid
+flowchart LR
+  payer[Payer]
+  va[Virtual account]
+  addr[Wallet address]
+  onramp[Card onramp]
+  tag[Easetag]
+  convert[Fiat to stablecoin]
+  vault[Customer vault]
+  acct["acct_ available"]
+  payer --> va --> convert --> vault
+  payer --> addr --> vault
+  payer --> onramp --> vault
+  payer --> tag --> vault
+  vault --> acct
+```
+
+Live virtual accounts, live wallet addresses, and onramp require hosted [verification](/customers#start-verification). A `cus_` with only email and name cannot hold a **named** virtual account. Test skips verification.
 
 <Note>
   **Scope:** `GET` needs `accounts.read`. Verification and onramp need `accounts.write`.
@@ -16,25 +35,29 @@ Live bank details, live chain addresses, and onramp require hosted customer veri
 
 <Steps>
   <Step title="Create the customer">
-    `POST /v1/customers` issues USD. Save `cus_` and `acct_`.
+    `POST /v1/customers` issues the USD vault and `acct_`. Save both ids.
   </Step>
   <Step title="Start verification">
     `POST /v1/customers/:id/verification` with `{ "return_url": "https://…" }`. Test returns `{ "status": "approved", "url": null }`. Live returns a hosted `url`.
   </Step>
   <Step title="Wait for approved">
-    Poll `GET /v1/customers/:id` or handle `customer.updated`. Live Receive calls return `403` `verification_required` until `approved`.
+    Poll `GET /v1/customers/:id` or handle `customer.updated`. Live Receive returns `403` `verification_required` until `approved`.
   </Step>
-  <Step title="Collect onto the account">
-    Bank details, chain addresses, or an onramp session — all keyed by `acct_`.
+  <Step title="Publish one rail">
+    Virtual account, wallet address, card onramp, or the customer’s Easetag.
   </Step>
 </Steps>
 
-## Bank details
+## Virtual account
+
+A virtual account is **bank details that settle into the vault**. The payer uses ACH (USD) or SEPA (EUR). They never see a chain address. Easner converts the fiat to USDC or EURC and credits the same `acct_`.
 
 ```bash
 curl https://api.easner.com/v1/accounts/acct_…/deposit_instructions \
   -H "Authorization: Bearer $EASNER_SECRET_KEY"
 ```
+
+USD:
 
 ```json
 {
@@ -48,16 +71,25 @@ curl https://api.easner.com/v1/accounts/acct_…/deposit_instructions \
 }
 ```
 
-EUR test details use `iban` and `bic` instead of account and routing numbers.
+EUR uses `iban` and `bic` instead of account and routing numbers.
 
 | Mode | Result |
 |---|---|
-| Test | Sandbox numbers. No KYC |
-| Live | Named details after `approved`. `409` `not_available` if provisioning is not ready yet |
+| Test | Sandbox numbers. No KYC. Nothing moves on a real bank |
+| Live | Named details after `approved`. Destination is this customer’s vault, not yours. `409` `not_available` if provisioning is not ready |
 
-Show these details to your customer. When the deposit settles, the issued `acct_` is credited. You get `account.updated` and `transaction.created` (`type: "deposit"`).
+Show these details in your app. When the bank deposit settles:
 
-## Chain addresses
+1. Fiat arrives on the virtual account.
+2. It converts to the vault stablecoin (USDC or EURC).
+3. That stablecoin lands in the customer vault.
+4. `available` rises. You get `account.updated` and `transaction.created` with `type: "deposit"`.
+
+Do not credit your own product from the HTTP GET. Fulfil from the webhooks.
+
+## Wallet address
+
+A wallet address is the vault’s **token account** on Solana. Someone who already holds USDC or EURC sends it on-chain. No conversion. The same `acct_` credits.
 
 ```bash
 curl https://api.easner.com/v1/accounts/acct_…/deposit_addresses \
@@ -77,9 +109,20 @@ curl https://api.easner.com/v1/accounts/acct_…/deposit_addresses \
 }
 ```
 
-Live requires `approved`. An inbound transfer to that address credits the same `acct_` (`type: "chain"`).
+| Field | Meaning |
+|---|---|
+| `currency` | The `acct_` ledger (`USD` or `EUR`) |
+| `asset` | `USDC` for USD, `EURC` for EUR |
+| `network` | `solana` |
+| `address` | Token account to send to |
 
-## Onramp
+Live requires `approved`. An inbound transfer to that address credits the account (`type: "chain"`).
+
+Publish `address` + `asset` + `network`. Do not ask the payer to send to a bank routing number on this rail.
+
+## Card onramp
+
+Card onramp funds the **same vault** from a card. Destination is the issued `acct_`, not your Banking user.
 
 ```bash
 curl https://api.easner.com/v1/accounts/acct_…/onramp_sessions \
@@ -103,21 +146,42 @@ curl https://api.easner.com/v1/accounts/acct_…/onramp_sessions \
 }
 ```
 
-Send your customer to `url`. The destination is that vault — the issued `acct_`, not your Banking user.
+Send your customer to `url`.
 
 | Mode | Result |
 |---|---|
 | Test | The hosted page completes and credits the account (`type: "onramp"`) |
-| Live | Session after `approved`. Completing card onramp from the hosted page returns `403` `not_available` until live card onramp is enabled |
+| Live | Session after `approved`. The hosted `url` opens card onramp onto this vault. `account.updated` and `transaction.created` (`type: "onramp"`) fire when it settles |
 
-`400` `invalid_amount` if `amount` is missing. `403` `verification_required` in live before approval.
+`400` `invalid_amount` if `amount` is missing.
+
+## Easetag
+
+Easetag is an **in-network handle** (`@ada`). Creating a customer allocates one. Pass `"easetag": "ada"` on `POST /v1/customers` or accept the allocated tag on the Customer object.
+
+Someone who pays that tag (first-party Banking or another `v1` transfer) credits this customer’s `acct_` (`type: "easetag"`). The tag is unique across Banking users, businesses, and `cus_` records.
+
+```json
+{ "id": "cus_…", "easetag": "ada", "verification_status": "approved" }
+```
+
+Publish `@` + `easetag`. To pay a tag from `v1`, create a destination `{ "type": "easetag", "details": { "easetag": "ada" } }` and transfer. See [Send](/send#easetag).
+
+## What this is not
+
+| Product | Lands on |
+|---|---|
+| Receive (`deposit` / `chain` / `onramp`) | Customer vault (`acct_` with `customer`) |
+| Checkout | **Your** business balance |
+
+Do not send your customer to first-party Banking screens or unpublished `/api` paths.
 
 ## Errors
 
 | Code | HTTP | When |
 |---|---|---|
 | `verification_required` | 403 | Live call before `approved` |
-| `not_available` | 403 / 409 | Live details or onramp not ready |
+| `not_available` | 403 / 409 | Live details or card session not ready |
 | `not_found` | 404 | Unknown `cus_` / `acct_` |
 | `invalid_amount` | 400 | Onramp amount missing or not a positive integer |
 
@@ -126,15 +190,9 @@ Send your customer to `url`. The destination is that vault — the issued `acct_
 | Event | When |
 |---|---|
 | `customer.updated` | `verification_status` changed |
-| `account.updated` | The `acct_` available balance changed |
-| `transaction.created` | `deposit`, `onramp`, or `chain` credit |
+| `account.updated` | Vault `available` changed |
+| `transaction.created` | `deposit`, `onramp`, `chain`, or `easetag` credit |
 
-## Expected
-
-- Always pass an issued `acct_` (`customer` set).
-- Do not send your customer to first-party Banking screens or unpublished `/api` paths.
-- Do not use Checkout to fund a customer account.
-
-<Card title="Checkout" icon="credit-card" href="/checkout">
-  Collect onto your business balance. Different product.
+<Card title="Send money" icon="send" href="/send">
+  Pay out from the same vault.
 </Card>

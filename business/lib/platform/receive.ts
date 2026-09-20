@@ -9,8 +9,16 @@ import { getBusinessAppPublicOrigin } from "@/lib/business-app-public-url"
 import { newPublicId } from "@/lib/platform/ids"
 import { publicCustomer } from "@/lib/platform/objects"
 import { creditPlatformAccountFromInbound } from "@/lib/platform/ledger"
+import { provisionPlatformCustomerVaults } from "@/lib/platform/wallet-owner"
 import { getTurnkeyDepositAddressesForWalletOwner } from "@/lib/wallet/turnkey-deposit-addresses"
 import { createBridgeVirtualAccountForVault } from "@/lib/bridge/virtual-accounts"
+import { stripeOnramp } from "@/lib/stripe/onramp-client"
+import { getStripePublishableKey } from "@/lib/stripe/config"
+import {
+  isStripeOnrampFailedStatus,
+  isStripeOnrampFulfilledStatus,
+  normalizeStripeOnrampSessionStatus,
+} from "@/lib/stripe/onramp-session-status"
 
 export type PlatformVerificationStatus = "unverified" | "pending" | "approved" | "rejected"
 
@@ -56,7 +64,7 @@ export async function loadPlatformCustomer(
 ) {
   const { data } = await admin
     .from("platform_customers")
-    .select("id, business_id, livemode, email, name, external_id, status, verification_status, metadata, wallet_owner_id, created_at")
+    .select("id, business_id, livemode, email, name, external_id, easetag, status, verification_status, metadata, wallet_owner_id, created_at")
     .eq("id", input.customerId)
     .eq("business_id", input.businessId)
     .eq("livemode", input.livemode)
@@ -83,7 +91,7 @@ export async function setPlatformCustomerVerification(
 ) {
   const { data: current } = await admin
     .from("platform_customers")
-    .select("id, business_id, livemode, email, name, external_id, status, verification_status, metadata, created_at")
+    .select("id, business_id, livemode, email, name, external_id, easetag, status, verification_status, metadata, created_at")
     .eq("id", input.customerId)
     .maybeSingle()
   if (!current?.id) return null
@@ -97,7 +105,7 @@ export async function setPlatformCustomerVerification(
       updated_at: now,
     })
     .eq("id", current.id)
-    .select("id, business_id, livemode, email, name, external_id, status, verification_status, created_at")
+    .select("id, business_id, livemode, email, name, external_id, easetag, status, verification_status, created_at")
     .single()
   if (!data) return null
   if (String(current.verification_status) !== input.status) {
@@ -325,6 +333,7 @@ export async function getDepositAddresses(
   if (!account.wallet_owner_id) {
     return []
   }
+  await provisionPlatformCustomerVaults(admin, account.wallet_owner_id)
   const lines = await getTurnkeyDepositAddressesForWalletOwner(admin, account.wallet_owner_id, {
     mode: input.livemode ? "ensure" : "fast",
   })
@@ -363,6 +372,39 @@ export async function createPlatformOnrampSession(
   if (input.livemode && mapProviderStatusToVerification(customer.verification_status) !== "approved") {
     throw Object.assign(new Error("Customer verification is required"), { code: "verification_required" })
   }
+  const currency = String(input.currency ?? account.currency).toUpperCase()
+  let stripeSessionId: string | null = null
+  let clientSecret: string | null = null
+  let walletAddress: string | null = null
+  if (input.livemode) {
+    if (!account.wallet_owner_id) {
+      throw Object.assign(new Error("Customer vault is not ready"), { code: "not_available" })
+    }
+    await provisionPlatformCustomerVaults(admin, account.wallet_owner_id)
+    const lines = await getTurnkeyDepositAddressesForWalletOwner(admin, account.wallet_owner_id, {
+      mode: "ensure",
+    })
+    const wanted = currency === "EUR" ? lines.EUR : lines.USD
+    walletAddress = String(wanted.ownerAddress || wanted.address || "").trim()
+    if (!walletAddress) {
+      throw Object.assign(new Error("Customer vault is not ready"), { code: "not_available" })
+    }
+    const destCurrency = currency === "EUR" ? "eurc" : "usdc"
+    const created = await stripeOnramp.createHostedSession({
+      wallet_addresses: { solana: walletAddress },
+      destination_currencies: [destCurrency],
+      destination_networks: ["solana"],
+      source_amount: (input.amountCents / 100).toFixed(2),
+      source_currency: currency === "EUR" ? "eur" : "usd",
+      lock_wallet_address: true,
+    })
+    stripeSessionId = String((created as { id?: string }).id ?? "").trim() || null
+    clientSecret =
+      String((created as { client_secret?: string }).client_secret ?? "").trim() || null
+    if (!stripeSessionId || !clientSecret) {
+      throw Object.assign(new Error("Could not start card onramp"), { code: "not_available" })
+    }
+  }
   const id = newPublicId("ors")
   const now = new Date().toISOString()
   const { data, error } = await admin
@@ -374,9 +416,14 @@ export async function createPlatformOnrampSession(
       customer_id: account.customer_id,
       livemode: input.livemode,
       amount_cents: input.amountCents,
-      currency: String(input.currency ?? account.currency).toUpperCase(),
+      currency,
       status: "open",
       return_url: input.returnUrl ?? null,
+      stripe_session_id: stripeSessionId,
+      metadata: {
+        ...(walletAddress ? { wallet_address: walletAddress } : {}),
+        ...(clientSecret ? { client_secret: clientSecret } : {}),
+      },
       created_at: now,
       updated_at: now,
     })
@@ -394,13 +441,86 @@ export async function createPlatformOnrampSession(
   }
 }
 
+export async function getPlatformOnrampSession(admin: SupabaseClient, sessionId: string) {
+  const { data } = await admin
+    .from("platform_onramp_sessions")
+    .select("id, amount_cents, currency, status, livemode, return_url, metadata")
+    .eq("id", sessionId)
+    .maybeSingle()
+  if (!data?.id) return null
+  const meta = asMeta(data.metadata)
+  const clientSecret = String(meta.client_secret ?? "").trim() || null
+  return {
+    id: data.id,
+    amount: Number(data.amount_cents),
+    currency: String(data.currency).toUpperCase(),
+    status: String(data.status),
+    livemode: Boolean(data.livemode),
+    return_url: data.return_url ?? null,
+    client_secret: clientSecret,
+    publishable_key: data.livemode ? getStripePublishableKey(true) || null : null,
+  }
+}
+
+export async function findPlatformOnrampInboundKey(
+  admin: SupabaseClient,
+  input: { accountId: string; amountCents: number; walletAddress?: string | null },
+): Promise<string | null> {
+  const { data: rows } = await admin
+    .from("platform_onramp_sessions")
+    .select("id, amount_cents, metadata, status")
+    .eq("account_id", input.accountId)
+    .in("status", ["open", "processing", "completed"])
+    .order("created_at", { ascending: false })
+    .limit(8)
+  const wallet = String(input.walletAddress ?? "").trim()
+  for (const row of rows ?? []) {
+    const meta = asMeta(row.metadata)
+    const addr = String(meta.wallet_address ?? "").trim()
+    if (wallet && addr && addr !== wallet) continue
+    if (Math.abs(Number(row.amount_cents) - input.amountCents) > 100) continue
+    return `onramp:${row.id}`
+  }
+  return null
+}
+
+export async function creditPlatformOnrampFromStripeSession(
+  admin: SupabaseClient,
+  stripeSession: Record<string, unknown>,
+): Promise<boolean> {
+  const stripeSessionId = String(stripeSession.id ?? "").trim()
+  if (!stripeSessionId) return false
+  const status = normalizeStripeOnrampSessionStatus(stripeSession.status)
+  if (!isStripeOnrampFulfilledStatus(status)) return false
+  const { data: session } = await admin
+    .from("platform_onramp_sessions")
+    .select("id, account_id, amount_cents, status, return_url")
+    .eq("stripe_session_id", stripeSessionId)
+    .maybeSingle()
+  if (!session?.id) return false
+  await creditPlatformAccountFromInbound(admin, {
+    accountId: String(session.account_id),
+    amountCents: Number(session.amount_cents),
+    type: "onramp",
+    description: "Onramp",
+    inboundKey: `onramp:${session.id}`,
+  })
+  if (session.status !== "completed") {
+    await admin
+      .from("platform_onramp_sessions")
+      .update({ status: "completed", updated_at: new Date().toISOString() })
+      .eq("id", session.id)
+  }
+  return true
+}
+
 export async function completePlatformOnrampSession(
   admin: SupabaseClient,
   sessionId: string,
 ): Promise<{ status: string; return_url: string | null }> {
   const { data: session } = await admin
     .from("platform_onramp_sessions")
-    .select("id, account_id, amount_cents, currency, status, livemode, return_url")
+    .select("id, account_id, amount_cents, currency, status, livemode, return_url, stripe_session_id")
     .eq("id", sessionId)
     .maybeSingle()
   if (!session?.id) throw new Error("Session not found")
@@ -408,9 +528,24 @@ export async function completePlatformOnrampSession(
     return { status: "completed", return_url: session.return_url ?? null }
   }
   if (session.livemode) {
-    throw Object.assign(new Error("Live onramp cannot be completed from this page"), {
-      code: "not_available",
-    })
+    const stripeSessionId = String(session.stripe_session_id ?? "").trim()
+    if (!stripeSessionId) {
+      throw Object.assign(new Error("Live onramp is not ready"), { code: "not_available" })
+    }
+    const stripeSession = await stripeOnramp.retrieveSession(stripeSessionId)
+    const stripeStatus = normalizeStripeOnrampSessionStatus(
+      (stripeSession as { status?: unknown }).status,
+    )
+    if (isStripeOnrampFailedStatus(stripeStatus)) {
+      await admin
+        .from("platform_onramp_sessions")
+        .update({ status: "failed", updated_at: new Date().toISOString() })
+        .eq("id", session.id)
+      return { status: "failed", return_url: session.return_url ?? null }
+    }
+    if (!isStripeOnrampFulfilledStatus(stripeStatus)) {
+      return { status: "open", return_url: session.return_url ?? null }
+    }
   }
   await creditPlatformAccountFromInbound(admin, {
     accountId: String(session.account_id),

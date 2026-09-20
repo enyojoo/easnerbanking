@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { dispatchMerchantWebhook } from "@/lib/checkout/merchant-webhooks"
+import { isEasetagGloballyAvailable, isUndefinedEasetagColumnError } from "@/lib/easetag-global"
+import { normalizeEasetag, validateEasetag } from "@/lib/easetag-validation"
 import { newPublicId } from "@/lib/platform/ids"
 import {
   adjustPlatformAccount,
@@ -7,6 +9,7 @@ import {
   insertPlatformTransaction,
   publicAccount,
 } from "@/lib/platform/ledger"
+import { executePlatformOutboundRail } from "@/lib/platform/send-rails"
 import { ensurePlatformCustomerWalletOwner } from "@/lib/platform/wallet-owner"
 import { buildWalletSendQuote } from "@/lib/wallet-send/wallet-send-quote"
 import type { WalletRecipientRow } from "@/lib/wallet-send/validate-recipient"
@@ -16,6 +19,7 @@ export function publicCustomer(row: {
   email?: string | null
   name?: string | null
   external_id?: string | null
+  easetag?: string | null
   status?: string | null
   verification_status?: string | null
   livemode: boolean
@@ -26,11 +30,49 @@ export function publicCustomer(row: {
     email: row.email ?? null,
     name: row.name ?? null,
     external_id: row.external_id ?? null,
+    easetag: row.easetag ?? null,
     status: row.status ?? "active",
     verification_status: row.verification_status ?? "unverified",
     livemode: Boolean(row.livemode),
     created: row.created_at,
   }
+}
+
+function railError(code: string, message: string) {
+  return Object.assign(new Error(message), { code })
+}
+
+export async function allocatePlatformEasetag(
+  admin: SupabaseClient,
+  input: { customerId: string; requested?: string | null; name?: string | null },
+): Promise<string> {
+  const requested = String(input.requested ?? "").trim()
+  if (requested) {
+    const tag = normalizeEasetag(requested)
+    const valid = validateEasetag(tag)
+    if (!valid.valid) throw railError("invalid_easetag", valid.error || "Invalid easetag")
+    const available = await isEasetagGloballyAvailable(admin, tag, {
+      excludePlatformCustomerId: input.customerId,
+    })
+    if (!available) throw railError("easetag_taken", "Easetag is taken")
+    return tag
+  }
+  const fromName = normalizeEasetag(String(input.name ?? "").replace(/[^a-z0-9]/gi, "")).slice(0, 10)
+  const idSlug = input.customerId.replace(/^cus_/, "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 8)
+  const candidates = [fromName, idSlug, `c${idSlug}`.slice(0, 10)].filter((tag) => validateEasetag(tag).valid)
+  for (const tag of candidates) {
+    if (await isEasetagGloballyAvailable(admin, tag, { excludePlatformCustomerId: input.customerId })) {
+      return tag
+    }
+  }
+  for (let i = 0; i < 24; i++) {
+    const tag = `c${Math.random().toString(36).slice(2, 10)}`.slice(0, 10)
+    if (!validateEasetag(tag).valid) continue
+    if (await isEasetagGloballyAvailable(admin, tag, { excludePlatformCustomerId: input.customerId })) {
+      return tag
+    }
+  }
+  throw railError("easetag_taken", "Could not allocate easetag")
 }
 
 export function publicDestination(row: {
@@ -107,9 +149,15 @@ export async function createPlatformCustomer(
     email?: string | null
     name?: string | null
     externalId?: string | null
+    easetag?: string | null
   },
 ) {
   const id = newPublicId("cus")
+  const easetag = await allocatePlatformEasetag(admin, {
+    customerId: id,
+    requested: input.easetag,
+    name: input.name,
+  })
   const email = String(input.email ?? "").trim().toLowerCase() || null
   let walletOwnerId: string | null = null
   if (email) {
@@ -120,22 +168,26 @@ export async function createPlatformCustomer(
     walletOwnerId = owner.id
   }
   const now = new Date().toISOString()
-  const { data, error } = await admin
-    .from("platform_customers")
-    .insert({
-      id,
-      business_id: input.businessId,
-      livemode: input.livemode,
-      email,
-      name: String(input.name ?? "").trim() || null,
-      external_id: String(input.externalId ?? "").trim() || null,
-      wallet_owner_id: walletOwnerId,
-      verification_status: "unverified",
-      created_at: now,
-      updated_at: now,
-    })
-    .select("*")
-    .single()
+  const row = {
+    id,
+    business_id: input.businessId,
+    livemode: input.livemode,
+    email,
+    name: String(input.name ?? "").trim() || null,
+    external_id: String(input.externalId ?? "").trim() || null,
+    easetag,
+    wallet_owner_id: walletOwnerId,
+    verification_status: "unverified",
+    created_at: now,
+    updated_at: now,
+  }
+  let { data, error } = await admin.from("platform_customers").insert(row).select("*").single()
+  if (error && isUndefinedEasetagColumnError(error)) {
+    const { easetag: _dropped, ...withoutTag } = row
+    const retry = await admin.from("platform_customers").insert(withoutTag).select("*").single()
+    data = retry.data
+    error = retry.error
+  }
   if (error || !data) throw new Error(error?.message || "Could not create customer")
   const account = await getOrCreatePlatformAccount(admin, {
     businessId: input.businessId,
@@ -346,7 +398,7 @@ export async function executePlatformTransfer(
   if (!sourceAccountId) throw new Error("source is required")
   const { data: sourceAccount } = await admin
     .from("platform_accounts")
-    .select("id, customer_id")
+    .select("id, customer_id, wallet_owner_id")
     .eq("id", sourceAccountId)
     .eq("business_id", input.businessId)
     .eq("livemode", input.livemode)
@@ -354,6 +406,7 @@ export async function executePlatformTransfer(
   if (!sourceAccount?.id) throw new Error("Account not found")
   const source = sourceAccount.id
   const customerId = (sourceAccount.customer_id as string | null) ?? null
+  const walletOwnerId = (sourceAccount.wallet_owner_id as string | null) ?? null
 
   const now = new Date().toISOString()
   const { data, error } = await admin
@@ -383,8 +436,20 @@ export async function executePlatformTransfer(
     data: created,
   })
 
+  let debited = false
   try {
     await adjustPlatformAccount(admin, { accountId: source, availableDelta: -amountCents })
+    debited = true
+    if (input.livemode) {
+      await executePlatformOutboundRail(admin, {
+        businessId: input.businessId,
+        customerId,
+        destinationId,
+        amountCents,
+        currency,
+        walletOwnerId,
+      })
+    }
     await insertPlatformTransaction(admin, {
       businessId: input.businessId,
       livemode: input.livemode,
@@ -414,6 +479,9 @@ export async function executePlatformTransfer(
     return mapped
   } catch (err) {
     const message = err instanceof Error ? err.message : "Transfer failed"
+    if (debited) {
+      await adjustPlatformAccount(admin, { accountId: source, availableDelta: amountCents }).catch(() => {})
+    }
     await admin
       .from("platform_transfers")
       .update({ status: "failed", updated_at: new Date().toISOString() })

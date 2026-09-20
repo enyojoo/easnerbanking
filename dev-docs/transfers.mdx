@@ -4,7 +4,7 @@ description: Execute a quote or send from a customer account.
 icon: arrow-left-right
 ---
 
-A transfer sends from a customer account to a destination. Prefer quote-then-transfer so the amounts are locked.
+A transfer sends from a customer **vault** to a [payment method](/send). Prefer quote-then-transfer so the amounts are locked.
 
 <Note>
   **Scope:** `POST` needs `transfers.write`. `GET` needs `accounts.read`.
@@ -74,7 +74,7 @@ You may pass `source`, `destination`, `amount`, and `currency` instead of `quote
 | `completed` | Account debited. Webhook `transfer.completed` |
 | `failed` | No debit, or debit rolled back. Webhook `transfer.failed` |
 
-Test completes without moving live rails money. Live debits the customer account.
+Test completes without moving live rails. Live wallet (Solana USDC/EURC), Easetag, bank, and mobile money leave the customer vault. Live bank and mobile money require `approved` verification and a corridor from `GET /v1/payment_methods`.
 
 ## Events
 

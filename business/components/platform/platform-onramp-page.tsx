@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { apiUrl } from "@/lib/api-base-url"
 
 type Session = {
@@ -10,6 +10,8 @@ type Session = {
   status: string
   livemode: boolean
   return_url: string | null
+  client_secret?: string | null
+  publishable_key?: string | null
 }
 
 function money(amount: number, currency: string) {
@@ -23,12 +25,14 @@ export function PlatformOnrampPage({ sessionId }: { sessionId: string }) {
   const [session, setSession] = useState<Session | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const mountRef = useRef<HTMLDivElement | null>(null)
+  const mountedSecret = useRef<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     fetch(apiUrl(`/api/platform/onramp-sessions/${encodeURIComponent(sessionId)}`), {
-        credentials: "omit",
-      })
+      credentials: "omit",
+    })
       .then(async (res) => {
         const json = (await res.json().catch(() => ({}))) as Session & { error?: string }
         if (!res.ok) throw new Error(json.error || "Session not found")
@@ -52,17 +56,55 @@ export function PlatformOnrampPage({ sessionId }: { sessionId: string }) {
       })
       const json = (await res.json().catch(() => ({}))) as { error?: string; return_url?: string | null; status?: string }
       if (!res.ok) throw new Error(json.error || "Could not complete")
-      if (json.return_url) {
+      if (json.return_url && json.status === "completed") {
         window.location.href = json.return_url
         return
       }
-      setSession((prev) => (prev ? { ...prev, status: json.status || "completed" } : prev))
+      setSession((prev) => (prev ? { ...prev, status: json.status || prev.status } : prev))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not complete")
     } finally {
       setBusy(false)
     }
   }
+
+  useEffect(() => {
+    const secret = session?.client_secret
+    const pk = session?.publishable_key
+    if (!session?.livemode || session.status === "completed" || !secret || !pk || !mountRef.current) return
+    if (mountedSecret.current === secret) return
+    mountedSecret.current = secret
+    let cancelled = false
+    void (async () => {
+      try {
+        const mod = (await import("@stripe/crypto")) as {
+          loadStripeOnramp?: (key: string) => Promise<{
+            createSession: (opts: { clientSecret: string }) => {
+              mount: (node: string | HTMLElement) => void
+              addEventListener?: (event: string, cb: (event: { payload?: { session?: { status?: string } } }) => void) => void
+            }
+          }>
+        }
+        const load = mod.loadStripeOnramp
+        if (!load) throw new Error("Card onramp is not available in this browser")
+        const onramp = await load(pk)
+        if (cancelled || !mountRef.current) return
+        const inst = onramp.createSession({ clientSecret: secret })
+        inst.mount(mountRef.current)
+        inst.addEventListener?.("onramp_session_updated", (event) => {
+          const status = String(event.payload?.session?.status ?? "")
+          if (status.includes("fulfillment_complete") || status === "fulfilled" || status === "complete") {
+            void complete()
+          }
+        })
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Could not open card onramp")
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [session])
 
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-md flex-col justify-center gap-4 px-6 py-16">
@@ -77,9 +119,12 @@ export function PlatformOnrampPage({ sessionId }: { sessionId: string }) {
           {session.status === "completed" ? (
             <p className="text-sm text-foreground">This deposit is complete.</p>
           ) : session.livemode ? (
-            <p className="text-sm text-muted-foreground">
-              Finish this deposit in your app. Live card onramp opens here when the session is ready.
-            </p>
+            <>
+              <div id="platform-onramp" ref={mountRef} className="min-h-[360px] w-full" />
+              {!session.client_secret ? (
+                <p className="text-sm text-muted-foreground">This card session is still opening. Refresh in a moment.</p>
+              ) : null}
+            </>
           ) : (
             <button
               type="button"

@@ -3,6 +3,7 @@ import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { resolveNoahAccountContextFromLedgerScope } from "@/lib/processing-fee/capture-pending-processing-fee"
 import {
   executeEasetagTransfer,
+  executeEasetagTransferToPlatformCustomer,
   isEasetagLedgerP2PEnabled,
 } from "@/lib/ledger/easetag-transfer"
 import { normalizeEasetag } from "@/lib/easetag-validation"
@@ -76,8 +77,9 @@ async function resolvePayeeFromEasetag(
   admin: SupabaseClient,
   tag: string,
   senderBusinessId: string,
+  currency = "USD",
 ): Promise<
-  | { ok: true; payeeUserId: string; payeeBusinessId: string | null; payeeEasetag: string }
+  | { ok: true; payeeUserId: string; payeeBusinessId: string | null; payeeEasetag: string; payeePlatformAccountId?: string }
   | { ok: false; error: string }
 > {
   const cleanTag = normalizeEasetag(tag)
@@ -107,7 +109,20 @@ async function resolvePayeeFromEasetag(
     .maybeSingle()
 
   if (bizErr) return { ok: false, error: bizErr.message }
-  if (!biz) return { ok: false, error: "Easetag not found." }
+  if (!biz) {
+    const { resolveEasetagPayee } = await import("@/lib/easetag-payee")
+    const platform = await resolveEasetagPayee(admin, cleanTag, currency)
+    if (platform?.kind === "platform_customer") {
+      return {
+        ok: true,
+        payeeUserId: platform.accountId,
+        payeeBusinessId: null,
+        payeeEasetag: platform.easetag,
+        payeePlatformAccountId: platform.accountId,
+      }
+    }
+    return { ok: false, error: "Easetag not found." }
+  }
   if (biz.id === senderBusinessId) return { ok: false, error: "Cannot pay your own business easetag." }
 
   const ownerUserId = await resolveBusinessOrgOwnerUserId(admin, String(biz.id))
@@ -229,7 +244,7 @@ export async function executePayrollLine(input: {
         ? Number(line.source_amount_cents)
         : Number(line.source_amount_cents ?? 0)) / 100
 
-    const payee = await resolvePayeeFromEasetag(admin, tag, businessId)
+    const payee = await resolvePayeeFromEasetag(admin, tag, businessId, sourceCurrency)
     if (!payee.ok) return { state: "failed", message: payee.error, code: "easetag_payee_invalid" }
 
     const orgOwner = await resolveBusinessOrgOwnerUserId(admin, businessId)
@@ -244,7 +259,32 @@ export async function executePayrollLine(input: {
     )
 
     const reservedDebitEtid = generateTransactionId()
-    const result = await executeEasetagTransfer(admin, {
+    const result = payee.payeePlatformAccountId
+      ? await executeEasetagTransferToPlatformCustomer(admin, {
+          idempotencyKey,
+          amount,
+          currency: sourceCurrency,
+          senderUserId,
+          senderBusinessId: businessId,
+          payeePlatformAccountId: payee.payeePlatformAccountId,
+          payeeEasetag: payee.payeeEasetag,
+          reservedDebitEtid,
+          sendNote: "Payroll",
+          productMetadata: {
+            product: "payroll",
+            payroll_run_id: run.id,
+            payroll_line_id: line.id,
+            payroll_person_id: line.person_id,
+            payroll_business_id: businessId,
+            payroll_business_name: String(senderBusiness?.name || "Easner Business"),
+            payroll_period_start: run.pay_period_start ?? null,
+            payroll_period_end: run.pay_period_end ?? null,
+            payroll_payday: run.payday ?? run.scheduled_for ?? null,
+            payroll_method: "easetag",
+            payroll_reference: run.id,
+          },
+        })
+      : await executeEasetagTransfer(admin, {
       idempotencyKey,
       amount,
       currency: sourceCurrency,

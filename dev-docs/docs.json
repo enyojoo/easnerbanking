@@ -2,7 +2,7 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
   "name": "Easner",
-  "description": "Banking and Checkout APIs for integrators building on Easner.",
+  "description": "Stablecoin-native banking and payments. Hold, receive, send, and collect through the Easner API.",
   "colors": {
     "primary": "#007ACC",
     "light": "#3AA6F8",

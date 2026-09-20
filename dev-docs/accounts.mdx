@@ -1,14 +1,32 @@
 ---
 title: Accounts
-description: Issued customer balances. Receive credits these. Transfers debit them.
+description: A currency view of your customer’s custodial stablecoin vault.
 icon: wallet
 ---
 
-An account is a currency balance for a customer. Issued accounts always have `customer`.
+An account is not a float you invent. It is the **USD or EUR view** of a custodial vault Easner opens for that customer.
 
-Creating a [customer](/customers) issues USD. Open EUR (or another USD row if you need a second book) with `POST /v1/accounts` and the `cus_` id.
+Creating a [customer](/customers) issues USD. Open EUR with `POST /v1/accounts` and the `cus_` id. Both currencies sit on the **same customer vault owner** — two ledger views, two on-chain vaults.
 
-Checkout does **not** credit these accounts. Checkout collects onto your business balance. Receive credits the `acct_` you pass.
+| `currency` | Stablecoin | Chain | What `available` means |
+|---|---|---|---|
+| `USD` | USDC | Solana | USDC in the USD vault, in cents |
+| `EUR` | EURC | Solana | EURC in the EUR vault, in cents |
+
+You never receive a private key. Deposit addresses and bank details are issued against this vault. Sends debit `available` and leave from it.
+
+```mermaid
+flowchart TB
+  cus[cus_]
+  usdVault[USD vault USDC Solana]
+  eurVault[EUR vault EURC Solana]
+  usdAcct["acct_ USD available"]
+  eurAcct["acct_ EUR available"]
+  cus --> usdVault --> usdAcct
+  cus --> eurVault --> eurAcct
+```
+
+Checkout does **not** credit these accounts. Checkout collects onto your business balance. [Receive](/receive) credits the `acct_` you pass.
 
 <Note>
   **Scope:** `GET` needs `accounts.read`. `POST` needs `accounts.write`.
@@ -19,8 +37,8 @@ Checkout does **not** credit these accounts. Checkout collects onto your busines
 | Field | Type | Notes |
 |---|---|---|
 | `id` | string | `acct_…` |
-| `currency` | string | Uppercase, e.g. `USD`, `EUR` |
-| `available` | integer | Cents you can send |
+| `currency` | string | `USD` or `EUR` |
+| `available` | integer | Cents you can send from this vault |
 | `pending` | integer | Cents not yet available |
 | `customer` | string | `cus_…` |
 | `livemode` | boolean | |
@@ -36,26 +54,29 @@ Checkout does **not** credit these accounts. Checkout collects onto your busines
 }
 ```
 
+`available: 4900` is **$49.00 of USDC** in that customer’s USD vault.
+
+## How money gets into the vault
+
+Three Receive rails, one balance.
+
+| Rail | What you publish | What arrives in the vault | `transaction.type` |
+|---|---|---|---|
+| **Virtual account** | ACH / SEPA details | Fiat converts to USDC or EURC, then lands in the vault | `deposit` |
+| **Wallet address** | Solana token account | USDC or EURC sent on-chain | `chain` |
+| **Card onramp** | Hosted session URL | Card funds the same vault | `onramp` |
+
+The virtual account is **not** a second balance. It is a bank front door onto this vault. The payer sends dollars or euros. Easner converts to the vault stablecoin and credits `available`. Same `acct_`. See [Receive](/receive).
+
+The wallet address is the vault’s **token account** for that asset (USDC for USD, EURC for EUR). A chain payment to that address is a direct credit. No conversion.
+
+Easetag is **not** an account rail. It is a send payment method (and a first-party handle). You do not get an `@tag` on `GET /v1/accounts`.
+
 ## List
 
 ```bash
 curl https://api.easner.com/v1/accounts \
   -H "Authorization: Bearer $EASNER_SECRET_KEY"
-```
-
-```json
-{
-  "data": [
-    {
-      "id": "acct_…",
-      "currency": "USD",
-      "available": 4900,
-      "pending": 0,
-      "customer": "cus_…",
-      "livemode": false
-    }
-  ]
-}
 ```
 
 Issued accounts only. Filter with `?customer=cus_…`.
@@ -71,7 +92,7 @@ curl https://api.easner.com/v1/accounts \
   -d '{"currency":"EUR","customer":"cus_…"}'
 ```
 
-`201` and the account. Opening the same currency for the same customer returns the existing account.
+`201` and the account. Opening the same currency for the same customer returns the existing account (same vault).
 
 `400` `invalid_currency` if `currency` is missing. `400` `invalid_customer` if `customer` is missing. `404` if the customer is not on this key. Deposit restrictions return `403`.
 
@@ -79,26 +100,27 @@ curl https://api.easner.com/v1/accounts \
 
 `GET /v1/accounts/:id` → Account. `404` if the id is not on this key.
 
-## Receive on an account
+## Rails on an account
 
 | Call | Job |
 |---|---|
-| `GET /v1/accounts/:id/deposit_instructions` | Bank details for this `acct_` |
-| `GET /v1/accounts/:id/deposit_addresses` | Chain addresses for this `acct_` |
-| `POST /v1/accounts/:id/onramp_sessions` | Hosted card onramp onto this `acct_` |
+| `GET /v1/accounts/:id/deposit_instructions` | Virtual-account bank details for this vault |
+| `GET /v1/accounts/:id/deposit_addresses` | Chain token account for this vault |
+| `POST /v1/accounts/:id/onramp_sessions` | Hosted card onramp onto this vault |
 
-See [Receive](/receive). Live bank details, chain addresses, and onramp require `verification_status = approved`. Test skips that.
+Live bank details, chain addresses, and onramp require `verification_status = approved`. Test skips that.
 
 ## Events
 
 | Event | When |
 |---|---|
-| `account.updated` | Available or pending changed |
+| `account.updated` | `available` or `pending` changed |
 | `transaction.created` | A credit or debit was written |
 | `payment.available` | Checkout funds became usable on **your** business balance |
 
 ## Expected
 
+- Treat `available` as vault inventory, not a synthetic book.
 - Read `available` before you quote a send.
 - Pass `customer` on every create.
 - Do not treat Checkout settlement as a credit to this `acct_`.

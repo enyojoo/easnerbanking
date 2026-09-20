@@ -253,6 +253,8 @@ export const stripeOnramp = {
     stripeOnrampRequest("GET", stripeOnrampQuotesPath(), { ui_mode: "headless", ...params }, { oauthToken }),
   createSession: (params: Record<string, unknown>, oauthToken?: string) =>
     stripeOnrampRequest("POST", "/v1/crypto/onramp_sessions", { ui_mode: "headless", ...params }, { oauthToken }),
+  createHostedSession: (params: Record<string, unknown>, oauthToken?: string) =>
+    stripeOnrampRequest("POST", "/v1/crypto/onramp_sessions", params, { oauthToken }),
   retrieveSession: (id: string, oauthToken?: string) =>
     stripeOnrampRequest("GET", `/v1/crypto/onramp_sessions/${id}`, undefined, { oauthToken }),
   quoteSession: (id: string, params?: Record<string, unknown>, oauthToken?: string) =>

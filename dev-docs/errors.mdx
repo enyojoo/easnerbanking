@@ -40,7 +40,9 @@ Do not parse the message. Branch on `type` and `code`.
 | `invalid_source` | `POST /v1/quotes` without `source` |
 | `invalid_type` | Destination type is not `bank`, `mobile_money`, `wallet`, or `easetag` |
 | `verification_required` | Live Receive before the customer is `approved` |
-| `not_available` | Live bank details or onramp not ready |
+| `not_available` | Live bank details or a corridor/session not ready yet |
+| `easetag_taken` | `POST /v1/customers` with an `@tag` already in use |
+| `invalid_easetag` | `POST /v1/customers` with an invalid `@tag` |
 | `create_failed` | Create customer, account, destination, or quote failed |
 | `transfer_failed` | Transfer could not debit the customer account |
 | `origin_not_allowed` | Checkout success/cancel URL is not on an allowed website |
@@ -54,7 +56,7 @@ Do not parse the message. Branch on `type` and `code`.
 - `404` — the object is not in this mode. Check test vs live.
 - `409` `not_available` — retry later; live details are still provisioning.
 - `400` `transfer_failed` with "Quote expired" — create a new quote.
-- `400` `transfer_failed` with insufficient funds — [Receive](/receive) onto the customer account, then retry with a **new** idempotency key only if you intend a new send.
+- `400` `transfer_failed` with insufficient funds — [Receive](/receive) onto the customer vault, then retry with a **new** idempotency key only if you intend a new send.
 - `5xx` — retry the same `Idempotency-Key`.
 
 <Card title="Customers" icon="users" href="/customers">

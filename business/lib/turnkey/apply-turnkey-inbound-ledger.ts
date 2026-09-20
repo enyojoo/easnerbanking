@@ -44,6 +44,7 @@ import {
   creditPlatformAccountFromInbound,
   findIssuedPlatformAccountForWalletOwner,
 } from "@/lib/platform/ledger"
+import { findPlatformOnrampInboundKey } from "@/lib/platform/receive"
 
 export type TurnkeyInboundLedgerInput = {
   userId: string
@@ -140,13 +141,18 @@ export async function applyTurnkeyInboundLedgerEvent(
     if (ownerId) {
       const issued = await findIssuedPlatformAccountForWalletOwner(admin, ownerId, input.currency)
       if (issued?.id) {
-        const inboundKey = txHash || input.providerTransactionId
         const cents = Math.round(input.amount * 100)
+        const onrampKey = await findPlatformOnrampInboundKey(admin, {
+          accountId: issued.id,
+          amountCents: cents,
+          walletAddress: input.walletAddress,
+        })
+        const inboundKey = onrampKey || txHash || input.providerTransactionId
         const credited = await creditPlatformAccountFromInbound(admin, {
           accountId: issued.id,
           amountCents: cents,
-          type: "chain",
-          description: "Chain deposit",
+          type: onrampKey ? "onramp" : "chain",
+          description: onrampKey ? "Onramp" : "Chain deposit",
           inboundKey,
           metadata: {
             source: "chain",

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { createHash } from "crypto"
+import { creditPlatformAccountFromInbound } from "@/lib/platform/ledger"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { generateTransactionId, isEasnerClientTransactionIdFormat } from "@/lib/transaction-id"
 
@@ -255,6 +256,147 @@ export async function executeEasetagTransfer(
           ...senderBalanceScope,
           delta: amt,
         })
+    } catch {
+      // best-effort rollback
+    }
+    const msg = e instanceof Error ? e.message : String(e)
+    return { ok: false, error: msg || "transfer_failed" }
+  }
+}
+
+export async function executeEasetagTransferToPlatformCustomer(
+  admin: SupabaseClient,
+  input: {
+    idempotencyKey: string
+    amount: number
+    currency: "USD" | "EUR"
+    senderUserId: string
+    senderBusinessId: string | null
+    senderEasetag?: string | null
+    payeePlatformAccountId: string
+    payeeEasetag: string
+    reservedDebitEtid?: string | null
+    sendNote?: string | null
+    productMetadata?: Record<string, unknown>
+  },
+): Promise<ExecuteEasetagTransferResult> {
+  const key = String(input.idempotencyKey || "").trim()
+  if (!key) return { ok: false, error: "idempotency_key_required" }
+  if (!Number.isFinite(input.amount) || input.amount <= 0) return { ok: false, error: "invalid_amount" }
+
+  const transferGroupId = deterministicTransferGroupUuid(key)
+  const debitPtid = `easetag_p2p:${transferGroupId}:debit`
+  const creditPtid = `easetag_p2p:${transferGroupId}:credit`
+
+  const { data: existingDebit, error: existErr } = await admin
+    .from("transactions")
+    .select("id,easner_transaction_id,metadata")
+    .eq("provider", "easner_internal")
+    .eq("provider_transaction_id", debitPtid)
+    .maybeSingle()
+  if (existErr) return { ok: false, error: existErr.message }
+  if (existingDebit?.id) {
+    const meta = (existingDebit.metadata || {}) as Record<string, unknown>
+    const etid = String(existingDebit.easner_transaction_id || meta.easner_transaction_id || "").trim()
+    return {
+      ok: true,
+      idempotent: true,
+      transferGroupId,
+      debitProviderTransactionId: debitPtid,
+      creditProviderTransactionId: creditPtid,
+      easnerTransactionId: etid || debitPtid,
+    }
+  }
+
+  const amt = Math.round(input.amount * 100) / 100
+  const reservedRaw = String(input.reservedDebitEtid ?? "").trim()
+  const etid =
+    reservedRaw && isEasnerClientTransactionIdFormat(reservedRaw) ? reservedRaw.toUpperCase() : generateTransactionId()
+  const senderTag = String(input.senderEasetag ?? "").trim().replace(/^@+/, "")
+  const payeeTag = String(input.payeeEasetag ?? "").trim().replace(/^@+/, "")
+  const senderBalanceScope = {
+    businessId: input.senderBusinessId,
+    userId: input.senderBusinessId ? null : input.senderUserId,
+    currency: input.currency,
+  }
+  const { available, err: balErr } = await readAvailableBalance(admin, {
+    businessId: senderBalanceScope.businessId,
+    userId: senderBalanceScope.userId,
+    currency: input.currency,
+  })
+  if (balErr) return { ok: false, error: "sender_balance_row_missing" }
+  if (available < amt) return { ok: false, error: "insufficient_balance" }
+
+  const now = new Date().toISOString()
+  const debitMeta: Record<string, unknown> = {
+    ...(input.productMetadata ?? {}),
+    easner_transaction_id: etid,
+    source: "easetag_p2p",
+    idempotency_key: key,
+    transfer_group_id: transferGroupId,
+    payee_easetag: payeeTag,
+    payee_kind: "platform_customer",
+  }
+  if (senderTag) debitMeta.sender_easetag = senderTag
+  const sendNote = String(input.sendNote || "").trim()
+  if (sendNote) {
+    debitMeta.send_note = sendNote
+    debitMeta.note = sendNote
+  }
+
+  let debited = false
+  let credited = false
+  let debitInserted = false
+  try {
+    await applyWalletBalanceDelta(admin, { ...senderBalanceScope, delta: -amt })
+    debited = true
+    await creditPlatformAccountFromInbound(admin, {
+      accountId: input.payeePlatformAccountId,
+      amountCents: Math.round(amt * 100),
+      type: "easetag",
+      description: "Easetag",
+      inboundKey: `easetag:${transferGroupId}`,
+    })
+    credited = true
+    const debitInsert = buildTransactionInsert({
+      userId: input.senderUserId,
+      businessId: input.senderBusinessId,
+      providerTransactionId: debitPtid,
+      direction: "out",
+      amount: amt,
+      currency: input.currency,
+      easnerTransactionId: etid,
+      metadata: debitMeta,
+      now,
+    })
+    const { error: dErr } = await admin.from("transactions").insert(debitInsert)
+    if (dErr) throw dErr
+    debitInserted = true
+    return {
+      ok: true,
+      idempotent: false,
+      transferGroupId,
+      debitProviderTransactionId: debitPtid,
+      creditProviderTransactionId: creditPtid,
+      easnerTransactionId: etid,
+    }
+  } catch (e) {
+    try {
+      if (debitInserted) {
+        await admin.from("transactions").delete().eq("provider", "easner_internal").eq("provider_transaction_id", debitPtid)
+      }
+      if (credited) {
+        await creditPlatformAccountFromInbound(admin, {
+          accountId: input.payeePlatformAccountId,
+          amountCents: -Math.round(amt * 100),
+          type: "easetag",
+          description: "Easetag reversal",
+          inboundKey: `easetag:${transferGroupId}:reversal`,
+        })
+      }
+      if (debited) {
+        await applyWalletBalanceDelta(admin, { ...senderBalanceScope, delta: amt })
+      }
     } catch {
       // best-effort rollback
     }

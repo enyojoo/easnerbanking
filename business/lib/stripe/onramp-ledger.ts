@@ -371,6 +371,10 @@ export async function creditOnrampSessionIfFulfilled(
   const session = input.stripeSession
   const stripeSessionId = String(session.id || "").trim()
   if (!stripeSessionId) return { credited: false }
+  const { creditPlatformOnrampFromStripeSession } = await import("@/lib/platform/receive")
+  if (await creditPlatformOnrampFromStripeSession(admin, session)) {
+    return { credited: true }
+  }
   const status = sessionStatus(session.status)
   if (!isFulfilledStatus(status)) {
     if (status.includes("fail") || status.includes("expired") || status.includes("cancel")) {

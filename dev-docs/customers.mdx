@@ -6,7 +6,7 @@ icon: users
 
 A customer is your end user. They never log into Easner. You hold the id and call `v1`.
 
-Creating a customer issues a USD `acct_` on that customer. Email and name are not enough for live bank details or onramp — start hosted verification first.
+Creating a customer opens their **custodial vault** and issues a USD `acct_` (USDC on Solana). Email and name are not enough for a live virtual account or onramp — start hosted verification first.
 
 <Note>
   **Scope:** `GET` needs `accounts.read`. `POST` customer needs `transfers.write`. `POST` verification needs `accounts.write`.
@@ -20,6 +20,7 @@ Creating a customer issues a USD `acct_` on that customer. Email and name are no
 | `email` | string \| null | Required to start live verification |
 | `name` | string \| null | Used on bank details |
 | `external_id` | string \| null | Your id. Use this to map your user |
+| `easetag` | string \| null | In-network `@tag`. Allocated on create. Unique |
 | `status` | string | `active` |
 | `verification_status` | string | `unverified`, `pending`, `approved`, `rejected` |
 | `livemode` | boolean | From the key |
@@ -31,6 +32,7 @@ Creating a customer issues a USD `acct_` on that customer. Email and name are no
   "email": "ada@example.com",
   "name": "Ada",
   "external_id": "user_42",
+  "easetag": "ada",
   "status": "active",
   "verification_status": "unverified",
   "livemode": false,
@@ -46,10 +48,10 @@ Creating a customer issues a USD `acct_` on that customer. Email and name are no
 curl https://api.easner.com/v1/customers \
   -H "Authorization: Bearer $EASNER_SECRET_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"email":"ada@example.com","name":"Ada","external_id":"user_42"}'
+  -d '{"email":"ada@example.com","name":"Ada","external_id":"user_42","easetag":"ada"}'
 ```
 
-`201` on success. The response includes the issued USD account under `accounts`.
+`201` on success. The response includes the issued USD account (the vault view) under `accounts`.
 
 ## List
 
@@ -83,7 +85,7 @@ curl https://api.easner.com/v1/customers/cus_…/verification \
 
 Live create needs an email. `404` if the customer is missing.
 
-A live `cus_` with only email and name cannot hold named bank details or card onramp until `approved`.
+A live `cus_` with only email and name cannot hold a named virtual account or card onramp until `approved`. The vault still exists; live bank details wait on verification.
 
 ## Events
 
@@ -94,9 +96,9 @@ A live `cus_` with only email and name cannot hold named bank details or card on
 
 ## Expected
 
-- Store `id` and `external_id` on your side.
+- Store `id`, `external_id`, and `easetag` on your side.
 - Attach destinations with `"customer": "cus_…"`.
-- Open further currencies with `POST /v1/accounts` and `"customer": "cus_…"`.
+- Open EUR with `POST /v1/accounts` and `"customer": "cus_…"` — a second vault view, same customer.
 - Start verification before live Receive.
 
 <Card title="Receive money" icon="download" href="/receive">

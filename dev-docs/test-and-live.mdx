@@ -10,11 +10,11 @@ Livemode is the key prefix. There is no `livemode` body flag.
 |---|---|---|
 | Objects | Isolated test objects | Isolated live objects |
 | Verification | Approves immediately. No hosted form | Hosted link. Live bank details and onramp need `approved` |
-| Bank details | Sandbox numbers | Named details after approval |
-| Chain addresses | Returned without KYC | Require `approved` |
-| Onramp | Hosted page completes and credits the `acct_` | Hosted session after approval |
+| Virtual account | Sandbox numbers. No real bank | Named ACH/SEPA after approval. Fiat converts into the vault |
+| Wallet address | Token account without KYC | Require `approved`. USDC/EURC into the vault |
+| Onramp | Hosted page completes and credits the vault | Hosted card onramp after approval, onto the vault |
 | Quote | Completes. Send/receive 1:1 | May price wallet destinations |
-| Transfer | Completes. Debits the **test** customer account | Debits the **live** customer account |
+| Transfer | Completes. Debits the **test** vault | Wallet, Easetag, bank, and mobile money leave the live vault |
 | Checkout | Test card `4242…`. Nothing charged | Real collect onto your business balance |
 | Webhooks | Your test URL | Your live URL |
 

@@ -18,7 +18,7 @@ export EASNER_SECRET_KEY=easner_sk_test_…
 
 <Steps>
   <Step title="Create a customer">
-    A customer is your end user. Creating one issues a USD account.
+    A customer is your end user. Creating one opens their USD vault (USDC) and issues `acct_`.
 
     ```bash
     curl https://api.easner.com/v1/customers \
@@ -30,7 +30,7 @@ export EASNER_SECRET_KEY=easner_sk_test_…
     Save `id` (`cus_…`) and the issued `accounts[0].id` (`acct_…`).
   </Step>
   <Step title="Add a destination">
-    Where the transfer should land. Easetag is the simplest test destination.
+    A payment method. Easetag is the simplest test destination (in-network). For bank, mobile money, or wallet, see [Send](/send).
 
     ```bash
     curl https://api.easner.com/v1/destinations \

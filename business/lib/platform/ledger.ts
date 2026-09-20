@@ -218,7 +218,7 @@ export async function creditPlatformAccountFromInbound(
   input: {
     accountId: string
     amountCents: number
-    type: "deposit" | "onramp" | "chain"
+    type: "deposit" | "onramp" | "chain" | "easetag"
     description?: string | null
     inboundKey?: string | null
     metadata?: Record<string, unknown>

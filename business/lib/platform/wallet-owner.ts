@@ -1,6 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { isTurnkeyConfigured, isTurnkeyWalletAutoprovisionEnabled } from "@/lib/turnkey/config"
 import { createEasnerTurnkeySubOrganization } from "@/lib/wallet/turnkey-create-sub-org"
-import type { WalletOwnerRow } from "@/lib/wallet/turnkey-wallet-db"
+import { processNextWalletProvisioningJob } from "@/lib/wallet/turnkey-provisioning"
+import { enqueueVaultProvisioningJobs, type WalletOwnerRow } from "@/lib/wallet/turnkey-wallet-db"
+import { DEFAULT_INDIVIDUAL_VAULTS } from "@/lib/wallet/vault-spec"
 
 export const PLATFORM_OWNER_TYPE = "platform"
 export const PLATFORM_CUSTOMER_OWNER_TYPE = "platform_customer"
@@ -50,10 +53,33 @@ async function provisionSubOrgIfNeeded(
       .eq("id", owner.id)
       .select("*")
       .single()
-    return (data as WalletOwnerRow | null) ?? owner
+    const next = (data as WalletOwnerRow | null) ?? owner
+    await provisionPlatformCustomerVaults(admin, next.id)
+    return next
   } catch (error) {
     console.warn("[platform] turnkey sub-org:", error instanceof Error ? error.message : error)
     return owner
+  }
+}
+
+/** Open the USD (USDC) and EUR (EURC) Solana vaults for a platform customer. */
+export async function provisionPlatformCustomerVaults(
+  admin: SupabaseClient,
+  walletOwnerId: string,
+): Promise<void> {
+  const ownerId = String(walletOwnerId ?? "").trim()
+  if (!ownerId) return
+  if (!isTurnkeyConfigured() || !isTurnkeyWalletAutoprovisionEnabled()) return
+  const { data: wo } = await admin
+    .from("wallet_owners")
+    .select("turnkey_sub_organization_id")
+    .eq("id", ownerId)
+    .maybeSingle()
+  if (!String(wo?.turnkey_sub_organization_id ?? "").trim()) return
+  await enqueueVaultProvisioningJobs(admin, ownerId, DEFAULT_INDIVIDUAL_VAULTS)
+  for (let i = 0; i < 16; i++) {
+    const result = await processNextWalletProvisioningJob({ walletOwnerId: ownerId })
+    if (!result.processed || result.detail === "no_jobs") break
   }
 }
 

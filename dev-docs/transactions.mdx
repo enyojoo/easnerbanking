@@ -4,7 +4,7 @@ description: List and retrieve `txn_` rows for Banking and Checkout.
 icon: receipt
 ---
 
-A transaction is a row on `GET /v1/transactions`. Banking receive and send write here. Checkout collects also appear here when you used a merchant secret key.
+A transaction is a row on `GET /v1/transactions`. Receive writes vault credits (`deposit`, `chain`, `onramp`). Send writes vault debits (`transfer`). Checkout collects also appear here when you used a merchant secret key — those are **your** business balance, not a customer vault.
 
 <Note>
   **Scope:** `accounts.read`

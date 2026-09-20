@@ -121,6 +121,9 @@ vi.mock("@/lib/platform/ledger", () => ({
   findIssuedPlatformAccountForWalletOwner: mocks.findIssued,
   creditPlatformAccountFromInbound: mocks.creditPlatform,
 }))
+vi.mock("@/lib/platform/receive", () => ({
+  findPlatformOnrampInboundKey: vi.fn().mockResolvedValue(null),
+}))
 
 function adminFrom(data: unknown = null) {
   const q = {

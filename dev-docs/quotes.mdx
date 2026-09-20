@@ -19,7 +19,7 @@ Quotes expire **15 minutes** after create. Expired quotes cannot be transferred.
 | `id` | string | `qt_…` |
 | `source` | string | `acct_…` — required on create |
 | `destination` | string \| null | `dest_…` |
-| `send` | `{ amount, currency }` | What leaves the customer account, cents |
+| `send` | `{ amount, currency }` | What leaves the customer vault, cents |
 | `receive` | `{ amount, currency }` | What the destination should get, cents |
 | `expires_at` | ISO-8601 | |
 | `status` | string | `open` until used or expired |
@@ -38,7 +38,7 @@ Quotes expire **15 minutes** after create. Expired quotes cannot be transferred.
 }
 ```
 
-In test, send and receive are 1:1. In live, a wallet destination may return a higher `send.amount` (fees) and a different `receive.currency`. Always debit `send.amount`.
+In test, send and receive are 1:1. In live, a wallet destination may return a higher `send.amount` (fees) and a different `receive.currency`. Bank and mobile-money corridors are listed on `GET /v1/payment_methods`. Always debit `send.amount`.
 
 ## Create
 
@@ -58,7 +58,7 @@ curl https://api.easner.com/v1/quotes \
 | Field | Required | Notes |
 |---|---|---|
 | `amount` | yes | Positive integer cents |
-| `source` | yes | Customer account to debit |
+| `source` | yes | Customer vault (`acct_`) to debit |
 | `currency` | no | Defaults to `USD` |
 | `receive_currency` | no | Defaults to send currency |
 | `destination` | no | Destination to credit |

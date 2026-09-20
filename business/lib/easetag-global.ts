@@ -3,6 +3,12 @@ import { normalizeEasetag } from "@/lib/easetag-validation"
 
 type Admin = SupabaseClient
 
+export type EasetagAvailabilityOptions = {
+  excludeUserId?: string
+  excludeBusinessId?: string
+  excludePlatformCustomerId?: string
+}
+
 export function isUndefinedEasetagColumnError(err: { code?: string; message?: string } | null): boolean {
   if (!err) return false
   const code = String(err.code ?? "")
@@ -15,7 +21,7 @@ export function isUndefinedEasetagColumnError(err: { code?: string; message?: st
 export async function isEasetagGloballyAvailable(
   admin: Admin,
   easetag: string,
-  options?: { excludeUserId?: string; excludeBusinessId?: string },
+  options?: EasetagAvailabilityOptions,
 ): Promise<boolean> {
   const clean = normalizeEasetag(easetag)
   let uq = admin.from("users").select("id").eq("easetag", clean).limit(1)
@@ -34,5 +40,14 @@ export async function isEasetagGloballyAvailable(
     if (isUndefinedEasetagColumnError(berr)) return true
     throw new Error(berr.message)
   }
-  return !(brows && brows.length > 0)
+  if (brows && brows.length > 0) return false
+
+  let pq = admin.from("platform_customers").select("id").eq("easetag", clean).limit(1)
+  if (options?.excludePlatformCustomerId) pq = pq.neq("id", options.excludePlatformCustomerId)
+  const { data: prows, error: perr } = await pq
+  if (perr) {
+    if (isUndefinedEasetagColumnError(perr)) return true
+    throw new Error(perr.message)
+  }
+  return !(prows && prows.length > 0)
 }

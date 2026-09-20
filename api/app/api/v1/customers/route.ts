@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   const livemode = auth.ctx.mode === "live"
   const { data } = await admin
     .from("platform_customers")
-    .select("id, email, name, external_id, status, verification_status, livemode, created_at")
+    .select("id, email, name, external_id, easetag, status, verification_status, livemode, created_at")
     .eq("business_id", auth.ctx.businessId)
     .eq("livemode", livemode)
     .order("created_at", { ascending: false })
@@ -36,6 +36,7 @@ export async function POST(request: Request) {
     email?: string
     name?: string
     external_id?: string
+    easetag?: string
   } | null
   try {
     const customer = await createPlatformCustomer(admin, {
@@ -44,6 +45,7 @@ export async function POST(request: Request) {
       email: body?.email,
       name: body?.name,
       externalId: body?.external_id,
+      easetag: body?.easetag,
     })
     await logPlatformApi(admin, {
       businessId: auth.ctx.businessId,
@@ -55,14 +57,21 @@ export async function POST(request: Request) {
     return NextResponse.json(customer, { status: 201 })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not create customer"
+    const code =
+      error && typeof error === "object" && "code" in error
+        ? String((error as { code?: string }).code)
+        : "create_failed"
+    const status = code === "easetag_taken" ? 409 : 400
+    const errorCode =
+      code === "invalid_easetag" || code === "easetag_taken" ? code : "create_failed"
     await logPlatformApi(admin, {
       businessId: auth.ctx.businessId,
       livemode,
       method: "POST",
       path: "/v1/customers",
-      status: 400,
-      errorCode: "create_failed",
+      status,
+      errorCode,
     })
-    return v1Error(400, "create_failed", message)
+    return v1Error(status, errorCode, message)
   }
 }

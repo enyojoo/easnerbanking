@@ -3,6 +3,7 @@ import { requireAuth } from "@/app/api/noah/_helpers"
 import { resolveNoahAccountContext } from "@/lib/noah/resolve-account-context"
 import { requireNoahVerificationApproved } from "@/lib/noah/noah-tier-guards"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
+import { resolveEasetagPayee } from "@/lib/easetag-payee"
 import { normalizeEasetag } from "@/lib/easetag-validation"
 import { isUndefinedEasetagColumnError } from "@/lib/easetag-global"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
@@ -19,6 +20,7 @@ import {
 import {
   deterministicTransferGroupUuid,
   executeEasetagTransfer,
+  executeEasetagTransferToPlatformCustomer,
   isEasetagChainSettlementEnabled,
   isEasetagLedgerP2PEnabled,
   rollbackEasetagP2pLedger,
@@ -100,6 +102,7 @@ export async function POST(request: Request) {
   let payeeEasetagResolved = cleanTag
   let payeeUserId: string | undefined
   let payeeBusinessId: string | undefined
+  let payeePlatformAccountId: string | undefined
 
   if (resolvedPayeeUser) {
     if (resolvedPayeeUser.id === auth.user.id) {
@@ -111,16 +114,24 @@ export async function POST(request: Request) {
   } else {
     const { data: biz, error: bizErr } = await admin.from("businesses").select("id,easetag").eq("easetag", cleanTag).maybeSingle()
     if (bizErr) return NextResponse.json({ error: bizErr.message }, { status: 400 })
-    if (!biz) return NextResponse.json({ error: "Easetag not found." }, { status: 404 })
-    if (myBusinessId && biz.id === myBusinessId) {
-      return NextResponse.json({ error: "You cannot send to yourself." }, { status: 400 })
-    }
-    payeeEasetagResolved = String(biz.easetag || cleanTag)
-    payeeBusinessId = String(biz.id)
-    const ownerUserId = await resolveBusinessOrgOwnerUserId(admin, biz.id as string)
-    payeeUserId = ownerUserId || undefined
-    if (!payeeUserId) {
-      return NextResponse.json({ error: "Payee organization has no owner on file." }, { status: 400 })
+    if (!biz) {
+      const platform = await resolveEasetagPayee(admin, cleanTag, currencyRaw)
+      if (platform?.kind !== "platform_customer") {
+        return NextResponse.json({ error: "Easetag not found." }, { status: 404 })
+      }
+      payeeEasetagResolved = platform.easetag
+      payeePlatformAccountId = platform.accountId
+    } else {
+      if (myBusinessId && biz.id === myBusinessId) {
+        return NextResponse.json({ error: "You cannot send to yourself." }, { status: 400 })
+      }
+      payeeEasetagResolved = String(biz.easetag || cleanTag)
+      payeeBusinessId = String(biz.id)
+      const ownerUserId = await resolveBusinessOrgOwnerUserId(admin, biz.id as string)
+      payeeUserId = ownerUserId || undefined
+      if (!payeeUserId) {
+        return NextResponse.json({ error: "Payee organization has no owner on file." }, { status: 400 })
+      }
     }
   }
 
@@ -139,7 +150,40 @@ export async function POST(request: Request) {
   const idemHeader = request.headers.get("idempotency-key")?.trim() || request.headers.get("x-idempotency-key")?.trim()
   const idempotencyKey =
     idemHeader ||
-    `easetag:${senderBusinessId || senderUserId}:${payeeBusinessId || payeeUserId}:${currencyRaw}:${amount}:${cleanTag}`
+    `easetag:${senderBusinessId || senderUserId}:${payeePlatformAccountId || payeeBusinessId || payeeUserId}:${currencyRaw}:${amount}:${cleanTag}`
+
+  if (payeePlatformAccountId) {
+    const reservedDebit =
+      typeof body?.reserved_debit_etid === "string" ? body.reserved_debit_etid.trim() : ""
+    const result = await executeEasetagTransferToPlatformCustomer(admin, {
+      idempotencyKey,
+      amount: ledgerAmount,
+      currency: currencyRaw as "USD" | "EUR",
+      senderUserId,
+      senderBusinessId,
+      senderEasetag: senderEasetag || undefined,
+      payeePlatformAccountId,
+      payeeEasetag: payeeEasetagResolved,
+      reservedDebitEtid: reservedDebit || undefined,
+      sendNote: sendNote || undefined,
+    })
+    if (!result.ok) {
+      return NextResponse.json({ ok: false, error: result.error }, { status: 400 })
+    }
+    await notifyEasetagTransferSettled(admin, {
+      idempotent: result.idempotent,
+      debitProviderTransactionId: result.debitProviderTransactionId,
+      creditProviderTransactionId: result.creditProviderTransactionId,
+    }).catch((e) => console.warn("easetag transfer notify:", e))
+    return NextResponse.json({
+      ok: true,
+      idempotent: result.idempotent,
+      transfer_group_id: result.transferGroupId,
+      debit_provider_transaction_id: result.debitProviderTransactionId,
+      credit_provider_transaction_id: result.creditProviderTransactionId,
+      easner_transaction_id: result.easnerTransactionId,
+    })
+  }
 
   const reservedDebit =
     typeof body?.reserved_debit_etid === "string" ? body.reserved_debit_etid.trim() : ""

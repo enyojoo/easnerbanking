@@ -1,10 +1,46 @@
 ---
 title: Easner Dev Platform
-description: Two products on one key — Banking for your customers, Checkout for payers on your site.
+description: Stablecoin-native banking and payment infrastructure. Hold, receive, send, and collect through one API.
 icon: book-open
 ---
 
-You integrate. Your customer is the banking end user (`cus_`). A payer is someone who pays you through Checkout.
+Easner is **stablecoin-native banking and payment infrastructure**. You integrate. Your customer is the banking end user (`cus_`). A payer is someone who pays you through Checkout.
+
+Every issued account is a **custodial stablecoin vault** with a currency view:
+
+| Account | Vault asset | Chain |
+|---|---|---|
+| USD `acct_` | USDC | Solana |
+| EUR `acct_` | EURC | Solana |
+
+You never hold signing keys. You call `v1`. Easner signs. Fiat in (virtual account) converts into that vault. Fiat and chain out leave from that vault. `available` is the vault, in cents.
+
+```mermaid
+flowchart LR
+  subgraph edgesIn [Receive]
+    va[Virtual account]
+    chain[Wallet address]
+    card[Card onramp]
+    tagIn[Easetag]
+  end
+  vault[Customer vault]
+  acct["acct_ available"]
+  subgraph edgesOut [Send]
+    bank[Bank]
+    momo[Mobile money]
+    wallet[Wallet]
+    tag[Easetag]
+  end
+  va -->|"fiat to stablecoin"| vault
+  chain -->|"USDC or EURC"| vault
+  card --> vault
+  tagIn --> vault
+  vault --> acct
+  acct --> bank
+  acct --> momo
+  acct --> wallet
+  acct --> tag
+```
 
 Base URL: `https://api.easner.com`
 
@@ -16,59 +52,73 @@ Amounts are minor units (cents). Errors are `{ error: { type, code, message } }`
 
 | Product | Who holds the money | What you build |
 |---|---|---|
-| **Banking** | Your customer, on an issued `acct_` | Accounts, receive, send |
-| **Checkout** | You, on your business balance | Collect on your website |
+| **Banking** | Your customer, in their vault (`acct_`) | [Accounts](/accounts), [Receive](/receive), [Send](/send) |
+| **Checkout** | You, on your business balance | [Collect](/checkout) on your website |
 
 They share a secret key and Console. They do not share a balance.
 
-Checkout uses the same Connect account as invoices and payment links. A successful collect lands on **your** business balance. Switch to Banking in the app to see it. Checkout does not credit a customer `acct_`. That is Receive.
+Checkout uses the same Connect account as invoices and payment links. A collect lands on **your** business balance — not a customer vault. That is not Receive.
+
+## What `v1` covers
+
+| Rail | On `v1` |
+|---|---|
+| Customer vault (USDC / EURC) | Yes — created with the customer |
+| Receive: virtual account | Yes — live after verification |
+| Receive: wallet address | Yes — Solana USDC / EURC |
+| Receive: card onramp | Yes — test completes on the hosted page; live opens card onramp onto the vault |
+| Receive: Easetag | Yes — the `cus_` has an `@tag`. Inbound credits the issued `acct_` |
+| Send: wallet (Solana USDC / EURC) | Yes |
+| Send: Easetag | Yes — pays a first-party `@tag` or another `cus_` |
+| Send: bank / mobile money | Yes — live leaves the customer vault on the corridor catalog |
+| Country / corridor catalog | Yes — `GET /v1/payment_methods` |
+| Checkout | Yes — your business balance |
+
+## How you integrate
+
+You map **your user → `cus_` → `acct_`**. Then you either fund the vault (Receive) or pay from it (Send), or you collect onto yourself (Checkout).
+
+<Steps>
+  <Step title="Create the customer">
+    `POST /v1/customers` with your `external_id`. This issues a USD vault and account. Open EUR with `POST /v1/accounts`.
+  </Step>
+  <Step title="Verify before live rails">
+    `POST /v1/customers/:id/verification`. Test approves immediately. Live returns a hosted URL. A name and email alone cannot hold a named virtual account.
+  </Step>
+  <Step title="Receive into the vault">
+    Publish [bank details](/receive#virtual-account), a [wallet address](/receive#wallet-address), or a [card onramp](/receive#card-onramp). When the deposit settles, `available` rises. Listen for `account.updated` and `transaction.created`.
+  </Step>
+  <Step title="Send from the vault">
+    Create a [destination](/destinations) (bank, mobile money, wallet, or Easetag). [Quote](/quotes) with `source`. [Transfer](/transfers). Fulfil from `transfer.completed`.
+  </Step>
+  <Step title="Collect on your site">
+    Optional. [Checkout](/checkout) sessions credit **your** business balance. Fulfil from `checkout.completed`.
+  </Step>
+</Steps>
 
 ## Objects
 
 | Object | Id | Product | Job |
 |---|---|---|---|
-| Customer | `cus_` | Banking | Your end user |
-| Account | `acct_` | Banking | A currency balance. Issued accounts have `customer` |
-| Destination | `dest_` | Banking | Where a send can land |
+| Customer | `cus_` | Banking | Your end user. Owns the vault |
+| Account | `acct_` | Banking | Currency view of that vault |
+| Destination | `dest_` | Banking | Payment method for a send |
 | Quote | `qt_` | Banking | Locked send / receive amounts |
-| Transfer | `tr_` | Banking | Money leaving a customer account |
-| Transaction | `txn_` | Both | A row on `GET /v1/transactions` |
+| Transfer | `tr_` | Banking | Money leaving the vault |
+| Transaction | `txn_` | Both | Activity on `GET /v1/transactions` |
 | Checkout session | `cs_` | Checkout | A collect on your website |
 
-## Expected flow
-
-<Steps>
-  <Step title="Open Dev">
-    Switch to Dev on `business.easner.com`.
-  </Step>
-  <Step title="Mint a test key">
-    Open Console. Mint a test key. Add a webhook URL and tick events.
-  </Step>
-  <Step title="Send (Banking)">
-    Create a customer (this issues USD). Add a destination. Quote with `source`. Transfer.
-  </Step>
-  <Step title="Receive (Banking)">
-    Start hosted verification. In test, that approves immediately. Then fetch bank details, chain addresses, or an onramp session onto the customer `acct_`.
-  </Step>
-  <Step title="Collect (Checkout)">
-    Register a website, create sessions from your server, mount `checkout.js`, fulfil from `checkout.completed`.
-  </Step>
-  <Step title="Go live">
-    Mint a live key only after test works. Live receive needs an approved customer.
-  </Step>
-</Steps>
-
 <Columns cols={2}>
-  <Card title="Quickstart" icon="rocket" href="/quickstart">
-    First send in test: customer → destination → quote → transfer.
+  <Card title="Accounts" icon="wallet" href="/accounts">
+    The vault, USD/EUR, and how `available` is the stablecoin.
   </Card>
   <Card title="Receive money" icon="download" href="/receive">
-    Verification, bank details, chain addresses, onramp.
+    Virtual account, wallet address, card onramp.
   </Card>
-  <Card title="Checkout" icon="credit-card" href="/checkout">
-    Collect onto your business balance.
+  <Card title="Send money" icon="send" href="/send">
+    Bank, mobile money, wallet, and Easetag.
   </Card>
-  <Card title="Authentication" icon="key" href="/authentication">
-    Bearer keys, livemode, scopes, idempotency.
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    First send in test.
   </Card>
 </Columns>
