@@ -33,7 +33,7 @@ export function OfficeCaseHeader({
 }) {
   return (
     <div className="sticky top-0 z-20 bg-background/95 backdrop-blur">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-3 px-6 py-3">
         <div className="min-w-0 flex-1">
           <Button asChild variant="ghost" size="sm" className="-ml-2 mb-1 h-7 gap-1 px-2 text-muted-foreground">
             <Link href={backHref}>

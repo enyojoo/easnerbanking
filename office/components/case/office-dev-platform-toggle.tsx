@@ -46,10 +46,10 @@ export function OfficeDevPlatformToggle({
   }
 
   return (
-    <div className="flex items-center justify-between gap-4 rounded-lg border border-border/70 px-3 py-3">
+    <div className="flex w-full items-center justify-between gap-4 rounded-lg border border-border/70 bg-background px-3 py-3">
       <div className="min-w-0">
         <Label htmlFor="enable-dev-platform" className="text-sm font-medium">
-          Enable Dev Platform
+          Dev Platform
         </Label>
         <p className="mt-0.5 text-xs text-muted-foreground">
           Unlocks Checkout, Developers, and the product switcher. Default off.

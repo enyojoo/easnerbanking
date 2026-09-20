@@ -201,21 +201,27 @@ export function BusinessCase({ businessId }: { businessId: string }) {
           </>
         }
         actions={
-          <>
-            {business.owner_user_id ? (
-              <Button asChild size="sm" variant="outline">
-                <Link href={`/users/${business.owner_user_id}`}>Owner</Link>
-              </Button>
-            ) : null}
-            <OfficeRestrictionControls
-              compact
-              kind="business"
-              subjectId={business.id}
-              phase={business.accountRestrictionPhase}
-              source={business.accountRestrictionSource}
-              windDownEndsAt={business.accountRestrictionWindDownEndsAt}
+          <div className="flex w-[min(22rem,100%)] flex-col items-stretch gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {business.owner_user_id ? (
+                <Button asChild size="sm" variant="outline">
+                  <Link href={`/users/${business.owner_user_id}`}>Owner</Link>
+                </Button>
+              ) : null}
+              <OfficeRestrictionControls
+                compact
+                kind="business"
+                subjectId={business.id}
+                phase={business.accountRestrictionPhase}
+                source={business.accountRestrictionSource}
+                windDownEndsAt={business.accountRestrictionWindDownEndsAt}
+              />
+            </div>
+            <OfficeDevPlatformToggle
+              businessId={business.id}
+              enabled={Boolean(business.dev_platform_enabled)}
             />
-          </>
+          </div>
         }
         tabs={<OfficeCaseTabBar tabs={[...TABS]} onTabHover={prefetchTab} />}
       />
@@ -241,16 +247,6 @@ export function BusinessCase({ businessId }: { businessId: string }) {
                     "–"
                   )}
                 </OfficeDetailRow>
-              </OfficeSection>
-              <OfficeSection
-                title="Platform"
-                description="Office-gated access to Checkout, Developers, and the product switcher."
-                divide={false}
-              >
-                <OfficeDevPlatformToggle
-                  businessId={business.id}
-                  enabled={Boolean(business.dev_platform_enabled)}
-                />
               </OfficeSection>
               <OfficeSection title="Description">
                 <p className="whitespace-pre-wrap text-sm text-foreground">
