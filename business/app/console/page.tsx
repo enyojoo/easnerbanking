@@ -2,15 +2,15 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
 import { ArrowDownLeft, ArrowUpRight, Eye, EyeOff, TrendingDown, TrendingUp } from "lucide-react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ConsoleWorkspaceActions } from "@/components/console/console-workspace-actions"
+import { ConsoleAuditLogCard } from "@/components/console/console-audit-log-card"
+import { ConsoleQuickstartCard } from "@/components/console/console-quickstart-card"
 import { useCheckoutSettings } from "@/hooks/use-checkout-settings"
 import { usePlatformOverview } from "@/hooks/use-platform-overview"
-import { parseConsoleLivemode } from "@/lib/console/livemode"
+import { useConsoleLivemode } from "@/lib/console/livemode-context"
 import { formatTransactionRowDateTime, transactionStatusRowPresentation } from "@/lib/transaction-row-present"
 import { cn, formatCurrency } from "@/lib/utils"
 
@@ -24,7 +24,7 @@ function formatVolumeParts(usdTotal: number, eurTotal: number): string {
 }
 
 export default function ConsoleHomePage() {
-  const livemode = parseConsoleLivemode(useSearchParams().get("livemode"))
+  const { livemode } = useConsoleLivemode()
   const overview = usePlatformOverview(livemode)
   const { data: checkout } = useCheckoutSettings()
   const [amountsVisible, setAmountsVisible] = useState(true)
@@ -45,6 +45,7 @@ export default function ConsoleHomePage() {
 
   return (
     <div className="space-y-6">
+      <ConsoleQuickstartCard />
       <Card>
         <CardHeader className="pb-4">
           <div className="flex items-start justify-between gap-6">
@@ -84,7 +85,6 @@ export default function ConsoleHomePage() {
                 {transactionCount === 1 ? "transaction" : "transactions"}
               </p>
             </div>
-            <ConsoleWorkspaceActions />
           </div>
         </CardHeader>
         <CardContent>
@@ -212,6 +212,8 @@ export default function ConsoleHomePage() {
           </CardContent>
         </Card>
       </div>
+
+      <ConsoleAuditLogCard />
     </div>
   )
 }

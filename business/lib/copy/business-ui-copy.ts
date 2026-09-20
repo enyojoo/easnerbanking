@@ -93,12 +93,20 @@ export const PAGE_COPY = {
   },
   consoleEvents: {
     title: "Events",
-    intro: "Choose what you get notified about.",
+    intro: "Everything that happened, whether or not delivery succeeded.",
   },
   consoleLogs: {
     title: "Logs",
     intro: "Recent requests.",
     empty: "No requests yet.",
+  },
+  consoleUsage: {
+    title: "Usage & limits",
+    intro: "How close you are to your rate limits, and your traffic over time.",
+  },
+  consoleExplorer: {
+    title: "Explorer",
+    intro: "Try an endpoint with your own test key, right here.",
   },
   links: {
     title: "Payment links",

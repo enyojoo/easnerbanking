@@ -8,6 +8,7 @@ import { toast } from "sonner"
 
 type Delivery = {
   id: string
+  endpointId: string
   event: string
   status: "pending" | "delivered" | "failed"
   attemptCount: number
@@ -23,7 +24,14 @@ function statusLabel(status: Delivery["status"]) {
   return "Retrying"
 }
 
-export function CheckoutWebhookDeliveries({ live }: { live?: boolean }) {
+export function CheckoutWebhookDeliveries({
+  live,
+  endpointLabels,
+}: {
+  live?: boolean
+  /** Map of endpoint id -> a short label (e.g. its URL), shown per delivery row. */
+  endpointLabels?: Record<string, string>
+}) {
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
   const [loading, setLoading] = useState(true)
   const [redelivering, setRedelivering] = useState<string | null>(null)
@@ -94,6 +102,11 @@ export function CheckoutWebhookDeliveries({ live }: { live?: boolean }) {
                   <Badge variant={row.status === "delivered" ? "default" : "secondary"}>
                     {statusLabel(row.status)}
                   </Badge>
+                  {endpointLabels?.[row.endpointId] ? (
+                    <span className="truncate text-xs text-muted-foreground">
+                      → {endpointLabels[row.endpointId]}
+                    </span>
+                  ) : null}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {new Date(row.createdAt).toLocaleString()}

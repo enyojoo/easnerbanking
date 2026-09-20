@@ -27,6 +27,7 @@ revoke update on public.users from authenticated, anon;
 -- pattern already proven correct on `invoices` / `transactions` /
 -- `wallet_balances`. No INSERT/UPDATE/DELETE policies are added — writes to
 -- these tables should stay service-role-only, same as the ledger tables.
+drop policy if exists payroll_runs_select_own_business on public.payroll_runs;
 create policy payroll_runs_select_own_business
   on public.payroll_runs
   for select
@@ -37,6 +38,7 @@ create policy payroll_runs_select_own_business
     )
   );
 
+drop policy if exists businesses_select_member on public.businesses;
 create policy businesses_select_member
   on public.businesses
   for select
@@ -47,6 +49,7 @@ create policy businesses_select_member
     )
   );
 
+drop policy if exists business_stripe_connect_accounts_select_member on public.business_stripe_connect_accounts;
 create policy business_stripe_connect_accounts_select_member
   on public.business_stripe_connect_accounts
   for select

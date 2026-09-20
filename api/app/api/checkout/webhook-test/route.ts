@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server"
-import { dispatchMerchantWebhook } from "@/lib/checkout/merchant-webhooks"
+import { MERCHANT_WEBHOOK_EVENTS, type MerchantWebhookEvent, sendTestWebhook } from "@/lib/checkout/merchant-webhooks"
+import { buildSampleWebhookPayload } from "@/lib/checkout/sample-webhook-payloads"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { requireEasnerBusinessId } from "@/lib/terminal/context"
 
-/** Send a sample `checkout.completed` event so merchants can verify their endpoint. */
+/** Send a sample event to a specific endpoint so merchants can verify it. */
 export async function POST(request: Request) {
   const user = await getUserFromApiRequest(request)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -11,22 +12,19 @@ export async function POST(request: Request) {
   const ctx = await requireEasnerBusinessId(user.id)
   if (!ctx.ok) return ctx.response
 
+  const body = (await request.json().catch(() => null)) as { endpointId?: string; event?: string } | null
+  const endpointId = body?.endpointId
+  if (!endpointId) return NextResponse.json({ error: "Choose an endpoint to test" }, { status: 400 })
+
+  const allowed = new Set<string>(MERCHANT_WEBHOOK_EVENTS)
+  const event = (allowed.has(String(body?.event)) ? body?.event : "checkout.completed") as MerchantWebhookEvent
+
   const admin = createSupabaseAdmin()
-  const result = await dispatchMerchantWebhook(admin, {
+  const result = await sendTestWebhook(admin, {
     businessId: ctx.businessId,
-    event: "checkout.completed",
-    data: {
-      test: true,
-      checkout_session_id: "cs_test_easner_sample",
-      mode: "payment",
-      amount_cents: 4900,
-      currency: "USD",
-      customer_email: "customer@example.com",
-      subscription_id: null,
-      metadata: { order_id: "ord_test" },
-      paid_at: new Date().toISOString(),
-      livemode: false,
-    },
+    endpointId,
+    event,
+    data: buildSampleWebhookPayload(event),
   })
 
   if (!result.delivered) {
@@ -34,9 +32,7 @@ export async function POST(request: Request) {
       {
         error:
           result.error ||
-          (result.status
-            ? `Your endpoint replied with ${result.status}.`
-            : "Add an endpoint URL and signing secret first."),
+          (result.status ? `Your endpoint replied with ${result.status}.` : "Add an endpoint URL and signing secret first."),
       },
       { status: 400 },
     )

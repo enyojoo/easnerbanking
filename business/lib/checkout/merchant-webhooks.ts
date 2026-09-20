@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { decryptCheckoutSecret, signMerchantWebhookPayload } from "./secrets"
-import type { MerchantWebhookEvent } from "./merchant-webhook-events"
+import { normalizeSubscribedWebhookEvents, type MerchantWebhookEvent } from "./merchant-webhook-events"
 
 export {
   MERCHANT_WEBHOOK_EVENTS,
@@ -18,6 +18,8 @@ export type CheckoutWebhookDeliveryStatus = "pending" | "delivered" | "failed"
 
 export type CheckoutWebhookDelivery = {
   id: string
+  endpointId: string
+  eventId: string
   businessId: string
   event: MerchantWebhookEvent
   payload: Record<string, unknown>
@@ -30,18 +32,27 @@ export type CheckoutWebhookDelivery = {
   nextAttemptAt: string | null
 }
 
+type EndpointRow = {
+  id: string
+  url: string
+  secret: string
+  events: MerchantWebhookEvent[]
+}
+
 function nextAttemptAt(attemptCount: number, from = Date.now()): string | null {
   const delay = BACKOFF_MS[Math.min(attemptCount, BACKOFF_MS.length) - 1]
   if (attemptCount >= MAX_ATTEMPTS) return null
   return new Date(from + (delay ?? BACKOFF_MS[BACKOFF_MS.length - 1])).toISOString()
 }
 
-function mapDelivery(row: Record<string, unknown>): CheckoutWebhookDelivery {
+function mapDelivery(row: Record<string, unknown>, eventType: string, payload: Record<string, unknown>): CheckoutWebhookDelivery {
   return {
     id: String(row.id),
+    endpointId: String(row.endpoint_id),
+    eventId: String(row.event_id),
     businessId: String(row.business_id),
-    event: row.event as MerchantWebhookEvent,
-    payload: (row.payload && typeof row.payload === "object" ? row.payload : {}) as Record<string, unknown>,
+    event: eventType as MerchantWebhookEvent,
+    payload,
     status: (row.status as CheckoutWebhookDeliveryStatus) || "pending",
     attemptCount: Number(row.attempt_count ?? 0),
     lastStatusCode: typeof row.last_status_code === "number" ? row.last_status_code : null,
@@ -85,42 +96,39 @@ async function postSignedWebhook(input: {
   }
 }
 
-async function loadEndpoint(
-  admin: SupabaseClient,
-  businessId: string,
-): Promise<{ url: string; secret: string; events: MerchantWebhookEvent[] } | null> {
-  let settings: {
-    webhook_url?: string | null
-    webhook_secret_ciphertext?: string | null
-    webhook_events?: unknown
-  } | null = null
-  const withEvents = await admin
-    .from("business_checkout_settings")
-    .select("webhook_url, webhook_secret_ciphertext, webhook_events")
+/**
+ * Every enabled endpoint for the business, regardless of the endpoint's own
+ * `livemode` tag — that tag is organizational (which console tab an
+ * endpoint shows under), not a delivery filter. Mirrors the pre-multi-endpoint
+ * behavior, where one shared config received both test and live events;
+ * filtering by mode here would silently stop live deliveries to any endpoint
+ * migrated from that single-config era.
+ */
+async function loadEnabledEndpoints(admin: SupabaseClient, businessId: string): Promise<EndpointRow[]> {
+  const { data } = await admin
+    .from("platform_webhook_endpoints")
+    .select("id, url, webhook_secret_ciphertext, events")
     .eq("business_id", businessId)
-    .maybeSingle()
-  if (withEvents.error) {
-    const fallback = await admin
-      .from("business_checkout_settings")
-      .select("webhook_url, webhook_secret_ciphertext")
-      .eq("business_id", businessId)
-      .maybeSingle()
-    settings = fallback.data
-  } else {
-    settings = withEvents.data
-  }
-  const url = typeof settings?.webhook_url === "string" ? settings.webhook_url.trim() : ""
-  const secret = decryptCheckoutSecret(settings?.webhook_secret_ciphertext as string | null)
-  if (!url || !secret) return null
-  return {
-    url,
-    secret,
-    events: normalizeSubscribedWebhookEvents(settings?.webhook_events),
-  }
+    .is("disabled_at", null)
+
+  return (data ?? [])
+    .map((row) => {
+      const url = typeof row.url === "string" ? row.url.trim() : ""
+      const secret = decryptCheckoutSecret(row.webhook_secret_ciphertext as string | null)
+      if (!url || !secret) return null
+      return {
+        id: String(row.id),
+        url,
+        secret,
+        events: normalizeSubscribedWebhookEvents(row.events),
+      }
+    })
+    .filter((row): row is EndpointRow => row !== null)
 }
 
 async function attemptDelivery(
   admin: SupabaseClient,
+  endpoint: EndpointRow,
   row: {
     id: string
     business_id: string
@@ -129,23 +137,8 @@ async function attemptDelivery(
     attempt_count: number
   },
 ): Promise<{ delivered: boolean; status?: number; error?: string }> {
-  const endpoint = await loadEndpoint(admin, row.business_id)
   const attemptCount = Number(row.attempt_count ?? 0) + 1
   const now = new Date().toISOString()
-  if (!endpoint) {
-    await admin
-      .from("checkout_webhook_deliveries")
-      .update({
-        status: attemptCount >= MAX_ATTEMPTS ? "failed" : "pending",
-        attempt_count: attemptCount,
-        last_attempt_at: now,
-        last_error: "Webhook URL or signing secret is missing",
-        next_attempt_at: nextAttemptAt(attemptCount),
-        updated_at: now,
-      })
-      .eq("id", row.id)
-    return { delivered: false, error: "Add an endpoint URL and signing secret first." }
-  }
 
   const timestampSeconds =
     typeof row.payload.created === "number" ? row.payload.created : Math.floor(Date.now() / 1000)
@@ -160,14 +153,12 @@ async function attemptDelivery(
 
   if (result.ok) {
     await admin
-      .from("checkout_webhook_deliveries")
+      .from("platform_webhook_deliveries")
       .update({
         status: "delivered",
         attempt_count: attemptCount,
-        last_attempt_at: now,
         last_status_code: result.status ?? 200,
         last_error: null,
-        response_body: result.responseBody ?? null,
         delivered_at: now,
         next_attempt_at: null,
         updated_at: now,
@@ -178,14 +169,12 @@ async function attemptDelivery(
 
   const failed = attemptCount >= MAX_ATTEMPTS
   await admin
-    .from("checkout_webhook_deliveries")
+    .from("platform_webhook_deliveries")
     .update({
       status: failed ? "failed" : "pending",
       attempt_count: attemptCount,
-      last_attempt_at: now,
       last_status_code: result.status ?? null,
       last_error: result.error ?? (result.status ? `HTTP ${result.status}` : "Webhook delivery failed"),
-      response_body: result.responseBody ?? null,
       next_attempt_at: failed ? null : nextAttemptAt(attemptCount),
       updated_at: now,
     })
@@ -198,8 +187,11 @@ async function attemptDelivery(
 }
 
 /**
- * Queue a signed Easner event and attempt delivery immediately.
- * Best-effort: never throws, so settlement is not blocked by a merchant outage.
+ * Record an Easner event and fan it out to every enabled endpoint subscribed
+ * to it. Best-effort: never throws, so settlement is not blocked by a
+ * merchant outage. Livemode is read off `data.livemode` (every public object
+ * mapper sets it) rather than a new parameter, so this stays a drop-in
+ * replacement at all 15+ existing call sites.
  */
 export async function dispatchMerchantWebhook(
   admin: SupabaseClient,
@@ -208,11 +200,8 @@ export async function dispatchMerchantWebhook(
     event: MerchantWebhookEvent
     data: Record<string, unknown>
   },
-): Promise<{ delivered: boolean; status?: number; error?: string; deliveryId?: string }> {
-  const endpoint = await loadEndpoint(admin, input.businessId)
-  if (!endpoint) return { delivered: false }
-  if (!endpoint.events.includes(input.event)) return { delivered: false }
-
+): Promise<{ delivered: boolean; status?: number; error?: string; deliveryId?: string; eventId?: string }> {
+  const livemode = Boolean(input.data?.livemode)
   const timestampSeconds = Math.floor(Date.now() / 1000)
   const payload = {
     type: input.event,
@@ -220,40 +209,159 @@ export async function dispatchMerchantWebhook(
     data: input.data,
   }
 
-  const { data: inserted, error: insertError } = await admin
-    .from("checkout_webhook_deliveries")
-    .insert({
+  const { data: eventRow, error: eventError } = await admin
+    .from("platform_events")
+    .insert({ business_id: input.businessId, livemode, type: input.event, payload })
+    .select("id")
+    .single()
+
+  if (eventError || !eventRow?.id) {
+    console.warn("[checkout] event insert failed", input.businessId, eventError?.message)
+    return { delivered: false }
+  }
+
+  const endpoints = (await loadEnabledEndpoints(admin, input.businessId)).filter((e) =>
+    e.events.includes(input.event),
+  )
+  if (endpoints.length === 0) return { delivered: false, eventId: String(eventRow.id) }
+
+  let anyDelivered = false
+  let lastStatus: number | undefined
+  let lastError: string | undefined
+  let firstDeliveryId: string | undefined
+
+  for (const endpoint of endpoints) {
+    const { data: deliveryRow, error: deliveryError } = await admin
+      .from("platform_webhook_deliveries")
+      .insert({
+        endpoint_id: endpoint.id,
+        event_id: eventRow.id,
+        business_id: input.businessId,
+        status: "pending",
+        attempt_count: 0,
+        next_attempt_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single()
+
+    if (deliveryError || !deliveryRow?.id) {
+      console.warn("[checkout] delivery insert failed", input.businessId, deliveryError?.message)
+      continue
+    }
+    firstDeliveryId ??= String(deliveryRow.id)
+
+    const result = await attemptDelivery(admin, endpoint, {
+      id: String(deliveryRow.id),
       business_id: input.businessId,
       event: input.event,
       payload,
+      attempt_count: 0,
+    })
+    if (result.delivered) anyDelivered = true
+    lastStatus = result.status ?? lastStatus
+    lastError = result.error ?? lastError
+  }
+
+  return {
+    delivered: anyDelivered,
+    status: lastStatus,
+    error: anyDelivered ? undefined : lastError,
+    deliveryId: firstDeliveryId,
+    eventId: String(eventRow.id),
+  }
+}
+
+/**
+ * Console "send test event" — records a real Event (so it shows in the
+ * Events feed) but delivers to exactly the one endpoint being tested, not
+ * every endpoint subscribed to that event type. Testing endpoint A should
+ * never spam endpoint B.
+ */
+export async function sendTestWebhook(
+  admin: SupabaseClient,
+  input: { businessId: string; endpointId: string; event: MerchantWebhookEvent; data: Record<string, unknown> },
+): Promise<{ delivered: boolean; status?: number; error?: string }> {
+  const { data: endpointRow } = await admin
+    .from("platform_webhook_endpoints")
+    .select("id, url, webhook_secret_ciphertext, events")
+    .eq("id", input.endpointId)
+    .eq("business_id", input.businessId)
+    .maybeSingle()
+  const url = typeof endpointRow?.url === "string" ? endpointRow.url.trim() : ""
+  const secret = decryptCheckoutSecret(endpointRow?.webhook_secret_ciphertext as string | null)
+  if (!endpointRow || !url || !secret) {
+    return { delivered: false, error: "Add an endpoint URL and signing secret first." }
+  }
+
+  const livemode = Boolean(input.data?.livemode)
+  const payload = { type: input.event, created: Math.floor(Date.now() / 1000), data: input.data }
+
+  const { data: eventRow } = await admin
+    .from("platform_events")
+    .insert({ business_id: input.businessId, livemode, type: input.event, payload })
+    .select("id")
+    .single()
+
+  const { data: deliveryRow } = await admin
+    .from("platform_webhook_deliveries")
+    .insert({
+      endpoint_id: input.endpointId,
+      event_id: eventRow?.id,
+      business_id: input.businessId,
       status: "pending",
       attempt_count: 0,
       next_attempt_at: new Date().toISOString(),
     })
-    .select("id, business_id, event, payload, attempt_count")
+    .select("id")
     .single()
 
-  if (insertError || !inserted?.id) {
-    console.warn("[checkout] webhook delivery insert failed", input.businessId, insertError?.message)
-    const body = JSON.stringify(payload)
-    const result = await postSignedWebhook({
-      url: endpoint.url,
-      secret: endpoint.secret,
-      event: input.event,
-      body,
-      timestampSeconds,
-    })
-    return { delivered: result.ok, status: result.status, error: result.error }
-  }
+  if (!deliveryRow?.id) return { delivered: false, error: "Could not record the test delivery." }
 
-  const result = await attemptDelivery(admin, {
-    id: String(inserted.id),
-    business_id: String(inserted.business_id),
-    event: String(inserted.event),
-    payload: payload,
-    attempt_count: 0,
-  })
-  return { ...result, deliveryId: String(inserted.id) }
+  return attemptDelivery(
+    admin,
+    {
+      id: String(endpointRow.id),
+      url,
+      secret,
+      events: normalizeSubscribedWebhookEvents(endpointRow.events),
+    },
+    { id: String(deliveryRow.id), business_id: input.businessId, event: input.event, payload, attempt_count: 0 },
+  )
+}
+
+async function loadDeliveryContext(
+  admin: SupabaseClient,
+  input: { businessId: string; deliveryId: string },
+): Promise<{ endpoint: EndpointRow; row: { id: string; event: string; payload: Record<string, unknown>; attempt_count: number } } | null> {
+  const { data } = await admin
+    .from("platform_webhook_deliveries")
+    .select("id, attempt_count, endpoint_id, event:platform_events(type, payload)")
+    .eq("id", input.deliveryId)
+    .eq("business_id", input.businessId)
+    .maybeSingle()
+  if (!data?.id) return null
+
+  const { data: endpointRow } = await admin
+    .from("platform_webhook_endpoints")
+    .select("id, url, webhook_secret_ciphertext, events")
+    .eq("id", data.endpoint_id as string)
+    .maybeSingle()
+  const url = typeof endpointRow?.url === "string" ? endpointRow.url.trim() : ""
+  const secret = decryptCheckoutSecret(endpointRow?.webhook_secret_ciphertext as string | null)
+  if (!endpointRow || !url || !secret) return null
+
+  const eventInfo = data.event as unknown as { type: string; payload: Record<string, unknown> } | null
+  if (!eventInfo) return null
+
+  return {
+    endpoint: { id: String(endpointRow.id), url, secret, events: normalizeSubscribedWebhookEvents(endpointRow.events) },
+    row: {
+      id: String(data.id),
+      event: eventInfo.type,
+      payload: eventInfo.payload ?? {},
+      attempt_count: Number(data.attempt_count ?? 0),
+    },
+  }
 }
 
 export async function listCheckoutWebhookDeliveries(
@@ -262,33 +370,29 @@ export async function listCheckoutWebhookDeliveries(
   limit = 25,
 ): Promise<CheckoutWebhookDelivery[]> {
   const { data } = await admin
-    .from("checkout_webhook_deliveries")
+    .from("platform_webhook_deliveries")
     .select(
-      "id, business_id, event, payload, status, attempt_count, last_status_code, last_error, created_at, delivered_at, next_attempt_at",
+      "id, endpoint_id, event_id, business_id, status, attempt_count, last_status_code, last_error, created_at, delivered_at, next_attempt_at, event:platform_events(type, payload)",
     )
     .eq("business_id", businessId)
     .order("created_at", { ascending: false })
     .limit(limit)
-  return (data ?? []).map((row) => mapDelivery(row as Record<string, unknown>))
+
+  return (data ?? []).map((row) => {
+    const eventInfo = row.event as unknown as { type: string; payload: Record<string, unknown> } | null
+    return mapDelivery(row as Record<string, unknown>, eventInfo?.type ?? "", eventInfo?.payload ?? {})
+  })
 }
 
 export async function redeliverCheckoutWebhook(
   admin: SupabaseClient,
   input: { businessId: string; deliveryId: string },
 ): Promise<{ delivered: boolean; status?: number; error?: string }> {
-  const { data } = await admin
-    .from("checkout_webhook_deliveries")
-    .select("id, business_id, event, payload, attempt_count")
-    .eq("id", input.deliveryId)
-    .eq("business_id", input.businessId)
-    .maybeSingle()
-  if (!data?.id) return { delivered: false, error: "Delivery not found" }
-  return attemptDelivery(admin, {
-    id: String(data.id),
-    business_id: String(data.business_id),
-    event: String(data.event),
-    payload: (data.payload ?? {}) as Record<string, unknown>,
-    attempt_count: Number(data.attempt_count ?? 0),
+  const context = await loadDeliveryContext(admin, input)
+  if (!context) return { delivered: false, error: "Delivery not found" }
+  return attemptDelivery(admin, context.endpoint, {
+    ...context.row,
+    business_id: input.businessId,
   })
 }
 
@@ -298,8 +402,8 @@ export async function retryDueCheckoutWebhooks(
 ): Promise<{ attempted: number; delivered: number }> {
   const now = new Date().toISOString()
   const { data } = await admin
-    .from("checkout_webhook_deliveries")
-    .select("id, business_id, event, payload, attempt_count")
+    .from("platform_webhook_deliveries")
+    .select("id, business_id, endpoint_id, attempt_count, event:platform_events(type, payload)")
     .eq("status", "pending")
     .lte("next_attempt_at", now)
     .lt("attempt_count", MAX_ATTEMPTS)
@@ -308,13 +412,29 @@ export async function retryDueCheckoutWebhooks(
 
   let delivered = 0
   for (const row of data ?? []) {
-    const result = await attemptDelivery(admin, {
-      id: String(row.id),
-      business_id: String(row.business_id),
-      event: String(row.event),
-      payload: (row.payload ?? {}) as Record<string, unknown>,
-      attempt_count: Number(row.attempt_count ?? 0),
-    })
+    const { data: endpointRow } = await admin
+      .from("platform_webhook_endpoints")
+      .select("id, url, webhook_secret_ciphertext, events")
+      .eq("id", row.endpoint_id as string)
+      .maybeSingle()
+    const url = typeof endpointRow?.url === "string" ? endpointRow.url.trim() : ""
+    const secret = decryptCheckoutSecret(endpointRow?.webhook_secret_ciphertext as string | null)
+    if (!endpointRow || !url || !secret) continue
+
+    const eventInfo = row.event as unknown as { type: string; payload: Record<string, unknown> } | null
+    if (!eventInfo) continue
+
+    const result = await attemptDelivery(
+      admin,
+      { id: String(endpointRow.id), url, secret, events: normalizeSubscribedWebhookEvents(endpointRow.events) },
+      {
+        id: String(row.id),
+        business_id: String(row.business_id),
+        event: eventInfo.type,
+        payload: eventInfo.payload ?? {},
+        attempt_count: Number(row.attempt_count ?? 0),
+      },
+    )
     if (result.delivered) delivered += 1
   }
   return { attempted: (data ?? []).length, delivered }

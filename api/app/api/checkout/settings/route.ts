@@ -1,15 +1,5 @@
 import { NextResponse } from "next/server"
-import {
-  MERCHANT_WEBHOOK_EVENT_DESCRIPTIONS,
-  MERCHANT_WEBHOOK_EVENTS,
-  normalizeSubscribedWebhookEvents,
-  type MerchantWebhookEvent,
-} from "@/lib/checkout/merchant-webhooks"
-import {
-  checkoutKeyLast4,
-  encryptCheckoutSecret,
-  generateWebhookSigningSecret,
-} from "@/lib/checkout/secrets"
+import { MERCHANT_WEBHOOK_EVENT_DESCRIPTIONS } from "@/lib/checkout/merchant-webhooks"
 import { mapCheckoutSite } from "@/lib/checkout/map-checkout-site"
 import { normalizeOrigin, normalizeReturnUrl } from "@/lib/checkout/normalize-checkout-url"
 import { BUSINESS_SELECTABLE_FEE_MODES, resolveCheckoutFeeMode } from "@/lib/stripe/checkout-fee-mode"
@@ -21,7 +11,7 @@ import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin
 import { requireEasnerBusinessId } from "@/lib/terminal/context"
 
 const SETTINGS_COLUMNS =
-  "business_id, fee_mode, allowed_origins, default_success_url, default_cancel_url, appearance, webhook_url, webhook_secret_last4, live_mode_enabled, test_payment_completed_at, online_payments_enabled"
+  "business_id, fee_mode, allowed_origins, default_success_url, default_cancel_url, appearance, live_mode_enabled, test_payment_completed_at, online_payments_enabled"
 
 export async function GET(request: Request) {
   const user = await getUserFromApiRequest(request)
@@ -31,13 +21,21 @@ export async function GET(request: Request) {
   if (!ctx.ok) return ctx.response
 
   const admin = createSupabaseAdmin()
-  const [{ data: settings }, feeMode, onlinePayments, { data: keys }, { data: siteRows }, { data: lastDelivery }, eventsRow] = await Promise.all([
+  const [
+    { data: settings },
+    feeMode,
+    onlinePayments,
+    { data: keys },
+    { data: siteRows },
+    { data: lastDelivery },
+    { data: firstEndpoint },
+  ] = await Promise.all([
     admin.from("business_checkout_settings").select(SETTINGS_COLUMNS).eq("business_id", ctx.businessId).maybeSingle(),
     resolveCheckoutFeeMode(admin, ctx.businessId),
     resolveOnlinePaymentsEnabled(admin, ctx.businessId),
     admin
       .from("business_api_keys")
-      .select("id, mode, publishable_key, secret_key_last4, created_at, last_used_at")
+      .select("id, mode, name, publishable_key, secret_key_last4, scopes, created_at, last_used_at")
       .eq("business_id", ctx.businessId)
       .is("revoked_at", null)
       .order("created_at", { ascending: false }),
@@ -46,8 +44,10 @@ export async function GET(request: Request) {
       .select("id, origin, success_url, cancel_url, created_at, updated_at")
       .eq("business_id", ctx.businessId)
       .order("created_at", { ascending: true }),
+    // Deliveries now live on `platform_webhook_deliveries` (multi-endpoint) —
+    // see the Console Developers > Webhooks rebuild.
     admin
-      .from("checkout_webhook_deliveries")
+      .from("platform_webhook_deliveries")
       .select("delivered_at")
       .eq("business_id", ctx.businessId)
       .eq("status", "delivered")
@@ -55,9 +55,12 @@ export async function GET(request: Request) {
       .limit(1)
       .maybeSingle(),
     admin
-      .from("business_checkout_settings")
-      .select("webhook_events")
+      .from("platform_webhook_endpoints")
+      .select("url, webhook_secret_last4")
       .eq("business_id", ctx.businessId)
+      .is("disabled_at", null)
+      .order("created_at", { ascending: true })
+      .limit(1)
       .maybeSingle(),
   ])
 
@@ -79,13 +82,12 @@ export async function GET(request: Request) {
       allowedOrigins: Array.isArray(settings?.allowed_origins) ? settings.allowed_origins : [],
       defaultSuccessUrl: settings?.default_success_url ?? null,
       defaultCancelUrl: settings?.default_cancel_url ?? null,
-      webhookUrl: settings?.webhook_url ?? null,
-      webhookSecretLast4: settings?.webhook_secret_last4 ?? null,
+      webhookUrl: firstEndpoint?.url ?? null,
+      webhookSecretLast4: firstEndpoint?.webhook_secret_last4 ?? null,
       liveModeEnabled: Boolean(settings?.live_mode_enabled),
       testPaymentCompletedAt: settings?.test_payment_completed_at ?? null,
       lastWebhookDeliveredAt: lastDelivery?.delivered_at ?? null,
       onlinePaymentsEnabled: onlinePayments.enabled,
-      subscribedWebhookEvents: normalizeSubscribedWebhookEvents(eventsRow.data?.webhook_events),
     },
     readiness: {
       ready: connect.ready,
@@ -110,11 +112,8 @@ export async function PATCH(request: Request) {
     allowed_origins?: string[]
     default_success_url?: string | null
     default_cancel_url?: string | null
-    webhook_url?: string | null
-    rotate_webhook_secret?: boolean
     live_mode_enabled?: boolean
     test_payment_completed?: boolean
-    webhook_events?: string[]
   } | null
 
   const admin = createSupabaseAdmin()
@@ -122,7 +121,6 @@ export async function PATCH(request: Request) {
     business_id: ctx.businessId,
     updated_at: new Date().toISOString(),
   }
-  let webhookSecret: string | null = null
 
   if (body?.fee_mode !== undefined) {
     const { overrideFeeMode } = await resolveCheckoutFeeMode(admin, ctx.businessId)
@@ -178,38 +176,6 @@ export async function PATCH(request: Request) {
     patch[column] = url
   }
 
-  if (body?.webhook_url !== undefined) {
-    const raw = String(body.webhook_url ?? "")
-    if (!raw.trim()) {
-      patch.webhook_url = null
-    } else {
-      const url = normalizeReturnUrl(raw)
-      if (!url) {
-        return NextResponse.json(
-          { error: "Enter a full https:// address for your webhook endpoint" },
-          { status: 400 },
-        )
-      }
-      patch.webhook_url = url
-    }
-  }
-
-  if (body?.webhook_events !== undefined) {
-    const allowed = new Set<string>(MERCHANT_WEBHOOK_EVENTS)
-    const events = (Array.isArray(body.webhook_events) ? body.webhook_events : [])
-      .map(String)
-      .filter((event): event is MerchantWebhookEvent => allowed.has(event))
-    patch.webhook_events = events
-  }
-
-  if (body?.rotate_webhook_secret) {
-    webhookSecret = generateWebhookSigningSecret()
-    const { ciphertext, keyId } = encryptCheckoutSecret(webhookSecret)
-    patch.webhook_secret_ciphertext = ciphertext
-    patch.webhook_secret_key_id = keyId
-    patch.webhook_secret_last4 = checkoutKeyLast4(webhookSecret)
-  }
-
   if (body?.test_payment_completed) {
     patch.test_payment_completed_at = new Date().toISOString()
   }
@@ -230,7 +196,7 @@ export async function PATCH(request: Request) {
           .eq("business_id", ctx.businessId)
           .maybeSingle(),
         admin
-          .from("checkout_webhook_deliveries")
+          .from("platform_webhook_deliveries")
           .select("id")
           .eq("business_id", ctx.businessId)
           .eq("status", "delivered")
@@ -261,9 +227,5 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
 
-  return NextResponse.json({
-    ok: true,
-    // Shown once; only the last 4 are stored for display afterwards.
-    ...(webhookSecret ? { webhookSecret } : {}),
-  })
+  return NextResponse.json({ ok: true })
 }

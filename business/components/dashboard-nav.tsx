@@ -15,6 +15,13 @@ import {
   Users,
   Link2,
   CircleDollarSign,
+  Terminal,
+  KeyRound,
+  Radio,
+  Rss,
+  FileText,
+  FlaskConical,
+  Gauge,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
@@ -50,6 +57,9 @@ function deriveOpenGroups(pathname: string) {
     pathname.startsWith("/terminal")
   ) {
     openGroups.add("collections")
+  }
+  if (pathname.startsWith("/console")) {
+    openGroups.add("developers")
   }
   return openGroups
 }
@@ -102,11 +112,25 @@ export function DashboardNav() {
   const menuItems =
     surface === "platform"
       ? [
-          { href: "/console", label: "Console", icon: LayoutDashboard, type: "single" as const },
           { href: "/customers", label: "Customers", icon: Users, type: "single" as const },
           { href: "/accounts", label: "Accounts", icon: Wallet, type: "single" as const },
           { href: "/transactions", label: "Transactions", icon: List, type: "single" as const },
           { href: "/checkout", label: "Checkout", icon: CircleDollarSign, type: "single" as const },
+          {
+            key: "developers",
+            label: "Developers",
+            icon: Terminal,
+            type: "group" as const,
+            items: [
+              { href: "/console", label: "Overview", icon: LayoutDashboard },
+              { href: "/console/keys", label: "API keys", icon: KeyRound },
+              { href: "/console/webhooks", label: "Webhooks", icon: Radio },
+              { href: "/console/events", label: "Events", icon: Rss },
+              { href: "/console/logs", label: "Logs", icon: FileText },
+              { href: "/console/explorer", label: "Explorer", icon: FlaskConical },
+              { href: "/console/usage", label: "Usage & limits", icon: Gauge },
+            ],
+          },
         ]
       : [
           { href: "/dashboard", label: "Home", icon: LayoutDashboard, type: "single" as const },
@@ -262,7 +286,15 @@ export function DashboardNav() {
                   <div className="ml-5 flex flex-col gap-0.5 border-l border-sidebar-border pl-2">
                     {item.items?.map((child) => {
                       const ChildIcon = child.icon
-                      const isActive = isNavPathActive(pathname, child.href)
+                      // An "index" child (e.g. Developers' Overview at `/console`) must
+                      // match exactly — otherwise it stays highlighted alongside every
+                      // sibling route nested under the same path prefix.
+                      const hasNestedSibling = item.items?.some(
+                        (sibling) => sibling.href !== child.href && sibling.href.startsWith(`${child.href}/`),
+                      )
+                      const isActive = hasNestedSibling
+                        ? pathname === child.href
+                        : isNavPathActive(pathname, child.href)
                       return (
                         <Link
                           key={child.href}
