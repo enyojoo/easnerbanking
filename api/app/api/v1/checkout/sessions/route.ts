@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { authenticateMerchantKey } from "@/lib/checkout/authenticate-merchant-key"
+import { authenticateMerchantKey, requireScope } from "@/lib/checkout/authenticate-merchant-key"
 import { checkoutApiError } from "@/lib/checkout/checkout-api-error"
 import { buildPaymentThanksUrl } from "@/lib/payment-links/public-url"
 import { createOnlineCheckoutSession } from "@/lib/stripe/create-online-checkout-session"
@@ -70,6 +70,10 @@ export async function POST(request: Request) {
   const auth = await authenticateMerchantKey(admin, request.headers.get("authorization"))
   if (!auth.ok) {
     return jsonError(auth.status, auth.status === 403 ? "key_forbidden" : "invalid_api_key", auth.error)
+  }
+  const scoped = requireScope(auth.ctx, "checkout")
+  if (!scoped.ok) {
+    return jsonError(scoped.status, "key_forbidden", scoped.error)
   }
 
   const body = (await request.json().catch(() => null)) as {
@@ -236,6 +240,10 @@ export async function GET(request: Request) {
   const auth = await authenticateMerchantKey(admin, request.headers.get("authorization"))
   if (!auth.ok) {
     return jsonError(auth.status, auth.status === 403 ? "key_forbidden" : "invalid_api_key", auth.error)
+  }
+  const scoped = requireScope(auth.ctx, "checkout")
+  if (!scoped.ok) {
+    return jsonError(scoped.status, "key_forbidden", scoped.error)
   }
 
   const id = new URL(request.url).searchParams.get("id")?.trim()

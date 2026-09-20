@@ -48,7 +48,7 @@ export function resolveDevPlatformAccess(input: {
     (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) &&
     split
   ) {
-    return { action: "redirect", href: getProductSwitchUrl("platform", "/customers") }
+    return { action: "redirect", href: getProductSwitchUrl("platform", "/console") }
   }
 
   return { action: "allow" }

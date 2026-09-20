@@ -5,11 +5,24 @@ export type MerchantKeyContext = {
   businessId: string
   mode: CheckoutKeyMode
   keyId: string
+  scopes: string[]
+}
+
+export function requireScope(
+  ctx: MerchantKeyContext,
+  scope: string,
+): { ok: true } | { ok: false; status: 403; error: string } {
+  if (ctx.scopes.includes(scope)) return { ok: true }
+  return { ok: false, status: 403, error: `This key cannot ${scope}` }
+}
+
+function readScopes(raw: unknown): string[] {
+  return Array.isArray(raw) ? raw.map(String) : []
 }
 
 /**
- * Authenticate `Authorization: Bearer easner_sk_…` for the merchant checkout API.
- * Only the hash is stored, and keys are scoped to checkout so a leak cannot move money.
+ * Authenticate `Authorization: Bearer easner_sk_…`.
+ * Only the hash is stored. Call `requireScope` for the product the route needs.
  */
 export async function authenticateMerchantKey(
   admin: SupabaseClient,
@@ -37,11 +50,6 @@ export async function authenticateMerchantKey(
     return { ok: false, status: 401, error: "Invalid API key" }
   }
 
-  const scopes = Array.isArray(data.scopes) ? data.scopes.map(String) : []
-  if (!scopes.includes("checkout")) {
-    return { ok: false, status: 403, error: "This key cannot create checkout sessions" }
-  }
-
   await admin
     .from("business_api_keys")
     .update({ last_used_at: new Date().toISOString() })
@@ -53,6 +61,7 @@ export async function authenticateMerchantKey(
       businessId: String(data.business_id),
       mode: (data.mode as CheckoutKeyMode) ?? mode,
       keyId: String(data.id),
+      scopes: readScopes(data.scopes),
     },
   }
 }
@@ -78,8 +87,14 @@ export async function authenticatePublishableKey(
     return { ok: false, status: 401, error: "Invalid publishable key" }
   }
 
-  const scopes = Array.isArray(data.scopes) ? data.scopes.map(String) : []
-  if (!scopes.includes("checkout")) {
+  const ctx: MerchantKeyContext = {
+    businessId: String(data.business_id),
+    mode: (data.mode as CheckoutKeyMode) ?? mode,
+    keyId: String(data.id),
+    scopes: readScopes(data.scopes),
+  }
+  const scoped = requireScope(ctx, "checkout")
+  if (!scoped.ok) {
     return { ok: false, status: 403, error: "This key cannot start checkout" }
   }
 
@@ -88,12 +103,5 @@ export async function authenticatePublishableKey(
     .update({ last_used_at: new Date().toISOString() })
     .eq("id", data.id as string)
 
-  return {
-    ok: true,
-    ctx: {
-      businessId: String(data.business_id),
-      mode: (data.mode as CheckoutKeyMode) ?? mode,
-      keyId: String(data.id),
-    },
-  }
+  return { ok: true, ctx }
 }

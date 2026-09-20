@@ -11,17 +11,6 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { CheckoutCodeBlock, RevealOnceValue } from "@/components/checkout/checkout-code-block"
 import { CheckoutDashboardPanel } from "@/components/checkout/checkout-dashboard-panel"
 import { CheckoutGuideSheet } from "@/components/checkout/checkout-integration-guide"
 import { analytics } from "@/lib/analytics"
@@ -31,11 +20,9 @@ import {
   saveCheckoutSettings,
   updateCheckoutSite,
   useCheckoutSettings,
-  type CheckoutApiKey,
   type CheckoutHubPayload,
   type CheckoutSite,
 } from "@/hooks/use-checkout-settings"
-import { fetchWithSession } from "@/lib/fetch-with-session"
 import { COLLECTIONS_COPY } from "@/lib/copy/business-ui-copy"
 import {
   CHECKOUT_SITE_SETUP_STEPS,
@@ -49,8 +36,6 @@ import { cn } from "@/lib/utils"
 const STEP_COPY: Record<CheckoutSiteSetupStep | "live", { title: string; blurb: string }> = {
   website: { title: COLLECTIONS_COPY.stepWebsiteTitle, blurb: COLLECTIONS_COPY.stepWebsiteBlurb },
   urls: { title: COLLECTIONS_COPY.stepUrlsTitle, blurb: COLLECTIONS_COPY.stepUrlsBlurb },
-  keys: { title: COLLECTIONS_COPY.stepKeysTitle, blurb: COLLECTIONS_COPY.stepKeysBlurb },
-  webhook: { title: COLLECTIONS_COPY.stepWebhookTitle, blurb: COLLECTIONS_COPY.stepWebhookBlurb },
   live: { title: COLLECTIONS_COPY.stepLiveTitle, blurb: COLLECTIONS_COPY.stepLiveBlurb },
 }
 
@@ -300,10 +285,6 @@ function StepBody({
       return <StepWebsite data={data} site={site} onSaved={onSaved} onSiteCreated={onSiteCreated} />
     case "urls":
       return <StepUrls data={data} site={site} onSaved={onSaved} onSiteCreated={onSiteCreated} />
-    case "keys":
-      return <StepKeys data={data} onSaved={onSaved} />
-    case "webhook":
-      return <StepWebhook data={data} onSaved={onSaved} />
   }
 }
 
@@ -550,306 +531,6 @@ function StepUrls({ site, onSaved }: SiteStepProps) {
   )
 }
 
-function StepKeys({ data, onSaved }: HubDataProps) {
-  const [creating, setCreating] = useState<"test" | "live" | null>(null)
-  const [revoking, setRevoking] = useState<"test" | "live" | null>(null)
-  const [revealed, setRevealed] = useState<{ mode: string; secretKey: string } | null>(null)
-  const origins = data.settings.allowedOrigins
-
-  const create = async (mode: "test" | "live") => {
-    setCreating(mode)
-    try {
-      const res = await fetchWithSession("/api/checkout/keys", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode }),
-      })
-      const body = (await res.json().catch(() => ({}))) as {
-        secretKey?: string
-        key?: CheckoutApiKey
-        error?: string
-      }
-      if (!res.ok || !body.secretKey) {
-        toast.error(body.error || "Could not create keys")
-        return
-      }
-      setRevealed({ mode, secretKey: body.secretKey })
-      onSaved()
-    } finally {
-      setCreating(null)
-    }
-  }
-
-  const revoke = async (mode: "test" | "live") => {
-    setRevoking(mode)
-    try {
-      const res = await fetchWithSession("/api/checkout/keys", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode }),
-      })
-      const body = (await res.json().catch(() => ({}))) as { error?: string }
-      if (!res.ok) {
-        toast.error(body.error || "Could not revoke keys")
-        return
-      }
-      toast.success("Keys revoked. Checkout will fail at mount until you create new ones.")
-      onSaved()
-    } finally {
-      setRevoking(null)
-    }
-  }
-
-  return (
-    <>
-      <StepHeading title={STEP_COPY.keys.title} blurb={STEP_COPY.keys.blurb} />
-
-      <div className="grid gap-4">
-        {(["test", "live"] as const).map((mode) => {
-          const key = data.keys.find((item) => item.mode === mode)
-          return (
-            <div key={mode} className="flex flex-col gap-4 rounded-xl border bg-muted/20 p-4 sm:p-5">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium capitalize text-foreground">{mode} keys</p>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={creating !== null}
-                  onClick={() => void create(mode)}
-                >
-                  {creating === mode ? "Creating…" : key ? "Rotate" : "Create"}
-                </Button>
-              </div>
-              {key ? (
-                <div className="flex flex-col gap-3">
-                  <CheckoutCodeBlock label="Publishable key (browser)" code={key.publishable_key} />
-                  <p className="text-xs leading-relaxed text-muted-foreground">
-                    Secret key ending {key.secret_key_last4} – rotate to get a new one.
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Last used {key.last_used_at ? new Date(key.last_used_at).toLocaleString() : "never"}
-                    {origins.length ? ` · allowed origins ${origins.join(", ")}` : ""}
-                  </p>
-                  <div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      disabled={revoking !== null || creating !== null}
-                      onClick={() => void revoke(mode)}
-                    >
-                      {revoking === mode ? "Revoking…" : "Revoke"}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {mode === "live"
-                    ? "Create live keys when you are ready to take real payments."
-                    : "Start with test keys while you build."}
-                </p>
-              )}
-              {revealed?.mode === mode ? (
-                <RevealOnceValue
-                  value={revealed.secretKey}
-                  note="Store it in your server environment. Easner keeps only a fingerprint."
-                />
-              ) : null}
-            </div>
-          )
-        })}
-      </div>
-    </>
-  )
-}
-
-function StepWebhook({ data, onSaved }: HubDataProps) {
-  const savedUrl = data.settings.webhookUrl ?? ""
-  const [editing, setEditing] = useState(!savedUrl)
-  const [url, setUrl] = useState(savedUrl)
-  const [saving, setSaving] = useState(false)
-  const [rotating, setRotating] = useState(false)
-  const [testing, setTesting] = useState(false)
-  const [rotateOpen, setRotateOpen] = useState(false)
-  const [secret, setSecret] = useState<string | null>(null)
-  const [lastTest, setLastTest] = useState<string | null>(null)
-  const hasSecret = Boolean(data.settings.webhookSecretLast4)
-
-  useEffect(() => {
-    if (!editing) setUrl(savedUrl)
-  }, [savedUrl, editing])
-
-  const saveUrl = async () => {
-    setSaving(true)
-    try {
-      const result = await saveCheckoutSettings({ webhook_url: url })
-      if (!result.ok) {
-        toast.error(result.error || "Could not save")
-        return
-      }
-      toast.success("Saved.")
-      setEditing(false)
-      onSaved()
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const rotateSecret = async () => {
-    setRotating(true)
-    try {
-      const result = await saveCheckoutSettings({ rotate_webhook_secret: true })
-      if (!result.ok) {
-        toast.error(result.error || "Could not rotate the secret")
-        return
-      }
-      if (result.webhookSecret) setSecret(result.webhookSecret)
-      toast.success(hasSecret ? "Signing secret rotated." : "Signing secret created.")
-      setRotateOpen(false)
-      onSaved()
-    } finally {
-      setRotating(false)
-    }
-  }
-
-  const sendTest = async () => {
-    setTesting(true)
-    try {
-      const res = await fetchWithSession("/api/checkout/webhook-test", { method: "POST" })
-      const body = (await res.json().catch(() => ({}))) as { error?: string; status?: number }
-      if (!res.ok) {
-        toast.error(body.error || "Test delivery failed")
-        setLastTest(null)
-        return
-      }
-      const message = `Your endpoint replied ${body.status ?? 200}.`
-      setLastTest(message)
-      toast.success(message)
-    } finally {
-      setTesting(false)
-    }
-  }
-
-  return (
-    <>
-      <StepHeading title={STEP_COPY.webhook.title} blurb={STEP_COPY.webhook.blurb} />
-
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <Label htmlFor="checkout-webhook" className="mb-0">
-            Endpoint URL
-          </Label>
-          <FieldEditControls
-            editing={editing}
-            saving={saving}
-            hasSaved={Boolean(savedUrl)}
-            saveDisabled={!url.trim()}
-            onEdit={() => setEditing(true)}
-            onCancel={() => {
-              setUrl(savedUrl)
-              setEditing(!savedUrl)
-            }}
-            onSave={() => void saveUrl()}
-          />
-        </div>
-        <Input
-          id="checkout-webhook"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://shop.yoursite.com/webhooks/easner"
-          disabled={!editing}
-          className="font-mono text-xs"
-        />
-        {!savedUrl && editing ? (
-          <p className="text-xs text-muted-foreground">Save an https:// URL your server can receive.</p>
-        ) : null}
-      </div>
-
-      <div className="flex flex-col gap-3 rounded-xl border p-4 sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex min-w-0 flex-col gap-1">
-            <p className="text-sm font-medium text-foreground">Signing secret</p>
-            <p className="text-xs text-muted-foreground">
-              {data.settings.webhookSecretLast4
-                ? `Ending ${data.settings.webhookSecretLast4}. Use it to verify the easner-signature header.`
-                : "Create a secret before you verify events on your server."}
-            </p>
-          </div>
-          {hasSecret ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={rotating}
-              onClick={() => setRotateOpen(true)}
-            >
-              Rotate
-            </Button>
-          ) : (
-            <Button type="button" size="sm" disabled={rotating} onClick={() => void rotateSecret()}>
-              {rotating ? "Creating…" : "Create"}
-            </Button>
-          )}
-        </div>
-        {secret ? (
-          <RevealOnceValue
-            value={secret}
-            note="Use it to verify the easner-signature header on every event."
-          />
-        ) : null}
-      </div>
-
-      <div className="flex flex-col gap-3 rounded-xl border p-4 sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex min-w-0 flex-col gap-1">
-            <p className="text-sm font-medium text-foreground">Test delivery</p>
-            <p className="text-xs text-muted-foreground">
-              Sends a signed event to the saved endpoint. Does not charge a card.
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={testing || !savedUrl}
-            onClick={() => void sendTest()}
-          >
-            {testing ? "Sending…" : "Send test"}
-          </Button>
-        </div>
-        {lastTest ? <p className="text-xs text-muted-foreground">{lastTest}</p> : null}
-        {!savedUrl ? (
-          <p className="text-xs text-muted-foreground">Save an endpoint before sending a test.</p>
-        ) : null}
-      </div>
-
-      <AlertDialog open={rotateOpen} onOpenChange={setRotateOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Rotate signing secret?</AlertDialogTitle>
-            <AlertDialogDescription>
-              The current secret stops working immediately. Copy the new one and update your server
-              before events fail to verify.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={rotating}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={rotating}
-              onClick={(event) => {
-                event.preventDefault()
-                void rotateSecret()
-              }}
-            >
-              {rotating ? "Rotating…" : "Rotate secret"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
-  )
-}
 
 function StepLive({ data, onSaved }: HubDataProps) {
   const [saving, setSaving] = useState(false)

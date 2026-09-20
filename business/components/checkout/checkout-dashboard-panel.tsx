@@ -1,6 +1,7 @@
 "use client"
 
 import { type ReactNode } from "react"
+import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -57,7 +58,7 @@ export function CheckoutDashboardPanel({
                 }`
               : "None yet"
           }
-          onEdit={() => onEditStep("keys")}
+          href="/console/keys"
         />
         <StatusCard
           title={COLLECTIONS_COPY.webhookLabel}
@@ -68,7 +69,7 @@ export function CheckoutDashboardPanel({
             </Badge>
           }
           extra={webhookOn ? lastDelivery : null}
-          onEdit={() => onEditStep("webhook")}
+          href="/console/webhooks"
         />
       </div>
 
@@ -86,21 +87,29 @@ function StatusCard({
   badge,
   extra,
   onEdit,
+  href,
 }: {
   title: string
   hint: string
   badge?: ReactNode
   extra?: string | null
-  onEdit: () => void
+  onEdit?: () => void
+  href?: string
 }) {
   return (
     <Card elevation="flat" padding="sm">
       <CardHeader className="px-5">
         <CardTitle>{title}</CardTitle>
         <CardAction>
-          <Button type="button" variant="ghost" size="sm" onClick={onEdit}>
-            {COLLECTIONS_COPY.editWebsite}
-          </Button>
+          {href ? (
+            <Button type="button" variant="ghost" size="sm" asChild>
+              <Link href={href}>{COLLECTIONS_COPY.editWebsite}</Link>
+            </Button>
+          ) : (
+            <Button type="button" variant="ghost" size="sm" onClick={onEdit}>
+              {COLLECTIONS_COPY.editWebsite}
+            </Button>
+          )}
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-2 px-5">

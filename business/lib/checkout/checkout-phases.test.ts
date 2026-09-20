@@ -28,6 +28,7 @@ function payload(partial: {
       liveModeEnabled: false,
       testPaymentCompletedAt: null,
       lastWebhookDeliveredAt: null,
+      subscribedWebhookEvents: [],
       ...settings,
     },
     readiness: { ready: ready ?? false, reason: null },
@@ -113,22 +114,8 @@ describe("checkout phases", () => {
     expect(completedCheckoutSteps(data, data.sites[0]).has("urls")).toBe(true)
   })
 
-  it("treats the site page as ready once origin, success URL, keys, and webhook exist", () => {
-    const data = payload({
-      ready: true,
-      webhookUrl: "https://a.com/hooks",
-      webhookSecretLast4: "wxyz",
-    })
-    data.keys = [
-      {
-        id: "1",
-        mode: "test",
-        publishable_key: "easner_pk_test_x",
-        secret_key_last4: "abcd",
-        created_at: "",
-        last_used_at: null,
-      },
-    ]
+  it("treats the site page as ready once origin and success URL exist", () => {
+    const data = payload({ ready: true })
     const site = {
       id: "site_a",
       origin: "https://a.com",

@@ -11,6 +11,7 @@ import {
 } from "@/lib/server-analytics"
 import type { StripePaymentMethodDisplay } from "@/lib/stripe/parse-payment-method-display"
 import { getStripe } from "./client"
+import { creditPlatformBookFromCheckout } from "@/lib/platform/ledger"
 import { resolveFeeAndTransfer } from "./resolve-charge-settlement"
 
 export type CheckoutCollectionSource = "payment_link" | "embed"
@@ -46,6 +47,10 @@ function asMetadata(raw: unknown): Record<string, unknown> {
     return { ...(raw as Record<string, unknown>) }
   }
   return {}
+}
+
+function isMerchantKeyCheckout(metadata: Record<string, unknown>): boolean {
+  return Boolean(String(metadata.easner_api_key_id ?? "").trim())
 }
 
 function hasReceiptClaim(metadata: Record<string, unknown>): boolean {
@@ -163,10 +168,9 @@ async function sendPayerReceiptIfNeeded(
 }
 
 /**
- * Settle a Payment Link or website-embed collection: complete the session row,
- * record the settlement, credit the ledger with `source: checkout_stripe`, and
- * notify the merchant webhook. Stripe test events (`livemode: false`) complete
- * the session and fire the merchant webhook, but skip the live ledger.
+ * Settle a Payment Link or website-embed collection. Merchant-key Checkout
+ * credits the platform book only. Payment links and invoices stay on the
+ * Banking ledger. Stripe test events skip the live Banking ledger.
  */
 export async function handleCheckoutCollectionCompleted(
   admin: SupabaseClient,
@@ -348,6 +352,98 @@ export async function handleCheckoutCollectionCompleted(
       paidAt,
       livemode: !isStripeTest,
     }),
+  }
+
+  if (isMerchantKeyCheckout(sessionMetadata)) {
+    if (isStripeTest && input.source === "embed") {
+      await admin
+        .from("business_checkout_settings")
+        .update({ test_payment_completed_at: paidAt, updated_at: paidAt })
+        .eq("business_id", input.businessId)
+    }
+    try {
+      await creditPlatformBookFromCheckout(admin, {
+        businessId: input.businessId,
+        livemode: !isStripeTest,
+        amountCents: netCents,
+        currency,
+        checkoutSessionId: input.sessionId,
+        description: headlineFor(input.source, linkLabel),
+        metadata: {
+          easner_settlement_id: input.settlementId,
+          stripe_payment_intent_id: input.paymentIntentId,
+        },
+      })
+    } catch (error) {
+      console.warn(
+        "[checkout] platform book credit failed",
+        error instanceof Error ? error.message : error,
+      )
+    }
+    await admin.from("checkout_stripe_settlements").upsert(
+      {
+        id: input.settlementId,
+        business_id: input.businessId,
+        checkout_session_id: sessionRow?.id ? String(sessionRow.id) : null,
+        payment_link_id: paymentLinkId,
+        source: input.source,
+        stripe_payment_intent_id: input.paymentIntentId,
+        stripe_charge_id: chargeId,
+        stripe_connected_account_id: connectedAccountId,
+        stripe_transfer_id: transferId,
+        stripe_subscription_id: input.subscriptionId,
+        gross_cents: grossCents,
+        fee_cents: merchantFeeCents,
+        net_cents: netCents,
+        currency,
+        phase: "payment_received",
+        ledger_transaction_id: null,
+        stripe_event_ids: [event.id],
+        created_at: paidAt,
+        updated_at: paidAt,
+      },
+      { onConflict: "id" },
+    )
+    await dispatchMerchantWebhook(admin, webhookPayload)
+    if (!isStripeTest) {
+      await sendPayerReceiptIfNeeded(admin, event, {
+        sessionRowId: sessionRow?.id ? String(sessionRow.id) : null,
+        metadata: sessionRow && "metadata" in sessionRow ? sessionRow.metadata : null,
+        businessId: input.businessId,
+        to:
+          customerEmail ||
+          (sessionRow && typeof sessionRow.customer_email === "string"
+            ? sessionRow.customer_email
+            : null),
+        customerName,
+        amountCents: grossCents,
+        currency,
+        description: receiptDescription(input.source, linkLabel),
+        paidAt,
+        paymentMethod,
+      })
+    }
+    trackServerCheckoutCompleted({
+      channel: input.source,
+      businessId: input.businessId,
+      settlementId: input.settlementId,
+      currency,
+      amountCents: grossCents,
+      paymentLinkId,
+      livemode: !isStripeTest,
+      stripeEventId: event.id,
+    })
+    trackServerEmbedPayerPaymentSucceeded({
+      channel: input.source,
+      businessId: input.businessId,
+      settlementId: input.settlementId,
+      currency,
+      amountCents: grossCents,
+      paymentLinkId,
+      livemode: !isStripeTest,
+      stripeEventId: event.id,
+    })
+    return { handled: true }
   }
 
   if (isStripeTest) {

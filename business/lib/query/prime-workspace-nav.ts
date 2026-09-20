@@ -22,10 +22,11 @@ export const WORKSPACE_NAV_HREFS = [
 ] as const
 
 const PLATFORM_NAV_HREFS = [
+  "/console",
   "/customers",
+  "/accounts",
   "/transactions",
   "/checkout",
-  "/developers",
   "/settings",
 ] as const
 
@@ -42,7 +43,9 @@ function navHrefsForSurface(): readonly string[] {
 }
 
 function secondaryHrefsForSurface(): readonly string[] {
-  return getClientAppSurface() === "platform" ? ["/developers"] : SECONDARY_NAV_HREFS
+  return getClientAppSurface() === "platform"
+    ? ["/console/keys", "/console/webhooks"]
+    : SECONDARY_NAV_HREFS
 }
 
 let warmInflight: Promise<void> | null = null

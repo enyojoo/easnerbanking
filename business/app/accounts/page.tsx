@@ -22,8 +22,16 @@ import { PageIntro } from "@/components/copy/page-intro"
 import { useBusinessAccountRows } from "@/hooks/use-business-account-rows"
 import { useIncomingBalances } from "@/hooks/queries/use-incoming-balance"
 import { OpenCurrencyAccountDialog } from "@/components/accounts/open-currency-account-dialog"
+import { PlatformAccountsPage } from "@/components/console/platform-accounts-page"
+import { useAppSurface } from "@/lib/use-app-surface"
 
 export default function AccountsPage() {
+  const surface = useAppSurface()
+  if (surface === "platform") return <PlatformAccountsPage />
+  return <BankingAccountsPage />
+}
+
+function BankingAccountsPage() {
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const {
     accountRows,

@@ -77,18 +77,22 @@ describe("resolveAppSurface order", () => {
 })
 
 describe("product paths", () => {
-  it("marks Checkout, Developers, and Customers as Platform-only", () => {
+  it("marks Console, Checkout, and Customers as Platform-only", () => {
+    expect(isPlatformOnlyPath("/console")).toBe(true)
+    expect(isPlatformOnlyPath("/console/keys")).toBe(true)
     expect(isPlatformOnlyPath("/checkout")).toBe(true)
     expect(isPlatformOnlyPath("/checkout/site_1")).toBe(true)
-    expect(isPlatformOnlyPath("/developers")).toBe(true)
+    expect(isPlatformOnlyPath("/developers")).toBe(false)
     expect(isPlatformOnlyPath("/customers")).toBe(true)
     expect(isPlatformOnlyPath("/dashboard")).toBe(false)
+    expect(isPlatformOnlyPath("/accounts")).toBe(false)
   })
 
   it("marks banking routes as Business-only", () => {
     expect(isBankingOnlyPath("/send")).toBe(true)
     expect(isBankingOnlyPath("/invoices/new")).toBe(true)
     expect(isBankingOnlyPath("/checkout")).toBe(false)
+    expect(isBankingOnlyPath("/accounts")).toBe(false)
     expect(isBankingOnlyPath("/settings")).toBe(false)
   })
 })
@@ -105,16 +109,16 @@ describe("host split", () => {
 
   it("returns in-app switch paths when hosts are not split", () => {
     vi.stubEnv("NEXT_PUBLIC_PLATFORM_APP_URL", "")
-    expect(getProductSwitchPath("platform")).toBe("/checkout")
+    expect(getProductSwitchPath("platform")).toBe("/console")
     expect(getProductSwitchPath("business")).toBe("/dashboard")
-    expect(getProductSwitchUrl("platform")).toBe("/checkout")
+    expect(getProductSwitchUrl("platform")).toBe("/console")
     expect(getProductSwitchUrl("business")).toBe("/dashboard")
-    expect(getProductSwitchUrl("platform", "/developers")).toBe("/developers")
+    expect(getProductSwitchUrl("platform", "/console/keys")).toBe("/console/keys")
   })
 
   it("opens the stored mode home after login", () => {
     vi.stubEnv("NEXT_PUBLIC_APP_SURFACE", "")
-    expect(getProductSwitchPath(resolveAppSurface({ cookie: "platform" }))).toBe("/checkout")
+    expect(getProductSwitchPath(resolveAppSurface({ cookie: "platform" }))).toBe("/console")
     expect(getProductSwitchPath(resolveAppSurface({ cookie: "business" }))).toBe("/dashboard")
     expect(getProductSwitchPath(resolveAppSurface({ cookie: null }))).toBe("/dashboard")
     expect(getWorkspaceHomePath()).toBe(getProductSwitchPath(getClientAppSurface()))

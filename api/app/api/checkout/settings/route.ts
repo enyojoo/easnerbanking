@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server"
-import { MERCHANT_WEBHOOK_EVENT_DESCRIPTIONS } from "@/lib/checkout/merchant-webhooks"
+import {
+  MERCHANT_WEBHOOK_EVENT_DESCRIPTIONS,
+  MERCHANT_WEBHOOK_EVENTS,
+  normalizeSubscribedWebhookEvents,
+  type MerchantWebhookEvent,
+} from "@/lib/checkout/merchant-webhooks"
 import {
   checkoutKeyLast4,
   encryptCheckoutSecret,
@@ -26,7 +31,7 @@ export async function GET(request: Request) {
   if (!ctx.ok) return ctx.response
 
   const admin = createSupabaseAdmin()
-  const [{ data: settings }, feeMode, onlinePayments, { data: keys }, { data: siteRows }, { data: lastDelivery }] = await Promise.all([
+  const [{ data: settings }, feeMode, onlinePayments, { data: keys }, { data: siteRows }, { data: lastDelivery }, eventsRow] = await Promise.all([
     admin.from("business_checkout_settings").select(SETTINGS_COLUMNS).eq("business_id", ctx.businessId).maybeSingle(),
     resolveCheckoutFeeMode(admin, ctx.businessId),
     resolveOnlinePaymentsEnabled(admin, ctx.businessId),
@@ -48,6 +53,11 @@ export async function GET(request: Request) {
       .eq("status", "delivered")
       .order("delivered_at", { ascending: false })
       .limit(1)
+      .maybeSingle(),
+    admin
+      .from("business_checkout_settings")
+      .select("webhook_events")
+      .eq("business_id", ctx.businessId)
       .maybeSingle(),
   ])
 
@@ -75,6 +85,7 @@ export async function GET(request: Request) {
       testPaymentCompletedAt: settings?.test_payment_completed_at ?? null,
       lastWebhookDeliveredAt: lastDelivery?.delivered_at ?? null,
       onlinePaymentsEnabled: onlinePayments.enabled,
+      subscribedWebhookEvents: normalizeSubscribedWebhookEvents(eventsRow.data?.webhook_events),
     },
     readiness: {
       ready: connect.ready,
@@ -103,6 +114,7 @@ export async function PATCH(request: Request) {
     rotate_webhook_secret?: boolean
     live_mode_enabled?: boolean
     test_payment_completed?: boolean
+    webhook_events?: string[]
   } | null
 
   const admin = createSupabaseAdmin()
@@ -180,6 +192,14 @@ export async function PATCH(request: Request) {
       }
       patch.webhook_url = url
     }
+  }
+
+  if (body?.webhook_events !== undefined) {
+    const allowed = new Set<string>(MERCHANT_WEBHOOK_EVENTS)
+    const events = (Array.isArray(body.webhook_events) ? body.webhook_events : [])
+      .map(String)
+      .filter((event): event is MerchantWebhookEvent => allowed.has(event))
+    patch.webhook_events = events
   }
 
   if (body?.rotate_webhook_secret) {

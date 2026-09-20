@@ -1,4 +1,4 @@
-import type { ReactNode } from "react"
+import { Suspense, type ReactNode } from "react"
 import { appSectionsSeo } from "@/lib/seo/content/app-sections"
 import { businessMetadata } from "@/lib/seo/metadata"
 
@@ -8,5 +8,5 @@ export const metadata = businessMetadata({
 })
 
 export default function AccountsLayout({ children }: { children: ReactNode }) {
-  return children
+  return <Suspense fallback={null}>{children}</Suspense>
 }

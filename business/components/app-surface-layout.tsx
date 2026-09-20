@@ -14,9 +14,9 @@ import { useApplyStoredAppSurface } from "@/lib/use-app-surface"
 const DASHBOARD_SHELL_ROOTS = [
   "/accounts",
   "/cards",
+  "/console",
   "/customers",
   "/dashboard",
-  "/developers",
   "/invoices",
   "/payroll",
   "/checkout",

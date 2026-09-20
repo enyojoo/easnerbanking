@@ -7,13 +7,15 @@ import {
   parseCheckoutKeyMode,
 } from "@/lib/checkout/secrets"
 import { resolveConnectReadyForCheckout } from "@/lib/stripe/connect"
+import { PLATFORM_KEY_SCOPES } from "@/lib/platform/scopes"
 import { resolveOnlinePaymentsEnabled } from "@/lib/stripe/resolve-online-payments-enabled"
 import { createSupabaseAdmin, getUserFromApiRequest } from "@/lib/supabase/admin"
 import { requireEasnerBusinessId } from "@/lib/terminal/context"
 
 /**
- * Issue (or rotate) checkout-scoped merchant keys. The secret is returned once and
- * only its hash is stored, so a leaked key can never be read back or reused elsewhere.
+ * Issue (or rotate) merchant keys from Console. New keys get platform scopes.
+ * Existing checkout-only rows stay checkout-only until they mint a new key.
+ * The secret is returned once; only the hash is stored.
  */
 export async function POST(request: Request) {
   const user = await getUserFromApiRequest(request)
@@ -67,7 +69,7 @@ export async function POST(request: Request) {
       publishable_key: publishableKey,
       secret_key_hash: hashCheckoutSecretKey(secretKey),
       secret_key_last4: checkoutKeyLast4(secretKey),
-      scopes: ["checkout"],
+      scopes: [...PLATFORM_KEY_SCOPES],
       created_by: user.id,
     })
     .select("id, mode, publishable_key, secret_key_last4, created_at")

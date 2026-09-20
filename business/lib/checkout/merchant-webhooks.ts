@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { DEFAULT_WEBHOOK_EVENTS } from "@/lib/platform/scopes"
 import { decryptCheckoutSecret, signMerchantWebhookPayload } from "./secrets"
 
 /**
@@ -11,6 +12,13 @@ export const MERCHANT_WEBHOOK_EVENTS = [
   "payment.available",
   "subscription.updated",
   "subscription.canceled",
+  "account.updated",
+  "customer.created",
+  "customer.updated",
+  "transfer.created",
+  "transfer.completed",
+  "transfer.failed",
+  "transaction.created",
 ] as const
 
 export type MerchantWebhookEvent = (typeof MERCHANT_WEBHOOK_EVENTS)[number]
@@ -22,6 +30,19 @@ export const MERCHANT_WEBHOOK_EVENT_DESCRIPTIONS: Record<MerchantWebhookEvent, s
   "payment.available": "Funds landed in the Easner Balance and are available to use.",
   "subscription.updated": "A recurring payment renewed or its plan changed.",
   "subscription.canceled": "A recurring payment was cancelled.",
+  "account.updated": "A platform account balance or status changed.",
+  "customer.created": "A customer was created through the API.",
+  "customer.updated": "A customer record changed.",
+  "transfer.created": "A transfer was created.",
+  "transfer.completed": "A transfer finished.",
+  "transfer.failed": "A transfer failed.",
+  "transaction.created": "A platform ledger entry was written.",
+}
+
+export function normalizeSubscribedWebhookEvents(raw: unknown): MerchantWebhookEvent[] {
+  if (!Array.isArray(raw)) return [...DEFAULT_WEBHOOK_EVENTS]
+  const allowed = new Set<string>(MERCHANT_WEBHOOK_EVENTS)
+  return raw.map(String).filter((event): event is MerchantWebhookEvent => allowed.has(event))
 }
 
 const DELIVERY_TIMEOUT_MS = 8000
@@ -103,16 +124,35 @@ async function postSignedWebhook(input: {
 async function loadEndpoint(
   admin: SupabaseClient,
   businessId: string,
-): Promise<{ url: string; secret: string } | null> {
-  const { data: settings } = await admin
+): Promise<{ url: string; secret: string; events: MerchantWebhookEvent[] } | null> {
+  let settings: {
+    webhook_url?: string | null
+    webhook_secret_ciphertext?: string | null
+    webhook_events?: unknown
+  } | null = null
+  const withEvents = await admin
     .from("business_checkout_settings")
-    .select("webhook_url, webhook_secret_ciphertext")
+    .select("webhook_url, webhook_secret_ciphertext, webhook_events")
     .eq("business_id", businessId)
     .maybeSingle()
+  if (withEvents.error) {
+    const fallback = await admin
+      .from("business_checkout_settings")
+      .select("webhook_url, webhook_secret_ciphertext")
+      .eq("business_id", businessId)
+      .maybeSingle()
+    settings = fallback.data
+  } else {
+    settings = withEvents.data
+  }
   const url = typeof settings?.webhook_url === "string" ? settings.webhook_url.trim() : ""
   const secret = decryptCheckoutSecret(settings?.webhook_secret_ciphertext as string | null)
   if (!url || !secret) return null
-  return { url, secret }
+  return {
+    url,
+    secret,
+    events: normalizeSubscribedWebhookEvents(settings?.webhook_events),
+  }
 }
 
 async function attemptDelivery(
@@ -207,6 +247,7 @@ export async function dispatchMerchantWebhook(
 ): Promise<{ delivered: boolean; status?: number; error?: string; deliveryId?: string }> {
   const endpoint = await loadEndpoint(admin, input.businessId)
   if (!endpoint) return { delivered: false }
+  if (!endpoint.events.includes(input.event)) return { delivered: false }
 
   const timestampSeconds = Math.floor(Date.now() / 1000)
   const payload = {

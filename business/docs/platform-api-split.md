@@ -1,6 +1,6 @@
 # Next: Office Enable Dev Platform (same business origin)
 
-**No new directory. No second Vercel project.** Banking and Dev Platform are one Next app (`business/`) on the existing business project (`business.easner.com` / `easnerbank.vercel.app`). Operators stay on one login and one origin.
+**No new directory. No second Vercel project.** Banking and Dev Platform are one Next app (`business/`) on the existing business project (`business.easner.com` / `easnerbank.vercel.app`). Operators stay on one login and one origin. Product and `v1` live in [`dev-platform.md`](./dev-platform.md).
 
 **Banking is the product. Dev is a tool mode.** Default is always Banking. Do not store Banking / Dev on the user or business in Supabase — it is not an account preference. Office **Enable Dev Platform** only gates who may enter Dev. On this browser, Switch writes a host-only cookie (`easner_app_surface`). Same browser keeps that mode until they switch back. A new browser, device, or incognito session starts in Banking.
 
@@ -36,7 +36,7 @@ Office → the merchant → **Enable Dev Platform**. That is the only gate. Do n
 
 - Flag **on**: profile dropdown shows Switch to Dev Platform / Switch to Banking Account. Click writes `easner_app_surface`, flips nav in the same paint, `router.push` `/checkout` or `/dashboard`. No full reload. Cookie is this browser only.
 - Flag **off**: dropdown shows **Need API Account?** / **Contact us for developer access.** Both the empty state and the row open Intercom (`openBusinessSupport()`). If a leftover cookie is `platform`, chrome is treated as banking and the cookie is cleared.
-- `/checkout`, `/developers`, `/customers` with the flag off: gated empty state on this host. No bounce to another origin.
+- `/checkout`, `/console`, `/customers` with the flag off: gated empty state on this host. No bounce to another origin.
 
 Settings and Transactions stay in both modes. Bookmarks do not change mode (persist stays the dropdown).
 

@@ -104,26 +104,14 @@ function CheckoutStepCode({
     )
   }
 
-  if (step === "keys") {
-    return (
-      <div className="flex flex-col gap-4">
-        <p className="text-sm text-muted-foreground">
-          Publishable key in the browser. Secret key only on your server. The page never sees the
-          amount.
-        </p>
-        <CheckoutCodeBlock label="Browser" code={recipeBrowserHtml(publishableKey)} />
-        <CheckoutCodeBlock label="Server (Node)" code={recipeServerNode(CHECKOUT_RECIPES[0])} />
-      </div>
-    )
-  }
-
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">
-        Fulfil on checkout.completed. Verify the easner-signature header — not X-Easner-Signature.
+        Publishable key in the browser. Secret key only on your server. The page never sees the
+        amount. Keys and webhooks live in Console.
       </p>
-      <CheckoutCodeBlock label="verifyWebhook()" code={recipeVerifyWebhook()} />
-      <CheckoutCodeBlock label="Handler" code={recipeWebhookHandler()} />
+      <CheckoutCodeBlock label="Browser" code={recipeBrowserHtml(publishableKey)} />
+      <CheckoutCodeBlock label="Server (Node)" code={recipeServerNode(CHECKOUT_RECIPES[0])} />
     </div>
   )
 }

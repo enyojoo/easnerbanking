@@ -10,7 +10,6 @@ const OPERATOR_FIRST_SEGMENTS = new Set([
   "checkout",
   "customers",
   "dashboard",
-  "developers",
   "invoice",
   "invoices",
   "links",

@@ -428,7 +428,7 @@ export async function prefetchRouteWorkspaceData(
     ])
     return
   }
-  if (href === "/checkout" || href.startsWith("/checkout/")) {
+  if (href === "/checkout" || href.startsWith("/checkout/") || href === "/console" || href.startsWith("/console/")) {
     const { prefetchCheckoutSettings } = await import("@/hooks/queries/use-checkout-settings-query")
     await prefetchCheckoutSettings(queryClient, scope)
     return

@@ -55,6 +55,10 @@ export const PAGE_COPY = {
     title: "Developer Tools",
     intro: "Connect Easner to your apps with APIs and webhooks.",
   },
+  console: {
+    title: "Console",
+    intro: "Platform volume and recent activity.",
+  },
   links: {
     title: "Payment links",
     intro: "Share a link and collect payment without an invoice.",

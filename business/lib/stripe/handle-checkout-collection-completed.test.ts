@@ -9,6 +9,9 @@ const paymentIntentsRetrieve = vi.fn()
 const upsertLedgerTransaction = vi.fn(
   async (_admin: unknown, _input: LedgerCall) => ({ transactionId: "txn_1" }),
 )
+const creditPlatformBookFromCheckout = vi.fn(
+  async () => ({ accountId: "acct_1", transactionId: "txn_p1" }),
+)
 const dispatchMerchantWebhook = vi.fn(async () => ({ delivered: true }))
 const deliverCheckoutPayerReceiptEmail = vi.fn(async () => ({ ok: true, to: "buyer@example.com" }))
 
@@ -18,6 +21,10 @@ vi.mock("./client", () => ({
 vi.mock("@/lib/ledger/transactions", () => ({
   upsertLedgerTransaction: (admin: unknown, input: LedgerCall) =>
     upsertLedgerTransaction(admin, input),
+}))
+vi.mock("@/lib/platform/ledger", () => ({
+  creditPlatformBookFromCheckout: (...args: unknown[]) =>
+    creditPlatformBookFromCheckout(...(args as [])),
 }))
 vi.mock("@/lib/business/org-owner", () => ({
   resolveOrgOwnerUserId: vi.fn(async () => "user_owner"),
@@ -382,5 +389,22 @@ describe("payment link settlement", () => {
       net_cents: 100,
       gross_cents: 100,
     })
+  })
+
+  it("credits the platform book when the session used a merchant key", async () => {
+    const { admin } = mockAdmin({
+      sessionMetadata: { easner_api_key_id: "key_1", plan: "pro" },
+    })
+    const result = await handleStripeCheckoutCompleted(admin, paymentLinkSessionEvent())
+    expect(result.handled).toBe(true)
+    expect(upsertLedgerTransaction).not.toHaveBeenCalled()
+    expect(creditPlatformBookFromCheckout).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        businessId: BUSINESS_ID,
+        livemode: true,
+        currency: "USD",
+      }),
+    )
   })
 })

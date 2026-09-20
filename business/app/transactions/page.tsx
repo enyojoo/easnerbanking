@@ -31,6 +31,8 @@ import {
   REPORTING_FX_BASE_CHANGE_NOTE,
 } from "@/lib/fx/base-currency-display"
 import { isSuccessfulTransactionStatus, resolveReportingAmountForFeed } from "@easner/shared"
+import { PlatformTransactionsPage } from "@/components/console/platform-transactions-page"
+import { useAppSurface } from "@/lib/use-app-surface"
 
 function exportToCsv(
   transactions: {
@@ -69,6 +71,12 @@ function exportToCsv(
 }
 
 export default function TransactionsPage() {
+  const surface = useAppSurface()
+  if (surface === "platform") return <PlatformTransactionsPage />
+  return <BankingTransactionsPage />
+}
+
+function BankingTransactionsPage() {
   const {
     data: rows,
     loading: listLoading,

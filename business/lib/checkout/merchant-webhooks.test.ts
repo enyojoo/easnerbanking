@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { signMerchantWebhookPayload, verifyMerchantWebhookPayload } from "./secrets"
 import { checkoutCompletedWebhookData } from "./merchant-webhook-payload"
+import { normalizeSubscribedWebhookEvents } from "./merchant-webhooks"
 
 describe("merchant webhook signatures", () => {
   it("verifies a signed payload", () => {
@@ -35,6 +36,14 @@ describe("merchant webhook signatures", () => {
         nowSeconds: 1_700_000_000,
       }),
     ).toBe(false)
+  })
+})
+
+describe("subscribed webhook events", () => {
+  it("keeps checkout events when the column is empty", () => {
+    expect(normalizeSubscribedWebhookEvents(null)).toContain("checkout.completed")
+    expect(normalizeSubscribedWebhookEvents(["account.updated"])).toEqual(["account.updated"])
+    expect(normalizeSubscribedWebhookEvents([])).toEqual([])
   })
 })
 

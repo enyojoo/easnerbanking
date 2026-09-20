@@ -90,7 +90,7 @@ export function isProductHostSplit(): boolean {
 }
 
 export function getProductSwitchPath(target: ProductSurface): string {
-  return target === "platform" ? "/checkout" : "/dashboard"
+  return target === "platform" ? "/console" : "/dashboard"
 }
 
 /** Home for the stored mode. Login and `/` use this so Dev does not open as Banking. */
@@ -108,17 +108,17 @@ export function getProductSwitchUrl(target: ProductSurface, path?: string): stri
 
 export function isPlatformOnlyPath(pathname: string): boolean {
   return (
+    pathname === "/console" ||
+    pathname.startsWith("/console/") ||
     pathname === "/checkout" ||
     pathname.startsWith("/checkout/") ||
-    pathname === "/developers" ||
-    pathname.startsWith("/developers/") ||
     pathname === "/customers" ||
     pathname.startsWith("/customers/")
   )
 }
 
 export function isBankingOnlyPath(pathname: string): boolean {
-  const roots = ["/send", "/cards", "/payroll", "/invoices", "/links", "/terminal", "/accounts"]
+  const roots = ["/send", "/cards", "/payroll", "/invoices", "/links", "/terminal"]
   return roots.some((root) => pathname === root || pathname.startsWith(`${root}/`))
 }
 

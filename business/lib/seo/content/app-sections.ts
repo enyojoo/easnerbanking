@@ -199,6 +199,17 @@ export const appSectionsSeo = {
       altText: "Easner Business website checkout",
     },
   },
+  console: {
+    metadata: {
+      title: "Console | Easner",
+      description: "See platform volume and recent activity, then manage keys and webhooks while you build on Easner Accounts, Transfers, and Checkout.",
+    },
+    hero: {
+      h1: "Console",
+      subhead: "Platform volume and recent activity.",
+      altText: "Easner Console",
+    },
+  },
   developers: {
     metadata: {
       title: "Developers | Easner Business Banking",

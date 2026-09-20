@@ -23,6 +23,7 @@ export type CheckoutHubSettings = {
   liveModeEnabled: boolean
   testPaymentCompletedAt: string | null
   lastWebhookDeliveredAt: string | null
+  subscribedWebhookEvents?: MerchantWebhookEvent[]
 }
 
 export type CheckoutApiKey = {

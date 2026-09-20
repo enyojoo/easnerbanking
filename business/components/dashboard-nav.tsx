@@ -14,7 +14,6 @@ import {
   SmartphoneNfc,
   Users,
   Link2,
-  Code,
   CircleDollarSign,
 } from "lucide-react"
 import Link from "next/link"
@@ -103,10 +102,11 @@ export function DashboardNav() {
   const menuItems =
     surface === "platform"
       ? [
+          { href: "/console", label: "Console", icon: LayoutDashboard, type: "single" as const },
           { href: "/customers", label: "Customers", icon: Users, type: "single" as const },
+          { href: "/accounts", label: "Accounts", icon: Wallet, type: "single" as const },
           { href: "/transactions", label: "Transactions", icon: List, type: "single" as const },
           { href: "/checkout", label: "Checkout", icon: CircleDollarSign, type: "single" as const },
-          { href: "/developers", label: "Developers", icon: Code, type: "single" as const },
         ]
       : [
           { href: "/dashboard", label: "Home", icon: LayoutDashboard, type: "single" as const },

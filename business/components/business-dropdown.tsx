@@ -210,7 +210,7 @@ export function BusinessDropdown({
             <Code2 className="mt-0.5 h-4 w-4 shrink-0" />
             <span className="min-w-0">
               <span className="block text-sm font-medium">Switch to Dev Platform</span>
-              <span className="block text-xs text-muted-foreground">Checkout, APIs, and developers</span>
+              <span className="block text-xs text-muted-foreground">Accounts, transfers, and checkout</span>
             </span>
           </DropdownMenuItem>
         ) : null}
