@@ -1,29 +1,30 @@
 "use client"
 
-import { apiUrl } from "@/lib/api-base-url"
-import { BUSINESS_APP_SESSION_COOKIE } from "@/lib/app-session-constants"
 import { clearLegacySupabaseAuthCookiesOnce } from "@/lib/supabase/clear-legacy-auth-cookies"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
 
 let appSessionExpiresAt = 0
 let appSessionPromise: Promise<boolean> | null = null
 
-function setBusinessAppSessionCookie(token: string, expiresInSeconds: number) {
-  const secure = typeof window !== "undefined" && window.location.protocol === "https:" ? "; Secure" : ""
-  document.cookie = `${BUSINESS_APP_SESSION_COOKIE}=${token}; Max-Age=${expiresInSeconds}; Path=/; SameSite=Lax${secure}`
-  appSessionExpiresAt = Date.now() + expiresInSeconds * 1000
+/**
+ * The session cookie is httpOnly (set by `/api/auth/session` on the server) —
+ * JS can no longer read or write it directly. `appSessionExpiresAt` is our
+ * only signal for "do we still have one," and resets on reload, which is
+ * the accepted tradeoff for keeping the token out of `document.cookie`.
+ */
+export function clearBusinessAppSessionCookie(): void {
+  resetAppSessionMarker()
+  if (typeof fetch !== "function") return
+  fetch("/api/auth/session", { method: "DELETE", credentials: "same-origin" }).catch(() => {})
 }
 
-export function clearBusinessAppSessionCookie(): void {
-  if (typeof document === "undefined") return
-  document.cookie = `${BUSINESS_APP_SESSION_COOKIE}=; Max-Age=0; Path=/; SameSite=Lax`
+/** Local-only reset for "we never had a cookie to begin with" paths — no network call. */
+function resetAppSessionMarker(): void {
   appSessionExpiresAt = 0
 }
 
 function hasUsableBusinessAppSessionCookie(): boolean {
-  if (typeof document === "undefined") return false
-  if (appSessionExpiresAt > Date.now() + 15_000) return true
-  return document.cookie.split(";").some((part) => part.trim().startsWith(`${BUSINESS_APP_SESSION_COOKIE}=`))
+  return appSessionExpiresAt > Date.now() + 15_000
 }
 
 export async function ensureBusinessAppSession(force = false): Promise<boolean> {
@@ -46,15 +47,15 @@ export async function ensureBusinessAppSession(force = false): Promise<boolean> 
 
       const accessToken = session?.access_token
       if (!accessToken) {
-        clearBusinessAppSessionCookie()
+        resetAppSessionMarker()
         return false
       }
 
-      const res = await fetch(apiUrl("/api/auth/session"), {
+      const res = await fetch("/api/auth/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ accessToken }),
-        credentials: "omit",
+        credentials: "same-origin",
       })
 
       if (!res.ok) {
@@ -62,13 +63,13 @@ export async function ensureBusinessAppSession(force = false): Promise<boolean> 
         return hasUsableBusinessAppSessionCookie()
       }
 
-      const json = (await res.json()) as { token?: string; expiresIn?: number }
-      if (!json.token || !json.expiresIn) {
+      const json = (await res.json()) as { ok?: boolean; expiresIn?: number }
+      if (!json.ok || !json.expiresIn) {
         clearBusinessAppSessionCookie()
         return hasUsableBusinessAppSessionCookie()
       }
 
-      setBusinessAppSessionCookie(json.token, json.expiresIn)
+      appSessionExpiresAt = Date.now() + json.expiresIn * 1000
       return true
     } catch {
       // Session mint can fail on a tab wake / dev-server blip; keep using an
