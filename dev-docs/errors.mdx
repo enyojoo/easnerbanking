@@ -40,6 +40,10 @@ Do not parse the message. Branch on `type` and `code`.
 | `invalid_source` | `POST /v1/quotes` without `source` |
 | `invalid_type` | Destination type is not `bank`, `mobile_money`, `wallet`, or `easetag` |
 | `verification_required` | Live Receive before the customer is `approved` |
+| `customer_action_required` | A merchant key tried to confirm or send. The customer must authorize |
+| `invalid_client_secret` | Confirm without a transfer `client_secret` |
+| `transfer_expired` | Confirm after `expires_at` |
+| `transfer_canceled` | Confirm after cancel |
 | `not_available` | Live bank details or a corridor/session not ready yet |
 | `easetag_taken` | `POST /v1/customers` with an `@tag` already in use |
 | `invalid_easetag` | `POST /v1/customers` with an invalid `@tag` |
@@ -52,7 +56,7 @@ Do not parse the message. Branch on `type` and `code`.
 
 ## Expected client behavior
 
-- `401` / `403` — stop. Fix the key or complete verification.
+- `401` / `403` — stop. Fix the key, complete verification, or have the customer authorize (`customer_action_required`).
 - `404` — the object is not in this mode. Check test vs live.
 - `409` `not_available` — retry later; live details are still provisioning.
 - `400` `transfer_failed` with "Quote expired" — create a new quote.

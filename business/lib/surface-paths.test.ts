@@ -26,6 +26,9 @@ describe("surface paths", () => {
     expect(isPublicSurfacePath("/pay-customer/acme/tuition-fall", "business.easner.com")).toBe(true)
     expect(isPublicSurfacePath("/receive/onramp/ors_123", "business.easner.com")).toBe(true)
     expect(isWorkspaceSurfacePath("/receive/onramp/ors_123", "business.easner.com")).toBe(false)
+    expect(isPublicSurfacePath("/send/authorize/tr_123", "business.easner.com")).toBe(true)
+    expect(isWorkspaceSurfacePath("/send/authorize/tr_123", "business.easner.com")).toBe(false)
+    expect(isWorkspaceSurfacePath("/send", "business.easner.com")).toBe(true)
   })
 
   it("treats customer URL shapes as public even when Host is the operator app", () => {

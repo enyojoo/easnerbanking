@@ -1,15 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { getBusinessAppPublicOrigin } from "@/lib/business-app-public-url"
 import { dispatchMerchantWebhook } from "@/lib/checkout/merchant-webhooks"
+import { generateTransferAuthorizeSecret, hashCheckoutSecretKey } from "@/lib/checkout/secrets"
 import { isEasetagGloballyAvailable, isUndefinedEasetagColumnError } from "@/lib/easetag-global"
 import { normalizeEasetag, validateEasetag } from "@/lib/easetag-validation"
 import { newPublicId } from "@/lib/platform/ids"
-import {
-  adjustPlatformAccount,
-  getOrCreatePlatformAccount,
-  insertPlatformTransaction,
-  publicAccount,
-} from "@/lib/platform/ledger"
-import { executePlatformOutboundRail } from "@/lib/platform/send-rails"
+import { adjustPlatformAccount, getOrCreatePlatformAccount, publicAccount } from "@/lib/platform/ledger"
 import { ensurePlatformCustomerWalletOwner } from "@/lib/platform/wallet-owner"
 import { buildWalletSendQuote } from "@/lib/wallet-send/wallet-send-quote"
 import type { WalletRecipientRow } from "@/lib/wallet-send/validate-recipient"
@@ -117,7 +113,7 @@ export function publicQuote(row: {
   }
 }
 
-export function publicTransfer(row: {
+export type PlatformTransferRow = {
   id: string
   quote_id?: string | null
   source_account_id?: string | null
@@ -127,7 +123,24 @@ export function publicTransfer(row: {
   status: string
   livemode: boolean
   created_at: string
-}) {
+  expires_at?: string | null
+}
+
+export function publicTransfer(
+  row: PlatformTransferRow,
+  opts?: { clientSecret?: string | null },
+) {
+  const status = row.status
+  const origin = getBusinessAppPublicOrigin()
+  const nextAction =
+    status === "requires_action"
+      ? {
+          type: "authorize" as const,
+          url: opts?.clientSecret
+            ? `${origin}/send/authorize/${row.id}?client_secret=${encodeURIComponent(opts.clientSecret)}`
+            : `${origin}/send/authorize/${row.id}`,
+        }
+      : null
   return {
     id: row.id,
     quote: row.quote_id ?? null,
@@ -135,9 +148,12 @@ export function publicTransfer(row: {
     destination: row.destination_id ?? null,
     amount: Number(row.amount_cents),
     currency: String(row.currency).toUpperCase(),
-    status: row.status,
+    status,
     livemode: Boolean(row.livemode),
     created: row.created_at,
+    expires_at: row.expires_at ?? null,
+    next_action: nextAction,
+    ...(opts?.clientSecret ? { client_secret: opts.clientSecret } : {}),
   }
 }
 
@@ -351,7 +367,7 @@ export async function createPlatformQuote(
   return publicQuote(data as Parameters<typeof publicQuote>[0])
 }
 
-export async function executePlatformTransfer(
+export async function createPlatformTransfer(
   admin: SupabaseClient,
   input: {
     businessId: string
@@ -372,13 +388,14 @@ export async function executePlatformTransfer(
       .eq("livemode", input.livemode)
       .eq("idempotency_key", input.idempotencyKey)
       .maybeSingle()
-    if (existing?.id) return publicTransfer(existing as Parameters<typeof publicTransfer>[0])
+    if (existing?.id) return publicTransfer(existing as PlatformTransferRow)
   }
 
   let amountCents = input.amountCents ?? 0
   let currency = String(input.currency ?? "USD").toUpperCase()
   let sourceAccountId = input.sourceAccountId ?? null
   let destinationId = input.destinationId ?? null
+  let quoteExpiresAt: string | null = null
   if (input.quoteId) {
     const { data: quote } = await admin
       .from("platform_quotes")
@@ -392,6 +409,7 @@ export async function executePlatformTransfer(
     currency = String(quote.send_currency).toUpperCase()
     sourceAccountId = sourceAccountId || (quote.source_account_id as string | null)
     destinationId = destinationId || (quote.destination_id as string | null)
+    quoteExpiresAt = String(quote.expires_at)
   }
   if (amountCents <= 0) throw new Error("amount must be a positive integer in cents")
 
@@ -406,91 +424,62 @@ export async function executePlatformTransfer(
   if (!sourceAccount?.id) throw new Error("Account not found")
   const source = sourceAccount.id
   const customerId = (sourceAccount.customer_id as string | null) ?? null
-  const walletOwnerId = (sourceAccount.wallet_owner_id as string | null) ?? null
 
-  const now = new Date().toISOString()
-  const { data, error } = await admin
-    .from("platform_transfers")
-    .insert({
-      id: newPublicId("tr"),
-      business_id: input.businessId,
-      livemode: input.livemode,
-      quote_id: input.quoteId ?? null,
-      source_account_id: source,
-      destination_id: destinationId,
-      amount_cents: amountCents,
-      currency,
-      status: "created",
-      idempotency_key: input.idempotencyKey ?? null,
-      created_at: now,
-      updated_at: now,
-    })
-    .select("*")
-    .single()
-  if (error || !data) throw new Error(error?.message || "Could not create transfer")
+  const nowMs = Date.now()
+  const defaultExpiry = nowMs + 15 * 60_000
+  const quoteExpiry = quoteExpiresAt ? new Date(quoteExpiresAt).getTime() : defaultExpiry
+  const expiresAt = new Date(Math.min(defaultExpiry, quoteExpiry)).toISOString()
+  const clientSecret = generateTransferAuthorizeSecret(input.livemode ? "live" : "test")
+  const now = new Date(nowMs).toISOString()
 
-  const created = publicTransfer(data as Parameters<typeof publicTransfer>[0])
-  await dispatchMerchantWebhook(admin, {
-    businessId: input.businessId,
-    event: "transfer.created",
-    data: created,
-  })
-
-  let debited = false
+  let locked = false
+  let inserted = false
   try {
-    await adjustPlatformAccount(admin, { accountId: source, availableDelta: -amountCents })
-    debited = true
-    if (input.livemode) {
-      await executePlatformOutboundRail(admin, {
-        businessId: input.businessId,
-        customerId,
-        destinationId,
-        amountCents,
-        currency,
-        walletOwnerId,
-      })
-    }
-    await insertPlatformTransaction(admin, {
-      businessId: input.businessId,
-      livemode: input.livemode,
-      type: "transfer",
-      amountCents,
-      currency,
-      direction: "out",
-      status: "completed",
+    await adjustPlatformAccount(admin, {
       accountId: source,
-      customerId,
-      transferId: created.id,
-      description: "Transfer",
+      availableDelta: -amountCents,
+      pendingDelta: amountCents,
     })
-    const completedAt = new Date().toISOString()
-    const { data: completed } = await admin
+    locked = true
+    const { data, error } = await admin
       .from("platform_transfers")
-      .update({ status: "completed", updated_at: completedAt })
-      .eq("id", created.id)
+      .insert({
+        id: newPublicId("tr"),
+        business_id: input.businessId,
+        livemode: input.livemode,
+        quote_id: input.quoteId ?? null,
+        source_account_id: source,
+        destination_id: destinationId,
+        amount_cents: amountCents,
+        currency,
+        status: "requires_action",
+        idempotency_key: input.idempotencyKey ?? null,
+        client_secret_hash: hashCheckoutSecretKey(clientSecret),
+        expires_at: expiresAt,
+        customer_id: customerId,
+        created_at: now,
+        updated_at: now,
+      })
       .select("*")
       .single()
-    const mapped = publicTransfer((completed ?? data) as Parameters<typeof publicTransfer>[0])
+    if (error || !data) throw new Error(error?.message || "Could not create transfer")
+    inserted = true
+
+    const created = publicTransfer(data as PlatformTransferRow)
     await dispatchMerchantWebhook(admin, {
       businessId: input.businessId,
-      event: "transfer.completed",
-      data: mapped,
+      event: "transfer.created",
+      data: created,
     })
-    return mapped
+    return publicTransfer(data as PlatformTransferRow, { clientSecret })
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Transfer failed"
-    if (debited) {
-      await adjustPlatformAccount(admin, { accountId: source, availableDelta: amountCents }).catch(() => {})
+    if (locked && !inserted) {
+      await adjustPlatformAccount(admin, {
+        accountId: source,
+        availableDelta: amountCents,
+        pendingDelta: -amountCents,
+      }).catch(() => {})
     }
-    await admin
-      .from("platform_transfers")
-      .update({ status: "failed", updated_at: new Date().toISOString() })
-      .eq("id", created.id)
-    await dispatchMerchantWebhook(admin, {
-      businessId: input.businessId,
-      event: "transfer.failed",
-      data: { ...created, status: "failed", error: message },
-    })
     throw err
   }
 }

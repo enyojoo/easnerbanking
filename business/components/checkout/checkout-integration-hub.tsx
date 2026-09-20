@@ -563,7 +563,7 @@ function StepLive({ data, onSaved }: HubDataProps) {
           <p className="text-sm font-medium text-foreground">Live payments</p>
           <p className="text-xs text-muted-foreground">
             {gateReady
-              ? "Connect is ready, a test payment on your website succeeded, and a webhook returned 200."
+              ? "Online payments are ready, a test payment on your website succeeded, and a webhook returned 200."
               : data.readiness.ready
                 ? "Pay on your website with test keys, and confirm a webhook returns 200, before going live."
                 : "Complete verification first."}

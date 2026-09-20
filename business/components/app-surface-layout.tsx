@@ -10,6 +10,7 @@ import { redirectToWorkspaceLogin } from "@/lib/auth/workspace-login-redirect"
 import { probeStoredSupabaseSession } from "@/lib/query/web-persist"
 import { PlatformAccessGate } from "@/components/platform-access-gate"
 import { useApplyStoredAppSurface } from "@/lib/use-app-surface"
+import { isHostedSendAuthorizePath } from "@/lib/surface-paths"
 
 const DASHBOARD_SHELL_ROOTS = [
   "/accounts",
@@ -38,6 +39,7 @@ function matchesShellRoot(pathname: string, root: string) {
 }
 
 function isDashboardShellPath(pathname: string) {
+  if (isHostedSendAuthorizePath(pathname)) return false
   return DASHBOARD_SHELL_ROOTS.some((root) => matchesShellRoot(pathname, root))
 }
 

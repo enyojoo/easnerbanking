@@ -6,6 +6,8 @@ icon: send
 
 Send **debits the customer vault**. `available` on the source `acct_` is USDC or EURC. The destination type is the **payment method** — how the recipient gets paid.
 
+Create the transfer with your secret key. The customer authorizes it — in your app with the `client_secret`, or on the hosted review URL. If they do not, the funds stay in the vault. A merchant key cannot send on their behalf.
+
 ```mermaid
 flowchart LR
   acct["acct_ vault"]
@@ -38,10 +40,13 @@ flowchart LR
     `POST /v1/quotes` with **`source`** (the `acct_`) and `destination`. Lock send and receive. Expire in 15 minutes.
   </Step>
   <Step title="Transfer">
-    `POST /v1/transfers` with `{ "quote": "qt_…" }` and `Idempotency-Key`.
+    `POST /v1/transfers` with `{ "quote": "qt_…" }` and `Idempotency-Key`. Returns `requires_action` and a `client_secret`.
+  </Step>
+  <Step title="Customer authorizes">
+    Show amount and destination. `POST /v1/transfers/:id/confirm` with `{ "client_secret": "easner_ta_…" }` — not your secret key. Or open `next_action.url`.
   </Step>
   <Step title="Fulfil from webhooks">
-    `transfer.completed` and `transaction.created`. Do not treat HTTP `201` as “the recipient has the money” if your product can retry.
+    `transfer.completed` and `transaction.created`. Do not treat HTTP `201` as “the recipient has the money”.
   </Step>
 </Steps>
 
@@ -156,10 +161,8 @@ The source `acct_` must match the send currency. A USD account sends from the US
 
 | Mode | What happens |
 |---|---|
-| Test | Transfer completes. Test vault is debited. No live bank, mobile-money, or chain movement |
-| Live wallet (Solana USDC/EURC) | Vault signs the token transfer to the destination address |
-| Live Easetag | Vault is debited. The `@tag` owner is credited — a Banking balance or a `cus_` `acct_` |
-| Live bank / mobile money | Vault stablecoin is sold into the destination corridor. Live requires `approved` verification. `GET /v1/payment_methods` lists countries and currencies |
+| Test | Create returns `requires_action`. Confirm debits the **test** vault. No live rails move |
+| Live | Create returns `requires_action` and locks `available` into `pending`. Confirm sends from the customer vault. A merchant key on confirm is `403` `customer_action_required` |
 
 `GET /v1/payment_methods` returns the send/receive rails and a **country catalog** (`catalog.fiat.bank`, `catalog.fiat.mobile_money`, `catalog.crypto`). Use it the way first-party send uses its destination list: pick a corridor, create a destination with those details, quote, transfer.
 

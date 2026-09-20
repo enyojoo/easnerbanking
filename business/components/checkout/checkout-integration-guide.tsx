@@ -137,7 +137,7 @@ export function CheckoutIntegrationGuide({ data }: { data: CheckoutHubPayload })
       <section className="flex flex-col gap-3">
         <h2 className="text-base font-semibold text-foreground">1. Before you start</h2>
         <ul className="list-disc pl-5 text-sm text-muted-foreground">
-          <li>Finish Connect so live charges can settle to your Easner balance.</li>
+          <li>Finish online payments setup so live charges settle to your Easner balance.</li>
           <li>Add your website origin and a success URL.</li>
           <li>Create test keys. Keep the secret key on your server.</li>
           <li>Add a webhook URL so you can fulfil after payment, not from the browser.</li>

@@ -68,9 +68,9 @@ function stripeCache(): Record<string, Promise<StripeLike>> {
   return window.__easnerStripeByKey
 }
 
-function loadStripe(platformKey: string, stripeAccountId?: string): Promise<StripeLike> {
+function loadStripe(platformKey: string, accountId?: string): Promise<StripeLike> {
   const cache = stripeCache()
-  const cacheKey = `${platformKey}:${stripeAccountId || ""}`
+  const cacheKey = `${platformKey}:${accountId || ""}`
   if (cache[cacheKey]) return cache[cacheKey]
   cache[cacheKey] = new Promise((resolve, reject) => {
     const start = () => {
@@ -81,7 +81,7 @@ function loadStripe(platformKey: string, stripeAccountId?: string): Promise<Stri
       resolve(
         window.Stripe(platformKey, {
           developerTools: STRIPE_DEVELOPER_TOOLS,
-          ...(stripeAccountId ? { stripeAccount: stripeAccountId } : {}),
+          ...(accountId ? { stripeAccount: accountId } : {}),
         }),
       )
     }
@@ -121,15 +121,18 @@ function platformStripeKey(
 async function assertPublishableKey(
   publishableKey: string,
   validateUrl: string,
-): Promise<string> {
+): Promise<{ platformKey: string; accountId: string }> {
   if (!isPublishableKey(publishableKey)) {
     throw new Error("Easner Checkout: publishableKey is required")
   }
-  if (!validateUrl || validateUrl.includes("EASNER_VALIDATE")) return ""
+  if (!validateUrl || validateUrl.includes("EASNER_VALIDATE")) {
+    return { platformKey: "", accountId: "" }
+  }
   const url = `${validateUrl}${validateUrl.includes("?") ? "&" : "?"}key=${encodeURIComponent(publishableKey)}`
   const response = await fetch(url, { method: "GET" })
   const body = (await response.json().catch(() => null)) as {
-    stripe_publishable_key?: string
+    publishable_key?: string
+    account_id?: string | null
     error?: { message?: string }
   } | null
   if (response.status === 401 || response.status === 403) {
@@ -138,7 +141,10 @@ async function assertPublishableKey(
   if (!response.ok) {
     throw new Error(body?.error?.message || "Easner Checkout: could not verify publishable key")
   }
-  return String(body?.stripe_publishable_key || "").trim()
+  return {
+    platformKey: String(body?.publishable_key || "").trim(),
+    accountId: String(body?.account_id || "").trim(),
+  }
 }
 
 function applyBaseStyles(el: HTMLElement, extra?: Partial<CSSStyleDeclaration>) {
@@ -211,10 +217,10 @@ export async function mountInline(
   const formSlot = mountCheckoutChrome(el as HTMLElement)
   renderSkeleton(formSlot)
 
-  const validatedKey = await assertPublishableKey(options.publishableKey, runtime.validateUrl)
+  const validated = await assertPublishableKey(options.publishableKey, runtime.validateUrl)
   const sdk = await loadStripe(
-    platformStripeKey(options.publishableKey, runtime, validatedKey),
-    String(options.stripeAccountId || "").trim() || undefined,
+    platformStripeKey(options.publishableKey, runtime, validated.platformKey),
+    validated.accountId || undefined,
   )
   const mountEmail = String(options.customerEmail || "").trim()
   const mountName = String(options.customerName || "").trim()

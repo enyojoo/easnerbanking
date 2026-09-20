@@ -88,8 +88,7 @@ export function recipeBrowserHtml(publishableKey: string): string {
       EasnerCheckout.mount("#easner-checkout", {
         publishableKey: ${JSON.stringify(publishableKey)},
         clientSecret: session.client_secret,
-        stripeAccountId: session.stripe_account_id,
-        onSuccess: function () { window.location = "/thanks"; }
+        onSuccess: function () { window.location = "/thanks"; }})
       });
     });
 </script>`
@@ -141,7 +140,7 @@ Golden rule: the amount and secret key never go in the browser.
 ${JSON.stringify(recipe.sessionBody, null, 2)}
 
 2. In the browser, load https://js.easner.com/v1/checkout.js and mount the form on the page (same as invoices and payment links):
-EasnerCheckout.mount("#easner-checkout", { publishableKey: "easner_pk_…", clientSecret: session.client_secret, stripeAccountId: session.stripe_account_id, onSuccess })
+EasnerCheckout.mount("#easner-checkout", { publishableKey: "easner_pk_…", clientSecret: session.client_secret, onSuccess })
 
 3. Fulfil on checkout.completed. Verify easner-signature HMAC-SHA256 of "\${t}.\${rawBody}".
 Metadata on the webhook will include ${JSON.stringify(recipe.metadataExample)}.
@@ -151,7 +150,7 @@ Do not send tax, appearance, or amount from the browser.`
 
 export function recipeDebugPrompt(): string {
   return `Debug an Easner Checkout integration.
-Check: secret key only on the server; POST /v1/checkout/sessions returns client_secret and stripe_account_id; browser uses js.easner.com/v1/checkout.js and mount("#easner-checkout", { publishableKey, clientSecret, stripeAccountId }); webhook verifies easner-signature; checkout.completed includes merchant metadata (no easner_* keys). Errors look like { error: { type, code, message } }.`
+Check: secret key only on the server; POST /v1/checkout/sessions returns client_secret; browser uses js.easner.com/v1/checkout.js and mount("#easner-checkout", { publishableKey, clientSecret }); webhook verifies easner-signature; checkout.completed includes merchant metadata (no easner_* keys). Errors look like { error: { type, code, message } }.`
 }
 
 export const CHECKOUT_EVENT_CATALOG: Array<{ event: string; example: Record<string, unknown> }> = [

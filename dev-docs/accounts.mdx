@@ -1,10 +1,10 @@
 ---
 title: Accounts
-description: A currency view of your customer’s custodial stablecoin vault.
+description: A currency view of your customer’s isolated stablecoin vault.
 icon: wallet
 ---
 
-An account is not a float you invent. It is the **USD or EUR view** of a custodial vault Easner opens for that customer.
+An account is not a float you invent and not money Easner takes onto its own balance. It is the **USD or EUR view** of that customer’s isolated vault.
 
 Creating a [customer](/customers) issues USD. Open EUR with `POST /v1/accounts` and the `cus_` id. Both currencies sit on the **same customer vault owner** — two ledger views, two on-chain vaults.
 
@@ -13,7 +13,7 @@ Creating a [customer](/customers) issues USD. Open EUR with `POST /v1/accounts` 
 | `USD` | USDC | Solana | USDC in the USD vault, in cents |
 | `EUR` | EURC | Solana | EURC in the EUR vault, in cents |
 
-You never receive a private key. Deposit addresses and bank details are issued against this vault. Sends debit `available` and leave from it.
+The vault is isolated to that customer. You never receive a key. Deposit addresses and bank details are issued against this vault. The customer authorizes send from their vault. `available` is that vault, in cents.
 
 ```mermaid
 flowchart TB

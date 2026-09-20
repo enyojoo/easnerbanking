@@ -14,7 +14,7 @@ Livemode is the key prefix. There is no `livemode` body flag.
 | Wallet address | Token account without KYC | Require `approved`. USDC/EURC into the vault |
 | Onramp | Hosted page completes and credits the vault | Hosted card onramp after approval, onto the vault |
 | Quote | Completes. Send/receive 1:1 | May price wallet destinations |
-| Transfer | Completes. Debits the **test** vault | Wallet, Easetag, bank, and mobile money leave the live vault |
+| Transfer | Create `requires_action`. Confirm debits the **test** vault | Create `requires_action`. Confirm sends from the customer vault. Merchant key cannot confirm |
 | Checkout | Test card `4242…`. Nothing charged | Real collect onto your business balance |
 | Webhooks | Your test URL | Your live URL |
 

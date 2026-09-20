@@ -61,7 +61,6 @@ export async function POST(request: Request) {
   return NextResponse.json({
     client_secret: result.clientSecret,
     checkout_session_id: result.checkoutSessionId,
-    stripe_account_id: result.stripeAccountId,
     publishable_key: testKey.publishable_key,
   })
 }

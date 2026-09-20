@@ -3,8 +3,6 @@ export type CheckoutMode = "payment" | "subscription"
 export type EasnerCheckoutMountOptions = {
   publishableKey: string
   clientSecret: string
-  /** Connected account that owns the Direct Charge Checkout Session. */
-  stripeAccountId?: string
   customerEmail?: string
   customerName?: string
   onSuccess?: (result: unknown) => void

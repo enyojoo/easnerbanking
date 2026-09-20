@@ -53,8 +53,10 @@ Mint a new key from Console if an older checkout-only key is still on the busine
 
 Send `Idempotency-Key` on writes that can move money:
 
-- `POST /v1/transfers`
+- `POST /v1/transfers` (create)
 - `POST /v1/checkout/sessions`
+
+`POST /v1/transfers/:id/confirm` uses the transfer `client_secret` (`easner_ta_…`), not `easner_sk_*`. A merchant key on confirm returns `403` `customer_action_required`.
 
 Use a new key per logical operation. Replays with the same key return the original transfer or session instead of sending twice. Keys longer than 256 characters are ignored.
 

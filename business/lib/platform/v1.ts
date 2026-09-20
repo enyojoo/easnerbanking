@@ -52,6 +52,11 @@ export function readIdempotencyKey(request: Request): string | null {
   return value
 }
 
+export function readBearerToken(authorizationHeader: string | null): string {
+  const raw = String(authorizationHeader ?? "").trim()
+  return raw.toLowerCase().startsWith("bearer ") ? raw.slice(7).trim() : raw
+}
+
 export async function logPlatformApi(
   admin: SupabaseClient,
   input: {

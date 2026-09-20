@@ -6,14 +6,14 @@ icon: book-open
 
 Easner is **stablecoin-native banking and payment infrastructure**. You integrate. Your customer is the banking end user (`cus_`). A payer is someone who pays you through Checkout.
 
-Every issued account is a **custodial stablecoin vault** with a currency view:
+Every issued account is that customer’s **isolated stablecoin vault** with a currency view:
 
 | Account | Vault asset | Chain |
 |---|---|---|
 | USD `acct_` | USDC | Solana |
 | EUR `acct_` | EURC | Solana |
 
-You never hold signing keys. You call `v1`. Easner signs. Fiat in (virtual account) converts into that vault. Fiat and chain out leave from that vault. `available` is the vault, in cents.
+The funds sit in **their** vault — a dedicated on-chain address for that `cus_`. They do not land on Easner’s balance and they do not land on yours. Easner does not operate that vault and does not move money out of it on a merchant key. The customer authorizes the send from their vault. Fiat in converts into the vault. `available` is the vault, in cents.
 
 ```mermaid
 flowchart LR
@@ -57,7 +57,7 @@ Amounts are minor units (cents). Errors are `{ error: { type, code, message } }`
 
 They share a secret key and Console. They do not share a balance.
 
-Checkout uses the same Connect account as invoices and payment links. A collect lands on **your** business balance — not a customer vault. That is not Receive.
+Checkout collects onto **your** business balance — the same balance as invoices and payment links, not a customer vault. That is not Receive.
 
 ## What `v1` covers
 
@@ -68,9 +68,7 @@ Checkout uses the same Connect account as invoices and payment links. A collect 
 | Receive: wallet address | Yes — Solana USDC / EURC |
 | Receive: card onramp | Yes — test completes on the hosted page; live opens card onramp onto the vault |
 | Receive: Easetag | Yes — the `cus_` has an `@tag`. Inbound credits the issued `acct_` |
-| Send: wallet (Solana USDC / EURC) | Yes |
-| Send: Easetag | Yes — pays a first-party `@tag` or another `cus_` |
-| Send: bank / mobile money | Yes — live leaves the customer vault on the corridor catalog |
+| Send: wallet / Easetag / bank / mobile money | Yes — create with your key, customer confirms with `client_secret`. A merchant key cannot move the vault |
 | Country / corridor catalog | Yes — `GET /v1/payment_methods` |
 | Checkout | Yes — your business balance |
 
@@ -89,7 +87,7 @@ You map **your user → `cus_` → `acct_`**. Then you either fund the vault (Re
     Publish [bank details](/receive#virtual-account), a [wallet address](/receive#wallet-address), or a [card onramp](/receive#card-onramp). When the deposit settles, `available` rises. Listen for `account.updated` and `transaction.created`.
   </Step>
   <Step title="Send from the vault">
-    Create a [destination](/destinations) (bank, mobile money, wallet, or Easetag). [Quote](/quotes) with `source`. [Transfer](/transfers). Fulfil from `transfer.completed`.
+    Create a [destination](/destinations) (bank, mobile money, wallet, or Easetag). [Quote](/quotes) with `source`. [Transfer](/transfers). The customer authorizes. Fulfil from `transfer.completed`.
   </Step>
   <Step title="Collect on your site">
     Optional. [Checkout](/checkout) sessions credit **your** business balance. Fulfil from `checkout.completed`.

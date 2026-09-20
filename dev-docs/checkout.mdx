@@ -6,7 +6,7 @@ icon: credit-card
 
 Checkout collects on your website. The amount and secret key stay on your server. The browser only sees a publishable key and a `client_secret`.
 
-Settlement uses the **same Connect account** as invoices and payment links. The collect lands on **your** business balance. Switch to Banking in the app to see it.
+The collect lands on **your** business balance — the same balance as invoices and payment links. Switch to Banking in the app to see it.
 
 Checkout is not Receive. It does not credit a customer vault. To fund a `cus_` `acct_`, use [Receive](/receive).
 
@@ -36,7 +36,6 @@ curl https://api.easner.com/v1/checkout/sessions \
 {
   "client_secret": "…",
   "checkout_session_id": "cs_…",
-  "stripe_account_id": "…",
   "amount": 4900,
   "currency": "USD",
   "mode": "payment",
@@ -46,7 +45,7 @@ curl https://api.easner.com/v1/checkout/sessions \
 }
 ```
 
-`201`. Return only `client_secret` (and the account id the script needs) to the page.
+`201`. Return only `client_secret` to the page. The script resolves the rest from your publishable key.
 
 | Field | Notes |
 |---|---|
@@ -96,7 +95,6 @@ curl https://api.easner.com/v1/checkout/sessions \
       EasnerCheckout.mount("#easner-checkout", {
         publishableKey: "easner_pk_test_…",
         clientSecret: session.client_secret,
-        stripeAccountId: session.stripe_account_id,
         onSuccess: function () { window.location = "/thanks"; }
       });
     });

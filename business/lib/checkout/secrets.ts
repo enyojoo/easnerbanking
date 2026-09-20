@@ -65,6 +65,24 @@ export function generateWebhookSigningSecret(): string {
   return `easner_whsec_${randomBytes(24).toString("hex")}`
 }
 
+/** One-time transfer authorize secret. Only the hash is stored. */
+export function generateTransferAuthorizeSecret(mode: CheckoutKeyMode): string {
+  return `easner_ta_${mode}_${randomBytes(24).toString("hex")}`
+}
+
+export function transferAuthorizeSecretMode(key: string): CheckoutKeyMode | null {
+  const match = /^easner_ta_(test|live)_[0-9a-f]+$/i.exec(key.trim())
+  return match ? (match[1].toLowerCase() as CheckoutKeyMode) : null
+}
+
+export function isTransferAuthorizeSecret(key: string): boolean {
+  return transferAuthorizeSecretMode(key) != null
+}
+
+export function isMerchantSecretKey(key: string): boolean {
+  return key.trim().startsWith("easner_sk_")
+}
+
 export function parseCheckoutKeyMode(raw: unknown): CheckoutKeyMode | null {
   const value = String(raw ?? "").trim().toLowerCase()
   return value === "test" || value === "live" ? value : null

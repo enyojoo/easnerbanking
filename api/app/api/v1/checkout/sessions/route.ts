@@ -162,7 +162,7 @@ export async function POST(request: Request) {
       try {
         stripeAccountId = await ensureTestConnectedAccount(admin, { businessId: auth.ctx.businessId })
       } catch (e) {
-        return jsonError(502, "price_create_failed", e instanceof Error ? e.message : "Test connected account failed")
+        return jsonError(502, "price_create_failed", e instanceof Error ? e.message : "Could not set up test payments")
       }
     }
     const price = await createRecurringPrice({
@@ -222,7 +222,6 @@ export async function POST(request: Request) {
     {
       client_secret: result.clientSecret,
       checkout_session_id: result.checkoutSessionId,
-      stripe_account_id: result.stripeAccountId,
       amount: result.amounts.customerAmountCents,
       currency,
       mode,

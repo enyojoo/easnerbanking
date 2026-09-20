@@ -3,6 +3,12 @@ import { isCustomerAppHostname } from "@/lib/customer-hosts"
 /** Routes that should not mount workspace chrome (DashboardShell, Intercom, RQ persist, etc.). */
 export const PUBLIC_SURFACE_PREFIXES = ["/auth", "/invoice", "/pay-customer", "/pay", "/receive"] as const
 
+/** Hosted customer send review. `/send` itself stays a workspace route. */
+export function isHostedSendAuthorizePath(pathname: string | null | undefined): boolean {
+  if (!pathname) return false
+  return pathname === "/send/authorize" || pathname.startsWith("/send/authorize/")
+}
+
 const OPERATOR_FIRST_SEGMENTS = new Set([
   "accounts",
   "auth",
@@ -41,6 +47,7 @@ export function isPublicSurfacePath(
 ): boolean {
   if (isCustomerAppHostname(hostname)) return true
   if (!pathname) return false
+  if (isHostedSendAuthorizePath(pathname)) return true
   if (
     PUBLIC_SURFACE_PREFIXES.some(
       (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),

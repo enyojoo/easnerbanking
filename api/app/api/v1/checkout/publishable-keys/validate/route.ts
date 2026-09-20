@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { authenticatePublishableKey } from "@/lib/checkout/authenticate-merchant-key"
 import { checkoutApiError } from "@/lib/checkout/checkout-api-error"
 import { getStripePublishableKey, isStripeTestPaymentsConfigured } from "@/lib/stripe/config"
+import { getConnectAccountRow } from "@/lib/stripe/connect"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 
 const CORS = {
@@ -26,7 +27,8 @@ export async function GET(request: Request) {
     return json(400, body)
   }
 
-  const auth = await authenticatePublishableKey(createSupabaseAdmin(), key)
+  const admin = createSupabaseAdmin()
+  const auth = await authenticatePublishableKey(admin, key)
   if (!auth.ok) {
     const { body } = checkoutApiError(auth.status, "invalid_publishable_key", auth.error)
     return json(auth.status, body)
@@ -36,14 +38,16 @@ export async function GET(request: Request) {
     const { body } = checkoutApiError(
       503,
       "test_payments_unconfigured",
-      "Test payments are not configured. Add Stripe test keys on the Easner platform.",
+      "Test payments are not configured.",
     )
     return json(503, body)
   }
 
+  const connect = await getConnectAccountRow(admin, auth.ctx.businessId)
   return json(200, {
     ok: true,
     mode: auth.ctx.mode,
-    stripe_publishable_key: getStripePublishableKey(auth.ctx.mode === "live"),
+    publishable_key: getStripePublishableKey(auth.ctx.mode === "live"),
+    account_id: connect?.stripe_account_id?.trim() || null,
   })
 }

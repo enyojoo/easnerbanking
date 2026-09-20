@@ -1,6 +1,6 @@
 ---
 title: Quickstart
-description: First send in test — customer, destination, quote, then transfer.
+description: First send in test — customer, destination, quote, transfer, then confirm.
 icon: rocket
 ---
 
@@ -54,7 +54,7 @@ export EASNER_SECRET_KEY=easner_sk_test_…
     Save `id` (`qt_…`). In test, send and receive are 1:1 unless a live wallet destination is priced.
   </Step>
   <Step title="Transfer">
-    Execute the quote. Always send `Idempotency-Key` so a retry does not send twice.
+    Create the send. Always send `Idempotency-Key`.
 
     ```bash
     curl https://api.easner.com/v1/transfers \
@@ -64,7 +64,18 @@ export EASNER_SECRET_KEY=easner_sk_test_…
       -d '{"quote":"qt_…"}'
     ```
 
-    Expected: `status` moves to `completed` (test) or stays `created` then completes. The customer account is debited. A `txn_` row is written.
+    Expected: `status` is `requires_action`. Save `id` and `client_secret`.
+  </Step>
+  <Step title="Confirm">
+    In your app the customer reviews, then you confirm with the `client_secret` — not the secret key.
+
+    ```bash
+    curl https://api.easner.com/v1/transfers/tr_…/confirm \
+      -H "Content-Type: application/json" \
+      -d '{"client_secret":"easner_ta_test_…"}'
+    ```
+
+    Expected: `status` is `completed`. The test vault is debited. A `txn_` row is written.
 
     Listen for `transfer.completed` and `transaction.created` on your webhook.
   </Step>

@@ -4,9 +4,9 @@ description: Your banking end user. Create, retrieve, and start hosted verificat
 icon: users
 ---
 
-A customer is your end user. They never log into Easner. You hold the id and call `v1`.
+A customer is your end user. They never log into Easner. You hold the id and call `v1`. Live send is authorized in your app (or the hosted review URL) with the transfer `client_secret`.
 
-Creating a customer opens their **custodial vault** and issues a USD `acct_` (USDC on Solana). Email and name are not enough for a live virtual account or onramp — start hosted verification first.
+Creating a customer opens **their** vault and issues a USD `acct_` (USDC on Solana). Email and name are not enough for a live virtual account or onramp — start hosted verification first.
 
 <Note>
   **Scope:** `GET` needs `accounts.read`. `POST` customer needs `transfers.write`. `POST` verification needs `accounts.write`.
