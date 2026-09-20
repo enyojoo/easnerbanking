@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { assertAccountAllows } from "@/lib/account-restriction"
+import { consumeApiRateLimit, isV1WriteScope, v1BusinessWriteLimit } from "@/lib/api/rate-limit"
 import {
   authenticateMerchantKey,
   requireScope,
@@ -8,16 +9,21 @@ import {
 } from "@/lib/checkout/authenticate-merchant-key"
 import { checkoutApiError } from "@/lib/checkout/checkout-api-error"
 
+export type TimedMerchantContext = MerchantKeyContext & { startedAt: number }
+
 export function v1Error(status: number, code: string, message: string) {
   const { body } = checkoutApiError(status, code, message)
-  return NextResponse.json(body, { status })
+  const response = NextResponse.json(body, { status })
+  if (status === 429) response.headers.set("Retry-After", "60")
+  return response
 }
 
 export async function requireMerchant(
   admin: SupabaseClient,
   request: Request,
   scope: string,
-): Promise<{ ok: true; ctx: MerchantKeyContext } | { ok: false; response: NextResponse }> {
+): Promise<{ ok: true; ctx: TimedMerchantContext } | { ok: false; response: NextResponse }> {
+  const startedAt = Date.now()
   const auth = await authenticateMerchantKey(admin, request.headers.get("authorization"))
   if (!auth.ok) {
     return {
@@ -29,7 +35,17 @@ export async function requireMerchant(
   if (!scoped.ok) {
     return { ok: false, response: v1Error(scoped.status, "key_forbidden", scoped.error) }
   }
-  return { ok: true, ctx: auth.ctx }
+  const write = isV1WriteScope(scope)
+  if (write) {
+    const allowed = await consumeApiRateLimit(admin, `v1:write:${auth.ctx.businessId}`, {
+      limit: v1BusinessWriteLimit(),
+      windowSeconds: 60,
+    })
+    if (!allowed) {
+      return { ok: false, response: v1Error(429, "rate_limit", "Too many requests") }
+    }
+  }
+  return { ok: true, ctx: { ...auth.ctx, startedAt } }
 }
 
 export async function denyIfRestricted(
@@ -66,8 +82,23 @@ export async function logPlatformApi(
     path: string
     status: number
     errorCode?: string | null
+    startedAt?: number
   },
 ): Promise<void> {
+  const durationMs =
+    input.startedAt != null && Number.isFinite(input.startedAt)
+      ? Math.max(0, Date.now() - input.startedAt)
+      : null
+  console.info(
+    JSON.stringify({
+      evt: "api.timing",
+      surface: "v1",
+      method: input.method,
+      path: input.path,
+      status: input.status,
+      ms: durationMs,
+    }),
+  )
   try {
     await admin.from("platform_api_logs").insert({
       business_id: input.businessId,
@@ -76,6 +107,7 @@ export async function logPlatformApi(
       path: input.path,
       status: input.status,
       error_code: input.errorCode ?? null,
+      ...(durationMs != null ? { duration_ms: durationMs } : {}),
     })
   } catch (error) {
     console.warn("[platform] api log:", error instanceof Error ? error.message : error)

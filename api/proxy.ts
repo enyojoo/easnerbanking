@@ -6,6 +6,7 @@ import {
   maybeRewriteApiV1ToAppApi,
   maybeRewriteJsCheckoutScript,
 } from "@/lib/api-subdomain-redirect"
+import { maybeRateLimitApiRequest } from "@/lib/api/rate-limit"
 import { applyCorsHeaders, corsPreflightResponse, getCorsAllowedOrigins } from "@/lib/cors"
 import { cronJobsEnabledOnThisProject, isScheduledCronPath } from "@/lib/api/cron-project"
 
@@ -36,6 +37,8 @@ export function proxy(request: NextRequest) {
     const allowed = getCorsAllowedOrigins()
     const preflight = corsPreflightResponse(request, allowed)
     if (preflight) return preflight
+    const limited = maybeRateLimitApiRequest(request)
+    if (limited) return applyCorsHeaders(limited, request, allowed)
     const response = NextResponse.next()
     return applyCorsHeaders(response, request, allowed)
   }

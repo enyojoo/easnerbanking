@@ -16,6 +16,7 @@ export async function GET(request: Request) {
     .order("created_at", { ascending: false })
     .limit(100)
   await logPlatformApi(admin, {
+    startedAt: auth.ctx.startedAt,
     businessId: auth.ctx.businessId,
     livemode,
     method: "GET",
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
       easetag: body?.easetag,
     })
     await logPlatformApi(admin, {
+      startedAt: auth.ctx.startedAt,
       businessId: auth.ctx.businessId,
       livemode,
       method: "POST",
@@ -65,6 +67,7 @@ export async function POST(request: Request) {
     const errorCode =
       code === "invalid_easetag" || code === "easetag_taken" ? code : "create_failed"
     await logPlatformApi(admin, {
+      startedAt: auth.ctx.startedAt,
       businessId: auth.ctx.businessId,
       livemode,
       method: "POST",

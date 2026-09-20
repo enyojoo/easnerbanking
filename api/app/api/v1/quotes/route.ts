@@ -31,6 +31,7 @@ export async function POST(request: Request) {
       receiveCurrency: body?.receive_currency,
     })
     await logPlatformApi(admin, {
+      startedAt: auth.ctx.startedAt,
       businessId: auth.ctx.businessId,
       livemode,
       method: "POST",

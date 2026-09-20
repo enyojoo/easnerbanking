@@ -18,6 +18,7 @@ export async function GET(request: Request) {
     .order("created_at", { ascending: false })
     .limit(100)
   await logPlatformApi(admin, {
+    startedAt: auth.ctx.startedAt,
     businessId: auth.ctx.businessId,
     livemode,
     method: "GET",
@@ -50,6 +51,7 @@ export async function POST(request: Request) {
       details: body?.details && typeof body.details === "object" ? body.details : {},
     })
     await logPlatformApi(admin, {
+      startedAt: auth.ctx.startedAt,
       businessId: auth.ctx.businessId,
       livemode,
       method: "POST",

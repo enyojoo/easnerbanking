@@ -1,4 +1,9 @@
-export type CheckoutApiErrorType = "invalid_request" | "authentication" | "permission" | "api_error"
+export type CheckoutApiErrorType =
+  | "invalid_request"
+  | "authentication"
+  | "permission"
+  | "rate_limit"
+  | "api_error"
 
 export type CheckoutApiErrorBody = {
   error: {
@@ -20,9 +25,11 @@ export function checkoutApiError(
       ? "authentication"
       : status === 403
         ? "permission"
-        : status >= 500
-          ? "api_error"
-          : "invalid_request")
+        : status === 429
+          ? "rate_limit"
+          : status >= 500
+            ? "api_error"
+            : "invalid_request")
   return {
     status,
     body: {

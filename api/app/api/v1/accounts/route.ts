@@ -15,6 +15,7 @@ export async function GET(request: Request) {
       issuedOnly: !customerId,
     })
     await logPlatformApi(admin, {
+      startedAt: auth.ctx.startedAt,
       businessId: auth.ctx.businessId,
       livemode,
       method: "GET",
@@ -25,6 +26,7 @@ export async function GET(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not list accounts"
     await logPlatformApi(admin, {
+      startedAt: auth.ctx.startedAt,
       businessId: auth.ctx.businessId,
       livemode,
       method: "GET",
@@ -75,6 +77,7 @@ export async function POST(request: Request) {
       name: customer.name,
     })
     await logPlatformApi(admin, {
+      startedAt: auth.ctx.startedAt,
       businessId: auth.ctx.businessId,
       livemode,
       method: "POST",
@@ -85,6 +88,7 @@ export async function POST(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not create account"
     await logPlatformApi(admin, {
+      startedAt: auth.ctx.startedAt,
       businessId: auth.ctx.businessId,
       livemode,
       method: "POST",

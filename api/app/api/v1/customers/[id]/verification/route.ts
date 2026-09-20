@@ -18,6 +18,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       returnUrl: body?.return_url,
     })
     await logPlatformApi(admin, {
+      startedAt: auth.ctx.startedAt,
       businessId: auth.ctx.businessId,
       livemode,
       method: "POST",
@@ -29,6 +30,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const message = error instanceof Error ? error.message : "Could not start verification"
     const code = message === "Customer not found" ? "not_found" : "create_failed"
     await logPlatformApi(admin, {
+      startedAt: auth.ctx.startedAt,
       businessId: auth.ctx.businessId,
       livemode,
       method: "POST",

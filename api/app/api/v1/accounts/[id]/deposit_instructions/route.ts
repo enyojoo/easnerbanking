@@ -18,6 +18,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       accountId: id,
     })
     await logPlatformApi(admin, {
+      startedAt: auth.ctx.startedAt,
       businessId: auth.ctx.businessId,
       livemode,
       method: "GET",
@@ -34,6 +35,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
           : "create_failed"
     const status = code === "verification_required" ? 403 : code === "not_found" ? 404 : code === "not_available" ? 409 : 400
     await logPlatformApi(admin, {
+      startedAt: auth.ctx.startedAt,
       businessId: auth.ctx.businessId,
       livemode,
       method: "GET",

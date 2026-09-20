@@ -9,6 +9,7 @@ export async function GET(request: Request) {
   if (!auth.ok) return auth.response
   const livemode = auth.ctx.mode === "live"
   await logPlatformApi(admin, {
+    startedAt: auth.ctx.startedAt,
     businessId: auth.ctx.businessId,
     livemode,
     method: "GET",

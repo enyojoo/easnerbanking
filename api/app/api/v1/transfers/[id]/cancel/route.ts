@@ -16,6 +16,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       transferId: id,
     })
     await logPlatformApi(admin, {
+      startedAt: auth.ctx.startedAt,
       businessId: auth.ctx.businessId,
       livemode,
       method: "POST",
@@ -26,6 +27,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   } catch (error) {
     const mapped = platformTransferHttpError(error)
     await logPlatformApi(admin, {
+      startedAt: auth.ctx.startedAt,
       businessId: auth.ctx.businessId,
       livemode,
       method: "POST",

@@ -18,6 +18,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     .maybeSingle()
   if (!data) {
     await logPlatformApi(admin, {
+      startedAt: auth.ctx.startedAt,
       businessId: auth.ctx.businessId,
       livemode,
       method: "GET",
@@ -28,6 +29,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     return v1Error(404, "not_found", "Not found")
   }
   await logPlatformApi(admin, {
+    startedAt: auth.ctx.startedAt,
     businessId: auth.ctx.businessId,
     livemode,
     method: "GET",

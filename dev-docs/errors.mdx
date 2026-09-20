@@ -25,6 +25,7 @@ Do not parse the message. Branch on `type` and `code`.
 | `authentication` | 401 | Missing or invalid key |
 | `permission` | 403 | Key lacks the scope, or the account is restricted |
 | `invalid_request` | 400 / 404 / 409 / 422 | Bad body, unknown id, expired quote, not ready |
+| `rate_limit` | 429 | Too many requests. Wait, then retry. `Retry-After` is seconds |
 | `api_error` | 5xx | Unexpected failure. Retry with the same `Idempotency-Key` |
 
 ## Common codes
@@ -33,6 +34,7 @@ Do not parse the message. Branch on `type` and `code`.
 |---|---|
 | `invalid_api_key` | Header missing or not an `easner_sk_*` key |
 | `key_forbidden` | Scope missing |
+| `rate_limit` | Merchant `/v1` exceeded the request budget |
 | `not_found` | Id does not exist in this livemode |
 | `invalid_amount` | Amount missing, zero, or not a positive integer |
 | `invalid_currency` | `POST /v1/accounts` without a currency |
@@ -57,6 +59,7 @@ Do not parse the message. Branch on `type` and `code`.
 ## Expected client behavior
 
 - `401` / `403` — stop. Fix the key, complete verification, or have the customer authorize (`customer_action_required`).
+- `429` `rate_limit` — wait `Retry-After` seconds. Do not open a new send.
 - `404` — the object is not in this mode. Check test vs live.
 - `409` `not_available` — retry later; live details are still provisioning.
 - `400` `transfer_failed` with "Quote expired" — create a new quote.

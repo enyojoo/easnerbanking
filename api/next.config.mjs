@@ -42,7 +42,7 @@ const nextConfig = {
   },
   experimental: {
     externalDir: true,
-    optimizePackageImports: ["@easner/shared", "date-fns"],
+    optimizePackageImports: ["@easner/shared", "date-fns", "lucide-react", "zod"],
   },
   webpack: (config) => {
     config.resolve.alias = {
@@ -99,6 +99,11 @@ const nextConfig = {
     "@noble/ciphers",
     "@noble/curves",
     "@noble/hashes",
+    "@solana/web3.js",
+    "@solana/spl-token",
+    "@turnkey/sdk-server",
+    "stripe",
+    "posthog-js",
   ],
   async rewrites() {
     const jsHosts = [...new Set(["js.easner.com", hostnameFromOrigin(process.env.NEXT_PUBLIC_EASNER_JS_HOST, "js.easner.com")])]

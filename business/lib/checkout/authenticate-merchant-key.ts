@@ -50,7 +50,7 @@ export async function authenticateMerchantKey(
     return { ok: false, status: 401, error: "Invalid API key" }
   }
 
-  await admin
+  void admin
     .from("business_api_keys")
     .update({ last_used_at: new Date().toISOString() })
     .eq("id", data.id as string)
@@ -98,7 +98,7 @@ export async function authenticatePublishableKey(
     return { ok: false, status: 403, error: "This key cannot start checkout" }
   }
 
-  await admin
+  void admin
     .from("business_api_keys")
     .update({ last_used_at: new Date().toISOString() })
     .eq("id", data.id as string)
