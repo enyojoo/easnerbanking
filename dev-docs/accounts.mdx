@@ -1,12 +1,14 @@
 ---
 title: Accounts
-description: Platform balances. Checkout credits these accounts. Transfers debit them.
+description: Issued customer balances. Receive credits these. Transfers debit them.
 icon: wallet
 ---
 
-An account is a currency balance on the **platform** book.
+An account is a currency balance for a customer. Issued accounts always have `customer`.
 
-Checkout that used a merchant secret key credits an account here. Transfers debit an account here.
+Creating a [customer](/customers) issues USD. Open EUR (or another USD row if you need a second book) with `POST /v1/accounts` and the `cus_` id.
+
+Checkout does **not** credit these accounts. Checkout collects onto your business balance. Receive credits the `acct_` you pass.
 
 <Note>
   **Scope:** `GET` needs `accounts.read`. `POST` needs `accounts.write`.
@@ -20,6 +22,7 @@ Checkout that used a merchant secret key credits an account here. Transfers debi
 | `currency` | string | Uppercase, e.g. `USD`, `EUR` |
 | `available` | integer | Cents you can send |
 | `pending` | integer | Cents not yet available |
+| `customer` | string | `cus_…` |
 | `livemode` | boolean | |
 
 ```json
@@ -28,6 +31,7 @@ Checkout that used a merchant secret key credits an account here. Transfers debi
   "currency": "USD",
   "available": 4900,
   "pending": 0,
+  "customer": "cus_…",
   "livemode": false
 }
 ```
@@ -40,43 +44,61 @@ curl https://api.easner.com/v1/accounts \
 ```
 
 ```json
-{ "data": [{ "id": "acct_…", "currency": "USD", "available": 4900, "pending": 0, "livemode": false }] }
+{
+  "data": [
+    {
+      "id": "acct_…",
+      "currency": "USD",
+      "available": 4900,
+      "pending": 0,
+      "customer": "cus_…",
+      "livemode": false
+    }
+  ]
+}
 ```
 
-Empty `data` is expected on a new test book.
+Issued accounts only. Filter with `?customer=cus_…`.
 
 ## Open
 
-`POST /v1/accounts` with `{ "currency": "USD" }`.
+`POST /v1/accounts` with `{ "currency": "USD", "customer": "cus_…" }`.
 
 ```bash
 curl https://api.easner.com/v1/accounts \
   -H "Authorization: Bearer $EASNER_SECRET_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"currency":"USD"}'
+  -d '{"currency":"EUR","customer":"cus_…"}'
 ```
 
-`201` and the account. Opening the same currency again returns the existing account.
+`201` and the account. Opening the same currency for the same customer returns the existing account.
 
-`400` `invalid_currency` if `currency` is missing. Deposit restrictions return `403`.
+`400` `invalid_currency` if `currency` is missing. `400` `invalid_customer` if `customer` is missing. `404` if the customer is not on this key. Deposit restrictions return `403`.
 
 ## Retrieve
 
-`GET /v1/accounts/:id` → Account. `404` if the id is not on this book.
+`GET /v1/accounts/:id` → Account. `404` if the id is not on this key.
+
+## Receive on an account
+
+| Call | Job |
+|---|---|
+| `GET /v1/accounts/:id/deposit_instructions` | Bank details for this `acct_` |
+| `GET /v1/accounts/:id/deposit_addresses` | Chain addresses for this `acct_` |
+| `POST /v1/accounts/:id/onramp_sessions` | Hosted card onramp onto this `acct_` |
+
+See [Receive](/receive). Live bank details, chain addresses, and onramp require `verification_status = approved`. Test skips that.
 
 ## Events
 
 | Event | When |
 |---|---|
 | `account.updated` | Available or pending changed |
-| `payment.available` | Collected funds became usable |
+| `transaction.created` | A credit or debit was written |
+| `payment.available` | Checkout funds became usable on **your** business balance |
 
 ## Expected
 
-- Open USD and EUR if you collect or send in both.
 - Read `available` before you quote a send.
-- Console Accounts shows these balances only.
-
-<Card title="Destinations" icon="map-pin" href="/destinations">
-  Where money can leave — bank, mobile money, wallet, or Easetag.
-</Card>
+- Pass `customer` on every create.
+- Do not treat Checkout settlement as a credit to this `acct_`.

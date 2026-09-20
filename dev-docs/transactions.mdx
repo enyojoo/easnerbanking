@@ -1,10 +1,10 @@
 ---
 title: Transactions
-description: Platform ledger. List and retrieve `txn_` rows.
+description: List and retrieve `txn_` rows for Banking and Checkout.
 icon: receipt
 ---
 
-A transaction is a row on the **platform** ledger. `GET /v1/transactions` and Dev `/transactions` in Console read this list.
+A transaction is a row on `GET /v1/transactions`. Banking receive and send write here. Checkout collects also appear here when you used a merchant secret key.
 
 <Note>
   **Scope:** `accounts.read`
@@ -15,12 +15,12 @@ A transaction is a row on the **platform** ledger. `GET /v1/transactions` and De
 | Field | Type | Notes |
 |---|---|---|
 | `id` | string | `txn_…` |
-| `type` | string | `transfer`, `checkout`, and other platform types |
+| `type` | string | `transfer`, `deposit`, `onramp`, `chain`, `checkout` |
 | `amount` | integer | Cents, always positive |
 | `currency` | string | |
 | `direction` | string | `in` or `out` |
 | `status` | string | `completed`, `pending`, `failed` |
-| `account` | string \| null | `acct_…` |
+| `account` | string \| null | `acct_…` for issued-account activity |
 | `customer` | string \| null | `cus_…` |
 | `transfer` | string \| null | `tr_…` |
 | `checkout_session` | string \| null | `cs_…` |
@@ -31,20 +31,32 @@ A transaction is a row on the **platform** ledger. `GET /v1/transactions` and De
 ```json
 {
   "id": "txn_…",
-  "type": "transfer",
+  "type": "deposit",
   "amount": 4900,
   "currency": "USD",
-  "direction": "out",
+  "direction": "in",
   "status": "completed",
   "account": "acct_…",
-  "customer": null,
-  "transfer": "tr_…",
+  "customer": "cus_…",
+  "transfer": null,
   "checkout_session": null,
-  "description": "Transfer",
+  "description": "Bank deposit",
   "livemode": false,
   "created": "2026-09-20T00:00:00.000Z"
 }
 ```
+
+## Types
+
+| `type` | Product | Meaning |
+|---|---|---|
+| `deposit` | Banking | Bank credit to a customer `acct_` |
+| `onramp` | Banking | Card onramp credit to a customer `acct_` |
+| `chain` | Banking | Chain credit to a customer `acct_` |
+| `transfer` | Banking | Send from a customer `acct_` |
+| `checkout` | Checkout | Collect onto **your** business balance |
+
+`checkout` is not Receive. It does not credit a customer `acct_`. Banking mode in the app also shows that collect.
 
 ## List
 
@@ -68,15 +80,12 @@ Newest first. Up to 100. Filtered by the key’s livemode.
 | Event | When |
 |---|---|
 | `transaction.created` | A row was written |
-| `payment.available` | A collect became usable `in` |
 | `account.updated` | The account totals changed |
+| `payment.available` | A Checkout collect became usable |
 
 ## Expected
 
 - Reconcile your product against this list.
-- `direction: "in"` is Checkout (or other credits) on the platform book.
+- `direction: "in"` with `deposit` / `onramp` / `chain` is Receive on a customer account.
+- `direction: "in"` with `checkout` is a collect onto your business balance.
 - `direction: "out"` is a transfer.
-
-<Card title="Checkout" icon="credit-card" href="/checkout">
-  Collect on your website. Settlement credits the platform book.
-</Card>

@@ -5,6 +5,7 @@ import { suppressTurnkeyGridVaChainMirrorRow } from "@/lib/grid/grid-va-turnkey-
 import { notifyGridBankDepositPayInSettledPush } from "@/lib/notifications/bank-deposit-settled-notify"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import { handleBridgeStripeSettlementWebhook } from "./stripe-settlement-webhook"
+import { creditPlatformAccountFromBridgeDeposit } from "@/lib/platform/receive"
 
 export function buildBridgeVaDepositCreditKey(depositId: string): string {
   return `bridge_va_inbound:${String(depositId || "").trim()}`
@@ -52,9 +53,17 @@ export async function handleBridgeVaInboundActivity(
   ).trim()
 
   const subject = await resolveBridgeSubject(admin, customerId)
-  if (!subject) return
-
   const processed = status.includes("payment_processed") || status.includes("funds_received") || status.includes("completed")
+  if (processed && amount > 0) {
+    const platformCredit = await creditPlatformAccountFromBridgeDeposit(admin, {
+      bridgeCustomerId: customerId,
+      amount,
+      currency: ledgerCurrency,
+      depositId,
+    })
+    if (platformCredit) return
+  }
+  if (!subject) return
   if (processed && subject.businessId) {
     const connect = await handleBridgeStripeSettlementWebhook(admin, {
       payload,

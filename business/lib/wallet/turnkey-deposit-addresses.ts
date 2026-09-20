@@ -156,6 +156,23 @@ export async function getTurnkeyDepositAddressesForContext(
   return { USD: usd, EUR: eur }
 }
 
+export async function getTurnkeyDepositAddressesForWalletOwner(
+  admin: SupabaseClient,
+  walletOwnerId: string,
+  opts?: { mode?: "fast" | "ensure" },
+): Promise<TurnkeyDepositAddressesResponse> {
+  const usdcVault = DEFAULT_INDIVIDUAL_VAULTS.find((v) => v.asset === "USDC")
+  const eurcVault = DEFAULT_INDIVIDUAL_VAULTS.find((v) => v.asset === "EURC")
+  if (!usdcVault || !eurcVault) {
+    return { USD: emptyLine("USDC"), EUR: emptyLine("EURC") }
+  }
+  const [usd, eur] = await Promise.all([
+    depositLineForVault(admin, walletOwnerId, usdcVault, opts),
+    depositLineForVault(admin, walletOwnerId, eurcVault, opts),
+  ])
+  return { USD: usd, EUR: eur }
+}
+
 /** Invoice pay-in and other server paths keyed only by Easner business id. */
 export async function getTurnkeyDepositAddressesForBusiness(
   admin: SupabaseClient,

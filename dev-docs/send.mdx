@@ -1,0 +1,32 @@
+---
+title: Send money
+description: Destination, quote, then transfer from a customer account.
+icon: send
+---
+
+Send debits an issued customer `acct_`. Create a destination, lock a quote with `source`, then transfer.
+
+<Note>
+  **Scope:** `GET` needs `accounts.read`. Creates need `transfers.write`.
+</Note>
+
+<Steps>
+  <Step title="Have a funded account">
+    The customer’s `acct_` must have `available` ≥ the send amount. Fund it with [Receive](/receive) or keep the first send in test.
+  </Step>
+  <Step title="Create a destination">
+    Bank, mobile money, wallet, or Easetag. See [Destinations](/destinations).
+  </Step>
+  <Step title="Quote">
+    `POST /v1/quotes` with `source` (required) and `destination`. See [Quotes](/quotes).
+  </Step>
+  <Step title="Transfer">
+    `POST /v1/transfers` with `{ "quote": "qt_…" }` and `Idempotency-Key`. See [Transfers](/transfers).
+  </Step>
+</Steps>
+
+Fulfil from `transfer.completed` and `transaction.created`. Do not treat Checkout as a source of customer funds — a collect lands on **your** business balance.
+
+<Card title="Quickstart" icon="rocket" href="/quickstart">
+  First send in test, curl by curl.
+</Card>

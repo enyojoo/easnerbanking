@@ -8,13 +8,17 @@ Livemode is the key prefix. There is no `livemode` body flag.
 
 | | Test (`easner_sk_test_`) | Live (`easner_sk_live_`) |
 |---|---|---|
-| Objects | Isolated test book | Isolated live book |
+| Objects | Isolated test objects | Isolated live objects |
+| Verification | Approves immediately. No hosted form | Hosted link. Live bank details and onramp need `approved` |
+| Bank details | Sandbox numbers | Named details after approval |
+| Chain addresses | Returned without KYC | Require `approved` |
+| Onramp | Hosted page completes and credits the `acct_` | Hosted session after approval |
 | Quote | Completes. Send/receive 1:1 | May price wallet destinations |
-| Transfer | Completes. Debits the **test** platform book. No live rails | Debits the **live** platform book |
-| Checkout | Test card `4242…`. Nothing charged | Real collect. Credits the live platform book |
+| Transfer | Completes. Debits the **test** customer account | Debits the **live** customer account |
+| Checkout | Test card `4242…`. Nothing charged | Real collect onto your business balance |
 | Webhooks | Your test URL | Your live URL |
 
-Test never moves live partner money. Live never writes the test book.
+Test never moves live money. Live never writes test objects.
 
 ## What you must do before live
 
@@ -25,8 +29,11 @@ Test never moves live partner money. Live never writes the test book.
   <Step title="Run the quickstart">
     [Quickstart](/quickstart) a customer → destination → quote → transfer. Confirm `transfer.completed` on the test URL.
   </Step>
+  <Step title="Receive in test">
+    [Receive](/receive): start verification, fetch sandbox bank details, complete a test onramp. Confirm `account.updated` and `transaction.created`.
+  </Step>
   <Step title="Pay with the test card">
-    Checkout: register the website, create a test session, pay with `4242`, confirm `checkout.completed` and a platform `in` transaction.
+    Checkout: register the website, create a test session, pay with `4242`, confirm `checkout.completed`.
   </Step>
   <Step title="Check Console Logs">
     You should see the `v1` calls. Errors should be gone.
@@ -34,15 +41,12 @@ Test never moves live partner money. Live never writes the test book.
   <Step title="Mint a live key">
     Set a live webhook URL. Tick the same events.
   </Step>
-  <Step title="Open live accounts">
-    Open `USD` / `EUR` before you send.
-  </Step>
 </Steps>
 
 ## What you should not do
 
 <Warning>
-  Do not reuse a test key in production. Do not fulfil from the browser `onSuccess` without the webhook.
+  Do not reuse a test key in production. Do not fulfil from the browser `onSuccess` without the webhook. Do not treat Checkout as Receive — a collect does not credit a customer `acct_`.
 </Warning>
 
 ## Restriction

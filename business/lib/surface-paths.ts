@@ -1,7 +1,7 @@
 import { isCustomerAppHostname } from "@/lib/customer-hosts"
 
 /** Routes that should not mount workspace chrome (DashboardShell, Intercom, RQ persist, etc.). */
-export const PUBLIC_SURFACE_PREFIXES = ["/auth", "/invoice", "/pay-customer", "/pay"] as const
+export const PUBLIC_SURFACE_PREFIXES = ["/auth", "/invoice", "/pay-customer", "/pay", "/receive"] as const
 
 const OPERATOR_FIRST_SEGMENTS = new Set([
   "accounts",
@@ -18,6 +18,7 @@ const OPERATOR_FIRST_SEGMENTS = new Set([
   "pay",
   "pay-customer",
   "payroll",
+  "receive",
   "send",
   "settings",
   "terminal",

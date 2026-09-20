@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 export type ResolvedTurnkeyWalletScope = {
   userId: string
   businessId: string | null
+  platformCustomerId?: string | null
   walletAccount: {
     id: string
     wallet_owner_id: string
@@ -110,8 +111,26 @@ export async function resolveTurnkeyWalletScopeFromEvent(
 
   let userId: string | null = null
   let businessId: string | null = null
+  let platformCustomerId: string | null = null
   if (owner.owner_type === "business") {
     businessId = String(owner.owner_ref)
+    const { data: orgOwner } = await admin
+      .from("users")
+      .select("id")
+      .eq("easner_business_id", businessId)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    userId = orgOwner?.id ? String(orgOwner.id) : null
+  } else if (owner.owner_type === "platform_customer") {
+    const { data: customer } = await admin
+      .from("platform_customers")
+      .select("id, business_id")
+      .eq("id", String(owner.owner_ref))
+      .maybeSingle()
+    if (!customer?.id || !customer.business_id) return null
+    platformCustomerId = String(customer.id)
+    businessId = String(customer.business_id)
     const { data: orgOwner } = await admin
       .from("users")
       .select("id")
@@ -128,6 +147,7 @@ export async function resolveTurnkeyWalletScopeFromEvent(
   return {
     userId,
     businessId,
+    platformCustomerId,
     walletAccount,
     walletAddress,
     tokenAccountAddress,

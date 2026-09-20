@@ -2,7 +2,7 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
   "name": "Easner",
-  "description": "Platform v1 for banks and fintechs building on Easner.",
+  "description": "Banking and Checkout APIs for integrators building on Easner.",
   "colors": {
     "primary": "#007ACC",
     "light": "#3AA6F8",
@@ -30,28 +30,33 @@
     "groups": [
       {
         "group": "Get started",
-        "pages": ["index", "overview", "quickstart", "console"]
+        "pages": ["index", "quickstart", "authentication", "test-and-live"]
+      },
+      {
+        "group": "Banking",
+        "pages": ["accounts", "receive", "send"]
+      },
+      {
+        "group": "Checkout",
+        "pages": ["checkout"]
       },
       {
         "group": "API",
         "pages": [
-          "authentication",
-          "errors",
           "customers",
           "accounts",
           "destinations",
           "quotes",
           "transfers",
-          "transactions"
+          "transactions",
+          "checkout",
+          "webhooks",
+          "errors"
         ]
       },
       {
-        "group": "Collect",
-        "pages": ["checkout", "webhooks"]
-      },
-      {
-        "group": "Go live",
-        "pages": ["test-and-live"]
+        "group": "Console",
+        "pages": ["console"]
       }
     ]
   },

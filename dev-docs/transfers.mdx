@@ -1,10 +1,10 @@
 ---
 title: Transfers
-description: Execute a quote or send from a platform account.
+description: Execute a quote or send from a customer account.
 icon: arrow-left-right
 ---
 
-A transfer sends from a platform account to a destination. Prefer quote-then-transfer so the amounts are locked.
+A transfer sends from a customer account to a destination. Prefer quote-then-transfer so the amounts are locked.
 
 <Note>
   **Scope:** `POST` needs `transfers.write`. `GET` needs `accounts.read`.
@@ -20,7 +20,7 @@ Send restrictions apply. A restricted business cannot create transfers.
 | `quote` | string \| null | `qt_…` |
 | `source` | string \| null | `acct_…` |
 | `destination` | string \| null | `dest_…` |
-| `amount` | integer | Cents debited from the platform account |
+| `amount` | integer | Cents debited from the customer account |
 | `currency` | string | |
 | `status` | string | `created`, `completed`, `failed` |
 | `livemode` | boolean | |
@@ -54,7 +54,7 @@ curl https://api.easner.com/v1/transfers \
 
 The transfer uses the quote’s send amount, source, and destination. A replay with the same idempotency key returns the same transfer.
 
-`201`. On success the platform account is debited and a platform transaction is written.
+`201`. On success the customer account is debited and a transaction is written.
 
 ## Create without a quote
 
@@ -71,10 +71,10 @@ You may pass `source`, `destination`, `amount`, and `currency` instead of `quote
 | Status | Expected |
 |---|---|
 | `created` | Accepted. Webhook `transfer.created` |
-| `completed` | Platform book debited. Webhook `transfer.completed` |
+| `completed` | Account debited. Webhook `transfer.completed` |
 | `failed` | No debit, or debit rolled back. Webhook `transfer.failed` |
 
-Test completes without moving live rails money. Live debits the platform book.
+Test completes without moving live rails money. Live debits the customer account.
 
 ## Events
 
@@ -91,5 +91,5 @@ Test completes without moving live rails money. Live debits the platform book.
 </Warning>
 
 <Card title="Transactions" icon="receipt" href="/transactions">
-  Platform ledger. Reconciliation against `GET /v1/transactions`.
+  Reconcile sends and receives against `GET /v1/transactions`.
 </Card>

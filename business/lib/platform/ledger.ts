@@ -198,6 +198,72 @@ export async function insertPlatformTransaction(
   return { id: String(data.id) }
 }
 
+export async function findIssuedPlatformAccountForWalletOwner(
+  admin: SupabaseClient,
+  walletOwnerId: string,
+  currency: string,
+): Promise<PlatformAccountRow | null> {
+  const { data } = await admin
+    .from("platform_accounts")
+    .select("id, business_id, livemode, currency, available_cents, pending_cents, customer_id")
+    .eq("wallet_owner_id", walletOwnerId)
+    .eq("currency", currency.trim().toUpperCase())
+    .not("customer_id", "is", null)
+    .maybeSingle()
+  return data?.id ? (data as PlatformAccountRow) : null
+}
+
+export async function creditPlatformAccountFromInbound(
+  admin: SupabaseClient,
+  input: {
+    accountId: string
+    amountCents: number
+    type: "deposit" | "onramp" | "chain"
+    description?: string | null
+    inboundKey?: string | null
+    metadata?: Record<string, unknown>
+  },
+): Promise<{ accountId: string; transactionId: string } | { skipped: true }> {
+  const inboundKey = String(input.inboundKey ?? "").trim()
+  if (inboundKey) {
+    const { data: existing } = await admin
+      .from("platform_transactions")
+      .select("id, account_id")
+      .contains("metadata", { inbound_key: inboundKey })
+      .maybeSingle()
+    if (existing?.id) {
+      return { accountId: String(existing.account_id ?? input.accountId), transactionId: String(existing.id) }
+    }
+  }
+  const { data: account } = await admin
+    .from("platform_accounts")
+    .select("id, business_id, livemode, currency, available_cents, pending_cents, customer_id")
+    .eq("id", input.accountId)
+    .maybeSingle()
+  if (!account?.id) throw new Error("Account not found")
+  const updated = await adjustPlatformAccount(admin, {
+    accountId: account.id,
+    availableDelta: input.amountCents,
+  })
+  const txn = await insertPlatformTransaction(admin, {
+    businessId: String(account.business_id),
+    livemode: Boolean(account.livemode),
+    type: input.type,
+    amountCents: input.amountCents,
+    currency: String(account.currency),
+    direction: "in",
+    status: "completed",
+    accountId: updated.id,
+    customerId: (account.customer_id as string | null) ?? null,
+    description: input.description ?? "Deposit",
+    metadata: {
+      ...(input.metadata ?? {}),
+      ...(inboundKey ? { inbound_key: inboundKey } : {}),
+    },
+  })
+  return { accountId: updated.id, transactionId: txn.id }
+}
+
 export async function creditPlatformBookFromCheckout(
   admin: SupabaseClient,
   input: {

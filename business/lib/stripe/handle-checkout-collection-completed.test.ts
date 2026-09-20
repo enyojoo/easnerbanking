@@ -391,13 +391,17 @@ describe("payment link settlement", () => {
     })
   })
 
-  it("credits the platform book when the session used a merchant key", async () => {
-    const { admin } = mockAdmin({
+  it("credits the platform book and Banking ledger when the session used a merchant key", async () => {
+    const { admin, writes } = mockAdmin({
       sessionMetadata: { easner_api_key_id: "key_1", plan: "pro" },
     })
     const result = await handleStripeCheckoutCompleted(admin, paymentLinkSessionEvent())
     expect(result.handled).toBe(true)
-    expect(upsertLedgerTransaction).not.toHaveBeenCalled()
+    expect(upsertLedgerTransaction).toHaveBeenCalledTimes(1)
+    expect(upsertLedgerTransaction.mock.calls[0][1].metadata).toMatchObject({
+      source: "checkout_stripe",
+      easner_api_key_id: "key_1",
+    })
     expect(creditPlatformBookFromCheckout).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -406,5 +410,25 @@ describe("payment link settlement", () => {
         currency: "USD",
       }),
     )
+    const settlement = writes.find(
+      (w) => w.table === "checkout_stripe_settlements" && w.op === "upsert",
+    )
+    expect(settlement?.payload).toMatchObject({ ledger_transaction_id: "txn_1" })
+  })
+
+  it("keeps Stripe test merchant-key payments off the Banking ledger", async () => {
+    const { admin, writes } = mockAdmin({
+      sessionMetadata: { easner_api_key_id: "key_1", plan: "pro" },
+    })
+    const event = paymentLinkSessionEvent()
+    event.livemode = false
+    const result = await handleStripeCheckoutCompleted(admin, event)
+    expect(result.handled).toBe(true)
+    expect(upsertLedgerTransaction).not.toHaveBeenCalled()
+    expect(creditPlatformBookFromCheckout).toHaveBeenCalled()
+    const settlement = writes.find(
+      (w) => w.table === "checkout_stripe_settlements" && w.op === "upsert",
+    )
+    expect(settlement?.payload).toMatchObject({ ledger_transaction_id: null })
   })
 })

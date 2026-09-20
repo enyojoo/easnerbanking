@@ -167,10 +167,76 @@ async function sendPayerReceiptIfNeeded(
   }
 }
 
+async function upsertCheckoutCollectionLedger(
+  admin: SupabaseClient,
+  input: {
+    ownerUserId: string
+    businessId: string
+    paymentIntentId: string
+    eventId: string
+    netCents: number
+    currency: string
+    paidAt: string
+    source: CheckoutCollectionSource
+    paymentLinkId: string | null
+    linkLabel: string | null
+    settlementId: string
+    chargeId: string | null
+    subscriptionId: string | null
+    merchantFeeCents: number
+    grossCents: number
+    paymentMethodType: string | null
+    paymentMethod: StripePaymentMethodDisplay | null
+    customerEmail: string | null
+    customerName: string | null
+    connectedAccountId: string | null
+    transferId: string | null
+    apiKeyId?: string | null
+  },
+) {
+  const headline = headlineFor(input.source, input.linkLabel)
+  return upsertLedgerTransaction(admin, {
+    userId: input.ownerUserId,
+    businessId: input.businessId,
+    provider: "stripe",
+    providerTransactionId: input.paymentIntentId,
+    providerEventId: input.eventId,
+    status: "processing",
+    amount: input.netCents / 100,
+    currency: input.currency,
+    direction: "in",
+    occurredAt: input.paidAt,
+    metadata: {
+      source: "checkout_stripe",
+      collection_source: input.source,
+      ...(input.paymentLinkId ? { payment_link_id: input.paymentLinkId } : {}),
+      ...(input.linkLabel ? { payment_link_label: input.linkLabel } : {}),
+      ...(input.apiKeyId ? { easner_api_key_id: input.apiKeyId } : {}),
+      easner_settlement_id: input.settlementId,
+      stripe_payment_intent_id: input.paymentIntentId,
+      stripe_charge_id: input.chargeId,
+      ...(input.subscriptionId ? { stripe_subscription_id: input.subscriptionId } : {}),
+      settlement_phase: "payment_received",
+      payment_received_at: input.paidAt,
+      gross_cents: input.grossCents,
+      fee_cents: input.merchantFeeCents,
+      net_cents: input.netCents,
+      payment_method_type: input.paymentMethodType,
+      ...(input.paymentMethod ? { payment_method: input.paymentMethod } : {}),
+      ...(input.customerEmail ? { customer_email: input.customerEmail } : {}),
+      ...(input.customerName ? { customer_name: input.customerName } : {}),
+      stripe_connected_account_id: input.connectedAccountId,
+      stripe_transfer_id: input.transferId,
+      headline,
+    },
+    baseCurrency: input.currency === "EUR" ? "EUR" : "USD",
+  })
+}
+
 /**
  * Settle a Payment Link or website-embed collection. Merchant-key Checkout
- * credits the platform book only. Payment links and invoices stay on the
- * Banking ledger. Stripe test events skip the live Banking ledger.
+ * credits the platform book and, in live mode, the business Banking ledger
+ * so Banking mode shows the collect. Stripe test events skip the live ledger.
  */
 export async function handleCheckoutCollectionCompleted(
   admin: SupabaseClient,
@@ -380,6 +446,38 @@ export async function handleCheckoutCollectionCompleted(
         error instanceof Error ? error.message : error,
       )
     }
+    let merchantLedgerId: string | null = null
+    if (!isStripeTest) {
+      const ownerUserId = await resolveOrgOwnerUserId(admin, input.businessId, "")
+      if (!ownerUserId) {
+        throw new Error(`No org owner for business ${input.businessId}`)
+      }
+      const ledger = await upsertCheckoutCollectionLedger(admin, {
+        ownerUserId,
+        businessId: input.businessId,
+        paymentIntentId: input.paymentIntentId,
+        eventId: event.id,
+        netCents,
+        currency,
+        paidAt,
+        source: input.source,
+        paymentLinkId,
+        linkLabel,
+        settlementId: input.settlementId,
+        chargeId,
+        subscriptionId: input.subscriptionId,
+        merchantFeeCents,
+        grossCents,
+        paymentMethodType,
+        paymentMethod,
+        customerEmail,
+        customerName,
+        connectedAccountId,
+        transferId,
+        apiKeyId: String(sessionMetadata.easner_api_key_id ?? "").trim() || null,
+      })
+      merchantLedgerId = ledger.transactionId
+    }
     await admin.from("checkout_stripe_settlements").upsert(
       {
         id: input.settlementId,
@@ -397,7 +495,7 @@ export async function handleCheckoutCollectionCompleted(
         net_cents: netCents,
         currency,
         phase: "payment_received",
-        ledger_transaction_id: null,
+        ledger_transaction_id: merchantLedgerId,
         stripe_event_ids: [event.id],
         created_at: paidAt,
         updated_at: paidAt,
@@ -482,41 +580,28 @@ export async function handleCheckoutCollectionCompleted(
     throw new Error(`No org owner for business ${input.businessId}`)
   }
 
-  const headline = headlineFor(input.source, linkLabel)
-  const ledger = await upsertLedgerTransaction(admin, {
-    userId: ownerUserId,
+  const ledger = await upsertCheckoutCollectionLedger(admin, {
+    ownerUserId,
     businessId: input.businessId,
-    provider: "stripe",
-    providerTransactionId: input.paymentIntentId,
-    providerEventId: event.id,
-    status: "processing",
-    amount: netCents / 100,
+    paymentIntentId: input.paymentIntentId,
+    eventId: event.id,
+    netCents,
     currency,
-    direction: "in",
-    occurredAt: paidAt,
-    metadata: {
-      source: "checkout_stripe",
-      collection_source: input.source,
-      ...(paymentLinkId ? { payment_link_id: paymentLinkId } : {}),
-      ...(linkLabel ? { payment_link_label: linkLabel } : {}),
-      easner_settlement_id: input.settlementId,
-      stripe_payment_intent_id: input.paymentIntentId,
-      stripe_charge_id: chargeId,
-      ...(input.subscriptionId ? { stripe_subscription_id: input.subscriptionId } : {}),
-      settlement_phase: "payment_received",
-      payment_received_at: paidAt,
-      gross_cents: grossCents,
-      fee_cents: merchantFeeCents,
-      net_cents: netCents,
-      payment_method_type: paymentMethodType,
-      ...(paymentMethod ? { payment_method: paymentMethod } : {}),
-      ...(customerEmail ? { customer_email: customerEmail } : {}),
-      ...(customerName ? { customer_name: customerName } : {}),
-      stripe_connected_account_id: connectedAccountId,
-      stripe_transfer_id: transferId,
-      headline,
-    },
-    baseCurrency: currency === "EUR" ? "EUR" : "USD",
+    paidAt,
+    source: input.source,
+    paymentLinkId,
+    linkLabel,
+    settlementId: input.settlementId,
+    chargeId,
+    subscriptionId: input.subscriptionId,
+    merchantFeeCents,
+    grossCents,
+    paymentMethodType,
+    paymentMethod,
+    customerEmail,
+    customerName,
+    connectedAccountId,
+    transferId,
   })
 
   await admin.from("checkout_stripe_settlements").upsert(

@@ -60,11 +60,11 @@ Use the **raw** body. Re-serializing JSON will fail the signature.
 
 ## Catalog
 
-Tick these in Console. Default ticks are the checkout collect events.
+Tick these in Console. Default ticks are the Checkout collect events.
 
-### Collect
+### Checkout
 
-**`checkout.completed`** — Payment succeeded. Fulfil the order.
+**`checkout.completed`** — Payment succeeded. Fulfil the order. Credits **your** business balance.
 
 ```json
 {
@@ -88,7 +88,7 @@ Tick these in Console. Default ticks are the checkout collect events.
 
 **`checkout.failed`** — Abandoned or failed. Do not fulfil.
 
-**`payment.available`** — Funds are usable on a platform account.
+**`payment.available`** — Funds are usable on your business balance.
 
 ```json
 {
@@ -108,15 +108,15 @@ Tick these in Console. Default ticks are the checkout collect events.
 }
 ```
 
-### Platform book
+### Banking
 
 **`account.updated`** — Available or pending changed. `data` is the [Account](/accounts).
 
-**`customer.created`** / **`customer.updated`** — `data` is the [Customer](/customers).
+**`customer.created`** / **`customer.updated`** — `data` is the [Customer](/customers). `customer.updated` fires when `verification_status` changes.
 
 **`transfer.created`** / **`transfer.completed`** / **`transfer.failed`** — `data` is the [Transfer](/transfers). Failed includes `error`.
 
-**`transaction.created`** — `data` is the [Transaction](/transactions).
+**`transaction.created`** — `data` is the [Transaction](/transactions). Receive types are `deposit`, `onramp`, and `chain`.
 
 ## Retries
 

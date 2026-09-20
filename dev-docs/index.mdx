@@ -1,16 +1,39 @@
 ---
-title: Introduction
-description: Integrator guide for banks and fintechs building on Easner. Console plus platform v1.
+title: Easner Dev Platform
+description: Two products on one key — Banking for your customers, Checkout for payers on your site.
 icon: book-open
 ---
 
-Dev is **Console** plus **platform `v1`**.
+You integrate. Your customer is the banking end user (`cus_`). A payer is someone who pays you through Checkout.
 
 Base URL: `https://api.easner.com`
 
 Auth: `Authorization: Bearer easner_sk_test_…` or `easner_sk_live_…`
 
 Amounts are minor units (cents). Errors are `{ error: { type, code, message } }`. Writes that move money take `Idempotency-Key`.
+
+## Two products
+
+| Product | Who holds the money | What you build |
+|---|---|---|
+| **Banking** | Your customer, on an issued `acct_` | Accounts, receive, send |
+| **Checkout** | You, on your business balance | Collect on your website |
+
+They share a secret key and Console. They do not share a balance.
+
+Checkout uses the same Connect account as invoices and payment links. A successful collect lands on **your** business balance. Switch to Banking in the app to see it. Checkout does not credit a customer `acct_`. That is Receive.
+
+## Objects
+
+| Object | Id | Product | Job |
+|---|---|---|---|
+| Customer | `cus_` | Banking | Your end user |
+| Account | `acct_` | Banking | A currency balance. Issued accounts have `customer` |
+| Destination | `dest_` | Banking | Where a send can land |
+| Quote | `qt_` | Banking | Locked send / receive amounts |
+| Transfer | `tr_` | Banking | Money leaving a customer account |
+| Transaction | `txn_` | Both | A row on `GET /v1/transactions` |
+| Checkout session | `cs_` | Checkout | A collect on your website |
 
 ## Expected flow
 
@@ -21,63 +44,31 @@ Amounts are minor units (cents). Errors are `{ error: { type, code, message } }`
   <Step title="Mint a test key">
     Open Console. Mint a test key. Add a webhook URL and tick events.
   </Step>
-  <Step title="Create objects">
-    Create a customer. Open a USD (or EUR) account. Add a destination.
+  <Step title="Send (Banking)">
+    Create a customer (this issues USD). Add a destination. Quote with `source`. Transfer.
   </Step>
-  <Step title="Quote, then transfer">
-    Fulfil from `transfer.completed` and `transaction.created`.
+  <Step title="Receive (Banking)">
+    Start hosted verification. In test, that approves immediately. Then fetch bank details, chain addresses, or an onramp session onto the customer `acct_`.
   </Step>
-  <Step title="Collect (optional)">
-    Add a website on Checkout, create sessions from your server, mount `checkout.js`, fulfil from `checkout.completed`.
+  <Step title="Collect (Checkout)">
+    Register a website, create sessions from your server, mount `checkout.js`, fulfil from `checkout.completed`.
   </Step>
   <Step title="Go live">
-    Mint a live key only after test works. Live debits and credits the platform book.
+    Mint a live key only after test works. Live receive needs an approved customer.
   </Step>
 </Steps>
 
-## Pages
-
 <Columns cols={2}>
-  <Card title="Overview" icon="layers" href="/overview">
-    What Dev is, objects, and the platform book.
-  </Card>
   <Card title="Quickstart" icon="rocket" href="/quickstart">
-    First transfer in test: customer → destination → quote → transfer.
+    First send in test: customer → destination → quote → transfer.
   </Card>
-  <Card title="Console" icon="layout-dashboard" href="/console">
-    Keys, webhooks, logs, events, and the Dev dashboard.
+  <Card title="Receive money" icon="download" href="/receive">
+    Verification, bank details, chain addresses, onramp.
+  </Card>
+  <Card title="Checkout" icon="credit-card" href="/checkout">
+    Collect onto your business balance.
   </Card>
   <Card title="Authentication" icon="key" href="/authentication">
     Bearer keys, livemode, scopes, idempotency.
-  </Card>
-  <Card title="Errors" icon="circle-alert" href="/errors">
-    Envelope, status codes, common codes.
-  </Card>
-  <Card title="Customers" icon="users" href="/customers">
-    Create and list API customers. Each gets a wallet.
-  </Card>
-  <Card title="Accounts" icon="wallet" href="/accounts">
-    Platform balances.
-  </Card>
-  <Card title="Destinations" icon="map-pin" href="/destinations">
-    Bank, mobile money, wallet, or Easetag.
-  </Card>
-  <Card title="Quotes" icon="tag" href="/quotes">
-    Lock send and receive amounts.
-  </Card>
-  <Card title="Transfers" icon="arrow-left-right" href="/transfers">
-    Execute a quote or send from a platform account.
-  </Card>
-  <Card title="Transactions" icon="receipt" href="/transactions">
-    Platform ledger only.
-  </Card>
-  <Card title="Checkout" icon="credit-card" href="/checkout">
-    Collect on your website. Settlement credits the platform book.
-  </Card>
-  <Card title="Webhooks" icon="webhook" href="/webhooks">
-    Catalog, `easner-signature`, retries.
-  </Card>
-  <Card title="Test and live" icon="flask-conical" href="/test-and-live">
-    What test completes, what live moves.
   </Card>
 </Columns>

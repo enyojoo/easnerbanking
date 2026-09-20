@@ -40,6 +40,10 @@ import { turnkeyVisibleInboundLedgerRowExists } from "@/lib/turnkey/ledger-inbou
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { enqueueLiquiditySweepJob } from "@/lib/liquidity/sweep-jobs"
 import { resolvePooledSolanaSourceAddress, ledgerCurrencyForStablecoinAsset } from "@/lib/liquidity/platform-pool"
+import {
+  creditPlatformAccountFromInbound,
+  findIssuedPlatformAccountForWalletOwner,
+} from "@/lib/platform/ledger"
 
 export type TurnkeyInboundLedgerInput = {
   userId: string
@@ -67,6 +71,7 @@ export type TurnkeyInboundLedgerInput = {
   asset: string
   chain: string
   amountMinor: string | null
+  platformCustomerId?: string | null
 }
 
 export type TurnkeyInboundLedgerResult =
@@ -124,6 +129,34 @@ export async function applyTurnkeyInboundLedgerEvent(
   const status = input.status
   const direction = input.direction
   const skipProductSuppressors = opts?.forceOrganicStablecoinDeposit === true
+
+  if (direction === "in" && status === "settled" && input.amount > 0) {
+    const { data: walletRow } = await admin
+      .from("wallet_accounts")
+      .select("wallet_owner_id")
+      .eq("id", input.walletAccount.id)
+      .maybeSingle()
+    const ownerId = String(walletRow?.wallet_owner_id ?? "").trim()
+    if (ownerId) {
+      const issued = await findIssuedPlatformAccountForWalletOwner(admin, ownerId, input.currency)
+      if (issued?.id) {
+        const inboundKey = txHash || input.providerTransactionId
+        const cents = Math.round(input.amount * 100)
+        const credited = await creditPlatformAccountFromInbound(admin, {
+          accountId: issued.id,
+          amountCents: cents,
+          type: "chain",
+          description: "Chain deposit",
+          inboundKey,
+          metadata: {
+            source: "chain",
+            ...(txHash ? { tx_hash: txHash } : {}),
+          },
+        })
+        return { kind: "applied", transactionId: "transactionId" in credited ? credited.transactionId : null }
+      }
+    }
+  }
 
   if (direction === "in" && (isGridVaTurnkeyDustAmount(input.amount) || input.amount <= 0)) {
     if (txHash && status === "settled" && businessId) {

@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   const livemode = auth.ctx.mode === "live"
   const { data } = await admin
     .from("platform_customers")
-    .select("id, email, name, external_id, status, livemode, created_at")
+    .select("id, email, name, external_id, status, verification_status, livemode, created_at")
     .eq("business_id", auth.ctx.businessId)
     .eq("livemode", livemode)
     .order("created_at", { ascending: false })

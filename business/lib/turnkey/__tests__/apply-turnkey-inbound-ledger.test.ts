@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
   settleGridSweep: vi.fn(),
   findPendingGridRefundSweep: vi.fn(),
   settleGridRefundSweep: vi.fn(),
+  findIssued: vi.fn(),
+  creditPlatform: vi.fn(),
 }))
 
 vi.mock("@/lib/noah/noah-bank-onramp-chain-suppression", () => ({
@@ -115,6 +117,24 @@ vi.mock("@/lib/turnkey/ledger-inbound-exists", () => ({
   turnkeyInboundLedgerRowExists: vi.fn().mockResolvedValue(false),
   turnkeyVisibleInboundLedgerRowExists: vi.fn().mockResolvedValue(false),
 }))
+vi.mock("@/lib/platform/ledger", () => ({
+  findIssuedPlatformAccountForWalletOwner: mocks.findIssued,
+  creditPlatformAccountFromInbound: mocks.creditPlatform,
+}))
+
+function adminFrom(data: unknown = null) {
+  const q = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    not: vi.fn().mockReturnThis(),
+    contains: vi.fn().mockReturnThis(),
+    gte: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data }),
+    update: vi.fn().mockReturnThis(),
+    insert: vi.fn().mockReturnThis(),
+  }
+  return { from: vi.fn(() => q) }
+}
 
 import { applyTurnkeyInboundLedgerEvent } from "@/lib/turnkey/apply-turnkey-inbound-ledger"
 import { turnkeyVisibleInboundLedgerRowExists } from "@/lib/turnkey/ledger-inbound-exists"
@@ -178,6 +198,8 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     mocks.settleGridSweep.mockResolvedValue(undefined)
     mocks.findPendingGridRefundSweep.mockResolvedValue(null)
     mocks.settleGridRefundSweep.mockResolvedValue(undefined)
+    mocks.findIssued.mockResolvedValue(null)
+    mocks.creditPlatform.mockResolvedValue({ skipped: true })
   })
 
   it("allows organic fallback for relay pending amount match only", async () => {
@@ -185,7 +207,7 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
       reason: "pending_deposit",
       relayDepositId: "relay-pending",
     })
-    const admin = { from: vi.fn() }
+    const admin = adminFrom()
 
     const result = await applyTurnkeyInboundLedgerEvent(admin as never, {
       ...baseInput,
@@ -199,7 +221,7 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
       reason: "fill_hash",
       relayDepositId: "relay-1",
     })
-    const admin = { from: vi.fn() }
+    const admin = adminFrom()
 
     const result = await applyTurnkeyInboundLedgerEvent(admin as never, {
       ...baseInput,
@@ -213,7 +235,7 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
       reason: "pending_deposit",
       relayDepositId: "relay-1",
     })
-    const admin = { from: vi.fn() }
+    const admin = adminFrom()
 
     const result = await applyTurnkeyInboundLedgerEvent(admin as never, {
       ...baseInput,
@@ -278,7 +300,7 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
       easnerPayoutId: "payout-1",
       outRowId: "out-1",
     })
-    const admin = { from: vi.fn() }
+    const admin = adminFrom()
 
     const result = await applyTurnkeyInboundLedgerEvent(admin as never, baseInput)
     expect(result.kind).toBe("suppressed_noah")
@@ -288,7 +310,7 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
 
   it("skips duplicate settled inbound when tx_hash already has a visible ledger row", async () => {
     vi.mocked(turnkeyVisibleInboundLedgerRowExists).mockResolvedValueOnce(true)
-    const admin = { from: vi.fn() }
+    const admin = adminFrom()
 
     const result = await applyTurnkeyInboundLedgerEvent(admin as never, baseInput)
     expect(result.kind).toBe("skipped")
@@ -301,7 +323,7 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
       transfer_group_id: "tg-1",
       status: "submitted",
     })
-    const admin = { from: vi.fn() }
+    const admin = adminFrom()
 
     const result = await applyTurnkeyInboundLedgerEvent(admin as never, baseInput)
     expect(result).toEqual({
@@ -338,7 +360,7 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
 
   it("suppresses settled Grid VA sweep by tx hash when webhook amount is dust", async () => {
     vi.mocked(findGridVaTurnkeySweepForSolanaTx).mockResolvedValueOnce({ transferId: "sweep-settled" })
-    const admin = { from: vi.fn() }
+    const admin = adminFrom()
 
     const result = await applyTurnkeyInboundLedgerEvent(admin as never, {
       ...baseInput,
@@ -362,7 +384,7 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
   })
 
   it("skips sub-cent inbound when no Grid VA sweep matches", async () => {
-    const admin = { from: vi.fn() }
+    const admin = adminFrom()
 
     const result = await applyTurnkeyInboundLedgerEvent(admin as never, {
       ...baseInput,
@@ -405,7 +427,7 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
 
   it("suppresses YC fund balance vault delivery without upsert", async () => {
     vi.mocked(findYcFundBalanceChainSettlementForSuppression).mockResolvedValueOnce(true)
-    const admin = { from: vi.fn() }
+    const admin = adminFrom()
 
     const result = await applyTurnkeyInboundLedgerEvent(admin as never, {
       ...baseInput,
@@ -417,7 +439,7 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
 
   it("completes YC fund balance split from vault inbound", async () => {
     vi.mocked(tryCompleteYcFundBalanceFromUserVaultInbound).mockResolvedValueOnce(true)
-    const admin = { from: vi.fn() }
+    const admin = adminFrom()
 
     const result = await applyTurnkeyInboundLedgerEvent(admin as never, {
       ...baseInput,
@@ -464,7 +486,7 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
       transactionId: "grid-pay-1",
       gridTransactionId: "Transaction:in-1",
     })
-    const admin = { from: vi.fn() }
+    const admin = adminFrom()
 
     const result = await applyTurnkeyInboundLedgerEvent(admin as never, {
       ...baseInput,
@@ -508,7 +530,7 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
   })
 
   it("never force-creates Grid dust as a stablecoin deposit", async () => {
-    const admin = { from: vi.fn() }
+    const admin = adminFrom()
     const result = await applyTurnkeyInboundLedgerEvent(
       admin as never,
       {
@@ -521,5 +543,29 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     )
     expect(result.kind).toBe("skipped")
     expect(mocks.upsertLedger).not.toHaveBeenCalled()
+  })
+
+  it("credits an issued customer account and skips the banking book", async () => {
+    mocks.findIssued.mockResolvedValue({ id: "acct_1" })
+    mocks.creditPlatform.mockResolvedValue({ accountId: "acct_1", transactionId: "txn_plat" })
+    const admin = adminFrom({ wallet_owner_id: "wo_1" })
+
+    const result = await applyTurnkeyInboundLedgerEvent(admin as never, {
+      ...baseInput,
+      businessId: "biz-1",
+      txHash: "hash-platform-in",
+    })
+    expect(result).toEqual({ kind: "applied", transactionId: "txn_plat" })
+    expect(mocks.creditPlatform).toHaveBeenCalledWith(
+      admin,
+      expect.objectContaining({
+        accountId: "acct_1",
+        amountCents: 1000,
+        type: "chain",
+        inboundKey: "hash-platform-in",
+      }),
+    )
+    expect(mocks.upsertLedger).not.toHaveBeenCalled()
+    expect(mocks.applyDelta).not.toHaveBeenCalled()
   })
 })

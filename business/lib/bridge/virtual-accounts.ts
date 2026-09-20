@@ -125,6 +125,22 @@ export async function createBridgeVirtualAccount(input: {
       admin: input.admin,
     })
   }
+  return createBridgeVirtualAccountForVault({
+    customerId: input.customerId,
+    sourceCurrency: input.sourceCurrency,
+    vaultAddress: vault.vaultAddress,
+    destCurrency,
+    idempotencyKey: input.idempotencyKey,
+  })
+}
+
+export async function createBridgeVirtualAccountForVault(input: {
+  customerId: string
+  sourceCurrency: "usd" | "eur"
+  vaultAddress: string
+  destCurrency: "usdc" | "eurc"
+  idempotencyKey: string
+}): Promise<BridgeVirtualAccount> {
   return bridgeFetch<BridgeVirtualAccount>({
     method: "POST",
     path: `/customers/${encodeURIComponent(input.customerId)}/virtual_accounts`,
@@ -133,8 +149,8 @@ export async function createBridgeVirtualAccount(input: {
       source: { currency: input.sourceCurrency },
       destination: {
         payment_rail: "solana",
-        currency: destCurrency,
-        address: vault.vaultAddress,
+        currency: input.destCurrency,
+        address: input.vaultAddress,
       },
     },
   })

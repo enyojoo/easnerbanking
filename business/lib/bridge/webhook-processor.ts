@@ -3,6 +3,10 @@ import { persistVerificationStatus } from "@/lib/compliance/verification-store"
 import { resolveBridgeCustomerKycStatus } from "./kyc-links"
 import { provisionBridgeVirtualAccounts } from "./provision-after-approval"
 import { handleBridgeVaInboundActivity, resolveBridgeSubject } from "./va-inbound-webhook"
+import {
+  applyBridgeVerificationToPlatformCustomer,
+  creditPlatformAccountFromBridgeDeposit,
+} from "@/lib/platform/receive"
 
 function asRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {}
@@ -42,6 +46,7 @@ async function handleBridgeKycWebhook(
     endorsements,
   })
   const subject = await resolveBridgeSubject(admin, customerId)
+  await applyBridgeVerificationToPlatformCustomer(admin, customerId, status)
   if (!subject) return
 
   if (subject.businessId) {

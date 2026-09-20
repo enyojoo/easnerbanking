@@ -1,12 +1,14 @@
 ---
 title: Checkout
-description: Collect on your website. Settlement credits the platform book.
+description: Collect on your website onto your business balance.
 icon: credit-card
 ---
 
 Checkout collects on your website. The amount and secret key stay on your server. The browser only sees a publishable key and a `client_secret`.
 
-When the session is created with a merchant secret key, settlement credits the **platform** book.
+Settlement uses the **same Connect account** as invoices and payment links. The collect lands on **your** business balance. Switch to Banking in the app to see it.
+
+Checkout is not Receive. It does not credit a customer `acct_`.
 
 <Note>
   **Scope:** `checkout`
@@ -122,18 +124,19 @@ Unlock on `checkout.completed`. Also listen for `subscription.updated` and `subs
 
 | Event | Expected |
 |---|---|
-| `checkout.completed` | Payment succeeded. Fulfil. Credits the platform book |
+| `checkout.completed` | Payment succeeded. Fulfil. Credits your business balance |
 | `checkout.async_succeeded` | A delayed method cleared |
 | `checkout.failed` | Abandoned or failed |
-| `payment.available` | Funds usable on the platform account |
+| `payment.available` | Funds usable on your business balance |
 | `subscription.updated` / `subscription.canceled` | Recurring |
 
 ## Expected
 
 - Amount and secret key never in the browser.
 - Fulfil in the webhook using `metadata` you sent.
-- Platform Transactions shows the collect.
+- Banking Home and `GET /v1/transactions` (`type: "checkout"`) show the collect.
+- Do not credit a customer `acct_` from this event.
 
-<Card title="Webhooks" icon="webhook" href="/webhooks">
-  Event catalog, easner-signature, and retries.
+<Card title="Receive money" icon="download" href="/receive">
+  Fund a customer account. Different product.
 </Card>

@@ -1,0 +1,140 @@
+---
+title: Receive money
+description: Fund a customer account — verification, bank details, chain addresses, onramp.
+icon: download
+---
+
+Receive credits an issued customer `acct_`. It is not Checkout. Checkout collects onto **your** business balance.
+
+Live bank details, live chain addresses, and onramp require hosted customer verification. A `cus_` with only email and name cannot hold named bank details or card onramp. Test skips verification.
+
+<Note>
+  **Scope:** `GET` needs `accounts.read`. Verification and onramp need `accounts.write`.
+</Note>
+
+## Path
+
+<Steps>
+  <Step title="Create the customer">
+    `POST /v1/customers` issues USD. Save `cus_` and `acct_`.
+  </Step>
+  <Step title="Start verification">
+    `POST /v1/customers/:id/verification` with `{ "return_url": "https://…" }`. Test returns `{ "status": "approved", "url": null }`. Live returns a hosted `url`.
+  </Step>
+  <Step title="Wait for approved">
+    Poll `GET /v1/customers/:id` or handle `customer.updated`. Live Receive calls return `403` `verification_required` until `approved`.
+  </Step>
+  <Step title="Collect onto the account">
+    Bank details, chain addresses, or an onramp session — all keyed by `acct_`.
+  </Step>
+</Steps>
+
+## Bank details
+
+```bash
+curl https://api.easner.com/v1/accounts/acct_…/deposit_instructions \
+  -H "Authorization: Bearer $EASNER_SECRET_KEY"
+```
+
+```json
+{
+  "type": "bank",
+  "currency": "USD",
+  "account_holder": "Ada",
+  "account_number": "000123456789",
+  "routing_number": "110000000",
+  "bank_name": "Easner Test Bank",
+  "country": "US"
+}
+```
+
+EUR test details use `iban` and `bic` instead of account and routing numbers.
+
+| Mode | Result |
+|---|---|
+| Test | Sandbox numbers. No KYC |
+| Live | Named details after `approved`. `409` `not_available` if provisioning is not ready yet |
+
+Show these details to your customer. When the deposit settles, the issued `acct_` is credited. You get `account.updated` and `transaction.created` (`type: "deposit"`).
+
+## Chain addresses
+
+```bash
+curl https://api.easner.com/v1/accounts/acct_…/deposit_addresses \
+  -H "Authorization: Bearer $EASNER_SECRET_KEY"
+```
+
+```json
+{
+  "data": [
+    {
+      "currency": "USD",
+      "network": "solana",
+      "address": "…",
+      "asset": "USDC"
+    }
+  ]
+}
+```
+
+Live requires `approved`. An inbound transfer to that address credits the same `acct_` (`type: "chain"`).
+
+## Onramp
+
+```bash
+curl https://api.easner.com/v1/accounts/acct_…/onramp_sessions \
+  -H "Authorization: Bearer $EASNER_SECRET_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 2500,
+    "currency": "usd",
+    "return_url": "https://yoursite.com/funded"
+  }'
+```
+
+```json
+{
+  "id": "ors_…",
+  "status": "open",
+  "amount": 2500,
+  "currency": "USD",
+  "livemode": false,
+  "url": "https://business.easner.com/receive/onramp/ors_…"
+}
+```
+
+Send your customer to `url`. The destination is that vault — the issued `acct_`, not your Banking user.
+
+| Mode | Result |
+|---|---|
+| Test | The hosted page completes and credits the account (`type: "onramp"`) |
+| Live | Session after `approved`. Completing card onramp from the hosted page returns `403` `not_available` until live card onramp is enabled |
+
+`400` `invalid_amount` if `amount` is missing. `403` `verification_required` in live before approval.
+
+## Errors
+
+| Code | HTTP | When |
+|---|---|---|
+| `verification_required` | 403 | Live call before `approved` |
+| `not_available` | 403 / 409 | Live details or onramp not ready |
+| `not_found` | 404 | Unknown `cus_` / `acct_` |
+| `invalid_amount` | 400 | Onramp amount missing or not a positive integer |
+
+## Events
+
+| Event | When |
+|---|---|
+| `customer.updated` | `verification_status` changed |
+| `account.updated` | The `acct_` available balance changed |
+| `transaction.created` | `deposit`, `onramp`, or `chain` credit |
+
+## Expected
+
+- Always pass an issued `acct_` (`customer` set).
+- Do not send your customer to first-party Banking screens or unpublished `/api` paths.
+- Do not use Checkout to fund a customer account.
+
+<Card title="Checkout" icon="credit-card" href="/checkout">
+  Collect onto your business balance. Different product.
+</Card>

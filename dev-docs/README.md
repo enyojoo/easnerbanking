@@ -1,6 +1,6 @@
 # Easner Docs
 
-Mintlify project for the platform `v1` integrator docs.
+Mintlify project for Banking and Checkout `v1`.
 
 ```bash
 npm i -g mint

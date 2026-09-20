@@ -1,13 +1,15 @@
 ---
 title: Customers
-description: Create and list API customers. Each customer gets a wallet.
+description: Your banking end user. Create, retrieve, and start hosted verification.
 icon: users
 ---
 
-A customer is your end user on the platform. Creating a customer creates their wallet. They never log into Easner. You hold the id and call `v1`.
+A customer is your end user. They never log into Easner. You hold the id and call `v1`.
+
+Creating a customer issues a USD `acct_` on that customer. Email and name are not enough for live bank details or onramp — start hosted verification first.
 
 <Note>
-  **Scope:** `GET` needs `accounts.read`. `POST` needs `transfers.write`.
+  **Scope:** `GET` needs `accounts.read`. `POST` customer needs `transfers.write`. `POST` verification needs `accounts.write`.
 </Note>
 
 ## Object
@@ -15,12 +17,28 @@ A customer is your end user on the platform. Creating a customer creates their w
 | Field | Type | Notes |
 |---|---|---|
 | `id` | string | `cus_…` |
-| `email` | string \| null | Optional |
-| `name` | string \| null | Optional |
+| `email` | string \| null | Required to start live verification |
+| `name` | string \| null | Used on bank details |
 | `external_id` | string \| null | Your id. Use this to map your user |
 | `status` | string | `active` |
+| `verification_status` | string | `unverified`, `pending`, `approved`, `rejected` |
 | `livemode` | boolean | From the key |
 | `created` | ISO-8601 | |
+
+```json
+{
+  "id": "cus_…",
+  "email": "ada@example.com",
+  "name": "Ada",
+  "external_id": "user_42",
+  "status": "active",
+  "verification_status": "unverified",
+  "livemode": false,
+  "created": "2026-09-20T00:00:00.000Z"
+}
+```
+
+`GET /v1/customers/:id` also includes `accounts` (issued balances for that customer).
 
 ## Create
 
@@ -31,19 +49,7 @@ curl https://api.easner.com/v1/customers \
   -d '{"email":"ada@example.com","name":"Ada","external_id":"user_42"}'
 ```
 
-```json
-{
-  "id": "cus_…",
-  "email": "ada@example.com",
-  "name": "Ada",
-  "external_id": "user_42",
-  "status": "active",
-  "livemode": false,
-  "created": "2026-09-20T00:00:00.000Z"
-}
-```
-
-`201` on success. `400` `create_failed` if the wallet could not be created.
+`201` on success. The response includes the issued USD account under `accounts`.
 
 ## List
 
@@ -53,23 +59,46 @@ Newest first. Up to 100.
 
 ## Retrieve
 
-`GET /v1/customers/:id` → `Customer`
+`GET /v1/customers/:id` → Customer plus `accounts`.
 
 `404` `not_found` if the id is missing or belongs to the other livemode.
+
+## Start verification
+
+```bash
+curl https://api.easner.com/v1/customers/cus_…/verification \
+  -H "Authorization: Bearer $EASNER_SECRET_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"return_url":"https://yoursite.com/verified"}'
+```
+
+```json
+{ "status": "approved", "url": null }
+```
+
+| Mode | Result |
+|---|---|
+| Test | Sets `verification_status` to `approved`. `url` is `null` |
+| Live | `{ "status": "pending", "url": "https://…" }` hosted form. Already-approved customers return `{ "status": "approved", "url": null }` |
+
+Live create needs an email. `404` if the customer is missing.
+
+A live `cus_` with only email and name cannot hold named bank details or card onramp until `approved`.
 
 ## Events
 
 | Event | When |
 |---|---|
 | `customer.created` | After a successful create |
-| `customer.updated` | When the record changes |
+| `customer.updated` | When the record changes, including `verification_status` |
 
 ## Expected
 
 - Store `id` and `external_id` on your side.
 - Attach destinations with `"customer": "cus_…"`.
-- Do not expect a wallet address or signing key in the response.
+- Open further currencies with `POST /v1/accounts` and `"customer": "cus_…"`.
+- Start verification before live Receive.
 
-<Card title="Accounts" icon="wallet" href="/accounts">
-  Platform balances. Checkout credits these accounts. Transfers debit them.
+<Card title="Receive money" icon="download" href="/receive">
+  Bank details, chain addresses, and onramp after verification.
 </Card>

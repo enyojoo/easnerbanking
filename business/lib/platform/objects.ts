@@ -17,6 +17,7 @@ export function publicCustomer(row: {
   name?: string | null
   external_id?: string | null
   status?: string | null
+  verification_status?: string | null
   livemode: boolean
   created_at: string
 }) {
@@ -26,6 +27,7 @@ export function publicCustomer(row: {
     name: row.name ?? null,
     external_id: row.external_id ?? null,
     status: row.status ?? "active",
+    verification_status: row.verification_status ?? "unverified",
     livemode: Boolean(row.livemode),
     created: row.created_at,
   }
@@ -128,6 +130,7 @@ export async function createPlatformCustomer(
       name: String(input.name ?? "").trim() || null,
       external_id: String(input.externalId ?? "").trim() || null,
       wallet_owner_id: walletOwnerId,
+      verification_status: "unverified",
       created_at: now,
       updated_at: now,
     })

@@ -17,9 +17,9 @@ Quotes expire **15 minutes** after create. Expired quotes cannot be transferred.
 | Field | Type | Notes |
 |---|---|---|
 | `id` | string | `qt_…` |
-| `source` | string \| null | `acct_…` |
+| `source` | string | `acct_…` — required on create |
 | `destination` | string \| null | `dest_…` |
-| `send` | `{ amount, currency }` | What leaves the platform account, cents |
+| `send` | `{ amount, currency }` | What leaves the customer account, cents |
 | `receive` | `{ amount, currency }` | What the destination should get, cents |
 | `expires_at` | ISO-8601 | |
 | `status` | string | `open` until used or expired |
@@ -58,12 +58,12 @@ curl https://api.easner.com/v1/quotes \
 | Field | Required | Notes |
 |---|---|---|
 | `amount` | yes | Positive integer cents |
+| `source` | yes | Customer account to debit |
 | `currency` | no | Defaults to `USD` |
 | `receive_currency` | no | Defaults to send currency |
-| `source` | no | Platform account to debit |
 | `destination` | no | Destination to credit |
 
-`201`. `400` `invalid_amount` if `amount` is not a positive integer. `400` `create_failed` if pricing cannot be built.
+`201`. `400` `invalid_amount` if `amount` is not a positive integer. `400` `invalid_source` if `source` is missing. `400` `create_failed` if pricing cannot be built.
 
 The body has no `recipientId` or `formSessionId`.
 
