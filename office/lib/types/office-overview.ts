@@ -1,4 +1,4 @@
-/** Response from GET /api/admin/office/overview (via office proxy to business). */
+/** Response from GET /api/admin/office/overview on the api app. */
 export type OfficeOverviewWindow = {
   preset: string
   since: string

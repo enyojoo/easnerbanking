@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from './supabase'
 import { PENDING_RESIDENCE_COUNTRY_KEY } from '../constants/residenceCountry'
 import type { SignupEmailBlockReason } from '@easner/shared'
-import { parseSignupEmailBlockFromResponseText } from '@easner/shared'
+import { LOCAL_URLS, parseSignupEmailBlockFromResponseText } from '@easner/shared'
 
 export type BootstrapResult =
   | { ok: true; deletionCancelled?: boolean }
@@ -21,11 +21,11 @@ export type BootstrapResult =
 export const EASNER_PUBLIC_APP_ORIGIN = 'https://api.easner.com'
 
 /**
- * Business Next.js API (bootstrap, Noah proxy). Resolution order:
+ * First-party Banking API on the api app. Resolution order:
  * 1. `expo.extra.apiUrl` from app.config.js (EAS env / local .env at prebuild)
  * 2. `process.env.EXPO_PUBLIC_API_URL` (Metro inline)
- * 3. Dev: `http://localhost:3000`
- * 4. Release: {@link EASNER_PUBLIC_APP_ORIGIN} (warn once – same default as auth deep links elsewhere)
+ * 3. Dev: `LOCAL_URLS.api` (`http://localhost:3002`)
+ * 4. Release: {@link EASNER_PUBLIC_APP_ORIGIN} (warn once)
  */
 export const getApiBaseUrl = (): string => {
   const fromExtra = Constants.expoConfig?.extra?.apiUrl
@@ -39,7 +39,7 @@ export const getApiBaseUrl = (): string => {
   }
 
   if (__DEV__) {
-    return 'http://localhost:3000'
+    return LOCAL_URLS.api
   }
 
   console.warn(

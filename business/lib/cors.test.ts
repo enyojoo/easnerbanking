@@ -47,6 +47,27 @@ describe("corsPreflightResponse", () => {
     }
   })
 
+  it("allows Office Vercel production and unique hosts", () => {
+    const allowed = getCorsAllowedOrigins()
+    expect(allowed.has("https://easnerbanking-office.vercel.app")).toBe(true)
+    for (const origin of [
+      "https://easnerbanking-office.vercel.app",
+      "https://easnerbanking-office-abc123-easner.vercel.app",
+    ] as const) {
+      const request = new NextRequest("https://api.easner.com/api/admin/office/overview", {
+        method: "OPTIONS",
+        headers: {
+          origin,
+          "access-control-request-method": "GET",
+          "access-control-request-headers": "authorization,content-type",
+        },
+      })
+      const response = corsPreflightResponse(request, allowed)
+      expect(response?.status).toBe(204)
+      expect(response?.headers.get("Access-Control-Allow-Origin")).toBe(origin)
+    }
+  })
+
   it("allows Business, Platform, payer, and Office origins", () => {
     const allowed = getCorsAllowedOrigins()
     expect(allowed.has("https://business.easner.com")).toBe(true)
@@ -77,5 +98,35 @@ describe("corsPreflightResponse", () => {
       expect(response?.headers.get("Access-Control-Allow-Origin")).toBe(origin)
       expect(response?.headers.get("Access-Control-Allow-Headers")).toContain("Authorization")
     }
+  })
+
+  it("allows Office Return and Mobile send preflight against the api origin", () => {
+    const allowed = getCorsAllowedOrigins()
+    const office = new NextRequest(
+      "https://api.easner.com/api/admin/office/subjects/user/abc/return-remaining",
+      {
+        method: "OPTIONS",
+        headers: {
+          origin: "https://bk.easner.com",
+          "access-control-request-method": "POST",
+          "access-control-request-headers": "authorization,content-type",
+        },
+      },
+    )
+    const officeRes = corsPreflightResponse(office, allowed)
+    expect(officeRes?.status).toBe(204)
+    expect(officeRes?.headers.get("Access-Control-Allow-Origin")).toBe("https://bk.easner.com")
+
+    const mobile = new NextRequest("https://api.easner.com/api/transfers", {
+      method: "OPTIONS",
+      headers: {
+        origin: "https://app.easner.com",
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "authorization,content-type,idempotency-key",
+      },
+    })
+    const mobileRes = corsPreflightResponse(mobile, allowed)
+    expect(mobileRes?.status).toBe(204)
+    expect(mobileRes?.headers.get("Access-Control-Allow-Origin")).toBe("https://app.easner.com")
   })
 })

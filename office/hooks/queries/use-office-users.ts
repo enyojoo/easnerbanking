@@ -65,11 +65,11 @@ export type OfficeUserRow = {
 }
 
 /**
- * Whole-directory query. The backing route
- * (business/app/api/admin/office/users) is owned by the business workspace
- * and does not paginate yet; once it grows `limit`/`cursor` + `nextCursor`,
- * convert this to useInfiniteQuery and flatten pages. Until then the users
- * page keeps the DOM small with a client-side render cap ("Load more").
+ * Whole-directory query. The backing route is GET /api/admin/office/users
+ * on the api app and does not paginate yet; once it grows `limit`/`cursor`
+ * + `nextCursor`, convert this to useInfiniteQuery and flatten pages. Until
+ * then the users page keeps the DOM small with a client-side render cap
+ * ("Load more").
  * The ~35-field row normalization below runs inside the queryFn, so it
  * executes once per fetch – not per render.
  *

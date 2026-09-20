@@ -58,9 +58,19 @@ function isBusinessVercelOrigin(origin: string): boolean {
   }
 }
 
+function isOfficeVercelOrigin(origin: string): boolean {
+  try {
+    const url = new URL(origin)
+    if (url.protocol !== "https:") return false
+    return /^easnerbanking-office(?:-[a-z0-9-]+)*\.vercel\.app$/i.test(url.hostname)
+  } catch {
+    return false
+  }
+}
+
 export function isCorsAllowedOrigin(origin: string | null, allowed: Set<string>): boolean {
   if (!origin) return false
-  return allowed.has(origin) || isBusinessVercelOrigin(origin)
+  return allowed.has(origin) || isBusinessVercelOrigin(origin) || isOfficeVercelOrigin(origin)
 }
 
 export function getCorsAllowedOrigins(): Set<string> {
