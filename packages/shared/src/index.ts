@@ -1210,7 +1210,8 @@ export {
   resolveInboundReceiveDetail,
   resolveInboundReceiveNotification,
 } from "./transactions/inbound-receive-detail"
-export { formatStablecoinDepositSchemeLabel, receiveStablecoinDepositSubtitle, receiveStablecoinPaymentNotes, receiveStablecoinCreditCurrency } from "./transactions/stablecoin-deposit-scheme"
+export { formatStablecoinDepositSchemeLabel, receiveStablecoinDepositSubtitle, receiveStablecoinPaymentNotes, receiveStablecoinCreditCurrency, relayUsdtReceiveRows } from "./transactions/stablecoin-deposit-scheme"
+export type { RelayUsdtReceiveRow } from "./transactions/stablecoin-deposit-scheme"
 export {
   isRelayTronDepositInbound,
   isRelayTronDepositMetadata,

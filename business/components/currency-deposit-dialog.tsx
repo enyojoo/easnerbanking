@@ -29,7 +29,7 @@ import {
   type StablecoinReceiveMethod,
 } from "@/components/receive/ReceiveStablecoinMethodList"
 import { fetchWithSession } from "@/lib/fetch-with-session"
-import { resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, resolvePayInProvider, type NgLocalIdType, resolveReceiveCountryName, receiveInternationalBankTitle, receiveInternationalDepositSubtitle, receiveLocalBankTitle, receiveLocalMomoTitle, receiveLocalDepositSubtitle, localPayInCountries, expressDepositMethodTitle, expressDepositMethodSubtitle, expressDepositsStatusIsReady, isExpressCashKind, listExpressCashKinds, type CashPayInMethodKind, BUSINESS_DEPOSIT_KYB_COPY, type BusinessDepositKybProduct } from "@easner/shared"
+import { resolveNgLocalVerification, mapResidenceToLocalPayInCurrency, resolvePayInProvider, type NgLocalIdType, resolveReceiveCountryName, receiveInternationalBankTitle, receiveInternationalDepositSubtitle, receiveLocalBankTitle, receiveLocalMomoTitle, receiveLocalDepositSubtitle, localPayInCountries, expressDepositMethodTitle, expressDepositMethodSubtitle, expressDepositsStatusIsReady, isExpressCashKind, listExpressCashKinds, type CashPayInMethodKind, BUSINESS_DEPOSIT_KYB_COPY, type BusinessDepositKybProduct, relayUsdtReceiveRows } from "@easner/shared"
 import { LocalDepositWizard } from "@/components/local-deposit-wizard"
 import { AccountsExpressDepositFlow } from "@/components/accounts/accounts-express-deposit-flow"
 import { NgLocalVerificationNotice } from "@/components/compliance/ng-local-verification-notice"
@@ -409,22 +409,17 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
         }
         if (cancelled) return
         const methods = [...base]
-        if (res.ok && data.enabled) {
-          for (const row of data.addresses ?? []) {
+        if (res.ok) {
+          for (const row of relayUsdtReceiveRows(data)) {
             methods.push({
-              id: `relay-${row.asset}-${row.network}`.toLowerCase(),
+              id:
+                row.status === "active"
+                  ? `relay-${row.asset}-${row.network}`.toLowerCase()
+                  : "usdt-tron-provisioning",
               asset: row.asset,
               network: row.network,
-              status: "active",
+              status: row.status,
               address: row.address,
-            })
-          }
-          if (data.status === "provisioning" && !methods.some((m) => m.asset === "USDT")) {
-            methods.push({
-              id: "usdt-tron-provisioning",
-              asset: "USDT",
-              network: "Tron",
-              status: "provisioning",
             })
           }
         }

@@ -110,6 +110,13 @@ export function prefetchReceiveDepositQueries(
       gcTime: RECEIVE_DEPOSIT_GC_MS,
       meta: RECEIVE_QUERY_META,
     }),
+    qc.prefetchQuery({
+      queryKey: [...qk.wallets.depositAddresses(scope), 'relay'],
+      queryFn: fetchConsumerRelayDepositAddresses,
+      staleTime: RECEIVE_DEPOSIT_STALE_MS,
+      gcTime: RECEIVE_DEPOSIT_GC_MS,
+      meta: RECEIVE_QUERY_META,
+    }),
   ]).then(() => undefined)
 }
 
@@ -134,7 +141,7 @@ export function useConsumerVirtualAccounts() {
 
 async function fetchConsumerRelayDepositAddresses(): Promise<{
   enabled: boolean
-  status?: string
+  status?: "active" | "provisioning" | "unavailable"
   addresses: Array<{
     asset: string
     network: string

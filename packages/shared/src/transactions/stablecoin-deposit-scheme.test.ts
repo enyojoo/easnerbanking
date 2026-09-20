@@ -3,6 +3,7 @@ import {
   formatStablecoinDepositSchemeLabel,
   receiveStablecoinDepositSubtitle,
   receiveStablecoinPaymentNotes,
+  relayUsdtReceiveRows,
 } from "./stablecoin-deposit-scheme"
 
 describe("formatStablecoinDepositSchemeLabel", () => {
@@ -55,6 +56,27 @@ describe("receiveStablecoinDepositSubtitle", () => {
         status: "provisioning",
       }),
     ).toBe("Setting up…")
+  })
+})
+
+describe("relayUsdtReceiveRows", () => {
+  it("omits USDT when Relay is off", () => {
+    expect(relayUsdtReceiveRows({ enabled: false, addresses: [] })).toEqual([])
+  })
+
+  it("keeps an active Tron address", () => {
+    expect(
+      relayUsdtReceiveRows({
+        enabled: true,
+        addresses: [{ asset: "USDT", network: "Tron", address: "Txyz" }],
+      }),
+    ).toEqual([{ asset: "USDT", network: "Tron", status: "active", address: "Txyz" }])
+  })
+
+  it("shows a provisioning row when Relay is on but the address is missing", () => {
+    expect(relayUsdtReceiveRows({ enabled: true, addresses: [] })).toEqual([
+      { asset: "USDT", network: "Tron", status: "provisioning" },
+    ])
   })
 })
 

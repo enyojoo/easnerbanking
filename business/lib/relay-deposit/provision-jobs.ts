@@ -56,17 +56,19 @@ export async function enqueueRelayDepositProvisionJob(
 export async function processRelayDepositProvisionJobs(
   admin: SupabaseClient,
   limit = 10,
+  options?: { walletOwnerId?: string },
 ): Promise<{ processed: number }> {
   if (!isRelayTronInboundEnabled()) return { processed: 0 }
 
   const now = new Date().toISOString()
-  const { data: jobs } = await admin
+  const ownerId = String(options?.walletOwnerId ?? "").trim()
+  let query = admin
     .from("relay_deposit_provision_jobs")
     .select("*")
     .in("state", ["pending", "retry"])
     .or(`next_retry_at.is.null,next_retry_at.lte.${now}`)
-    .order("created_at", { ascending: true })
-    .limit(limit)
+  if (ownerId) query = query.eq("wallet_owner_id", ownerId)
+  const { data: jobs } = await query.order("created_at", { ascending: true }).limit(limit)
 
   let processed = 0
   for (const job of jobs ?? []) {

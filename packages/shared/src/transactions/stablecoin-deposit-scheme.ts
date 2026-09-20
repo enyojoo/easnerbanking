@@ -62,6 +62,39 @@ export function receiveStablecoinDepositSubtitle(input: {
   return `Deposit ${asset} to credit your ${credit} Balance`
 }
 
+export type RelayUsdtReceiveRow = {
+  asset: "USDT"
+  network: string
+  status: "active" | "provisioning"
+  address?: string
+}
+
+/**
+ * USD Receive always lists Tron USDT when Relay is on, even before the
+ * deposit address is ready (otherwise the stablecoin tab only shows USDC).
+ */
+export function relayUsdtReceiveRows(relay: {
+  enabled?: boolean
+  addresses?: Array<{ asset?: string; network?: string; address?: string }>
+} | null | undefined): RelayUsdtReceiveRow[] {
+  if (!relay?.enabled) return []
+  const rows: RelayUsdtReceiveRow[] = []
+  for (const row of relay.addresses ?? []) {
+    const address = String(row.address ?? "").trim()
+    if (String(row.asset ?? "").toUpperCase() !== "USDT" || !address) continue
+    rows.push({
+      asset: "USDT",
+      network: String(row.network ?? "Tron").trim() || "Tron",
+      status: "active",
+      address,
+    })
+  }
+  if (!rows.some((row) => row.asset === "USDT")) {
+    rows.push({ asset: "USDT", network: "Tron", status: "provisioning" })
+  }
+  return rows
+}
+
 /** About / payment-instruction bullets for a stablecoin receive address. */
 export function receiveStablecoinPaymentNotes(input: {
   asset: string

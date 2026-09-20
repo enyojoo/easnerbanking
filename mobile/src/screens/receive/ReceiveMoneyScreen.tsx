@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
-import { qk, isVaAnswerSettled, shouldShowBankDepositTab, mapResidenceToLocalPayInCurrency, expressDepositsPayerCountry, expressDepositsStatusIsReady, isExpressCashKind, listExpressCashKinds, EXPRESS_DEPOSITS_MIN_USD_CREDIT, type NgLocalIdType } from '@easner/shared'
+import { qk, isVaAnswerSettled, shouldShowBankDepositTab, mapResidenceToLocalPayInCurrency, expressDepositsPayerCountry, expressDepositsStatusIsReady, isExpressCashKind, listExpressCashKinds, EXPRESS_DEPOSITS_MIN_USD_CREDIT, relayUsdtReceiveRows, type NgLocalIdType } from '@easner/shared'
 import {
   View,
   Text,
@@ -563,25 +563,17 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
       })
     }
     if (currency === 'USD') {
-      const relay = relayDepositQuery.data
-      if (relay?.enabled) {
-        for (const row of relay.addresses ?? []) {
-          methods.push({
-            id: `relay-${row.asset}-${row.network}`.toLowerCase(),
-            asset: row.asset,
-            network: row.network,
-            status: 'active',
-            address: row.address,
-          })
-        }
-        if (relay.status === 'provisioning' && !methods.some((m) => m.asset === 'USDT')) {
-          methods.push({
-            id: 'usdt-tron-provisioning',
-            asset: 'USDT',
-            network: 'Tron',
-            status: 'provisioning',
-          })
-        }
+      for (const row of relayUsdtReceiveRows(relayDepositQuery.data)) {
+        methods.push({
+          id:
+            row.status === 'active'
+              ? `relay-${row.asset}-${row.network}`.toLowerCase()
+              : 'usdt-tron-provisioning',
+          asset: row.asset,
+          network: row.network,
+          status: row.status,
+          address: row.address,
+        })
       }
     }
     return methods

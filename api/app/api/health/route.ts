@@ -18,6 +18,7 @@ import {
 } from "@/lib/turnkey/config"
 import { getTurnkeyApiClient, getTurnkeyDaApiClient } from "@/lib/turnkey/client"
 import { isNewPaymentIntentsPaused } from "@/lib/ops/safe-mode"
+import { isRelayConfigured, resolveRelayTronPlatformAddress } from "@/lib/relay/config"
 
 /**
  * Liveness + dependency checks (Phase A smoke).
@@ -96,6 +97,11 @@ export async function GET() {
   }
 
   checks.safe_mode_new_intents = isNewPaymentIntentsPaused() ? "paused" : "off"
+  checks.relay = isRelayConfigured() ? "configured" : "missing RELAY_API_KEY"
+  checks.relay_tron_inbound =
+    isRelayConfigured() && resolveRelayTronPlatformAddress()
+      ? "ok"
+      : "missing RELAY_API_KEY or RELAY_TRON_PLATFORM_ADDRESS"
 
   const ok = checks.supabase === "ok"
   return NextResponse.json({ ok, checks }, { status: ok ? 200 : 503 })
