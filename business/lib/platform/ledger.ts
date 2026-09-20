@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { dispatchMerchantWebhook, type MerchantWebhookEvent } from "@/lib/checkout/merchant-webhooks"
 import { newPublicId } from "@/lib/platform/ids"
-import { ensurePlatformWalletOwner } from "@/lib/platform/wallet-owner"
+import { ensurePlatformCustomerWalletOwner, ensurePlatformWalletOwner } from "@/lib/platform/wallet-owner"
 
 export type PlatformAccountRow = {
   id: string
@@ -10,6 +10,7 @@ export type PlatformAccountRow = {
   currency: string
   available_cents: number
   pending_cents: number
+  customer_id?: string | null
 }
 
 export function publicAccount(row: {
@@ -18,12 +19,14 @@ export function publicAccount(row: {
   available_cents: number | null
   pending_cents: number | null
   livemode: boolean
+  customer_id?: string | null
 }) {
   return {
     id: row.id,
     currency: String(row.currency).toUpperCase(),
     available: Number(row.available_cents ?? 0),
     pending: Number(row.pending_cents ?? 0),
+    customer: row.customer_id ?? null,
     livemode: Boolean(row.livemode),
   }
 }
@@ -32,13 +35,17 @@ export async function listPlatformAccounts(
   admin: SupabaseClient,
   businessId: string,
   livemode: boolean,
+  input?: { customerId?: string | null; issuedOnly?: boolean },
 ) {
-  const { data, error } = await admin
+  let query = admin
     .from("platform_accounts")
-    .select("id, currency, available_cents, pending_cents, livemode")
+    .select("id, currency, available_cents, pending_cents, livemode, customer_id")
     .eq("business_id", businessId)
     .eq("livemode", livemode)
     .order("currency", { ascending: true })
+  if (input?.customerId) query = query.eq("customer_id", input.customerId)
+  else if (input?.issuedOnly) query = query.not("customer_id", "is", null)
+  const { data, error } = await query
   if (error) throw new Error(error.message)
   return (data ?? []).map(publicAccount)
 }
@@ -49,24 +56,32 @@ export async function getOrCreatePlatformAccount(
     businessId: string
     livemode: boolean
     currency: string
+    customerId?: string | null
     email?: string | null
     name?: string | null
   },
 ): Promise<PlatformAccountRow> {
   const currency = input.currency.trim().toUpperCase()
-  const { data: existing } = await admin
+  const customerId = input.customerId?.trim() || null
+  let existingQuery = admin
     .from("platform_accounts")
-    .select("id, business_id, livemode, currency, available_cents, pending_cents")
+    .select("id, business_id, livemode, currency, available_cents, pending_cents, customer_id")
     .eq("business_id", input.businessId)
     .eq("livemode", input.livemode)
     .eq("currency", currency)
-    .maybeSingle()
+  existingQuery = customerId ? existingQuery.eq("customer_id", customerId) : existingQuery.is("customer_id", null)
+  const { data: existing } = await existingQuery.maybeSingle()
   if (existing?.id) return existing as PlatformAccountRow
 
-  const owner = await ensurePlatformWalletOwner(admin, input.businessId, {
-    email: input.email,
-    name: input.name,
-  })
+  const owner = customerId
+    ? await ensurePlatformCustomerWalletOwner(admin, customerId, {
+        email: String(input.email ?? "").trim() || `${customerId}@customers.easner.invalid`,
+        name: input.name,
+      })
+    : await ensurePlatformWalletOwner(admin, input.businessId, {
+        email: input.email,
+        name: input.name,
+      })
   const row = {
     id: newPublicId("acct"),
     business_id: input.businessId,
@@ -74,17 +89,19 @@ export async function getOrCreatePlatformAccount(
     currency,
     available_cents: 0,
     pending_cents: 0,
+    customer_id: customerId,
     wallet_owner_id: owner.id,
   }
   const { data, error } = await admin.from("platform_accounts").insert(row).select("*").single()
   if (error) {
-    const { data: raced } = await admin
+    let racedQuery = admin
       .from("platform_accounts")
-      .select("id, business_id, livemode, currency, available_cents, pending_cents")
+      .select("id, business_id, livemode, currency, available_cents, pending_cents, customer_id")
       .eq("business_id", input.businessId)
       .eq("livemode", input.livemode)
       .eq("currency", currency)
-      .maybeSingle()
+    racedQuery = customerId ? racedQuery.eq("customer_id", customerId) : racedQuery.is("customer_id", null)
+    const { data: raced } = await racedQuery.maybeSingle()
     if (raced?.id) return raced as PlatformAccountRow
     throw new Error(error.message)
   }
@@ -106,7 +123,7 @@ export async function adjustPlatformAccount(
 ): Promise<PlatformAccountRow> {
   const { data: row } = await admin
     .from("platform_accounts")
-    .select("id, business_id, livemode, currency, available_cents, pending_cents")
+    .select("id, business_id, livemode, currency, available_cents, pending_cents, customer_id")
     .eq("id", input.accountId)
     .maybeSingle()
   if (!row?.id) throw new Error("Account not found")
@@ -118,7 +135,7 @@ export async function adjustPlatformAccount(
     .from("platform_accounts")
     .update({ available_cents: available, pending_cents: pending, updated_at: now })
     .eq("id", row.id)
-    .select("id, business_id, livemode, currency, available_cents, pending_cents")
+    .select("id, business_id, livemode, currency, available_cents, pending_cents, customer_id")
     .single()
   if (error || !data) throw new Error(error?.message || "Could not update account")
   await dispatchMerchantWebhook(admin, {

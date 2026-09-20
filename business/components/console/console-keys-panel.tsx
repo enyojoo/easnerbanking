@@ -83,8 +83,8 @@ export function ConsoleKeysPanel() {
               <div className="flex flex-col gap-3">
                 <CheckoutCodeBlock label="Publishable key (browser)" code={key.publishable_key} />
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  Secret key ending {key.secret_key_last4}. New keys include checkout, accounts, and
-                  transfers. Existing checkout-only keys stay checkout-only until you mint a new key.
+                  Secret ending {key.secret_key_last4}. Keep it on your server. The publishable key
+                  goes in the browser.
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Last used {key.last_used_at ? new Date(key.last_used_at).toLocaleString() : "never"}
@@ -105,7 +105,7 @@ export function ConsoleKeysPanel() {
             ) : (
               <p className="text-sm leading-relaxed text-muted-foreground">
                 {mode === "live"
-                  ? "Create live keys when you are ready to take real payments and move platform money."
+                  ? "Create live keys when you are ready to take real payments."
                   : "Start with test keys while you build."}
               </p>
             )}

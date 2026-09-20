@@ -1,0 +1,149 @@
+---
+title: Webhooks
+description: Event catalog, easner-signature, and retries.
+icon: webhook
+---
+
+Easner POSTs signed events to one URL per mode. Tick which events you want in Console → Webhooks. Unticked events are not sent.
+
+Headers on every delivery:
+
+| Header | Value |
+|---|---|
+| `content-type` | `application/json` |
+| `easner-event` | The event name, e.g. `transfer.completed` |
+| `easner-signature` | `t=<unix>,v1=<hex>` |
+
+Body:
+
+```json
+{
+  "type": "transfer.completed",
+  "created": 1758336000,
+  "data": {
+    "id": "tr_…",
+    "amount": 4900,
+    "currency": "USD",
+    "status": "completed",
+    "livemode": false
+  }
+}
+```
+
+Return `2xx` quickly. Do the work after you ACK, or keep the handler short. Anything else is a failure and will retry.
+
+## Verify `easner-signature`
+
+HMAC-SHA256 of the Unix timestamp, a period, and the raw body. Compare with `v1` using a constant-time compare. Reject if the timestamp is older than 5 minutes.
+
+```js
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+export function verifyWebhook(rawBody, signatureHeader, secret) {
+  const parts = Object.fromEntries(
+    String(signatureHeader || "")
+      .split(",")
+      .map((part) => part.trim().split("=", 2)),
+  );
+  const timestamp = Number(parts.t);
+  const expected = createHmac("sha256", secret)
+    .update(`${timestamp}.${rawBody}`)
+    .digest("hex");
+  const got = String(parts.v1 || "");
+  if (got.length !== expected.length) return false;
+  if (Math.abs(Date.now() / 1000 - timestamp) > 300) return false;
+  return timingSafeEqual(Buffer.from(expected), Buffer.from(got));
+}
+```
+
+Use the **raw** body. Re-serializing JSON will fail the signature.
+
+## Catalog
+
+Tick these in Console. Default ticks are the checkout collect events.
+
+### Collect
+
+**`checkout.completed`** — Payment succeeded. Fulfil the order.
+
+```json
+{
+  "type": "checkout.completed",
+  "created": 1758336000,
+  "data": {
+    "checkout_session_id": "cs_…",
+    "mode": "payment",
+    "amount_cents": 4900,
+    "currency": "USD",
+    "customer_email": "ada@example.com",
+    "subscription_id": null,
+    "metadata": { "order_id": "ord_123" },
+    "paid_at": "2026-09-20T00:00:00.000Z",
+    "livemode": false
+  }
+}
+```
+
+**`checkout.async_succeeded`** — A delayed method (bank debit) cleared.
+
+**`checkout.failed`** — Abandoned or failed. Do not fulfil.
+
+**`payment.available`** — Funds are usable on a platform account.
+
+```json
+{
+  "type": "payment.available",
+  "created": 1758336000,
+  "data": { "amount_cents": 4750, "currency": "USD", "available_at": "2026-09-20T00:00:00.000Z" }
+}
+```
+
+**`subscription.updated`** / **`subscription.canceled`**
+
+```json
+{
+  "type": "subscription.updated",
+  "created": 1758336000,
+  "data": { "subscription_id": "sub_…", "status": "active", "metadata": { "user_id": "123", "plan": "pro" } }
+}
+```
+
+### Platform book
+
+**`account.updated`** — Available or pending changed. `data` is the [Account](/accounts).
+
+**`customer.created`** / **`customer.updated`** — `data` is the [Customer](/customers).
+
+**`transfer.created`** / **`transfer.completed`** / **`transfer.failed`** — `data` is the [Transfer](/transfers). Failed includes `error`.
+
+**`transaction.created`** — `data` is the [Transaction](/transactions).
+
+## Retries
+
+Failed deliveries retry at 1 minute, 5 minutes, 30 minutes, 2 hours, then 24 hours. After five attempts the delivery is `failed`. Redeliver from Console → Webhooks.
+
+Deliveries are listed in Console. Use Send test to confirm the URL is reachable; that is not a real payment.
+
+## Expected handler
+
+<Steps>
+  <Step title="Read the raw body">
+    Do not re-serialize JSON before verifying.
+  </Step>
+  <Step title="Verify `easner-signature`">
+    HMAC-SHA256 of timestamp plus raw body. Reject timestamps older than 5 minutes.
+  </Step>
+  <Step title="Switch on `type`">
+    Branch on the event name, not the message text.
+  </Step>
+  <Step title="Fulfil idempotently">
+    Use `checkout_session_id`, `id` on the transfer, or your `metadata`.
+  </Step>
+  <Step title="Return `200`">
+    ACK quickly. Do heavier work after.
+  </Step>
+</Steps>
+
+<Card title="Test and live" icon="flask-conical" href="/test-and-live">
+  What test completes, and what live actually moves.
+</Card>

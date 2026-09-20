@@ -1,6 +1,6 @@
 # Next: Office Enable Dev Platform (same business origin)
 
-**No new directory. No second Vercel project.** Banking and Dev Platform are one Next app (`business/`) on the existing business project (`business.easner.com` / `easnerbank.vercel.app`). Operators stay on one login and one origin. Product and `v1` live in [`dev-platform.md`](./dev-platform.md).
+**No new directory. No second Vercel project.** Banking and Dev Platform are one Next app (`business/`) on the existing business project (`business.easner.com` / `easnerbank.vercel.app`). Operators stay on one login and one origin. Product and `v1` live in [`dev-platform.md`](./dev-platform.md) (page index under [`dev-platform/`](./dev-platform/)).
 
 **Banking is the product. Dev is a tool mode.** Default is always Banking. Do not store Banking / Dev on the user or business in Supabase — it is not an account preference. Office **Enable Dev Platform** only gates who may enter Dev. On this browser, Switch writes a host-only cookie (`easner_app_surface`). Same browser keeps that mode until they switch back. A new browser, device, or incognito session starts in Banking.
 

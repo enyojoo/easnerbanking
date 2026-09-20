@@ -17,12 +17,14 @@ export async function POST(request: Request) {
   } | null
   const amount = parseMinorAmount(body?.amount)
   if (!amount) return v1Error(400, "invalid_amount", "amount must be a positive integer in cents")
+  const source = String(body?.source ?? "").trim()
+  if (!source) return v1Error(400, "invalid_source", "source is required")
   const currency = String(body?.currency ?? "usd").trim().toUpperCase()
   try {
     const quote = await createPlatformQuote(admin, {
       businessId: auth.ctx.businessId,
       livemode,
-      sourceAccountId: body?.source ?? null,
+      sourceAccountId: source,
       destinationId: body?.destination ?? null,
       amountCents: amount,
       sendCurrency: currency,

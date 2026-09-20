@@ -3,8 +3,8 @@
 import { useQuery } from "@tanstack/react-query"
 import { useSearchParams } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
-import { PageIntro } from "@/components/copy/page-intro"
-import { ConsoleModeSwitch } from "@/components/console/console-mode-switch"
+import { ConsolePageHeader } from "@/components/console/console-page-header"
+import { PAGE_COPY } from "@/lib/copy/business-ui-copy"
 import { parseConsoleLivemode } from "@/lib/console/livemode"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 import { formatCurrency } from "@/lib/utils"
@@ -34,18 +34,14 @@ export function PlatformTransactionsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <PageIntro
-          title="Transactions"
-          description="Platform ledger only. Banking Send and invoices are not listed here."
-          variant="page"
-        />
-        <ConsoleModeSwitch />
-      </div>
+      <ConsolePageHeader
+        title={PAGE_COPY.consoleTransactions.title}
+        description={PAGE_COPY.consoleTransactions.intro}
+      />
       <Card>
         <CardContent className="p-0">
           {(query.data ?? []).length === 0 ? (
-            <p className="p-6 text-sm text-muted-foreground">No platform transactions yet.</p>
+            <p className="p-6 text-sm text-muted-foreground">{PAGE_COPY.consoleTransactions.empty}</p>
           ) : (
             <ul className="divide-y">
               {(query.data ?? []).map((row) => (

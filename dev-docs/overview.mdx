@@ -1,0 +1,33 @@
+---
+title: Overview
+description: What Dev is, objects, and the platform book.
+icon: layers
+---
+
+Easner is stablecoin-native banking and payment infrastructure. **Dev** is Console (`/console` on `business.easner.com`) plus **platform `v1`** on `https://api.easner.com`.
+
+Everything you create with `easner_sk_*` lives on the **platform** book. Console, Dev `/transactions`, and `GET /v1/transactions` read that book.
+
+Checkout created with a merchant secret key credits the platform book. Transfers debit it.
+
+## Wallets
+
+Each platform treasury and each API customer has an isolated wallet. Integrators never receive wallet keys. You call `v1`. Easner signs.
+
+Creating a customer creates their wallet. Opening an account attaches a currency balance on that book.
+
+## Objects
+
+| Object | Id | Job |
+|---|---|---|
+| Customer | `cus_` | Your end user on the platform |
+| Account | `acct_` | A currency balance on the platform book |
+| Destination | `dest_` | Where a transfer can land |
+| Quote | `qt_` | Locked send / receive amounts |
+| Transfer | `tr_` | Money leaving a platform account |
+| Transaction | `txn_` | A row on the platform ledger |
+| Checkout session | `cs_` | A collect on your website |
+
+<Card title="Quickstart" icon="rocket" href="/quickstart">
+  Create a test customer and move money on the platform book.
+</Card>

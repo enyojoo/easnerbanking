@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { listPlatformAccounts } from "@/lib/platform/ledger"
 import { publicCustomer } from "@/lib/platform/objects"
 import { logPlatformApi, requireMerchant, v1Error } from "@/lib/platform/v1"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
@@ -34,5 +35,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     path: `/v1/customers/${id}`,
     status: 200,
   })
-  return NextResponse.json(publicCustomer(data))
+  const accounts = await listPlatformAccounts(admin, auth.ctx.businessId, livemode, {
+    customerId: id,
+  })
+  return NextResponse.json({ ...publicCustomer(data), accounts })
 }

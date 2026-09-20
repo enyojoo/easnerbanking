@@ -11,7 +11,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const livemode = auth.ctx.mode === "live"
   const { data } = await admin
     .from("platform_accounts")
-    .select("id, currency, available_cents, pending_cents, livemode")
+    .select("id, currency, available_cents, pending_cents, livemode, customer_id")
     .eq("id", id)
     .eq("business_id", auth.ctx.businessId)
     .eq("livemode", livemode)

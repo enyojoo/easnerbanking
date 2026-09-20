@@ -18,6 +18,9 @@ describe("surface paths", () => {
   it("still treats operator dashboard paths as workspace on the business host", () => {
     expect(isWorkspaceSurfacePath("/links", "business.easner.com")).toBe(true)
     expect(isWorkspaceSurfacePath("/customers", "business.easner.com")).toBe(true)
+    expect(isWorkspaceSurfacePath("/console", "business.easner.com")).toBe(true)
+    expect(isWorkspaceSurfacePath("/console/missing", "business.easner.com")).toBe(true)
+    expect(isPublicSurfacePath("/developers", "business.easner.com")).toBe(false)
     expect(isPublicSurfacePath("/invoices/abc", "business.easner.com")).toBe(false)
     expect(isPublicSurfacePath("/invoice/acme/einv-1042", "business.easner.com")).toBe(true)
     expect(isPublicSurfacePath("/pay-customer/acme/tuition-fall", "business.easner.com")).toBe(true)

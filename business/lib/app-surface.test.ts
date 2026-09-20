@@ -84,6 +84,7 @@ describe("product paths", () => {
     expect(isPlatformOnlyPath("/checkout/site_1")).toBe(true)
     expect(isPlatformOnlyPath("/developers")).toBe(false)
     expect(isPlatformOnlyPath("/customers")).toBe(true)
+    expect(isPlatformOnlyPath("/customers/cus_1")).toBe(true)
     expect(isPlatformOnlyPath("/dashboard")).toBe(false)
     expect(isPlatformOnlyPath("/accounts")).toBe(false)
   })

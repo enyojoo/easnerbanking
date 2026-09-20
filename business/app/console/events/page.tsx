@@ -1,17 +1,17 @@
 "use client"
 
-import { PageIntro } from "@/components/copy/page-intro"
+import { ConsolePageHeader } from "@/components/console/console-page-header"
 import { ConsoleWebhooksPanel } from "@/components/console/console-webhooks-panel"
+import { PAGE_COPY } from "@/lib/copy/business-ui-copy"
 
 export default function ConsoleEventsPage() {
   return (
     <div className="space-y-6">
-      <PageIntro
-        title="Events"
-        description="The webhook catalog. Tick events on the same endpoint as Webhooks."
-        variant="page"
+      <ConsolePageHeader
+        title={PAGE_COPY.consoleEvents.title}
+        description={PAGE_COPY.consoleEvents.intro}
       />
-      <ConsoleWebhooksPanel />
+      <ConsoleWebhooksPanel variant="catalog" />
     </div>
   )
 }

@@ -1,0 +1,82 @@
+---
+title: Accounts
+description: Platform balances. Checkout credits these accounts. Transfers debit them.
+icon: wallet
+---
+
+An account is a currency balance on the **platform** book.
+
+Checkout that used a merchant secret key credits an account here. Transfers debit an account here.
+
+<Note>
+  **Scope:** `GET` needs `accounts.read`. `POST` needs `accounts.write`.
+</Note>
+
+## Object
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | string | `acct_…` |
+| `currency` | string | Uppercase, e.g. `USD`, `EUR` |
+| `available` | integer | Cents you can send |
+| `pending` | integer | Cents not yet available |
+| `livemode` | boolean | |
+
+```json
+{
+  "id": "acct_…",
+  "currency": "USD",
+  "available": 4900,
+  "pending": 0,
+  "livemode": false
+}
+```
+
+## List
+
+```bash
+curl https://api.easner.com/v1/accounts \
+  -H "Authorization: Bearer $EASNER_SECRET_KEY"
+```
+
+```json
+{ "data": [{ "id": "acct_…", "currency": "USD", "available": 4900, "pending": 0, "livemode": false }] }
+```
+
+Empty `data` is expected on a new test book.
+
+## Open
+
+`POST /v1/accounts` with `{ "currency": "USD" }`.
+
+```bash
+curl https://api.easner.com/v1/accounts \
+  -H "Authorization: Bearer $EASNER_SECRET_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"currency":"USD"}'
+```
+
+`201` and the account. Opening the same currency again returns the existing account.
+
+`400` `invalid_currency` if `currency` is missing. Deposit restrictions return `403`.
+
+## Retrieve
+
+`GET /v1/accounts/:id` → Account. `404` if the id is not on this book.
+
+## Events
+
+| Event | When |
+|---|---|
+| `account.updated` | Available or pending changed |
+| `payment.available` | Collected funds became usable |
+
+## Expected
+
+- Open USD and EUR if you collect or send in both.
+- Read `available` before you quote a send.
+- Console Accounts shows these balances only.
+
+<Card title="Destinations" icon="map-pin" href="/destinations">
+  Where money can leave — bank, mobile money, wallet, or Easetag.
+</Card>

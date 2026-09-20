@@ -5,6 +5,7 @@ import {
   adjustPlatformAccount,
   getOrCreatePlatformAccount,
   insertPlatformTransaction,
+  publicAccount,
 } from "@/lib/platform/ledger"
 import { ensurePlatformCustomerWalletOwner } from "@/lib/platform/wallet-owner"
 import { buildWalletSendQuote } from "@/lib/wallet-send/wallet-send-quote"
@@ -133,13 +134,21 @@ export async function createPlatformCustomer(
     .select("*")
     .single()
   if (error || !data) throw new Error(error?.message || "Could not create customer")
+  const account = await getOrCreatePlatformAccount(admin, {
+    businessId: input.businessId,
+    livemode: input.livemode,
+    currency: "USD",
+    customerId: id,
+    email,
+    name: input.name,
+  })
   const mapped = publicCustomer(data as Parameters<typeof publicCustomer>[0])
   await dispatchMerchantWebhook(admin, {
     businessId: input.businessId,
     event: "customer.created",
     data: mapped,
   })
-  return mapped
+  return { ...mapped, accounts: [publicAccount(account)] }
 }
 
 export async function createPlatformDestination(
@@ -331,15 +340,17 @@ export async function executePlatformTransfer(
   }
   if (amountCents <= 0) throw new Error("amount must be a positive integer in cents")
 
-  const source =
-    sourceAccountId ??
-    (
-      await getOrCreatePlatformAccount(admin, {
-        businessId: input.businessId,
-        livemode: input.livemode,
-        currency,
-      })
-    ).id
+  if (!sourceAccountId) throw new Error("source is required")
+  const { data: sourceAccount } = await admin
+    .from("platform_accounts")
+    .select("id, customer_id")
+    .eq("id", sourceAccountId)
+    .eq("business_id", input.businessId)
+    .eq("livemode", input.livemode)
+    .maybeSingle()
+  if (!sourceAccount?.id) throw new Error("Account not found")
+  const source = sourceAccount.id
+  const customerId = (sourceAccount.customer_id as string | null) ?? null
 
   const now = new Date().toISOString()
   const { data, error } = await admin
@@ -380,6 +391,7 @@ export async function executePlatformTransfer(
       direction: "out",
       status: "completed",
       accountId: source,
+      customerId,
       transferId: created.id,
       description: "Transfer",
     })

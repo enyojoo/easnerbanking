@@ -1,138 +1,39 @@
 # Dev is Console + platform v1
 
-Banking is the operator product on `business.easner.com`. Dev is the same origin in Dev mode: **Console** (`/console`) plus **platform `v1`** on `https://api.easner.com`. There is no second host.
+Integrator guide for banks and fintechs building on Easner. This is the product contract. Host, Office, and deploy notes stay in [`platform-api-split.md`](./platform-api-split.md).
 
-Two books. API money is the platform book. It does not show in Banking Transactions. Banking Send does not show in Dev Transactions.
+Base URL: `https://api.easner.com`
 
-Wallets are the same non-custodial shape as Business and Mobile: an isolated wallet per platform treasury and per API customer. Integrators never receive wallet keys. They call `v1`.
+Auth: `Authorization: Bearer easner_sk_test_…` or `easner_sk_live_…`
 
-Out of scope: cards, payroll, Banking Send, and invoice APIs.
+Amounts are minor units (cents). Errors are `{ error: { type, code, message } }`. Writes that move money take `Idempotency-Key`.
 
-Amounts are minor units (cents). Errors are `{ error: { type, code, message } }`. Writes take `Idempotency-Key`.
+## Pages
 
-## Console
+| Page | What you do |
+|---|---|
+| [Overview](./dev-platform/overview.md) | What Dev is, two books, what is out of scope |
+| [Quickstart](./dev-platform/quickstart.md) | First transfer in test: customer → destination → quote → transfer |
+| [Console](./dev-platform/console.md) | Keys, webhooks, logs, events, and the Dev dashboard |
+| [Authentication](./dev-platform/authentication.md) | Bearer keys, livemode, scopes, idempotency |
+| [Errors](./dev-platform/errors.md) | Envelope, status codes, common codes |
+| [Customers](./dev-platform/customers.md) | Create and list API customers (each gets a wallet and a USD account) |
+| [Accounts](./dev-platform/accounts.md) | Virtual accounts issued to customers |
+| [Destinations](./dev-platform/destinations.md) | Where money can leave: bank, mobile money, wallet, Easetag |
+| [Quotes](./dev-platform/quotes.md) | Lock send and receive amounts |
+| [Transfers](./dev-platform/transfers.md) | Execute a quote or send from an issued account |
+| [Transactions](./dev-platform/transactions.md) | Platform ledger only |
+| [Checkout](./dev-platform/checkout.md) | Collect on your website; settlement credits the platform book |
+| [Webhooks](./dev-platform/webhooks.md) | Catalog, `easner-signature`, retries |
+| [Test and live](./dev-platform/test-and-live.md) | What test completes, what live moves |
 
-Console is Dev Home.
+## Expected flow
 
-- `/console` — live/test, total volume, last webhook, last API errors
-- `/console/keys` — one test key and one live key
-- `/console/webhooks` — one endpoint, event ticks, deliveries, redeliver
-- `/console/logs` — recent `v1` requests
-- `/console/events` — event catalog
+1. Office enables Dev Platform on the business. Switch to Dev on `business.easner.com`.
+2. Open Console. Mint a test key. Add a webhook URL and tick events.
+3. Create a customer (USD account is issued). Open EUR if you need it. Add a destination.
+4. Quote, then transfer. Fulfil from `transfer.completed` and `transaction.created`.
+5. For collect, add a website on Checkout, create sessions from your server, mount `checkout.js`, fulfil from `checkout.completed`.
+6. Mint a live key only after test works. Live debits and credits the platform book.
 
-Nav: Console, Customers, Accounts, Transactions, Checkout. Settings stays in both modes.
-
-New keys include checkout, accounts, and transfers scopes. Existing checkout-only keys stay checkout-only until you mint a new key.
-
-One webhook URL per mode. Tick events. Verify `easner-signature`. Failed deliveries retry.
-
-## Authentication and errors
-
-```bash
-curl https://api.easner.com/v1/accounts \
-  -H "Authorization: Bearer easner_sk_test_…"
-```
-
-Livemode comes from the key prefix (`easner_sk_test_` or `easner_sk_live_`). A key without the required scope returns `403` `{ error: { type: "permission", code: "key_forbidden", message: "…" } }`.
-
-## Objects
-
-Ids: `cus_`, `acct_`, `dest_`, `qt_`, `tr_`, `txn_`, `cs_`.
-
-### Customers
-
-Creating a customer creates their wallet (same shape as an Easner user).
-
-```bash
-curl https://api.easner.com/v1/customers \
-  -H "Authorization: Bearer easner_sk_test_…" \
-  -H "Content-Type: application/json" \
-  -H "Idempotency-Key: $(uuidgen)" \
-  -d '{"email":"ada@example.com","name":"Ada"}'
-```
-
-```json
-{
-  "id": "cus_…",
-  "email": "ada@example.com",
-  "name": "Ada",
-  "external_id": null,
-  "status": "active",
-  "livemode": false,
-  "created": "2026-09-20T00:00:00.000Z"
-}
-```
-
-`GET /v1/customers`, `GET /v1/customers/:id`.
-
-### Accounts
-
-```json
-{ "id": "acct_…", "currency": "USD", "available": 4900, "pending": 0, "livemode": false }
-```
-
-`GET /v1/accounts`, `POST /v1/accounts` with `{ "currency": "USD" }`, `GET /v1/accounts/:id`.
-
-### Destinations
-
-Types: `bank`, `mobile_money`, `wallet`, `easetag`.
-
-```bash
-curl https://api.easner.com/v1/destinations \
-  -H "Authorization: Bearer easner_sk_test_…" \
-  -H "Content-Type: application/json" \
-  -d '{"type":"easetag","details":{"easetag":"ada"}}'
-```
-
-### Quotes then Transfers
-
-```bash
-curl https://api.easner.com/v1/quotes \
-  -H "Authorization: Bearer easner_sk_test_…" \
-  -H "Content-Type: application/json" \
-  -d '{"amount":4900,"currency":"usd","destination":"dest_…"}'
-
-curl https://api.easner.com/v1/transfers \
-  -H "Authorization: Bearer easner_sk_test_…" \
-  -H "Content-Type: application/json" \
-  -H "Idempotency-Key: $(uuidgen)" \
-  -d '{"quote":"qt_…"}'
-```
-
-Public bodies have no `recipientId` or `formSessionId`.
-
-### Transactions
-
-`GET /v1/transactions`, `GET /v1/transactions/:id` — platform book only.
-
-### Checkout
-
-Existing `POST /v1/checkout/sessions` and `js.easner.com/v1/checkout.js`. When the session is created with a merchant secret key, settlement credits the platform book.
-
-## Webhooks
-
-Header: `easner-signature: t=<unix>,v1=<hmac_sha256 of t.body>`. Also `easner-event`.
-
-Events: `checkout.completed`, `checkout.failed`, `checkout.async_succeeded`, `payment.available`, `account.updated`, `customer.created`, `customer.updated`, `transfer.created`, `transfer.completed`, `transfer.failed`, `transaction.created`.
-
-```json
-{
-  "type": "transfer.completed",
-  "created": 1758336000,
-  "data": {
-    "id": "tr_…",
-    "amount": 4900,
-    "currency": "USD",
-    "status": "completed",
-    "livemode": false
-  }
-}
-```
-
-## Test vs live
-
-Test keys complete without moving live rails money. Live keys debit and credit the platform book.
-
-## Not in this file
-
-Host split, Office Enable Dev Platform, Front Door, and env tables live in `platform-api-split.md`.
+Do not call Banking Send, invoices, cards, or payroll from this API. Those stay in the Banking product.

@@ -1,0 +1,88 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Easner",
+  "description": "Platform v1 for banks and fintechs building on Easner.",
+  "colors": {
+    "primary": "#007ACC",
+    "light": "#3AA6F8",
+    "dark": "#0062A3"
+  },
+  "favicon": "/favicon.svg",
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.png",
+    "href": "https://www.easner.com"
+  },
+  "appearance": {
+    "default": "system"
+  },
+  "background": {
+    "color": {
+      "light": "#F8F6F0",
+      "dark": "#0F1110"
+    }
+  },
+  "icons": {
+    "library": "lucide"
+  },
+  "navigation": {
+    "groups": [
+      {
+        "group": "Get started",
+        "pages": ["index", "overview", "quickstart", "console"]
+      },
+      {
+        "group": "API",
+        "pages": [
+          "authentication",
+          "errors",
+          "customers",
+          "accounts",
+          "destinations",
+          "quotes",
+          "transfers",
+          "transactions"
+        ]
+      },
+      {
+        "group": "Collect",
+        "pages": ["checkout", "webhooks"]
+      },
+      {
+        "group": "Go live",
+        "pages": ["test-and-live"]
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Website",
+        "href": "https://www.easner.com"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Console",
+      "href": "https://business.easner.com"
+    }
+  },
+  "footer": {
+    "socials": {
+      "x": "https://twitter.com/easnerapp",
+      "linkedin": "https://linkedin.com/company/easner"
+    }
+  },
+  "api": {
+    "mdx": {
+      "server": "https://api.easner.com",
+      "auth": {
+        "method": "bearer"
+      }
+    }
+  },
+  "contextual": {
+    "options": ["copy", "view", "chatgpt", "claude", "cursor"]
+  }
+}

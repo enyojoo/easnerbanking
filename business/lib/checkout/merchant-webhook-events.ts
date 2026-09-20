@@ -26,16 +26,16 @@ export const MERCHANT_WEBHOOK_EVENT_DESCRIPTIONS: Record<MerchantWebhookEvent, s
   "checkout.completed": "Payment succeeded – safe to fulfil the order.",
   "checkout.async_succeeded": "A delayed method (such as bank debit) finally cleared.",
   "checkout.failed": "The payment attempt failed or was abandoned.",
-  "payment.available": "Funds landed in the Easner Balance and are available to use.",
+  "payment.available": "Funds landed and are ready to use.",
   "subscription.updated": "A recurring payment renewed or its plan changed.",
   "subscription.canceled": "A recurring payment was cancelled.",
-  "account.updated": "A platform account balance or status changed.",
-  "customer.created": "A customer was created through the API.",
-  "customer.updated": "A customer record changed.",
+  "account.updated": "A balance or account status changed.",
+  "customer.created": "A customer was created.",
+  "customer.updated": "A customer changed.",
   "transfer.created": "A transfer was created.",
   "transfer.completed": "A transfer finished.",
   "transfer.failed": "A transfer failed.",
-  "transaction.created": "A platform ledger entry was written.",
+  "transaction.created": "A new transaction was recorded.",
 }
 
 export function normalizeSubscribedWebhookEvents(raw: unknown): MerchantWebhookEvent[] {

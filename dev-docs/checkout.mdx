@@ -1,0 +1,139 @@
+---
+title: Checkout
+description: Collect on your website. Settlement credits the platform book.
+icon: credit-card
+---
+
+Checkout collects on your website. The amount and secret key stay on your server. The browser only sees a publishable key and a `client_secret`.
+
+When the session is created with a merchant secret key, settlement credits the **platform** book.
+
+<Note>
+  **Scope:** `checkout`
+
+  Before you call the API: add the website origin and a success URL on Checkout in Dev. Keys and webhooks live in Console.
+</Note>
+
+## Create a session
+
+```bash
+curl https://api.easner.com/v1/checkout/sessions \
+  -H "Authorization: Bearer $EASNER_SECRET_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d '{
+    "mode": "payment",
+    "amount": 4900,
+    "currency": "usd",
+    "success_url": "https://yoursite.com/thanks",
+    "metadata": { "order_id": "ord_123" }
+  }'
+```
+
+```json
+{
+  "client_secret": "…",
+  "checkout_session_id": "cs_…",
+  "stripe_account_id": "…",
+  "amount": 4900,
+  "currency": "USD",
+  "mode": "payment",
+  "customer_email": null,
+  "customer_name": null,
+  "metadata": { "order_id": "ord_123" }
+}
+```
+
+`201`. Return only `client_secret` (and the account id the script needs) to the page.
+
+| Field | Notes |
+|---|---|
+| `mode` | `payment` (default) or `subscription` |
+| `amount` | Cents. Required. Never taken from the browser |
+| `currency` | Defaults to `USD` |
+| `interval` | `month` or `year` when `mode` is `subscription` |
+| `success_url` / `cancel_url` | Must be on an allowed website |
+| `customer_email` / `customer_name` | Optional |
+| `line_items` | Optional `name`, `amount`, `description` |
+| `metadata` | Your keys. Reserved `easner_*` keys are stripped from webhooks |
+
+`400` `origin_not_allowed` if the URL is not registered. `400` `invalid_amount` if amount is missing.
+
+## Retrieve a session
+
+`GET /v1/checkout/sessions?id=cs_…`
+
+```json
+{
+  "checkout_session_id": "cs_…",
+  "status": "complete",
+  "amount": 4900,
+  "currency": "USD",
+  "mode": "payment",
+  "customer_email": "ada@example.com",
+  "customer_name": "Ada",
+  "subscription_id": null,
+  "metadata": { "order_id": "ord_123" },
+  "completed_at": "2026-09-20T00:00:00.000Z"
+}
+```
+
+<Warning>
+  Do not fulfil from this GET alone. Fulfil from `checkout.completed`.
+</Warning>
+
+## Browser
+
+```html
+<script src="https://js.easner.com/v1/checkout.js"></script>
+<div id="easner-checkout"></div>
+<script>
+  fetch("/create-checkout-session", { method: "POST" })
+    .then(function (r) { return r.json(); })
+    .then(function (session) {
+      EasnerCheckout.mount("#easner-checkout", {
+        publishableKey: "easner_pk_test_…",
+        clientSecret: session.client_secret,
+        stripeAccountId: session.stripe_account_id,
+        onSuccess: function () { window.location = "/thanks"; }
+      });
+    });
+</script>
+```
+
+Test card: `4242 4242 4242 4242`. Nothing is charged in test.
+
+## Subscription
+
+```json
+{
+  "mode": "subscription",
+  "amount": 4900,
+  "currency": "usd",
+  "interval": "month",
+  "success_url": "https://yoursite.com/thanks",
+  "metadata": { "user_id": "123", "plan": "pro" }
+}
+```
+
+Unlock on `checkout.completed`. Also listen for `subscription.updated` and `subscription.canceled`.
+
+## Events
+
+| Event | Expected |
+|---|---|
+| `checkout.completed` | Payment succeeded. Fulfil. Credits the platform book |
+| `checkout.async_succeeded` | A delayed method cleared |
+| `checkout.failed` | Abandoned or failed |
+| `payment.available` | Funds usable on the platform account |
+| `subscription.updated` / `subscription.canceled` | Recurring |
+
+## Expected
+
+- Amount and secret key never in the browser.
+- Fulfil in the webhook using `metadata` you sent.
+- Platform Transactions shows the collect.
+
+<Card title="Webhooks" icon="webhook" href="/webhooks">
+  Event catalog, easner-signature, and retries.
+</Card>

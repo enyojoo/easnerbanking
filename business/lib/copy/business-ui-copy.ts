@@ -57,7 +57,48 @@ export const PAGE_COPY = {
   },
   console: {
     title: "Console",
-    intro: "Platform volume and recent activity.",
+    intro: "Volume and recent activity.",
+  },
+  consoleCustomers: {
+    title: "Customers",
+    intro: "People you collect from and pay.",
+    empty: "No customers yet.",
+  },
+  consoleCustomer: {
+    title: "Customer",
+    intro: "Profile and issued accounts.",
+    accounts: "Accounts",
+    accountsEmpty: "No accounts issued yet.",
+    activity: "Activity",
+    activityEmpty: "No activity yet.",
+    notFound: "Customer not found.",
+  },
+  consoleAccounts: {
+    title: "Accounts",
+    intro: "Virtual accounts issued to customers.",
+    empty: "No accounts issued yet.",
+  },
+  consoleTransactions: {
+    title: "Transactions",
+    intro: "Review money in and out of your accounts.",
+    empty: "No transactions yet.",
+  },
+  consoleKeys: {
+    title: "Keys",
+    intro: "Test and live keys.",
+  },
+  consoleWebhooks: {
+    title: "Webhooks",
+    intro: "Get a ping when something happens.",
+  },
+  consoleEvents: {
+    title: "Events",
+    intro: "Choose what you get notified about.",
+  },
+  consoleLogs: {
+    title: "Logs",
+    intro: "Recent requests.",
+    empty: "No requests yet.",
   },
   links: {
     title: "Payment links",

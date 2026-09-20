@@ -1,0 +1,100 @@
+---
+title: Quickstart
+description: First transfer in test — customer, destination, quote, then transfer.
+icon: rocket
+---
+
+Move money on the platform book in test. Nothing hits live rails.
+
+You need:
+
+- Dev Platform enabled on the business
+- A test secret key from Console → Keys (`easner_sk_test_…`)
+- `EASNER_SECRET_KEY` set in your shell
+
+```bash
+export EASNER_SECRET_KEY=easner_sk_test_…
+```
+
+<Steps>
+  <Step title="Create a customer">
+    A customer is your end user. Creating one creates their wallet.
+
+    ```bash
+    curl https://api.easner.com/v1/customers \
+      -H "Authorization: Bearer $EASNER_SECRET_KEY" \
+      -H "Content-Type: application/json" \
+      -H "Idempotency-Key: $(uuidgen)" \
+      -d '{"email":"ada@example.com","name":"Ada","external_id":"user_42"}'
+    ```
+
+    Save `id` (`cus_…`).
+  </Step>
+  <Step title="Open a platform account">
+    This is your platform float.
+
+    ```bash
+    curl https://api.easner.com/v1/accounts \
+      -H "Authorization: Bearer $EASNER_SECRET_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{"currency":"USD"}'
+    ```
+
+    Save `id` (`acct_…`). `available` is in cents.
+  </Step>
+  <Step title="Add a destination">
+    Where the transfer should land. Easetag is the simplest test destination.
+
+    ```bash
+    curl https://api.easner.com/v1/destinations \
+      -H "Authorization: Bearer $EASNER_SECRET_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{"type":"easetag","customer":"cus_…","details":{"easetag":"ada"}}'
+    ```
+
+    Save `id` (`dest_…`).
+  </Step>
+  <Step title="Quote">
+    Lock send and receive. Amounts are cents. Quotes expire in 15 minutes.
+
+    ```bash
+    curl https://api.easner.com/v1/quotes \
+      -H "Authorization: Bearer $EASNER_SECRET_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{"amount":4900,"currency":"usd","source":"acct_…","destination":"dest_…"}'
+    ```
+
+    Save `id` (`qt_…`). In test, send and receive are 1:1 unless a live wallet destination is priced.
+  </Step>
+  <Step title="Transfer">
+    Execute the quote. Always send `Idempotency-Key` so a retry does not send twice.
+
+    ```bash
+    curl https://api.easner.com/v1/transfers \
+      -H "Authorization: Bearer $EASNER_SECRET_KEY" \
+      -H "Content-Type: application/json" \
+      -H "Idempotency-Key: $(uuidgen)" \
+      -d '{"quote":"qt_…"}'
+    ```
+
+    Expected: `status` moves to `completed` (test) or stays `created` then completes. The platform account is debited. A `txn_` row is written.
+
+    Listen for `transfer.completed` and `transaction.created` on your webhook.
+  </Step>
+  <Step title="Read the book">
+    ```bash
+    curl https://api.easner.com/v1/transactions \
+      -H "Authorization: Bearer $EASNER_SECRET_KEY"
+    ```
+
+    This list is the platform book.
+  </Step>
+</Steps>
+
+## Collect instead of send
+
+To take a payment on your website, go to [Checkout](/checkout). A merchant-key session credits this same platform book.
+
+<Card title="Console" icon="layout-dashboard" href="/console">
+  Mint keys and tick webhook events before you go further.
+</Card>

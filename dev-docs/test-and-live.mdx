@@ -1,0 +1,50 @@
+---
+title: Test and live
+description: What test completes, and what live actually moves.
+icon: flask-conical
+---
+
+Livemode is the key prefix. There is no `livemode` body flag.
+
+| | Test (`easner_sk_test_`) | Live (`easner_sk_live_`) |
+|---|---|---|
+| Objects | Isolated test book | Isolated live book |
+| Quote | Completes. Send/receive 1:1 | May price wallet destinations |
+| Transfer | Completes. Debits the **test** platform book. No live rails | Debits the **live** platform book |
+| Checkout | Test card `4242…`. Nothing charged | Real collect. Credits the live platform book |
+| Webhooks | Your test URL | Your live URL |
+
+Test never moves live partner money. Live never writes the test book.
+
+## What you must do before live
+
+<Steps>
+  <Step title="Mint a test key">
+    Console: add a test webhook. Tick the events you handle.
+  </Step>
+  <Step title="Run the quickstart">
+    [Quickstart](/quickstart) a customer → destination → quote → transfer. Confirm `transfer.completed` on the test URL.
+  </Step>
+  <Step title="Pay with the test card">
+    Checkout: register the website, create a test session, pay with `4242`, confirm `checkout.completed` and a platform `in` transaction.
+  </Step>
+  <Step title="Check Console Logs">
+    You should see the `v1` calls. Errors should be gone.
+  </Step>
+  <Step title="Mint a live key">
+    Set a live webhook URL. Tick the same events.
+  </Step>
+  <Step title="Open live accounts">
+    Open `USD` / `EUR` before you send.
+  </Step>
+</Steps>
+
+## What you should not do
+
+<Warning>
+  Do not reuse a test key in production. Do not fulfil from the browser `onSuccess` without the webhook.
+</Warning>
+
+## Restriction
+
+If the business is restricted for send or deposit, matching writes fail with `permission`.

@@ -2,8 +2,9 @@
 
 import { useQuery } from "@tanstack/react-query"
 import { useSearchParams } from "next/navigation"
-import { PageIntro } from "@/components/copy/page-intro"
-import { ConsoleModeSwitch } from "@/components/console/console-mode-switch"
+import { Button } from "@/components/ui/button"
+import { ConsolePageHeader } from "@/components/console/console-page-header"
+import { PAGE_COPY } from "@/lib/copy/business-ui-copy"
 import { parseConsoleLivemode } from "@/lib/console/livemode"
 import { fetchWithSession } from "@/lib/fetch-with-session"
 
@@ -30,13 +31,21 @@ export default function ConsoleLogsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <PageIntro title="Logs" description="Recent platform API requests for this business." variant="page" />
-        <ConsoleModeSwitch />
-      </div>
+      <ConsolePageHeader title={PAGE_COPY.consoleLogs.title} description={PAGE_COPY.consoleLogs.intro} />
       <div className="overflow-hidden rounded-xl border">
-        {(query.data ?? []).length === 0 ? (
-          <p className="p-6 text-sm text-muted-foreground">No API calls yet.</p>
+        {query.isError ? (
+          <div className="flex flex-col items-start gap-3 p-6">
+            <p className="text-sm text-muted-foreground">
+              {query.error instanceof Error ? query.error.message : "Could not load logs."}
+            </p>
+            <Button type="button" variant="outline" size="sm" onClick={() => void query.refetch()}>
+              Try again
+            </Button>
+          </div>
+        ) : (query.data ?? []).length === 0 ? (
+          <p className="p-6 text-sm text-muted-foreground">
+            {query.isPending ? "Loading…" : PAGE_COPY.consoleLogs.empty}
+          </p>
         ) : (
           <ul className="divide-y">
             {(query.data ?? []).map((row) => (

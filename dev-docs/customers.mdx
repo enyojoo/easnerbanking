@@ -1,0 +1,75 @@
+---
+title: Customers
+description: Create and list API customers. Each customer gets a wallet.
+icon: users
+---
+
+A customer is your end user on the platform. Creating a customer creates their wallet. They never log into Easner. You hold the id and call `v1`.
+
+<Note>
+  **Scope:** `GET` needs `accounts.read`. `POST` needs `transfers.write`.
+</Note>
+
+## Object
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | string | `cus_…` |
+| `email` | string \| null | Optional |
+| `name` | string \| null | Optional |
+| `external_id` | string \| null | Your id. Use this to map your user |
+| `status` | string | `active` |
+| `livemode` | boolean | From the key |
+| `created` | ISO-8601 | |
+
+## Create
+
+```bash
+curl https://api.easner.com/v1/customers \
+  -H "Authorization: Bearer $EASNER_SECRET_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"ada@example.com","name":"Ada","external_id":"user_42"}'
+```
+
+```json
+{
+  "id": "cus_…",
+  "email": "ada@example.com",
+  "name": "Ada",
+  "external_id": "user_42",
+  "status": "active",
+  "livemode": false,
+  "created": "2026-09-20T00:00:00.000Z"
+}
+```
+
+`201` on success. `400` `create_failed` if the wallet could not be created.
+
+## List
+
+`GET /v1/customers` → `{ "data": [ Customer, … ] }`
+
+Newest first. Up to 100.
+
+## Retrieve
+
+`GET /v1/customers/:id` → `Customer`
+
+`404` `not_found` if the id is missing or belongs to the other livemode.
+
+## Events
+
+| Event | When |
+|---|---|
+| `customer.created` | After a successful create |
+| `customer.updated` | When the record changes |
+
+## Expected
+
+- Store `id` and `external_id` on your side.
+- Attach destinations with `"customer": "cus_…"`.
+- Do not expect a wallet address or signing key in the response.
+
+<Card title="Accounts" icon="wallet" href="/accounts">
+  Platform balances. Checkout credits these accounts. Transfers debit them.
+</Card>

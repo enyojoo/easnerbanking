@@ -3,20 +3,11 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import {
-  ArrowDownLeft,
-  ArrowUpRight,
-  Eye,
-  EyeOff,
-  KeyRound,
-  Radio,
-  TrendingDown,
-  TrendingUp,
-} from "lucide-react"
+import { ArrowDownLeft, ArrowUpRight, Eye, EyeOff, TrendingDown, TrendingUp } from "lucide-react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ConsoleModeSwitch } from "@/components/console/console-mode-switch"
+import { ConsoleWorkspaceActions } from "@/components/console/console-workspace-actions"
 import { useCheckoutSettings } from "@/hooks/use-checkout-settings"
 import { usePlatformOverview } from "@/hooks/use-platform-overview"
 import { parseConsoleLivemode } from "@/lib/console/livemode"
@@ -54,16 +45,6 @@ export default function ConsoleHomePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-end gap-2">
-        <Button variant="ghost" size="sm" asChild>
-          <Link href="/console/logs">Logs</Link>
-        </Button>
-        <Button variant="ghost" size="sm" asChild>
-          <Link href="/console/events">Events</Link>
-        </Button>
-        <ConsoleModeSwitch />
-      </div>
-
       <Card>
         <CardHeader className="pb-4">
           <div className="flex items-start justify-between gap-6">
@@ -103,25 +84,7 @@ export default function ConsoleHomePage() {
                 {transactionCount === 1 ? "transaction" : "transactions"}
               </p>
             </div>
-            <div className="flex shrink-0 flex-wrap justify-end gap-2">
-              <Button asChild size="sm" className="shadow-sm">
-                <Link href="/console/keys" className="flex items-center gap-2">
-                  <KeyRound className="h-4 w-4" />
-                  Keys
-                </Link>
-              </Button>
-              <Button variant="outline" asChild size="sm">
-                <Link href="/console/webhooks" className="flex items-center gap-2">
-                  <Radio className="h-4 w-4" />
-                  Webhooks
-                </Link>
-              </Button>
-              <Button variant="outline" asChild size="sm">
-                <Link href="/checkout" className="flex items-center gap-2">
-                  Checkout
-                </Link>
-              </Button>
-            </div>
+            <ConsoleWorkspaceActions />
           </div>
         </CardHeader>
         <CardContent>
@@ -173,7 +136,7 @@ export default function ConsoleHomePage() {
                 {lastWebhook ? <p className="truncate">Last webhook {new Date(lastWebhook).toLocaleString()}</p> : null}
                 {lastError ? (
                   <p className="truncate">
-                    Last API error {lastError.method} {lastError.path} · {lastError.status}
+                    Last error {lastError.method} {lastError.path} · {lastError.status}
                   </p>
                 ) : null}
               </div>
@@ -199,7 +162,7 @@ export default function ConsoleHomePage() {
               </div>
             ) : recent.length === 0 ? (
               <div className="py-8 text-center text-sm text-muted-foreground">
-                No platform transactions yet
+                No transactions yet
               </div>
             ) : (
               <div className="divide-y">

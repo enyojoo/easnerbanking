@@ -26,7 +26,14 @@ import {
   type MerchantWebhookEvent,
 } from "@/lib/checkout/merchant-webhook-events"
 
-export function ConsoleWebhooksPanel({ showEvents = true }: { showEvents?: boolean }) {
+export function ConsoleWebhooksPanel({
+  variant = "endpoint",
+  showEvents = true,
+}: {
+  variant?: "endpoint" | "catalog"
+  showEvents?: boolean
+}) {
+  const showEndpoint = variant === "endpoint"
   const { data, refetch } = useCheckoutSettings()
   const savedUrl = data?.settings.webhookUrl ?? ""
   const [editing, setEditing] = useState(!savedUrl)
@@ -111,6 +118,7 @@ export function ConsoleWebhooksPanel({ showEvents = true }: { showEvents?: boole
 
   return (
     <div className="flex flex-col gap-6">
+      {showEndpoint ? (
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Label htmlFor="console-webhook" className="mb-0">
@@ -140,36 +148,37 @@ export function ConsoleWebhooksPanel({ showEvents = true }: { showEvents?: boole
           className="font-mono text-xs"
         />
       </div>
+      ) : null}
 
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={() => setRotateOpen(true)}>
-          {hasSecret ? "Rotate signing secret" : "Create signing secret"}
-        </Button>
-        <Button type="button" variant="outline" size="sm" disabled={testing || !savedUrl} onClick={() => void sendTest()}>
-          {testing ? "Sending…" : "Send test event"}
-        </Button>
-        {data?.settings.webhookSecretLast4 ? (
-          <p className="self-center text-xs text-muted-foreground">
-            Secret ending {data.settings.webhookSecretLast4}
-          </p>
-        ) : null}
-      </div>
-
-      {secret ? (
-        <RevealOnceValue
-          value={secret}
-          note="Verify easner-signature with this secret. It is shown once."
-        />
+      {showEndpoint ? (
+        <>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setRotateOpen(true)}>
+              {hasSecret ? "Rotate signing secret" : "Create signing secret"}
+            </Button>
+            <Button type="button" variant="outline" size="sm" disabled={testing || !savedUrl} onClick={() => void sendTest()}>
+              {testing ? "Sending…" : "Send test event"}
+            </Button>
+            {data?.settings.webhookSecretLast4 ? (
+              <p className="self-center text-xs text-muted-foreground">
+                Secret ending {data.settings.webhookSecretLast4}
+              </p>
+            ) : null}
+          </div>
+          {secret ? (
+            <RevealOnceValue
+              value={secret}
+              note="Shown once. Keep it on your server."
+            />
+          ) : null}
+        </>
       ) : null}
 
       {showEvents ? (
         <div className="space-y-3 rounded-xl border p-4 sm:p-5">
           <div>
             <p className="text-sm font-medium text-foreground">Events</p>
-            <p className="text-xs text-muted-foreground">
-              Tick the events your endpoint should receive. Checkout events stay on for existing
-              accounts until you change them.
-            </p>
+            <p className="text-xs text-muted-foreground">Choose what we send you.</p>
           </div>
           <ul className="space-y-3">
             {MERCHANT_WEBHOOK_EVENTS.map((event) => {
@@ -199,7 +208,7 @@ export function ConsoleWebhooksPanel({ showEvents = true }: { showEvents?: boole
         </div>
       ) : null}
 
-      <CheckoutWebhookDeliveries live />
+      {showEndpoint ? <CheckoutWebhookDeliveries live /> : null}
 
       <AlertDialog open={rotateOpen} onOpenChange={setRotateOpen}>
         <AlertDialogContent>

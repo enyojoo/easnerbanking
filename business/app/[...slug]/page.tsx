@@ -1,9 +1,11 @@
 import { headers } from "next/headers"
+import { notFound } from "next/navigation"
 import { CustomerPublicView } from "@/components/customer-host/customer-public-view"
 import { pickPublicHostname } from "@/lib/customer-hosts"
 import { resolveCustomerPublicKind } from "@/lib/customer-public-path"
 import { loadPublicInvoicePage } from "@/lib/invoices/load-public-invoice-page"
 import { loadPublicPayPage } from "@/lib/payment-links/load-public-pay-page"
+import { isPublicSurfacePath } from "@/lib/surface-paths"
 
 export const dynamic = "force-dynamic"
 
@@ -15,6 +17,10 @@ export default async function PublicCatchAllPage({
   const { slug } = await params
   const headerList = await headers()
   const hostname = pickPublicHostname(headerList.get("x-forwarded-host"), headerList.get("host"))
+  const pathname = `/${slug.join("/")}`
+  if (!isPublicSurfacePath(pathname, hostname)) {
+    notFound()
+  }
   const kind = resolveCustomerPublicKind(hostname, slug)
 
   const [invoicePayload, payPage] = await Promise.all([
