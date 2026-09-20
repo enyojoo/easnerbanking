@@ -94,16 +94,15 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Keep Solana / Turnkey / Stripe / PostHog bundled. Marking them external
+  // made Vercel serve the static HTML 500 page for every first-party money
+  // route (bootstrap, balances, VAs, transfers) because those handlers import
+  // `@/lib/solana/ata` or `stripe` at module load.
   serverExternalPackages: [
     "@react-pdf/renderer",
     "@noble/ciphers",
     "@noble/curves",
     "@noble/hashes",
-    "@solana/web3.js",
-    "@solana/spl-token",
-    "@turnkey/sdk-server",
-    "stripe",
-    "posthog-js",
   ],
   async rewrites() {
     const jsHosts = [...new Set(["js.easner.com", hostnameFromOrigin(process.env.NEXT_PUBLIC_EASNER_JS_HOST, "js.easner.com")])]
