@@ -290,7 +290,11 @@ export async function POST(request: Request) {
   })
   } catch (e: unknown) {
     const msg = formatBridgeKycStartError(e)
-    console.warn("[bridge/kyc-links] hosted KYC start failed:", msg, e)
+    const detail =
+      e && typeof e === "object" && "body" in e
+        ? JSON.stringify((e as { body?: unknown }).body)
+        : e
+    console.warn("[bridge/kyc-links] hosted KYC start failed:", msg, detail)
     return NextResponse.json({ error: msg }, { status: 502 })
   }
 }

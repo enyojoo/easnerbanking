@@ -12,6 +12,15 @@ describe("formatBridgeApiError", () => {
 })
 
 describe("formatBridgeKycStartError", () => {
+  it("maps invalid full_name from source.key objects", () => {
+    const err = new BridgeHttpError("Please resubmit the following parameters that are either missing or invalid", 400, {
+      code: "invalid_parameters",
+      message: "Please resubmit the following parameters that are either missing or invalid",
+      source: { location: "body", key: { full_name: {} } },
+    })
+    expect(formatBridgeKycStartError(err)).toMatch(/Latin-letter/i)
+  })
+
   it("does not name the vendor", () => {
     const err = new BridgeHttpError("Bridge POST /v0/kyc_links failed (500)", 500)
     expect(formatBridgeKycStartError(err)).not.toMatch(/bridge/i)

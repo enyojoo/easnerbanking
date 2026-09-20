@@ -1,5 +1,6 @@
 import { canonicalizeHostedOnboardingReturnUrl } from "@/lib/auth/hosted-onboarding-complete"
 import { getBridgeBusinessKybReturnUrl, getBridgeKycReturnUrl, getBridgeTosReturnUrl } from "./config"
+import { bridgeErrorSourceKeys, formatBridgeApiError } from "./format-bridge-api-error"
 import { bridgeFetch } from "./http"
 
 export type BridgeCustomerType = "individual" | "business"
@@ -39,12 +40,49 @@ export function bridgeCreateKycLinkIdempotencyKey(input: {
     .trim()
     .toLowerCase()
     .replace(/\s+/g, " ")
-  // Individuals retry with a display-name fallback (email local-part). Keep the
-  // key stable so Bridge does not treat reopen as a second customer.
+  // v2: do not send `base` on POST /kyc_links (it is implicit; Bridge 400s it).
+  // Bump the prefix so a cached invalid_parameters idempotent response is not replayed.
   if (input.type === "individual") {
-    return `bridge-kyc:${input.type}:${input.subjectId}`
+    return `bridge-kyc-v2:${input.type}:${input.subjectId}`
   }
-  return `bridge-kyc:${input.type}:${input.subjectId}:${name}`
+  return `bridge-kyc-v2:${input.type}:${input.subjectId}:${name}`
+}
+
+/** Base is implicit on KYC links. Only request add-on endorsements. */
+export const BRIDGE_KYC_LINK_ENDORSEMENTS = ["sepa"] as const
+
+const BRIDGE_NAME_LATIN1 =
+  /^[\u0020-\u007E\u00C0-\u00D6\u00D8-\u00DF\u00E0-\u00F6\u00F8-\u00FF]+$/
+
+export function bridgeNameNeedsTransliteration(name: string): boolean {
+  return Boolean(name.trim()) && !BRIDGE_NAME_LATIN1.test(name)
+}
+
+export function asciiNameFromBridgeFullName(name: string): string {
+  return name
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\x20-\x7E]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+export function bridgeKycTransliterationFields(
+  fullName: string,
+  type: BridgeCustomerType,
+): Record<string, string> {
+  if (!bridgeNameNeedsTransliteration(fullName)) return {}
+  const ascii = asciiNameFromBridgeFullName(fullName) || "Customer"
+  if (type === "business") {
+    return { transliterated_business_legal_name: ascii.slice(0, 1024) }
+  }
+  const parts = ascii.split(" ").filter(Boolean)
+  const first = (parts[0] || "Customer").slice(0, 256)
+  const last = (parts.length > 1 ? parts.slice(1).join(" ") : first).slice(0, 256)
+  return {
+    transliterated_first_name: first,
+    transliterated_last_name: last,
+  }
 }
 
 function hostedUrlFromPayload(payload: unknown): string | null {
@@ -87,20 +125,38 @@ export async function createBridgeKycLink(input: {
     input.redirectUri?.trim() ||
       (input.type === "business" ? getBridgeBusinessKybReturnUrl() : getBridgeKycReturnUrl()),
   )
-  const created = await bridgeFetch<BridgeKycLink>({
-    method: "POST",
-    path: "/kyc_links",
-    idempotencyKey: input.idempotencyKey,
-    json: {
-      full_name: input.fullName.trim(),
-      email: input.email.trim(),
-      type: input.type,
-      endorsements: input.endorsements ?? ["base", "sepa"],
-      ...(redirect ? { redirect_uri: redirect } : {}),
-    },
-  })
+  const fullName = input.fullName.trim()
+  const json: Record<string, unknown> = {
+    full_name: fullName,
+    email: input.email.trim(),
+    type: input.type,
+    endorsements: input.endorsements ?? [...BRIDGE_KYC_LINK_ENDORSEMENTS],
+    ...bridgeKycTransliterationFields(fullName, input.type),
+    ...(redirect ? { redirect_uri: redirect } : {}),
+  }
+  let created: BridgeKycLink
+  try {
+    created = await bridgeFetch<BridgeKycLink>({
+      method: "POST",
+      path: "/kyc_links",
+      idempotencyKey: input.idempotencyKey,
+      json,
+    })
+  } catch (error) {
+    const keys = bridgeErrorSourceKeys(error).join(" ")
+    const msg = formatBridgeApiError(error)
+    if (!/redirect_uri/i.test(`${keys} ${msg}`)) throw error
+    const { redirect_uri: _omit, ...withoutRedirect } = json
+    created = await bridgeFetch<BridgeKycLink>({
+      method: "POST",
+      path: "/kyc_links",
+      idempotencyKey: `${input.idempotencyKey}:noredirect`,
+      json: withoutRedirect,
+    })
+  }
   return {
     ...created,
+    kyc_link: applyBridgeHostedRedirect(created.kyc_link, redirect) ?? created.kyc_link ?? null,
     tos_link: isBridgeTosApproved(created)
       ? null
       : applyBridgeHostedRedirect(created.tos_link, getBridgeTosReturnUrl(), { overwrite: true }),

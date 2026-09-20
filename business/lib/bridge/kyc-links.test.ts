@@ -10,6 +10,9 @@ import {
   shouldPrefillBridgeBusinessCustomer,
   shouldRequestSepaKycEndorsement,
   publicBridgeKycHubStatus,
+  BRIDGE_KYC_LINK_ENDORSEMENTS,
+  bridgeNameNeedsTransliteration,
+  bridgeKycTransliterationFields,
 } from "./kyc-links"
 
 describe("pickBridgeKycLinkFullName", () => {
@@ -53,13 +56,14 @@ describe("bridgeCreateKycLinkIdempotencyKey", () => {
         subjectId,
         fullName: "Jane Owner",
       }),
-    ).toBe(
+    ).toBe("bridge-kyc-v2:individual:user_1")
+    expect(
       bridgeCreateKycLinkIdempotencyKey({
         type: "individual",
         subjectId,
         fullName: "jane",
       }),
-    )
+    ).toBe("bridge-kyc-v2:individual:user_1")
   })
 
   it("changes when the legal name changes so reopen does not reuse the owner-name link", () => {
@@ -259,6 +263,21 @@ describe("hostedLinksForExistingCustomer", () => {
       tos_link: null,
       alreadyOnboarded: true,
       kyc_status: "approved",
+    })
+  })
+})
+
+describe("bridge KYC link create payload helpers", () => {
+  it("requests sepa only — base is implicit and rejected on the link body", () => {
+    expect(BRIDGE_KYC_LINK_ENDORSEMENTS).toEqual(["sepa"])
+  })
+
+  it("adds transliterated name parts when the legal name is outside Latin-1", () => {
+    expect(bridgeNameNeedsTransliteration("Jane Owner")).toBe(false)
+    expect(bridgeNameNeedsTransliteration("Kọla Adeyemi")).toBe(true)
+    expect(bridgeKycTransliterationFields("Kọla Adeyemi", "individual")).toEqual({
+      transliterated_first_name: "Kola",
+      transliterated_last_name: "Adeyemi",
     })
   })
 })
