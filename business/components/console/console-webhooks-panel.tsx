@@ -24,7 +24,7 @@ import {
   MERCHANT_WEBHOOK_EVENT_DESCRIPTIONS,
   MERCHANT_WEBHOOK_EVENTS,
   type MerchantWebhookEvent,
-} from "@/lib/checkout/merchant-webhooks"
+} from "@/lib/checkout/merchant-webhook-events"
 
 export function ConsoleWebhooksPanel({ showEvents = true }: { showEvents?: boolean }) {
   const { data, refetch } = useCheckoutSettings()

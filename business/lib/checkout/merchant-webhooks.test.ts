@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { signMerchantWebhookPayload, verifyMerchantWebhookPayload } from "./secrets"
 import { checkoutCompletedWebhookData } from "./merchant-webhook-payload"
-import { normalizeSubscribedWebhookEvents } from "./merchant-webhooks"
+import { normalizeSubscribedWebhookEvents } from "./merchant-webhook-events"
 
 describe("merchant webhook signatures", () => {
   it("verifies a signed payload", () => {

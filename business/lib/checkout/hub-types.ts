@@ -1,5 +1,5 @@
 import type { CheckoutFeeMode } from "@/lib/stripe/checkout-fee-mode"
-import type { MerchantWebhookEvent } from "@/lib/checkout/merchant-webhooks"
+import type { MerchantWebhookEvent } from "@/lib/checkout/merchant-webhook-events"
 
 export type CheckoutSite = {
   id: string
