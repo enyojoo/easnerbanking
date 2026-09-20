@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react"
 import { usePathname, useRouter } from "next/navigation"
+import { getWorkspaceHomePath } from "@/lib/app-surface"
 import { useAuth } from "@/lib/auth-context"
 import { resolvePostSignInMfaRequirement } from "@/lib/auth-mfa"
 import { createSupabaseBrowser } from "@/lib/supabase/browser"
@@ -45,7 +46,7 @@ export function AuthSessionRedirect({ children }: { children: ReactNode }) {
     if (!shouldRedirectWhenAuthed || isLoading || !user) return
 
     if (!isLogin) {
-      router.replace("/dashboard")
+      router.replace(getWorkspaceHomePath())
       return
     }
 
@@ -62,7 +63,7 @@ export function AuthSessionRedirect({ children }: { children: ReactNode }) {
         setLoginSessionChecked(true)
         return
       }
-      router.replace("/dashboard")
+      router.replace(getWorkspaceHomePath())
     })()
 
     return () => {
@@ -77,7 +78,7 @@ export function AuthSessionRedirect({ children }: { children: ReactNode }) {
     (!isLogin || !loginSessionChecked)
 
   if (showRedirecting) {
-    // Intentionally render nothing during the short auth → dashboard redirect
+    // Intentionally render nothing during the short auth → workspace redirect
     // instead of an intermediary spinner. Workspace routes render the shell
     // immediately and resolve auth in the background.
     return null

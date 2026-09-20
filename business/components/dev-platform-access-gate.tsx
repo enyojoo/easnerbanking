@@ -3,12 +3,8 @@
 import { useEffect } from "react"
 import { usePathname } from "next/navigation"
 import { NeedDeveloperAccountPage } from "@/components/need-developer-account"
-import {
-  getProductSwitchUrl,
-  isBankingOnlyPath,
-  isPlatformOnlyPath,
-  isProductHostSplit,
-} from "@/lib/app-surface"
+import { isProductHostSplit } from "@/lib/app-surface"
+import { readDevPlatformFlag, resolveDevPlatformAccess } from "@/lib/dev-platform-access"
 import { useAppSurface } from "@/lib/use-app-surface"
 import { useBusinessProfile } from "@/lib/use-business-profile"
 
@@ -21,34 +17,29 @@ function ProductRedirect({ href }: { href: string }) {
 
 /**
  * Office-gated Platform access + wrong-surface redirects after hosts split.
- * Same-origin (Phase 1b before platform.easner.com exists) keeps pages on this host.
+ * Same-origin keeps pages on this host. Cookie platform + flag off is treated
+ * as banking (cookie cleared in AppSurfaceProvider) — no origin bounce.
  */
 export function DevPlatformAccessGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? ""
   const surface = useAppSurface()
   const { devPlatformEnabled, hasData } = useBusinessProfile()
-  const enabled = Boolean(devPlatformEnabled)
+  const enabled = readDevPlatformFlag(hasData, devPlatformEnabled)
   const split = isProductHostSplit()
+  const decision = resolveDevPlatformAccess({
+    surface,
+    pathname,
+    hasData,
+    enabled,
+    split,
+  })
 
-  if (surface === "platform" && hasData && !enabled) {
+  if (decision.action === "need-account") {
     return <NeedDeveloperAccountPage />
   }
 
-  if (surface === "business" && isPlatformOnlyPath(pathname)) {
-    if (hasData && !enabled) {
-      return <NeedDeveloperAccountPage />
-    }
-    if (hasData && enabled && split) {
-      return <ProductRedirect href={getProductSwitchUrl("platform", pathname)} />
-    }
-  }
-
-  if (surface === "platform" && isBankingOnlyPath(pathname) && split) {
-    return <ProductRedirect href={getProductSwitchUrl("business", pathname)} />
-  }
-
-  if (surface === "platform" && (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) && split) {
-    return <ProductRedirect href={getProductSwitchUrl("platform", "/customers")} />
+  if (decision.action === "redirect") {
+    return <ProductRedirect href={decision.href} />
   }
 
   return <>{children}</>

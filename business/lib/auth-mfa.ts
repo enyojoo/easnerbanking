@@ -283,7 +283,7 @@ function delay(ms: number): Promise<void> {
 
 /**
  * After `signInWithPassword`, AAL can briefly be missing or inconsistent. The login form and
- * `AuthSessionRedirect` both consult this so we don't `replace("/dashboard")` before the MFA step
+ * `AuthSessionRedirect` both consult this so we don't leave `/auth/login` before the MFA step
  * is detected (which felt like "nothing happens until I submit again").
  */
 export async function resolvePostSignInMfaRequirement(

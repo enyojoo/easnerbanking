@@ -29,6 +29,7 @@ import {
   prefetchWorkspaceCriticalData,
   refetchStaleReducedQueries,
 } from "@/lib/query/workspace-prefetch"
+import { AppSurfaceProvider } from "@/components/app-surface-provider"
 
 /**
  * Root client provider tree for Easner Business.
@@ -76,19 +77,21 @@ export function Providers({ children }: { children: React.ReactNode }) {
           },
         }}
       >
-        <BusinessIntercom />
-        <ImageWarmBootstrap />
-        <BusinessScopeProvider>
-          <ScopeRealtimeBridge>
-            <PersistedBusinessLifecycleBridge />
-            <WorkspaceDataWarmBridge />
-            <InvoiceModuleStoreSync />
-            {children}
-          </ScopeRealtimeBridge>
-        </BusinessScopeProvider>
-        {process.env.NODE_ENV !== "production" ? (
-          <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />
-        ) : null}
+        <AppSurfaceProvider>
+          <BusinessIntercom />
+          <ImageWarmBootstrap />
+          <BusinessScopeProvider>
+            <ScopeRealtimeBridge>
+              <PersistedBusinessLifecycleBridge />
+              <WorkspaceDataWarmBridge />
+              <InvoiceModuleStoreSync />
+              {children}
+            </ScopeRealtimeBridge>
+          </BusinessScopeProvider>
+          {process.env.NODE_ENV !== "production" ? (
+            <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />
+          ) : null}
+        </AppSurfaceProvider>
       </PersistQueryClientProvider>
     </ThemeProvider>
   )

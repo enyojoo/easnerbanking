@@ -1,5 +1,6 @@
 "use client"
 
+import { getWorkspaceHomePath } from "@/lib/app-surface"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
@@ -11,7 +12,7 @@ export default function Home() {
   useEffect(() => {
     if (!isLoading) {
       if (user) {
-        router.push("/dashboard")
+        router.push(getWorkspaceHomePath())
       } else {
         router.push("/auth/login")
       }

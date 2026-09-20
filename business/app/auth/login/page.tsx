@@ -18,6 +18,7 @@ import {
   resolvePostSignInMfaRequirement,
   totpFactorsFromListResponse,
 } from "@/lib/auth-mfa"
+import { getWorkspaceHomePath } from "@/lib/app-surface"
 import { getSafeNextPath } from "@/lib/auth/safe-next-path"
 import { ensureBusinessWebSurface } from "@/lib/auth/validate-surface-client"
 import { useTeamInviteContext } from "@/lib/use-team-invite-context"
@@ -100,7 +101,7 @@ export default function LoginPage() {
       if (userData.user?.id) {
         analytics.trackSignIn("email", { userId: userData.user.id })
       }
-      router.push(nextPath || "/dashboard")
+      router.push(nextPath || getWorkspaceHomePath())
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Invalid credentials"
       if (message.toLowerCase().includes("email not confirmed")) {
@@ -161,7 +162,7 @@ export default function LoginPage() {
       if (userData.user?.id) {
         analytics.trackSignIn("email", { userId: userData.user.id })
       }
-      router.push(nextPath || "/dashboard")
+      router.push(nextPath || getWorkspaceHomePath())
     } finally {
       mfaSubmittingRef.current = false
       setMfaSubmitting(false)
@@ -225,7 +226,7 @@ export default function LoginPage() {
         setStep("mfa")
         return
       }
-      router.push(nextPath || "/dashboard")
+      router.push(nextPath || getWorkspaceHomePath())
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unable to continue with Apple. Please try again."
       setError(msg)

@@ -144,7 +144,7 @@ const DEFAULT_PROFILE: BusinessProfile = {
   invoiceReplyEmailSource: null,
   invoiceSettings: undefined,
   onlinePaymentsEnabled: true,
-  devPlatformEnabled: false,
+  devPlatformEnabled: undefined,
 }
 
 function countryCodeFromName(name: string | null | undefined): string | null {

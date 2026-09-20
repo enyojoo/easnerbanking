@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth-context"
 import { redirectToWorkspaceLogin } from "@/lib/auth/workspace-login-redirect"
 import { probeStoredSupabaseSession } from "@/lib/query/web-persist"
 import { PlatformAccessGate } from "@/components/platform-access-gate"
+import { useApplyStoredAppSurface } from "@/lib/use-app-surface"
 
 const DASHBOARD_SHELL_ROOTS = [
   "/accounts",
@@ -43,18 +44,22 @@ function isDashboardShellPath(pathname: string) {
 export function AppSurfaceLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const { user, isLoading, canBootstrapWorkspace } = useAuth()
+  const applyStoredSurface = useApplyStoredAppSurface()
   const [clientReady, setClientReady] = useState(false)
   const [storedSessionLikelyValid, setStoredSessionLikelyValid] = useState(false)
 
   const isShellRoute = Boolean(pathname && isDashboardShellPath(pathname))
 
   useLayoutEffect(() => {
+    // Cookie → surface in this same turn as `clientReady` so the first painted
+    // nav is already Banking or Dev. Do not read cookies in the root layout.
+    applyStoredSurface?.()
     // Probe once: it JSON-parses the full Supabase session blob and walks it
     // recursively — doing that in the render body ran on every navigation and
     // every auth-context tick. Auth state changes flow through `useAuth()`.
     setStoredSessionLikelyValid(probeStoredSupabaseSession().likelyAuthenticated)
     setClientReady(true)
-  }, [])
+  }, [applyStoredSurface])
 
   // First paint must match SSR (empty shell). Reading localStorage before
   // `clientReady` is the React #418 hydration mismatch on /dashboard.
