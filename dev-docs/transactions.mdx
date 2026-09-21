@@ -4,7 +4,7 @@ description: List and retrieve `txn_` rows for Banking and Checkout.
 icon: receipt
 ---
 
-A transaction is a row on `GET /v1/transactions`. Receive writes vault credits (`deposit`, `chain`, `onramp`). Send writes vault debits (`transfer`). Checkout collects also appear here when you used a merchant secret key — those are **your** business balance, not a customer vault.
+A transaction is a row on `GET /v1/transactions`. Receive writes vault credits (`deposit`, `chain`, `onramp`). Send writes vault debits (`transfer`). Checkout website payments also appear here when you used a merchant secret key — those land on **your** business balance, not a customer vault.
 
 In Console, these rows are **Payments**. Open a `txn_` for type, source, destination, and the related `tr_` / `cs_`.
 
@@ -57,9 +57,9 @@ In Console, these rows are **Payments**. Open a `txn_` for type, source, destina
 | `chain` | Banking | Chain credit to a customer `acct_` |
 | `easetag` | Banking | In-network credit to a customer `acct_` |
 | `transfer` | Banking | Send from a customer `acct_` |
-| `checkout` | Checkout | Collect onto **your** business balance |
+| `checkout` | Checkout | Online payment on your website. Lands on **your** business balance |
 
-`checkout` is not Receive. It does not credit a customer `acct_`. Banking mode in the app also shows that collect.
+`checkout` is not Receive. It does not credit a customer `acct_`. Banking mode in the app also shows that payment.
 
 ## List
 
@@ -84,11 +84,11 @@ Newest first. Up to 100. There is no next page. Filtered by the key’s livemode
 |---|---|
 | `transaction.created` | A row was written. Webhook `data` is **narrower** than this GET object — see [Webhooks](/webhooks) |
 | `account.updated` | The account totals changed |
-| `payment.available` | A Checkout collect became usable |
+| `payment.available` | A Checkout payment became usable |
 
 ## Expected
 
 - Reconcile your product against this list.
 - `direction: "in"` with `deposit` / `onramp` / `chain` / `easetag` is Receive on a customer account.
-- `direction: "in"` with `checkout` is a collect onto your business balance.
+- `direction: "in"` with `checkout` is a website payment on your business balance.
 - `direction: "out"` is a transfer.

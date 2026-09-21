@@ -1,16 +1,16 @@
 ---
 title: Checkout
-description: Collect on your website onto your business balance.
+description: Take online payments on your website. Funds land on your business balance.
 icon: credit-card
 ---
 
-Checkout collects on your website. The amount and secret key stay on your server. The browser only sees a publishable key and a `client_secret`.
+Checkout is how you take online payments on your website. Amount and secret key stay on your server. The browser only sees a publishable key and a `client_secret`.
 
-The collect lands on **your** business balance — the same balance as invoices and payment links. Switch to Banking in the app to see it.
+When the payment succeeds, funds land on **your** business balance — the same place as invoices and payment links. Switch to Banking in the app to see it.
 
 Checkout is not Receive. It does not credit a customer vault. To fund a `cus_` `acct_`, use [Receive](/receive).
 
-In Console, open a site. Tabs are **Payments** (`cs_` sessions), **Integrate** (origin, recipes, Checkout.js), and **Settings** (name, success URL, allowed origins). Keys and webhook URLs stay in Console Settings — not a per-site secret. Tick Checkout events on the webhook when you collect.
+In Console, open a site. Tabs are **Payments** (`cs_` sessions), **Integrate** (origin, recipes, Checkout.js), and **Settings** (name, success URL, allowed origins). Keys and webhook URLs stay in Console Settings — not a per-site secret. Tick Checkout events on the webhook when you take payments.
 
 <Note>
   **Scope:** `checkout`
@@ -126,7 +126,7 @@ Unlock on `checkout.completed`. Also listen for `subscription.updated` and `subs
 
 | Event | Expected |
 |---|---|
-| `checkout.completed` | Payment succeeded. Fulfil. Credits your business balance |
+| `checkout.completed` | Payment succeeded. Fulfil. Funds land on your business balance |
 | `checkout.async_succeeded` | A delayed method cleared |
 | `checkout.failed` | Abandoned or failed |
 | `payment.available` | Funds usable on your business balance |
@@ -136,7 +136,7 @@ Unlock on `checkout.completed`. Also listen for `subscription.updated` and `subs
 
 - Amount and secret key never in the browser.
 - Fulfil in the webhook using `metadata` you sent.
-- Banking Home and `GET /v1/transactions` (`type: "checkout"`) show the collect.
+- Banking Home and `GET /v1/transactions` (`type: "checkout"`) show the payment.
 - Do not credit a customer `acct_` from this event.
 
 <Card title="Receive money" icon="download" href="/receive">

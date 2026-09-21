@@ -6,7 +6,7 @@ icon: download
 
 Receive credits your customer’s **stablecoin vault**. The `acct_` `available` balance is that vault.
 
-It is not Checkout. Checkout collects onto **your** business balance.
+It is not Checkout. Checkout is online payments on your website; those funds land on **your** business balance.
 
 ```mermaid
 flowchart LR
@@ -172,7 +172,7 @@ Publish `@` + `easetag`. To pay a tag from `v1`, create a destination `{ "type":
 | Product | Lands on |
 |---|---|
 | Receive (`deposit` / `chain` / `onramp` / `easetag`) | Customer vault (`acct_` with `customer`) |
-| Checkout | **Your** business balance |
+| Checkout | **Your** business balance (website payments) |
 
 Do not send your customer to first-party Banking screens or unpublished `/api` paths. In **test**, Console Accounts → **Simulate test deposit** credits the vault without `/v1` (not available in live).
 

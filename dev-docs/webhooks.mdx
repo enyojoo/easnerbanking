@@ -60,11 +60,11 @@ Use the **raw** body. Re-serializing JSON will fail the signature.
 
 ## Catalog
 
-Tick these in Settings → Webhooks. Default ticks are Banking: `customer.updated`, `account.updated`, `transfer.completed`, `transaction.created`. Add Checkout events when you collect on a site.
+Tick these in Settings → Webhooks. Default ticks are Banking: `customer.updated`, `account.updated`, `transfer.completed`, `transaction.created`. Add Checkout events when you take payments on a site.
 
 ### Checkout
 
-**`checkout.completed`** — Payment succeeded. Fulfil the order. Credits **your** business balance.
+**`checkout.completed`** — Payment succeeded. Fulfil the order. Funds land on **your** business balance.
 
 ```json
 {

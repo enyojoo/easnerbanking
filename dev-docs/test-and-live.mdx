@@ -16,7 +16,7 @@ Livemode is the key prefix. There is no `livemode` body flag. In Console, the Te
 | Onramp | Hosted page completes and credits the vault | Hosted card onramp after approval, onto the vault |
 | Quote | Completes. Send/receive 1:1 | May price wallet destinations |
 | Transfer | Create `requires_action`. Confirm debits the **test** vault | Create `requires_action`. Confirm sends from the customer vault. Merchant key cannot confirm |
-| Checkout | Test card `4242…`. Nothing charged | Real collect onto your business balance |
+| Checkout | Test card `4242…`. Nothing charged | Real card payments on your website. Funds land on your business balance |
 | Webhooks | Your test URL | Your live URL |
 
 Test never moves live money. Live never writes test objects.
@@ -66,7 +66,7 @@ Use these in Console Settings while you stay in Test:
 ## What you should not do
 
 <Warning>
-  Do not reuse a test key in production. Do not fulfil from the browser `onSuccess` without the webhook. Do not treat Checkout as Receive — a collect does not credit a customer `acct_`.
+  Do not reuse a test key in production. Do not fulfil from the browser `onSuccess` without the webhook. Do not treat Checkout as Receive — a website payment does not credit a customer `acct_`.
 </Warning>
 
 ## Restriction

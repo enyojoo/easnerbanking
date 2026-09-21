@@ -1,10 +1,12 @@
 ---
 title: What is Easner?
-description: Stablecoin-native banking and payment infrastructure.
+description: Isolated customer vaults, two products, and who authorizes a send.
 icon: info
 ---
 
-Easner is **stablecoin-native banking and payment infrastructure**. You integrate. Your customer is the banking end user (`cus_`). A payer is someone who pays you through Checkout.
+You integrate. Your customer is the banking end user (`cus_`). A payer is someone who pays you through Checkout.
+
+The model is one isolated vault per customer — receive in, send out. Checkout is separate: take online payments on your website; those funds land on your business balance.
 
 Every issued account is that customer’s **isolated stablecoin vault** with a currency view:
 
@@ -47,11 +49,11 @@ flowchart LR
 | Product | Where funds sit | What you build |
 |---|---|---|
 | **Banking** | Your customer, in their vault (`acct_`) | [Customers](/customers), [Accounts](/accounts), [Receive](/receive), [Send](/send) |
-| **Checkout** | You, on your business balance | [Collect](/checkout) on your website |
+| **Checkout** | Your business balance | [Online payments](/checkout) on your website |
 
 They share a secret key and Console. They do not share a balance.
 
-Checkout collects onto **your** business balance — the same balance as invoices and payment links, not a customer vault. That is not Receive.
+Checkout is online payments on your website. Paid funds land on **your** business balance — the same place as invoices and payment links, not a customer vault. That is not Receive.
 
 ## Access to Easner, then onboard your customers
 
@@ -82,8 +84,8 @@ Mint keys and add webhook URLs from Console Settings (API keys, Webhooks). Inspe
   <Step title="Send from the vault">
     [Destination](/destinations), [quote](/quotes) with `source`, [transfer](/transfers). The customer authorizes. Fulfil from `transfer.completed`.
   </Step>
-  <Step title="Collect on your site">
-    Optional. [Checkout](/checkout) sessions credit **your** business balance. Fulfil from `checkout.completed`.
+  <Step title="Take payments on your site">
+    Optional. [Checkout](/checkout) on your website. Funds land on **your** business balance. Fulfil from `checkout.completed`.
   </Step>
 </Steps>
 
@@ -97,6 +99,6 @@ Mint keys and add webhook URLs from Console Settings (API keys, Webhooks). Inspe
 | Quote | `qt_` | Banking | Locked send / receive amounts |
 | Transfer | `tr_` | Banking | Money leaving the vault |
 | Transaction | `txn_` | Both | Activity on `GET /v1/transactions` |
-| Checkout session | `cs_` | Checkout | A collect on your website |
+| Checkout session | `cs_` | Checkout | A payment on your website |
 
 Easner Group, Inc. ("Easner") is a financial technology company, not a bank or investment adviser. Banking, payment, verification, and card services available are provided by licensed partners. Easner does not provide investment, legal, tax, or financial advice.

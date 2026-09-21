@@ -8,10 +8,10 @@ These are the primitives on `https://api.easner.com/v1`. Combine them. Do not in
 
 | Capability | What it is | Not |
 |---|---|---|
-| **Vault** | Isolated customer vault [`acct_`](/accounts). USD is USDC, EUR is EURC, on Solana. `available` is that vault, in cents. Funds sit with the customer, not on Easner’s books. | Your float. Checkout business balance. Easner taking the funds onto its own books. |
-| **Receive** | Credit **that** vault: [virtual account](/receive#virtual-account), [Solana address](/receive#wallet-address), [card onramp](/receive#card-onramp), [Easetag](/receive#easetag). | [Checkout](/checkout) collect. |
+| **Vault** | Isolated customer vault [`acct_`](/accounts). USD is USDC, EUR is EURC, on Solana. `available` is that vault, in cents. Funds sit with the customer, not on Easner’s books. | Your float. Website payments (Checkout). Easner taking the funds onto its own books. |
+| **Receive** | Credit **that** vault: [virtual account](/receive#virtual-account), [Solana address](/receive#wallet-address), [card onramp](/receive#card-onramp), [Easetag](/receive#easetag). | [Checkout](/checkout) website payments. |
 | **Send** | Debit the vault to [bank, mobile money, wallet, or Easetag](/send). You create the transfer. The [customer confirms](/transfers#confirm). Corridors: [Payment methods](/payment-methods). | A merchant key moving the vault. HTTP `201` on create meaning the recipient was paid. |
-| **Collect** | [Checkout](/checkout) on your website onto **your** business balance. Fulfil from `checkout.completed`. | A credit to a `cus_` `acct_`. |
+| **Collect** | Take [online payments](/checkout) on your website. Funds land on **your** business balance. Fulfil from `checkout.completed`. | A credit to a `cus_` `acct_`. |
 | **Identify** | **You:** KYB in Banking → Settings for **access to Easner**. **Them:** hosted KYC (person) or KYB (business) on the `cus_` via `POST /v1/customers/:id/verification`, so they onboard on **your** app. | Your KYB approving a `cus_`. Email and name on create. |
 
 ## Vault
@@ -28,7 +28,7 @@ Live virtual accounts, live wallet addresses, and onramp need `verification_stat
 
 ## Collect
 
-Amount and secret key stay on your server. The browser sees a publishable key and a Checkout `client_secret`. Tick Checkout events on the webhook when you collect.
+Take payments on your website. Amount and secret key stay on your server. The browser sees a publishable key and a Checkout `client_secret`. Tick Checkout events on the webhook when you take payments.
 
 ## Identify
 

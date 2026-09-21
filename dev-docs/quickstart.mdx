@@ -19,7 +19,7 @@ Stay in **Test**. Settings is API keys, webhooks, logs, and Workbench.
     ```
   </Step>
   <Step title="Add a webhook URL">
-    Settings → Webhooks. Create as many URLs as you need. Default ticks are Banking: `customer.updated`, `account.updated`, `transfer.completed`, `transaction.created`. Add Checkout events if you collect on a site.
+    Settings → Webhooks. Create as many URLs as you need. Default ticks are Banking: `customer.updated`, `account.updated`, `transfer.completed`, `transaction.created`. Add Checkout events if you take payments on a site.
   </Step>
 </Steps>
 
@@ -103,9 +103,9 @@ You need Dev Platform enabled on the business and that test secret.
 
 A new test account starts at `available: 0`. Fund it before the first send (step above). For live-sized sends, use [Receive](/receive).
 
-## Collect instead of send
+## Take a payment on your website
 
-To take a payment on your website, go to [Checkout](/checkout). That credits **your** business balance, not this customer `acct_`.
+To accept online payments, go to [Checkout](/checkout). Those funds land on **your** business balance, not this customer `acct_`.
 
 <Card title="Receive money" icon="download" href="/receive">
   Verify the customer (KYC or KYB), then fetch bank details, chain addresses, and onramp onto their account.
