@@ -81,12 +81,15 @@
       "linkedin": "https://linkedin.com/company/easner"
     },
     "links": [
-      [
-        {
-          "label": "Terms",
-          "href": "https://www.easner.com/terms"
-        }
-      ]
+      {
+        "header": "Legal",
+        "items": [
+          {
+            "label": "Terms",
+            "href": "https://www.easner.com/terms"
+          }
+        ]
+      }
     ]
   },
   "api": {
