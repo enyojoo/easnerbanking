@@ -11,8 +11,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { CheckoutDashboardPanel } from "@/components/checkout/checkout-dashboard-panel"
 import { CheckoutGuideSheet } from "@/components/checkout/checkout-integration-guide"
+import { CheckoutSiteReadyView } from "@/components/checkout/checkout-site-ready"
 import { analytics } from "@/lib/analytics"
 import { CheckoutHubSkeleton } from "@/components/collections/collections-skeletons"
 import {
@@ -110,9 +110,11 @@ export function CheckoutIntegrationHub({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={() => setGuideOpen(true)}>
-            {COLLECTIONS_COPY.addToWebsite}
-          </Button>
+          {pageReady ? null : (
+            <Button type="button" variant="ghost" size="sm" onClick={() => setGuideOpen(true)}>
+              {COLLECTIONS_COPY.addToWebsite}
+            </Button>
+          )}
           <Badge variant={pageReady ? (data.settings.liveModeEnabled ? "emerald" : "slate") : "amber"}>
             {statusLabel}
           </Badge>
@@ -120,7 +122,7 @@ export function CheckoutIntegrationHub({
       </div>
 
       {pageReady && site && !editingReadyStep ? (
-        <CheckoutDashboardPanel
+        <CheckoutSiteReadyView
           data={data}
           site={site}
           onEditStep={setFocusStep}

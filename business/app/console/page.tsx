@@ -1,149 +1,88 @@
 "use client"
 
-import { useState } from "react"
 import Link from "next/link"
-import { ArrowDownLeft, ArrowUpRight, Eye, EyeOff, TrendingDown, TrendingUp } from "lucide-react"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { ArrowDownLeft, ArrowUpRight } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
 import { ConsoleAuditLogCard } from "@/components/console/console-audit-log-card"
+import { ConsolePageHeader } from "@/components/console/console-page-header"
 import { ConsoleQuickstartCard } from "@/components/console/console-quickstart-card"
+import { PAGE_COPY } from "@/lib/copy/business-ui-copy"
 import { useCheckoutSettings } from "@/hooks/use-checkout-settings"
 import { usePlatformOverview } from "@/hooks/use-platform-overview"
 import { useConsoleLivemode } from "@/lib/console/livemode-context"
 import { formatTransactionRowDateTime, transactionStatusRowPresentation } from "@/lib/transaction-row-present"
-import { cn, formatCurrency } from "@/lib/utils"
-
-const MASK = "******"
-
-function formatVolumeParts(usdTotal: number, eurTotal: number): string {
-  const parts: string[] = []
-  if (usdTotal > 0) parts.push(formatCurrency(usdTotal / 100, "USD"))
-  if (eurTotal > 0) parts.push(formatCurrency(eurTotal / 100, "EUR"))
-  return parts.length > 0 ? parts.join(" · ") : formatCurrency(0, "USD")
-}
+import { formatCurrency } from "@/lib/utils"
 
 export default function ConsoleHomePage() {
   const { livemode } = useConsoleLivemode()
   const overview = usePlatformOverview(livemode)
   const { data: checkout } = useCheckoutSettings()
-  const [amountsVisible, setAmountsVisible] = useState(true)
 
-  const volume = overview.data?.volume
-  const usdTotal = volume?.USD.total ?? 0
-  const eurTotal = volume?.EUR.total ?? 0
-  const inOutCurrency = usdTotal >= eurTotal ? "USD" : "EUR"
-  const inOutSide = volume?.[inOutCurrency]
-  const moneyIn = (inOutSide?.moneyIn ?? 0) / 100
-  const moneyOut = (inOutSide?.moneyOut ?? 0) / 100
   const recent = overview.data?.recentTransactions ?? []
   const lastError = overview.data?.lastError ?? null
   const lastWebhook = checkout?.settings.lastWebhookDeliveredAt
   const transactionCount = overview.data?.transactionCount ?? 0
-  const showVolumePending = overview.isPending && !overview.data
-  const volumeLabel = formatVolumeParts(usdTotal, eurTotal)
+  const last4xx =
+    lastError && lastError.status != null && lastError.status >= 400 && lastError.status < 500 ? lastError : null
 
   return (
     <div className="space-y-6">
+      <ConsolePageHeader title={PAGE_COPY.console.title} description={PAGE_COPY.console.intro} />
       <ConsoleQuickstartCard />
       <Card>
-        <CardHeader className="pb-4">
-          <div className="flex items-start justify-between gap-6">
-            <div>
-              <div className="mb-2 flex items-center gap-2">
-                <p className="text-sm font-medium text-muted-foreground">Total Volume</p>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
-                  onClick={() => setAmountsVisible((value) => !value)}
-                  aria-pressed={amountsVisible}
-                  aria-label={amountsVisible ? "Hide amounts" : "Show amounts"}
-                >
-                  {amountsVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
-              </div>
-              <h2 className="text-6xl font-bold tracking-tight text-foreground">
-                <span
-                  className={cn(
-                    "inline-flex min-w-[12rem] items-center justify-start leading-none tabular-nums",
-                    !amountsVisible && "tracking-[0.2em]",
-                  )}
-                >
-                  {showVolumePending ? (
-                    <Skeleton className="h-14 w-64 max-w-full" />
-                  ) : amountsVisible ? (
-                    volumeLabel
-                  ) : (
-                    MASK
-                  )}
-                </span>
-              </h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {transactionCount.toLocaleString()}{" "}
-                {transactionCount === 1 ? "transaction" : "transactions"}
-              </p>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between border-t border-border pt-4">
-            <div className="flex gap-12">
-              <div className="flex items-center gap-3">
-                <div className="rounded-full bg-primary/10 p-2">
-                  <TrendingUp className="h-4 w-4 text-primary" />
-                </div>
-                <div>
-                  <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                    Money in
-                  </p>
-                  <p className="text-lg font-semibold text-primary">
-                    <span
-                      className={cn(
-                        "inline-flex min-w-[9.5rem] items-center justify-start tabular-nums leading-none",
-                        !amountsVisible && "tracking-wider",
-                      )}
-                    >
-                      {amountsVisible ? `+${formatCurrency(moneyIn, inOutCurrency)}` : MASK}
-                    </span>
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="rounded-full bg-muted p-2">
-                  <TrendingDown className="h-4 w-4 text-muted-foreground" />
-                </div>
-                <div>
-                  <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                    Money out
-                  </p>
-                  <p className="text-lg font-semibold text-foreground">
-                    <span
-                      className={cn(
-                        "inline-flex min-w-[9.5rem] items-center justify-start tabular-nums leading-none",
-                        !amountsVisible && "tracking-wider",
-                      )}
-                    >
-                      {amountsVisible ? `-${formatCurrency(moneyOut, inOutCurrency)}` : MASK}
-                    </span>
-                  </p>
-                </div>
-              </div>
-            </div>
-            {lastWebhook || lastError ? (
-              <div className="max-w-[18rem] space-y-1 text-right text-xs text-muted-foreground">
-                {lastWebhook ? <p className="truncate">Last webhook {new Date(lastWebhook).toLocaleString()}</p> : null}
-                {lastError ? (
-                  <p className="truncate">
-                    Last error {lastError.method} {lastError.path} · {lastError.status}
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
+        <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground">
+            Go live after a test send, test receive, and test Checkout, then mint a live key and add a live webhook.
+          </p>
+          <div className="flex flex-wrap gap-3 text-sm">
+            <Link href="/customers" className="underline underline-offset-2">
+              Receive
+            </Link>
+            <Link href="/checkout" className="underline underline-offset-2">
+              Checkout
+            </Link>
+            <Link href="/console/keys" className="underline underline-offset-2">
+              Keys
+            </Link>
+            <Link href="/console/webhooks" className="underline underline-offset-2">
+              Webhooks
+            </Link>
           </div>
         </CardContent>
       </Card>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Payments</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums">
+              {overview.isPending && !overview.data ? "—" : transactionCount.toLocaleString()}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">in this mode</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Last webhook</p>
+            <p className="mt-1 truncate text-sm font-medium">
+              {lastWebhook ? new Date(lastWebhook).toLocaleString() : "None yet"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">most recent delivery</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Last 4xx</p>
+            <p className="mt-1 truncate text-sm font-medium">
+              {last4xx ? `${last4xx.method} ${last4xx.path} · ${last4xx.status}` : "None"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {last4xx ? new Date(last4xx.created_at).toLocaleString() : "API errors in this mode"}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -161,9 +100,7 @@ export default function ConsoleHomePage() {
                 <div className="h-16 animate-pulse rounded-md bg-muted" />
               </div>
             ) : recent.length === 0 ? (
-              <div className="py-8 text-center text-sm text-muted-foreground">
-                No transactions yet
-              </div>
+              <div className="py-8 text-center text-sm text-muted-foreground">No payments yet</div>
             ) : (
               <div className="divide-y">
                 {recent.map((txn) => {
@@ -186,9 +123,7 @@ export default function ConsoleHomePage() {
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-foreground">
-                          {txn.description || txn.type}
-                        </p>
+                        <p className="truncate text-sm font-medium text-foreground">{txn.description || txn.type}</p>
                         <p className="mt-1 truncate text-xs text-muted-foreground">
                           {formatTransactionRowDateTime(txn.created)}
                         </p>

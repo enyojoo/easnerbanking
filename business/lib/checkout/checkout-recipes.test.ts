@@ -18,7 +18,7 @@ describe("checkout recipes", () => {
     expect(recipeVerifyWebhook()).toContain("createHmac")
   })
 
-  it("mounts the payment form on the page, like invoices and payment links", () => {
+  it("mounts Checkout.js on the merchant site", () => {
     const html = recipeBrowserHtml("easner_pk_test_x")
     expect(html).toContain("EasnerCheckout.mount")
     expect(html).not.toContain("openOverlay")

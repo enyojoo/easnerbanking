@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { ConsolePageHeader } from "@/components/console/console-page-header"
 import { PAGE_COPY } from "@/lib/copy/business-ui-copy"
 import { useConsoleLivemode } from "@/lib/console/livemode-context"
@@ -17,6 +19,7 @@ type LogRow = {
   status: number | null
   error_code: string | null
   duration_ms: number | null
+  idempotency_key: string | null
   created_at: string
 }
 
@@ -45,6 +48,8 @@ function buildQuery(params: {
 
 export default function ConsoleLogsPage() {
   const { livemode } = useConsoleLivemode()
+  const searchParams = useSearchParams()
+  const jumpId = searchParams.get("id")
   const [method, setMethod] = useState("all")
   const [path, setPath] = useState("")
   const [status, setStatus] = useState("all")
@@ -53,6 +58,7 @@ export default function ConsoleLogsPage() {
   const [rows, setRows] = useState<LogRow[]>([])
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [selected, setSelected] = useState<LogRow | null>(null)
 
   const filters = useMemo(
     () => ({ livemode, method, path, status, since, until }),
@@ -80,6 +86,25 @@ export default function ConsoleLogsPage() {
   const data = query.data
   const displayRows = data ? data.logs : rows
   const cursor = data ? data.nextCursor : nextCursor
+
+  useEffect(() => {
+    if (!jumpId) return
+    const match = displayRows.find((row) => row.id === jumpId)
+    if (match) {
+      setSelected(match)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      const res = await fetchWithSession(`/api/platform/logs?livemode=${livemode}&id=${encodeURIComponent(jumpId)}`)
+      const body = (await res.json().catch(() => ({}))) as LogsResponse
+      const row = body.logs?.[0]
+      if (!cancelled && row) setSelected(row)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [jumpId, displayRows, livemode])
 
   const loadMore = async () => {
     if (!cursor) return
@@ -163,17 +188,23 @@ export default function ConsoleLogsPage() {
         ) : (
           <ul className="divide-y">
             {displayRows.map((row) => (
-              <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
-                <span className="font-mono text-xs">
-                  {row.method} {row.path}
-                </span>
-                <span className="text-muted-foreground">
-                  {row.status ?? "—"}
-                  {row.error_code ? ` · ${row.error_code}` : ""}
-                  {row.duration_ms != null ? ` · ${row.duration_ms}ms` : ""}
-                  {" · "}
-                  {new Date(row.created_at).toLocaleString()}
-                </span>
+              <li key={row.id}>
+                <button
+                  type="button"
+                  onClick={() => setSelected(row)}
+                  className="flex w-full flex-wrap items-center justify-between gap-2 px-4 py-3 text-left text-sm hover:bg-muted/50"
+                >
+                  <span className="font-mono text-xs">
+                    {row.method} {row.path}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {row.status ?? "—"}
+                    {row.error_code ? ` · ${row.error_code}` : ""}
+                    {row.duration_ms != null ? ` · ${row.duration_ms}ms` : ""}
+                    {" · "}
+                    {new Date(row.created_at).toLocaleString()}
+                  </span>
+                </button>
               </li>
             ))}
           </ul>
@@ -186,6 +217,46 @@ export default function ConsoleLogsPage() {
             {loadingMore ? "Loading…" : "Load more"}
           </Button>
         </div>
+      ) : null}
+
+      {selected ? (
+        <Sheet open onOpenChange={(open) => !open && setSelected(null)}>
+          <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
+            <SheetHeader>
+              <SheetTitle className="font-mono text-sm">
+                {selected.method} {selected.path}
+              </SheetTitle>
+            </SheetHeader>
+            <dl className="space-y-3 px-4 pb-6 text-sm">
+              <div>
+                <dt className="text-xs text-muted-foreground">Status</dt>
+                <dd>{selected.status ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Error code</dt>
+                <dd>{selected.error_code ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Duration</dt>
+                <dd>{selected.duration_ms != null ? `${selected.duration_ms}ms` : "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">When</dt>
+                <dd>{new Date(selected.created_at).toLocaleString()}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Request id</dt>
+                <dd className="font-mono text-xs">{selected.id}</dd>
+              </div>
+              {selected.idempotency_key ? (
+                <div>
+                  <dt className="text-xs text-muted-foreground">Idempotency-Key</dt>
+                  <dd className="font-mono text-xs">{selected.idempotency_key}</dd>
+                </div>
+              ) : null}
+            </dl>
+          </SheetContent>
+        </Sheet>
       ) : null}
     </div>
   )

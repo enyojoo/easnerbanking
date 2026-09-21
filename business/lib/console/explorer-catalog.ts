@@ -5,15 +5,9 @@ export type ExplorerEndpoint = {
   capability: string
   description: string
   sampleBody?: Record<string, unknown>
+  scope: "checkout" | "accounts.read" | "accounts.write" | "transfers.write"
 }
 
-/**
- * Hand-authored starter catalog for the API Explorer — the most-used `/v1`
- * endpoints that take no path parameters, so "pick one and send it" works
- * with zero setup. Grow this list as the Explorer proves useful; endpoints
- * needing a path param (e.g. `/accounts/{id}`) are a natural next step once
- * this ships.
- */
 export const EXPLORER_ENDPOINTS: ExplorerEndpoint[] = [
   {
     id: "customers.list",
@@ -21,6 +15,16 @@ export const EXPLORER_ENDPOINTS: ExplorerEndpoint[] = [
     path: "/v1/customers",
     capability: "Customers",
     description: "List customers",
+    scope: "accounts.read",
+  },
+  {
+    id: "customers.retrieve",
+    method: "GET",
+    path: "/v1/customers/{id}",
+    capability: "Customers",
+    description: "Retrieve a customer",
+    sampleBody: { id: "cus_..." },
+    scope: "accounts.read",
   },
   {
     id: "customers.create",
@@ -29,6 +33,7 @@ export const EXPLORER_ENDPOINTS: ExplorerEndpoint[] = [
     capability: "Customers",
     description: "Create a customer",
     sampleBody: { email: "customer@example.com", name: "Sample Customer" },
+    scope: "transfers.write",
   },
   {
     id: "accounts.list",
@@ -36,6 +41,16 @@ export const EXPLORER_ENDPOINTS: ExplorerEndpoint[] = [
     path: "/v1/accounts",
     capability: "Accounts",
     description: "List accounts",
+    scope: "accounts.read",
+  },
+  {
+    id: "accounts.retrieve",
+    method: "GET",
+    path: "/v1/accounts/{id}",
+    capability: "Accounts",
+    description: "Retrieve an account",
+    sampleBody: { id: "acct_..." },
+    scope: "accounts.read",
   },
   {
     id: "accounts.create",
@@ -44,6 +59,7 @@ export const EXPLORER_ENDPOINTS: ExplorerEndpoint[] = [
     capability: "Accounts",
     description: "Open an account for a customer",
     sampleBody: { currency: "USD", customer: "cus_..." },
+    scope: "accounts.write",
   },
   {
     id: "transfers.list",
@@ -51,6 +67,16 @@ export const EXPLORER_ENDPOINTS: ExplorerEndpoint[] = [
     path: "/v1/transfers",
     capability: "Transfers",
     description: "List transfers",
+    scope: "accounts.read",
+  },
+  {
+    id: "transfers.retrieve",
+    method: "GET",
+    path: "/v1/transfers/{id}",
+    capability: "Transfers",
+    description: "Retrieve a transfer",
+    sampleBody: { id: "tr_..." },
+    scope: "accounts.read",
   },
   {
     id: "quotes.create",
@@ -59,6 +85,7 @@ export const EXPLORER_ENDPOINTS: ExplorerEndpoint[] = [
     capability: "Transfers",
     description: "Quote a transfer",
     sampleBody: { amount: 2500, currency: "USD", source: "acct_..." },
+    scope: "transfers.write",
   },
   {
     id: "transactions.list",
@@ -66,6 +93,16 @@ export const EXPLORER_ENDPOINTS: ExplorerEndpoint[] = [
     path: "/v1/transactions",
     capability: "Transactions",
     description: "List transactions",
+    scope: "accounts.read",
+  },
+  {
+    id: "transactions.retrieve",
+    method: "GET",
+    path: "/v1/transactions/{id}",
+    capability: "Transactions",
+    description: "Retrieve a transaction",
+    sampleBody: { id: "txn_..." },
+    scope: "accounts.read",
   },
   {
     id: "payment_methods.list",
@@ -73,5 +110,6 @@ export const EXPLORER_ENDPOINTS: ExplorerEndpoint[] = [
     path: "/v1/payment_methods",
     capability: "Transfers",
     description: "List supported corridors and rails",
+    scope: "accounts.read",
   },
 ]

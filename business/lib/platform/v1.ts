@@ -9,7 +9,7 @@ import {
 } from "@/lib/checkout/authenticate-merchant-key"
 import { checkoutApiError } from "@/lib/checkout/checkout-api-error"
 
-export type TimedMerchantContext = MerchantKeyContext & { startedAt: number }
+export type TimedMerchantContext = MerchantKeyContext & { startedAt: number; idempotencyKey: string | null }
 
 export function v1Error(status: number, code: string, message: string) {
   const { body } = checkoutApiError(status, code, message)
@@ -45,7 +45,7 @@ export async function requireMerchant(
       return { ok: false, response: v1Error(429, "rate_limit", "Too many requests") }
     }
   }
-  return { ok: true, ctx: { ...auth.ctx, startedAt } }
+  return { ok: true, ctx: { ...auth.ctx, startedAt, idempotencyKey: readIdempotencyKey(request) } }
 }
 
 export async function denyIfRestricted(
@@ -83,6 +83,7 @@ export async function logPlatformApi(
     status: number
     errorCode?: string | null
     startedAt?: number
+    idempotencyKey?: string | null
   },
 ): Promise<void> {
   const durationMs =
@@ -108,6 +109,7 @@ export async function logPlatformApi(
       status: input.status,
       error_code: input.errorCode ?? null,
       ...(durationMs != null ? { duration_ms: durationMs } : {}),
+      ...(input.idempotencyKey ? { idempotency_key: input.idempotencyKey } : {}),
     })
   } catch (error) {
     console.warn("[platform] api log:", error instanceof Error ? error.message : error)

@@ -40,8 +40,9 @@ describe("merchant webhook signatures", () => {
 })
 
 describe("subscribed webhook events", () => {
-  it("keeps checkout events when the column is empty", () => {
-    expect(normalizeSubscribedWebhookEvents(null)).toContain("checkout.completed")
+  it("defaults to Banking events when the column is empty", () => {
+    expect(normalizeSubscribedWebhookEvents(null)).toContain("transfer.completed")
+    expect(normalizeSubscribedWebhookEvents(null)).toContain("customer.updated")
     expect(normalizeSubscribedWebhookEvents(["account.updated"])).toEqual(["account.updated"])
     expect(normalizeSubscribedWebhookEvents([])).toEqual([])
   })

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query"
 import { qk } from "@easner/shared"
 import { apiFetch } from "@/lib/query/api-client"
 import { useScope } from "@/lib/query/scope"
+import { useConsoleLivemode } from "@/lib/console/livemode-context"
 import type { CheckoutTestPayment } from "@/lib/checkout/hub-types"
 
 export type CheckoutTestPaymentsPayload = {
@@ -14,11 +15,12 @@ const STALE_MS = 0
 
 export function useCheckoutTestPaymentsQuery(enabled: boolean) {
   const { scope } = useScope()
+  const { livemode } = useConsoleLivemode()
   return useQuery<CheckoutTestPaymentsPayload>({
     queryKey: scope
-      ? qk.collections.checkoutSettings.testPayments(scope)
-      : ["collections", "checkout-settings", "test-payments", "disabled"],
-    queryFn: () => apiFetch<CheckoutTestPaymentsPayload>("/api/checkout/test-payments"),
+      ? [...qk.collections.checkoutSettings.testPayments(scope), livemode]
+      : ["collections", "checkout-settings", "test-payments", "disabled", livemode],
+    queryFn: () => apiFetch<CheckoutTestPaymentsPayload>(`/api/checkout/test-payments?livemode=${livemode}`),
     enabled: enabled && Boolean(scope),
     staleTime: STALE_MS,
     gcTime: 30 * 60_000,

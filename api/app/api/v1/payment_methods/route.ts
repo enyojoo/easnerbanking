@@ -10,6 +10,7 @@ export async function GET(request: Request) {
   const livemode = auth.ctx.mode === "live"
   await logPlatformApi(admin, {
     startedAt: auth.ctx.startedAt,
+    idempotencyKey: auth.ctx.idempotencyKey,
     businessId: auth.ctx.businessId,
     livemode,
     method: "GET",

@@ -22,9 +22,9 @@ function readStoredLivemode(): ConsoleLivemode {
 }
 
 /**
- * Persists Test/Live across the whole Developers section (localStorage, not
- * the URL) so switching via the sidebar — a plain `<Link>`, not a same-page
- * tab — never silently resets the mode back to test.
+ * Persists Test/Live across Console (localStorage, not the URL) so switching
+ * via the sidebar — a plain `<Link>`, not a same-page tab — never silently
+ * resets the mode back to test.
  */
 export function ConsoleLivemodeProvider({ children }: { children: React.ReactNode }) {
   const [livemode, setLivemodeState] = useState<ConsoleLivemode>("test")

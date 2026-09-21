@@ -1,17 +1,17 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { APP_URLS } from "@easner/shared"
+import { useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { ConsolePageHeader } from "@/components/console/console-page-header"
 import { PAGE_COPY } from "@/lib/copy/business-ui-copy"
 import { EXPLORER_ENDPOINTS } from "@/lib/console/explorer-catalog"
-
-const API_ORIGIN = APP_URLS.api
+import { useConsoleLivemode } from "@/lib/console/livemode-context"
+import { useCheckoutSettings } from "@/hooks/use-checkout-settings"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 
 function groupByCapability() {
   const groups = new Map<string, typeof EXPLORER_ENDPOINTS>()
@@ -24,8 +24,12 @@ function groupByCapability() {
 }
 
 export default function ConsoleExplorerPage() {
-  const [endpointId, setEndpointId] = useState(EXPLORER_ENDPOINTS[0].id)
-  const [secretKey, setSecretKey] = useState("")
+  const searchParams = useSearchParams()
+  const { livemode } = useConsoleLivemode()
+  const { data } = useCheckoutSettings()
+  const keys = (data?.keys ?? []).filter((key) => key.mode === livemode)
+  const [endpointId, setEndpointId] = useState(searchParams.get("endpoint") || EXPLORER_ENDPOINTS[0].id)
+  const [keyId, setKeyId] = useState("")
   const [body, setBody] = useState(() => JSON.stringify(EXPLORER_ENDPOINTS[0].sampleBody ?? {}, null, 2))
   const [sending, setSending] = useState(false)
   const [response, setResponse] = useState<{ status: number; body: string } | null>(null)
@@ -33,6 +37,20 @@ export default function ConsoleExplorerPage() {
 
   const endpoint = EXPLORER_ENDPOINTS.find((e) => e.id === endpointId) ?? EXPLORER_ENDPOINTS[0]
   const groups = useMemo(() => groupByCapability(), [])
+
+  useEffect(() => {
+    const prefill = searchParams.get("endpoint")
+    const objectId = searchParams.get("id")
+    if (prefill && EXPLORER_ENDPOINTS.some((item) => item.id === prefill)) {
+      setEndpointId(prefill)
+      const next = EXPLORER_ENDPOINTS.find((item) => item.id === prefill)
+      setBody(JSON.stringify({ ...(next?.sampleBody ?? {}), ...(objectId ? { id: objectId } : {}) }, null, 2))
+    }
+  }, [searchParams])
+
+  useEffect(() => {
+    if (!keyId && keys[0]) setKeyId(keys[0].id)
+  }, [keyId, keys])
 
   const selectEndpoint = (id: string) => {
     setEndpointId(id)
@@ -42,32 +60,31 @@ export default function ConsoleExplorerPage() {
     setError(null)
   }
 
-  const curl =
-    endpoint.method === "GET"
-      ? `curl ${API_ORIGIN}${endpoint.path} \\\n  -H "Authorization: Bearer ${secretKey || "easner_sk_test_..."}"`
-      : `curl ${API_ORIGIN}${endpoint.path} \\\n  -H "Authorization: Bearer ${secretKey || "easner_sk_test_..."}" \\\n  -H "Content-Type: application/json" \\\n  -d '${body.replace(/\n\s*/g, " ")}'`
-
   const send = async () => {
     setError(null)
     setResponse(null)
-    if (!secretKey.trim()) {
-      setError("Paste a test secret key first — mint one on the API keys page.")
+    if (!keyId) {
+      setError("Create a key for this mode first.")
+      return
+    }
+    let parsed: Record<string, unknown> = {}
+    try {
+      parsed = body.trim() ? (JSON.parse(body) as Record<string, unknown>) : {}
+    } catch {
+      setError("Request body must be JSON.")
       return
     }
     setSending(true)
     try {
-      const res = await fetch(`${API_ORIGIN}${endpoint.path}`, {
-        method: endpoint.method,
-        headers: {
-          Authorization: `Bearer ${secretKey.trim()}`,
-          ...(endpoint.method === "POST" ? { "Content-Type": "application/json" } : {}),
-        },
-        body: endpoint.method === "POST" ? body : undefined,
+      const res = await fetchWithSession("/api/platform/workbench", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keyId, endpointId, body: parsed }),
       })
       const text = await res.text()
       setResponse({ status: res.status, body: text })
     } catch {
-      setError("Request failed — check the console for a CORS or network error.")
+      setError("Request failed.")
     } finally {
       setSending(false)
     }
@@ -78,19 +95,23 @@ export default function ConsoleExplorerPage() {
       <ConsolePageHeader title={PAGE_COPY.consoleExplorer.title} description={PAGE_COPY.consoleExplorer.intro} />
 
       <div className="space-y-1.5">
-        <Label htmlFor="explorer-key">Your test secret key</Label>
-        <Input
-          id="explorer-key"
-          type="password"
-          value={secretKey}
-          onChange={(e) => setSecretKey(e.target.value)}
-          placeholder="sk_test_..."
-          className="font-mono text-xs"
-        />
-        <p className="text-xs text-muted-foreground">
-          Never stored — only kept in this tab. Easner can&rsquo;t show you a secret key again after creation, so
-          paste one you already have or mint a fresh one on the API keys page.
-        </p>
+        <Label>Key</Label>
+        {keys.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Mint a {livemode} key in Settings. The secret stays hashed.</p>
+        ) : (
+          <Select value={keyId} onValueChange={setKeyId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Choose a key" />
+            </SelectTrigger>
+            <SelectContent>
+              {keys.map((key) => (
+                <SelectItem key={key.id} value={key.id}>
+                  {key.name || "Unnamed key"} · …{key.secret_key_last4}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       <div className="space-y-1.5">
@@ -114,31 +135,22 @@ export default function ConsoleExplorerPage() {
         </Select>
       </div>
 
-      {endpoint.method === "POST" ? (
-        <div className="space-y-1.5">
-          <Label htmlFor="explorer-body">Request body</Label>
-          <Textarea
-            id="explorer-body"
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            rows={6}
-            className="font-mono text-xs"
-          />
-        </div>
-      ) : null}
+      <div className="space-y-1.5">
+        <Label htmlFor="explorer-body">{endpoint.method === "GET" && !endpoint.path.includes("{") ? "Query JSON (optional)" : "Request JSON"}</Label>
+        <Textarea
+          id="explorer-body"
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          rows={6}
+          className="font-mono text-xs"
+        />
+      </div>
 
-      <Button type="button" disabled={sending} onClick={() => void send()}>
+      <Button type="button" disabled={sending || !keyId} onClick={() => void send()}>
         {sending ? "Sending…" : "Send request"}
       </Button>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
-
-      <div className="space-y-1.5">
-        <Label>Equivalent curl</Label>
-        <pre className="overflow-x-auto rounded-lg border bg-muted/40 p-3 text-xs leading-relaxed">
-          <code>{curl}</code>
-        </pre>
-      </div>
 
       {response ? (
         <div className="space-y-1.5">

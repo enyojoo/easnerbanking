@@ -24,10 +24,13 @@ export const WORKSPACE_NAV_HREFS = [
 const PLATFORM_NAV_HREFS = [
   "/console",
   "/customers",
-  "/accounts",
   "/transactions",
+  "/accounts",
   "/checkout",
-  "/settings",
+  "/console/keys",
+  "/console/webhooks",
+  "/console/logs",
+  "/console/explorer",
 ] as const
 
 const SECONDARY_NAV_HREFS = [
@@ -44,7 +47,7 @@ function navHrefsForSurface(): readonly string[] {
 
 function secondaryHrefsForSurface(): readonly string[] {
   return getClientAppSurface() === "platform"
-    ? ["/console/keys", "/console/webhooks"]
+    ? ["/console/keys", "/console/webhooks", "/console/logs", "/console/explorer"]
     : SECONDARY_NAV_HREFS
 }
 

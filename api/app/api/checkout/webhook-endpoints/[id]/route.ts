@@ -19,7 +19,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const { id } = await context.params
 
   const body = (await request.json().catch(() => null)) as
-    | { url?: string; description?: string; events?: string[]; rotate_secret?: boolean }
+    | {
+        url?: string
+        description?: string
+        events?: string[]
+        rotate_secret?: boolean
+        disabled?: boolean
+      }
     | null
 
   const admin = createSupabaseAdmin()
@@ -47,13 +53,18 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     patch.webhook_secret_ciphertext = ciphertext
     patch.webhook_secret_last4 = checkoutKeyLast4(secret)
   }
+  if (body?.disabled === false) {
+    patch.disabled_at = null
+  } else if (body?.disabled === true) {
+    patch.disabled_at = new Date().toISOString()
+  }
 
   const { data: updated, error } = await admin
     .from("platform_webhook_endpoints")
     .update(patch)
     .eq("id", id)
     .eq("business_id", ctx.businessId)
-    .select("id, url, description, livemode, events, webhook_secret_last4, created_at")
+    .select("id, url, description, livemode, events, webhook_secret_last4, disabled_at, created_at")
     .single()
 
   if (error || !updated) {

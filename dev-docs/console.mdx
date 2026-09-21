@@ -1,63 +1,67 @@
 ---
 title: Console
-description: Keys, webhooks, logs, events, and the Dev dashboard.
+description: Keys, webhooks, logs, and the developer dashboard.
 icon: layout-dashboard
 ---
 
-Console is Dev Home for keys and API activity.
+Console is the developer portal. Banking is the operator app.
 
-Open Dev on `business.easner.com`. You land on `/console`.
+Open Console on `business.easner.com` (or `platform.easner.com` when hosts are split). You land on `/console`. The Test / Live switch in the header applies to Home, Customers, Payments, Accounts, Checkout, and Settings.
 
 ## What you see
 
 | Path | Expected |
 |---|---|
-| `/console` | Test / live switch. Volume. Money in / money out. Recent activity. Last webhook and last API error. |
-| `/console/keys` | One test key and one live key. Reveal the secret once. New keys include checkout, accounts, and transfers. |
-| `/console/webhooks` | One endpoint URL per mode. Event ticks. Signing secret. Deliveries and redeliver. |
+| `/console` | Home. Integration health: payment count, last webhook, last 4xx. Quickstart. |
+| `/customers` | Customers in the current mode. |
+| `/transactions` | Payments in the current mode. |
+| `/accounts` | Customer vault accounts. |
+| `/checkout` | Website Checkout. Payments, Integrate, and Settings per site. |
+| `/console/keys` | API keys for the **current** Test or Live mode. Create as many as you need. |
+| `/console/webhooks` | Endpoints for the current mode. Create as many URLs as you need. |
 | `/console/logs` | Recent `v1` requests for this business and mode. |
-| `/console/events` | The webhook catalog. Tick the same events as Webhooks. |
+| `/console/events` | Event log (every event, whether or not delivery succeeded). Not the event catalog — pick events on a webhook endpoint. |
+| `/console/explorer` | Workbench. Call `v1` as this business without pasting a secret. |
 
-Nav: **Console, Customers, Accounts, Transactions, Checkout**.
+Nav: **Home, Customers, Payments, Accounts, Checkout, Settings**. Settings opens on API keys (`/console/keys`), then Webhooks, Logs, and Workbench.
 
-Switch to Banking to see Checkout collects on your business balance and first-party activity. Console lists `v1` objects.
+Switch to Banking for first-party send, cards, and collections. Checkout still credits your **business balance**. Console lists `v1` objects.
 
 ## Keys
 
-- One test key (`easner_sk_test_…` / `easner_pk_test_…`).
-- One live key (`easner_sk_live_…` / `easner_pk_live_…`).
+- Many keys per mode. Each key is test (`easner_sk_test_…` / `easner_pk_test_…`) or live (`easner_sk_live_…` / `easner_pk_live_…`).
 - Secret key: server only. Publishable key: browser, Checkout only.
-- **New** keys include `checkout`, `accounts.read`, `accounts.write`, `transfers.write`.
-- Existing checkout-only keys stay checkout-only until you mint a new key.
+- New keys can include Banking scopes (`accounts.read`, `accounts.write`, `transfers.write`) and Checkout.
+- Restricted keys use a subset of those scopes. Existing checkout-only keys stay checkout-only until you mint a new key.
 
 <Tip>
-  If a call returns `key_forbidden`, the key is missing that scope. Mint a new key from Console.
+  If a call returns `key_forbidden`, the key is missing that scope. Mint a new key from Settings → API keys.
 </Tip>
 
 ## Webhooks
 
-- One URL per mode (test and live may differ).
-- Tick which events to receive. Unticked events are not delivered.
+- Many URLs per mode (test and live may differ).
+- Default ticks are Banking events: `customer.updated`, `account.updated`, `transfer.completed`, `transaction.created`. Add Checkout events when you integrate a site.
 - Verify every request with `easner-signature`. See [Webhooks](/webhooks).
-- Failed deliveries retry: 1m, 5m, 30m, 2h, 24h. After five attempts the delivery is failed. Redeliver from Console.
+- Failed deliveries retry: 1m, 5m, 30m, 2h, 24h. After five attempts the delivery is failed. Redeliver from Console. Disable is reversible — Enable puts the endpoint back.
 
 ## Expected operator path
 
 <Steps>
-  <Step title="Switch to Dev">
-    Open Dev on `business.easner.com`.
+  <Step title="Switch to Console">
+    Open Console. Stay in Test.
   </Step>
   <Step title="Mint a test key">
-    Store the secret in your server env.
+    Store the secret in your server env (`EASNER_SECRET_KEY`).
   </Step>
   <Step title="Add a webhook URL">
-    Tick `transfer.completed`, `transaction.created`, `customer.updated`, and the checkout events you need.
+    Tick Banking events, plus Checkout events if you take website payments.
   </Step>
   <Step title="Stay in test">
     Use test until quotes, transfers, receive, and `checkout.completed` land on your endpoint.
   </Step>
   <Step title="Mint a live key">
-    Point the live webhook URL at production.
+    Point a live webhook URL at production.
   </Step>
 </Steps>
 

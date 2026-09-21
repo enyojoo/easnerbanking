@@ -8,10 +8,8 @@ export const PLATFORM_KEY_SCOPES = [
 export type PlatformKeyScope = (typeof PLATFORM_KEY_SCOPES)[number]
 
 export const DEFAULT_WEBHOOK_EVENTS = [
-  "checkout.completed",
-  "checkout.async_succeeded",
-  "checkout.failed",
-  "payment.available",
-  "subscription.updated",
-  "subscription.canceled",
+  "customer.updated",
+  "account.updated",
+  "transfer.completed",
+  "transaction.created",
 ] as const

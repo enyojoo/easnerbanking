@@ -16,6 +16,7 @@ export async function GET(request: Request) {
     })
     await logPlatformApi(admin, {
       startedAt: auth.ctx.startedAt,
+      idempotencyKey: auth.ctx.idempotencyKey,
       businessId: auth.ctx.businessId,
       livemode,
       method: "GET",
@@ -27,6 +28,7 @@ export async function GET(request: Request) {
     const message = error instanceof Error ? error.message : "Could not list accounts"
     await logPlatformApi(admin, {
       startedAt: auth.ctx.startedAt,
+      idempotencyKey: auth.ctx.idempotencyKey,
       businessId: auth.ctx.businessId,
       livemode,
       method: "GET",
@@ -78,6 +80,7 @@ export async function POST(request: Request) {
     })
     await logPlatformApi(admin, {
       startedAt: auth.ctx.startedAt,
+      idempotencyKey: auth.ctx.idempotencyKey,
       businessId: auth.ctx.businessId,
       livemode,
       method: "POST",
@@ -89,6 +92,7 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "Could not create account"
     await logPlatformApi(admin, {
       startedAt: auth.ctx.startedAt,
+      idempotencyKey: auth.ctx.idempotencyKey,
       businessId: auth.ctx.businessId,
       livemode,
       method: "POST",

@@ -14,7 +14,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const admin = createSupabaseAdmin()
   const { data: customer } = await admin
     .from("platform_customers")
-    .select("id, email, name, external_id, status, livemode, created_at")
+    .select("id, email, name, external_id, easetag, status, verification_status, livemode, created_at")
     .eq("id", id)
     .eq("business_id", business.businessId)
     .eq("livemode", livemode)

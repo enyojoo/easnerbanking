@@ -7,7 +7,7 @@ import { prefetchDynamicRouteFull } from "@/lib/query/prefetch-dynamic-route"
 import { Globe, Pencil, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { CollectionsPageHeader } from "@/components/collections/collections-page-header"
-import { CollectionsReadinessBanner } from "@/components/collections/collections-readiness-banner"
+import { CheckoutSessionsTable } from "@/components/checkout/checkout-sessions-table"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -22,7 +22,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { CheckoutSitesTableSkeleton } from "@/components/collections/collections-skeletons"
-import { CheckoutTestPaymentsDialog } from "@/components/checkout/checkout-test-payments-dialog"
 import { deleteCheckoutSite, useCheckoutSettings } from "@/hooks/use-checkout-settings"
 import { COLLECTIONS_COPY, PAGE_COPY } from "@/lib/copy/business-ui-copy"
 
@@ -31,8 +30,8 @@ export function CheckoutSitesPage() {
   const { data, loading, error, refetch } = useCheckoutSettings()
   const [removeId, setRemoveId] = useState<string | null>(null)
   const [removing, setRemoving] = useState(false)
-  const [testPaymentsOpen, setTestPaymentsOpen] = useState(false)
   const sites = data?.sites ?? []
+  const [view, setView] = useState<"sessions" | "websites">("sessions")
   const [tab, setTab] = useState<"all" | "incomplete">("all")
   const [search, setSearch] = useState("")
   const incompleteCount = sites.filter((site) => !site.successUrl).length
@@ -73,22 +72,12 @@ export function CheckoutSitesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <CollectionsReadinessBanner />
       <div className="flex flex-col gap-4">
         <CollectionsPageHeader
           title={PAGE_COPY.checkout.title}
           intro={PAGE_COPY.checkout.intro}
           actions={
             <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-              <p className="text-sm text-muted-foreground lg:text-right">
-                {COLLECTIONS_COPY.notBuildingSite}{" "}
-                <Link href="/links" className="underline underline-offset-2">
-                  {COLLECTIONS_COPY.openPaymentLinks}
-                </Link>
-              </p>
-              <Button type="button" variant="outline" onClick={() => setTestPaymentsOpen(true)}>
-                {COLLECTIONS_COPY.viewTestPayments}
-              </Button>
               {createButton}
             </div>
           }
@@ -101,6 +90,34 @@ export function CheckoutSitesPage() {
         </p>
       ) : null}
 
+      {sites.length > 0 ? (
+        <div className="flex min-w-0 space-x-1 overflow-x-auto border-b">
+          {(
+            [
+              { id: "sessions" as const, label: "Sessions" },
+              { id: "websites" as const, label: "Websites" },
+            ]
+          ).map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setView(item.id)}
+              className={`shrink-0 border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+                view === item.id
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {sites.length > 0 && view === "sessions" ? <CheckoutSessionsTable /> : null}
+
+      {sites.length === 0 || view === "websites" ? (
+        <>
       {sites.length > 0 ? (
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 flex-1 space-x-1 overflow-x-auto">
@@ -221,8 +238,8 @@ export function CheckoutSitesPage() {
           )}
         </CardContent>
       </Card>
-
-      <CheckoutTestPaymentsDialog open={testPaymentsOpen} onOpenChange={setTestPaymentsOpen} />
+        </>
+      ) : null}
 
       <AlertDialog open={Boolean(removeId)} onOpenChange={(open) => !open && setRemoveId(null)}>
         <AlertDialogContent>

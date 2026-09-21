@@ -14,6 +14,10 @@ import { MessageCircle } from "lucide-react"
 import { DashboardNav } from "@/components/dashboard-nav"
 import { DevPlatformAccessGate } from "@/components/dev-platform-access-gate"
 import { BusinessDropdown } from "@/components/business-dropdown"
+import { ConsoleModeSwitch } from "@/components/console/console-mode-switch"
+import { ConsoleJumpTo } from "@/components/console/console-jump-to"
+import { ConsoleLivemodeProvider } from "@/lib/console/livemode-context"
+import { useAppSurface } from "@/lib/use-app-surface"
 import { AppLockProvider } from "@/components/app-lock/app-lock-provider"
 import { Button } from "@/components/ui/button"
 import { useBusinessProfile } from "@/lib/use-business-profile"
@@ -75,6 +79,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
   const { user, logout, sessionUserId } = useAuth()
   const router = useRouter()
   const pathname = usePathname() ?? ""
+  const surface = useAppSurface()
   const onSettingsPage = pathname === "/settings" || pathname.startsWith("/settings/")
   const queryClient = useQueryClient()
 
@@ -176,10 +181,25 @@ export function DashboardShell({ children }: DashboardShellProps) {
 
   return (
     <AppLockProvider>
+      <ConsoleLivemodeProvider>
       <div className="min-h-dvh bg-background text-foreground">
         <DashboardNav />
         <div className="ml-64 flex h-dvh flex-col overflow-hidden">
           <header className="z-30 flex h-16 min-h-16 shrink-0 items-center justify-end gap-3 border-b border-border/60 bg-background/80 px-8 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
+          {surface === "platform" ? (
+            <div className="mr-auto flex min-w-0 flex-1 items-center gap-3">
+              <ConsoleModeSwitch />
+              <ConsoleJumpTo />
+              <a
+                href="https://www.easner.com/developers"
+                target="_blank"
+                rel="noreferrer"
+                className="shrink-0 text-sm font-medium text-muted-foreground hover:text-foreground"
+              >
+                Docs
+              </a>
+            </div>
+          ) : null}
           {showProfileChromeSkeleton ? (
             <div className="flex items-center gap-3">
               <div className="h-9 w-9 animate-pulse rounded-full border-2 border-border bg-muted" />
@@ -273,6 +293,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
           </main>
         </div>
       </div>
+      </ConsoleLivemodeProvider>
     </AppLockProvider>
   )
 }

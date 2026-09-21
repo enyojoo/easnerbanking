@@ -143,9 +143,9 @@ export function CheckoutIntegrationGuide({ data }: { data: CheckoutHubPayload })
           <li>Add a webhook URL so you can fulfil after payment, not from the browser.</li>
         </ul>
         <p className="text-sm text-muted-foreground">
-          Mental model: your server creates a session (amount + metadata) → the customer pays on
-          your page — same form as invoices and payment links → <code>checkout.completed</code>{" "}
-          tells you to unlock access. Golden rule: amount and secret key never in the browser.
+          Mental model: your server creates a session (amount + metadata) → the customer pays with
+          Checkout.js on your site → <code>checkout.completed</code> tells you to unlock access.
+          Golden rule: amount and secret key never in the browser.
         </p>
       </section>
 
@@ -168,7 +168,7 @@ export function CheckoutIntegrationGuide({ data }: { data: CheckoutHubPayload })
           <li>POST /v1/checkout/sessions from your server with the secret key.</li>
           <li>Return only client_secret to the page.</li>
           <li>Load js.easner.com/v1/checkout.js.</li>
-          <li>Mount EasnerCheckout on the page (same form as invoices and payment links).</li>
+          <li>Mount EasnerCheckout on the page with Checkout.js.</li>
           <li>Fulfil in the checkout.completed webhook using metadata.</li>
         </ol>
         <Tabs value={recipeId} onValueChange={(value) => setRecipeId(value as CheckoutRecipeId)}>

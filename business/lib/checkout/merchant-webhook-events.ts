@@ -22,6 +22,25 @@ export const MERCHANT_WEBHOOK_EVENTS = [
 
 export type MerchantWebhookEvent = (typeof MERCHANT_WEBHOOK_EVENTS)[number]
 
+export const BANKING_WEBHOOK_EVENTS: MerchantWebhookEvent[] = [
+  "account.updated",
+  "customer.created",
+  "customer.updated",
+  "transfer.created",
+  "transfer.completed",
+  "transfer.failed",
+  "transaction.created",
+]
+
+export const CHECKOUT_WEBHOOK_EVENTS: MerchantWebhookEvent[] = [
+  "checkout.completed",
+  "checkout.async_succeeded",
+  "checkout.failed",
+  "payment.available",
+  "subscription.updated",
+  "subscription.canceled",
+]
+
 export const MERCHANT_WEBHOOK_EVENT_DESCRIPTIONS: Record<MerchantWebhookEvent, string> = {
   "checkout.completed": "Payment succeeded – safe to fulfil the order.",
   "checkout.async_succeeded": "A delayed method (such as bank debit) finally cleared.",

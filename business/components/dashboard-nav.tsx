@@ -15,13 +15,11 @@ import {
   Users,
   Link2,
   CircleDollarSign,
-  Terminal,
   KeyRound,
   Radio,
-  Rss,
   FileText,
   FlaskConical,
-  Gauge,
+  Settings,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
@@ -58,8 +56,13 @@ function deriveOpenGroups(pathname: string) {
   ) {
     openGroups.add("collections")
   }
-  if (pathname.startsWith("/console")) {
-    openGroups.add("developers")
+  if (
+    pathname.startsWith("/console/keys") ||
+    pathname.startsWith("/console/webhooks") ||
+    pathname.startsWith("/console/logs") ||
+    pathname.startsWith("/console/explorer")
+  ) {
+    openGroups.add("settings")
   }
   return openGroups
 }
@@ -112,23 +115,21 @@ export function DashboardNav() {
   const menuItems =
     surface === "platform"
       ? [
+          { href: "/console", label: "Home", icon: LayoutDashboard, type: "single" as const, exact: true },
           { href: "/customers", label: "Customers", icon: Users, type: "single" as const },
+          { href: "/transactions", label: "Payments", icon: List, type: "single" as const },
           { href: "/accounts", label: "Accounts", icon: Wallet, type: "single" as const },
-          { href: "/transactions", label: "Transactions", icon: List, type: "single" as const },
           { href: "/checkout", label: "Checkout", icon: CircleDollarSign, type: "single" as const },
           {
-            key: "developers",
-            label: "Developers",
-            icon: Terminal,
+            key: "settings",
+            label: "Settings",
+            icon: Settings,
             type: "group" as const,
             items: [
-              { href: "/console", label: "Overview", icon: LayoutDashboard },
               { href: "/console/keys", label: "API keys", icon: KeyRound },
               { href: "/console/webhooks", label: "Webhooks", icon: Radio },
-              { href: "/console/events", label: "Events", icon: Rss },
               { href: "/console/logs", label: "Logs", icon: FileText },
-              { href: "/console/explorer", label: "Explorer", icon: FlaskConical },
-              { href: "/console/usage", label: "Usage & limits", icon: Gauge },
+              { href: "/console/explorer", label: "Workbench", icon: FlaskConical },
             ],
           },
         ]
@@ -235,7 +236,10 @@ export function DashboardNav() {
         {menuItems.map((item) => {
           if (item.type === "single") {
             const Icon = item.icon
-            const isActive = isNavPathActive(pathname, item.href)
+            const isActive =
+              "exact" in item && item.exact
+                ? pathname === item.href
+                : isNavPathActive(pathname, item.href)
             return (
               <Link
                 key={item.href}
@@ -286,9 +290,8 @@ export function DashboardNav() {
                   <div className="ml-5 flex flex-col gap-0.5 border-l border-sidebar-border pl-2">
                     {item.items?.map((child) => {
                       const ChildIcon = child.icon
-                      // An "index" child (e.g. Developers' Overview at `/console`) must
-                      // match exactly — otherwise it stays highlighted alongside every
-                      // sibling route nested under the same path prefix.
+                      // An index child must match exactly — otherwise it stays
+                      // highlighted alongside every sibling nested under the same prefix.
                       const hasNestedSibling = item.items?.some(
                         (sibling) => sibling.href !== child.href && sibling.href.startsWith(`${child.href}/`),
                       )
@@ -325,7 +328,7 @@ export function DashboardNav() {
         })}
       </nav>
 
-      {user?.id ? <BusinessOnboardingChecklist key={user.id} /> : null}
+      {user?.id && surface !== "platform" ? <BusinessOnboardingChecklist key={user.id} /> : null}
 
       <div className="px-5 py-4 border-t border-sidebar-border flex items-center justify-center">
         <BusinessLogo size="md" href="/" priority />

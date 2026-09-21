@@ -56,6 +56,7 @@ export async function POST(request: Request) {
     })
     await logPlatformApi(admin, {
       startedAt: auth.ctx.startedAt,
+      idempotencyKey: auth.ctx.idempotencyKey,
       businessId: auth.ctx.businessId,
       livemode,
       method: "POST",
@@ -67,6 +68,7 @@ export async function POST(request: Request) {
     const mapped = platformTransferHttpError(error)
     await logPlatformApi(admin, {
       startedAt: auth.ctx.startedAt,
+      idempotencyKey: auth.ctx.idempotencyKey,
       businessId: auth.ctx.businessId,
       livemode,
       method: "POST",

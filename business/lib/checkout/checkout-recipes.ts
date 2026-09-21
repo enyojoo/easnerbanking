@@ -81,14 +81,14 @@ export function recipeBrowserHtml(publishableKey: string): string {
   return `<script src="https://js.easner.com/v1/checkout.js"></script>
 <div id="easner-checkout"></div>
 <script>
-  // Same on-page form as invoices and payment links.
+  // Checkout.js on your site. Amount never belongs in this page.
   fetch("/create-checkout-session", { method: "POST" })
     .then(function (r) { return r.json(); })
     .then(function (session) {
       EasnerCheckout.mount("#easner-checkout", {
         publishableKey: ${JSON.stringify(publishableKey)},
         clientSecret: session.client_secret,
-        onSuccess: function () { window.location = "/thanks"; }})
+        onSuccess: function () { window.location = "/thanks"; }
       });
     });
 </script>`
@@ -139,7 +139,7 @@ Golden rule: the amount and secret key never go in the browser.
 1. On the server, POST https://api.easner.com/v1/checkout/sessions with Bearer easner_sk_… and this JSON:
 ${JSON.stringify(recipe.sessionBody, null, 2)}
 
-2. In the browser, load https://js.easner.com/v1/checkout.js and mount the form on the page (same as invoices and payment links):
+2. In the browser, load https://js.easner.com/v1/checkout.js and mount Checkout.js on your site:
 EasnerCheckout.mount("#easner-checkout", { publishableKey: "easner_pk_…", clientSecret: session.client_secret, onSuccess })
 
 3. Fulfil on checkout.completed. Verify easner-signature HMAC-SHA256 of "\${t}.\${rawBody}".

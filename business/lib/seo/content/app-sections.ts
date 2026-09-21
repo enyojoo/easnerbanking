@@ -202,11 +202,11 @@ export const appSectionsSeo = {
   console: {
     metadata: {
       title: "Console | Easner",
-      description: "See platform volume and recent activity, then manage keys and webhooks while you build on Easner Accounts, Transfers, and Checkout.",
+      description: "See integration health, then manage keys and webhooks while you build on Easner Accounts, Transfers, and Checkout.",
     },
     hero: {
-      h1: "Console",
-      subhead: "Platform volume and recent activity.",
+      h1: "Home",
+      subhead: "Integration health for this mode.",
       altText: "Easner Console",
     },
   },

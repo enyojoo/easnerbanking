@@ -32,6 +32,7 @@ export async function POST(request: Request) {
     })
     await logPlatformApi(admin, {
       startedAt: auth.ctx.startedAt,
+      idempotencyKey: auth.ctx.idempotencyKey,
       businessId: auth.ctx.businessId,
       livemode,
       method: "POST",

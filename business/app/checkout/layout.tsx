@@ -1,4 +1,4 @@
-import type { ReactNode } from "react"
+import { Suspense, type ReactNode } from "react"
 import { PreloadStripeJs } from "@/components/stripe/preload-stripe-js"
 import { appSectionsSeo } from "@/lib/seo/content/app-sections"
 import { businessMetadata } from "@/lib/seo/metadata"
@@ -12,7 +12,7 @@ export default function CheckoutLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <PreloadStripeJs />
-      {children}
+      <Suspense fallback={null}>{children}</Suspense>
     </>
   )
 }

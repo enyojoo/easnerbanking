@@ -209,8 +209,8 @@ export function BusinessDropdown({
           >
             <Code2 className="mt-0.5 h-4 w-4 shrink-0" />
             <span className="min-w-0">
-              <span className="block text-sm font-medium">Switch to Dev Platform</span>
-              <span className="block text-xs text-muted-foreground">Accounts, transfers, and checkout</span>
+              <span className="block text-sm font-medium">Switch to Console</span>
+              <span className="block text-xs text-muted-foreground">Customers, payments, and Checkout</span>
             </span>
           </DropdownMenuItem>
         ) : null}
@@ -222,7 +222,7 @@ export function BusinessDropdown({
           >
             <Landmark className="mt-0.5 h-4 w-4 shrink-0" />
             <span className="min-w-0">
-              <span className="block text-sm font-medium">Switch to Banking Account</span>
+              <span className="block text-sm font-medium">Switch to Banking</span>
               <span className="block text-xs text-muted-foreground">Accounts, send, and collections</span>
             </span>
           </DropdownMenuItem>

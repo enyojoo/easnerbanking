@@ -56,13 +56,13 @@ export const PAGE_COPY = {
     intro: "Connect Easner to your apps with APIs and webhooks.",
   },
   console: {
-    title: "Console",
-    intro: "Volume and recent activity.",
+    title: "Home",
+    intro: "Integration health for this mode.",
   },
   consoleCustomers: {
     title: "Customers",
     intro: "People you collect from and pay.",
-    empty: "No customers yet.",
+    empty: "Create a test customer.",
   },
   consoleCustomer: {
     title: "Customer",
@@ -79,17 +79,17 @@ export const PAGE_COPY = {
     empty: "No accounts issued yet.",
   },
   consoleTransactions: {
-    title: "Transactions",
-    intro: "Review money in and out of your accounts.",
-    empty: "No transactions yet.",
+    title: "Payments",
+    intro: "Money in and out of customer vaults and Checkout.",
+    empty: "No payments yet.",
   },
   consoleKeys: {
-    title: "Keys",
-    intro: "Test and live keys.",
+    title: "API keys",
+    intro: "Keys for the current Test or Live mode.",
   },
   consoleWebhooks: {
     title: "Webhooks",
-    intro: "Get a ping when something happens.",
+    intro: "Banking and Checkout events, to as many URLs as you need.",
   },
   consoleEvents: {
     title: "Events",
@@ -105,8 +105,8 @@ export const PAGE_COPY = {
     intro: "How close you are to your rate limits, and your traffic over time.",
   },
   consoleExplorer: {
-    title: "Explorer",
-    intro: "Try an endpoint with your own test key, right here.",
+    title: "Workbench",
+    intro: "Try an endpoint without pasting a secret.",
   },
   links: {
     title: "Payment links",
