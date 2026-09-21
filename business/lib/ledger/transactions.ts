@@ -32,6 +32,7 @@ export type UpsertLedgerTransactionInput = {
   counterpartyAddress?: string | null
   occurredAt?: string | null
   settledAt?: string | null
+  createdAt?: string | null
   baseCurrency?: string | null
 }
 
@@ -274,7 +275,15 @@ export async function upsertLedgerTransaction(
     }
   }
 
-  const insert = await admin.from("transactions").insert(record).select("id").maybeSingle()
+  const createdAt = String(input.createdAt || input.occurredAt || "").trim() || null
+  const insert = await admin
+    .from("transactions")
+    .insert({
+      ...record,
+      ...(createdAt ? { created_at: createdAt } : {}),
+    })
+    .select("id")
+    .maybeSingle()
   if (insert.error) {
     if (String(insert.error.code) === "23505" && !opts?.retryOnConflict) {
       return upsertLedgerTransaction(admin, input, { retryOnConflict: true })

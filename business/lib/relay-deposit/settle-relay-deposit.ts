@@ -10,6 +10,7 @@ import { isRelayTronInboundEnabled } from "@/lib/relay/config"
 import type { RelayRequestV3 } from "@/lib/relay/types"
 import {
   extractRelayOccurredAtV3,
+  extractRelaySettledAtV3,
   extractRelayOutTxHashesV3,
   isRelayRequestTerminalV3,
   mapRelayRequestStatusV3,
@@ -191,6 +192,7 @@ export async function upsertRelayDepositFromRequestV3(
       ? (existing.metadata as Record<string, unknown>)
       : {}
   const occurredAt = extractRelayOccurredAtV3(input.request)
+  const settledAt = extractRelaySettledAtV3(input.request)
 
   const { data, error } = await admin
     .from("relay_deposits")
@@ -211,6 +213,7 @@ export async function upsertRelayDepositFromRequestV3(
           ...(input.webhookPayload ? { webhook: input.webhookPayload } : {}),
           ...(senderTronAddress ? { sender_tron_address: senderTronAddress } : {}),
           ...(occurredAt ? { relay_occurred_at: occurredAt } : {}),
+          ...(settledAt ? { relay_settled_at: settledAt } : {}),
         },
         updated_at: new Date().toISOString(),
       },
@@ -263,6 +266,7 @@ export async function tryCreditRelayTronDeposit(
       ? (row.metadata as Record<string, unknown>)
       : {}
   const occurredAt = String(depositMeta.relay_occurred_at || "").trim() || new Date().toISOString()
+  const settledAt = String(depositMeta.relay_settled_at || "").trim() || occurredAt
   const customerFee = resolveRelayDepositCustomerFee(row)
   const senderTronAddress =
     typeof depositMeta.sender_tron_address === "string"
@@ -279,7 +283,8 @@ export async function tryCreditRelayTronDeposit(
     currency: "USD",
     direction: "in",
     occurredAt,
-    settledAt: occurredAt,
+    settledAt,
+    createdAt: occurredAt,
     txHash,
     asset: "USDC",
     chain: "Solana",
@@ -302,6 +307,16 @@ export async function tryCreditRelayTronDeposit(
       balance_delta_applied: applyBalance,
     },
   })
+
+  await admin
+    .from("transactions")
+    .update({
+      created_at: occurredAt,
+      occurred_at: occurredAt,
+      settled_at: settledAt,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", upsert.transactionId)
 
   const shouldApplyBalance = applyBalance && (upsert.inserted || upsert.becameSettled)
   if (shouldApplyBalance) {

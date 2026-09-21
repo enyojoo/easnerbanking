@@ -111,7 +111,10 @@ describe("settle-relay-deposit", () => {
         ledger_tx_id: null,
         relay_request_id: "req-1",
         tron_address: "T123",
-        metadata: { relay_occurred_at: "2026-09-21T21:35:37.000Z" },
+        metadata: {
+          relay_occurred_at: "2026-09-21T21:35:37.000Z",
+          relay_settled_at: "2026-09-21T21:35:40.000Z",
+        },
       },
       walletOwners: {
         owner_type: "individual",
@@ -125,7 +128,8 @@ describe("settle-relay-deposit", () => {
       admin,
       expect.objectContaining({
         occurredAt: "2026-09-21T21:35:37.000Z",
-        settledAt: "2026-09-21T21:35:37.000Z",
+        settledAt: "2026-09-21T21:35:40.000Z",
+        createdAt: "2026-09-21T21:35:37.000Z",
       }),
     )
   })
@@ -258,6 +262,9 @@ describe("settle-relay-deposit", () => {
                   }),
                 }),
               }),
+            }),
+            update: () => ({
+              eq: async () => ({ error: null }),
             }),
           }
         }

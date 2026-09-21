@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   extractRelayOccurredAtV3,
+  extractRelaySettledAtV3,
   isRelayRequestTerminalV3,
   mapRelayRequestStatusV3,
   parseRelayFeesV3,
@@ -115,5 +116,19 @@ describe("extractRelayOccurredAtV3", () => {
         data: { inTxs: [{ timestamp: 1790026537 }] },
       }),
     ).toBe("2026-09-21T21:35:37.000Z")
+  })
+
+  it("uses the Solana outTx timestamp for settled", () => {
+    expect(
+      extractRelaySettledAtV3({
+        id: "0x1",
+        status: "success",
+        createdAt: "2026-09-21T22:03:25.477Z",
+        data: {
+          inTxs: [{ timestamp: 1790026537 }],
+          outTxs: [{ timestamp: 1790026540 }],
+        },
+      }),
+    ).toBe("2026-09-21T21:35:40.000Z")
   })
 })

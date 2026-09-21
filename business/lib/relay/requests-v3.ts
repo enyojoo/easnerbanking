@@ -173,16 +173,34 @@ function relayEpochToIso(ts: number): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString()
 }
 
+function firstTxTimestampIso(
+  rows: Array<{ timestamp?: number }> | undefined,
+): string | null {
+  for (const row of rows ?? []) {
+    const iso = relayEpochToIso(Number(row?.timestamp ?? NaN))
+    if (iso) return iso
+  }
+  return null
+}
+
 /** Tron deposit time, then Solana fill time, then Relay createdAt. */
 export function extractRelayOccurredAtV3(request: RelayRequestV3): string | null {
   const data = request.data ?? {}
   const inTxs = (data.inTxs as Array<{ timestamp?: number }> | undefined) ?? []
   const outTxs = (data.outTxs as Array<{ timestamp?: number }> | undefined) ?? []
-  for (const row of [...inTxs, ...outTxs]) {
-    const iso = relayEpochToIso(Number(row?.timestamp ?? NaN))
-    if (iso) return iso
-  }
-  const created = String(request.createdAt ?? "").trim()
-  if (created && !Number.isNaN(Date.parse(created))) return new Date(created).toISOString()
-  return null
+  return (
+    firstTxTimestampIso(inTxs) ??
+    firstTxTimestampIso(outTxs) ??
+    (String(request.createdAt ?? "").trim() && !Number.isNaN(Date.parse(String(request.createdAt)))
+      ? new Date(String(request.createdAt)).toISOString()
+      : null)
+  )
+}
+
+/** Solana fill time, then Tron deposit time, then Relay createdAt. */
+export function extractRelaySettledAtV3(request: RelayRequestV3): string | null {
+  const data = request.data ?? {}
+  const inTxs = (data.inTxs as Array<{ timestamp?: number }> | undefined) ?? []
+  const outTxs = (data.outTxs as Array<{ timestamp?: number }> | undefined) ?? []
+  return firstTxTimestampIso(outTxs) ?? extractRelayOccurredAtV3(request)
 }
