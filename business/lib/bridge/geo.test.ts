@@ -7,6 +7,7 @@ describe("isBridgeOnboardableResidence", () => {
     expect(isBridgeOnboardableResidence({ countryCode: "US", state: "NY" })).toBe(false)
     expect(isBridgeOnboardableResidence({ countryCode: "US", state: "CA" })).toBe(true)
     expect(isBridgeOnboardableResidence({ countryCode: "DE" })).toBe(true)
+    expect(isBridgeOnboardableResidence({ countryCode: "BD" })).toBe(true)
     expect(isBridgeOnboardableResidence({ countryCode: "IR" })).toBe(false)
   })
 })

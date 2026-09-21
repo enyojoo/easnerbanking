@@ -50,6 +50,12 @@ describe("signup jurisdiction regression", () => {
     }
   })
 
+  it("keeps Bangladesh on both signup pickers", () => {
+    const catalog = [{ code: "BD", name: "Bangladesh" }]
+    expect(filterCountriesForProductPicker(catalog, "business").map((r) => r.code)).toEqual(["BD"])
+    expect(filterCountriesForProductPicker(catalog, "mobile").map((r) => r.code)).toEqual(["BD"])
+  })
+
   it("helpers never throw on bad input", () => {
     expect(() => isBlockedForBusiness(null)).not.toThrow()
     expect(() => isBlockedForMobile("")).not.toThrow()
