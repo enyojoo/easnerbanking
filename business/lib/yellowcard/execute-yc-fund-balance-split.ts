@@ -359,6 +359,7 @@ export async function triggerYcFundBalanceOmnibusSplit(
       ledgerCurrency: "USD",
       amount: feeSweep,
       logTag: "yc-fund-balance",
+      admin,
     })
     feeWalletSweepTxHash = sweep.feeWalletSweepTxHash
   }

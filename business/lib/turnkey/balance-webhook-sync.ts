@@ -15,7 +15,7 @@ import { handleDepositOmnibusInbound } from "@/lib/deposit-omnibus/handle-omnibu
 import { createSolanaRpcConnection, isSolanaRpcRateLimitedError } from "@/lib/solana/rpc-connection"
 import { mintForStablecoinAsset } from "@/lib/solana/spl-mints"
 import { resolveSolanaInboundSenderFromTxHash } from "@/lib/turnkey/solana-inbound-sender"
-import { isWalletSendFeeSolanaAddress } from "@/lib/wallet-send/fee-address"
+import { isFeeWalletDestinationAddress } from "@/lib/processing-fee/fee-wallet-inbound-deposit"
 import { findYcCrossBorderFeeWalletRefundSuppression } from "@/lib/yellowcard/yc-ledger"
 import { withOrganicStablecoinDepositMetadata } from "@/lib/turnkey/organic-stablecoin-deposit-metadata"
 import { isGridVaSweepTreasurySender } from "@/lib/grid/grid-va-sweep-treasury"
@@ -153,11 +153,11 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
     return handleDepositOmnibusInbound(admin, deposit, eventId)
   }
 
-  // Cross-border leg2 fail refunds land on fee wallet – suppress + mark transfer.
-  // Do not amount-match those refunds against customer fee sweeps: J8Xh is also the org vault.
+  // Dual-use fee treasury / org vault: always book a visible Stablecoin deposit.
+  // Stamp YC cross-border refunds on the transfer, but never swallow the inbound row.
   const addr = String(deposit.address || "").trim()
-  const feeWalletInbound = isWalletSendFeeSolanaAddress(addr)
-  let feeWalletRevenueSweep = false
+  const feeWalletInbound = isFeeWalletDestinationAddress(addr)
+  let feeWalletRevenueSweep = feeWalletInbound
   let resolvedSender = String(deposit.counterpartyAddress || "").trim() || null
 
   if (feeWalletInbound) {
@@ -171,11 +171,12 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
         }).catch(() => null)
       }
     }
-    feeWalletRevenueSweep = resolvedSender
+    const fromManagedVault = resolvedSender
       ? await isActiveSolanaWalletAddress(admin, resolvedSender)
       : false
+    const fromOmnibus = resolvedSender ? isDepositOmnibusAddress(resolvedSender) : false
 
-    if (!feeWalletRevenueSweep) {
+    if (!fromManagedVault && !fromOmnibus) {
       const match = await findYcCrossBorderFeeWalletRefundSuppression(admin, {
         amount: deposit.amount,
         currency: mapAssetToCurrency(deposit.asset),
@@ -201,7 +202,6 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
             updated_at: new Date().toISOString(),
           })
           .eq("id", match.transferId)
-        return true
       }
     }
   }
@@ -253,8 +253,8 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
     }
   }
 
-  if (!feeWalletRevenueSweep && counterpartyAddress && isWalletSendFeeSolanaAddress(addr)) {
-    feeWalletRevenueSweep = await isActiveSolanaWalletAddress(admin, counterpartyAddress)
+  if (!feeWalletRevenueSweep && counterpartyAddress && isFeeWalletDestinationAddress(addr)) {
+    feeWalletRevenueSweep = true
   }
 
   let result = await applyTurnkeyInboundLedgerEvent(
@@ -293,7 +293,7 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
       chain,
       amountMinor: deposit.amountMinor,
     },
-    feeWalletRevenueSweep ? { forceOrganicStablecoinDeposit: true } : undefined,
+    feeWalletRevenueSweep ? { forceOrganicStablecoinDeposit: true, skipBalanceDelta: true } : undefined,
   )
 
   if (

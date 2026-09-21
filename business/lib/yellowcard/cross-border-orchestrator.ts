@@ -2099,6 +2099,7 @@ export async function completeCrossBorderOnSendSuccess(
       ledgerCurrency: "USD",
       amount: sweepAmt,
       logTag: "yc-cross-border",
+      admin,
     })
     feeWalletSweepTxHash = sweep.feeWalletSweepTxHash
   }

@@ -5,6 +5,10 @@ vi.mock("@/lib/processing-fee/fee-wallet-sweep", () => ({
   pollTurnkeySendById: vi.fn().mockResolvedValue({ status: "settled", txHash: "principal-hash" }),
 }))
 
+vi.mock("@/lib/processing-fee/fee-wallet-inbound-deposit", () => ({
+  ensureFeeWalletRevenueDeposit: vi.fn().mockResolvedValue({ inserted: true, existing: false }),
+}))
+
 vi.mock("@/lib/business/org-owner", () => ({
   resolveBusinessOrgOwnerUserId: vi.fn(),
 }))

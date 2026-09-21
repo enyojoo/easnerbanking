@@ -219,12 +219,14 @@ describe("applyTurnkeyBalanceWebhookSideEffects", () => {
         amount: 3.671217,
         metadata: expect.objectContaining({ fee_wallet_revenue_sweep: true }),
       }),
-      { forceOrganicStablecoinDeposit: true },
+      { forceOrganicStablecoinDeposit: true, skipBalanceDelta: true },
     )
   })
 
-  it("still suppresses a Yellowcard cross-border refund on the fee wallet", async () => {
+  it("stamps a Yellowcard refund but still posts the fee-wallet Stablecoin deposit", async () => {
     mocks.feeRefund.mockResolvedValue({ transferId: "yc-cb-1", transactionId: "tx-cb" })
+    mocks.applyInbound.mockResolvedValue({ kind: "applied", transactionId: "tx-fee-refund" })
+    mocks.inboundVisible.mockResolvedValueOnce(false).mockResolvedValueOnce(true)
     const update = vi.fn().mockReturnValue({
       eq: vi.fn().mockResolvedValue({ error: null }),
     })
@@ -243,8 +245,15 @@ describe("applyTurnkeyBalanceWebhookSideEffects", () => {
       "ev-yc-refund",
     )
     expect(ok).toBe(true)
-    expect(mocks.applyInbound).not.toHaveBeenCalled()
     expect(update).toHaveBeenCalled()
+    expect(mocks.applyInbound).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        amount: 12.5,
+        metadata: expect.objectContaining({ fee_wallet_revenue_sweep: true }),
+      }),
+      { forceOrganicStablecoinDeposit: true, skipBalanceDelta: true },
+    )
   })
 
   it("accepts Grid treasury suppress when the Grid VA bank-deposit row is already visible", async () => {

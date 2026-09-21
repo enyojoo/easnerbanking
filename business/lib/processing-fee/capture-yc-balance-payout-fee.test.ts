@@ -5,6 +5,10 @@ vi.mock("@/lib/processing-fee/fee-wallet-sweep", () => ({
   pollTurnkeySendById: vi.fn(),
 }))
 
+vi.mock("@/lib/processing-fee/fee-wallet-inbound-deposit", () => ({
+  ensureFeeWalletRevenueDeposit: vi.fn().mockResolvedValue({ inserted: true, existing: false }),
+}))
+
 vi.mock("@/lib/business/org-owner", () => ({
   resolveBusinessOrgOwnerUserId: vi.fn(),
 }))
@@ -14,6 +18,7 @@ import {
   pollTurnkeySendById,
   sweepEasnerRevenueFromUserTurnkeyWallet,
 } from "@/lib/processing-fee/fee-wallet-sweep"
+import { ensureFeeWalletRevenueDeposit } from "@/lib/processing-fee/fee-wallet-inbound-deposit"
 
 const ETID_META = {
   source: "api_yellowcard_balance_payout",
@@ -88,6 +93,32 @@ describe("captureYcBalancePayoutProcessingFeeIfPending", () => {
     expect(sweepEasnerRevenueFromUserTurnkeyWallet).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ logTag: "yc-balance-payout", amount: expect.closeTo(3.671217, 5) }),
+    )
+    expect(ensureFeeWalletRevenueDeposit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ txHash: "fee-sig", amount: expect.closeTo(3.671217, 5) }),
+    )
+  })
+
+  it("books the org Stablecoin deposit when the fee hash is already on the payout", async () => {
+    const { admin } = adminWithTx({
+      ...ETID_META,
+      fee_wallet_sweep: 3.671217,
+      fee_wallet_sweep_tx_hash: "already-on-chain",
+      processing_fee_pending: false,
+    })
+
+    const result = await captureYcBalancePayoutProcessingFeeIfPending(admin as never, {
+      transactionId: "tx-etid",
+      userId: "user-1",
+      businessId: null,
+    })
+
+    expect(result.captured).toBe(true)
+    expect(sweepEasnerRevenueFromUserTurnkeyWallet).not.toHaveBeenCalled()
+    expect(ensureFeeWalletRevenueDeposit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ txHash: "already-on-chain", amount: 3.671217 }),
     )
   })
 

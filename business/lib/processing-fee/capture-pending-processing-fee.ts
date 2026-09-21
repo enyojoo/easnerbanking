@@ -16,6 +16,7 @@ import {
   pollTurnkeySendById,
   sweepEasnerRevenueFromUserTurnkeyWallet,
 } from "@/lib/processing-fee/fee-wallet-sweep"
+import { ensureFeeWalletRevenueDeposit } from "@/lib/processing-fee/fee-wallet-inbound-deposit"
 import {
   buildEasnerRevenueSweepMetadataPatch,
   FEE_SWEEP_MIN,
@@ -105,6 +106,29 @@ const FEE_SEND_OMIT_KEYS = [
   "processing_fee_turnkey_send_status",
 ]
 
+async function bookFeeWalletRevenueDeposit(input: {
+  admin: SupabaseClient
+  userId: string
+  businessId: string | null
+  txHash: string | null | undefined
+  amount: number
+  asset?: "USDC" | "EURC"
+  relatedEasnerTransactionId?: string | null
+}): Promise<void> {
+  const txHash = String(input.txHash || "").trim()
+  if (!txHash || !Number.isFinite(input.amount) || input.amount <= FEE_DUST) return
+  await ensureFeeWalletRevenueDeposit(input.admin, {
+    txHash,
+    amount: input.amount,
+    asset: input.asset,
+    senderUserId: input.userId,
+    senderBusinessId: input.businessId,
+    relatedEasnerTransactionId: input.relatedEasnerTransactionId,
+  }).catch((e) => {
+    console.warn("[fee-wallet-inbound-deposit] book failed:", e)
+  })
+}
+
 async function refreshPrincipalPayoutSend(
   admin: SupabaseClient,
   input: {
@@ -149,6 +173,9 @@ async function settleSubmittedFeeSweepIfAny(
     ledgerCurrency: "USD" | "EUR"
     asset?: "USDC" | "EURC"
     useMarginTurnkeySendId?: boolean
+    userId: string
+    businessId: string | null
+    relatedEasnerTransactionId?: string | null
   },
 ): Promise<"settled" | "pending" | "retry" | "none"> {
   const sendId = readFeeTurnkeySendId(input.meta)
@@ -173,6 +200,15 @@ async function settleSubmittedFeeSweepIfAny(
         ledgerCurrency: input.ledgerCurrency,
       }),
     )
+    await bookFeeWalletRevenueDeposit({
+      admin,
+      userId: input.userId,
+      businessId: input.businessId,
+      txHash: rec.txHash,
+      amount: input.sweepAmt,
+      asset: input.asset ?? (input.ledgerCurrency === "EUR" ? "EURC" : "USDC"),
+      relatedEasnerTransactionId: input.relatedEasnerTransactionId,
+    })
     return "settled"
   }
 
@@ -204,7 +240,7 @@ export async function captureGlobalPayoutProcessingFeeIfPending(
 ): Promise<{ captured: boolean }> {
   const { data: row } = await admin
     .from("transactions")
-    .select("id, status, currency, metadata, amount")
+    .select("id, status, currency, metadata, amount, easner_transaction_id")
     .eq("id", input.transactionId)
     .maybeSingle()
   if (!row?.id || String(row.status ?? "").toLowerCase() !== "settled") {
@@ -216,7 +252,15 @@ export async function captureGlobalPayoutProcessingFeeIfPending(
     return { captured: false }
   }
   if (isEasnerRevenueAlreadySwept(meta)) {
-    return { captured: false }
+    await bookFeeWalletRevenueDeposit({
+      admin,
+      userId: input.userId,
+      businessId: input.businessId,
+      txHash: String(meta.fee_wallet_sweep_tx_hash ?? ""),
+      amount: Number(meta.fee_wallet_sweep ?? meta.easner_revenue_sweep_amount ?? 0),
+      relatedEasnerTransactionId: String(row.easner_transaction_id ?? "").trim() || null,
+    })
+    return { captured: true }
   }
   if (meta.processing_fee_pending !== true && !readFeeTurnkeySendId(meta)) {
     return { captured: false }
@@ -255,6 +299,9 @@ export async function captureGlobalPayoutProcessingFeeIfPending(
     meta: liveMeta,
     sweepAmt: feeLegAmount,
     ledgerCurrency: walletCurrency,
+    userId: input.userId,
+    businessId: input.businessId,
+    relatedEasnerTransactionId: String(row.easner_transaction_id ?? "").trim() || null,
   })
   if (submitted === "settled") return { captured: true }
   if (submitted === "pending") return { captured: false }
@@ -289,17 +336,24 @@ export async function captureGlobalPayoutProcessingFeeIfPending(
   })
 
   await patchTransactionMetadata(admin, input.transactionId, patch)
+  await bookFeeWalletRevenueDeposit({
+    admin,
+    userId: input.userId,
+    businessId: input.businessId,
+    txHash: sweep.feeWalletSweepTxHash,
+    amount: feeLegAmount,
+    asset: String(meta.crypto_asset ?? "USDC").toUpperCase().includes("EUR") ? "EURC" : "USDC",
+    relatedEasnerTransactionId: String(row.easner_transaction_id ?? "").trim() || null,
+  })
   return { captured: sweep.captured }
 }
-
-/** Capture deferred fee-wallet leg for wallet_send after principal / bridge settles. */
 export async function captureWalletSendFeeLegIfPending(
   admin: SupabaseClient,
   input: { transactionId: string; userId: string; businessId: string | null },
 ): Promise<{ captured: boolean }> {
   const { data: row } = await admin
     .from("transactions")
-    .select("id, status, currency, metadata")
+    .select("id, status, currency, metadata, easner_transaction_id")
     .eq("id", input.transactionId)
     .maybeSingle()
   if (!row?.id || String(row.status ?? "").toLowerCase() !== "settled") {
@@ -308,7 +362,17 @@ export async function captureWalletSendFeeLegIfPending(
 
   const meta = (row.metadata || {}) as Record<string, unknown>
   if (String(meta.activity_type ?? "") !== "wallet_send") return { captured: false }
-  if (isEasnerRevenueAlreadySwept(meta)) return { captured: false }
+  if (isEasnerRevenueAlreadySwept(meta)) {
+    await bookFeeWalletRevenueDeposit({
+      admin,
+      userId: input.userId,
+      businessId: input.businessId,
+      txHash: String(meta.fee_wallet_sweep_tx_hash ?? ""),
+      amount: Number(meta.fee_wallet_sweep ?? meta.easner_revenue_sweep_amount ?? 0),
+      relatedEasnerTransactionId: String(row.easner_transaction_id ?? "").trim() || null,
+    })
+    return { captured: true }
+  }
   if (meta.processing_fee_pending !== true && !readFeeTurnkeySendId(meta)) {
     return { captured: false }
   }
@@ -345,6 +409,9 @@ export async function captureWalletSendFeeLegIfPending(
     ledgerCurrency: walletCurrency,
     asset,
     useMarginTurnkeySendId: true,
+    userId: input.userId,
+    businessId: input.businessId,
+    relatedEasnerTransactionId: String(row.easner_transaction_id ?? "").trim() || null,
   })
   if (submitted === "settled") return { captured: true }
   if (submitted === "pending") return { captured: false }
@@ -368,17 +435,24 @@ export async function captureWalletSendFeeLegIfPending(
   })
 
   await patchTransactionMetadata(admin, input.transactionId, patch)
+  await bookFeeWalletRevenueDeposit({
+    admin,
+    userId: input.userId,
+    businessId: input.businessId,
+    txHash: sweep.feeWalletSweepTxHash,
+    amount: feeLegAmount,
+    asset,
+    relatedEasnerTransactionId: String(row.easner_transaction_id ?? "").trim() || null,
+  })
   return { captured: sweep.captured }
 }
-
-/** Capture deferred Easner revenue for YC balance payout after SEND completes (Noah parity). */
 export async function captureYcBalancePayoutProcessingFeeIfPending(
   admin: SupabaseClient,
   input: { transactionId: string; userId: string; businessId: string | null },
 ): Promise<{ captured: boolean }> {
   const { data: row } = await admin
     .from("transactions")
-    .select("id, status, currency, metadata, amount")
+    .select("id, status, currency, metadata, amount, easner_transaction_id")
     .eq("id", input.transactionId)
     .maybeSingle()
   if (!row?.id || String(row.status ?? "").toLowerCase() !== "settled") {
@@ -388,7 +462,17 @@ export async function captureYcBalancePayoutProcessingFeeIfPending(
   const meta = asLedgerMeta(row.metadata)
   if (!isYcBalancePayoutLedgerMeta(meta)) return { captured: false }
   if (!String(meta.turnkey_send_id ?? "").trim()) return { captured: false }
-  if (isEasnerRevenueAlreadySwept(meta)) return { captured: false }
+  if (isEasnerRevenueAlreadySwept(meta)) {
+    await bookFeeWalletRevenueDeposit({
+      admin,
+      userId: input.userId,
+      businessId: input.businessId,
+      txHash: String(meta.fee_wallet_sweep_tx_hash ?? ""),
+      amount: Number(meta.fee_wallet_sweep ?? meta.easner_revenue_sweep_amount ?? 0),
+      relatedEasnerTransactionId: String(row.easner_transaction_id ?? "").trim() || null,
+    })
+    return { captured: true }
+  }
   if (meta.processing_fee_pending !== true && !readFeeTurnkeySendId(meta)) {
     return { captured: false }
   }
@@ -420,6 +504,9 @@ export async function captureYcBalancePayoutProcessingFeeIfPending(
     meta: liveMeta,
     sweepAmt,
     ledgerCurrency: "USD",
+    userId: input.userId,
+    businessId: input.businessId,
+    relatedEasnerTransactionId: String(row.easner_transaction_id ?? "").trim() || null,
   })
   if (submitted === "settled") return { captured: true }
   if (submitted === "pending") return { captured: false }
@@ -453,6 +540,14 @@ export async function captureYcBalancePayoutProcessingFeeIfPending(
   })
 
   await patchTransactionMetadata(admin, input.transactionId, patch)
+  await bookFeeWalletRevenueDeposit({
+    admin,
+    userId: input.userId,
+    businessId: input.businessId,
+    txHash: sweep.feeWalletSweepTxHash,
+    amount: sweepAmt,
+    relatedEasnerTransactionId: String(row.easner_transaction_id ?? "").trim() || null,
+  })
   return { captured: sweep.captured }
 }
 
@@ -463,7 +558,7 @@ export async function captureGridBalancePayoutProcessingFeeIfPending(
 ): Promise<{ captured: boolean }> {
   const { data: row } = await admin
     .from("transactions")
-    .select("id, status, currency, metadata, amount")
+    .select("id, status, currency, metadata, amount, easner_transaction_id")
     .eq("id", input.transactionId)
     .maybeSingle()
   if (!row?.id || String(row.status ?? "").toLowerCase() !== "settled") {
@@ -473,7 +568,17 @@ export async function captureGridBalancePayoutProcessingFeeIfPending(
   const meta = asLedgerMeta(row.metadata)
   if (!isGridBalancePayoutLedgerMeta(meta)) return { captured: false }
   if (!String(meta.turnkey_send_id ?? "").trim()) return { captured: false }
-  if (isEasnerRevenueAlreadySwept(meta)) return { captured: false }
+  if (isEasnerRevenueAlreadySwept(meta)) {
+    await bookFeeWalletRevenueDeposit({
+      admin,
+      userId: input.userId,
+      businessId: input.businessId,
+      txHash: String(meta.fee_wallet_sweep_tx_hash ?? ""),
+      amount: Number(meta.fee_wallet_sweep ?? meta.easner_revenue_sweep_amount ?? 0),
+      relatedEasnerTransactionId: String(row.easner_transaction_id ?? "").trim() || null,
+    })
+    return { captured: true }
+  }
   const inFlightFeeSend = Boolean(readFeeTurnkeySendId(meta))
   // Legacy Grid rows never set processing_fee_pending; still sweep outstanding revenue.
   if (meta.processing_fee_pending === false && !inFlightFeeSend) return { captured: false }
@@ -505,6 +610,9 @@ export async function captureGridBalancePayoutProcessingFeeIfPending(
     meta: liveMeta,
     sweepAmt,
     ledgerCurrency: "USD",
+    userId: input.userId,
+    businessId: input.businessId,
+    relatedEasnerTransactionId: String(row.easner_transaction_id ?? "").trim() || null,
   })
   if (submitted === "settled") return { captured: true }
   if (submitted === "pending") return { captured: false }
@@ -538,5 +646,13 @@ export async function captureGridBalancePayoutProcessingFeeIfPending(
   })
 
   await patchTransactionMetadata(admin, input.transactionId, patch)
+  await bookFeeWalletRevenueDeposit({
+    admin,
+    userId: input.userId,
+    businessId: input.businessId,
+    txHash: sweep.feeWalletSweepTxHash,
+    amount: sweepAmt,
+    relatedEasnerTransactionId: String(row.easner_transaction_id ?? "").trim() || null,
+  })
   return { captured: sweep.captured }
 }

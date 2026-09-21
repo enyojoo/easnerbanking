@@ -26,6 +26,7 @@ import {
   isNoahGlobalPayoutLedgerMeta,
   isYcBalancePayoutLedgerMeta,
 } from "@/lib/processing-fee/payout-fee-ledger-routing"
+import { ensureFeeWalletRevenueDeposit } from "@/lib/processing-fee/fee-wallet-inbound-deposit"
 import {
   buildNoahTransactionWebhookEnvelope,
   fetchNoahTransactionById,
@@ -236,6 +237,7 @@ async function retryYcTransferFeeSweep(
     ledgerCurrency: "USD",
     amount: sweepAmt,
     logTag: `yc-${mode}-reconcile`,
+    admin,
   })
 
   if (!sweep.feeWalletSweepTxHash && !sweep.captured) return false
@@ -453,7 +455,7 @@ export async function reconcilePendingFeeCaptures(
 ): Promise<{ scanned: number; captured: number }> {
   const { data: pendingRows, error } = await admin
     .from("transactions")
-    .select("id, status, metadata, user_id, business_id, amount, currency")
+    .select("id, status, metadata, user_id, business_id, amount, currency, easner_transaction_id")
     .eq("status", "settled")
     .gte("settled_at", since)
     .filter("metadata->>processing_fee_pending", "eq", "true")
@@ -463,14 +465,22 @@ export async function reconcilePendingFeeCaptures(
 
   const { data: submittedRows } = await admin
     .from("transactions")
-    .select("id, status, metadata, user_id, business_id, amount, currency")
+    .select("id, status, metadata, user_id, business_id, amount, currency, easner_transaction_id")
     .eq("status", "settled")
     .gte("settled_at", since)
     .not("metadata->>processing_fee_turnkey_send_id", "is", null)
     .limit(200)
 
+  const { data: hashedRows } = await admin
+    .from("transactions")
+    .select("id, status, metadata, user_id, business_id, amount, currency, easner_transaction_id")
+    .eq("status", "settled")
+    .gte("settled_at", since)
+    .not("metadata->>fee_wallet_sweep_tx_hash", "is", null)
+    .limit(200)
+
   const byId = new Map<string, NonNullable<typeof pendingRows>[number]>()
-  for (const row of [...(pendingRows ?? []), ...(submittedRows ?? [])]) {
+  for (const row of [...(pendingRows ?? []), ...(submittedRows ?? []), ...(hashedRows ?? [])]) {
     if (row?.id) byId.set(String(row.id), row)
   }
   const rows = [...byId.values()]
@@ -481,10 +491,24 @@ export async function reconcilePendingFeeCaptures(
   for (const row of rows ?? []) {
     scanned += 1
     const meta = asMeta(row.metadata)
-    if (isEasnerRevenueAlreadySwept(meta)) continue
-
     const userId = String(row.user_id ?? "")
     const businessId = row.business_id != null ? String(row.business_id) : null
+    if (isEasnerRevenueAlreadySwept(meta)) {
+      if (!dryRun && userId) {
+        const booked = await ensureFeeWalletRevenueDeposit(admin, {
+          txHash: String(meta.fee_wallet_sweep_tx_hash ?? ""),
+          amount: Number(meta.fee_wallet_sweep ?? meta.easner_revenue_sweep_amount ?? 0),
+          senderUserId: userId,
+          senderBusinessId: businessId,
+          relatedEasnerTransactionId: String(row.easner_transaction_id ?? "").trim() || null,
+        }).catch((e) => {
+          console.warn("[reconcile-stuck-payouts] fee wallet deposit book failed:", e)
+          return { inserted: false, existing: false }
+        })
+        if (booked.inserted) captured += 1
+      }
+      continue
+    }
     if (!userId) continue
 
     if (dryRun) {
@@ -525,6 +549,7 @@ export async function reconcilePendingFeeCaptures(
           ledgerCurrency: String(row.currency ?? "USD").toUpperCase() === "EUR" ? "EUR" : "USD",
           amount: sweepAmt,
           logTag: "reconcile-fee-capture",
+          admin,
         })
         if (sweep.captured || sweep.feeWalletSweepTxHash) {
           await admin

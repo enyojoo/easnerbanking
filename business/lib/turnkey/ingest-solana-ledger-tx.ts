@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { Connection } from "@solana/web3.js"
 import { applyTurnkeyInboundLedgerEvent } from "@/lib/turnkey/apply-turnkey-inbound-ledger"
+import { isFeeWalletDestinationAddress } from "@/lib/processing-fee/fee-wallet-inbound-deposit"
 import { withOrganicStablecoinDepositMetadata } from "@/lib/turnkey/organic-stablecoin-deposit-metadata"
 import {
   resolveSplTransferSenderForVaultInbound,
@@ -185,6 +186,9 @@ export async function ingestTurnkeySolanaTxForOwnerVault(
         source_payment_rail: "solana",
         source_currency: params.asset,
         ...(counterpartyAddress ? { from_address: counterpartyAddress } : {}),
+        ...(isFeeWalletDestinationAddress(params.ownerAddress)
+          ? { fee_wallet_revenue_sweep: true }
+          : {}),
       },
       txHash: params.signature,
       walletAddress: params.ownerAddress,
@@ -196,8 +200,10 @@ export async function ingestTurnkeySolanaTxForOwnerVault(
       amountMinor: absAtomic.toString(),
     }
 
+    const forceOrganic = isFeeWalletDestinationAddress(params.ownerAddress)
     let result = await applyTurnkeyInboundLedgerEvent(admin, ledgerInput, {
       skipBalanceDelta: params.skipBalanceDelta ?? true,
+      ...(forceOrganic ? { forceOrganicStablecoinDeposit: true } : {}),
     })
 
     if (result.kind === "skipped") {

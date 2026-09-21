@@ -14,6 +14,8 @@ import {
 import { sendStablecoinFromDepositOmnibus } from "@/lib/turnkey/send-from-omnibus"
 import { resolveWalletSendFeeSolanaAddress } from "@/lib/wallet-send/fee-address"
 import { isTurnkeyFeeSweepOnChain } from "@/lib/processing-fee/fee-wallet-sweep-meta"
+import { ensureFeeWalletRevenueDeposit } from "@/lib/processing-fee/fee-wallet-inbound-deposit"
+import { resolveDepositOmnibusAddressForLedgerCurrency } from "@/lib/deposit-omnibus/config"
 
 export {
   FEE_SWEEP_MIN,
@@ -76,6 +78,7 @@ export async function sweepEasnerRevenueFromDepositOmnibus(input: {
   ledgerCurrency: "USD" | "EUR"
   amount: number
   logTag?: string
+  admin?: SupabaseClient
 }): Promise<{
   feeWalletSweepTxHash: string | null
   captured: boolean
@@ -106,6 +109,17 @@ export async function sweepEasnerRevenueFromDepositOmnibus(input: {
   const feeWalletSweepTxHash = sweep?.txHash ?? null
   const captured =
     sweep?.status === "skipped" || sweep?.status === "settled" || Boolean(feeWalletSweepTxHash)
+
+  if (input.admin && feeWalletSweepTxHash) {
+    await ensureFeeWalletRevenueDeposit(input.admin, {
+      txHash: feeWalletSweepTxHash,
+      amount: sweepAmt,
+      asset,
+      fromAddress: resolveDepositOmnibusAddressForLedgerCurrency(input.ledgerCurrency),
+    }).catch((e) => {
+      console.warn(`[${input.logTag ?? "easner-revenue-sweep"}] fee wallet deposit book failed:`, e)
+    })
+  }
 
   return {
     feeWalletSweepTxHash,
@@ -175,6 +189,17 @@ export async function sweepEasnerRevenueFromUserTurnkeyWallet(
       status: feeSend.status,
       txHash: feeSend.txHash,
     })
+    if (feeSend.txHash) {
+      await ensureFeeWalletRevenueDeposit(admin, {
+        txHash: feeSend.txHash,
+        amount: sweepAmt,
+        asset,
+        senderUserId: input.ctx.subjectUserId,
+        senderBusinessId: input.ctx.subjectBusinessId,
+      }).catch((e) => {
+        console.warn(`[${input.logTag ?? "easner-revenue-sweep"}] fee wallet deposit book failed:`, e)
+      })
+    }
     return {
       feeWalletSweepTxHash: feeSend.txHash,
       captured,
