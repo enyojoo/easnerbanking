@@ -165,3 +165,24 @@ export function readRelayDepositAddressV3(request: RelayRequestV3): string | nul
   }
   return null
 }
+
+function relayEpochToIso(ts: number): string | null {
+  if (!Number.isFinite(ts) || ts <= 0) return null
+  const ms = ts > 1e12 ? ts : ts * 1000
+  const date = new Date(ms)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
+/** Tron deposit time, then Solana fill time, then Relay createdAt. */
+export function extractRelayOccurredAtV3(request: RelayRequestV3): string | null {
+  const data = request.data ?? {}
+  const inTxs = (data.inTxs as Array<{ timestamp?: number }> | undefined) ?? []
+  const outTxs = (data.outTxs as Array<{ timestamp?: number }> | undefined) ?? []
+  for (const row of [...inTxs, ...outTxs]) {
+    const iso = relayEpochToIso(Number(row?.timestamp ?? NaN))
+    if (iso) return iso
+  }
+  const created = String(request.createdAt ?? "").trim()
+  if (created && !Number.isNaN(Date.parse(created))) return new Date(created).toISOString()
+  return null
+}

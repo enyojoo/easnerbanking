@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  extractRelayOccurredAtV3,
   isRelayRequestTerminalV3,
   mapRelayRequestStatusV3,
   parseRelayFeesV3,
@@ -101,5 +102,18 @@ describe("isRelayRequestTerminalV3", () => {
     expect(mapRelayRequestStatusV3("success")).toBe("settled")
     expect(mapRelayRequestStatusV3("failure")).toBe("failed")
     expect(mapRelayRequestStatusV3("pending")).toBe("pending")
+  })
+})
+
+describe("extractRelayOccurredAtV3", () => {
+  it("prefers the Tron inTx timestamp over createdAt", () => {
+    expect(
+      extractRelayOccurredAtV3({
+        id: "0x1",
+        status: "success",
+        createdAt: "2026-09-21T22:03:25.477Z",
+        data: { inTxs: [{ timestamp: 1790026537 }] },
+      }),
+    ).toBe("2026-09-21T21:35:37.000Z")
   })
 })

@@ -9,6 +9,7 @@ import {
 import { isRelayTronInboundEnabled } from "@/lib/relay/config"
 import type { RelayRequestV3 } from "@/lib/relay/types"
 import {
+  extractRelayOccurredAtV3,
   extractRelayOutTxHashesV3,
   isRelayRequestTerminalV3,
   mapRelayRequestStatusV3,
@@ -171,7 +172,7 @@ export async function upsertRelayDepositFromRequestV3(
 
   const { data: existing } = await admin
     .from("relay_deposits")
-    .select("id, ledger_tx_id, turnkey_tx_hash, status")
+    .select("id, ledger_tx_id, turnkey_tx_hash, status, metadata")
     .eq("relay_request_id", relayRequestId)
     .maybeSingle()
 
@@ -184,6 +185,12 @@ export async function upsertRelayDepositFromRequestV3(
       : hasLedgerCredit
         ? "settled"
         : depositStatusFromRelay(mapped, hasLedgerCredit)
+
+  const priorMeta =
+    existing?.metadata && typeof existing.metadata === "object"
+      ? (existing.metadata as Record<string, unknown>)
+      : {}
+  const occurredAt = extractRelayOccurredAtV3(input.request)
 
   const { data, error } = await admin
     .from("relay_deposits")
@@ -199,14 +206,12 @@ export async function upsertRelayDepositFromRequestV3(
         posted_amount: amounts.postedAmount,
         status,
         turnkey_tx_hash: turnkeyTxHash ?? existing?.turnkey_tx_hash ?? null,
-        metadata: input.webhookPayload
-          ? {
-              webhook: input.webhookPayload,
-              ...(senderTronAddress ? { sender_tron_address: senderTronAddress } : {}),
-            }
-          : senderTronAddress
-            ? { sender_tron_address: senderTronAddress }
-            : undefined,
+        metadata: {
+          ...priorMeta,
+          ...(input.webhookPayload ? { webhook: input.webhookPayload } : {}),
+          ...(senderTronAddress ? { sender_tron_address: senderTronAddress } : {}),
+          ...(occurredAt ? { relay_occurred_at: occurredAt } : {}),
+        },
         updated_at: new Date().toISOString(),
       },
       { onConflict: "relay_request_id" },
@@ -222,6 +227,7 @@ export async function upsertRelayDepositFromRequestV3(
 export async function tryCreditRelayTronDeposit(
   admin: SupabaseClient,
   depositId: string,
+  opts?: { applyBalance?: boolean },
 ): Promise<{ credited: boolean; reason?: string }> {
   const { data: row } = await admin.from("relay_deposits").select("*").eq("id", depositId).maybeSingle()
   if (!row?.id) return { credited: false, reason: "deposit_not_found" }
@@ -252,16 +258,17 @@ export async function tryCreditRelayTronDeposit(
     return { credited: false, reason: "ledger_already_exists" }
   }
 
-  const occurredAt = new Date().toISOString()
-  const customerFee = resolveRelayDepositCustomerFee(row)
   const depositMeta =
     row.metadata && typeof row.metadata === "object"
       ? (row.metadata as Record<string, unknown>)
       : {}
+  const occurredAt = String(depositMeta.relay_occurred_at || "").trim() || new Date().toISOString()
+  const customerFee = resolveRelayDepositCustomerFee(row)
   const senderTronAddress =
     typeof depositMeta.sender_tron_address === "string"
       ? depositMeta.sender_tron_address.trim()
       : ""
+  const applyBalance = opts?.applyBalance !== false
   const upsert = await upsertLedgerTransaction(admin, {
     userId: scope.userId,
     businessId: scope.businessId,
@@ -292,16 +299,19 @@ export async function tryCreditRelayTronDeposit(
       posted_currency: "USD",
       ...(senderTronAddress ? { sender_tron_address: senderTronAddress, from_address: senderTronAddress } : {}),
       relay_request_id: row.relay_request_id,
-      balance_delta_applied: true,
+      balance_delta_applied: applyBalance,
     },
   })
 
-  await applyWalletBalanceDelta(admin, {
-    userId: scope.userId,
-    businessId: scope.businessId,
-    currency: "USD",
-    delta: postedAmount,
-  })
+  const shouldApplyBalance = applyBalance && (upsert.inserted || upsert.becameSettled)
+  if (shouldApplyBalance) {
+    await applyWalletBalanceDelta(admin, {
+      userId: scope.userId,
+      businessId: scope.businessId,
+      currency: "USD",
+      delta: postedAmount,
+    })
+  }
 
   await admin
     .from("relay_deposits")
@@ -412,6 +422,9 @@ export async function reconcileRelayDepositCreditForSolanaTx(
   }
 
   const result = await tryCreditRelayTronDeposit(admin, String(deposit.id))
+  if (deposit.tron_address) {
+    await reconcileRelayDepositsForTronAddress(admin, String(deposit.tron_address)).catch(() => {})
+  }
   return { credited: result.credited }
 }
 
@@ -422,6 +435,8 @@ export async function syncRelayDepositFromRequestId(
     tronAddress?: string
     depositAddress?: string
     webhookPayload?: Record<string, unknown>
+    skipAddressSweep?: boolean
+    applyBalance?: boolean
   },
 ): Promise<{ ok: true; action: string } | { ok: false; error: string }> {
   if (!isRelayTronInboundEnabled()) {
@@ -466,22 +481,47 @@ export async function syncRelayDepositFromRequestId(
   }
 
   const mapped = mapRelayRequestStatusV3(status)
-  if (mapped !== "settled") {
-    return { ok: true, action: "deposit_recorded_pending" }
+  let action = "deposit_recorded_pending"
+  if (mapped === "settled") {
+    const credit = await tryCreditRelayTronDeposit(admin, upserted.row.id, {
+      applyBalance: input.applyBalance,
+    })
+    if (credit.credited) action = "credited"
+    else if (credit.reason === "already_credited") action = "already_credited"
+    else if (credit.reason === "missing_turnkey_tx_hash") action = "awaiting_turnkey"
+    else action = credit.reason ?? "awaiting_turnkey"
   }
 
-  const credit = await tryCreditRelayTronDeposit(admin, upserted.row.id)
-  if (credit.credited) return { ok: true, action: "credited" }
-  if (credit.reason === "already_credited") {
-    return { ok: true, action: "already_credited" }
+  if (!input.skipAddressSweep && tronAddress) {
+    await reconcileRelayDepositsForTronAddress(admin, tronAddress).catch(() => {})
   }
-  if (mapped === "settled" && upserted.row.turnkey_tx_hash) {
-    return { ok: true, action: credit.reason ?? "awaiting_credit" }
+
+  return { ok: true, action }
+}
+
+/** Persist every recent Relay request for an address so a later fill cannot hide an earlier one. */
+export async function reconcileRelayDepositsForTronAddress(
+  admin: SupabaseClient,
+  tronAddress: string,
+): Promise<{ scanned: number; credited: number }> {
+  const addr = String(tronAddress || "").trim()
+  if (!addr || !isRelayTronInboundEnabled()) return { scanned: 0, credited: 0 }
+
+  const page = await relayListRequestsV3({ depositAddress: addr, limit: 20 })
+  let scanned = 0
+  let credited = 0
+  for (const request of page.requests ?? []) {
+    const id = String(request.id || "").trim()
+    if (!id) continue
+    scanned += 1
+    const sync = await syncRelayDepositFromRequestId(admin, {
+      relayRequestId: id,
+      tronAddress: addr,
+      skipAddressSweep: true,
+    })
+    if (sync.ok && sync.action === "credited") credited += 1
   }
-  if (credit.reason === "missing_turnkey_tx_hash") {
-    return { ok: true, action: "awaiting_turnkey" }
-  }
-  return { ok: true, action: credit.reason ?? "awaiting_turnkey" }
+  return { scanned, credited }
 }
 
 const DEFAULT_RECONCILE_LOOKBACK_DAYS = 14

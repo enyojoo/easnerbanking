@@ -74,6 +74,7 @@ describe("settle-relay-deposit", () => {
     vi.clearAllMocks()
     mocks.upsertLedger.mockResolvedValue({ transactionId: "tx-relay-1", inserted: true })
     mocks.applyDelta.mockResolvedValue(undefined)
+    mocks.relayListRequestsV3.mockResolvedValue({ requests: [] })
   })
 
   it("does not credit without turnkey fill hash", async () => {
@@ -98,6 +99,35 @@ describe("settle-relay-deposit", () => {
     expect(result.credited).toBe(false)
     expect(result.reason).toBe("missing_turnkey_tx_hash")
     expect(mocks.applyDelta).not.toHaveBeenCalled()
+  })
+
+  it("books occurred_at from the Relay in-tx time", async () => {
+    const admin = adminMock({
+      relayDeposits: {
+        id: "dep-1",
+        wallet_owner_id: "owner-1",
+        posted_amount: 98,
+        turnkey_tx_hash: "sol-fill-1",
+        ledger_tx_id: null,
+        relay_request_id: "req-1",
+        tron_address: "T123",
+        metadata: { relay_occurred_at: "2026-09-21T21:35:37.000Z" },
+      },
+      walletOwners: {
+        owner_type: "individual",
+        owner_ref: "user-1",
+        user_id: "user-1",
+      },
+    })
+
+    await tryCreditRelayTronDeposit(admin, "dep-1")
+    expect(mocks.upsertLedger).toHaveBeenCalledWith(
+      admin,
+      expect.objectContaining({
+        occurredAt: "2026-09-21T21:35:37.000Z",
+        settledAt: "2026-09-21T21:35:37.000Z",
+      }),
+    )
   })
 
   it("credits once when fill hash is present", async () => {
