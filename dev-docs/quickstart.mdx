@@ -4,17 +4,28 @@ description: First send in test — customer, destination, quote, transfer, then
 icon: rocket
 ---
 
-Send from a customer account in test. Nothing hits live rails.
+Send from a customer account in test. Nothing hits live rails. Every public method is on [v1 reference](/reference).
 
-You need:
+## Open Console
 
-- Dev Platform enabled on the business
-- A test secret key from Console → Keys (`easner_sk_test_…`)
-- `EASNER_SECRET_KEY` set in your shell
+Stay in **Test**. Settings is API keys, webhooks, logs, and Workbench.
 
-```bash
-export EASNER_SECRET_KEY=easner_sk_test_…
-```
+<Steps>
+  <Step title="Mint a test key">
+    Settings → API keys. The list is the **current** Test or Live mode only. Create as many keys as you need. Copy the secret once into your server env.
+
+    ```bash
+    export EASNER_SECRET_KEY=easner_sk_test_…
+    ```
+  </Step>
+  <Step title="Add a webhook URL">
+    Settings → Webhooks. Create as many URLs as you need. Default ticks are Banking: `customer.updated`, `account.updated`, `transfer.completed`, `transaction.created`. Add Checkout events if you collect on a site.
+  </Step>
+</Steps>
+
+You need Dev Platform enabled on the business and that test secret.
+
+## First send
 
 <Steps>
   <Step title="Create a customer">
@@ -28,6 +39,9 @@ export EASNER_SECRET_KEY=easner_sk_test_…
     ```
 
     Save `id` (`cus_…`) and the issued `accounts[0].id` (`acct_…`).
+  </Step>
+  <Step title="Fund the test vault">
+    A new `acct_` is `available: 0`. In Console, open Accounts → **Simulate test deposit** (session API, **not** `/v1`, test only). Or `POST /v1/accounts/acct_…/onramp_sessions` and complete the hosted test page. Wait for `account.updated`.
   </Step>
   <Step title="Add a destination">
     A payment method. Easetag is the simplest test destination (in-network). For bank, mobile money, or wallet, see [Send](/send).
@@ -67,7 +81,7 @@ export EASNER_SECRET_KEY=easner_sk_test_…
     Expected: `status` is `requires_action`. Save `id` and `client_secret`.
   </Step>
   <Step title="Confirm">
-    In your app the customer reviews, then you confirm with the `client_secret` — not the secret key.
+    In your app the customer reviews, then you confirm with the `client_secret` — not the secret key. Or open `next_action.url`. See [Transfers](/transfers#confirm).
 
     ```bash
     curl https://api.easner.com/v1/transfers/tr_…/confirm \
@@ -87,12 +101,12 @@ export EASNER_SECRET_KEY=easner_sk_test_…
   </Step>
 </Steps>
 
-A new test account starts at `available: 0`. Fund it with [Receive](/receive) before a live-sized send, or keep the first transfer in test against a funded account.
+A new test account starts at `available: 0`. Fund it before the first send (step above). For live-sized sends, use [Receive](/receive).
 
 ## Collect instead of send
 
 To take a payment on your website, go to [Checkout](/checkout). That credits **your** business balance, not this customer `acct_`.
 
 <Card title="Receive money" icon="download" href="/receive">
-  Verification, bank details, chain addresses, and onramp onto the customer account.
+  KYC the customer, then fetch bank details, chain addresses, and onramp onto their account.
 </Card>

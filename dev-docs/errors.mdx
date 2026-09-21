@@ -58,14 +58,14 @@ Do not parse the message. Branch on `type` and `code`.
 
 ## Expected client behavior
 
-- `401` / `403` — stop. Fix the key, complete verification, or have the customer authorize (`customer_action_required`).
-- `429` `rate_limit` — wait `Retry-After` seconds. Do not open a new send.
+- `401` / `403` — stop. Fix the key, finish KYC (`verification_required`), or have the customer authorize (`customer_action_required`).
+- `429` `rate_limit` — wait `Retry-After` seconds (typically 60). Limits: [Authentication](/authentication#rate-limits). Do not open a new send.
 - `404` — the object is not in this mode. Check test vs live.
 - `409` `not_available` — retry later; live details are still provisioning.
 - `400` `transfer_failed` with "Quote expired" — create a new quote.
 - `400` `transfer_failed` with insufficient funds — [Receive](/receive) onto the customer vault, then retry with a **new** idempotency key only if you intend a new send.
 - `5xx` — retry the same `Idempotency-Key`.
 
-<Card title="Customers" icon="users" href="/customers">
-  Create a customer, then start hosted verification.
+<Card title="Authentication" icon="key" href="/authentication">
+  Keys, scopes, idempotency, and rate limits.
 </Card>

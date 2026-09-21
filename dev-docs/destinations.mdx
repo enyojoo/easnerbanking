@@ -137,7 +137,7 @@ curl https://api.easner.com/v1/destinations \
 
 `GET /v1/destinations` → `{ "data": [ Destination, … ] }`
 
-Newest first. Up to 100.
+Newest first. Up to 100. There is no next page. There is no `GET` by id — store the id from create. Creating twice creates two destinations (`Idempotency-Key` is not applied here).
 
 ## Expected
 

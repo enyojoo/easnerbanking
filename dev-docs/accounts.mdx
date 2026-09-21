@@ -28,6 +28,8 @@ flowchart TB
 
 Checkout does **not** credit these accounts. Checkout collects onto your business balance. [Receive](/receive) credits the `acct_` you pass.
 
+In Console, Accounts is the vault inspector for the current Test or Live mode: `available`, deposit instructions, and the wallet QR.
+
 <Note>
   **Scope:** `GET` needs `accounts.read`. `POST` needs `accounts.write`.
 </Note>
@@ -79,7 +81,7 @@ curl https://api.easner.com/v1/accounts \
   -H "Authorization: Bearer $EASNER_SECRET_KEY"
 ```
 
-Issued accounts only. Filter with `?customer=cus_…`.
+Issued accounts only. Filter with `?customer=cus_…`. Newest first. Up to 100. There is no next page.
 
 ## Open
 
@@ -108,7 +110,7 @@ curl https://api.easner.com/v1/accounts \
 | `GET /v1/accounts/:id/deposit_addresses` | Chain token account for this vault |
 | `POST /v1/accounts/:id/onramp_sessions` | Hosted card onramp onto this vault |
 
-Live bank details, chain addresses, and onramp require `verification_status = approved`. Test skips that.
+Live bank details, chain addresses, and onramp require the customer’s [KYC](/customers#start-kyc) (`verification_status = approved`). Test skips that.
 
 ## Events
 

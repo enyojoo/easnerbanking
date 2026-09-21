@@ -10,10 +10,12 @@ The collect lands on **your** business balance — the same balance as invoices 
 
 Checkout is not Receive. It does not credit a customer vault. To fund a `cus_` `acct_`, use [Receive](/receive).
 
+In Console, open a site. Tabs are **Payments** (`cs_` sessions), **Integrate** (origin, recipes, Checkout.js), and **Settings** (name, success URL, allowed origins). Keys and webhook URLs stay in Console Settings — not a per-site secret. Tick Checkout events on the webhook when you collect.
+
 <Note>
   **Scope:** `checkout`
 
-  Before you call the API: add the website origin and a success URL on Checkout in Dev. Keys and webhooks live in Console.
+  Before you call the API: add the website origin and a success URL on the site. Mint a key with the `checkout` scope from Settings → API keys.
 </Note>
 
 ## Create a session
@@ -62,7 +64,9 @@ curl https://api.easner.com/v1/checkout/sessions \
 
 ## Retrieve a session
 
-`GET /v1/checkout/sessions?id=cs_…`
+Query param, not a path id: `GET /v1/checkout/sessions?id=cs_…`
+
+There is no session list on `/v1`. Console Checkout → Payments lists `cs_` for the site.
 
 ```json
 {

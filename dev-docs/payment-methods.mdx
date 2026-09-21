@@ -1,0 +1,116 @@
+---
+title: Payment methods
+description: Rails and corridors — map GET /v1/payment_methods onto destination details.
+icon: list
+---
+
+`GET /v1/payment_methods` is how you know which send and receive rails exist, and which country/currency corridors you can pay.
+
+<Note>
+  **Scope:** `accounts.read`
+</Note>
+
+```bash
+curl https://api.easner.com/v1/payment_methods \
+  -H "Authorization: Bearer $EASNER_SECRET_KEY"
+```
+
+The body is `{ "data": [ … ], "catalog": { … } }`. `catalog` may be `null` if it cannot be built — use `data` plus the [destination](/destinations) examples.
+
+## `data` — rails
+
+Static. `direction` is `send` or `receive`.
+
+| `id` | `type` | Direction | What you do next |
+|---|---|---|---|
+| `bank` | `bank` | send | `POST /v1/destinations` with bank `details` |
+| `mobile_money` | `mobile_money` | send | Mobile-money `details` |
+| `wallet` | `wallet` | send | On-chain `details` |
+| `easetag` | `easetag` | send | `{ "easetag": "ada" }` |
+| `virtual_account` | `bank` | receive | `GET /v1/accounts/:id/deposit_instructions` |
+| `deposit_address` | `wallet` | receive | `GET /v1/accounts/:id/deposit_addresses` |
+| `onramp` | `onramp` | receive | `POST /v1/accounts/:id/onramp_sessions` |
+
+Receive rails are not destinations. See [Receive](/receive).
+
+## `catalog` — corridors
+
+Live country and currency list for **send**.
+
+| Key | Meaning |
+|---|---|
+| `catalog_version` | Catalog generation |
+| `currencies` | `{ code, available }` for vault currencies |
+| `fiat.bank` | Bank corridors |
+| `fiat.mobile_money` | Mobile-money corridors |
+| `crypto` | `{ asset, name, networks }` |
+
+Each fiat corridor: `id`, `rail` (`bank` or `mobile_money`), `country` (ISO-2), `country_name`, `currency`, `currency_name`, `networks` (MoMo operator labels, e.g. M-Pesa), optional `fields`.
+
+`fields` is an optional hint. Do not depend on nested partner keys. The contract for `POST /v1/destinations` `details` is on [Destinations](/destinations).
+
+```json
+{
+  "data": [
+    {
+      "id": "bank",
+      "type": "bank",
+      "direction": "send",
+      "label": "Bank",
+      "methods": ["ACH", "SEPA Instant", "Faster Payments", "Local transfer"],
+      "currencies": ["USD", "EUR"]
+    }
+  ],
+  "catalog": {
+    "catalog_version": "business:1",
+    "currencies": [{ "code": "USD", "available": true }],
+    "fiat": {
+      "bank": [
+        {
+          "id": "us-usd",
+          "rail": "bank",
+          "country": "US",
+          "country_name": "United States",
+          "currency": "USD",
+          "currency_name": "US Dollar",
+          "networks": null,
+          "fields": { "account_number": {} }
+        }
+      ],
+      "mobile_money": [
+        {
+          "id": "ke-kes",
+          "rail": "mobile_money",
+          "country": "KE",
+          "country_name": "Kenya",
+          "currency": "KES",
+          "currency_name": "Kenyan Shilling",
+          "networks": ["M-Pesa"]
+        }
+      ]
+    },
+    "crypto": [{ "asset": "USDC", "name": "USD Coin", "networks": ["solana"] }]
+  }
+}
+```
+
+## Recipe
+
+<Steps>
+  <Step title="List methods">
+    `GET /v1/payment_methods`.
+  </Step>
+  <Step title="Pick a corridor">
+    Match `country` + `currency` + rail on `catalog.fiat.bank` or `catalog.fiat.mobile_money`. For wallets, use `catalog.crypto`. For Easetag, no corridor — use `data` id `easetag`.
+  </Step>
+  <Step title="Create a destination">
+    `POST /v1/destinations` with `type` `bank`, `mobile_money`, `wallet`, or `easetag` and `details` from [Destinations](/destinations).
+  </Step>
+  <Step title="Quote and transfer">
+    [Quote](/quotes) with `source` and `destination`, then [transfer](/transfers). The customer [confirms](/transfers#confirm).
+  </Step>
+</Steps>
+
+<Card title="Send money" icon="send" href="/send">
+  When to use bank, mobile money, wallet, or Easetag.
+</Card>

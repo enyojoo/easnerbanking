@@ -6,12 +6,22 @@ icon: key
 
 Every `v1` call uses a secret key.
 
+Mint keys in Console: Settings → API keys. The list is the **current** Test or Live mode from the header. Create as many as you need.
+
+```bash
+export EASNER_SECRET_KEY=easner_sk_test_…
+```
+
 ```bash
 curl https://api.easner.com/v1/accounts \
   -H "Authorization: Bearer easner_sk_test_…"
 ```
 
 `Bearer` is required. A bare key is also accepted. Missing or unknown keys return `401`.
+
+Secret keys stay on the server. Publishable keys (`easner_pk_…`) are for the browser, Checkout only.
+
+New keys can include Banking scopes (`accounts.read`, `accounts.write`, `transfers.write`) and Checkout. Restricted keys use a subset of those scopes. Existing checkout-only keys stay checkout-only until you mint a new key.
 
 ## Livemode
 
@@ -47,16 +57,16 @@ A key without the required scope returns `403`:
 }
 ```
 
-Mint a new key from Console if an older checkout-only key is still on the business.
+If a call returns `key_forbidden`, mint a new key from Settings → API keys with the missing scope.
 
 ## Idempotency
 
-Send `Idempotency-Key` on writes that can move money:
+Send `Idempotency-Key` on writes that can move money. It is **only** honored on:
 
 - `POST /v1/transfers` (create)
 - `POST /v1/checkout/sessions`
 
-`POST /v1/transfers/:id/confirm` uses the transfer `client_secret` (`easner_ta_…`), not `easner_sk_*`. A merchant key on confirm returns `403` `customer_action_required`.
+Creating a customer, destination, quote, or onramp session twice creates two objects. Confirm uses the transfer `client_secret` (`easner_ta_…`), not `Idempotency-Key`. A merchant key on confirm returns `403` `customer_action_required`.
 
 Use a new key per logical operation. Replays with the same key return the original transfer or session instead of sending twice. Keys longer than 256 characters are ignored.
 
@@ -67,6 +77,12 @@ curl https://api.easner.com/v1/transfers \
   -H "Idempotency-Key: $(uuidgen)" \
   -d '{"quote":"qt_…"}'
 ```
+
+## Rate limits
+
+`429` `{ "error": { "type": "rate_limit", "code": "rate_limit", "message": "Too many requests" } }` with `Retry-After: 60`.
+
+Per IP, per minute: **120** reads, **30** writes. After the key authenticates, per business, per minute: **300** reads, **40** writes. Wait `Retry-After` seconds. Do not open a new send.
 
 ## Restrictions
 

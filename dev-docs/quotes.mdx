@@ -71,4 +71,6 @@ The body has no `recipientId` or `formSessionId`.
 
 - Show `send` and `receive` to your user before you transfer.
 - If the quote is expired, create a new one. Do not reuse the id.
+- Creating a quote twice creates two quotes. `Idempotency-Key` is not applied here.
+- There is no `GET /v1/quotes/:id` — store the id from create.
 - Then [Transfers](/transfers) with `{ "quote": "qt_…" }`. The customer confirms before anything leaves the vault.

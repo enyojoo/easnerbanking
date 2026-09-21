@@ -25,7 +25,7 @@ flowchart LR
   vault --> acct
 ```
 
-Live virtual accounts, live wallet addresses, and onramp require hosted [verification](/customers#start-verification). A `cus_` with only email and name cannot hold a **named** virtual account. Test skips verification.
+Live virtual accounts, live wallet addresses, and onramp require hosted [KYC](/customers#start-kyc) on that `cus_`. Your own KYB in Banking Settings does not approve the customer. A `cus_` with only email and name cannot hold a **named** virtual account. Test skips KYC.
 
 <Note>
   **Scope:** `GET` needs `accounts.read`. Verification and onramp need `accounts.write`.
@@ -37,8 +37,8 @@ Live virtual accounts, live wallet addresses, and onramp require hosted [verific
   <Step title="Create the customer">
     `POST /v1/customers` issues the USD vault and `acct_`. Save both ids.
   </Step>
-  <Step title="Start verification">
-    `POST /v1/customers/:id/verification` with `{ "return_url": "https://…" }`. Test returns `{ "status": "approved", "url": null }`. Live returns a hosted `url`.
+  <Step title="Start KYC">
+    `POST /v1/customers/:id/verification` with `{ "return_url": "https://…" }`. Test returns `{ "status": "approved", "url": null }`. Live returns a hosted KYC `url`. See [Customers](/customers).
   </Step>
   <Step title="Wait for approved">
     Poll `GET /v1/customers/:id` or handle `customer.updated`. Live Receive returns `403` `verification_required` until `approved`.
@@ -171,10 +171,10 @@ Publish `@` + `easetag`. To pay a tag from `v1`, create a destination `{ "type":
 
 | Product | Lands on |
 |---|---|
-| Receive (`deposit` / `chain` / `onramp`) | Customer vault (`acct_` with `customer`) |
+| Receive (`deposit` / `chain` / `onramp` / `easetag`) | Customer vault (`acct_` with `customer`) |
 | Checkout | **Your** business balance |
 
-Do not send your customer to first-party Banking screens or unpublished `/api` paths.
+Do not send your customer to first-party Banking screens or unpublished `/api` paths. In **test**, Console Accounts → **Simulate test deposit** credits the vault without `/v1` (not available in live).
 
 ## Errors
 

@@ -75,7 +75,52 @@ You may pass `source`, `destination`, `amount`, and `currency` instead of `quote
 
 ## Confirm
 
-Your app shows the amount and destination. The customer authorizes. Then:
+After `201` `requires_action`, the customer must authorize. Two paths — same secret.
+
+```mermaid
+flowchart LR
+  create[POST transfers]
+  action[requires_action]
+  inApp[In-app client_secret]
+  hosted[next_action.url]
+  done[completed]
+  create --> action
+  action --> inApp --> done
+  action --> hosted --> done
+```
+
+### In-app
+
+Pass `client_secret` to your user session. Show `amount`, `currency`, and a masked destination. Review:
+
+```bash
+curl https://api.easner.com/v1/transfers/tr_… \
+  -H "Authorization: Bearer easner_ta_…"
+```
+
+```json
+{
+  "id": "tr_…",
+  "quote": "qt_…",
+  "source": "acct_…",
+  "destination": "dest_…",
+  "amount": 4900,
+  "currency": "USD",
+  "status": "requires_action",
+  "livemode": false,
+  "created": "2026-09-20T00:00:00.000Z",
+  "expires_at": "2026-09-20T00:15:00.000Z",
+  "next_action": {
+    "type": "authorize",
+    "url": "https://business.easner.com/send/authorize/tr_…"
+  },
+  "destination_summary": { "type": "easetag", "label": "@ada" }
+}
+```
+
+`destination_summary.label` is masked (last four of account / IBAN / phone / wallet, or `@tag`). No `client_secret` on this response.
+
+Then confirm — **no** `easner_sk_*`:
 
 ```bash
 curl https://api.easner.com/v1/transfers/tr_…/confirm \
@@ -83,23 +128,31 @@ curl https://api.easner.com/v1/transfers/tr_…/confirm \
   -d '{"client_secret":"easner_ta_…"}'
 ```
 
-No `easner_sk_*` on this call. A merchant key returns `403` `customer_action_required`.
+You can also send `Authorization: Bearer easner_ta_…` with an empty or omitted body secret. A merchant key returns `403` `customer_action_required`. Replay after `completed` returns the same transfer.
 
-You can also send `Authorization: Bearer easner_ta_…`. Replay after `completed` returns the same transfer.
+### Hosted URL
 
-`GET /v1/transfers/:id` with that bearer returns a review object (`destination_summary` is masked). Or open `next_action.url` — hosted review, same secret.
+Open `next_action.url` (includes the secret). Same review and confirm, hosted.
 
 Test confirm debits the test book. Live confirm sends from the customer vault.
 
+Fulfil from `transfer.completed`, not from create `201`. Tick `transfer.failed` if you handle expiry or rail failure.
+
 ## Cancel
 
-`POST /v1/transfers/:id/cancel` with your secret key, only while `requires_action`. Releases the hold.
+Secret key, only while `requires_action`. Releases the hold. Already `canceled` returns the same transfer.
+
+```bash
+curl https://api.easner.com/v1/transfers/tr_…/cancel \
+  -H "Authorization: Bearer $EASNER_SECRET_KEY" \
+  -X POST
+```
 
 ## Retrieve and list
 
-`GET /v1/transfers/:id` → Transfer. `404` if missing. Merchant GET never returns `client_secret`.
+`GET /v1/transfers/:id` → Transfer. `404` if missing. Merchant GET never returns `client_secret`. Review (`destination_summary`) needs Bearer `easner_ta_…`.
 
-`GET /v1/transfers` → `{ "data": [ Transfer, … ] }` newest first, up to 100.
+`GET /v1/transfers` → `{ "data": [ Transfer, … ] }` newest first, up to 100. There is no next page.
 
 ## Status
 

@@ -31,7 +31,7 @@ flowchart LR
 
 <Steps>
   <Step title="Fund the vault">
-    `available` must cover the send. Fund with [Receive](/receive), or keep the first send in test.
+    `available` must cover the send. Fund with [Receive](/receive). In test: Console **Simulate test deposit**, or complete a test onramp. See [Test and live](/test-and-live).
   </Step>
   <Step title="Create a destination">
     One payment method. [Destinations](/destinations) stores the rail details.
@@ -164,12 +164,7 @@ The source `acct_` must match the send currency. A USD account sends from the US
 | Test | Create returns `requires_action`. Confirm debits the **test** vault. No live rails move |
 | Live | Create returns `requires_action` and locks `available` into `pending`. Confirm sends from the customer vault. A merchant key on confirm is `403` `customer_action_required` |
 
-`GET /v1/payment_methods` returns the send/receive rails and a **country catalog** (`catalog.fiat.bank`, `catalog.fiat.mobile_money`, `catalog.crypto`). Use it the way first-party send uses its destination list: pick a corridor, create a destination with those details, quote, transfer.
-
-```bash
-curl https://api.easner.com/v1/payment_methods \
-  -H "Authorization: Bearer $EASNER_SECRET_KEY"
-```
+Pick a corridor from [Payment methods](/payment-methods) (`GET /v1/payment_methods`), then create a destination with those details, quote, transfer.
 
 Checkout is not a send funding method and not a destination. A collect does not add to this `acct_`.
 
@@ -183,6 +178,6 @@ Checkout is not a send funding method and not a destination. A collect does not 
 | `transaction.created` | `type: "transfer"`, `direction: "out"` |
 | `account.updated` | New `available` |
 
-<Card title="Destinations" icon="map-pin" href="/destinations">
-  Full object, list, and detail keys.
+<Card title="Payment methods" icon="list" href="/payment-methods">
+  Rails, corridors, and how they map to destination details.
 </Card>

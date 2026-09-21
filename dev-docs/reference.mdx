@@ -1,0 +1,63 @@
+---
+title: v1 reference
+description: Every public /v1 method, scopes, and what is not on the API.
+icon: code
+---
+
+Base URL: `https://api.easner.com`
+
+Auth: `Authorization: Bearer easner_sk_test_…` or `easner_sk_live_…`. See [Authentication](/authentication).
+
+Skip `GET /v1/checkout/publishable-keys/validate` — that is for Checkout.js, not your server.
+
+## Methods
+
+| Method | Path | Scope | Id |
+|---|---|---|---|
+| `GET` | `/v1/customers` | `accounts.read` | `cus_` |
+| `POST` | `/v1/customers` | `transfers.write` | `cus_` (+ issued `acct_`) |
+| `GET` | `/v1/customers/:id` | `accounts.read` | `cus_` |
+| `POST` | `/v1/customers/:id/verification` | `accounts.write` | — |
+| `GET` | `/v1/accounts` | `accounts.read` | `acct_` |
+| `POST` | `/v1/accounts` | `accounts.write` | `acct_` |
+| `GET` | `/v1/accounts/:id` | `accounts.read` | `acct_` |
+| `GET` | `/v1/accounts/:id/deposit_instructions` | `accounts.read` | — |
+| `GET` | `/v1/accounts/:id/deposit_addresses` | `accounts.read` | — |
+| `POST` | `/v1/accounts/:id/onramp_sessions` | `accounts.write` | `ors_` |
+| `GET` | `/v1/payment_methods` | `accounts.read` | — |
+| `GET` | `/v1/destinations` | `accounts.read` | `dest_` |
+| `POST` | `/v1/destinations` | `transfers.write` | `dest_` |
+| `POST` | `/v1/quotes` | `transfers.write` | `qt_` |
+| `GET` | `/v1/transfers` | `accounts.read` | `tr_` |
+| `POST` | `/v1/transfers` | `transfers.write` | `tr_` (+ one-time `client_secret`) |
+| `GET` | `/v1/transfers/:id` | `accounts.read` or Bearer `easner_ta_…` | `tr_` |
+| `POST` | `/v1/transfers/:id/confirm` | none (customer secret) | `tr_` |
+| `POST` | `/v1/transfers/:id/cancel` | `transfers.write` | `tr_` |
+| `GET` | `/v1/transactions` | `accounts.read` | `txn_` |
+| `GET` | `/v1/transactions/:id` | `accounts.read` | `txn_` |
+| `POST` | `/v1/checkout/sessions` | `checkout` | `cs_` as `checkout_session_id` |
+| `GET` | `/v1/checkout/sessions?id=cs_…` | `checkout` | `cs_` |
+
+Confirm takes `{ "client_secret": "easner_ta_…" }` or `Authorization: Bearer easner_ta_…`. A merchant `easner_sk_*` on confirm returns `403` `customer_action_required`.
+
+Checkout retrieve is a **query** (`?id=`), not a path id.
+
+Guides: [Customers](/customers), [Accounts](/accounts), [Receive](/receive), [Send](/send), [Payment methods](/payment-methods), [Destinations](/destinations), [Quotes](/quotes), [Transfers](/transfers), [Checkout](/checkout), [Transactions](/transactions).
+
+## Lists
+
+`GET` collection endpoints return `{ "data": [ … ] }`, newest first, **hard cap 100**. There is no cursor, `starting_after`, or page 2.
+
+The only list filter is `GET /v1/accounts?customer=cus_…`.
+
+## Not on `/v1`
+
+- No `GET` destination or quote by id — store the id from create.
+- No customer update. Put `email` on create before live KYC.
+- No Checkout session list.
+- Keys and webhook URLs are Console Settings, not `/v1`.
+- No test-credit endpoint. Fund test via Console **Simulate test deposit** or [test onramp](/receive#card-onramp).
+
+<Card title="Quickstart" icon="rocket" href="/quickstart">
+  Mint a test key, fund, send.
+</Card>

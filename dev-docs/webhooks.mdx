@@ -4,7 +4,7 @@ description: Event catalog, easner-signature, and retries.
 icon: webhook
 ---
 
-Easner POSTs signed events to one URL per mode. Tick which events you want in Console → Webhooks. Unticked events are not sent.
+Easner POSTs signed events to your URLs. Create as many endpoints as you need per mode (test and live may differ). Tick which events you want in Settings → Webhooks. Unticked events are not sent. Disable is reversible — Enable puts the endpoint back.
 
 Headers on every delivery:
 
@@ -60,7 +60,7 @@ Use the **raw** body. Re-serializing JSON will fail the signature.
 
 ## Catalog
 
-Tick these in Console. Default ticks are the Checkout collect events.
+Tick these in Settings → Webhooks. Default ticks are Banking: `customer.updated`, `account.updated`, `transfer.completed`, `transaction.created`. Add Checkout events when you collect on a site.
 
 ### Checkout
 
@@ -110,19 +110,111 @@ Tick these in Console. Default ticks are the Checkout collect events.
 
 ### Banking
 
-**`account.updated`** — Available or pending changed. `data` is the [Account](/accounts).
+**`account.updated`** — Available or pending changed. Default tick.
 
-**`customer.created`** / **`customer.updated`** — `data` is the [Customer](/customers). `customer.updated` fires when `verification_status` changes.
+```json
+{
+  "type": "account.updated",
+  "created": 1758336000,
+  "data": {
+    "id": "acct_…",
+    "currency": "USD",
+    "available": 4900,
+    "pending": 0,
+    "customer": "cus_…",
+    "livemode": false
+  }
+}
+```
 
-**`transfer.created`** / **`transfer.completed`** / **`transfer.failed`** — `data` is the [Transfer](/transfers). Failed includes `error`.
+**`customer.updated`** — Record changed, including `verification_status`. Default tick. `customer.created` is the same `data` shape; tick it if you need create.
 
-**`transaction.created`** — `data` is the [Transaction](/transactions). Receive types are `deposit`, `onramp`, and `chain`.
+```json
+{
+  "type": "customer.updated",
+  "created": 1758336000,
+  "data": {
+    "id": "cus_…",
+    "email": "ada@example.com",
+    "name": "Ada",
+    "external_id": "user_42",
+    "easetag": "ada",
+    "status": "active",
+    "verification_status": "approved",
+    "livemode": false,
+    "created": "2026-09-20T00:00:00.000Z"
+  }
+}
+```
+
+**`transfer.completed`** — Vault sent. Default tick. `data` is the transfer **without** `client_secret`. Also tick `transfer.created` / `transfer.failed` if you handle those.
+
+```json
+{
+  "type": "transfer.completed",
+  "created": 1758336000,
+  "data": {
+    "id": "tr_…",
+    "quote": "qt_…",
+    "source": "acct_…",
+    "destination": "dest_…",
+    "amount": 4900,
+    "currency": "USD",
+    "status": "completed",
+    "livemode": false,
+    "created": "2026-09-20T00:00:00.000Z",
+    "expires_at": "2026-09-20T00:15:00.000Z",
+    "next_action": null
+  }
+}
+```
+
+**`transfer.failed`** — optional tick. Same transfer fields plus `error`:
+
+```json
+{
+  "type": "transfer.failed",
+  "created": 1758336000,
+  "data": {
+    "id": "tr_…",
+    "quote": "qt_…",
+    "source": "acct_…",
+    "destination": "dest_…",
+    "amount": 4900,
+    "currency": "USD",
+    "status": "failed",
+    "livemode": false,
+    "created": "2026-09-20T00:00:00.000Z",
+    "expires_at": "2026-09-20T00:15:00.000Z",
+    "next_action": null,
+    "error": "Transfer expired"
+  }
+}
+```
+
+**`transaction.created`** — A ledger row was written. Default tick. This payload is **narrower than** `GET /v1/transactions/:id`. Receive `type` is `deposit`, `onramp`, `chain`, or `easetag`.
+
+```json
+{
+  "type": "transaction.created",
+  "created": 1758336000,
+  "data": {
+    "id": "txn_…",
+    "type": "deposit",
+    "amount": 4900,
+    "currency": "USD",
+    "direction": "in",
+    "status": "completed",
+    "livemode": false
+  }
+}
+```
 
 ## Retries
 
-Failed deliveries retry at 1 minute, 5 minutes, 30 minutes, 2 hours, then 24 hours. After five attempts the delivery is `failed`. Redeliver from Console → Webhooks.
+Failed deliveries retry at 1 minute, 5 minutes, 30 minutes, 2 hours, then 24 hours. After five attempts the delivery is `failed`. Redeliver from Settings → Webhooks.
 
-Deliveries are listed in Console. Use Send test to confirm the URL is reachable; that is not a real payment.
+Deliveries are listed there. Use Send test to confirm the URL is reachable; that is not a real payment. Events in Console is a log of every event, not this catalog.
 
 ## Expected handler
 

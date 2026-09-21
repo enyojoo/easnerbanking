@@ -30,11 +30,27 @@
     "groups": [
       {
         "group": "Get started",
-        "pages": ["index", "quickstart", "authentication", "test-and-live"]
+        "pages": [
+          "index",
+          "what-is-easner",
+          "capabilities",
+          "quickstart",
+          "authentication",
+          "test-and-live"
+        ]
       },
       {
         "group": "Banking",
-        "pages": ["accounts", "receive", "send"]
+        "pages": [
+          "customers",
+          "accounts",
+          "receive",
+          "send",
+          "payment-methods",
+          "destinations",
+          "quotes",
+          "transfers"
+        ]
       },
       {
         "group": "Checkout",
@@ -42,21 +58,7 @@
       },
       {
         "group": "API",
-        "pages": [
-          "customers",
-          "accounts",
-          "destinations",
-          "quotes",
-          "transfers",
-          "transactions",
-          "checkout",
-          "webhooks",
-          "errors"
-        ]
-      },
-      {
-        "group": "Console",
-        "pages": ["console"]
+        "pages": ["reference", "transactions", "webhooks", "errors"]
       }
     ]
   },
@@ -77,7 +79,15 @@
     "socials": {
       "x": "https://x.com/easnerbanking",
       "linkedin": "https://linkedin.com/company/easner"
-    }
+    },
+    "links": [
+      [
+        {
+          "label": "Terms",
+          "href": "https://www.easner.com/terms"
+        }
+      ]
+    ]
   },
   "api": {
     "mdx": {

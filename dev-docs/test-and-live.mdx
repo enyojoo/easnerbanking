@@ -4,12 +4,13 @@ description: What test completes, and what live actually moves.
 icon: flask-conical
 ---
 
-Livemode is the key prefix. There is no `livemode` body flag.
+Livemode is the key prefix. There is no `livemode` body flag. In Console, the Test / Live switch in the header is the same split — it applies to Home, Customers, Payments, Accounts, Checkout, and Settings.
 
 | | Test (`easner_sk_test_`) | Live (`easner_sk_live_`) |
 |---|---|---|
 | Objects | Isolated test objects | Isolated live objects |
-| Verification | Approves immediately. No hosted form | Hosted link. Live bank details and onramp need `approved` |
+| Customer KYC | Approves immediately. No hosted form | Hosted KYC link. Live bank details and onramp need `approved` |
+| Your KYB | Not required to call test `v1` | Complete in Banking → Settings before live money |
 | Virtual account | Sandbox numbers. No real bank | Named ACH/SEPA after approval. Fiat converts into the vault |
 | Wallet address | Token account without KYC | Require `approved`. USDC/EURC into the vault |
 | Onramp | Hosted page completes and credits the vault | Hosted card onramp after approval, onto the vault |
@@ -20,17 +21,36 @@ Livemode is the key prefix. There is no `livemode` body flag.
 
 Test never moves live money. Live never writes test objects.
 
+## Fund a test vault
+
+A new `acct_` is `available: 0`. Before the first send:
+
+1. Console → Accounts → **Simulate test deposit** (session `/api/platform/...`, **not** `/v1`, test only). Credits `type: "deposit"`.
+2. Or `POST /v1/accounts/:id/onramp_sessions` and complete the hosted test page. See [Receive](/receive#card-onramp).
+
+Listen for `account.updated` and `transaction.created`.
+
+## Logs and Workbench
+
+Use these in Console Settings while you stay in Test:
+
+| Place | Job |
+|---|---|
+| Logs | Recent `v1` requests for this business and mode. Open a row for the request. |
+| Workbench | Call `v1` as this business without pasting a secret. Retrieve an id you already have. |
+| Events | A delivery log — every event, whether or not it reached your URL. Not the catalog; tick events on a webhook endpoint. |
+
 ## What you must do before live
 
 <Steps>
   <Step title="Mint a test key">
-    Console: add a test webhook. Tick the events you handle.
+    Settings → API keys, then Settings → Webhooks. Tick the events you handle. Stay in Test.
   </Step>
   <Step title="Run the quickstart">
-    [Quickstart](/quickstart) a customer → destination → quote → transfer. Confirm `transfer.completed` on the test URL.
+    [Quickstart](/quickstart): customer → fund test vault → destination → quote → transfer. Confirm `transfer.completed` on the test URL.
   </Step>
   <Step title="Receive in test">
-    [Receive](/receive): start verification, fetch sandbox bank details, complete a test onramp. Confirm `account.updated` and `transaction.created`.
+    [Receive](/receive): KYC the customer, fetch sandbox bank details, complete a test onramp. Confirm `account.updated` and `transaction.created`.
   </Step>
   <Step title="Pay with the test card">
     Checkout: register the website, create a test session, pay with `4242`, confirm `checkout.completed`.
@@ -38,8 +58,8 @@ Test never moves live money. Live never writes test objects.
   <Step title="Check Console Logs">
     You should see the `v1` calls. Errors should be gone.
   </Step>
-  <Step title="Mint a live key">
-    Set a live webhook URL. Tick the same events.
+  <Step title="Complete your KYB">
+    Banking → Settings → Verification. That verifies **you**, not a `cus_`. Then mint a live key and set a live webhook URL. Tick the same events.
   </Step>
 </Steps>
 

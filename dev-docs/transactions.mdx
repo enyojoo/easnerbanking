@@ -6,6 +6,8 @@ icon: receipt
 
 A transaction is a row on `GET /v1/transactions`. Receive writes vault credits (`deposit`, `chain`, `onramp`). Send writes vault debits (`transfer`). Checkout collects also appear here when you used a merchant secret key — those are **your** business balance, not a customer vault.
 
+In Console, these rows are **Payments**. Open a `txn_` for type, source, destination, and the related `tr_` / `cs_`.
+
 <Note>
   **Scope:** `accounts.read`
 </Note>
@@ -15,7 +17,7 @@ A transaction is a row on `GET /v1/transactions`. Receive writes vault credits (
 | Field | Type | Notes |
 |---|---|---|
 | `id` | string | `txn_…` |
-| `type` | string | `transfer`, `deposit`, `onramp`, `chain`, `checkout` |
+| `type` | string | `transfer`, `deposit`, `onramp`, `chain`, `easetag`, `checkout` |
 | `amount` | integer | Cents, always positive |
 | `currency` | string | |
 | `direction` | string | `in` or `out` |
@@ -53,6 +55,7 @@ A transaction is a row on `GET /v1/transactions`. Receive writes vault credits (
 | `deposit` | Banking | Bank credit to a customer `acct_` |
 | `onramp` | Banking | Card onramp credit to a customer `acct_` |
 | `chain` | Banking | Chain credit to a customer `acct_` |
+| `easetag` | Banking | In-network credit to a customer `acct_` |
 | `transfer` | Banking | Send from a customer `acct_` |
 | `checkout` | Checkout | Collect onto **your** business balance |
 
@@ -69,7 +72,7 @@ curl https://api.easner.com/v1/transactions \
 { "data": [ /* Transaction */ ] }
 ```
 
-Newest first. Up to 100. Filtered by the key’s livemode.
+Newest first. Up to 100. There is no next page. Filtered by the key’s livemode.
 
 ## Retrieve
 
@@ -79,13 +82,13 @@ Newest first. Up to 100. Filtered by the key’s livemode.
 
 | Event | When |
 |---|---|
-| `transaction.created` | A row was written |
+| `transaction.created` | A row was written. Webhook `data` is **narrower** than this GET object — see [Webhooks](/webhooks) |
 | `account.updated` | The account totals changed |
 | `payment.available` | A Checkout collect became usable |
 
 ## Expected
 
 - Reconcile your product against this list.
-- `direction: "in"` with `deposit` / `onramp` / `chain` is Receive on a customer account.
+- `direction: "in"` with `deposit` / `onramp` / `chain` / `easetag` is Receive on a customer account.
 - `direction: "in"` with `checkout` is a collect onto your business balance.
 - `direction: "out"` is a transfer.
