@@ -1053,6 +1053,12 @@ export async function patchGlobalPayoutNoahTurnkeySettlement(
   const meta = { ...row.metadata }
   if (input.marginLeg) {
     meta.margin_turnkey_send_id = input.turnkeySendId
+    meta.processing_fee_turnkey_send_id = input.turnkeySendId
+    if (input.turnkeySendStatus) meta.processing_fee_turnkey_send_status = input.turnkeySendStatus
+    if (input.txHash) {
+      meta.fee_wallet_sweep_tx_hash = input.txHash
+      meta.processing_fee_pending = false
+    }
   } else {
     meta.turnkey_send_id = input.turnkeySendId
     if (input.txHash) meta.turnkey_tx_hash = input.txHash

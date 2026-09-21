@@ -1,67 +1,75 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import {
-  computeEasnerRevenueFeeWalletSweepAmount,
-  EASNER_REVENUE_FEE_WALLET_SWEEP_MIN,
-  payoutCryptoAuthorizedAmountFromMeta,
-} from "@easner/shared"
+import { EASNER_REVENUE_FEE_WALLET_SWEEP_MIN } from "@easner/shared"
 import type { NoahAccountContext } from "@/lib/noah/resolve-account-context"
-import { createTurnkeySend } from "@/lib/turnkey/send"
+import { resolveTurnkeySendStatusClient } from "@/lib/turnkey/resolve-send-client"
+import {
+  createTurnkeySend,
+  resolveTurnkeySenderForAccountContext,
+} from "@/lib/turnkey/send"
+import {
+  interpretTurnkeyGetSendTransactionStatus,
+  normalizeTurnkeyGetSendTransactionStatusPayload,
+  type TurnkeyClientLike,
+} from "@/lib/turnkey/sol-send-polling"
 import { sendStablecoinFromDepositOmnibus } from "@/lib/turnkey/send-from-omnibus"
 import { resolveWalletSendFeeSolanaAddress } from "@/lib/wallet-send/fee-address"
+import { isTurnkeyFeeSweepOnChain } from "@/lib/processing-fee/fee-wallet-sweep-meta"
 
-export { EASNER_REVENUE_FEE_WALLET_SWEEP_MIN as FEE_SWEEP_MIN }
+export {
+  FEE_SWEEP_MIN,
+  FEE_SWEEP_STALE_MS,
+  buildEasnerRevenueSweepMetadataPatch,
+  computeSweepAmountFromMetadata,
+  isEasnerRevenueAlreadySwept,
+  isPayoutPrincipalOnChain,
+  isSubmittedFeeSweepStale,
+  isTurnkeyFeeSweepOnChain,
+  readFeeTurnkeySendId,
+  readPriorSweepFromMetadata,
+  type EasnerRevenueSweepMetadataPatch,
+} from "@/lib/processing-fee/fee-wallet-sweep-meta"
 
-export type EasnerRevenueSweepMetadataPatch = {
-  fee_wallet_sweep?: number
-  fee_wallet_sweep_tx_hash?: string
-  easner_revenue_sweep_amount?: number
-  processing_fee_pending?: boolean
-  processing_fee_captured_at?: string
-  processing_fee_turnkey_send_id?: string
-  margin_turnkey_send_id?: string
+export async function pollTurnkeySendById(
+  admin: SupabaseClient,
+  input: {
+    ctx: NoahAccountContext
+    sendId: string
+    asset?: "USDC" | "EURC"
+  },
+): Promise<{ status: "pending" | "settled" | "failed"; txHash: string | null }> {
+  const sendId = String(input.sendId || "").trim()
+  if (!sendId) return { status: "pending", txHash: null }
+
+  const asset = input.asset ?? "USDC"
+  const sender = await resolveTurnkeySenderForAccountContext(admin, input.ctx, asset)
+  if (!sender) return { status: "pending", txHash: null }
+
+  const resolved = await resolveTurnkeySendStatusClient({
+    subOrganizationId: sender.subOrgId,
+    admin,
+  })
+  if (!resolved.ok) return { status: "pending", txHash: null }
+  const client = resolved.client as TurnkeyClientLike
+  if (typeof client.getSendTransactionStatus !== "function") {
+    return { status: "pending", txHash: null }
+  }
+
+  try {
+    const raw = await client.getSendTransactionStatus({
+      organizationId: sender.subOrgId,
+      sendTransactionStatusId: sendId,
+    })
+    return interpretTurnkeyGetSendTransactionStatus(
+      normalizeTurnkeyGetSendTransactionStatusPayload(raw),
+    )
+  } catch (e) {
+    console.warn("[easner-revenue-sweep] poll fee/principal send failed:", e)
+    return { status: "pending", txHash: null }
+  }
 }
 
 function assetForCryptoSymbol(crypto: string): "USDC" | "EURC" {
   return String(crypto || "").toUpperCase().includes("EUR") ? "EURC" : "USDC"
-}
-
-export function computeSweepAmountFromMetadata(
-  meta: Record<string, unknown>,
-  opts?: { ledgerSurplus?: number; rowAmount?: number },
-): number {
-  return computeEasnerRevenueFeeWalletSweepAmount({
-    marginAmount: Number(meta.margin_amount ?? 0),
-    processingFee: Number(meta.processing_fee ?? 0),
-    totalDebited: Number(meta.total_debited ?? opts?.rowAmount ?? 0),
-    cryptoAuthorizedAmount: Number(payoutCryptoAuthorizedAmountFromMeta(meta) ?? 0),
-    ...(opts?.ledgerSurplus != null ? { ledgerSurplus: opts.ledgerSurplus } : {}),
-  })
-}
-
-export function buildEasnerRevenueSweepMetadataPatch(input: {
-  sweepAmt: number
-  feeWalletSweepTxHash: string | null
-  captured: boolean
-  turnkeySendId?: string | null
-  useMarginTurnkeySendId?: boolean
-}): EasnerRevenueSweepMetadataPatch {
-  const now = new Date().toISOString()
-  const patch: EasnerRevenueSweepMetadataPatch = {
-    ...(input.sweepAmt > 0 ? { fee_wallet_sweep: input.sweepAmt, easner_revenue_sweep_amount: input.sweepAmt } : {}),
-    ...(input.feeWalletSweepTxHash ? { fee_wallet_sweep_tx_hash: input.feeWalletSweepTxHash } : {}),
-    processing_fee_pending: !input.captured && input.sweepAmt >= EASNER_REVENUE_FEE_WALLET_SWEEP_MIN,
-    ...(input.captured && input.sweepAmt >= EASNER_REVENUE_FEE_WALLET_SWEEP_MIN
-      ? { processing_fee_captured_at: now }
-      : {}),
-  }
-  if (input.turnkeySendId) {
-    if (input.useMarginTurnkeySendId) {
-      patch.margin_turnkey_send_id = input.turnkeySendId
-    } else {
-      patch.processing_fee_turnkey_send_id = input.turnkeySendId
-    }
-  }
-  return patch
 }
 
 export async function sweepEasnerRevenueFromDepositOmnibus(input: {
@@ -163,7 +171,10 @@ export async function sweepEasnerRevenueFromUserTurnkeyWallet(
       ...(input.walletSend ? { walletSend: { formSessionId: input.walletSend.formSessionId, marginLeg: true } } : {}),
     })
 
-    const captured = feeSend.status !== "failed"
+    const captured = isTurnkeyFeeSweepOnChain({
+      status: feeSend.status,
+      txHash: feeSend.txHash,
+    })
     return {
       feeWalletSweepTxHash: feeSend.txHash,
       captured,
@@ -172,24 +183,5 @@ export async function sweepEasnerRevenueFromUserTurnkeyWallet(
   } catch (e) {
     console.warn(`[${input.logTag ?? "easner-revenue-sweep"}] user wallet fee sweep failed:`, e)
     return { feeWalletSweepTxHash: null, captured: false, turnkeySendId: null }
-  }
-}
-
-export function isEasnerRevenueAlreadySwept(meta: Record<string, unknown>): boolean {
-  return Boolean(String(meta.fee_wallet_sweep_tx_hash ?? "").trim())
-}
-
-export function readPriorSweepFromMetadata(meta: Record<string, unknown>): {
-  sweepAmt: number
-  feeWalletSweepTxHash: string | null
-  captured: boolean
-} {
-  if (!isEasnerRevenueAlreadySwept(meta)) {
-    return { sweepAmt: 0, feeWalletSweepTxHash: null, captured: false }
-  }
-  return {
-    sweepAmt: Number(meta.fee_wallet_sweep ?? meta.easner_revenue_sweep_amount ?? 0),
-    feeWalletSweepTxHash: String(meta.fee_wallet_sweep_tx_hash),
-    captured: true,
   }
 }

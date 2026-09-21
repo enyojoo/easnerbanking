@@ -463,6 +463,7 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
   it("forceOrganicStablecoinDeposit bypasses product suppressors", async () => {
     mocks.findNoah.mockResolvedValue({ linkedTransactionId: "noah-1", kind: "pay_in" })
     mocks.findEasetag.mockResolvedValue({ transfer_group_id: "tg-1", status: "submitted" })
+    mocks.findIssued.mockResolvedValue({ id: "plat-1" })
     const admin = {
       from: vi.fn(() => ({
         select: vi.fn().mockReturnThis(),
@@ -480,6 +481,7 @@ describe("applyTurnkeyInboundLedgerEvent", () => {
     expect(result.kind).toBe("applied")
     expect(mocks.reconcileNoah).not.toHaveBeenCalled()
     expect(mocks.findEasetag).not.toHaveBeenCalled()
+    expect(mocks.creditPlatform).not.toHaveBeenCalled()
     expect(mocks.upsertLedger).toHaveBeenCalled()
   })
 

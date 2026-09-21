@@ -451,7 +451,7 @@ export async function reconcilePendingFeeCaptures(
   since: string,
   dryRun: boolean,
 ): Promise<{ scanned: number; captured: number }> {
-  const { data: rows, error } = await admin
+  const { data: pendingRows, error } = await admin
     .from("transactions")
     .select("id, status, metadata, user_id, business_id, amount, currency")
     .eq("status", "settled")
@@ -460,6 +460,20 @@ export async function reconcilePendingFeeCaptures(
     .limit(300)
 
   if (error) throw error
+
+  const { data: submittedRows } = await admin
+    .from("transactions")
+    .select("id, status, metadata, user_id, business_id, amount, currency")
+    .eq("status", "settled")
+    .gte("settled_at", since)
+    .not("metadata->>processing_fee_turnkey_send_id", "is", null)
+    .limit(200)
+
+  const byId = new Map<string, NonNullable<typeof pendingRows>[number]>()
+  for (const row of [...(pendingRows ?? []), ...(submittedRows ?? [])]) {
+    if (row?.id) byId.set(String(row.id), row)
+  }
+  const rows = [...byId.values()]
 
   let scanned = 0
   let captured = 0

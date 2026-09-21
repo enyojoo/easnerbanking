@@ -47,6 +47,25 @@ function collectAddressCandidates(event: Record<string, unknown>): {
   return { toCandidates, fromCandidates, all }
 }
 
+/** True when this Solana owner pubkey or ATA is an active Easner Turnkey vault. */
+export async function isActiveSolanaWalletAddress(
+  admin: SupabaseClient,
+  address: string,
+): Promise<boolean> {
+  const addr = String(address || "").trim()
+  if (!addr) return false
+  const [{ data: byOwner }, { data: byAta }] = await Promise.all([
+    admin.from("wallet_accounts").select("id").eq("status", "active").eq("address", addr).limit(1),
+    admin
+      .from("wallet_accounts")
+      .select("id")
+      .eq("status", "active")
+      .eq("associated_token_account_address", addr)
+      .limit(1),
+  ])
+  return Boolean(byOwner?.[0]?.id || byAta?.[0]?.id)
+}
+
 /** Match Turnkey webhook / balance payload addresses to an active wallet account + ledger owner. */
 export async function resolveTurnkeyWalletScopeFromEvent(
   admin: SupabaseClient,

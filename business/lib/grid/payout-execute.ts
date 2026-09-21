@@ -65,6 +65,7 @@ export async function executeGridBalancePayoutTurnkeyLeg(input: {
         turnkey_send_id: send.providerTransactionId,
         turnkey_send_status: send.status,
         grid_funding_tx_hash: send.txHash,
+        ...(send.subOrgId ? { turnkey_sub_org_id: send.subOrgId } : {}),
       },
       baseCurrency: "USD",
       asset: "USDC",

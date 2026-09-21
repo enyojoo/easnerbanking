@@ -9,13 +9,13 @@ import {
 } from "@/lib/turnkey/ledger-inbound-exists"
 import type { NormalizedTurnkeyBalanceDeposit } from "@/lib/turnkey/turnkey-balance-webhook-payload"
 import { turnkeyBalanceDepositProviderTransactionId } from "@/lib/turnkey/turnkey-balance-webhook-payload"
-import { resolveTurnkeyWalletScopeFromEvent } from "@/lib/turnkey/resolve-turnkey-wallet-scope"
+import { resolveTurnkeyWalletScopeFromEvent, isActiveSolanaWalletAddress } from "@/lib/turnkey/resolve-turnkey-wallet-scope"
 import { isDepositOmnibusAddress } from "@/lib/deposit-omnibus/config"
 import { handleDepositOmnibusInbound } from "@/lib/deposit-omnibus/handle-omnibus-inbound"
 import { createSolanaRpcConnection, isSolanaRpcRateLimitedError } from "@/lib/solana/rpc-connection"
 import { mintForStablecoinAsset } from "@/lib/solana/spl-mints"
 import { resolveSolanaInboundSenderFromTxHash } from "@/lib/turnkey/solana-inbound-sender"
-import { resolveWalletSendFeeSolanaAddress } from "@/lib/wallet-send/fee-address"
+import { isWalletSendFeeSolanaAddress } from "@/lib/wallet-send/fee-address"
 import { findYcCrossBorderFeeWalletRefundSuppression } from "@/lib/yellowcard/yc-ledger"
 import { withOrganicStablecoinDepositMetadata } from "@/lib/turnkey/organic-stablecoin-deposit-metadata"
 import { isGridVaSweepTreasurySender } from "@/lib/grid/grid-va-sweep-treasury"
@@ -154,38 +154,56 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
   }
 
   // Cross-border leg2 fail refunds land on fee wallet – suppress + mark transfer.
-  const feeUsd = resolveWalletSendFeeSolanaAddress({ ledgerCurrency: "USD" })
-  const feeEur = resolveWalletSendFeeSolanaAddress({ ledgerCurrency: "EUR" })
+  // Do not amount-match those refunds against customer fee sweeps: J8Xh is also the org vault.
   const addr = String(deposit.address || "").trim()
-  if (addr && (addr === feeUsd || addr === feeEur)) {
-    const match = await findYcCrossBorderFeeWalletRefundSuppression(admin, {
-      amount: deposit.amount,
-      currency: mapAssetToCurrency(deposit.asset),
-    })
-    if (match) {
-      const { data: t } = await admin
-        .from("yc_transfers")
-        .select("metadata")
-        .eq("id", match.transferId)
-        .maybeSingle()
-      const prior = (t?.metadata && typeof t.metadata === "object" ? t.metadata : {}) as Record<
-        string,
-        unknown
-      >
-      await admin
-        .from("yc_transfers")
-        .update({
-          metadata: {
-            ...prior,
-            yc_fee_wallet_refund_suppressed: true,
-            yc_fee_wallet_refund_tx_hash: deposit.txHash,
-          },
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", match.transferId)
-      return true
+  const feeWalletInbound = isWalletSendFeeSolanaAddress(addr)
+  let feeWalletRevenueSweep = false
+  let resolvedSender = String(deposit.counterpartyAddress || "").trim() || null
+
+  if (feeWalletInbound) {
+    if (!resolvedSender && deposit.txHash) {
+      const mint = mintForStablecoinAsset(String(deposit.asset || "USDC"))
+      if (mint) {
+        resolvedSender = await resolveSolanaInboundSenderFromTxHash(createSolanaRpcConnection(), {
+          txHash: deposit.txHash,
+          mint,
+          ownerAddress: addr,
+        }).catch(() => null)
+      }
     }
-    // Same address is also the org vault: unmatched USDC is a Stablecoin deposit.
+    feeWalletRevenueSweep = resolvedSender
+      ? await isActiveSolanaWalletAddress(admin, resolvedSender)
+      : false
+
+    if (!feeWalletRevenueSweep) {
+      const match = await findYcCrossBorderFeeWalletRefundSuppression(admin, {
+        amount: deposit.amount,
+        currency: mapAssetToCurrency(deposit.asset),
+      })
+      if (match) {
+        const { data: t } = await admin
+          .from("yc_transfers")
+          .select("metadata")
+          .eq("id", match.transferId)
+          .maybeSingle()
+        const prior = (t?.metadata && typeof t.metadata === "object" ? t.metadata : {}) as Record<
+          string,
+          unknown
+        >
+        await admin
+          .from("yc_transfers")
+          .update({
+            metadata: {
+              ...prior,
+              yc_fee_wallet_refund_suppressed: true,
+              yc_fee_wallet_refund_tx_hash: deposit.txHash,
+            },
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", match.transferId)
+        return true
+      }
+    }
   }
 
   const scope = await resolveTurnkeyWalletScopeFromEvent(admin, {
@@ -222,7 +240,7 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
 
   const providerTransactionId = turnkeyBalanceDepositProviderTransactionId(deposit, addressForId)
 
-  let counterpartyAddress = deposit.counterpartyAddress
+  let counterpartyAddress = resolvedSender || deposit.counterpartyAddress
   if (!counterpartyAddress && deposit.txHash && chain === "solana") {
     const mint = mintForStablecoinAsset(asset)
     if (mint) {
@@ -235,39 +253,48 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
     }
   }
 
-  let result = await applyTurnkeyInboundLedgerEvent(admin, {
-    userId: scope.userId,
-    businessId: scope.businessId,
-    walletAccount: {
-      id: String(scope.walletAccount.id),
-      address: scope.walletAddress,
+  if (!feeWalletRevenueSweep && counterpartyAddress && isWalletSendFeeSolanaAddress(addr)) {
+    feeWalletRevenueSweep = await isActiveSolanaWalletAddress(admin, counterpartyAddress)
+  }
+
+  let result = await applyTurnkeyInboundLedgerEvent(
+    admin,
+    {
+      userId: scope.userId,
+      businessId: scope.businessId,
+      walletAccount: {
+        id: String(scope.walletAccount.id),
+        address: scope.walletAddress,
+        asset,
+        chain,
+        associated_token_account_address: scope.tokenAccountAddress || null,
+      },
+      providerTransactionId,
+      providerEventId: eventId,
+      status: "settled",
+      amount: deposit.amount,
+      currency,
+      direction: "in",
+      payload: deposit.raw,
+      metadata: {
+        source: "turnkey_balance_webhook",
+        operation: "deposit",
+        source_payment_rail: chain,
+        source_currency: asset,
+        ...(counterpartyAddress ? { from_address: counterpartyAddress } : {}),
+        ...(feeWalletRevenueSweep ? { fee_wallet_revenue_sweep: true } : {}),
+      },
+      txHash: deposit.txHash,
+      walletAddress: scope.walletAddress,
+      counterpartyAddress,
+      occurredAt: deposit.occurredAt,
+      settledAt: deposit.settledAt,
       asset,
       chain,
-      associated_token_account_address: scope.tokenAccountAddress || null,
+      amountMinor: deposit.amountMinor,
     },
-    providerTransactionId,
-    providerEventId: eventId,
-    status: "settled",
-    amount: deposit.amount,
-    currency,
-    direction: "in",
-    payload: deposit.raw,
-    metadata: {
-      source: "turnkey_balance_webhook",
-      operation: "deposit",
-      source_payment_rail: chain,
-      source_currency: asset,
-      ...(counterpartyAddress ? { from_address: counterpartyAddress } : {}),
-    },
-    txHash: deposit.txHash,
-    walletAddress: scope.walletAddress,
-    counterpartyAddress,
-    occurredAt: deposit.occurredAt,
-    settledAt: deposit.settledAt,
-    asset,
-    chain,
-    amountMinor: deposit.amountMinor,
-  })
+    feeWalletRevenueSweep ? { forceOrganicStablecoinDeposit: true } : undefined,
+  )
 
   if (
     (result.kind === "suppressed_noah" || result.kind === "suppressed_easetag") &&

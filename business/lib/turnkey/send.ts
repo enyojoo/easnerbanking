@@ -113,7 +113,7 @@ async function resolveScopeOwner(admin: SupabaseClient, ctx: NoahAccountContext)
   return { userId: ctx.subjectUserId, businessId: null }
 }
 
-async function getSubOrgAndWallet(
+export async function resolveTurnkeySenderForAccountContext(
   admin: SupabaseClient,
   ctx: NoahAccountContext,
   asset: "USDC" | "EURC",
@@ -161,7 +161,7 @@ export async function createTurnkeySend(
   if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error("amount must be positive")
 
   const scopeOwner = await resolveScopeOwner(admin, input.ctx)
-  const sender = await getSubOrgAndWallet(admin, input.ctx, input.asset)
+  const sender = await resolveTurnkeySenderForAccountContext(admin, input.ctx, input.asset)
   if (!sender) throw new Error("No managed wallet found for requested asset")
 
   const resolved = await resolveTurnkeySendClient({
@@ -593,20 +593,41 @@ export async function reconcileTurnkeySendStatus(
     } else {
       const noahRow = await findGlobalPayoutNoahRowByTurnkeySendId(admin, params.providerTransactionId)
       if (noahRow?.id) {
-        const meta = { ...noahRow.metadata, turnkey_send_status: status }
-        if (txHash) {
-          meta.turnkey_tx_hash = txHash
+        const prior = { ...noahRow.metadata }
+        const isMarginLeg =
+          String(prior.margin_turnkey_send_id ?? prior.processing_fee_turnkey_send_id ?? "").trim() ===
+            params.providerTransactionId &&
+          String(prior.turnkey_send_id ?? "").trim() !== params.providerTransactionId
+        const meta: Record<string, unknown> = { ...prior }
+        if (isMarginLeg) {
+          meta.processing_fee_turnkey_send_status = status
+          if (txHash) {
+            meta.fee_wallet_sweep_tx_hash = txHash
+            meta.processing_fee_pending = false
+            if (!meta.processing_fee_captured_at) {
+              meta.processing_fee_captured_at = new Date().toISOString()
+            }
+          } else if (status === "failed") {
+            meta.processing_fee_pending = true
+          }
+        } else {
+          meta.turnkey_send_status = status
+          if (txHash) {
+            meta.turnkey_tx_hash = txHash
+            meta.yc_crypto_deposit_tx_hash = String(meta.yc_crypto_deposit_tx_hash ?? txHash)
+            meta.yc_crypto_deposit_status = status
+          }
         }
         await admin
           .from("transactions")
           .update({
             metadata: meta,
-            ...(txHash ? { tx_hash: txHash } : {}),
+            ...(txHash && !isMarginLeg ? { tx_hash: txHash } : {}),
             updated_at: new Date().toISOString(),
           })
           .eq("id", noahRow.id)
 
-        if (status === "settled" && noahRow.easnerPayoutId) {
+        if (status === "settled" && noahRow.easnerPayoutId && !isMarginLeg) {
           await applyGlobalPayoutWalletDebitForEasnerPayoutId(admin, {
             easnerPayoutId: noahRow.easnerPayoutId,
             markTurnkeySettled: true,

@@ -19,6 +19,10 @@ import { buildWalletReportingSnapshot } from "@/lib/transactions/reporting-snaps
 import { isGridVaTurnkeyDustAmount } from "@/lib/grid/grid-va-turnkey-dust"
 import { findYcCrossBorderFeeWalletRefundSuppression } from "@/lib/yellowcard/yc-ledger"
 import { resolveWalletSendFeeSolanaAddress } from "@/lib/wallet-send/fee-address"
+import { isActiveSolanaWalletAddress } from "@/lib/turnkey/resolve-turnkey-wallet-scope"
+import { createSolanaRpcConnection } from "@/lib/solana/rpc-connection"
+import { mintForStablecoinAsset } from "@/lib/solana/spl-mints"
+import { resolveSolanaInboundSenderFromTxHash } from "@/lib/turnkey/solana-inbound-sender"
 
 const APPLY = process.argv.includes("--apply")
 const EASNER_GROUP_VAULT = "J8Xh2H1WLd252soocN2r3R3CbgadA5Rq9LBMvXkUyDVA"
@@ -61,14 +65,28 @@ async function main() {
     if (seenHash.has(deposit.txHash)) continue
     seenHash.add(deposit.txHash)
 
-    const yc = await findYcCrossBorderFeeWalletRefundSuppression(admin, {
-      amount: deposit.amount,
-      currency: deposit.asset === "EURC" ? "EUR" : "USD",
-    })
-    if (yc) {
-      console.log("SKIP_YC_REFUND", { txHash: deposit.txHash, amount: deposit.amount })
-      skipped += 1
-      continue
+    let sender = String(deposit.counterpartyAddress || "").trim() || null
+    if (!sender && deposit.txHash) {
+      const mint = mintForStablecoinAsset(deposit.asset === "EURC" ? "EURC" : "USDC")
+      if (mint) {
+        sender = await resolveSolanaInboundSenderFromTxHash(createSolanaRpcConnection(), {
+          txHash: deposit.txHash,
+          mint,
+          ownerAddress: deposit.address,
+        }).catch(() => null)
+      }
+    }
+    const fromManagedVault = sender ? await isActiveSolanaWalletAddress(admin, sender) : false
+    if (!fromManagedVault) {
+      const yc = await findYcCrossBorderFeeWalletRefundSuppression(admin, {
+        amount: deposit.amount,
+        currency: deposit.asset === "EURC" ? "EUR" : "USD",
+      })
+      if (yc) {
+        console.log("SKIP_YC_REFUND", { txHash: deposit.txHash, amount: deposit.amount })
+        skipped += 1
+        continue
+      }
     }
 
     const scope = await resolveTurnkeyWalletScopeFromEvent(admin, {
@@ -106,6 +124,8 @@ async function main() {
       source_currency: deposit.asset,
       organic_deposit_fallback: true,
       fee_wallet_heal: true,
+      ...(fromManagedVault ? { fee_wallet_revenue_sweep: true } : {}),
+      ...(sender ? { from_address: sender } : {}),
       balance_delta_applied: true,
       easner_transaction_id: easnerTransactionId,
       ...buildWalletReportingSnapshot({ amount: deposit.amount, currency, fxRates: [] }),
@@ -116,6 +136,8 @@ async function main() {
       amount: deposit.amount,
       businessId: scope.businessId,
       easnerTransactionId,
+      fromManagedVault,
+      sender,
     })
 
     if (!APPLY) continue

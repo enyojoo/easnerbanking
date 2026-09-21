@@ -1,13 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from "vitest"
 
 vi.mock("@/lib/processing-fee/fee-wallet-sweep", () => ({
-  FEE_SWEEP_MIN: 0.01,
-  isEasnerRevenueAlreadySwept: vi.fn(() => false),
   sweepEasnerRevenueFromUserTurnkeyWallet: vi.fn(),
-  buildEasnerRevenueSweepMetadataPatch: vi.fn((input: { sweepAmt: number; captured: boolean }) => ({
-    fee_wallet_sweep: input.sweepAmt,
-    processing_fee_pending: !input.captured,
-  })),
+  pollTurnkeySendById: vi.fn().mockResolvedValue({ status: "settled", txHash: "principal-hash" }),
 }))
 
 vi.mock("@/lib/business/org-owner", () => ({

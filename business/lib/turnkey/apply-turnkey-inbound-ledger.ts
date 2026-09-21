@@ -131,7 +131,7 @@ export async function applyTurnkeyInboundLedgerEvent(
   const direction = input.direction
   const skipProductSuppressors = opts?.forceOrganicStablecoinDeposit === true
 
-  if (direction === "in" && status === "settled" && input.amount > 0) {
+  if (direction === "in" && status === "settled" && input.amount > 0 && !skipProductSuppressors) {
     const { data: walletRow } = await admin
       .from("wallet_accounts")
       .select("wallet_owner_id")

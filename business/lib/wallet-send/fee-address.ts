@@ -13,6 +13,14 @@ export function resolveWalletSendFeeSolanaAddress(input: {
   return fromEnv || null
 }
 
+export function isWalletSendFeeSolanaAddress(address: string): boolean {
+  const addr = String(address || "").trim()
+  if (!addr) return false
+  const usd = resolveWalletSendFeeSolanaAddress({ ledgerCurrency: "USD" })
+  const eur = resolveWalletSendFeeSolanaAddress({ ledgerCurrency: "EUR" })
+  return Boolean((usd && addr === usd) || (eur && addr === eur))
+}
+
 export function assertWalletSendFeeSolanaAddressConfigured(
   ledgerCurrency: "USD" | "EUR",
 ): void {

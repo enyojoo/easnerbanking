@@ -72,6 +72,7 @@ export async function executeYcBalancePayoutTurnkeyLeg(input: {
       ...prior,
       turnkey_send_id: send.providerTransactionId,
       turnkey_send_status: send.status,
+      ...(send.subOrgId ? { turnkey_sub_org_id: send.subOrgId } : {}),
     },
     txHash: send.txHash,
     providerTransactionId: send.providerTransactionId,
