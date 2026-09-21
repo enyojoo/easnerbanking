@@ -21,6 +21,12 @@ import {
   findGlobalPayoutNoahRowByTurnkeySendId,
   patchGlobalPayoutNoahTurnkeySettlement,
 } from "@/lib/noah/global-payout-ledger"
+import {
+  ensureFeeWalletRevenueDeposit,
+  findTransactionByFeeTurnkeySendId,
+  isFeeWalletDestinationAddress,
+  stampFeeWalletSweepHashOnTransaction,
+} from "@/lib/processing-fee/fee-wallet-inbound-deposit"
 
 import {
   asRecord,
@@ -555,6 +561,30 @@ export async function reconcileTurnkeySendStatus(
       baseCurrency: String(existing.currency ?? "USD"),
     })
 
+    if (txHash && isFeeWalletDestinationAddress(String(existing.counterparty_address || ""))) {
+      await ensureFeeWalletRevenueDeposit(admin, {
+        txHash,
+        amount: Number(existing.amount ?? 0),
+        asset: String(existing.asset || "").toUpperCase() === "EURC" ? "EURC" : "USDC",
+        fromAddress: existing.wallet_address ? String(existing.wallet_address) : null,
+        senderUserId: String(existing.user_id),
+        senderBusinessId: existing.business_id ? String(existing.business_id) : null,
+      }).catch((e) => console.warn("fee_wallet_send_reconcile_book:", e))
+      const parent = await findTransactionByFeeTurnkeySendId(admin, params.providerTransactionId)
+      if (parent?.id) {
+        await stampFeeWalletSweepHashOnTransaction(admin, {
+          transactionId: parent.id,
+          meta: parent.metadata,
+          txHash,
+          userId: parent.user_id,
+          businessId: parent.business_id,
+          relatedEasnerTransactionId: parent.easner_transaction_id,
+          sendStatus: status,
+          fromAddress: existing.wallet_address ? String(existing.wallet_address) : null,
+        }).catch((e) => console.warn("fee_wallet_send_reconcile_stamp:", e))
+      }
+    }
+
     if (status === "settled") {
       const meta = (existing.metadata || {}) as Record<string, unknown>
       const easnerPayoutId =
@@ -602,13 +632,26 @@ export async function reconcileTurnkeySendStatus(
         if (isMarginLeg) {
           meta.processing_fee_turnkey_send_status = status
           if (txHash) {
-            meta.fee_wallet_sweep_tx_hash = txHash
-            meta.processing_fee_pending = false
-            if (!meta.processing_fee_captured_at) {
-              meta.processing_fee_captured_at = new Date().toISOString()
-            }
+            await stampFeeWalletSweepHashOnTransaction(admin, {
+              transactionId: noahRow.id,
+              meta,
+              txHash,
+              userId: noahRow.user_id,
+              businessId: noahRow.business_id,
+              relatedEasnerTransactionId: noahRow.easnerTransactionId,
+              sendStatus: status,
+            }).catch((e) => console.warn("fee_wallet_margin_reconcile_book:", e))
           } else if (status === "failed") {
             meta.processing_fee_pending = true
+            await admin
+              .from("transactions")
+              .update({ metadata: meta, updated_at: new Date().toISOString() })
+              .eq("id", noahRow.id)
+          } else {
+            await admin
+              .from("transactions")
+              .update({ metadata: meta, updated_at: new Date().toISOString() })
+              .eq("id", noahRow.id)
           }
         } else {
           meta.turnkey_send_status = status
@@ -617,21 +660,34 @@ export async function reconcileTurnkeySendStatus(
             meta.yc_crypto_deposit_tx_hash = String(meta.yc_crypto_deposit_tx_hash ?? txHash)
             meta.yc_crypto_deposit_status = status
           }
-        }
-        await admin
-          .from("transactions")
-          .update({
-            metadata: meta,
-            ...(txHash && !isMarginLeg ? { tx_hash: txHash } : {}),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", noahRow.id)
+          await admin
+            .from("transactions")
+            .update({
+              metadata: meta,
+              ...(txHash ? { tx_hash: txHash } : {}),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", noahRow.id)
 
-        if (status === "settled" && noahRow.easnerPayoutId && !isMarginLeg) {
-          await applyGlobalPayoutWalletDebitForEasnerPayoutId(admin, {
-            easnerPayoutId: noahRow.easnerPayoutId,
-            markTurnkeySettled: true,
-          }).catch((e) => console.warn("global_payout_turnkey_settle_debit:", e))
+          if (status === "settled" && noahRow.easnerPayoutId) {
+            await applyGlobalPayoutWalletDebitForEasnerPayoutId(admin, {
+              easnerPayoutId: noahRow.easnerPayoutId,
+              markTurnkeySettled: true,
+            }).catch((e) => console.warn("global_payout_turnkey_settle_debit:", e))
+          }
+        }
+      } else if (txHash) {
+        const feePayout = await findTransactionByFeeTurnkeySendId(admin, params.providerTransactionId)
+        if (feePayout?.id) {
+          await stampFeeWalletSweepHashOnTransaction(admin, {
+            transactionId: feePayout.id,
+            meta: feePayout.metadata,
+            txHash,
+            userId: feePayout.user_id,
+            businessId: feePayout.business_id,
+            relatedEasnerTransactionId: feePayout.easner_transaction_id,
+            sendStatus: status,
+          }).catch((e) => console.warn("fee_wallet_generic_reconcile_book:", e))
         }
       }
     }

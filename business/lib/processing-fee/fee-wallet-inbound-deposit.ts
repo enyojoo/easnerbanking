@@ -13,6 +13,13 @@ import {
   isWalletSendFeeSolanaAddress,
   resolveWalletSendFeeSolanaAddress,
 } from "@/lib/wallet-send/fee-address"
+import { computeSweepAmountFromMetadata } from "@/lib/processing-fee/fee-wallet-sweep-meta"
+
+export function feeWalletSweepAmountFromMeta(meta: Record<string, unknown>): number {
+  const stamped = Number(meta.fee_wallet_sweep ?? meta.easner_revenue_sweep_amount ?? 0)
+  if (Number.isFinite(stamped) && stamped > 0) return stamped
+  return computeSweepAmountFromMetadata(meta)
+}
 
 export function isFeeWalletDestinationAddress(address: string): boolean {
   const addr = String(address || "").trim()
@@ -181,4 +188,87 @@ export async function ensureFeeWalletRevenueDeposit(
     throw error
   }
   return { inserted: true, existing: false }
+}
+
+export async function findTransactionByFeeTurnkeySendId(
+  admin: SupabaseClient,
+  turnkeySendId: string,
+): Promise<{
+  id: string
+  user_id: string
+  business_id: string | null
+  easner_transaction_id: string | null
+  metadata: Record<string, unknown>
+} | null> {
+  const tid = String(turnkeySendId || "").trim()
+  if (!tid) return null
+  const select = "id, user_id, business_id, easner_transaction_id, metadata"
+  for (const column of ["processing_fee_turnkey_send_id", "margin_turnkey_send_id"] as const) {
+    const { data } = await admin
+      .from("transactions")
+      .select(select)
+      .eq("direction", "out")
+      .filter(`metadata->>${column}`, "eq", tid)
+      .limit(1)
+      .maybeSingle()
+    if (data?.id) {
+      return {
+        id: String(data.id),
+        user_id: String(data.user_id ?? ""),
+        business_id: data.business_id != null ? String(data.business_id) : null,
+        easner_transaction_id: data.easner_transaction_id
+          ? String(data.easner_transaction_id)
+          : null,
+        metadata: (data.metadata || {}) as Record<string, unknown>,
+      }
+    }
+  }
+  return null
+}
+
+/** Write the sweep hash on the payout and book the fee-wallet Stablecoin deposit. */
+export async function stampFeeWalletSweepHashOnTransaction(
+  admin: SupabaseClient,
+  input: {
+    transactionId: string
+    meta: Record<string, unknown>
+    txHash: string
+    userId: string
+    businessId: string | null
+    relatedEasnerTransactionId?: string | null
+    sendStatus?: string
+    fromAddress?: string | null
+    extraMeta?: Record<string, unknown>
+  },
+): Promise<{ booked: boolean }> {
+  const txHash = String(input.txHash || "").trim()
+  const transactionId = String(input.transactionId || "").trim()
+  if (!txHash || !transactionId) return { booked: false }
+
+  const meta = {
+    ...input.meta,
+    ...input.extraMeta,
+    fee_wallet_sweep_tx_hash: txHash,
+    processing_fee_pending: false,
+    processing_fee_turnkey_send_status: input.sendStatus ?? "settled",
+    processing_fee_captured_at:
+      String(input.meta.processing_fee_captured_at ?? "").trim() || new Date().toISOString(),
+  }
+  await admin
+    .from("transactions")
+    .update({ metadata: meta, updated_at: new Date().toISOString() })
+    .eq("id", transactionId)
+
+  const amount = feeWalletSweepAmountFromMeta(meta)
+  if (amount <= 0) return { booked: false }
+
+  const result = await ensureFeeWalletRevenueDeposit(admin, {
+    txHash,
+    amount,
+    fromAddress: input.fromAddress,
+    senderUserId: input.userId,
+    senderBusinessId: input.businessId,
+    relatedEasnerTransactionId: input.relatedEasnerTransactionId ?? null,
+  })
+  return { booked: result.inserted || result.existing }
 }

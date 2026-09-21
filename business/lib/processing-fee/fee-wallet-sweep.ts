@@ -13,7 +13,6 @@ import {
 } from "@/lib/turnkey/sol-send-polling"
 import { sendStablecoinFromDepositOmnibus } from "@/lib/turnkey/send-from-omnibus"
 import { resolveWalletSendFeeSolanaAddress } from "@/lib/wallet-send/fee-address"
-import { isTurnkeyFeeSweepOnChain } from "@/lib/processing-fee/fee-wallet-sweep-meta"
 import { ensureFeeWalletRevenueDeposit } from "@/lib/processing-fee/fee-wallet-inbound-deposit"
 import { resolveDepositOmnibusAddressForLedgerCurrency } from "@/lib/deposit-omnibus/config"
 
@@ -107,8 +106,7 @@ export async function sweepEasnerRevenueFromDepositOmnibus(input: {
   })
 
   const feeWalletSweepTxHash = sweep?.txHash ?? null
-  const captured =
-    sweep?.status === "skipped" || sweep?.status === "settled" || Boolean(feeWalletSweepTxHash)
+  const captured = sweep?.status === "skipped" || Boolean(feeWalletSweepTxHash)
 
   if (input.admin && feeWalletSweepTxHash) {
     await ensureFeeWalletRevenueDeposit(input.admin, {
@@ -185,11 +183,9 @@ export async function sweepEasnerRevenueFromUserTurnkeyWallet(
       ...(input.walletSend ? { walletSend: { formSessionId: input.walletSend.formSessionId, marginLeg: true } } : {}),
     })
 
-    const captured = isTurnkeyFeeSweepOnChain({
-      status: feeSend.status,
-      txHash: feeSend.txHash,
-    })
-    if (feeSend.txHash) {
+    const feeHash = String(feeSend.txHash || "").trim()
+    const captured = Boolean(feeHash)
+    if (feeHash) {
       await ensureFeeWalletRevenueDeposit(admin, {
         txHash: feeSend.txHash,
         amount: sweepAmt,

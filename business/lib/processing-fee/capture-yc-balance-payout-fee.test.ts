@@ -139,4 +139,28 @@ describe("captureYcBalancePayoutProcessingFeeIfPending", () => {
     expect(result.captured).toBe(false)
     expect(sweepEasnerRevenueFromUserTurnkeyWallet).not.toHaveBeenCalled()
   })
+
+  it("keeps polling a settled fee send until a signature exists", async () => {
+    const { admin } = adminWithTx({
+      ...ETID_META,
+      processing_fee_captured_at: new Date().toISOString(),
+      processing_fee_submitted_at: new Date().toISOString(),
+    })
+    vi.mocked(pollTurnkeySendById).mockImplementation(async (_client, input) => {
+      if (input.sendId === "sha256:principal") {
+        return { status: "settled", txHash: "yc-deposit-sig" }
+      }
+      return { status: "settled", txHash: null }
+    })
+
+    const result = await captureYcBalancePayoutProcessingFeeIfPending(admin as never, {
+      transactionId: "tx-etid",
+      userId: "user-1",
+      businessId: null,
+    })
+
+    expect(result.captured).toBe(false)
+    expect(sweepEasnerRevenueFromUserTurnkeyWallet).not.toHaveBeenCalled()
+    expect(ensureFeeWalletRevenueDeposit).not.toHaveBeenCalled()
+  })
 })

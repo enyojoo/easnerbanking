@@ -23,7 +23,6 @@ import {
   isEasnerRevenueAlreadySwept,
   isPayoutPrincipalOnChain,
   isSubmittedFeeSweepStale,
-  isTurnkeyFeeSweepOnChain,
   readFeeTurnkeySendId,
 } from "@/lib/processing-fee/fee-wallet-sweep-meta"
 
@@ -186,14 +185,14 @@ async function settleSubmittedFeeSweepIfAny(
     sendId,
     asset: input.asset,
   })
-  const onChain = isTurnkeyFeeSweepOnChain(rec)
-  if (onChain) {
+  const feeHash = String(rec.txHash || "").trim()
+  if (feeHash) {
     await patchTransactionMetadata(
       admin,
       input.transactionId,
       buildEasnerRevenueSweepMetadataPatch({
         sweepAmt: input.sweepAmt,
-        feeWalletSweepTxHash: rec.txHash,
+        feeWalletSweepTxHash: feeHash,
         captured: true,
         turnkeySendId: sendId,
         useMarginTurnkeySendId: input.useMarginTurnkeySendId,
@@ -204,12 +203,22 @@ async function settleSubmittedFeeSweepIfAny(
       admin,
       userId: input.userId,
       businessId: input.businessId,
-      txHash: rec.txHash,
+      txHash: feeHash,
       amount: input.sweepAmt,
       asset: input.asset ?? (input.ledgerCurrency === "EUR" ? "EURC" : "USDC"),
       relatedEasnerTransactionId: input.relatedEasnerTransactionId,
     })
     return "settled"
+  }
+
+  // Settled without a signature is not captured: keep the send id and wait.
+  // Do not treat it as stale or we can submit a second fee.
+  if (rec.status === "settled" || rec.status === "pending") {
+    await patchTransactionMetadata(admin, input.transactionId, {
+      processing_fee_pending: true,
+      processing_fee_turnkey_send_status: rec.status,
+    })
+    return "pending"
   }
 
   const stale = rec.status === "failed" || isSubmittedFeeSweepStale(input.meta)

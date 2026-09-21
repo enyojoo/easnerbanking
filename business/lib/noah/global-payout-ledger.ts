@@ -7,6 +7,7 @@ import {
 } from "@/lib/noah/bank-onramp-tx"
 import { applyWalletBalanceDelta } from "@/lib/wallet/wallet-balances-db"
 import { normalizeDirection } from "@/lib/ledger/transactions"
+import { stampFeeWalletSweepHashOnTransaction } from "@/lib/processing-fee/fee-wallet-inbound-deposit"
 
 const GLOBAL_PAYOUT_PROVIDERS = ["noah", "yellowcard", "grid"] as const
 const LEGACY_GRID_PENDING_PTID_PREFIX = "grid_payout_pending_"
@@ -958,12 +959,13 @@ export async function findGlobalPayoutNoahRowByEasnerPayoutId(
   amount: number
   currency: string
   metadata: Record<string, unknown>
+  easnerTransactionId: string | null
 } | null> {
   const pending = await findPendingGlobalPayoutByExternalId(admin, easnerPayoutId)
   if (!pending?.id) return null
   const { data } = await admin
     .from("transactions")
-    .select("id, user_id, business_id, amount, currency, metadata")
+    .select("id, user_id, business_id, amount, currency, metadata, easner_transaction_id")
     .eq("id", pending.id)
     .maybeSingle()
   if (!data?.id) return null
@@ -974,6 +976,7 @@ export async function findGlobalPayoutNoahRowByEasnerPayoutId(
     amount: Number(data.amount ?? 0),
     currency: String(data.currency ?? "USD"),
     metadata: (data.metadata || {}) as Record<string, unknown>,
+    easnerTransactionId: data.easner_transaction_id ? String(data.easner_transaction_id) : null,
   }
 }
 
@@ -988,11 +991,34 @@ export async function findGlobalPayoutNoahRowByTurnkeySendId(
   currency: string
   metadata: Record<string, unknown>
   easnerPayoutId: string | null
+  easnerTransactionId: string | null
 } | null> {
   const tid = String(turnkeySendId || "").trim()
   if (!tid) return null
 
-  const select = "id, user_id, business_id, amount, currency, metadata"
+  const select = "id, user_id, business_id, amount, currency, metadata, easner_transaction_id"
+
+  const mapRow = (row: {
+    id: unknown
+    user_id: unknown
+    business_id: unknown
+    amount: unknown
+    currency: unknown
+    metadata: unknown
+    easner_transaction_id?: unknown
+  }) => {
+    const meta = (row.metadata || {}) as Record<string, unknown>
+    return {
+      id: String(row.id),
+      user_id: String(row.user_id),
+      business_id: row.business_id != null ? String(row.business_id) : null,
+      amount: Number(row.amount ?? 0),
+      currency: String(row.currency ?? "USD"),
+      metadata: meta,
+      easnerPayoutId: readEasnerPayoutIdFromNoahMeta(meta),
+      easnerTransactionId: row.easner_transaction_id ? String(row.easner_transaction_id) : null,
+    }
+  }
 
   const { data: byMain } = await admin
     .from("transactions")
@@ -1001,18 +1027,7 @@ export async function findGlobalPayoutNoahRowByTurnkeySendId(
     .eq("direction", "out")
     .filter("metadata->>turnkey_send_id", "eq", tid)
     .maybeSingle()
-  if (byMain?.id) {
-    const meta = (byMain.metadata || {}) as Record<string, unknown>
-    return {
-      id: String(byMain.id),
-      user_id: String(byMain.user_id),
-      business_id: byMain.business_id != null ? String(byMain.business_id) : null,
-      amount: Number(byMain.amount ?? 0),
-      currency: String(byMain.currency ?? "USD"),
-      metadata: meta,
-      easnerPayoutId: readEasnerPayoutIdFromNoahMeta(meta),
-    }
-  }
+  if (byMain?.id) return mapRow(byMain)
 
   const { data: byMargin } = await admin
     .from("transactions")
@@ -1021,18 +1036,16 @@ export async function findGlobalPayoutNoahRowByTurnkeySendId(
     .eq("direction", "out")
     .filter("metadata->>margin_turnkey_send_id", "eq", tid)
     .maybeSingle()
-  if (byMargin?.id) {
-    const meta = (byMargin.metadata || {}) as Record<string, unknown>
-    return {
-      id: String(byMargin.id),
-      user_id: String(byMargin.user_id),
-      business_id: byMargin.business_id != null ? String(byMargin.business_id) : null,
-      amount: Number(byMargin.amount ?? 0),
-      currency: String(byMargin.currency ?? "USD"),
-      metadata: meta,
-      easnerPayoutId: readEasnerPayoutIdFromNoahMeta(meta),
-    }
-  }
+  if (byMargin?.id) return mapRow(byMargin)
+
+  const { data: byFee } = await admin
+    .from("transactions")
+    .select(select)
+    .in("provider", [...GLOBAL_PAYOUT_PROVIDERS])
+    .eq("direction", "out")
+    .filter("metadata->>processing_fee_turnkey_send_id", "eq", tid)
+    .maybeSingle()
+  if (byFee?.id) return mapRow(byFee)
 
   return null
 }
@@ -1056,8 +1069,16 @@ export async function patchGlobalPayoutNoahTurnkeySettlement(
     meta.processing_fee_turnkey_send_id = input.turnkeySendId
     if (input.turnkeySendStatus) meta.processing_fee_turnkey_send_status = input.turnkeySendStatus
     if (input.txHash) {
-      meta.fee_wallet_sweep_tx_hash = input.txHash
-      meta.processing_fee_pending = false
+      await stampFeeWalletSweepHashOnTransaction(admin, {
+        transactionId: row.id,
+        meta,
+        txHash: input.txHash,
+        userId: row.user_id,
+        businessId: row.business_id,
+        relatedEasnerTransactionId: row.easnerTransactionId,
+        sendStatus: input.turnkeySendStatus ?? "settled",
+      })
+      return
     }
   } else {
     meta.turnkey_send_id = input.turnkeySendId
