@@ -25,7 +25,7 @@ flowchart LR
   vault --> acct
 ```
 
-Live virtual accounts, live wallet addresses, and onramp require hosted [KYC](/customers#start-kyc) on that `cus_`. Your own KYB in Banking Settings does not approve the customer. A `cus_` with only email and name cannot hold a **named** virtual account. Test skips KYC.
+Live virtual accounts, live wallet addresses, and onramp require hosted [verification](/customers#start-verification) on that `cus_` — KYC for a person, KYB for a business, on **your** app. Your KYB in Banking Settings is access to Easner. It does not approve the customer. A `cus_` with only email and name cannot be issued a **named** virtual account. Test skips customer verification.
 
 <Note>
   **Scope:** `GET` needs `accounts.read`. Verification and onramp need `accounts.write`.
@@ -37,8 +37,8 @@ Live virtual accounts, live wallet addresses, and onramp require hosted [KYC](/c
   <Step title="Create the customer">
     `POST /v1/customers` issues the USD vault and `acct_`. Save both ids.
   </Step>
-  <Step title="Start KYC">
-    `POST /v1/customers/:id/verification` with `{ "return_url": "https://…" }`. Test returns `{ "status": "approved", "url": null }`. Live returns a hosted KYC `url`. See [Customers](/customers).
+  <Step title="Start verification">
+    `POST /v1/customers/:id/verification` with `{ "return_url": "https://…" }`. Test returns `{ "status": "approved", "url": null }`. Live returns a hosted KYC or KYB `url` for them to complete on your app. See [Customers](/customers).
   </Step>
   <Step title="Wait for approved">
     Poll `GET /v1/customers/:id` or handle `customer.updated`. Live Receive returns `403` `verification_required` until `approved`.
@@ -75,7 +75,7 @@ EUR uses `iban` and `bic` instead of account and routing numbers.
 
 | Mode | Result |
 |---|---|
-| Test | Sandbox numbers. No KYC. Nothing moves on a real bank |
+| Test | Sandbox numbers. No customer verification. Nothing moves on a real bank |
 | Live | Named details after `approved`. Destination is this customer’s vault, not yours. `409` `not_available` if provisioning is not ready |
 
 Show these details in your app. When the bank deposit settles:

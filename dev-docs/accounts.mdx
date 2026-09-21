@@ -110,7 +110,7 @@ curl https://api.easner.com/v1/accounts \
 | `GET /v1/accounts/:id/deposit_addresses` | Chain token account for this vault |
 | `POST /v1/accounts/:id/onramp_sessions` | Hosted card onramp onto this vault |
 
-Live bank details, chain addresses, and onramp require the customer’s [KYC](/customers#start-kyc) (`verification_status = approved`). Test skips that.
+Live bank details, chain addresses, and onramp require the customer’s [verification](/customers#start-verification) (`verification_status = approved`) — KYC or KYB on your app. Test skips that.
 
 ## Events
 

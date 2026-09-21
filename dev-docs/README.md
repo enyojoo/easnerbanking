@@ -1,6 +1,6 @@
 # Easner Docs
 
-Mintlify project for the Easner API: stablecoin-native banking (accounts, receive, send) and Checkout.
+Mintlify project for the Easner API: stablecoin-native banking and payment infrastructure (accounts, receive, send) and Checkout.
 
 ```bash
 npm i -g mint

@@ -9,10 +9,10 @@ Livemode is the key prefix. There is no `livemode` body flag. In Console, the Te
 | | Test (`easner_sk_test_`) | Live (`easner_sk_live_`) |
 |---|---|---|
 | Objects | Isolated test objects | Isolated live objects |
-| Customer KYC | Approves immediately. No hosted form | Hosted KYC link. Live bank details and onramp need `approved` |
-| Your KYB | Not required to call test `v1` | Complete in Banking → Settings before live money |
+| Customer KYC / KYB | Approves immediately. No hosted form | Hosted KYC (person) or KYB (business) on your app. Live bank details and onramp need `approved` |
+| Your KYB | Not required to call test `v1` | Complete in Banking → Settings for **access to Easner**, before live |
 | Virtual account | Sandbox numbers. No real bank | Named ACH/SEPA after approval. Fiat converts into the vault |
-| Wallet address | Token account without KYC | Require `approved`. USDC/EURC into the vault |
+| Wallet address | Token account without verification | Require `approved`. USDC/EURC into the vault |
 | Onramp | Hosted page completes and credits the vault | Hosted card onramp after approval, onto the vault |
 | Quote | Completes. Send/receive 1:1 | May price wallet destinations |
 | Transfer | Create `requires_action`. Confirm debits the **test** vault | Create `requires_action`. Confirm sends from the customer vault. Merchant key cannot confirm |
@@ -50,7 +50,7 @@ Use these in Console Settings while you stay in Test:
     [Quickstart](/quickstart): customer → fund test vault → destination → quote → transfer. Confirm `transfer.completed` on the test URL.
   </Step>
   <Step title="Receive in test">
-    [Receive](/receive): KYC the customer, fetch sandbox bank details, complete a test onramp. Confirm `account.updated` and `transaction.created`.
+    [Receive](/receive): verify the customer, fetch sandbox bank details, complete a test onramp. Confirm `account.updated` and `transaction.created`.
   </Step>
   <Step title="Pay with the test card">
     Checkout: register the website, create a test session, pay with `4242`, confirm `checkout.completed`.
@@ -59,7 +59,7 @@ Use these in Console Settings while you stay in Test:
     You should see the `v1` calls. Errors should be gone.
   </Step>
   <Step title="Complete your KYB">
-    Banking → Settings → Verification. That verifies **you**, not a `cus_`. Then mint a live key and set a live webhook URL. Tick the same events.
+    Banking → Settings → Verification. That is **your** access to Easner, not a `cus_`. Then mint a live key and set a live webhook URL. Tick the same events.
   </Step>
 </Steps>
 

@@ -1,10 +1,10 @@
 ---
 title: What is Easner?
-description: Isolated customer vaults, two products, and who authorizes a send.
+description: Stablecoin-native banking and payment infrastructure.
 icon: info
 ---
 
-You integrate. Your customer is the banking end user (`cus_`). A payer is someone who pays you through Checkout.
+Easner is **stablecoin-native banking and payment infrastructure**. You integrate. Your customer is the banking end user (`cus_`). A payer is someone who pays you through Checkout.
 
 Every issued account is that customer’s **isolated stablecoin vault** with a currency view:
 
@@ -44,7 +44,7 @@ flowchart LR
 
 ## Two products
 
-| Product | Who holds the money | What you build |
+| Product | Where funds sit | What you build |
 |---|---|---|
 | **Banking** | Your customer, in their vault (`acct_`) | [Customers](/customers), [Accounts](/accounts), [Receive](/receive), [Send](/send) |
 | **Checkout** | You, on your business balance | [Collect](/checkout) on your website |
@@ -53,11 +53,11 @@ They share a secret key and Console. They do not share a balance.
 
 Checkout collects onto **your** business balance — the same balance as invoices and payment links, not a customer vault. That is not Receive.
 
-## KYB you, KYC them
+## Access to Easner, then onboard your customers
 
-Your entity verifies in Banking → Settings (KYB). That is not a `cus_`. Licensed partners provide verification. Then `POST /v1/customers` with your `external_id` maps **your user → `cus_` → `acct_`**.
+**You** complete KYB in Banking → Settings to get **access to Easner**. That is your entity — not a `cus_`. Licensed partners provide verification.
 
-`POST /v1/customers/:id/verification` is personal KYC for that `cus_`. Test approves immediately. Live returns a hosted URL. A name and email alone cannot hold a named virtual account. See [Customers](/customers).
+**Your customers** complete KYC (people) or KYB (businesses) on **your** app so they can use their vault. `POST /v1/customers` with your `external_id` maps **your user → `cus_` → `acct_`**. Then `POST /v1/customers/:id/verification` returns a hosted URL you send them. Test approves immediately. A name and email alone cannot be issued a named virtual account. See [Customers](/customers).
 
 ## Console and Banking
 
@@ -70,11 +70,11 @@ Mint keys and add webhook URLs from Console Settings (API keys, Webhooks). Inspe
 ## How you integrate
 
 <Steps>
-  <Step title="KYB yourself, then create the customer">
-    Banking → Settings (KYB), then `POST /v1/customers`. This issues a USD vault and account. Open EUR with `POST /v1/accounts`.
+  <Step title="KYB for access to Easner, then create the customer">
+    Banking → Settings (your KYB), then `POST /v1/customers`. This issues a USD vault and account. Open EUR with `POST /v1/accounts`.
   </Step>
-  <Step title="KYC the customer before live rails">
-    `POST /v1/customers/:id/verification`. See [Customers](/customers).
+  <Step title="Onboard the customer (KYC or KYB) before live rails">
+    `POST /v1/customers/:id/verification` — hosted KYC for a person, hosted KYB for a business, on your app. See [Customers](/customers).
   </Step>
   <Step title="Receive into the vault">
     Publish [bank details](/receive#virtual-account), a [wallet address](/receive#wallet-address), or a [card onramp](/receive#card-onramp). Listen for `account.updated` and `transaction.created`.

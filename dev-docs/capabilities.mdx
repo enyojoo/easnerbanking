@@ -1,6 +1,6 @@
 ---
 title: Capabilities
-description: Hold, receive, send, collect, and identify — as they exist on v1 today.
+description: Vault, receive, send, collect, and identify — as they exist on v1 today.
 icon: layers
 ---
 
@@ -8,19 +8,19 @@ These are the primitives on `https://api.easner.com/v1`. Combine them. Do not in
 
 | Capability | What it is | Not |
 |---|---|---|
-| **Hold** | Customer vault [`acct_`](/accounts). USD is USDC, EUR is EURC, on Solana. `available` is that vault, in cents. | Your float. Checkout business balance. Easner taking the funds onto its own books. |
+| **Vault** | Isolated customer vault [`acct_`](/accounts). USD is USDC, EUR is EURC, on Solana. `available` is that vault, in cents. Funds sit with the customer, not on Easner’s books. | Your float. Checkout business balance. Easner taking the funds onto its own books. |
 | **Receive** | Credit **that** vault: [virtual account](/receive#virtual-account), [Solana address](/receive#wallet-address), [card onramp](/receive#card-onramp), [Easetag](/receive#easetag). | [Checkout](/checkout) collect. |
 | **Send** | Debit the vault to [bank, mobile money, wallet, or Easetag](/send). You create the transfer. The [customer confirms](/transfers#confirm). Corridors: [Payment methods](/payment-methods). | A merchant key moving the vault. HTTP `201` on create meaning the recipient was paid. |
 | **Collect** | [Checkout](/checkout) on your website onto **your** business balance. Fulfil from `checkout.completed`. | A credit to a `cus_` `acct_`. |
-| **Identify** | **You:** KYB in Banking → Settings. **Them:** hosted KYC on the `cus_` via `POST /v1/customers/:id/verification`. | A `cus_` KYB. Email and name on create. |
+| **Identify** | **You:** KYB in Banking → Settings for **access to Easner**. **Them:** hosted KYC (person) or KYB (business) on the `cus_` via `POST /v1/customers/:id/verification`, so they onboard on **your** app. | Your KYB approving a `cus_`. Email and name on create. |
 
-## Hold
+## Vault
 
 Creating a [customer](/customers) issues USD. Open EUR with `POST /v1/accounts`. Both currencies sit on the same customer vault owner.
 
 ## Receive
 
-Live virtual accounts, live wallet addresses, and onramp need `verification_status = approved` on that `cus_`. Test skips KYC. Fulfil from `account.updated` and `transaction.created` — not from the HTTP GET that returns bank details.
+Live virtual accounts, live wallet addresses, and onramp need `verification_status = approved` on that `cus_`. Test skips customer verification. Fulfil from `account.updated` and `transaction.created` — not from the HTTP GET that returns bank details.
 
 ## Send
 
@@ -32,7 +32,7 @@ Amount and secret key stay on your server. The browser sees a publishable key an
 
 ## Identify
 
-Your KYB does not approve a `cus_`. Completing Banking Settings does not set `verification_status`. Put `email` on create — there is no customer `PATCH`.
+Your KYB is access to Easner. It does not approve a `cus_`. Completing Banking Settings does not set `verification_status`. Put `email` on create — there is no customer `PATCH`.
 
 <Card title="Quickstart" icon="rocket" href="/quickstart">
   Mint a test key, fund a vault, send.

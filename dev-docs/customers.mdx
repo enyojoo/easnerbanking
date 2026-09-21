@@ -1,21 +1,19 @@
 ---
 title: Customers
-description: Map your user to a cus_, then KYC them before live Receive.
+description: Map your user to a cus_, then verify them before live Receive.
 icon: users
 ---
 
-A customer is **your** end user. They never log into Easner. You store `cus_` and call `v1`. Creating one opens **their** vault and issues a USD `acct_` (USDC on Solana).
+A customer is **your** end user. They never log into Easner — they onboard on **your** app. You store `cus_` and call `v1`. Creating one opens **their** vault and issues a USD `acct_` (USDC on Solana).
 
 There are two verifications. Mixing them up is the usual onboarding bug.
 
 | Who | What | Where |
 |---|---|---|
-| **You** (the business) | **KYB** — your entity can take and send live money | Banking → Settings → Verification. Not a `cus_`. Not Console. |
-| **Your customer** (`cus_`) | **KYC** — that person can hold a named vault and live Receive | `POST /v1/customers/:id/verification`. Console Customers → Verification. |
+| **You** (the business) | **KYB** — access to Easner | Banking → Settings → Verification. Not a `cus_`. Not Console. |
+| **Your customer** (`cus_`) | **KYC** (person) or **KYB** (business) — onboard on your app so they can use a named vault and live Receive | `POST /v1/customers/:id/verification`. Console Customers → Verification. |
 
-`v1` customers are **people**. Verification always starts individual KYC. There is no `cus_` KYB — a business end user is not a customer object on this API.
-
-Email and name on create are not KYC. Live bank details, chain addresses, and onramp wait until `verification_status` is `approved`.
+Email and name on create are not verification. Live bank details, chain addresses, and onramp wait until `verification_status` is `approved`.
 
 <Note>
   **Scope:** `GET` needs `accounts.read`. `POST` customer needs `transfers.write`. `POST` verification needs `accounts.write`.
@@ -27,8 +25,8 @@ Email and name on create are not KYC. Live bank details, chain addresses, and on
   <Step title="Create">
     `POST /v1/customers` with your `external_id`. Save `id` (`cus_…`) and the issued USD `accounts[0].id` (`acct_…`). In Console, create from Customers while Test is on.
   </Step>
-  <Step title="Start KYC">
-    `POST /v1/customers/:id/verification` with a `return_url`. Test approves immediately (`url` is `null`). Live returns a hosted form — send that URL to the person. Already-approved customers return `{ "status": "approved", "url": null }`.
+  <Step title="Start verification">
+    `POST /v1/customers/:id/verification` with a `return_url`. Test approves immediately (`url` is `null`). Live returns a hosted form — send that URL on your app so they complete KYC or KYB. Already-approved customers return `{ "status": "approved", "url": null }`.
   </Step>
   <Step title="Wait for approved">
     Poll `GET /v1/customers/:id` or handle `customer.updated`. Live Receive returns `403` `verification_required` until `approved`.
@@ -38,14 +36,14 @@ Email and name on create are not KYC. Live bank details, chain addresses, and on
   </Step>
 </Steps>
 
-Your own KYB does not KYC your customers. Completing Banking Settings does not set `verification_status` on a `cus_`.
+Your KYB does not verify your customers. Completing Banking Settings does not set `verification_status` on a `cus_`.
 
 ## Object
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | string | `cus_…` |
-| `email` | string \| null | Required to start live KYC |
+| `email` | string \| null | Required to start live verification |
 | `name` | string \| null | Used on bank details |
 | `external_id` | string \| null | Your id. Use this to map your user |
 | `easetag` | string \| null | In-network `@tag`. Allocated on create. Unique |
@@ -85,7 +83,7 @@ curl https://api.easner.com/v1/customers \
 
 `GET /v1/customers` → `{ "data": [ Customer, … ] }`
 
-Newest first. Up to 100. There is no next page. There is no customer `PATCH` — put `email` on create before live KYC.
+Newest first. Up to 100. There is no next page. There is no customer `PATCH` — put `email` on create before live verification.
 
 ## Retrieve
 
@@ -93,7 +91,7 @@ Newest first. Up to 100. There is no next page. There is no customer `PATCH` —
 
 `404` `not_found` if the id is missing or belongs to the other livemode.
 
-## Start KYC
+## Start verification
 
 ```bash
 curl https://api.easner.com/v1/customers/cus_…/verification \
@@ -109,11 +107,11 @@ curl https://api.easner.com/v1/customers/cus_…/verification \
 | Mode | Result |
 |---|---|
 | Test | Sets `verification_status` to `approved`. `url` is `null`. No hosted form |
-| Live | `{ "status": "pending", "url": "https://…" }` hosted KYC. Already-approved customers return `{ "status": "approved", "url": null }` |
+| Live | `{ "status": "pending", "url": "https://…" }` hosted KYC (person) or KYB (business). Already-approved customers return `{ "status": "approved", "url": null }` |
 
-Live KYC needs an email. `404` if the customer is missing.
+Live verification needs an email. `404` if the customer is missing.
 
-A live `cus_` with only email and name cannot hold a named virtual account or card onramp until `approved`. The vault still exists; live bank details wait on KYC.
+A live `cus_` with only email and name cannot be issued a named virtual account or card onramp until `approved`. The vault still exists; live bank details wait on verification.
 
 In Console, Customers → the `cus_` → Verification. Test approves in place. Live opens the hosted URL.
 
@@ -129,9 +127,9 @@ In Console, Customers → the `cus_` → Verification. Test approves in place. L
 - Store `id`, `external_id`, and `easetag` on your side.
 - Attach destinations with `"customer": "cus_…"`.
 - Open EUR with `POST /v1/accounts` and `"customer": "cus_…"` — a second vault view, same customer.
-- KYC the `cus_` before live Receive. KYB yourself in Banking before live keys.
-- There is no customer update. Live KYC needs `email` on create.
+- Verify the `cus_` (KYC or KYB) before live Receive. KYB yourself in Banking for access to Easner.
+- There is no customer update. Live verification needs `email` on create.
 
 <Card title="Receive money" icon="download" href="/receive">
-  Bank details, chain addresses, and onramp after KYC.
+  Bank details, chain addresses, and onramp after verification.
 </Card>

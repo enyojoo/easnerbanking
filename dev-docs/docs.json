@@ -2,7 +2,7 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
   "name": "Easner",
-  "description": "Stablecoin-native banking and payments. Hold, receive, send, and collect through the Easner API.",
+  "description": "Stablecoin-native banking and payment infrastructure.",
   "colors": {
     "primary": "#007ACC",
     "light": "#3AA6F8",
@@ -79,18 +79,7 @@
     "socials": {
       "x": "https://x.com/easnerbanking",
       "linkedin": "https://linkedin.com/company/easner"
-    },
-    "links": [
-      {
-        "header": "Legal",
-        "items": [
-          {
-            "label": "Terms",
-            "href": "https://www.easner.com/terms"
-          }
-        ]
-      }
-    ]
+    }
   },
   "api": {
     "mdx": {
