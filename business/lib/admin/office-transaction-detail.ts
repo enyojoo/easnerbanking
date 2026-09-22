@@ -23,6 +23,7 @@ import {
   officeRelatedLegMatchKeys,
 } from "@/lib/admin/office-related-ledger-legs"
 import type { TransactionWithSource } from "@/lib/transactions"
+import { isOrgTreasuryInboundTitle } from "@easner/shared"
 
 type AdminClient = ReturnType<typeof createSupabaseAdmin>
 
@@ -186,6 +187,27 @@ async function loadRelatedLedgerRows(
   return filterRelatedOfficeLedgerLegs(String(canonical.id ?? ""), buckets)
 }
 
+function inboundReceiveDisplayTitle(mapped: TransactionWithSource): string | null {
+  const title = mapped.inboundReceive?.displayTitle
+  return typeof title === "string" && title.trim() ? title.trim() : null
+}
+
+export function resolveOfficeCustomerHeroTitle(input: {
+  inboundDisplayTitle?: string | null
+  displayHeroTitle?: string | null
+  transactionLabel?: string | null
+}): string | null {
+  const inbound = String(input.inboundDisplayTitle ?? "").trim()
+  if (inbound) return inbound
+  const hero = String(input.displayHeroTitle ?? "").trim()
+  const label = String(input.transactionLabel ?? "").trim()
+  if (isOrgTreasuryInboundTitle(label) && (!hero || hero.toLowerCase() === "stablecoin deposit")) {
+    return label
+  }
+  if (hero) return hero
+  return label || null
+}
+
 function toOfficeCustomerDetail(
   mapped: TransactionWithSource,
   meta: Record<string, unknown> | null,
@@ -194,7 +216,12 @@ function toOfficeCustomerDetail(
     String(meta?.receive_network ?? mapped.chain ?? "").trim() || null
   return {
     description: mapped.description,
-    displayHeroTitle: mapped.displayHeroTitle ?? null,
+    displayHeroTitle:
+      resolveOfficeCustomerHeroTitle({
+        inboundDisplayTitle: inboundReceiveDisplayTitle(mapped),
+        displayHeroTitle: mapped.displayHeroTitle,
+        transactionLabel: mapped.description,
+      }) ?? null,
     paymentScheme: mapped.paymentScheme ?? null,
     counterpartyName: mapped.counterpartyName ?? null,
     sendNote: mapped.sendNote ?? null,

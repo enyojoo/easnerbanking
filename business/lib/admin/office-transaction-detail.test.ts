@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   pickOfficeDetailFromCandidates,
   readUnsanitizedFailureReason,
+  resolveOfficeCustomerHeroTitle,
 } from "./office-transaction-detail"
 
 describe("pickOfficeDetailFromCandidates", () => {
@@ -32,5 +33,34 @@ describe("readUnsanitizedFailureReason", () => {
         failure_reason: "YC_CHANNEL_TIMEOUT: mm_collection expired",
       }),
     ).toBe("YC_CHANNEL_TIMEOUT: mm_collection expired")
+  })
+})
+
+describe("resolveOfficeCustomerHeroTitle", () => {
+  it("prefers the inbound receive title over a hardcoded Stablecoin Deposit hero", () => {
+    expect(
+      resolveOfficeCustomerHeroTitle({
+        inboundDisplayTitle: "Payout fee",
+        displayHeroTitle: "Stablecoin Deposit",
+        transactionLabel: "Payout fee",
+      }),
+    ).toBe("Payout fee")
+  })
+
+  it("uses the org-treasury label when the mapped hero is still Stablecoin Deposit", () => {
+    expect(
+      resolveOfficeCustomerHeroTitle({
+        inboundDisplayTitle: null,
+        displayHeroTitle: "Stablecoin Deposit",
+        transactionLabel: "Pay in fee",
+      }),
+    ).toBe("Pay in fee")
+    expect(
+      resolveOfficeCustomerHeroTitle({
+        inboundDisplayTitle: null,
+        displayHeroTitle: null,
+        transactionLabel: "Payout refund",
+      }),
+    ).toBe("Payout refund")
   })
 })

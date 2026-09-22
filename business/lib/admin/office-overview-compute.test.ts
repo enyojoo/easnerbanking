@@ -672,6 +672,34 @@ describe("office-overview-compute", () => {
     ).toBe("Stablecoin Deposit")
     expect(
       resolveOfficeProductLabel({
+        id: "tk-payout-fee",
+        direction: "in",
+        provider: "turnkey",
+        metadata: {
+          source: "turnkey_webhook",
+          org_treasury_kind: "payout_fee",
+          related_easner_transaction_id: "ETID17647924",
+        },
+      }),
+    ).toBe("Payout fee")
+    expect(
+      resolveOfficeProductLabel({
+        id: "tk-pay-in-fee",
+        direction: "in",
+        provider: "turnkey",
+        metadata: { org_treasury_kind: "pay_in_fee" },
+      }),
+    ).toBe("Pay in fee")
+    expect(
+      resolveOfficeProductLabel({
+        id: "tk-payout-refund",
+        direction: "in",
+        provider: "turnkey",
+        metadata: { org_treasury_kind: "payout_refund" },
+      }),
+    ).toBe("Payout refund")
+    expect(
+      resolveOfficeProductLabel({
         id: "stripe-in",
         direction: "in",
         provider: "stripe",

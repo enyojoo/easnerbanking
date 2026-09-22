@@ -47,7 +47,25 @@ vi.mock("@easner/shared", () => ({
     }
   },
   resolveVaFundingDepositTitleFromMeta: () => undefined,
-  resolveInboundReceiveDetail: () => null,
+  resolveInboundReceiveDetail: (input?: { metadata?: Record<string, unknown> | null }) => {
+    const kind = String(input?.metadata?.org_treasury_kind ?? "")
+    const displayTitle =
+      kind === "payout_fee"
+        ? "Payout fee"
+        : kind === "pay_in_fee"
+          ? "Pay in fee"
+          : kind === "payout_refund"
+            ? "Payout refund"
+            : null
+    return displayTitle ? { kind: "stablecoin", displayTitle } : null
+  },
+  resolveOrgTreasuryInboundTitle: (meta?: Record<string, unknown> | null) => {
+    const kind = String(meta?.org_treasury_kind ?? "")
+    if (kind === "payout_fee") return "Payout fee"
+    if (kind === "pay_in_fee") return "Pay in fee"
+    if (kind === "payout_refund") return "Payout refund"
+    return null
+  },
   isExpressDepositsMetadata: (meta?: Record<string, unknown> | null) =>
     String(meta?.flow ?? "") === "express_deposits",
   expressDepositActivityLabel: (method?: string) =>
@@ -238,6 +256,28 @@ vi.mock("@easner/shared", () => ({
 
 vi.mock("@/lib/transactions/resolve-global-payout-off-ramp", () => ({
   resolveGlobalPayoutOffRampDetail: () => null,
+}))
+
+vi.mock("@/lib/transactions/resolve-stablecoin-deposit-pay-in", () => ({
+  resolveStablecoinDepositPayInDetail: (row: Record<string, unknown>) => {
+    const dir = String(row.direction ?? "").toLowerCase()
+    const provider = String(row.provider ?? "").toLowerCase()
+    if (dir !== "in" || provider !== "turnkey") return null
+    if (row.chain == null && row.asset == null) return null
+    return {
+      lifecycle: [],
+      transactionTiming: [],
+      postedAmount: Number(row.amount ?? 0),
+      postedCurrency: String(row.currency ?? "USD"),
+      feeAmount: 0,
+      senderDisplay: null,
+      schemeLabel: "USDC on SOL",
+      sourcePaymentRail: "solana",
+      ledgerCreatedAt: row.created_at != null ? String(row.created_at) : null,
+      processingAt: null,
+      completedAt: null,
+    }
+  },
 }))
 
 vi.mock("@/lib/noah/bank-onramp-tx", () => ({
@@ -569,5 +609,29 @@ describe("mapRowToBusinessTransaction", () => {
     expect(item.postedAmount).toBe(0.67)
     expect(item.fee).toBe(0.33)
     expect(item.accountImpactAmount).toBe(0.67)
+  })
+
+  it("titles org fee-wallet inbounds as Payout fee instead of Stablecoin Deposit", () => {
+    const item = mapRowToBusinessTransaction({
+      id: "fee-inbound-uuid",
+      easner_transaction_id: "ETID23303699",
+      provider: "turnkey",
+      status: "settled",
+      amount: 0.01,
+      currency: "USD",
+      direction: "in",
+      chain: "solana",
+      asset: "USDC",
+      metadata: {
+        org_treasury_kind: "payout_fee",
+        fee_wallet_revenue_sweep: true,
+        related_easner_transaction_id: "ETID17647924",
+        source: "turnkey_webhook",
+      },
+      created_at: "2026-09-18T12:00:00.000Z",
+    })
+
+    expect(item.displayHeroTitle).toBe("Payout fee")
+    expect(item.inboundReceive?.displayTitle).toBe("Payout fee")
   })
 })

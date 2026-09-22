@@ -5,6 +5,7 @@ import {
   buildInboundReceiveDetailRows,
   buildTransactionEmailDetailRows,
   formatTransactionWhen,
+  isOrgTreasuryInboundTitle,
   ledgerTransactionStatusDisplay,
   type BalanceMoveReviewSnapshot,
   type GlobalPayoutRecipientSnapshot,
@@ -185,6 +186,18 @@ export function OfficeTransactionDetailPanel({ detail }: { detail: OfficeTransac
   const stripePmLabel = stripePm
     ? [stripePm.brand || stripePm.type, stripePm.last4 ? `•••• ${stripePm.last4}` : ""].filter(Boolean).join(" ")
     : ""
+  const inbound = isInboundSnapshot(customer.inboundReceive) ? customer.inboundReceive : null
+  const mappedHero = String(customer.displayHeroTitle ?? "").trim()
+  const mappedHeroIsGenericStablecoin = mappedHero.toLowerCase() === "stablecoin deposit"
+  const heroTitle =
+    inbound?.displayTitle ||
+    (isOrgTreasuryInboundTitle(transaction.label) && mappedHeroIsGenericStablecoin
+      ? transaction.label
+      : mappedHero) ||
+    transaction.label ||
+    transaction.productLabel ||
+    transaction.easner_transaction_id ||
+    transaction.id
 
   return (
     <div className="space-y-6">
@@ -196,9 +209,7 @@ export function OfficeTransactionDetailPanel({ detail }: { detail: OfficeTransac
           {ops.hiddenFromFeed ? <Badge variant="slate">Hidden from feed</Badge> : null}
           <Badge variant={statusBadgeVariant(transaction.status)}>{statusLabel}</Badge>
         </div>
-        <p className="text-lg font-semibold">
-          {customer.displayHeroTitle || transaction.label || transaction.easner_transaction_id || transaction.id}
-        </p>
+        <p className="text-lg font-semibold">{heroTitle}</p>
         <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
           <div>
             <p className="text-gray-500">Display amount</p>

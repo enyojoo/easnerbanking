@@ -15,6 +15,7 @@ import {
   resolveYcCrossBorderListDisplay,
   resolveYcFundBalanceUsdCreditListDisplay,
   toEasnerTransactionPrimaryLabel,
+  resolveOrgTreasuryInboundTitle,
   isYcFundBalanceDepositMetadata,
   resolveYcFundBalanceDepositDisplayTitle,
   reconstructYcFundBalanceDepositReview,
@@ -552,7 +553,8 @@ export function mapRowToBusinessTransaction(row: Record<string, unknown>): Trans
           }
         : stablecoinDepositDetail
         ? {
-            displayHeroTitle: "Stablecoin Deposit",
+            displayHeroTitle:
+              resolveOrgTreasuryInboundTitle(meta, payload) ?? "Stablecoin Deposit",
             lifecycle: stablecoinDepositDetail.lifecycle,
             transactionTiming: stablecoinDepositDetail.transactionTiming,
             ...(stablecoinDepositDetail.depositAmount != null
