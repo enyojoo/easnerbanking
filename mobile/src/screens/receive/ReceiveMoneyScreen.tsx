@@ -15,7 +15,6 @@ import {
   ArrowRight,
   ShieldCheck,
 } from 'lucide-react-native'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import { colors, shadows, surfaceFrameStyle, surfaceChromeCircleStyle, textStyles, borderRadius, spacing, fontSize, fontFamily } from '../../theme'
@@ -58,6 +57,8 @@ import { useStackHardwareBack } from '../../hooks/useStackHardwareBack'
 import { navigateStackBack } from '../../navigation/stackBackNavigation'
 import { AccountRestrictionBanner } from '../../components/AccountRestrictionBanner'
 import { useAccountRestrictionData } from '../../hooks/queries/use-account-restriction'
+import { useReceiveDepositKyc } from '../../hooks/useReceiveDepositKyc'
+import { receiveDepositKycStatus } from '../../lib/bridgeConsumerKyc'
 import { accountRestrictionDepositsBlockedCopy } from '@easner/shared'
 
 type TabType = 'cash' | 'stablecoin'
@@ -93,9 +94,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     expressDepositsStatusIsReady(peekExpressOnrampStatus()),
   )
   const [expressMethods, setExpressMethods] = useState<ExpressCashKind[]>(() => {
-    const kycApproved =
-      String(userProfile?.noah_kyc_status || userProfile?.profile?.noah_kyc_status || '').toLowerCase() ===
-      'approved'
+    const kycApproved = receiveDepositKycStatus(userProfile) === 'approved'
     if (currency !== 'USD' || !kycApproved) return []
     const cached = peekExpressOnrampStatus()
     const country = cached?.payerCountry || instantExpressPayerCountry
@@ -154,35 +153,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const vaFetched = vaQuery.isFetched
   const depositFetched = depositQuery.isFetched
 
-  const getKycStatus = (): string | null => {
-    const noahKycStatus = userProfile?.noah_kyc_status || userProfile?.profile?.noah_kyc_status
-    if (!noahKycStatus) return null
-
-    switch (noahKycStatus) {
-      case 'approved':
-        return 'approved'
-      case 'rejected':
-        return 'rejected'
-      case 'under_review':
-      case 'in_review':
-        return 'in_review'
-      case 'not_started':
-      case 'incomplete':
-      default:
-        return null
-    }
-  }
-
-  const [cachedKycStatus, setCachedKycStatus] = useState<string | null>(null)
-  const profileRefreshAtRef = useRef(0)
-  const PROFILE_REFRESH_TTL_MS = 5 * 60 * 1000
-  const kycStatusStorageKey = useMemo(
-    () => (user?.id ? `easner_receive_kyc_status_${user.id}` : null),
-    [user?.id],
-  )
-
-  const liveKycStatus = getKycStatus()
-  const kycStatus = liveKycStatus ?? cachedKycStatus
+  const { kycStatus, verificationComplete } = useReceiveDepositKyc()
 
   const hasAccountData =
     Boolean(virtualAccount?.hasAccount) ||
@@ -198,7 +169,6 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     isFetched: vaFetched,
     hasCachedEntry: vaRecord != null,
   })
-  const verificationComplete = kycStatus === 'approved'
   const showStablecoinDepositDetails = verificationComplete && hasStablecoinData
   const showBankTab = shouldShowBankDepositTab({
     verificationComplete,
@@ -390,39 +360,20 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const walletReady = hasStablecoinData
 
   const accountCreationTriggeredRef = useRef(false)
-  const prevKycStatusRef = useRef<string | null>(null)
-  /** Avoid treating first focus after mount as a KYC transition (null → status), which was replaying the notice. */
-  const isFirstFocusAfterMountRef = useRef(true)
+  /** One deposit refetch per approval, so a pre-KYC cache does not hide accounts Bridge already provisioned. */
+  const depositRefreshForKycRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (!kycStatusStorageKey) return
-    let cancelled = false
-    void (async () => {
-      try {
-        const raw = await AsyncStorage.getItem(kycStatusStorageKey)
-        if (cancelled) return
-        if (!raw) return
-        const env = JSON.parse(raw) as { status?: string }
-        if (env?.status === 'approved' || env?.status === 'in_review' || env?.status === 'rejected') {
-          setCachedKycStatus(env.status)
-        }
-      } catch {
-        // ignore
-      }
-    })()
-    return () => {
-      cancelled = true
+    if (kycStatus !== 'approved') {
+      depositRefreshForKycRef.current = null
+      return
     }
-  }, [kycStatusStorageKey])
+    if (!scope || (accountReady && walletReady)) return
+    if (depositRefreshForKycRef.current === kycStatus) return
+    depositRefreshForKycRef.current = kycStatus
+    void queryClient.invalidateQueries({ queryKey: qk.wallets.root(scope) })
+  }, [kycStatus, scope, accountReady, walletReady, queryClient])
 
-  useEffect(() => {
-    if (!kycStatusStorageKey) return
-    if (liveKycStatus !== 'approved' && liveKycStatus !== 'in_review' && liveKycStatus !== 'rejected') return
-    setCachedKycStatus(liveKycStatus)
-    void AsyncStorage.setItem(kycStatusStorageKey, JSON.stringify({ status: liveKycStatus })).catch(() => {})
-  }, [kycStatusStorageKey, liveKycStatus])
-  
-  
   // Automatically create accounts when KYC is approved but accounts don't exist
   useEffect(() => {
     const autoCreateAccounts = async () => {
@@ -499,31 +450,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
     // Only run when KYC status changes to approved
     autoCreateAccounts()
   }, [kycStatus, currency, accountReady, walletReady, vaSettled, hasAccountData])
-  
-  // Refresh on focus and re-evaluate account state when verification status changes.
-  useFocusEffect(
-    React.useCallback(() => {
-      const now = Date.now()
-      if (now - profileRefreshAtRef.current > PROFILE_REFRESH_TTL_MS) {
-        profileRefreshAtRef.current = now
-        void refreshUserProfile?.()
-      }
-      const prev = prevKycStatusRef.current
 
-      if (isFirstFocusAfterMountRef.current) {
-        isFirstFocusAfterMountRef.current = false
-        prevKycStatusRef.current = kycStatus
-      } else {
-        const kycChanged = prev !== kycStatus
-        prevKycStatusRef.current = kycStatus
-        if (kycChanged && scope) {
-          void queryClient.invalidateQueries({ queryKey: qk.wallets.root(scope) })
-          return
-        }
-      }
-    }, [kycStatus, queryClient, refreshUserProfile, scope]),
-  )
-  
   // Set default tab based on cash vs stablecoin availability
   useEffect(() => {
     if (!showCashTab && showStablecoinTab) {

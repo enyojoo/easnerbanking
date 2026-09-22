@@ -5,6 +5,7 @@ import { logAdminAction } from "@/lib/admin-audit"
 import { persistVerificationStatus } from "@/lib/compliance/verification-store"
 import { getBridgeCustomer, findBridgeCustomerByEmail, resolveBridgeCustomerKycStatus } from "@/lib/bridge/kyc-links"
 import { provisionBridgeVirtualAccounts } from "@/lib/bridge/provision-after-approval"
+import { persistBridgeCustomerProfile } from "@/lib/bridge/persist-bridge-customer-profile"
 import { resolveOrgOwnerUserId } from "@/lib/business/org-owner"
 import { requireBridgeEnv } from "@/app/api/bridge/_helpers"
 
@@ -123,6 +124,15 @@ export async function POST(
       })
       .eq("id", userId)
   }
+
+  await persistBridgeCustomerProfile(admin, {
+    customer: customer as Record<string, unknown>,
+    status,
+    userId,
+    businessId,
+  }).catch((error) => {
+    console.warn("[bridge] customer profile persist failed", error)
+  })
 
   let provisioned = false
   if (status === "approved" && userId) {

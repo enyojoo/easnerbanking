@@ -2,6 +2,7 @@ import { describe, expect, it } from '@jest/globals'
 import {
   consumerBankKycStatus,
   isBridgeConsumerCutoverPending,
+  receiveDepositKycStatus,
   shouldUseBridgeConsumerKyc,
 } from '../bridgeConsumerKyc'
 
@@ -45,5 +46,32 @@ describe('bridgeConsumerKyc', () => {
     }
     expect(consumerBankKycStatus(profile)).toBe('approved')
     expect(isBridgeConsumerCutoverPending(profile)).toBe(false)
+  })
+
+  it('treats Bridge approval as receive-ready even when Noah KYC was never started', () => {
+    const profile = {
+      verification_provider: 'bridge',
+      bridge_kyc_status: 'approved',
+      noah_kyc_status: 'not_started',
+      kyc_address_country: 'GB',
+    }
+    expect(receiveDepositKycStatus(profile)).toBe('approved')
+  })
+
+  it('keeps the receive verification prompt until Bridge KYC starts', () => {
+    expect(
+      receiveDepositKycStatus({
+        verification_provider: 'bridge',
+        bridge_kyc_status: 'not_started',
+        noah_kyc_status: null,
+        residence_country: 'GB',
+      }),
+    ).toBe(null)
+    expect(
+      receiveDepositKycStatus({
+        bridge_kyc_status: 'under_review',
+        kyc_address_country: 'GB',
+      }),
+    ).toBe('in_review')
   })
 })

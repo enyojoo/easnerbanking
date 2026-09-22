@@ -1,5 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react'
-import { useFocusEffect } from '@react-navigation/native'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { qk, isVaAnswerSettled, receiveInternationalBankTitle, bankReceivePaymentNotes } from '@easner/shared'
 import {
@@ -22,7 +21,6 @@ import {
   ShieldCheck,
 } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { NavigationProps } from '../../types'
 import {
@@ -42,9 +40,9 @@ import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 import { EasnerAlertSheet, PremiumModalSheet } from '../../components/premium'
 import { getApiBaseUrl } from '../../lib/apiClient'
 import { supabase } from '../../lib/supabase'
-import { useAuth } from '../../contexts/AuthContext'
 import { useScope } from '../../query/scope'
 import { useConsumerVirtualAccounts } from '../../hooks/queries/use-receive-deposit-queries'
+import { useReceiveDepositKyc } from '../../hooks/useReceiveDepositKyc'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { haptics } from '../../lib/haptics'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
@@ -56,7 +54,6 @@ type RouteParams = {
 
 export default function ReceiveBankDetailsScreen({ navigation, route }: NavigationProps) {
   const scrollBottomPadding = useScrollBottomPadding(spacing[5])
-  const { user, userProfile, refreshUserProfile } = useAuth()
   const { showSuccess, showError } = useToast()
   const copyToClipboard = useCopyToClipboard()
   const queryClient = useQueryClient()
@@ -91,35 +88,7 @@ export default function ReceiveBankDetailsScreen({ navigation, route }: Navigati
 
   const vaFetched = vaQuery.isFetched
 
-  const getKycStatus = (): string | null => {
-    const noahKycStatus = userProfile?.noah_kyc_status || userProfile?.profile?.noah_kyc_status
-    if (!noahKycStatus) return null
-
-    switch (noahKycStatus) {
-      case 'approved':
-        return 'approved'
-      case 'rejected':
-        return 'rejected'
-      case 'under_review':
-      case 'in_review':
-        return 'in_review'
-      case 'not_started':
-      case 'incomplete':
-      default:
-        return null
-    }
-  }
-
-  const [cachedKycStatus, setCachedKycStatus] = useState<string | null>(null)
-  const profileRefreshAtRef = useRef(0)
-  const PROFILE_REFRESH_TTL_MS = 5 * 60 * 1000
-  const kycStatusStorageKey = useMemo(
-    () => (user?.id ? `easner_receive_kyc_status_${user.id}` : null),
-    [user?.id],
-  )
-
-  const liveKycStatus = getKycStatus()
-  const kycStatus = liveKycStatus ?? cachedKycStatus
+  const { kycStatus, verificationComplete } = useReceiveDepositKyc()
 
   const hasAccountData =
     Boolean(virtualAccount?.hasAccount) ||
@@ -129,38 +98,21 @@ export default function ReceiveBankDetailsScreen({ navigation, route }: Navigati
     isFetched: vaFetched,
     hasCachedEntry: vaRecord != null,
   })
-  const verificationComplete = kycStatus === 'approved'
   const showBankDepositDetails = verificationComplete && hasAccountData
 
   const accountCreationTriggeredRef = useRef(false)
+  const depositRefreshForKycRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (!kycStatusStorageKey) return
-    let cancelled = false
-    void (async () => {
-      try {
-        const raw = await AsyncStorage.getItem(kycStatusStorageKey)
-        if (cancelled) return
-        if (!raw) return
-        const env = JSON.parse(raw) as { status?: string }
-        if (env?.status === 'approved' || env?.status === 'in_review' || env?.status === 'rejected') {
-          setCachedKycStatus(env.status)
-        }
-      } catch {
-        // ignore
-      }
-    })()
-    return () => {
-      cancelled = true
+    if (kycStatus !== 'approved') {
+      depositRefreshForKycRef.current = null
+      return
     }
-  }, [kycStatusStorageKey])
-
-  useEffect(() => {
-    if (!kycStatusStorageKey) return
-    if (liveKycStatus !== 'approved' && liveKycStatus !== 'in_review' && liveKycStatus !== 'rejected') return
-    setCachedKycStatus(liveKycStatus)
-    void AsyncStorage.setItem(kycStatusStorageKey, JSON.stringify({ status: liveKycStatus })).catch(() => {})
-  }, [kycStatusStorageKey, liveKycStatus])
+    if (!scope || hasAccountData) return
+    if (depositRefreshForKycRef.current === kycStatus) return
+    depositRefreshForKycRef.current = kycStatus
+    void queryClient.invalidateQueries({ queryKey: qk.wallets.root(scope) })
+  }, [kycStatus, scope, hasAccountData, queryClient])
 
   useEffect(() => {
     const autoCreateAccounts = async () => {
@@ -223,16 +175,6 @@ export default function ReceiveBankDetailsScreen({ navigation, route }: Navigati
 
     void autoCreateAccounts()
   }, [kycStatus, currency, hasAccountData, vaSettled, queryClient, scope])
-
-  useFocusEffect(
-    React.useCallback(() => {
-      const now = Date.now()
-      if (now - profileRefreshAtRef.current > PROFILE_REFRESH_TTL_MS) {
-        profileRefreshAtRef.current = now
-        void refreshUserProfile?.()
-      }
-    }, [refreshUserProfile]),
-  )
 
   const bankAccountDetails = useMemo(() => {
     if (virtualAccount && (virtualAccount.hasAccount || virtualAccount.accountNumber || virtualAccount.iban)) {

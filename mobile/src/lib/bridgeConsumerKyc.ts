@@ -63,6 +63,31 @@ export function consumerBankKycStatus(profile: BridgeConsumerKycProfile | null |
   return read(profile, 'noah_kyc_status') || read(profile, 'verification_status') || 'not_started'
 }
 
+export type ReceiveDepositKycStatus = 'approved' | 'in_review' | 'rejected' | null
+
+/**
+ * Gate for receive / deposit details.
+ * Bridge customers stay on `bridge_kyc_status` after approval; `noah_kyc_status` can remain unset.
+ */
+export function receiveDepositKycStatus(
+  profile: BridgeConsumerKycProfile | null | undefined,
+): ReceiveDepositKycStatus {
+  const raw = consumerBankKycStatus(profile).trim().toLowerCase()
+  switch (raw) {
+    case 'approved':
+      return 'approved'
+    case 'rejected':
+      return 'rejected'
+    case 'under_review':
+    case 'in_review':
+    case 'pending':
+    case 'in_progress':
+      return 'in_review'
+    default:
+      return null
+  }
+}
+
 export function isBridgeConsumerCutoverPending(
   profile: BridgeConsumerKycProfile | null | undefined,
 ): boolean {

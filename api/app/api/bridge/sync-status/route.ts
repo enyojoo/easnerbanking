@@ -3,6 +3,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { getBridgeCustomer, findBridgeCustomerByEmail, resolveBridgeCustomerKycStatus } from "@/lib/bridge/kyc-links"
 import { persistVerificationStatus } from "@/lib/compliance/verification-store"
 import { provisionBridgeVirtualAccounts } from "@/lib/bridge/provision-after-approval"
+import { persistBridgeCustomerProfile } from "@/lib/bridge/persist-bridge-customer-profile"
 import { requireAuth, requireBridgeEnv } from "../_helpers"
 import { readAccountScopeFromRequest } from "@/lib/noah/resolve-noah-context"
 import { resolveGridBusinessContextAsync } from "@/app/api/grid/_helpers"
@@ -90,6 +91,15 @@ export async function POST(request: Request) {
       })
       .eq("id", user.id)
   }
+
+  await persistBridgeCustomerProfile(admin, {
+    customer: customer as Record<string, unknown>,
+    status,
+    userId: user.id,
+    businessId,
+  }).catch((error) => {
+    console.warn("[bridge] customer profile persist failed", error)
+  })
 
   let provisioned = false
   if (status === "approved") {

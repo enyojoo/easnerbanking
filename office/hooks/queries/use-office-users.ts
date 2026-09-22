@@ -49,6 +49,9 @@ export type OfficeUserRow = {
   residence_country?: string | null
   bridge_cutover_required_at?: string | null
   bridge_cutover_deadline_at?: string | null
+  stripe_crypto_customer_id?: string | null
+  stripe_express_deposits_status?: string | null
+  stripe_express_kyc_tier?: string | null
   totalTransactions: number
   totalVolume: number
   verificationStatus?: string

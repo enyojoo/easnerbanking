@@ -14,6 +14,7 @@ import { OfficeRestrictionControls } from "./office-restriction-controls"
 import { OfficeDevPlatformToggle } from "./office-dev-platform-toggle"
 import { OfficeCopyChip, OfficeCopyValue } from "./office-copy-value"
 import { OfficePartnerSync } from "./office-partner-sync"
+import { OfficeExpressDepositsSection } from "./office-express-deposits"
 import { OfficeDetailRow, OfficeSection } from "./office-detail-grid"
 import { ProcessingFeeOverrideSection } from "@/components/platform-control/processing-fee-override-section"
 import { CheckoutFeeOverrideSection } from "@/components/platform-control/checkout-fee-override-section"
@@ -22,6 +23,7 @@ import { OfficePageSkeleton } from "@/components/data/office-page-skeleton"
 import {
   useOfficeBusinesses,
   useOfficeBusinessMembers,
+  useOfficeUsersDirectory,
   useOfficeBusinessTransactions,
   useOfficeKybPacket,
   useOfficeSendCompliance,
@@ -38,6 +40,7 @@ import {
 } from "@/hooks/queries/use-office-case"
 import { OFFICE_LIST_STALE_MS } from "@/hooks/queries/constants"
 import { officeKeys } from "@/lib/query/keys"
+import { expressDepositsOfficeStatus } from "@/lib/case/express-deposits"
 import { officeStatusIsApproved, officeVerificationBadgeVariant } from "@/lib/case/status"
 import type { OfficeBusinessRow, OfficeCaseChip } from "@/lib/case/types"
 import { useOfficeCaseTab } from "@/lib/case/use-case-tab"
@@ -77,6 +80,7 @@ export function prefetchOfficeBusinessCase(queryClient: QueryClient, businessId:
 export function BusinessCase({ businessId }: { businessId: string }) {
   const queryClient = useQueryClient()
   const businessesQuery = useOfficeBusinesses()
+  const usersQuery = useOfficeUsersDirectory()
   const rows = (businessesQuery.data ?? []) as OfficeBusinessRow[]
   const loading = useQueryInitialLoading(businessesQuery.isPending, businessesQuery.data, rows)
   const business = rows.find((row) => row.id === businessId) ?? null
@@ -109,6 +113,8 @@ export function BusinessCase({ businessId }: { businessId: string }) {
     )
   }
 
+  const owner = usersQuery.data?.find((row) => row.id === business.owner_user_id) ?? null
+  const expressStatus = expressDepositsOfficeStatus(owner?.stripe_express_deposits_status)
   const gridStatus = business.verification_status || "not_started"
   const bridgeStatus = business.bridge_kyc_status || "not_started"
   const accessUnlocked = officeStatusIsApproved(gridStatus) || officeStatusIsApproved(bridgeStatus)
@@ -125,6 +131,10 @@ export function BusinessCase({ businessId }: { businessId: string }) {
     {
       label: `More · ${verificationStatusLabel(bridgeStatus, { detail: true })}`,
       variant: officeVerificationBadgeVariant(bridgeStatus),
+    },
+    {
+      label: `Express · ${verificationStatusLabel(expressStatus, { detail: true })}`,
+      variant: officeVerificationBadgeVariant(expressStatus),
     },
   ]
   if (business.accountRestrictionPhase === "locked") chips.push({ label: "Closed", variant: "oxblood" })
@@ -278,18 +288,26 @@ export function BusinessCase({ businessId }: { businessId: string }) {
             </div>
           </OfficeCaseTabPanel>
           <OfficeCaseTabPanel value="kyb">
-            <OfficeKybPacket
-              businessId={business.id}
-              packet={kybQuery.data}
-              loading={kybQuery.isPending && !kybQuery.data}
-              error={kybQuery.error instanceof Error ? kybQuery.error.message : null}
-              onRetry={() => void kybQuery.refetch()}
-              gridVerificationStatus={gridStatus}
-              bridgeVerificationStatus={bridgeStatus}
-              bridgeSync={
-                <OfficePartnerSync kind="business" subjectId={business.id} ownerUserId={business.owner_user_id} mode="bridge" />
-              }
-            />
+            <div className="space-y-4">
+              <OfficeKybPacket
+                businessId={business.id}
+                packet={kybQuery.data}
+                loading={kybQuery.isPending && !kybQuery.data}
+                error={kybQuery.error instanceof Error ? kybQuery.error.message : null}
+                onRetry={() => void kybQuery.refetch()}
+                gridVerificationStatus={gridStatus}
+                bridgeVerificationStatus={bridgeStatus}
+                bridgeSync={
+                  <OfficePartnerSync kind="business" subjectId={business.id} ownerUserId={business.owner_user_id} mode="bridge" />
+                }
+              />
+              <OfficeExpressDepositsSection
+                status={owner?.stripe_express_deposits_status}
+                tier={owner?.stripe_express_kyc_tier}
+                customerId={owner?.stripe_crypto_customer_id}
+                ownerLabel={ownerLabel(business)}
+              />
+            </div>
           </OfficeCaseTabPanel>
           <OfficeCaseTabPanel value="banking">
             <OfficeBankingPanel

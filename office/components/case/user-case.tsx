@@ -14,6 +14,7 @@ import { OfficeAuditPanel } from "./office-audit-panel"
 import { OfficeRestrictionControls } from "./office-restriction-controls"
 import { OfficeCopyChip, OfficeCopyValue } from "./office-copy-value"
 import { OfficePartnerSync } from "./office-partner-sync"
+import { OfficeExpressDepositsSection } from "./office-express-deposits"
 import { OfficeDetailRow, OfficeSection } from "./office-detail-grid"
 import { ProcessingFeeOverrideSection } from "@/components/platform-control/processing-fee-override-section"
 import {
@@ -37,6 +38,7 @@ import {
   officeVerificationBadgeVariant,
 } from "@/lib/case/status"
 import type { OfficeCaseChip } from "@/lib/case/types"
+import { expressDepositsOfficeStatus } from "@/lib/case/express-deposits"
 import { useOfficeCaseTab } from "@/lib/case/use-case-tab"
 import { formatOfficeTimestamp } from "@/lib/format-office-date"
 import { WALLET_SEND_COMPLIANCE_STATUS_LABEL, verificationStatusLabel } from "@easner/shared"
@@ -128,6 +130,11 @@ export function UserCase({ userId }: { userId: string }) {
     chips.push({
       label: `${rail === "bridge" ? "Bridge" : "Noah"} · ${verificationStatusLabel(kycRaw, { detail: true })}`,
       variant: officeVerificationBadgeVariant(kycRaw),
+    })
+    const expressStatus = expressDepositsOfficeStatus(user.stripe_express_deposits_status)
+    chips.push({
+      label: `Express · ${verificationStatusLabel(expressStatus, { detail: true })}`,
+      variant: officeVerificationBadgeVariant(expressStatus),
     })
     if (user.velocityLimitActive) {
       chips.push({ label: WALLET_SEND_COMPLIANCE_STATUS_LABEL, variant: "amber" })
@@ -246,6 +253,11 @@ export function UserCase({ userId }: { userId: string }) {
               <OfficeCaseTabPanel value="compliance">
                 <div className="space-y-4">
                   <IndividualCompliance user={user} />
+                  <OfficeExpressDepositsSection
+                    status={user.stripe_express_deposits_status}
+                    tier={user.stripe_express_kyc_tier}
+                    customerId={user.stripe_crypto_customer_id}
+                  />
                   <OfficeSection title="Audit" divide={false}>
                     <OfficeAuditPanel
                       entries={auditQuery.data ?? []}

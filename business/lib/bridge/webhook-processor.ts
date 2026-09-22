@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { persistVerificationStatus } from "@/lib/compliance/verification-store"
-import { resolveBridgeCustomerKycStatus } from "./kyc-links"
+import { getBridgeCustomer, resolveBridgeCustomerKycStatus } from "./kyc-links"
+import { persistBridgeCustomerProfile } from "./persist-bridge-customer-profile"
 import { provisionBridgeVirtualAccounts } from "./provision-after-approval"
 import { handleBridgeVaInboundActivity, resolveBridgeSubject } from "./va-inbound-webhook"
 import {
@@ -37,17 +38,31 @@ async function handleBridgeKycWebhook(
 ): Promise<void> {
   const customerId = String(data.customer_id ?? payload.customer_id ?? data.id ?? "").trim()
   if (!customerId) return
-  const endorsements = Array.isArray(data.endorsements)
-    ? data.endorsements.filter((row): row is { name?: string; status?: string } => Boolean(row) && typeof row === "object")
+  const remote = await getBridgeCustomer(customerId).catch(() => null)
+  const customer = {
+    ...data,
+    ...(remote ?? {}),
+  } as Record<string, unknown>
+  const endorsements = Array.isArray(customer.endorsements)
+    ? customer.endorsements.filter((row): row is { name?: string; status?: string } => Boolean(row) && typeof row === "object")
     : undefined
   const status = resolveBridgeCustomerKycStatus({
-    kyc_status: String(data.kyc_status ?? ""),
-    status: String(data.status ?? ""),
+    kyc_status: String(customer.kyc_status ?? ""),
+    status: String(customer.status ?? ""),
     endorsements,
   })
   const subject = await resolveBridgeSubject(admin, customerId)
   await applyBridgeVerificationToPlatformCustomer(admin, customerId, status)
   if (!subject) return
+
+  await persistBridgeCustomerProfile(admin, {
+    customer,
+    status,
+    userId: subject.userId,
+    businessId: subject.businessId,
+  }).catch((error) => {
+    console.warn("[bridge] customer profile persist failed", error)
+  })
 
   if (subject.businessId) {
     await persistVerificationStatus(admin, {
