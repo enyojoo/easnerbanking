@@ -36,6 +36,8 @@ export const REVIEW_ROW_LABELS = {
   /** Settled inbound bank / stablecoin deposit (detail / email). */
   amountCredited: "Amount credited",
   processingFee: "Processing fee",
+  /** Org fee-wallet inbound linked to the source payout or deposit. */
+  relatedTransaction: "Related transaction",
   exchangeRate: "Exchange rate",
   /** Outbound payout / send rail (Bank transfer, Local Transfer, etc.). */
   transferMethod: "Transfer method",

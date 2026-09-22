@@ -8,6 +8,7 @@ import {
   isEasnerProductReceiveTitle,
   isEasnerProductSendTitle,
 } from "./product-label"
+import { resolveOrgTreasuryInboundTitle } from "./org-treasury-inbound"
 import {
   ACCOUNT_VERIFICATION_LIST_LABEL,
   VERIFICATION_DEPOSIT_LIST_LABEL,
@@ -29,6 +30,9 @@ export function resolveInboundTransactionListLabel(input: TransactionListLabelIn
     const businessName = String(input.metadata?.payroll_business_name ?? "").trim()
     return businessName ? `Payment from ${businessName}` : "Payroll payment"
   }
+
+  const orgTitle = resolveOrgTreasuryInboundTitle(input.metadata, input.payload)
+  if (orgTitle) return orgTitle
 
   if (input.source_type === "liquidation_address" || input.source_liquidation_address_id) {
     return "Stablecoin Deposit"

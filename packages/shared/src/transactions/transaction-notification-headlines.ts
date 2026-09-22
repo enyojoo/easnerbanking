@@ -35,6 +35,12 @@ export function activityLabelForNotification(
       return "Bank deposit"
     case "stablecoin_deposit":
       return "Stablecoin deposit"
+    case "pay_in_fee":
+      return "Pay in fee"
+    case "payout_fee":
+      return "Payout fee"
+    case "payout_refund":
+      return "Payout refund"
     case "stablecoin_transfer":
       return "Stablecoin transfer"
     case "bank_verification_credit":

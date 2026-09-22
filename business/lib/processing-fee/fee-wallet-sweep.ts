@@ -114,6 +114,7 @@ export async function sweepEasnerRevenueFromDepositOmnibus(input: {
       amount: sweepAmt,
       asset,
       fromAddress: resolveDepositOmnibusAddressForLedgerCurrency(input.ledgerCurrency),
+      orgTreasuryKind: "pay_in_fee",
     }).catch((e) => {
       console.warn(`[${input.logTag ?? "easner-revenue-sweep"}] fee wallet deposit book failed:`, e)
     })
@@ -192,6 +193,7 @@ export async function sweepEasnerRevenueFromUserTurnkeyWallet(
         asset,
         senderUserId: input.ctx.subjectUserId,
         senderBusinessId: input.ctx.subjectBusinessId,
+        orgTreasuryKind: "payout_fee",
       }).catch((e) => {
         console.warn(`[${input.logTag ?? "easner-revenue-sweep"}] fee wallet deposit book failed:`, e)
       })

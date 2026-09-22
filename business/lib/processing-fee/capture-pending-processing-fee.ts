@@ -123,6 +123,8 @@ async function bookFeeWalletRevenueDeposit(input: {
     senderUserId: input.userId,
     senderBusinessId: input.businessId,
     relatedEasnerTransactionId: input.relatedEasnerTransactionId,
+    relatedDirection: "out",
+    orgTreasuryKind: "payout_fee",
   }).catch((e) => {
     console.warn("[fee-wallet-inbound-deposit] book failed:", e)
   })

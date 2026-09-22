@@ -47,5 +47,8 @@ describe("activityLabelForNotification", () => {
     expect(activityLabelForNotification("easetag_send", "Easetag Send")).toBe("Easetag transfer")
     expect(activityLabelForNotification("easetag_receive", "Easetag Received")).toBe("Easetag deposit")
     expect(activityLabelForNotification("card_topup", "Card top up")).toBe("Card top-up")
+    expect(activityLabelForNotification("pay_in_fee", "Pay in fee")).toBe("Pay in fee")
+    expect(activityLabelForNotification("payout_fee", "Payout fee")).toBe("Payout fee")
+    expect(activityLabelForNotification("payout_refund", "Payout refund")).toBe("Payout refund")
   })
 })

@@ -217,7 +217,10 @@ describe("applyTurnkeyBalanceWebhookSideEffects", () => {
       expect.anything(),
       expect.objectContaining({
         amount: 3.671217,
-        metadata: expect.objectContaining({ fee_wallet_revenue_sweep: true }),
+        metadata: expect.objectContaining({
+          fee_wallet_revenue_sweep: true,
+          org_treasury_kind: "payout_fee",
+        }),
       }),
       { forceOrganicStablecoinDeposit: true, skipBalanceDelta: true },
     )
@@ -250,10 +253,15 @@ describe("applyTurnkeyBalanceWebhookSideEffects", () => {
       expect.anything(),
       expect.objectContaining({
         amount: 12.5,
-        metadata: expect.objectContaining({ fee_wallet_revenue_sweep: true }),
+        metadata: expect.objectContaining({
+          org_treasury_kind: "payout_refund",
+          payout_refund: true,
+          yc_fee_wallet_refund: true,
+        }),
       }),
       { forceOrganicStablecoinDeposit: true, skipBalanceDelta: true },
     )
+    expect(mocks.applyInbound.mock.calls[0]?.[1]?.metadata?.fee_wallet_revenue_sweep).toBeUndefined()
   })
 
   it("accepts Grid treasury suppress when the Grid VA bank-deposit row is already visible", async () => {

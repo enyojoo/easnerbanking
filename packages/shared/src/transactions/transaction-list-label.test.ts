@@ -35,6 +35,16 @@ describe("resolveInboundTransactionListLabel", () => {
     ).toBe("Samuel Odiba")
   })
 
+  it("uses org treasury titles before the generic Stablecoin Deposit path", () => {
+    expect(
+      resolveInboundTransactionListLabel({
+        name: "Stablecoin Deposit",
+        source_type: "liquidation_address",
+        metadata: { fee_wallet_revenue_sweep: true },
+      }),
+    ).toBe("Payout fee")
+  })
+
   it("uses bank verification deposit label for verification deposits", () => {
     expect(
       resolveInboundTransactionListLabel({

@@ -26,6 +26,10 @@ import {
 import { isRelayTronDepositMetadata } from "./relay-tron-deposit"
 import { isBalanceConvertMetadata, balanceConvertListProductLabel } from "./balance-move-types"
 import { expressDepositActivityLabel, isExpressDepositsMetadata } from "../express-deposits-copy"
+import {
+  isOrgTreasuryInboundTitle,
+  resolveOrgTreasuryInboundTitle,
+} from "./org-treasury-inbound"
 
 export type EasnerLedgerDirection = "in" | "out"
 
@@ -187,6 +191,10 @@ export function toEasnerTransactionProductCategory(input: {
   if (direction === "out" && isBalanceConvertMetadata(meta)) {
     return balanceConvertListProductLabel()
   }
+  if (direction === "in") {
+    const orgTitle = resolveOrgTreasuryInboundTitle(meta, input.payload)
+    if (orgTitle) return orgTitle
+  }
   const isWalletSend =
     direction === "out" && String(meta?.activity_type ?? "").trim().toLowerCase() === "wallet_send"
   const isStablecoin =
@@ -258,6 +266,10 @@ export function toEasnerTransactionPrimaryLabel(input: {
   const collectionChannel = String(meta?.collection_channel ?? "").toLowerCase()
   if (direction === "out" && isBalanceConvertMetadata(meta)) {
     return balanceConvertListProductLabel()
+  }
+  if (direction === "in") {
+    const orgTitle = resolveOrgTreasuryInboundTitle(meta, input.payload)
+    if (orgTitle) return orgTitle
   }
   const isWalletSend =
     direction === "out" && String(meta?.activity_type ?? "").trim().toLowerCase() === "wallet_send"
@@ -333,7 +345,8 @@ export function isEasnerProductReceiveTitle(name: string | null | undefined): bo
     n === "Bank Deposit" ||
     n === ACCOUNT_VERIFICATION_LIST_LABEL ||
     n === VERIFICATION_DEPOSIT_LIST_LABEL ||
-    n === VERIFICATION_DEPOSIT_PRODUCT_LABEL
+    n === VERIFICATION_DEPOSIT_PRODUCT_LABEL ||
+    isOrgTreasuryInboundTitle(n)
   ) {
     return true
   }

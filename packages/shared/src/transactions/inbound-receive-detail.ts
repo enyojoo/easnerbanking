@@ -26,6 +26,12 @@ import {
   resolveYcFundBalanceNotificationActivityLabelFromMetadata,
 } from "./yc-deposit-display"
 import { deriveEasnerInboundRemitterDisplayName } from "./product-label"
+import {
+  isOrgTreasuryInboundTitle,
+  readRelatedEasnerTransactionId,
+  resolveOrgTreasuryInboundKind,
+  resolveOrgTreasuryInboundTitle,
+} from "./org-treasury-inbound"
 import { formatStablecoinDepositSchemeLabel } from "./stablecoin-deposit-scheme"
 import { isRelayTronDepositInbound } from "./relay-tron-deposit"
 import {
@@ -76,6 +82,8 @@ export type InboundReceiveDetailSnapshot = {
   notificationActivityLabel?: string
   /** Brand chip + mask for Express deposit method rows. */
   paymentMethodDisplay?: ExpressPaymentMethodDisplay
+  /** Linked payout / deposit ETID on org fee-wallet inbounds. */
+  relatedTransactionId?: string
 }
 
 export type InboundReceiveDetailRow = {
@@ -235,6 +243,7 @@ export function classifyInboundReceiveKind(
   if (isExpressDepositsMetadata(meta)) return "express_deposits"
   if (input.deposit_review || isYcFundBalanceDepositMetadata(meta)) return "yc_fund_balance"
   if (isStripeCollectionSettlementMetadata(meta)) return null
+  if (resolveOrgTreasuryInboundKind(meta, input.payload)) return "stablecoin"
   if (isStablecoinInbound(input)) return "stablecoin"
   if (
     isVaFundingDeposit({ provider: input.provider, direction: "in", metadata: meta }) ||
@@ -272,7 +281,7 @@ function resolveDisplayTitle(kind: InboundReceiveKind, input: InboundReceiveReso
     case "bank_verification":
       return "Bank verification deposit"
     case "stablecoin":
-      return "Stablecoin deposit"
+      return resolveOrgTreasuryInboundTitle(meta, input.payload) ?? "Stablecoin deposit"
     case "easetag_receive": {
       const handle = readEasetagHandle(meta)
       return handle ? `Received from @${handle}` : "Easetag deposit"
@@ -531,10 +540,14 @@ export function resolveInboundReceiveDetail(
     const grossUsd = pickAmount(meta.gross_usdt)
     const depositAmount =
       grossUsd != null ? { amount: grossUsd, currency: "USD" as const } : undefined
+    const displayTitle = resolveDisplayTitle(kind, input)
+    const relatedTransactionId = readRelatedEasnerTransactionId(meta)
     return {
       kind,
-      displayTitle: resolveDisplayTitle(kind, input),
-      notificationActivityLabel: "Stablecoin deposit",
+      displayTitle,
+      notificationActivityLabel: isOrgTreasuryInboundTitle(displayTitle)
+        ? displayTitle
+        : "Stablecoin deposit",
       transactionId,
       whenAt,
       amountCredited: { amount: creditedAmount, currency: creditedCurrency },
@@ -546,6 +559,7 @@ export function resolveInboundReceiveDetail(
         ? { processingFee: { amount: feeAmount, currency: feeCurrency } }
         : {}),
       ...(note ? { note } : {}),
+      ...(relatedTransactionId ? { relatedTransactionId } : {}),
     }
   }
 
@@ -570,6 +584,31 @@ export function resolveInboundReceiveDetail(
 function pushIf(rows: InboundReceiveDetailRow[], label: string, value: string | null | undefined): void {
   const v = String(value ?? "").trim()
   if (v) rows.push({ label, value: v })
+}
+
+function pushProcessingFeeRow(
+  rows: InboundReceiveDetailRow[],
+  fee: { amount: number; currency: string } | undefined,
+): void {
+  if (!fee) return
+  pushIf(
+    rows,
+    REVIEW_ROW_LABELS.processingFee,
+    formatReviewRowMoneyDisplay(REVIEW_ROW_LABELS.processingFee, fee.amount, fee.currency),
+  )
+}
+
+function pushRelatedTransactionRow(
+  rows: InboundReceiveDetailRow[],
+  snapshot: InboundReceiveDetailSnapshot,
+): void {
+  const related = String(snapshot.relatedTransactionId ?? "").trim()
+  if (!related || !isOrgTreasuryInboundTitle(snapshot.displayTitle)) return
+  rows.push({
+    label: REVIEW_ROW_LABELS.relatedTransaction,
+    value: related,
+    copyValue: related,
+  })
 }
 
 function pushSenderRow(rows: InboundReceiveDetailRow[], snapshot: InboundReceiveDetailSnapshot): void {
@@ -662,15 +701,7 @@ export function buildInboundReceiveDetailRows(
         )
       }
       if (snapshot.processingFee) {
-        pushIf(
-          rows,
-          REVIEW_ROW_LABELS.processingFee,
-          formatReviewRowMoneyDisplay(
-            REVIEW_ROW_LABELS.processingFee,
-            snapshot.processingFee.amount,
-            snapshot.processingFee.currency,
-          ),
-        )
+        pushProcessingFeeRow(rows, snapshot.processingFee)
       }
       if (snapshot.amountPaid) {
         pushIf(
@@ -691,15 +722,7 @@ export function buildInboundReceiveDetailRows(
       // In-app hero / list already show sender_name; keep Sender on email only.
       if (surface === "email") pushSenderRow(rows, snapshot)
       if (snapshot.processingFee) {
-        pushIf(
-          rows,
-          REVIEW_ROW_LABELS.processingFee,
-          formatReviewRowMoneyDisplay(
-            REVIEW_ROW_LABELS.processingFee,
-            snapshot.processingFee.amount,
-            snapshot.processingFee.currency,
-          ),
-        )
+        pushProcessingFeeRow(rows, snapshot.processingFee)
       }
       pushAmountCreditedIfNeeded(rows, snapshot)
       pushCreditDestination(rows, snapshot.creditDestination)
@@ -720,6 +743,7 @@ export function buildInboundReceiveDetailRows(
     }
     case "stablecoin": {
       pushSenderRow(rows, snapshot)
+      pushRelatedTransactionRow(rows, snapshot)
       if (
         surface !== "detail" &&
         snapshot.depositAmount &&
@@ -736,16 +760,8 @@ export function buildInboundReceiveDetailRows(
           ),
         )
       }
-      if (snapshot.processingFee) {
-        pushIf(
-          rows,
-          REVIEW_ROW_LABELS.processingFee,
-          formatReviewRowMoneyDisplay(
-            REVIEW_ROW_LABELS.processingFee,
-            snapshot.processingFee.amount,
-            snapshot.processingFee.currency,
-          ),
-        )
+      if (snapshot.processingFee && !isOrgTreasuryInboundTitle(snapshot.displayTitle)) {
+        pushProcessingFeeRow(rows, snapshot.processingFee)
       }
       pushAmountCreditedIfNeeded(rows, snapshot)
       pushCreditDestination(rows, snapshot.creditDestination)
@@ -770,15 +786,7 @@ export function buildInboundReceiveDetailRows(
         )
       }
       if (snapshot.processingFee && isPayoutReviewFeeVisible(snapshot.processingFee.amount)) {
-        pushIf(
-          rows,
-          REVIEW_ROW_LABELS.processingFee,
-          formatReviewRowMoneyDisplay(
-            REVIEW_ROW_LABELS.processingFee,
-            snapshot.processingFee.amount,
-            snapshot.processingFee.currency,
-          ),
-        )
+        pushProcessingFeeRow(rows, snapshot.processingFee)
       }
       if (snapshot.amountPaid) {
         pushIf(
@@ -902,8 +910,13 @@ export function resolveInboundReceiveNotification(
       successTitle = "Bank verification deposit complete"
       break
     case "stablecoin":
-      activityLabel = "Stablecoin deposit"
-      successTitle = "Stablecoin deposit complete"
+      if (isOrgTreasuryInboundTitle(snapshot.displayTitle)) {
+        activityLabel = snapshot.displayTitle
+        successTitle = `${snapshot.displayTitle} complete`
+      } else {
+        activityLabel = "Stablecoin deposit"
+        successTitle = "Stablecoin deposit complete"
+      }
       break
     case "easetag_receive":
       activityLabel = "Easetag deposit"

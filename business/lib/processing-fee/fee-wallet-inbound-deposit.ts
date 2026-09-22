@@ -14,6 +14,11 @@ import {
   resolveWalletSendFeeSolanaAddress,
 } from "@/lib/wallet-send/fee-address"
 import { computeSweepAmountFromMetadata } from "@/lib/processing-fee/fee-wallet-sweep-meta"
+import {
+  buildOrgTreasuryInboundWriteMetadata,
+  orgTreasuryKindFromRelatedDirection,
+  type OrgTreasuryInboundKind,
+} from "@easner/shared"
 
 export function feeWalletSweepAmountFromMeta(meta: Record<string, unknown>): number {
   const stamped = Number(meta.fee_wallet_sweep ?? meta.easner_revenue_sweep_amount ?? 0)
@@ -85,6 +90,8 @@ export async function ensureFeeWalletRevenueDeposit(
     senderUserId?: string | null
     senderBusinessId?: string | null
     relatedEasnerTransactionId?: string | null
+    relatedDirection?: "in" | "out" | null
+    orgTreasuryKind?: OrgTreasuryInboundKind
     occurredAt?: string | null
   },
 ): Promise<{ inserted: boolean; existing: boolean }> {
@@ -143,18 +150,21 @@ export async function ensureFeeWalletRevenueDeposit(
     addressForId,
   )
   const easnerTransactionId = generateTransactionId()
+  const orgTreasuryKind =
+    input.orgTreasuryKind ?? orgTreasuryKindFromRelatedDirection(input.relatedDirection)
+  const orgTreasuryFields = buildOrgTreasuryInboundWriteMetadata({
+    kind: orgTreasuryKind,
+    relatedEasnerTransactionId: input.relatedEasnerTransactionId,
+  })
   const metadata = withOrganicStablecoinDepositMetadata({
     source: "turnkey_balance_webhook",
     operation: "deposit",
     source_payment_rail: "solana",
     source_currency: asset,
     organic_deposit_fallback: true,
-    fee_wallet_revenue_sweep: true,
     balance_delta_applied: true,
     easner_transaction_id: easnerTransactionId,
-    ...(input.relatedEasnerTransactionId
-      ? { related_easner_transaction_id: input.relatedEasnerTransactionId }
-      : {}),
+    ...orgTreasuryFields,
     ...(fromAddress ? { from_address: fromAddress } : {}),
     ...buildWalletReportingSnapshot({ amount, currency, fxRates: [] }),
   })
@@ -188,6 +198,54 @@ export async function ensureFeeWalletRevenueDeposit(
     throw error
   }
   return { inserted: true, existing: false }
+}
+
+export async function findRelatedByFeeWalletSweepHash(
+  admin: SupabaseClient,
+  txHash: string,
+): Promise<{ easnerTransactionId: string | null; direction: "in" | "out" | null } | null> {
+  const hash = String(txHash || "").trim()
+  if (!hash) return null
+  try {
+    const { data } = await admin
+      .from("transactions")
+      .select("easner_transaction_id, direction")
+      .filter("metadata->>fee_wallet_sweep_tx_hash", "eq", hash)
+      .limit(5)
+    const rows = Array.isArray(data) ? data : data ? [data] : []
+    const row =
+      rows.find((r) => String(r.direction ?? "").toLowerCase() === "out") ??
+      rows.find((r) => String(r.direction ?? "").toLowerCase() === "in") ??
+      rows[0]
+    if (!row) return null
+    const direction = String(row.direction ?? "").toLowerCase()
+    return {
+      easnerTransactionId: row.easner_transaction_id ? String(row.easner_transaction_id) : null,
+      direction: direction === "in" || direction === "out" ? direction : null,
+    }
+  } catch {
+    return null
+  }
+}
+
+export async function findEtidForLedgerRowId(
+  admin: SupabaseClient,
+  transactionId: string | null | undefined,
+): Promise<string | null> {
+  const id = String(transactionId || "").trim()
+  if (!id) return null
+  if (/^ETID/i.test(id)) return id
+  try {
+    const { data } = await admin
+      .from("transactions")
+      .select("easner_transaction_id")
+      .eq("id", id)
+      .maybeSingle()
+    const etid = String(data?.easner_transaction_id ?? "").trim()
+    return etid || null
+  } catch {
+    return null
+  }
 }
 
 export async function findTransactionByFeeTurnkeySendId(
@@ -236,6 +294,8 @@ export async function stampFeeWalletSweepHashOnTransaction(
     userId: string
     businessId: string | null
     relatedEasnerTransactionId?: string | null
+    relatedDirection?: "in" | "out" | null
+    orgTreasuryKind?: OrgTreasuryInboundKind
     sendStatus?: string
     fromAddress?: string | null
     extraMeta?: Record<string, unknown>
@@ -269,6 +329,8 @@ export async function stampFeeWalletSweepHashOnTransaction(
     senderUserId: input.userId,
     senderBusinessId: input.businessId,
     relatedEasnerTransactionId: input.relatedEasnerTransactionId ?? null,
+    relatedDirection: input.relatedDirection ?? "out",
+    orgTreasuryKind: input.orgTreasuryKind,
   })
   return { booked: result.inserted || result.existing }
 }

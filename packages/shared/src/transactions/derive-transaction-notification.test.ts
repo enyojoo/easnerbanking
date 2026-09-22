@@ -234,3 +234,24 @@ describe("deriveTransactionNotification Express deposits", () => {
     expect(descriptor.body.toLowerCase()).not.toContain("stripe")
   })
 })
+
+describe("deriveTransactionNotification org treasury inbound", () => {
+  it("uses Payout fee headlines for a fee-wallet revenue sweep", () => {
+    const descriptor = deriveTransactionNotification({
+      provider: "turnkey",
+      direction: "in",
+      amount: 4.42,
+      currency: "USD",
+      metadata: {
+        source: "turnkey_balance_webhook",
+        fee_wallet_revenue_sweep: true,
+        source_payment_rail: "solana",
+        source_currency: "USDC",
+      },
+      outcome: "success",
+    })
+    expect(descriptor.kind).toBe("payout_fee")
+    expect(descriptor.pushTitle).toBe("Payout fee complete")
+    expect(descriptor.category).toBe("Payout fee")
+  })
+})

@@ -19,6 +19,10 @@ import {
   toEasnerTransactionProductCategory,
 } from "./product-label"
 import {
+  isOrgTreasuryInboundTitle,
+  resolveOrgTreasuryInboundKind,
+} from "./org-treasury-inbound"
+import {
   isVaFundingDeposit,
   isYcFundBalanceDepositMetadata,
   normalizeYcFundBalanceDepositReview,
@@ -73,6 +77,9 @@ export type TransactionNotificationKind =
   | "card_topup"
   | "card_payment"
   | "stablecoin_deposit"
+  | "pay_in_fee"
+  | "payout_fee"
+  | "payout_refund"
   | "stablecoin_transfer"
   | "bank_deposit"
   | "bank_verification_credit"
@@ -628,7 +635,8 @@ export function deriveTransactionNotification(
     payload: input.payload ?? null,
   })
 
-  if (category === "Stablecoin Deposit") {
+  const orgKind = resolveOrgTreasuryInboundKind(meta, input.payload)
+  if (category === "Stablecoin Deposit" || isOrgTreasuryInboundTitle(category)) {
     const metaRecord = meta ?? {}
     const inboundSnapshot = resolveInboundReceiveDetail({
       provider: input.provider,
@@ -655,7 +663,7 @@ export function deriveTransactionNotification(
       return finalizeDescriptor(
         {
           ...base,
-          kind: "stablecoin_deposit",
+          kind: orgKind ?? "stablecoin_deposit",
           amountDisplay,
           body: notification.successBody,
           pushBody: notification.successBody,
@@ -671,12 +679,12 @@ export function deriveTransactionNotification(
     return finalizeDescriptor(
       {
         ...base,
-        kind: "stablecoin_deposit",
+        kind: orgKind ?? "stablecoin_deposit",
         body,
         pushBody: body,
         category,
       },
-      activityLabelForNotification("stablecoin_deposit", category),
+      activityLabelForNotification(orgKind ?? "stablecoin_deposit", category),
     )
   }
 

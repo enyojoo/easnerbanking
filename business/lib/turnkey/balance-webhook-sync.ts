@@ -15,8 +15,16 @@ import { handleDepositOmnibusInbound } from "@/lib/deposit-omnibus/handle-omnibu
 import { createSolanaRpcConnection, isSolanaRpcRateLimitedError } from "@/lib/solana/rpc-connection"
 import { mintForStablecoinAsset } from "@/lib/solana/spl-mints"
 import { resolveSolanaInboundSenderFromTxHash } from "@/lib/turnkey/solana-inbound-sender"
-import { isFeeWalletDestinationAddress } from "@/lib/processing-fee/fee-wallet-inbound-deposit"
+import {
+  findEtidForLedgerRowId,
+  findRelatedByFeeWalletSweepHash,
+  isFeeWalletDestinationAddress,
+} from "@/lib/processing-fee/fee-wallet-inbound-deposit"
 import { findYcCrossBorderFeeWalletRefundSuppression } from "@/lib/yellowcard/yc-ledger"
+import {
+  buildOrgTreasuryInboundWriteMetadata,
+  orgTreasuryKindFromRelatedDirection,
+} from "@easner/shared"
 import { withOrganicStablecoinDepositMetadata } from "@/lib/turnkey/organic-stablecoin-deposit-metadata"
 import { isGridVaSweepTreasurySender } from "@/lib/grid/grid-va-sweep-treasury"
 import { isGridVaTurnkeyDustAmount } from "@/lib/grid/grid-va-turnkey-dust"
@@ -158,6 +166,9 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
   const addr = String(deposit.address || "").trim()
   const feeWalletInbound = isFeeWalletDestinationAddress(addr)
   let feeWalletRevenueSweep = feeWalletInbound
+  let feeWalletRefund = false
+  let relatedEasnerTransactionId: string | null = null
+  let relatedDirection: "in" | "out" | null = null
   let resolvedSender = String(deposit.counterpartyAddress || "").trim() || null
 
   if (feeWalletInbound) {
@@ -175,6 +186,8 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
       ? await isActiveSolanaWalletAddress(admin, resolvedSender)
       : false
     const fromOmnibus = resolvedSender ? isDepositOmnibusAddress(resolvedSender) : false
+    if (fromOmnibus) relatedDirection = "in"
+    else if (fromManagedVault) relatedDirection = "out"
 
     if (!fromManagedVault && !fromOmnibus) {
       const match = await findYcCrossBorderFeeWalletRefundSuppression(admin, {
@@ -202,6 +215,19 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
             updated_at: new Date().toISOString(),
           })
           .eq("id", match.transferId)
+        feeWalletRefund = true
+        feeWalletRevenueSweep = false
+        relatedEasnerTransactionId =
+          String(prior.easner_transaction_id ?? "").trim() ||
+          (await findEtidForLedgerRowId(admin, match.transactionId))
+      }
+    }
+
+    if (!feeWalletRefund && deposit.txHash) {
+      const related = await findRelatedByFeeWalletSweepHash(admin, deposit.txHash)
+      if (related) {
+        relatedEasnerTransactionId = related.easnerTransactionId
+        relatedDirection = related.direction ?? relatedDirection
       }
     }
   }
@@ -253,9 +279,22 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
     }
   }
 
-  if (!feeWalletRevenueSweep && counterpartyAddress && isFeeWalletDestinationAddress(addr)) {
+  if (!feeWalletRevenueSweep && !feeWalletRefund && counterpartyAddress && isFeeWalletDestinationAddress(addr)) {
     feeWalletRevenueSweep = true
   }
+
+  const orgTreasuryFields = feeWalletRefund
+    ? buildOrgTreasuryInboundWriteMetadata({
+        kind: "payout_refund",
+        relatedEasnerTransactionId,
+      })
+    : feeWalletRevenueSweep
+      ? buildOrgTreasuryInboundWriteMetadata({
+          kind: orgTreasuryKindFromRelatedDirection(relatedDirection),
+          relatedEasnerTransactionId,
+        })
+      : {}
+  const forceOrgTreasuryInbound = feeWalletRevenueSweep || feeWalletRefund
 
   let result = await applyTurnkeyInboundLedgerEvent(
     admin,
@@ -282,7 +321,7 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
         source_payment_rail: chain,
         source_currency: asset,
         ...(counterpartyAddress ? { from_address: counterpartyAddress } : {}),
-        ...(feeWalletRevenueSweep ? { fee_wallet_revenue_sweep: true } : {}),
+        ...orgTreasuryFields,
       },
       txHash: deposit.txHash,
       walletAddress: scope.walletAddress,
@@ -293,7 +332,7 @@ export async function applyTurnkeyBalanceWebhookSideEffects(
       chain,
       amountMinor: deposit.amountMinor,
     },
-    feeWalletRevenueSweep ? { forceOrganicStablecoinDeposit: true, skipBalanceDelta: true } : undefined,
+    forceOrgTreasuryInbound ? { forceOrganicStablecoinDeposit: true, skipBalanceDelta: true } : undefined,
   )
 
   if (

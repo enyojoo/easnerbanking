@@ -68,6 +68,7 @@ describe("ensureFeeWalletRevenueDeposit", () => {
       amount: 4.405302,
       fromAddress: "CZL3uoLy1j6Hye3tnrJQ82yWG3nKwcncQfUmquvHxvfC",
       relatedEasnerTransactionId: "ETID77375575",
+      orgTreasuryKind: "pay_in_fee",
     })
 
     expect(result).toEqual({ inserted: true, existing: false })
@@ -82,6 +83,7 @@ describe("ensureFeeWalletRevenueDeposit", () => {
         amount: 4.405302,
         metadata: expect.objectContaining({
           fee_wallet_revenue_sweep: true,
+          org_treasury_kind: "pay_in_fee",
           related_easner_transaction_id: "ETID77375575",
           suppress_in_feed: false,
         }),

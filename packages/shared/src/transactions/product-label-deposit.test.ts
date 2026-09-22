@@ -70,6 +70,23 @@ describe("product labels for deposits", () => {
     ).toBe("Apple Pay deposit")
   })
 
+  it("fee-wallet revenue sweep → Payout fee, not Stablecoin Deposit", () => {
+    expect(
+      toEasnerTransactionPrimaryLabel({
+        provider: "turnkey",
+        direction: "in",
+        metadata: { fee_wallet_revenue_sweep: true },
+      }),
+    ).toBe("Payout fee")
+    expect(
+      toEasnerTransactionProductCategory({
+        provider: "turnkey",
+        direction: "in",
+        metadata: { org_treasury_kind: "pay_in_fee" },
+      }),
+    ).toBe("Pay in fee")
+  })
+
   it("Stripe invoice settlement → Invoice #number (not Bank Deposit)", () => {
     const meta = {
       source: "invoice_stripe",

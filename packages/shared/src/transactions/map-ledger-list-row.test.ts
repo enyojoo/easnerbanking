@@ -90,6 +90,10 @@ describe("inferLedgerListSourceType", () => {
     expect(inferLedgerListSourceType({ source: "turnkey_webhook" })).toBe("liquidation_address")
   })
 
+  it("returns payout_fee for fee-wallet revenue sweeps", () => {
+    expect(inferLedgerListSourceType({ fee_wallet_revenue_sweep: true })).toBe("payout_fee")
+  })
+
   it("returns undefined for unknown", () => {
     expect(inferLedgerListSourceType({})).toBeUndefined()
   })

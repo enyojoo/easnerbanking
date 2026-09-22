@@ -992,6 +992,27 @@ export {
   isEasnerProductSendTitle,
   isEasetagReceiveTitle,
 } from "./transactions/product-label"
+export {
+  ORG_TREASURY_INBOUND_KINDS,
+  ORG_TREASURY_INBOUND_TITLES,
+  buildOrgTreasuryInboundWriteMetadata,
+  classifyOrgTreasuryInboundBackfill,
+  hasOrgTreasuryRefundFlags,
+  isFeeWalletRevenueSweepRecord,
+  isOrgTreasuryInboundKind,
+  isOrgTreasuryInboundTitle,
+  mergeOrgTreasuryInboundMetadataPatch,
+  orgTreasuryInboundTitle,
+  orgTreasuryKindFromRelatedDirection,
+  readRelatedEasnerTransactionId,
+  resolveOrgTreasuryInboundKind,
+  resolveOrgTreasuryInboundTitle,
+} from "./transactions/org-treasury-inbound"
+export type {
+  OrgTreasuryBackfillInput,
+  OrgTreasuryBackfillResult,
+  OrgTreasuryInboundKind,
+} from "./transactions/org-treasury-inbound"
 export type { EasnerLedgerDirection } from "./transactions/product-label"
 export {
   BANK_DEPOSIT_BLOCKED_NEGATIVE_MARGIN_DESCRIPTION,

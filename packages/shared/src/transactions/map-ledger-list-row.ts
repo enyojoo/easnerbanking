@@ -13,6 +13,7 @@
  */
 
 import { recipientIdFromLedgerMetadata } from "./ledger-recipient-id"
+import { resolveOrgTreasuryInboundKind } from "./org-treasury-inbound"
 import { deriveBankDepositInboundDisplayLabel } from "./bank-deposit-inbound-label"
 import { isBankOnrampDepositFlow } from "./bank-deposit-lifecycle"
 import { isGlobalPayoutOffRampOutRow } from "./global-payout-flow"
@@ -105,6 +106,8 @@ export function inferLedgerListSourceType(
   if (String(meta.source ?? "").toLowerCase() === "easetag_p2p") return "easetag_p2p"
   if (String(meta.flow ?? "").toLowerCase() === "express_deposits") return "express_deposits"
   if (isRelayTronDepositMetadata(meta)) return "relay_tron_deposit"
+  const orgKind = resolveOrgTreasuryInboundKind(meta)
+  if (orgKind) return orgKind
   const explicit = String(meta.source_type ?? "").trim()
   if (explicit) return explicit
   if (isBankOnrampDepositFlow(meta)) return "virtual_account"
