@@ -76,6 +76,8 @@ export const qk = {
     root: (scope: Scope) => [...scopeKey(scope), "transactions"] as const,
     list: (scope: Scope, filters: TxFilters = {}) =>
       [...scopeKey(scope), "transactions", "list", filters] as const,
+    summary: (scope: Scope, filters: TxFilters = {}) =>
+      [...scopeKey(scope), "transactions", "summary", filters] as const,
     detail: (scope: Scope, txId: string) =>
       [...scopeKey(scope), "transactions", "detail", txId] as const,
   },

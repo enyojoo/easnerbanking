@@ -242,6 +242,10 @@ describe("attachRealtime INSERT prepend path", () => {
       queryKey: qk.transactions.root(SCOPE),
       refetchType: "inactive",
     })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: [...qk.transactions.root(SCOPE), "summary"],
+      refetchType: "active",
+    })
     expect(invalidateSpy).not.toHaveBeenCalledWith({
       queryKey: qk.transactions.root(SCOPE),
       refetchType: "active",

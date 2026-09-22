@@ -23,7 +23,8 @@ import { DateRangeFilter, type TimePeriod } from "@/components/date-range-filter
 import { cn, formatCurrency } from "@/lib/utils"
 import { withReturnTo } from "@/lib/invoice-navigation"
 import { useTransactionsCached } from "@/hooks/use-transactions-cached"
-import { getDateRange, type TransactionWithSource } from "@/lib/transactions"
+import { useTransactionsSummary } from "@/hooks/queries/use-transactions"
+import { getDateRange, ledgerListRangeParams } from "@/lib/transactions"
 import { formatTransactionRowDateTime, transactionStatusRowPresentation } from "@/lib/transaction-row-present"
 import {
   useBusinessAccountRows,
@@ -35,7 +36,7 @@ import {
   hasHistoricalBaseCurrencyMismatch,
   REPORTING_FX_BASE_CHANGE_NOTE,
 } from "@/lib/fx/base-currency-display"
-import { isSuccessfulTransactionStatus, resolveReportingAmountForFeed, accountRestrictionDepositsBlockedCopy } from "@easner/shared"
+import { accountRestrictionDepositsBlockedCopy } from "@easner/shared"
 import { useAccountRestriction } from "@/hooks/use-account-restriction"
 
 export function DashboardPageClient() {
@@ -69,7 +70,14 @@ export function DashboardPageClient() {
 
   const MASK = "******"
 
-  const { start, end } = getDateRange({ timePeriod, customDateRange })
+  const dateRangeOptions = { timePeriod, customDateRange }
+  const { start, end } = getDateRange(dateRangeOptions)
+  const listRange = ledgerListRangeParams(dateRangeOptions)
+  const moneyFlow = useTransactionsSummary({
+    from: listRange.from,
+    to: listRange.to,
+    baseCurrency,
+  })
 
   const filteredTransactions = useMemo(() => {
     return rows.filter((t) => {
@@ -99,21 +107,9 @@ export function DashboardPageClient() {
     return amountAbs * rate
   }
 
-  const amountInBase = (t: TransactionWithSource, targetBase: string): number => {
-    const reporting = resolveReportingAmountForFeed(
-      t as unknown as Record<string, unknown>,
-      targetBase,
-      fxRates,
-    )
-    return Math.abs(reporting?.reportingAmount ?? 0)
-  }
-
-  const moneyIn = filteredTransactions
-    .filter((t) => t.direction === "credit" && isSuccessfulTransactionStatus(t.status))
-    .reduce((sum, t) => sum + amountInBase(t, baseCurrency), 0)
-  const moneyOut = filteredTransactions
-    .filter((t) => t.direction === "debit" && isSuccessfulTransactionStatus(t.status))
-    .reduce((sum, t) => sum + amountInBase(t, baseCurrency), 0)
+  const moneyIn = moneyFlow.data?.moneyIn ?? 0
+  const moneyOut = moneyFlow.data?.moneyOut ?? 0
+  const showMoneyFlowPending = moneyFlow.isPending && moneyFlow.data == null
 
   const showBaseChangeNote = useMemo(
     () => hasHistoricalBaseCurrencyMismatch(filteredTransactions, baseCurrency),
@@ -269,7 +265,11 @@ export function DashboardPageClient() {
                       )}
                     >
                       {balancesVisible ?
-                        `+${formatCurrency(moneyIn, summaryCurrency)}`
+                        showMoneyFlowPending ? (
+                          <Skeleton className="h-6 w-28" />
+                        ) : (
+                          `+${formatCurrency(moneyIn, summaryCurrency)}`
+                        )
                       : MASK}
                     </span>
                   </p>
@@ -289,7 +289,11 @@ export function DashboardPageClient() {
                       )}
                     >
                       {balancesVisible ?
-                        `-${formatCurrency(moneyOut, summaryCurrency)}`
+                        showMoneyFlowPending ? (
+                          <Skeleton className="h-6 w-28" />
+                        ) : (
+                          `-${formatCurrency(moneyOut, summaryCurrency)}`
+                        )
                       : MASK}
                     </span>
                   </p>

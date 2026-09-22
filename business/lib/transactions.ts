@@ -26,6 +26,18 @@ export interface DateRangeOptions {
   customDateRange: { from: Date | undefined; to: Date | undefined }
 }
 
+function startOfLocalDay(value: Date): Date {
+  const next = new Date(value)
+  next.setHours(0, 0, 0, 0)
+  return next
+}
+
+function endOfLocalDay(value: Date): Date {
+  const next = new Date(value)
+  next.setHours(23, 59, 59, 999)
+  return next
+}
+
 /**
  * Compute date range from time period and custom range.
  * Shared across dashboard, cards, and transactions pages.
@@ -36,11 +48,18 @@ export function getDateRange(options: DateRangeOptions): { start: Date; end: Dat
   const startDate = new Date()
 
   if (timePeriod === "all") {
-    return { start: new Date(0), end: now }
+    return { start: new Date(0), end: endOfLocalDay(now) }
   }
 
-  if (timePeriod === "custom" && customDateRange.from && customDateRange.to) {
-    return { start: customDateRange.from, end: customDateRange.to }
+  if (timePeriod === "custom") {
+    if (customDateRange.from && customDateRange.to) {
+      const start = startOfLocalDay(customDateRange.from)
+      const end = endOfLocalDay(customDateRange.to)
+      return start.getTime() <= end.getTime()
+        ? { start, end }
+        : { start: end, end: start }
+    }
+    return { start: new Date(0), end: endOfLocalDay(now) }
   }
 
   switch (timePeriod) {
@@ -59,6 +78,19 @@ export function getDateRange(options: DateRangeOptions): { start: Date; end: Dat
   }
 
   return { start: startDate, end: now }
+}
+
+/**
+ * Query params for the ledger list / money-flow summary.
+ * All time omits bounds so pagination and totals cover the full feed.
+ */
+export function ledgerListRangeParams(options: DateRangeOptions): { from?: string; to?: string } {
+  if (options.timePeriod === "all") return {}
+  if (options.timePeriod === "custom" && (!options.customDateRange.from || !options.customDateRange.to)) {
+    return {}
+  }
+  const { start, end } = getDateRange(options)
+  return { from: start.toISOString(), to: end.toISOString() }
 }
 
 /**

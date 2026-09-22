@@ -1,7 +1,7 @@
 "use client"
 
 import type { InfiniteData, QueryClient } from "@tanstack/react-query"
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query"
+import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query"
 import { qk, scopeKey, type TxFilters, type Scope, pollingIntervalFor } from "@easner/shared"
 import { apiFetch, ApiError } from "@/lib/query/api-client"
 import type { TransactionWithSource } from "@/lib/transactions"
@@ -229,4 +229,52 @@ export function useTransactionDetail(txId: string | null) {
 
 export function useTransactionsFirstPageKey(scope: Scope, filters: TxFilters = {}) {
   return qk.transactions.list(scope, { ...filters, limit: BUSINESS_TRANSACTIONS_LIST_LIMIT })
+}
+
+export type TransactionsMoneyFlowSummary = {
+  moneyIn: number
+  moneyOut: number
+  count: number
+  successfulCount: number
+  currency: string
+  from: string | null
+  to: string | null
+}
+
+/**
+ * Period money in / out over the full filtered feed — not the visible page.
+ */
+export function useTransactionsSummary(
+  filters: Pick<TxFilters, "from" | "to"> & { baseCurrency?: string } = {},
+) {
+  const { scope } = useScope()
+  const realtimeHealth = useRealtimeHealth()
+  const tabVisible = useDocumentVisibility()
+  const base = String(filters.baseCurrency ?? "USD").trim().toUpperCase() || "USD"
+  const summaryFilters: TxFilters = {
+    from: filters.from ?? null,
+    to: filters.to ?? null,
+    base,
+  }
+  return useQuery({
+    queryKey: scope ? qk.transactions.summary(scope, summaryFilters) : ["transactions", "summary", "disabled"],
+    enabled: Boolean(scope),
+    queryFn: () =>
+      apiFetch<TransactionsMoneyFlowSummary>("/api/transactions/summary", {
+        query: {
+          from: filters.from ?? undefined,
+          to: filters.to ?? undefined,
+          base,
+        },
+        headers: { ...LEDGER_BUSINESS_HEADERS },
+      }),
+    placeholderData: keepPreviousData,
+    staleTime: 90_000,
+    gcTime: 30 * 60_000,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
+    refetchInterval: tabVisible ? pollingIntervalFor("operational", realtimeHealth) : false,
+    refetchIntervalInBackground: false,
+    meta: { safePersist: true, webPersist: "reduced", freshness: "operational" },
+  })
 }

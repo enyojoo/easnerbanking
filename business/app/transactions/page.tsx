@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
-import { getDateRange, type TransactionWithSource } from "@/lib/transactions"
+import { getDateRange, ledgerListRangeParams } from "@/lib/transactions"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -20,8 +20,8 @@ import { DateRangeFilter, type TimePeriod } from "@/components/date-range-filter
 import { Button } from "@/components/ui/button"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { useTransactionsCached } from "@/hooks/use-transactions-cached"
+import { useTransactionsSummary } from "@/hooks/queries/use-transactions"
 import { useBusinessProfile } from "@/lib/use-business-profile"
-import { useFxRates } from "@/hooks/queries"
 import { formatTransactionRowDateTime, transactionStatusRowPresentation } from "@/lib/transaction-row-present"
 import { useTurnkeyLedgerRepair } from "@/hooks/use-turnkey-ledger-repair"
 import { TransactionDetailPrefetchLink } from "@/components/transactions/transaction-detail-prefetch-link"
@@ -30,7 +30,6 @@ import {
   hasHistoricalBaseCurrencyMismatch,
   REPORTING_FX_BASE_CHANGE_NOTE,
 } from "@/lib/fx/base-currency-display"
-import { isSuccessfulTransactionStatus, resolveReportingAmountForFeed } from "@easner/shared"
 import { PlatformTransactionsPage } from "@/components/console/platform-transactions-page"
 import { useAppSurface } from "@/lib/use-app-surface"
 
@@ -77,19 +76,6 @@ export default function TransactionsPage() {
 }
 
 function BankingTransactionsPage() {
-  const {
-    data: rows,
-    loading: listLoading,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useTransactionsCached()
-  const showListSkeleton = listLoading && rows.length === 0
-  useTurnkeyLedgerRepair()
-  const { baseCurrency: profileBaseCurrency } = useBusinessProfile()
-  const baseCurrencyCode = (profileBaseCurrency || "USD").toUpperCase()
-  const searchParams = useSearchParams()
-  const router = useRouter()
   const [statusFilter, setStatusFilter] = useState("all")
   const [searchTerm, setSearchTerm] = useState("")
   const [timePeriod, setTimePeriod] = useState<TimePeriod>("all")
@@ -97,15 +83,33 @@ function BankingTransactionsPage() {
     from: undefined,
     to: undefined,
   })
+  const listRange = ledgerListRangeParams({ timePeriod, customDateRange })
+  const {
+    data: rows,
+    loading: listLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useTransactionsCached(listRange)
+  const showListSkeleton = listLoading && rows.length === 0
+  useTurnkeyLedgerRepair()
+  const { baseCurrency: profileBaseCurrency } = useBusinessProfile()
+  const baseCurrencyCode = (profileBaseCurrency || "USD").toUpperCase()
+  const searchParams = useSearchParams()
+  const router = useRouter()
   const [displayCount, setDisplayCount] = useState(10)
-  const { data: fxRates = [] } = useFxRates()
+  const moneyFlow = useTransactionsSummary({
+    from: listRange.from,
+    to: listRange.to,
+    baseCurrency: baseCurrencyCode,
+  })
 
   useEffect(() => {
     const status = searchParams.get("status")
     const period = searchParams.get("period")
     const search = searchParams.get("search")
     if (status && ["completed", "pending", "processing", "failed"].includes(status)) setStatusFilter(status)
-    if (period && ["7d", "30d", "90d", "1y", "custom"].includes(period)) setTimePeriod(period as TimePeriod)
+    if (period && ["all", "7d", "30d", "90d", "1y", "custom"].includes(period)) setTimePeriod(period as TimePeriod)
     if (search) setSearchTerm(search)
   }, [searchParams])
 
@@ -152,23 +156,9 @@ function BankingTransactionsPage() {
   const hasMoreLocal = displayCount < filteredTransactions.length
   const hasMore = hasMoreLocal || Boolean(hasNextPage)
 
-  const reportingFor = (t: TransactionWithSource) =>
-    resolveReportingAmountForFeed(
-      t as unknown as Record<string, unknown>,
-      baseCurrencyCode,
-      fxRates,
-    )
-
-  const amountInBase = (t: TransactionWithSource): number =>
-    Math.abs(reportingFor(t)?.reportingAmount ?? 0)
-
-  const totalCredit = filteredTransactions
-    .filter((t) => t.direction === "credit" && isSuccessfulTransactionStatus(t.status))
-    .reduce((sum, t) => sum + amountInBase(t), 0)
-  const totalDebit = filteredTransactions
-    .filter((t) => t.direction === "debit" && isSuccessfulTransactionStatus(t.status))
-    .reduce((sum, t) => sum + amountInBase(t), 0)
-
+  const totalCredit = moneyFlow.data?.moneyIn ?? 0
+  const totalDebit = moneyFlow.data?.moneyOut ?? 0
+  const showMoneyFlowPending = moneyFlow.isPending && moneyFlow.data == null
   const summaryCurrency = baseCurrencyCode
 
   const showBaseChangeNote = useMemo(
@@ -191,6 +181,9 @@ function BankingTransactionsPage() {
   }
 
   const hasActiveFilters = statusFilter !== "all" || searchTerm.trim() !== ""
+  const resultCount = hasActiveFilters
+    ? filteredTransactions.length
+    : (moneyFlow.data?.count ?? filteredTransactions.length)
 
   return (
     <div className="space-y-6">
@@ -248,7 +241,7 @@ function BankingTransactionsPage() {
 
       <Card>
         <CardContent className="p-6">
-          {showListSkeleton ? (
+          {showListSkeleton || showMoneyFlowPending ? (
             <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
               <div className="space-y-2 text-center">
                 <div className="mx-auto h-4 w-24 animate-pulse rounded bg-muted" />
@@ -377,7 +370,7 @@ function BankingTransactionsPage() {
       </Card>
 
       <div className="text-sm text-muted-foreground">
-        {showListSkeleton ? "–" : `${filteredTransactions.length} result${filteredTransactions.length !== 1 ? "s" : ""}`}
+        {showListSkeleton ? "–" : `${resultCount} result${resultCount !== 1 ? "s" : ""}`}
       </div>
     </div>
   )

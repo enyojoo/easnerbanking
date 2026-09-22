@@ -2,6 +2,7 @@
 
 import { useMemo } from "react"
 import { useIsRestoring } from "@tanstack/react-query"
+import type { TxFilters } from "@easner/shared"
 import type { TransactionWithSource } from "@/lib/transactions"
 import { useTransactionsList } from "@/hooks/queries/use-transactions"
 import { useScope } from "@/lib/query/scope"
@@ -18,11 +19,11 @@ import { formatUserFacingFetchError, isFatalQueryFailure } from "@/lib/query/fet
  * `useTransactionsList` directly from `@/hooks/queries`.
  */
 
-export function useTransactionsCached() {
+export function useTransactionsCached(filters: TxFilters = {}) {
   const { scope } = useScope()
   const postUnlockResume = useIsPostUnlockResumeActive()
   const isRestoring = useIsRestoring()
-  const query = useTransactionsList()
+  const query = useTransactionsList(filters)
   const flattened = useMemo<TransactionWithSource[]>(() => {
     const pages = query.data?.pages ?? []
     return pages.flatMap((p) => p.transactions ?? [])

@@ -289,6 +289,10 @@ function scheduleTransactionInsert(
       qc.invalidateQueries({ queryKey: key, refetchType: "active" })
       return
     }
+    qc.invalidateQueries({
+      queryKey: [...qk.transactions.root(scope), "summary"],
+      refetchType: "active",
+    })
     scheduleInactiveTransactionListRevalidation(qc, scope)
   })
 }
@@ -331,6 +335,12 @@ function scheduleTransactionRowPatch(
         refetchType: "active",
       })
     }
+    const refreshActiveSummary = () => {
+      qc.invalidateQueries({
+        queryKey: [...key, "summary"],
+        refetchType: "active",
+      })
+    }
 
     let mapped: unknown | null = null
     if (mapTransactionInsert) {
@@ -346,12 +356,14 @@ function scheduleTransactionRowPatch(
       const mappedId = idFn(mapped)
       if (mappedId && patchRowInPages(qc, key, mappedId, () => mapped, idFn)) {
         refreshActiveDetail()
+        refreshActiveSummary()
         return
       }
     }
 
     if (tryPartialTransactionPatch(qc, key, row, mapped, idFn)) {
       refreshActiveDetail()
+      refreshActiveSummary()
       return
     }
 

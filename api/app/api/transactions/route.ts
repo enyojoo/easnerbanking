@@ -12,6 +12,10 @@ import {
 } from "@/lib/transactions/ledger-list-cursor"
 import { expireStaleYcPayInTransfers } from "@/lib/yellowcard/quote-key"
 import { enrichYcFundBalanceOfficeRows } from "@/lib/admin/enrich-yc-fund-balance-office-rows"
+import {
+  applyLedgerListCreatedAtRange,
+  parseLedgerListIsoBound,
+} from "@/lib/transactions/ledger-list-range"
 
 const DEFAULT_LIST_LIMIT = 50
 const MAX_LIST_LIMIT = 100
@@ -42,6 +46,8 @@ export async function GET(request: Request) {
   const limitRaw = Number.parseInt(url.searchParams.get("limit") || String(DEFAULT_LIST_LIMIT), 10)
   const limit = Math.min(MAX_LIST_LIMIT, Math.max(1, Number.isFinite(limitRaw) ? limitRaw : DEFAULT_LIST_LIMIT))
   const cursor = decodeLedgerListCursor(url.searchParams.get("cursor"))
+  const from = parseLedgerListIsoBound(url.searchParams.get("from"))
+  const to = parseLedgerListIsoBound(url.searchParams.get("to"))
 
   const admin = createSupabaseAdmin()
   // Expire stale YC pay-ins AFTER responding: this maintenance job (a select,
@@ -65,6 +71,8 @@ export async function GET(request: Request) {
   } else {
     query = query.eq("user_id", user.id).is("business_id", null)
   }
+
+  query = applyLedgerListCreatedAtRange(query, from, to)
 
   if (cursor) {
     query = applyLedgerListCursorFilter(query, cursor)

@@ -9,11 +9,12 @@ export {
   useTransactionsList,
   useTransactionDetail,
   useTransactionsFirstPageKey,
+  useTransactionsSummary,
   fetchBusinessTransactionDetail,
   getTransactionDetailPrefetchOptions,
   findTransactionInCachedLists,
 } from "./use-transactions"
-export type { TransactionsPage } from "./use-transactions"
+export type { TransactionsPage, TransactionsMoneyFlowSummary } from "./use-transactions"
 
 export { useApprovalsQueue } from "./use-approvals"
 export type { ApprovalRow } from "./use-approvals"

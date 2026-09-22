@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react"
 import { TransactionDetailPrefetchLink } from "@/components/transactions/transaction-detail-prefetch-link"
 import { transactionWebDetailPath } from "@/lib/easner-transaction-id"
-import { getDateRange, filterTransactions, type TransactionWithSource } from "@/lib/transactions"
+import { getDateRange, ledgerListRangeParams, filterTransactions } from "@/lib/transactions"
 import { useTransactionsCached } from "@/hooks/use-transactions-cached"
 import { Button } from "@/components/ui/button"
 import { Plus, Eye, Settings, Snowflake, ArrowUpRight, ArrowDownLeft, AlertCircle } from "lucide-react"
@@ -21,8 +21,6 @@ export default function CardsPage() {
   useEffect(() => {
     analytics.trackCardTabViewed()
   }, [])
-  const { data: rows, loading: listLoading } = useTransactionsCached()
-  const showListSkeleton = listLoading && rows.length === 0
   const [selectedCard, setSelectedCard] = useState<Card | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -32,6 +30,10 @@ export default function CardsPage() {
     from: undefined,
     to: undefined,
   })
+  const { data: rows, loading: listLoading } = useTransactionsCached(
+    ledgerListRangeParams({ timePeriod, customDateRange }),
+  )
+  const showListSkeleton = listLoading && rows.length === 0
 
   const cards: Card[] = []
 
