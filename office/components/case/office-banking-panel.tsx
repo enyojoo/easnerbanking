@@ -1,13 +1,9 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { toast } from "sonner"
-import { useQueryClient } from "@tanstack/react-query"
+import { useMemo } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { officeFetch } from "@/lib/api-client"
-import { officeKeys } from "@/lib/query/keys"
 import {
   consumerBankKycRail,
   officeProviderLabel,
@@ -26,8 +22,6 @@ import {
   resolveBusinessLedgerPayInProvider,
   resolveUsPayInModeFromCorridor,
 } from "@easner/shared"
-
-const EXTRA_CURRENCY_CHOICES = ["GBP"] as const
 
 function formatBalance(amount: number, currency: string): string {
   return `${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`
@@ -71,9 +65,7 @@ export function OfficeBankingPanel({
   bridgeApproved?: boolean
   ownerUserId?: string | null
 }) {
-  const queryClient = useQueryClient()
   const corridorsQuery = useOfficePayoutCorridors()
-  const [busy, setBusy] = useState<string | null>(null)
 
   const consumerRail = user ? consumerBankKycRail(user) : null
   const hasBridgeCustomer = Boolean(user?.bridge_customer_id)
@@ -88,30 +80,6 @@ export function OfficeBankingPanel({
     }
     return [...set].sort()
   }, [banking, kind])
-
-  async function invalidate() {
-    void queryClient.invalidateQueries({ queryKey: officeKeys.subjectBanking(kind, subjectId) })
-    void queryClient.invalidateQueries({ queryKey: officeKeys.users() })
-    void queryClient.invalidateQueries({ queryKey: officeKeys.businesses() })
-  }
-
-  async function patchExtras(next: string[]) {
-    setBusy("extras")
-    try {
-      const r = await officeFetch(
-        `/api/admin/office/subjects/${kind}/${encodeURIComponent(subjectId)}/extra-currencies`,
-        { method: "PATCH", body: JSON.stringify({ currencies: next }) },
-      )
-      const d = (await r.json()) as { error?: string }
-      if (!r.ok) throw new Error(d.error || "Could not update extra currencies")
-      toast.success("Extra currencies saved.")
-      await invalidate()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not update extra currencies")
-    } finally {
-      setBusy(null)
-    }
-  }
 
   if (loading) {
     return (
@@ -133,8 +101,6 @@ export function OfficeBankingPanel({
       </div>
     )
   }
-
-  const extras = (banking?.extraCurrencies ?? []).map((code) => code.toUpperCase())
 
   return (
     <div className="space-y-4">
@@ -242,40 +208,6 @@ export function OfficeBankingPanel({
         )
       })}
 
-      <OfficeSection title="Extra currencies" divide={false}>
-        {extras.length === 0 ? (
-          <p className="text-sm text-muted-foreground">None enabled.</p>
-        ) : (
-          extras.map((code) => (
-            <div key={code} className="flex items-center justify-between gap-2 text-sm">
-              <span className="font-mono">{code}</span>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                disabled={busy === "extras"}
-                onClick={() => void patchExtras(extras.filter((c) => c !== code))}
-              >
-                Remove
-              </Button>
-            </div>
-          ))
-        )}
-        <div className="flex flex-wrap gap-2">
-          {EXTRA_CURRENCY_CHOICES.filter((code) => !extras.includes(code)).map((code) => (
-            <Button
-              key={code}
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={busy === "extras"}
-              onClick={() => void patchExtras([...extras, code])}
-            >
-              Add {code}
-            </Button>
-          ))}
-        </div>
-      </OfficeSection>
       {!hasBridgeCustomer && kind === "user" && consumerRail === "bridge" ? (
         <p className="text-xs text-muted-foreground">
           Bridge geo with no customer yet
