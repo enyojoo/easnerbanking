@@ -16,6 +16,7 @@ import { OfficeCopyChip, OfficeCopyValue } from "./office-copy-value"
 import { OfficePartnerSync } from "./office-partner-sync"
 import { OfficeExpressDepositsSection } from "./office-express-deposits"
 import { OfficeDetailRow, OfficeSection } from "./office-detail-grid"
+import { OfficeIdentityPanel } from "./office-identity-panel"
 import { ProcessingFeeOverrideSection } from "@/components/platform-control/processing-fee-override-section"
 import { CheckoutFeeOverrideSection } from "@/components/platform-control/checkout-fee-override-section"
 import { WalletSendComplianceOfficePanel } from "@/components/wallet-send-compliance-office-panel"
@@ -57,6 +58,13 @@ const TABS = [
   { id: "activity", label: "Activity" },
   { id: "pricing", label: "Pricing" },
 ] as const
+
+function joinOfficeAddress(parts: Array<string | null | undefined>): string {
+  return parts
+    .map((part) => String(part ?? "").trim())
+    .filter(Boolean)
+    .join(", ")
+}
 
 function ownerLabel(row: OfficeBusinessRow): string {
   if (row.owner_name?.trim()) return row.owner_name.trim()
@@ -182,17 +190,21 @@ export function BusinessCase({ businessId }: { businessId: string }) {
   }
 
   const easetag = business.easetag ?? business.slug
-  const address = [
+  const address = joinOfficeAddress([
     business.address_line1,
     business.address_line2,
     business.city,
     business.state,
     business.postal_code,
     business.country,
-  ]
-    .map((p) => String(p ?? "").trim())
-    .filter(Boolean)
-    .join(", ")
+  ])
+  const registeredAddress = joinOfficeAddress([
+    business.registered_address_line1,
+    business.registered_address_city,
+    business.registered_address_state,
+    business.registered_address_postal_code,
+    business.registration_country || business.country,
+  ])
 
   return (
     <Tabs value={tab.value} onValueChange={tab.onValueChange} className="-mx-4 -mt-6 sm:-mx-6 lg:-mx-8">
@@ -266,6 +278,10 @@ export function BusinessCase({ businessId }: { businessId: string }) {
               <OfficeSection title="Registration">
                 <OfficeCopyValue label="Registration number" value={business.registration_number} />
                 <OfficeCopyValue label="Tax ID" value={business.tax_id} />
+                <OfficeDetailRow label="Registered address">{registeredAddress || "–"}</OfficeDetailRow>
+                <OfficeDetailRow label="Registration country">
+                  {business.registration_country?.trim() || business.country?.trim() || "–"}
+                </OfficeDetailRow>
               </OfficeSection>
               <OfficeSection title="Contact">
                 <OfficeDetailRow label="Website">
@@ -286,6 +302,11 @@ export function BusinessCase({ businessId }: { businessId: string }) {
                 <OfficeDetailRow label="Support phone">{business.support_phone?.trim() || "–"}</OfficeDetailRow>
               </OfficeSection>
             </div>
+            {owner ? (
+              <div className="mt-4">
+                <OfficeIdentityPanel user={owner} profileTitle="Owner" />
+              </div>
+            ) : null}
           </OfficeCaseTabPanel>
           <OfficeCaseTabPanel value="kyb">
             <div className="space-y-4">

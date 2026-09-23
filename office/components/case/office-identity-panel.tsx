@@ -10,9 +10,11 @@ import { isBridgeNewYorkResidence, isBridgeOnboardableResidence } from "@easner/
 export function OfficeIdentityPanel({
   user,
   showBankRail = true,
+  profileTitle = "Profile",
 }: {
   user: OfficeIdentityUser
   showBankRail?: boolean
+  profileTitle?: string
 }) {
   const country = user.kyc_address_country || user.residence_country
   const geo = { countryCode: country, state: user.kyc_address_state }
@@ -30,7 +32,7 @@ export function OfficeIdentityPanel({
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <OfficeSection title="Profile">
+      <OfficeSection title={profileTitle}>
         <OfficeDetailRow label="Name">{displayText(user.full_name)}</OfficeDetailRow>
         <OfficeDetailRow label="Email">{displayText(user.email)}</OfficeDetailRow>
         <OfficeDetailRow label="Phone">{displayText(user.phone)}</OfficeDetailRow>

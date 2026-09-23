@@ -185,8 +185,9 @@ function personName(source: Record<string, unknown>): string | null {
     pickString(source, "middle_name", "middleName"),
     pickString(source, "last_name", "lastName"),
   ].filter((part): part is string => Boolean(part))
-  if (!parts.length) return null
-  return formatDisplayPersonName(parts.join(" "))
+  const combined = parts.length ? parts.join(" ") : pickString(source, "full_name", "fullName")
+  if (!combined) return null
+  return formatDisplayPersonName(combined)
 }
 
 function applyIdentity(
@@ -265,7 +266,11 @@ export function parseBridgeCustomerForBusiness(
   options?: { approved?: boolean; occurredAt?: string },
 ): ParsedBridgeCustomerForBusiness {
   const out: ParsedBridgeCustomerForBusiness = {}
-  const legalName = pickString(customer, "business_legal_name", "businessLegalName")
+  const legalName =
+    pickString(customer, "business_legal_name", "businessLegalName") ??
+    (String(customer.type ?? "").trim().toLowerCase() === "business"
+      ? pickString(customer, "full_name", "fullName")
+      : null)
   if (legalName) out.name = legalName
   const description = pickString(customer, "business_description", "businessDescription")
   if (description) out.description = description

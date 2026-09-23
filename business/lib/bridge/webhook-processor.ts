@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { persistVerificationStatus } from "@/lib/compliance/verification-store"
 import { getBridgeCustomer, resolveBridgeCustomerKycStatus } from "./kyc-links"
+import { mergeBridgeCustomerRecords } from "./merge-bridge-customer-profile"
 import { persistBridgeCustomerProfile } from "./persist-bridge-customer-profile"
 import { provisionBridgeVirtualAccounts } from "./provision-after-approval"
 import { handleBridgeVaInboundActivity, resolveBridgeSubject } from "./va-inbound-webhook"
@@ -39,10 +40,11 @@ async function handleBridgeKycWebhook(
   const customerId = String(data.customer_id ?? payload.customer_id ?? data.id ?? "").trim()
   if (!customerId) return
   const remote = await getBridgeCustomer(customerId).catch(() => null)
-  const customer = {
-    ...data,
-    ...(remote ?? {}),
-  } as Record<string, unknown>
+  const remoteRecord = (remote ?? {}) as Record<string, unknown>
+  const customer = mergeBridgeCustomerRecords(
+    { ...remoteRecord, id: remoteRecord.id ?? customerId },
+    data,
+  )
   const endorsements = Array.isArray(customer.endorsements)
     ? customer.endorsements.filter((row): row is { name?: string; status?: string } => Boolean(row) && typeof row === "object")
     : undefined

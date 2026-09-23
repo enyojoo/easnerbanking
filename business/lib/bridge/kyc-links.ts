@@ -354,6 +354,29 @@ export async function findBridgeCustomerByEmail(
   return full ? { ...picked, ...asCustomerSummary(full) } : picked
 }
 
+export async function listBridgeAssociatedPersons(customerId: string): Promise<Array<Record<string, unknown>>> {
+  const payload = await bridgeFetch<unknown>({
+    method: "GET",
+    path: `/customers/${encodeURIComponent(customerId)}/associated_persons`,
+  })
+  const rows = Array.isArray(payload)
+    ? payload
+    : payload && typeof payload === "object" && Array.isArray((payload as { data?: unknown }).data)
+      ? (payload as { data: unknown[] }).data
+      : []
+  return rows.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === "object")
+}
+
+export async function getBridgeAssociatedPerson(
+  customerId: string,
+  associatedPersonId: string,
+): Promise<Record<string, unknown>> {
+  return bridgeFetch({
+    method: "GET",
+    path: `/customers/${encodeURIComponent(customerId)}/associated_persons/${encodeURIComponent(associatedPersonId)}`,
+  })
+}
+
 export async function getBridgeCustomer(customerId: string): Promise<{
   id: string
   status?: string

@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { getBridgeCustomer, resolveBridgeCustomerKycStatus } from "./kyc-links"
+import { persistBridgeCustomerProfile } from "./persist-bridge-customer-profile"
 import { persistBridgeVirtualAccount } from "./persist-virtual-accounts"
 import {
   type BridgeVirtualAccount,
@@ -117,6 +119,18 @@ export async function provisionBridgeVirtualAccounts(input: {
 }): Promise<{ usd: boolean; eur: boolean }> {
   const customerId = input.customerId.trim()
   if (!customerId) return { usd: false, eur: false }
+
+  const customer = await getBridgeCustomer(customerId).catch(() => null)
+  if (customer) {
+    await persistBridgeCustomerProfile(input.admin, {
+      customer: customer as Record<string, unknown>,
+      status: resolveBridgeCustomerKycStatus(customer),
+      userId: input.userId,
+      businessId: input.businessId,
+    }).catch((error) => {
+      console.warn("[bridge] customer profile persist failed", error)
+    })
+  }
 
   if (input.ensureTurnkey !== false) {
     if (input.businessId) {

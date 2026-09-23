@@ -103,4 +103,15 @@ describe("parseBridgeCustomerForBusiness", () => {
     expect(person.kyc_id_number).toBe("A123")
     expect(person.kyc_id_issuing_country).toBe("NG")
   })
+
+  it("uses the KYC link legal name when Bridge omits business_legal_name", () => {
+    const parsed = parseBridgeCustomerForBusiness({
+      type: "business",
+      full_name: "Ada Labs Ltd",
+      registered_address: { subdivision: "Lagos", country: "NGA" },
+    })
+    expect(parsed.name).toBe("Ada Labs Ltd")
+    expect(parsed.state).toBe("Lagos")
+    expect(parsed.country).toBe("Nigeria")
+  })
 })

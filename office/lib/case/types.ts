@@ -20,6 +20,11 @@ export type OfficeBusinessRow = {
   city?: string | null
   state?: string | null
   postal_code?: string | null
+  registered_address_line1?: string | null
+  registered_address_city?: string | null
+  registered_address_state?: string | null
+  registered_address_postal_code?: string | null
+  registration_country?: string | null
   enabled_extra_account_currencies?: string[]
   grid_customer_id?: string | null
   verification_status?: string | null
