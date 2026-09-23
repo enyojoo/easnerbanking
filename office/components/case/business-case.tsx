@@ -42,6 +42,7 @@ import {
 import { OFFICE_LIST_STALE_MS } from "@/hooks/queries/constants"
 import { officeKeys } from "@/lib/query/keys"
 import { expressDepositsOfficeStatus } from "@/lib/case/express-deposits"
+import { bridgeRejectionCopy } from "@/lib/case/bridge-rejection"
 import { officeStatusIsApproved, officeVerificationBadgeVariant } from "@/lib/case/status"
 import type { OfficeBusinessRow, OfficeCaseChip } from "@/lib/case/types"
 import { useOfficeCaseTab } from "@/lib/case/use-case-tab"
@@ -64,6 +65,17 @@ function joinOfficeAddress(parts: Array<string | null | undefined>): string {
     .map((part) => String(part ?? "").trim())
     .filter(Boolean)
     .join(", ")
+}
+
+function BridgeRejectionSection({ reasons }: { reasons: unknown }) {
+  const copy = bridgeRejectionCopy(reasons)
+  if (!copy.customer && !copy.compliance) return null
+  return (
+    <OfficeSection title="Bridge rejection">
+      {copy.customer ? <OfficeDetailRow label="Customer">{copy.customer}</OfficeDetailRow> : null}
+      {copy.compliance ? <OfficeDetailRow label="Compliance">{copy.compliance}</OfficeDetailRow> : null}
+    </OfficeSection>
+  )
 }
 
 function ownerLabel(row: OfficeBusinessRow): string {
@@ -310,6 +322,9 @@ export function BusinessCase({ businessId }: { businessId: string }) {
           </OfficeCaseTabPanel>
           <OfficeCaseTabPanel value="kyb">
             <div className="space-y-4">
+              <BridgeRejectionSection
+                reasons={business.bridge_kyc_rejection_reasons ?? business.verification_rejection_reasons}
+              />
               <OfficeKybPacket
                 businessId={business.id}
                 packet={kybQuery.data}

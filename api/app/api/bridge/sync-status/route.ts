@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { getBridgeCustomer, findBridgeCustomerByEmail, resolveBridgeCustomerKycStatus } from "@/lib/bridge/kyc-links"
-import { persistVerificationStatus } from "@/lib/compliance/verification-store"
+import { recordBridgeVerificationOutcome } from "@/lib/bridge/record-bridge-verification"
 import { provisionBridgeVirtualAccounts } from "@/lib/bridge/provision-after-approval"
 import { persistBridgeCustomerProfile } from "@/lib/bridge/persist-bridge-customer-profile"
 import { requireAuth, requireBridgeEnv } from "../_helpers"
@@ -61,27 +61,18 @@ export async function POST(request: Request) {
   const customer = await getBridgeCustomer(customerId)
   const status = resolveBridgeCustomerKycStatus(customer)
 
-  if (businessId) {
-    await persistVerificationStatus(admin, {
-      kind: "business",
-      businessId,
-      userId: user.id,
-      provider: "bridge",
-      status,
-      bridgeCustomerId: customerId,
-      extra:
-        String(customer.tos_status ?? "").toLowerCase() === "approved"
-          ? { bridge_tos_status: "approved" }
-          : undefined,
-    })
-  } else {
-    await persistVerificationStatus(admin, {
-      kind: "individual",
-      userId: user.id,
-      provider: "bridge",
-      status,
-      bridgeCustomerId: customerId,
-    })
+  await recordBridgeVerificationOutcome(admin, {
+    userId: user.id,
+    businessId,
+    customerId,
+    status,
+    customer: customer as Record<string, unknown>,
+    extra:
+      String(customer.tos_status ?? "").toLowerCase() === "approved"
+        ? { bridge_tos_status: "approved" }
+        : undefined,
+  })
+  if (!businessId) {
     await admin
       .from("users")
       .update({

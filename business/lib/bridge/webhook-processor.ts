@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { persistVerificationStatus } from "@/lib/compliance/verification-store"
+import { recordBridgeVerificationOutcome } from "./record-bridge-verification"
 import { getBridgeCustomer, resolveBridgeCustomerKycStatus } from "./kyc-links"
 import { mergeBridgeCustomerRecords } from "./merge-bridge-customer-profile"
 import { persistBridgeCustomerProfile } from "./persist-bridge-customer-profile"
@@ -66,23 +66,14 @@ async function handleBridgeKycWebhook(
     console.warn("[bridge] customer profile persist failed", error)
   })
 
-  if (subject.businessId) {
-    await persistVerificationStatus(admin, {
-      kind: "business",
-      businessId: subject.businessId,
-      userId: subject.userId,
-      provider: "bridge",
-      status,
-      bridgeCustomerId: customerId,
-    })
-  } else {
-    await persistVerificationStatus(admin, {
-      kind: "individual",
-      userId: subject.userId,
-      provider: "bridge",
-      status,
-      bridgeCustomerId: customerId,
-    })
+  await recordBridgeVerificationOutcome(admin, {
+    userId: subject.userId,
+    businessId: subject.businessId,
+    customerId,
+    status,
+    customer,
+  })
+  if (!subject.businessId) {
     await admin
       .from("users")
       .update({

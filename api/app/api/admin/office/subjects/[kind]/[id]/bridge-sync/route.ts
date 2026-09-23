@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { createSupabaseAdmin } from "@/lib/supabase/admin"
 import { requireOfficeAdmin } from "@/lib/api/admin-auth"
 import { logAdminAction } from "@/lib/admin-audit"
-import { persistVerificationStatus } from "@/lib/compliance/verification-store"
+import { recordBridgeVerificationOutcome } from "@/lib/bridge/record-bridge-verification"
 import { getBridgeCustomer, findBridgeCustomerByEmail, resolveBridgeCustomerKycStatus } from "@/lib/bridge/kyc-links"
 import { provisionBridgeVirtualAccounts } from "@/lib/bridge/provision-after-approval"
 import { persistBridgeCustomerProfile } from "@/lib/bridge/persist-bridge-customer-profile"
@@ -98,23 +98,14 @@ export async function POST(
   const customer = await getBridgeCustomer(customerId)
   const status = resolveBridgeCustomerKycStatus(customer)
 
-  if (kind === "business") {
-    await persistVerificationStatus(admin, {
-      kind: "business",
-      businessId: id,
-      userId: userId || id,
-      provider: "bridge",
-      status,
-      bridgeCustomerId: customerId,
-    })
-  } else {
-    await persistVerificationStatus(admin, {
-      kind: "individual",
-      userId,
-      provider: "bridge",
-      status,
-      bridgeCustomerId: customerId,
-    })
+  await recordBridgeVerificationOutcome(admin, {
+    userId: userId || id,
+    businessId,
+    customerId,
+    status,
+    customer: customer as Record<string, unknown>,
+  })
+  if (kind !== "business" && userId) {
     await admin
       .from("users")
       .update({

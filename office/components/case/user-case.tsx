@@ -39,6 +39,7 @@ import {
 } from "@/lib/case/status"
 import type { OfficeCaseChip } from "@/lib/case/types"
 import { expressDepositsOfficeStatus } from "@/lib/case/express-deposits"
+import { bridgeRejectionCopy } from "@/lib/case/bridge-rejection"
 import { useOfficeCaseTab } from "@/lib/case/use-case-tab"
 import { formatOfficeTimestamp } from "@/lib/format-office-date"
 import { WALLET_SEND_COMPLIANCE_STATUS_LABEL, verificationStatusLabel } from "@easner/shared"
@@ -307,6 +308,9 @@ function IndividualCompliance({ user }: { user: OfficeUserRow }) {
   const rail = consumerBankKycRail(user)
   const bridgeStatus = user.bridge_kyc_status || "not_started"
   const noahStatus = user.noah_kyc_status || user.noahKycStatus || "not_started"
+  const bridgeRejection = bridgeRejectionCopy(
+    user.bridge_kyc_rejection_reasons ?? user.verification_rejection_reasons,
+  )
   const rejection = rejectionText(user.noah_kyc_rejection_reasons)
   return (
     <OfficeSection
@@ -326,7 +330,15 @@ function IndividualCompliance({ user }: { user: OfficeUserRow }) {
         </Badge>
       </OfficeDetailRow>
       <OfficeCopyValue label="Noah · customer" value={user.noah_customer_id} />
-      {rejection ? <OfficeDetailRow label="Rejection">{rejection}</OfficeDetailRow> : null}
+      {bridgeRejection.customer ? (
+        <OfficeDetailRow label="Rejection">{bridgeRejection.customer}</OfficeDetailRow>
+      ) : null}
+      {bridgeRejection.compliance ? (
+        <OfficeDetailRow label="Compliance">{bridgeRejection.compliance}</OfficeDetailRow>
+      ) : null}
+      {rejection && rejection !== bridgeRejection.customer ? (
+        <OfficeDetailRow label="Noah rejection">{rejection}</OfficeDetailRow>
+      ) : null}
       {user.bridge_cutover_required_at ? (
         <OfficeDetailRow label="Bridge cutover">
           Required {formatOfficeTimestamp(user.bridge_cutover_required_at)}

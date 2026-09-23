@@ -31,6 +31,8 @@ export type OfficeBusinessRow = {
   verification_provider?: string | null
   bridge_customer_id?: string | null
   bridge_kyc_status?: string | null
+  bridge_kyc_rejection_reasons?: unknown
+  verification_rejection_reasons?: unknown
   created_at: string
   updated_at?: string | null
   owner_user_id?: string | null

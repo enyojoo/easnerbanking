@@ -94,6 +94,37 @@ describe("notifyBusinessKybStatusChange", () => {
     )
   })
 
+  it("sends the public reason to the business and the developer reason to compliance", async () => {
+    await notifyBusinessKybStatusChange(
+      { from: mockFrom } as never,
+      "biz-1",
+      "under_review",
+      "rejected",
+      ["Your information could not be verified"],
+      ["Bridge cannot support this individual."],
+    )
+
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "owner@example.com",
+        template: "kybRejected",
+        data: expect.objectContaining({
+          rejectionReasons: ["Your information could not be verified"],
+        }),
+      }),
+      expect.anything(),
+    )
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "compliance@easner.com",
+        template: "kybOpsNotification",
+        data: expect.objectContaining({
+          rejectionReasons: ["Bridge cannot support this individual."],
+        }),
+      }),
+    )
+  })
+
   it("skips sends when status is unchanged", async () => {
     await notifyBusinessKybStatusChange({ from: mockFrom } as never, "biz-1", "approved", "approved")
     expect(mockSendEmail).not.toHaveBeenCalled()

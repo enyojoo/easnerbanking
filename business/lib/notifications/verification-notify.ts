@@ -94,6 +94,7 @@ export async function notifyBusinessKybStatusChange(
   previousStatus: VerificationStatus | null | undefined,
   nextStatus: VerificationStatus,
   rejectionReasons?: string[] | null,
+  opsRejectionReasons?: string[] | null,
 ): Promise<void> {
   const emailStatus = mapToEmailStatus(previousStatus, nextStatus)
   if (!emailStatus) return
@@ -108,6 +109,7 @@ export async function notifyBusinessKybStatusChange(
   const profile = getEmailAudienceProfile("business")
   const template = kybTemplateForStatus(emailStatus)
   const reasons = rejectionReasons ?? undefined
+  const opsReasons = opsRejectionReasons?.length ? opsRejectionReasons : reasons
 
   const recipients = await resolveKybMerchantRecipients(admin, businessId)
   await Promise.all(
@@ -139,7 +141,7 @@ export async function notifyBusinessKybStatusChange(
           businessId,
           businessName,
           status: emailStatus,
-          rejectionReasons: reasons,
+          rejectionReasons: opsReasons,
           officeUrl: kybOfficeBusinessUrl(businessId),
         },
       })
@@ -153,6 +155,7 @@ export async function notifyIndividualKycStatusChange(
   previousStatus: VerificationStatus | null | undefined,
   nextStatus: VerificationStatus,
   rejectionReasons?: string[] | null,
+  opsRejectionReasons?: string[] | null,
 ): Promise<void> {
   const emailStatus = mapToEmailStatus(previousStatus, nextStatus)
   if (!emailStatus) return
@@ -163,6 +166,7 @@ export async function notifyIndividualKycStatusChange(
   const profile = getEmailAudienceProfile("personal")
   const template = kycTemplateForStatus(emailStatus)
   const reasons = rejectionReasons ?? undefined
+  const opsReasons = opsRejectionReasons?.length ? opsRejectionReasons : reasons
   const prefs = await fetchCommunicationPreferences(admin, userId)
 
   const data: VerificationEmailData = {
@@ -198,7 +202,7 @@ export async function notifyIndividualKycStatusChange(
           userEmail: contact.email,
           userDisplayName,
           status: emailStatus,
-          rejectionReasons: reasons,
+          rejectionReasons: opsReasons,
           officeUrl: kycOfficeUserUrl(userId),
         },
       })

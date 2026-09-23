@@ -33,6 +33,8 @@ export type OfficeUserRow = {
   verification_provider?: string | null
   bridge_customer_id?: string | null
   bridge_kyc_status?: string | null
+  bridge_kyc_rejection_reasons?: unknown
+  verification_rejection_reasons?: unknown
   linkedBusinessName?: string | null
   enabled_extra_account_currencies?: string[]
   email_confirmed_at?: string | null

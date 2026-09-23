@@ -6,6 +6,27 @@ import {
 } from "./parse-bridge-customer-profile"
 
 describe("mergeBridgeCustomerRecords", () => {
+  it("keeps webhook rejection text when the customer GET has an empty list", () => {
+    const merged = mergeBridgeCustomerRecords(
+      { id: "cust", status: "rejected", rejection_reasons: [] },
+      {
+        id: "cust",
+        rejection_reasons: [
+          {
+            reason: "Your information could not be verified",
+            developer_reason: "Bridge is unable to support this individual.",
+          },
+        ],
+      },
+    )
+    expect(merged.rejection_reasons).toEqual([
+      {
+        reason: "Your information could not be verified",
+        developer_reason: "Bridge is unable to support this individual.",
+      },
+    ])
+  })
+
   it("keeps webhook identity when the customer GET only has state and country", () => {
     const merged = mergeBridgeCustomerRecords(
       {

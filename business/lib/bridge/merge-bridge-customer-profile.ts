@@ -20,7 +20,6 @@ const AUTHORITATIVE_KEYS = new Set([
   "updated_at",
   "requirements_due",
   "future_requirements_due",
-  "rejection_reasons",
   "persona_inquiry_type",
   "client_reference_id",
 ])
@@ -88,6 +87,26 @@ function personKey(person: Record<string, unknown>): string {
   return ""
 }
 
+function rejectionScore(value: unknown): number {
+  if (!Array.isArray(value)) return 0
+  let score = 0
+  for (const row of value) {
+    if (!row || typeof row !== "object") continue
+    const record = row as Record<string, unknown>
+    if (filledString(record.reason)) score += 1
+    if (filledString(record.developer_reason) || filledString(record.developerReason)) score += 2
+  }
+  return score
+}
+
+function mergeRejectionReasons(primary: unknown, secondary: unknown): unknown[] | undefined {
+  const primaryScore = rejectionScore(primary)
+  const secondaryScore = rejectionScore(secondary)
+  if (primaryScore === 0 && secondaryScore === 0) return undefined
+  const chosen = secondaryScore > primaryScore ? secondary : primary
+  return Array.isArray(chosen) ? chosen : undefined
+}
+
 function mergePeople(primary: unknown, secondary: unknown): Array<Record<string, unknown>> | undefined {
   const people = [...idDocs(primary), ...idDocs(secondary)]
   if (!people.length) return undefined
@@ -131,6 +150,11 @@ export function mergeBridgeCustomerRecords(
     if ((ADDRESS_KEYS as readonly string[]).includes(key)) {
       const address = mergeAddress(primary[key], secondary[key])
       if (address) out[key] = address
+      continue
+    }
+    if (key === "rejection_reasons") {
+      const reasons = mergeRejectionReasons(primary[key], secondary[key])
+      if (reasons) out[key] = reasons
       continue
     }
     if (key === "identifying_information" || key === "identifyingInformation") {
