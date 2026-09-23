@@ -82,6 +82,8 @@ export type TurnkeySendInput = {
    * `0` returns `pending` immediately after broadcast submit (global payout execute path).
    */
   settlementPollTimeoutMs?: number
+  /** Fee sweeps: stop as soon as Solana signature is known so the deposit can be booked in this call. */
+  returnOnSignature?: boolean
 }
 
 function mapAssetToCurrency(asset: "USDC" | "EURC"): "USD" | "EUR" {
@@ -350,6 +352,10 @@ export async function createTurnkeySend(
     status: "pending",
     txHash: parsed.txHash,
   }
+  let polledSnapshot: { status: "pending" | "settled" | "failed"; txHash: string | null } = {
+    status: "pending",
+    txHash: parsed.txHash,
+  }
   let lastPollPayload: unknown = null
 
   if (input.settlementPollTimeoutMs === 0) {
@@ -377,9 +383,17 @@ export async function createTurnkeySend(
       client,
       sender.subOrgId,
       parsed.providerTransactionId,
-      { timeoutMs: pollTimeoutMs, intervalMs: pollIntervalMs },
+      {
+        timeoutMs: pollTimeoutMs,
+        intervalMs: pollIntervalMs,
+        returnOnSignature: input.returnOnSignature === true,
+      },
     )
     const polled = interpretTurnkeyGetSendTransactionStatus(lastPollPayload)
+    polledSnapshot = {
+      status: polled.status,
+      txHash: polled.txHash ?? parsed.txHash,
+    }
     console.info("turnkey_sol_send_poll_done", {
       subOrgId: sender.subOrgId,
       terminal: polled.status,
@@ -399,6 +413,9 @@ export async function createTurnkeySend(
       providerTransactionId: parsed.providerTransactionId,
       ...(lastPollPayload != null ? { statusResponse: lastPollPayload } : {}),
     })
+    if (!reconciled.txHash && polledSnapshot.txHash) {
+      reconciled = { ...reconciled, txHash: polledSnapshot.txHash }
+    }
     if (reconciled.status === "settled" && globalPayoutEasnerPayoutId) {
       await patchGlobalPayoutNoahTurnkeySettlement(admin, {
         easnerPayoutId: globalPayoutEasnerPayoutId,
@@ -423,7 +440,9 @@ export async function createTurnkeySend(
       await updateEasetagSettlementSettled(admin, easetagTransferGroupId, txHash).catch(() => {})
     }
   } catch {
-    // Best-effort reconciliation.
+    if (!reconciled.txHash && polledSnapshot.txHash) {
+      reconciled = { status: polledSnapshot.status, txHash: polledSnapshot.txHash }
+    }
   }
 
   const chainFailureDetail =

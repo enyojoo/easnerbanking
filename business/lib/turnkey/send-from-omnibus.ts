@@ -20,6 +20,8 @@ export type SendFromOmnibusInput = {
   /** When false, return immediately after submit without polling. */
   pollForSettlement?: boolean
   settlementPollTimeoutMs?: number
+  /** Stop polling once the Solana signature is present. */
+  returnOnSignature?: boolean
 }
 
 export type SendFromOmnibusResult = {
@@ -143,6 +145,7 @@ export async function sendStablecoinFromDepositOmnibus(
     const terminal = await pollUntilTurnkeySendTerminal(client, orgId, sendStatusId, {
       timeoutMs,
       intervalMs: 1_000,
+      returnOnSignature: input.returnOnSignature === true,
     })
     if (terminal) {
       const interpreted = interpretTurnkeyGetSendTransactionStatus(terminal)

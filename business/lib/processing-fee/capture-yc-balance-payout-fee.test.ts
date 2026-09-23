@@ -9,6 +9,10 @@ vi.mock("@/lib/processing-fee/fee-wallet-inbound-deposit", () => ({
   ensureFeeWalletRevenueDeposit: vi.fn().mockResolvedValue({ inserted: true, existing: false }),
 }))
 
+vi.mock("@/lib/processing-fee/fee-wallet-chain-match", () => ({
+  findFeeWalletSweepSignatureOnChain: vi.fn().mockResolvedValue(null),
+}))
+
 vi.mock("@/lib/business/org-owner", () => ({
   resolveBusinessOrgOwnerUserId: vi.fn(),
 }))
@@ -19,6 +23,7 @@ import {
   sweepEasnerRevenueFromUserTurnkeyWallet,
 } from "@/lib/processing-fee/fee-wallet-sweep"
 import { ensureFeeWalletRevenueDeposit } from "@/lib/processing-fee/fee-wallet-inbound-deposit"
+import { findFeeWalletSweepSignatureOnChain } from "@/lib/processing-fee/fee-wallet-chain-match"
 
 const ETID_META = {
   source: "api_yellowcard_balance_payout",
@@ -162,5 +167,33 @@ describe("captureYcBalancePayoutProcessingFeeIfPending", () => {
     expect(result.captured).toBe(false)
     expect(sweepEasnerRevenueFromUserTurnkeyWallet).not.toHaveBeenCalled()
     expect(ensureFeeWalletRevenueDeposit).not.toHaveBeenCalled()
+  })
+
+  it("books the fee-wallet deposit from the on-chain transfer while Turnkey status is still pending", async () => {
+    const { admin } = adminWithTx({
+      ...ETID_META,
+      processing_fee_pending: true,
+      processing_fee_submitted_at: new Date().toISOString(),
+      fee_wallet_sweep: 3.671217,
+    })
+    vi.mocked(pollTurnkeySendById).mockResolvedValue({ status: "pending", txHash: null })
+    vi.mocked(findFeeWalletSweepSignatureOnChain).mockResolvedValue("chain-fee-sig")
+
+    const result = await captureYcBalancePayoutProcessingFeeIfPending(admin as never, {
+      transactionId: "tx-etid",
+      userId: "user-1",
+      businessId: null,
+    })
+
+    expect(result.captured).toBe(true)
+    expect(sweepEasnerRevenueFromUserTurnkeyWallet).not.toHaveBeenCalled()
+    expect(ensureFeeWalletRevenueDeposit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        txHash: "chain-fee-sig",
+        amount: expect.closeTo(3.671217, 5),
+        orgTreasuryKind: "payout_fee",
+      }),
+    )
   })
 })

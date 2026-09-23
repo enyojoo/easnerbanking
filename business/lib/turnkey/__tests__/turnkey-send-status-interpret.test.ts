@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   extractTxHashFromTurnkeySendStatusResponse,
   interpretTurnkeyGetSendTransactionStatus,
+  pollUntilTurnkeySendTerminal,
 } from "@/lib/turnkey/sol-send-polling"
 
 describe("extractTxHashFromTurnkeySendStatusResponse", () => {
@@ -73,5 +74,24 @@ describe("interpretTurnkeyGetSendTransactionStatus", () => {
         solana: { signature: "sigEarly" },
       }),
     ).toEqual({ status: "pending", txHash: "sigEarly" })
+  })
+})
+
+describe("pollUntilTurnkeySendTerminal", () => {
+  it("returns as soon as a signature is present when returnOnSignature is set", async () => {
+    let calls = 0
+    const client = {
+      getSendTransactionStatus: async () => {
+        calls += 1
+        return { txStatus: "PENDING", solana: { signature: "feeSig" } }
+      },
+    }
+    const last = await pollUntilTurnkeySendTerminal(client, "org", "sha256:fee", {
+      timeoutMs: 5_000,
+      intervalMs: 1_000,
+      returnOnSignature: true,
+    })
+    expect(calls).toBe(1)
+    expect(interpretTurnkeyGetSendTransactionStatus(last).txHash).toBe("feeSig")
   })
 })

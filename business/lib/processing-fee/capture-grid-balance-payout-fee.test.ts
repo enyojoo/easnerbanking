@@ -9,6 +9,10 @@ vi.mock("@/lib/processing-fee/fee-wallet-inbound-deposit", () => ({
   ensureFeeWalletRevenueDeposit: vi.fn().mockResolvedValue({ inserted: true, existing: false }),
 }))
 
+vi.mock("@/lib/processing-fee/fee-wallet-chain-match", () => ({
+  findFeeWalletSweepSignatureOnChain: vi.fn().mockResolvedValue(null),
+}))
+
 vi.mock("@/lib/business/org-owner", () => ({
   resolveBusinessOrgOwnerUserId: vi.fn(),
 }))

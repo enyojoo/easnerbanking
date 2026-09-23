@@ -14,6 +14,7 @@ import {
 import { sendStablecoinFromDepositOmnibus } from "@/lib/turnkey/send-from-omnibus"
 import { resolveWalletSendFeeSolanaAddress } from "@/lib/wallet-send/fee-address"
 import { ensureFeeWalletRevenueDeposit } from "@/lib/processing-fee/fee-wallet-inbound-deposit"
+import { findFeeWalletSweepSignatureOnChain } from "@/lib/processing-fee/fee-wallet-chain-match"
 import { resolveDepositOmnibusAddressForLedgerCurrency } from "@/lib/deposit-omnibus/config"
 
 export {
@@ -99,13 +100,23 @@ export async function sweepEasnerRevenueFromDepositOmnibus(input: {
     asset,
     destinationAddress: feeAddr,
     amount: sweepAmt,
-    pollForSettlement: false,
+    pollForSettlement: true,
+    settlementPollTimeoutMs: 45_000,
+    returnOnSignature: true,
   }).catch((e) => {
     console.warn(`[${input.logTag ?? "easner-revenue-sweep"}] omnibus fee sweep failed (non-fatal):`, e)
     return null
   })
 
-  const feeWalletSweepTxHash = sweep?.txHash ?? null
+  let feeWalletSweepTxHash = sweep?.txHash ?? null
+  if (!feeWalletSweepTxHash && input.admin) {
+    feeWalletSweepTxHash = await findFeeWalletSweepSignatureOnChain(input.admin, {
+      amount: sweepAmt,
+      asset,
+      ledgerCurrency: input.ledgerCurrency,
+      fromAddress: resolveDepositOmnibusAddressForLedgerCurrency(input.ledgerCurrency),
+    }).catch(() => null)
+  }
   const captured = sweep?.status === "skipped" || Boolean(feeWalletSweepTxHash)
 
   if (input.admin && feeWalletSweepTxHash) {
@@ -169,7 +180,8 @@ export async function sweepEasnerRevenueFromUserTurnkeyWallet(
       chain: "solana",
       destinationAddress: feeAddress,
       amount: sweepAmt,
-      settlementPollTimeoutMs: 0,
+      settlementPollTimeoutMs: 45_000,
+      returnOnSignature: true,
       ...(input.globalPayout
         ? {
             globalPayout: {
@@ -184,11 +196,21 @@ export async function sweepEasnerRevenueFromUserTurnkeyWallet(
       ...(input.walletSend ? { walletSend: { formSessionId: input.walletSend.formSessionId, marginLeg: true } } : {}),
     })
 
-    const feeHash = String(feeSend.txHash || "").trim()
+    let feeHash = String(feeSend.txHash || "").trim()
+    if (!feeHash) {
+      feeHash =
+        (await findFeeWalletSweepSignatureOnChain(admin, {
+          amount: sweepAmt,
+          asset,
+          ledgerCurrency: input.ledgerCurrency,
+          senderUserId: input.ctx.subjectUserId,
+          senderBusinessId: input.ctx.subjectBusinessId,
+        }).catch(() => null)) || ""
+    }
     const captured = Boolean(feeHash)
     if (feeHash) {
       await ensureFeeWalletRevenueDeposit(admin, {
-        txHash: feeSend.txHash,
+        txHash: feeHash,
         amount: sweepAmt,
         asset,
         senderUserId: input.ctx.subjectUserId,
@@ -199,7 +221,7 @@ export async function sweepEasnerRevenueFromUserTurnkeyWallet(
       })
     }
     return {
-      feeWalletSweepTxHash: feeSend.txHash,
+      feeWalletSweepTxHash: feeHash || null,
       captured,
       turnkeySendId: feeSend.providerTransactionId,
     }

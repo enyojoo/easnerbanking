@@ -17,6 +17,7 @@ import {
   sweepEasnerRevenueFromUserTurnkeyWallet,
 } from "@/lib/processing-fee/fee-wallet-sweep"
 import { ensureFeeWalletRevenueDeposit } from "@/lib/processing-fee/fee-wallet-inbound-deposit"
+import { findFeeWalletSweepSignatureOnChain } from "@/lib/processing-fee/fee-wallet-chain-match"
 import {
   buildEasnerRevenueSweepMetadataPatch,
   FEE_SWEEP_MIN,
@@ -187,7 +188,21 @@ async function settleSubmittedFeeSweepIfAny(
     sendId,
     asset: input.asset,
   })
-  const feeHash = String(rec.txHash || "").trim()
+  const asset = input.asset ?? (input.ledgerCurrency === "EUR" ? "EURC" : "USDC")
+  let feeHash = String(rec.txHash || "").trim()
+  if (!feeHash && (rec.status === "pending" || rec.status === "settled")) {
+    feeHash =
+      (await findFeeWalletSweepSignatureOnChain(admin, {
+        amount: input.sweepAmt,
+        asset,
+        ledgerCurrency: input.ledgerCurrency,
+        senderUserId: input.userId,
+        senderBusinessId: input.businessId,
+        submittedAt: String(
+          input.meta.processing_fee_submitted_at ?? input.meta.processing_fee_captured_at ?? "",
+        ),
+      }).catch(() => null)) || ""
+  }
   if (feeHash) {
     await patchTransactionMetadata(
       admin,
@@ -207,7 +222,7 @@ async function settleSubmittedFeeSweepIfAny(
       businessId: input.businessId,
       txHash: feeHash,
       amount: input.sweepAmt,
-      asset: input.asset ?? (input.ledgerCurrency === "EUR" ? "EURC" : "USDC"),
+      asset,
       relatedEasnerTransactionId: input.relatedEasnerTransactionId,
     })
     return "settled"

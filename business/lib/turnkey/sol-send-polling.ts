@@ -366,7 +366,7 @@ export async function pollUntilTurnkeySendTerminal(
   client: TurnkeyClientLike,
   organizationId: string,
   sendTransactionStatusId: string,
-  opts: { timeoutMs: number; intervalMs: number },
+  opts: { timeoutMs: number; intervalMs: number; returnOnSignature?: boolean },
 ): Promise<unknown | null> {
   if (typeof client.getSendTransactionStatus !== "function") return null
   const deadline = Date.now() + opts.timeoutMs
@@ -378,6 +378,7 @@ export async function pollUntilTurnkeySendTerminal(
     })
     const m = interpretTurnkeyGetSendTransactionStatus(last)
     if (m.status === "settled" || m.status === "failed") return last
+    if (opts.returnOnSignature && m.txHash) return last
     await sleep(opts.intervalMs)
   }
   return last
