@@ -85,12 +85,12 @@ function verificationBadgeForProfile(
     return { label: VERIFICATION_STATUS_COPY.verified, tone: 'green' }
   }
   if (verificationStatus === 'in_review') {
-    return { label: VERIFICATION_STATUS_COPY.inReview, tone: 'yellow' }
+    return { label: 'Review', tone: 'yellow' }
   }
   if (verificationStatus === 'take_action') {
-    return { label: VERIFICATION_STATUS_COPY.actionNeeded, tone: 'yellow' }
+    return { label: 'Action', tone: 'yellow' }
   }
-  return { label: VERIFICATION_STATUS_COPY.unverified, tone: 'yellow' }
+  return { label: 'Start', tone: 'yellow' }
 }
 
 function MoreContent({ navigation }: NavigationProps) {
@@ -612,18 +612,26 @@ function MoreContent({ navigation }: NavigationProps) {
                       <ShieldCheck size={18} color={colors.primary.main} strokeWidth={2} />
                     </View>
                     <View style={styles.menuItemTextWrap}>
-                      <Text style={styles.menuItemText}>Account verification</Text>
-                      <Text style={styles.menuItemSubtitle}>Verify and check status</Text>
+                      <Text style={styles.menuItemText} numberOfLines={1}>
+                        Account verification
+                      </Text>
+                      <Text style={styles.menuItemSubtitle} numberOfLines={1}>
+                        Verify and check status
+                      </Text>
                     </View>
                   </View>
                   <View style={styles.menuItemRight}>
                     {tierBadge.tone === 'green' ? (
                       <View style={styles.badgeGreen}>
-                        <Text style={styles.badgeTextGreen}>{tierBadge.label}</Text>
+                        <Text style={styles.badgeTextGreen} numberOfLines={1}>
+                          {tierBadge.label}
+                        </Text>
                       </View>
                     ) : (
                       <View style={styles.badgeYellow}>
-                        <Text style={styles.badgeTextYellow}>{tierBadge.label}</Text>
+                        <Text style={styles.badgeTextYellow} numberOfLines={1}>
+                          {tierBadge.label}
+                        </Text>
                       </View>
                     )}
                     <ChevronRight size={18} color={colors.text.tertiary} strokeWidth={2} />
@@ -684,7 +692,7 @@ function MoreContent({ navigation }: NavigationProps) {
                 {biometric.available ? (
                   <SettingsRow
                     title={biometricUnlockLabel(biometric.kind)}
-                    subtitle="Quick login and safe transfers"
+                    subtitle="Unlock and confirm sends"
                     onPress={() => {
                       void handleBiometricToggle(!biometricOn)
                     }}
@@ -1019,7 +1027,10 @@ const styles = StyleSheet.create({
   menuItemRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: spacing[2],
+    flexShrink: 0,
+    marginLeft: spacing[3],
   },
   destructiveText: {
     color: colors.error.main,
@@ -1029,6 +1040,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[2],
     paddingVertical: 4,
     borderRadius: borderRadius.full,
+    flexShrink: 0,
+    alignItems: 'center',
   },
   badgeTextGreen: {
     ...textStyles.labelSmall,
@@ -1040,6 +1053,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[2],
     paddingVertical: 4,
     borderRadius: borderRadius.full,
+    flexShrink: 0,
+    alignItems: 'center',
   },
   badgeTextYellow: {
     ...textStyles.labelSmall,
