@@ -29,8 +29,8 @@ function hasStoredReasons(value: unknown): boolean {
 /**
  * Save Bridge status and rejection text, then email like Grid.
  * The customer receives `reason`. Compliance receives `developer_reason`.
- * A rejection that was stored without reasons still sends once those reasons arrive.
- * Sync polls (GET often omits rejection_reasons) must not re-email or wipe stored reasons.
+ * Emails only on a real status transition (e.g. pending → rejected).
+ * Repeated sync-status polls that still return rejected must not re-send.
  */
 export async function recordBridgeVerificationOutcome(
   admin: SupabaseClient,
@@ -51,11 +51,10 @@ export async function recordBridgeVerificationOutcome(
 
   const prior = await admin
     .from(table)
-    .select("bridge_kyc_status,bridge_kyc_rejection_reasons")
+    .select("bridge_kyc_status,bridge_kyc_rejection_reasons,verification_rejection_reasons")
     .eq("id", subjectId)
     .maybeSingle()
   let previousStatus = String(prior.data?.bridge_kyc_status ?? "not_started")
-  let hadReasons = hasStoredReasons(prior.data?.bridge_kyc_rejection_reasons)
   if (prior.error && missingRejectionColumn(prior.error)) {
     const fallback = await admin
       .from(table)
@@ -63,14 +62,6 @@ export async function recordBridgeVerificationOutcome(
       .eq("id", subjectId)
       .maybeSingle()
     previousStatus = String(fallback.data?.bridge_kyc_status ?? "not_started")
-    hadReasons = hasStoredReasons(fallback.data?.verification_rejection_reasons)
-  } else if (!hadReasons) {
-    const fallback = await admin
-      .from(table)
-      .select("verification_rejection_reasons")
-      .eq("id", subjectId)
-      .maybeSingle()
-    hadReasons = hasStoredReasons(fallback.data?.verification_rejection_reasons)
   }
 
   await persistVerificationStatus(admin, {
@@ -79,8 +70,8 @@ export async function recordBridgeVerificationOutcome(
     userId: input.userId,
     provider: "bridge",
     status: input.status as "not_started" | "in_progress" | "pending" | "approved" | "rejected" | "hold",
-    // Omit when Bridge GET has no reasons so sync does not wipe webhook-stored copy.
-    rejectionReasons: businessId ? undefined : stored ?? undefined,
+    // Only write reasons when Bridge includes them. An empty GET must not wipe a prior webhook body.
+    rejectionReasons: businessId ? undefined : stored || undefined,
     bridgeCustomerId: input.customerId,
     extra: input.extra,
   })
@@ -93,28 +84,25 @@ export async function recordBridgeVerificationOutcome(
     if (reasonWrite.error && !missingRejectionColumn(reasonWrite.error)) {
       console.warn("[bridge] rejection reasons persist failed", reasonWrite.error.message)
     }
-    if (businessId) {
-      const existing = await admin
+  }
+  if (businessId && stored) {
+    const existing = await admin
+      .from("businesses")
+      .select("verification_rejection_reasons")
+      .eq("id", businessId)
+      .maybeSingle()
+    if (!hasStoredReasons(existing.data?.verification_rejection_reasons)) {
+      await admin
         .from("businesses")
-        .select("verification_rejection_reasons")
+        .update({ verification_rejection_reasons: stored, updated_at: new Date().toISOString() })
         .eq("id", businessId)
-        .maybeSingle()
-      if (!hasStoredReasons(existing.data?.verification_rejection_reasons)) {
-        await admin
-          .from("businesses")
-          .update({ verification_rejection_reasons: stored, updated_at: new Date().toISOString() })
-          .eq("id", businessId)
-      }
     }
   }
 
+  const previousEmail = bridgeStatusForEmail(previousStatus)
   const nextEmail = bridgeStatusForEmail(input.status)
-  const previousEmailStatus = bridgeStatusForEmail(previousStatus)
-  // Only treat as a fresh rejection when reasons first arrive after a bare reject.
-  // Without this guard, sync-status re-emails forever when Bridge GET omits rejection_reasons.
-  const reasonsJustArrived =
-    nextEmail === "rejected" && previousEmailStatus === "rejected" && !hadReasons && Boolean(stored)
-  const previousEmail = reasonsJustArrived ? "not_started" : previousEmailStatus
+  // Status unchanged (typical sync-status while still rejected) → persist only, never re-email.
+  if (previousEmail === nextEmail) return
 
   const customerReasons = notices.customerReasons.length ? notices.customerReasons : null
   const complianceReasons = notices.complianceReasons.length ? notices.complianceReasons : null
