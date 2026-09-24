@@ -197,7 +197,6 @@ export async function persistVerificationStatus(
     const patch: Record<string, unknown> = {
       verification_provider: input.provider,
       verification_status: input.status,
-      verification_rejection_reasons: input.rejectionReasons ?? null,
       updated_at: now,
       ...(input.extra ?? {}),
       ...kybStatusTimestampPatch({
@@ -206,6 +205,9 @@ export async function persistVerificationStatus(
         now,
         column: "grid_kyb_status_updated_at",
       }),
+    }
+    if (input.rejectionReasons !== undefined) {
+      patch.verification_rejection_reasons = input.rejectionReasons
     }
     if (input.status === "approved") {
       patch.kyb_verified_at = input.verifiedAt ?? now
@@ -225,9 +227,11 @@ export async function persistVerificationStatus(
   const patch: Record<string, unknown> = {
     verification_provider: input.provider,
     verification_status: input.status,
-    verification_rejection_reasons: input.rejectionReasons ?? null,
     updated_at: now,
     ...(input.extra ?? {}),
+  }
+  if (input.rejectionReasons !== undefined) {
+    patch.verification_rejection_reasons = input.rejectionReasons
   }
   if (input.status === "approved") {
     patch.kyc_verified_at = input.verifiedAt ?? now
