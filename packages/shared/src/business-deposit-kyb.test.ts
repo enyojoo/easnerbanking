@@ -5,7 +5,7 @@ import {
 } from "./business-deposit-kyb"
 
 describe("resolveBusinessDepositKyb", () => {
-  it("gates USD on Global banking when Office US pay-in is Grid", () => {
+  it("unlocks USD on Bridge KYB when Office US pay-in is Grid but Global banking is not done", () => {
     expect(
       resolveBusinessDepositKyb({
         currency: "USD",
@@ -13,7 +13,7 @@ describe("resolveBusinessDepositKyb", () => {
         gridApproved: false,
         bridgeApproved: true,
       }),
-    ).toEqual({ complete: false, product: "us_banking" })
+    ).toEqual({ complete: true, product: "euro_banking" })
     expect(
       resolveBusinessDepositKyb({
         currency: "USD",
@@ -22,6 +22,14 @@ describe("resolveBusinessDepositKyb", () => {
         bridgeApproved: false,
       }),
     ).toEqual({ complete: true, product: "us_banking" })
+    expect(
+      resolveBusinessDepositKyb({
+        currency: "USD",
+        officePayIn: "grid",
+        gridApproved: false,
+        bridgeApproved: false,
+      }),
+    ).toEqual({ complete: false, product: "us_banking" })
   })
 
   it("does not ask for Global banking on USD when Office US pay-in is Bridge", () => {

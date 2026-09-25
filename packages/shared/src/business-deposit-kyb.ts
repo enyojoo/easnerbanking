@@ -14,7 +14,8 @@ export type BusinessDepositKybGate = {
 
 /**
  * Office pay-in for a business ledger. USD defaults to Grid; EUR defaults to Bridge.
- * If Office sets US pay-in to Bridge, USD uses More accounts KYB, not Global banking.
+ * If Office sets US pay-in to Bridge, USD uses More accounts KYB.
+ * With default Grid US pay-in, Bridge-only KYB still unlocks USD via the Bridge VA.
  */
 export function resolveBusinessLedgerPayInProvider(
   rows:
@@ -53,6 +54,10 @@ export function resolveBusinessLedgerPayInProvider(
 
 /**
  * Whether this currency’s bank deposit is unlocked, and which hub product the CTA should open.
+ *
+ * USD under default Office Grid routing unlocks when Grid **or** Bridge KYB is approved so
+ * Bridge-only orgs can use the Bridge USD VA already in `virtual_accounts`. Explicit Office
+ * `pay_in_provider: bridge` still gates USD on Bridge alone.
  */
 export function resolveBusinessDepositKyb(input: {
   currency: string
@@ -71,7 +76,13 @@ export function resolveBusinessDepositKyb(input: {
     if (payIn === "bridge") {
       return { complete: input.bridgeApproved, product: "euro_banking" }
     }
-    return { complete: input.gridApproved, product: "us_banking" }
+    if (input.gridApproved) {
+      return { complete: true, product: "us_banking" }
+    }
+    if (input.bridgeApproved) {
+      return { complete: true, product: "euro_banking" }
+    }
+    return { complete: false, product: "us_banking" }
   }
 
   return {
