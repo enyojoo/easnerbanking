@@ -1,0 +1,3 @@
+• Bank accounts show up right after you finish identity verification
+• Clearer verification status and Face ID / fingerprint details on More
+• Receive USDT on Relay when that address is ready
