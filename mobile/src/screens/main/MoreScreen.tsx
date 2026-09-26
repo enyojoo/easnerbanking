@@ -53,7 +53,7 @@ import {
   shouldListFactorsForMfaRow,
 } from '../../lib/mfaStatusCache'
 import { isGlobalBankingVerified } from '../../lib/compliance'
-import { isBridgeConsumerCutoverPending } from '../../lib/bridgeConsumerKyc'
+import { consumerBankKycStatus, isBridgeConsumerCutoverPending } from '../../lib/bridgeConsumerKyc'
 import { VERIFICATION_STATUS_COPY } from '@easner/shared'
 import { useScrollBottomPadding } from '../../hooks/useScrollBottomPadding'
 import { apiFetch } from '../../query/api-client'
@@ -79,13 +79,16 @@ type TierBadge = { label: string; tone: 'green' | 'yellow' }
 
 function verificationBadgeForProfile(
   userProfile: Parameters<typeof isGlobalBankingVerified>[0],
-  verificationStatus: 'approved' | 'in_review' | 'take_action',
+  verificationStatus: 'approved' | 'in_review' | 'take_action' | 'rejected',
 ): TierBadge {
   if (isGlobalBankingVerified(userProfile)) {
     return { label: VERIFICATION_STATUS_COPY.verified, tone: 'green' }
   }
   if (verificationStatus === 'in_review') {
     return { label: 'Review', tone: 'yellow' }
+  }
+  if (verificationStatus === 'rejected') {
+    return { label: VERIFICATION_STATUS_COPY.rejected, tone: 'yellow' }
   }
   if (verificationStatus === 'take_action') {
     return { label: 'Action', tone: 'yellow' }
@@ -350,23 +353,26 @@ function MoreContent({ navigation }: NavigationProps) {
     return unsubscribe
   }, [userProfile?.id, navigation])
 
-  const getVerificationStatus = (): 'approved' | 'in_review' | 'take_action' => {
-    const noahStatus =
-      userProfile?.noah_kyc_status ??
-      (userProfile as { profile?: { noah_kyc_status?: string } })?.profile?.noah_kyc_status
+  const getVerificationStatus = (): 'approved' | 'in_review' | 'take_action' | 'rejected' => {
+    const status = consumerBankKycStatus(userProfile).trim().toLowerCase()
 
-    if (noahStatus === 'approved') {
+    if (status === 'approved') {
       return 'approved'
     }
 
-    if (noahStatus === 'pending' || noahStatus === 'in_review' || noahStatus === 'under_review') {
+    if (status === 'pending' || status === 'in_review' || status === 'under_review') {
       return 'in_review'
+    }
+
+    if (status === 'rejected') {
+      return 'rejected'
     }
 
     return 'take_action'
   }
 
   const verificationStatus = getVerificationStatus()
+  const kycRejected = verificationStatus === 'rejected'
   const tierBadge = verificationBadgeForProfile(userProfile, verificationStatus)
 
   const handleSignOut = async () => {
@@ -475,11 +481,17 @@ function MoreContent({ navigation }: NavigationProps) {
   const showMfaBanner = profileReady && !showVerifyBanner && mfaStatusResolved && mfaStatusLine === 'Off'
   const banner = showVerifyBanner
     ? {
-        title: cutoverPending ? 'Update your verification' : 'Verify your identity',
+        title: cutoverPending
+          ? 'Update your verification'
+          : kycRejected
+            ? 'Verification could not be completed'
+            : 'Verify your identity',
         subtitle: cutoverPending
           ? 'Keep receiving USD and euro deposits'
-          : 'Higher limits, full banking access',
-        cta: cutoverPending ? 'Continue' : 'Begin',
+          : kycRejected
+            ? 'Review status or contact support'
+            : 'Higher limits, full banking access',
+        cta: cutoverPending ? 'Continue' : kycRejected ? 'Status' : 'Begin',
         Icon: ShieldCheck,
         onPress: () => navigateFromMoreTab('AccountVerification'),
       }

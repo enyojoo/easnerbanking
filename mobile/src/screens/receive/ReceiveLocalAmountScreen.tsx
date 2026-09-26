@@ -59,6 +59,9 @@ import type { NgLocalIdType } from '@easner/shared'
 import { useDebouncedValue } from '@easner/shared'
 import { NgLocalVerificationNotice } from '../../components/compliance/NgLocalVerificationNotice'
 import SkeletonLoader from '../../components/SkeletonLoader'
+import { accountRestrictionDepositsBlockedCopy } from '@easner/shared'
+import { useAccountRestrictionData } from '../../hooks/queries/use-account-restriction'
+import { AccountRestrictionBanner } from '../../components/AccountRestrictionBanner'
 import { useToast } from '../../components/ToastProvider'
 import {
   clearFundBalanceQuote,
@@ -102,6 +105,8 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
   })
   const { balances } = useBalance()
   const { showError } = useToast()
+  const accountRestriction = useAccountRestrictionData(true)
+  const depositsRestricted = accountRestriction.active
   const params = (route.params || {}) as Partial<RouteParams>
 
   const localPayInCurrency = params.localPayInCurrency ?? ''
@@ -493,6 +498,18 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     }
   }
 
+  if (depositsRestricted) {
+    return (
+      <ScreenWrapper>
+        <View style={styles.blocked}>
+          <ReceiveFlowHeader title="Add money" onBack={handleBack} />
+          <AccountRestrictionBanner restriction={accountRestriction} />
+          <Text style={styles.restrictionBlockedText}>{accountRestrictionDepositsBlockedCopy()}</Text>
+        </View>
+      </ScreenWrapper>
+    )
+  }
+
   if (ngMissingType) {
     return (
       <ScreenWrapper>
@@ -721,6 +738,11 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
 const styles = StyleSheet.create({
   mainColumn: { flex: 1 },
   blocked: { flex: 1, paddingHorizontal: spacing[5] },
+  restrictionBlockedText: {
+    ...textStyles.body,
+    color: colors.error.main,
+    marginTop: spacing[3],
+  },
   content: {
     paddingHorizontal: spacing[5],
     paddingTop: spacing[2],

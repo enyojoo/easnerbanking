@@ -1,6 +1,15 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { qk, isVaAnswerSettled, receiveInternationalBankTitle, bankReceivePaymentNotes } from '@easner/shared'
+import { accountRestrictionMessageFromError } from '../../lib/accountRestrictionErrors'
+import { useAccountRestrictionData } from '../../hooks/queries/use-account-restriction'
+import { AccountRestrictionBanner } from '../../components/AccountRestrictionBanner'
+import {
+  accountRestrictionDepositsBlockedCopy,
+  qk,
+  isVaAnswerSettled,
+  receiveInternationalBankTitle,
+  bankReceivePaymentNotes,
+} from '@easner/shared'
 import {
   View,
   Text,
@@ -58,6 +67,8 @@ export default function ReceiveBankDetailsScreen({ navigation, route }: Navigati
   const copyToClipboard = useCopyToClipboard()
   const queryClient = useQueryClient()
   const { scope } = useScope()
+  const accountRestriction = useAccountRestrictionData(Boolean(scope?.userId))
+  const depositsRestricted = accountRestriction.active
   const vaQuery = useConsumerVirtualAccounts()
 
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({})
@@ -98,7 +109,7 @@ export default function ReceiveBankDetailsScreen({ navigation, route }: Navigati
     isFetched: vaFetched,
     hasCachedEntry: vaRecord != null,
   })
-  const showBankDepositDetails = verificationComplete && hasAccountData
+  const showBankDepositDetails = verificationComplete && hasAccountData && !depositsRestricted
 
   const accountCreationTriggeredRef = useRef(false)
   const depositRefreshForKycRef = useRef<string | null>(null)
@@ -266,6 +277,10 @@ export default function ReceiveBankDetailsScreen({ navigation, route }: Navigati
   }
 
   const handleCreateAccounts = async () => {
+    if (depositsRestricted) {
+      showError(accountRestrictionDepositsBlockedCopy())
+      return
+    }
     try {
       setAccountCreationError(null)
       haptics.medium()
@@ -322,7 +337,9 @@ export default function ReceiveBankDetailsScreen({ navigation, route }: Navigati
         void queryClient.invalidateQueries({ queryKey: qk.wallets.root(scope) })
       }
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to create accounts'
+      const errorMessage =
+        accountRestrictionMessageFromError(error, 'deposit') ||
+        (error instanceof Error ? error.message : 'Failed to create accounts')
       setAccountCreationError(errorMessage)
       if (
         errorMessage.toLowerCase().includes('tos') ||
@@ -398,7 +415,12 @@ export default function ReceiveBankDetailsScreen({ navigation, route }: Navigati
           contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
         >
           <View style={styles.content}>
-            {showBankDepositDetails && bankAccountDetails ? (
+            <AccountRestrictionBanner restriction={accountRestriction} />
+            {depositsRestricted ? (
+              <View style={styles.kycNoticeContainer}>
+                <Text style={styles.kycNoticeText}>{accountRestrictionDepositsBlockedCopy()}</Text>
+              </View>
+            ) : showBankDepositDetails && bankAccountDetails ? (
               <>
                 <PostHogMaskView style={styles.section}>
                   {bankAccountDetails.accountName &&
@@ -479,7 +501,7 @@ export default function ReceiveBankDetailsScreen({ navigation, route }: Navigati
                     : !kycStatus
                       ? 'Please complete your identity verification to receive bank deposit information.'
                       : kycStatus === 'rejected'
-                        ? 'Your verification could not be completed. Please complete identity verification again to receive your account details.'
+                        ? 'Your verification could not be completed. Review your status or contact support if you need help.'
                         : kycStatus === 'approved'
                           ? 'Your account is being set up. This may take a few moments. Please check back shortly.'
                           : 'Please complete your identity verification to receive bank deposit information.'}
@@ -493,7 +515,9 @@ export default function ReceiveBankDetailsScreen({ navigation, route }: Navigati
                       navigation.navigate('AccountVerification' as never)
                     }}
                   >
-                    <Text style={styles.kycNoticeButtonText}>Complete Verification</Text>
+                    <Text style={styles.kycNoticeButtonText}>
+                      {kycStatus === 'rejected' ? 'Status' : 'Complete Verification'}
+                    </Text>
                     <ArrowRight size={18} color={colors.text.inverse} strokeWidth={2} />
                   </Pressable>
                 ) : null}

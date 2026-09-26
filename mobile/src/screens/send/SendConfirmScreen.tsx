@@ -48,6 +48,7 @@ import { useCalmParallelEnterWhen } from '../../hooks/useCalmParallelEnter'
 import { ripple } from '../../lib/androidRipple'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToast } from '../../components/ToastProvider'
+import { accountRestrictionMessageFromError } from '../../lib/accountRestrictionErrors'
 import { useBalance } from '../../contexts/BalanceContext'
 import { useScope } from '../../query/scope'
 import { apiFetch } from '../../query/api-client'
@@ -807,9 +808,14 @@ export default function SendConfirmScreen({ navigation, route }: NavigationProps
         } catch (e: unknown) {
           if (!cancelled) {
             haptics.error()
-            const msg = e instanceof Error ? e.message : TRANSFER_FAIL_MESSAGE
+            const restrictionMsg = accountRestrictionMessageFromError(e, 'send')
+            const msg =
+              restrictionMsg ||
+              (e instanceof Error ? e.message : TRANSFER_FAIL_MESSAGE)
             setTransferError(
-              customerFacingSendAmountError(msg, selectedBalanceCurrency) || msg,
+              restrictionMsg ||
+                customerFacingSendAmountError(msg, selectedBalanceCurrency) ||
+                msg,
             )
           }
         } finally {

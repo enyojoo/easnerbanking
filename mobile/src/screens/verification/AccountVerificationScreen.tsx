@@ -23,7 +23,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
-import { qk, canResubmitNoahVerification, getNoahRejectionDisplay, NOAH_FINAL_REJECTION_USER_MESSAGE, NOAH_VERIFICATION_IN_REVIEW_COPY, VERIFICATION_STATUS_COPY, verificationStatusLabel, EXPRESS_DEPOSITS_COPY, expressDepositsPayerCountry, expressDepositsVerificationCta, isStripeOnrampPayerEligible } from '@easner/shared'
+import { qk, NOAH_FINAL_REJECTION_USER_MESSAGE, NOAH_VERIFICATION_IN_REVIEW_COPY, VERIFICATION_STATUS_COPY, verificationStatusLabel, EXPRESS_DEPOSITS_COPY, expressDepositsPayerCountry, expressDepositsVerificationCta, isStripeOnrampPayerEligible, ACCOUNT_RESTRICTION_STATUS_LABEL, accountRestrictionVerificationBlockedCopy } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
 import ExternalLinkModal from '../../components/ExternalLinkModal'
@@ -31,7 +31,10 @@ import BridgeHostedVerificationModal from '../../components/BridgeHostedVerifica
 import { useExternalLink } from '../../hooks/useExternalLink'
 import { useBridgeHostedVerification } from '../../hooks/useBridgeHostedVerification'
 import { useAuth } from '../../contexts/AuthContext'
+import { useAccountRestrictionData } from '../../hooks/queries/use-account-restriction'
 import { NavigationProps } from '../../types'
+import { mobileHubKycCtaLabel, MOBILE_HUB_KYC_HOLD_COPY, mobileHubKycStatusIsInReview } from '../../lib/compliance/hub-kyc-cta'
+import { bridgeCustomerRejectionReason } from '../../lib/compliance/bridge-rejection-copy'
 import { noahService } from '../../lib/noahService'
 import { supabase } from '../../lib/supabase'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -468,15 +471,31 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   const bankKycStatus = consumerBankKycStatus(userProfile)
   const cutoverPending = isBridgeConsumerCutoverPending(userProfile)
   const noahKycApproved = bankKycStatus.toLowerCase() === 'approved' && !cutoverPending
-  const showExpressCta = Boolean(expressCta) && noahKycApproved
+  const accountRestriction = useAccountRestrictionData(Boolean(userProfile?.id || user?.id))
+  const accountRestricted = accountRestriction.active
   const kycStatusLower = bankKycStatus.trim().toLowerCase()
-  const noahKycInReview = kycStatusLower === 'under_review' || kycStatusLower === 'in_review' || kycStatusLower === 'pending'
+  const noahKycInReview = mobileHubKycStatusIsInReview(kycStatusLower)
   const noahKycRejected = kycStatusLower === 'rejected'
-  const rejectionReasons =
-    userProfile?.noah_kyc_rejection_reasons ?? userProfile?.profile?.noah_kyc_rejection_reasons
-  const rejectionDisplay = noahKycRejected ? getNoahRejectionDisplay(rejectionReasons) : null
-  const kycFinalReject = rejectionDisplay?.isFinal === true
-  const kycCanResubmit = noahKycRejected ? canResubmitNoahVerification(rejectionReasons) : true
+  const noahKycOnHold = kycStatusLower === 'hold'
+  const bridgeRejectReason = noahKycRejected
+    ? bridgeCustomerRejectionReason(
+        userProfile?.bridge_kyc_rejection_reasons ??
+          userProfile?.profile?.bridge_kyc_rejection_reasons,
+      )
+    : null
+  const rejectionAlertCopy = noahKycRejected
+    ? bridgeRejectReason || NOAH_FINAL_REJECTION_USER_MESSAGE
+    : null
+  const globalBankingCtaLabel = accountRestricted
+    ? null
+    : mobileHubKycCtaLabel({
+        status: bankKycStatus,
+        complete: noahKycApproved,
+        forceContinue: cutoverPending,
+      })
+  const showExpressCta = Boolean(expressCta) && noahKycApproved && !accountRestricted
+  const showDocsNotice =
+    !noahKycApproved && !noahKycRejected && !noahKycInReview && !accountRestricted
   const residenceCountry = residenceCountryFromProfile(userProfile)
 
   const proceedOpenKyc = async (residenceOverride?: string) => {
@@ -700,8 +719,12 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   }
 
   const handleOpenKYC = async () => {
-    if (kycFinalReject || !kycCanResubmit) {
-      showWarning(NOAH_FINAL_REJECTION_USER_MESSAGE)
+    if (accountRestricted) {
+      showWarning(accountRestrictionVerificationBlockedCopy())
+      return
+    }
+    if (noahKycRejected || !globalBankingCtaLabel) {
+      showWarning(rejectionAlertCopy || NOAH_FINAL_REJECTION_USER_MESSAGE)
       return
     }
 
@@ -747,7 +770,14 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
   // 1. Noah webhooks (automatic)
   // 2. sync-status when screen loads / after browser dismiss (fallback)
 
-  const getStatusBadge = (status: string | undefined) => {
+  const getStatusBadge = (status: string | undefined, opts?: { restricted?: boolean }) => {
+    if (opts?.restricted) {
+      return (
+        <View style={styles.badgeRed}>
+          <Text style={styles.badgeTextRed}>{ACCOUNT_RESTRICTION_STATUS_LABEL}</Text>
+        </View>
+      )
+    }
     const label = verificationStatusLabel(status, { detail: true })
 
     if (label === VERIFICATION_STATUS_COPY.verified) {
@@ -855,15 +885,25 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
             {!noahKycApproved && (
               <View style={styles.infoCard}>
                 <View style={styles.infoBox}>
-                  {noahKycRejected ? (
+                  {accountRestricted ? (
                     <>
                       <CircleAlert size={20} color={colors.error.main} strokeWidth={2} />
                       <Text style={[styles.infoText, { color: colors.error.main }]}>
-                        {kycFinalReject
-                          ? NOAH_FINAL_REJECTION_USER_MESSAGE
-                          : rejectionDisplay?.guidanceLines?.length
-                            ? `Verification needs attention: ${rejectionDisplay.guidanceLines.join(' ')}`
-                            : 'Verification was declined. Review your documents and try again, or contact support if you need help.'}
+                        {accountRestrictionVerificationBlockedCopy()}
+                      </Text>
+                    </>
+                  ) : noahKycRejected ? (
+                    <>
+                      <CircleAlert size={20} color={colors.error.main} strokeWidth={2} />
+                      <Text style={[styles.infoText, { color: colors.error.main }]}>
+                        {rejectionAlertCopy}
+                      </Text>
+                    </>
+                  ) : noahKycOnHold ? (
+                    <>
+                      <CircleAlert size={20} color={colors.error.main} strokeWidth={2} />
+                      <Text style={[styles.infoText, { color: colors.error.main }]}>
+                        {MOBILE_HUB_KYC_HOLD_COPY}
                       </Text>
                     </>
                   ) : noahKycInReview ? (
@@ -886,9 +926,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
             )}
 
             {/* Verification products: Global banking is live; others stay visible as coming later. */}
-            {!noahKycApproved && !kycFinalReject ? (
-              <KycRequiredDocumentsNotice />
-            ) : null}
+            {showDocsNotice ? <KycRequiredDocumentsNotice /> : null}
             <View style={styles.cardsContainer}>
               {noahKycApproved ? (
                 <View style={styles.card}>
@@ -905,34 +943,11 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                       </Text>
                     </View>
                     <View style={styles.cardRight}>
-                      {getStatusBadge(
-                        bankKycStatus || 'approved',
-                      )}
+                      {getStatusBadge(bankKycStatus || 'approved', { restricted: accountRestricted })}
                     </View>
                   </View>
                 </View>
-              ) : kycFinalReject ? (
-                <View style={styles.card}>
-                  <View style={styles.cardContent}>
-                    <View style={styles.cardLeft}>
-                      <View style={styles.iconContainer}>
-                        <ProductGlyph id="global_banking" size={24} color={colors.primary.main} />
-                      </View>
-                      <Text style={styles.cardTitle}>
-                        {tierTitleDisplay(GLOBAL_BANKING_PRODUCT.title)}
-                      </Text>
-                      <Text style={styles.cardDescription}>
-                        {GLOBAL_BANKING_PRODUCT.description}
-                      </Text>
-                    </View>
-                    <View style={styles.cardRight}>
-                      {getStatusBadge(
-                        bankKycStatus || 'rejected',
-                      )}
-                    </View>
-                  </View>
-                </View>
-              ) : (
+              ) : globalBankingCtaLabel && !loadingKyc ? (
                 <View style={styles.card}>
                   <View style={styles.cardInner}>
                     <View style={[styles.cardContent, styles.cardContentWithCta]}>
@@ -951,33 +966,48 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                         </Text>
                       </View>
                       <View style={styles.cardRight}>
-                        {loadingKyc ? (
-                          <ActivityIndicator size="small" color={colors.primary.main} />
-                        ) : (
-                          getStatusBadge(bankKycStatus || 'not_started')
-                        )}
+                        {getStatusBadge(bankKycStatus || 'not_started')}
                       </View>
                     </View>
-                    {!loadingKyc ? (
-                      <Pressable
-                        onPress={async () => {
-                          haptics.tap()
-                          await handleOpenKYC()
-                        }}
-                        style={({ pressed }) => [
-                          styles.startBadge,
-                          pressed && Platform.OS === 'ios' && styles.cardPressed,
-                        ]}
-                        android_ripple={{ color: 'rgba(0, 122, 204, 0.12)', borderless: false }}
-                      >
-                        <Text style={styles.startBadgeText}>
-                          {cutoverPending || kycStatusLower === 'in_progress' || kycStatusLower === 'pending'
-                            ? 'Continue'
-                            : 'Start'}
-                        </Text>
-                        <ChevronRight size={12} color={colors.neutral.white} strokeWidth={2} />
-                      </Pressable>
-                    ) : null}
+                    <Pressable
+                      onPress={async () => {
+                        haptics.tap()
+                        await handleOpenKYC()
+                      }}
+                      style={({ pressed }) => [
+                        styles.startBadge,
+                        pressed && Platform.OS === 'ios' && styles.cardPressed,
+                      ]}
+                      android_ripple={{ color: 'rgba(0, 122, 204, 0.12)', borderless: false }}
+                    >
+                      <Text style={styles.startBadgeText}>{globalBankingCtaLabel}</Text>
+                      <ChevronRight size={12} color={colors.neutral.white} strokeWidth={2} />
+                    </Pressable>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.card}>
+                  <View style={styles.cardContent}>
+                    <View style={styles.cardLeft}>
+                      <View style={styles.iconContainer}>
+                        <ProductGlyph id="global_banking" size={24} color={colors.primary.main} />
+                      </View>
+                      <Text style={styles.cardTitle}>
+                        {tierTitleDisplay(GLOBAL_BANKING_PRODUCT.title)}
+                      </Text>
+                      <Text style={styles.cardDescription}>
+                        {GLOBAL_BANKING_PRODUCT.description}
+                      </Text>
+                    </View>
+                    <View style={styles.cardRight}>
+                      {loadingKyc ? (
+                        <ActivityIndicator size="small" color={colors.primary.main} />
+                      ) : (
+                        getStatusBadge(bankKycStatus || (noahKycRejected ? 'rejected' : 'not_started'), {
+                          restricted: accountRestricted,
+                        })
+                      )}
+                    </View>
                   </View>
                 </View>
               )}

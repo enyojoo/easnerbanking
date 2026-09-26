@@ -72,7 +72,10 @@ import { WebAwareModal } from '../../components/WebAwareModal'
 import { CachedImage } from '../../components/CachedImage'
 import KeyboardSafeContainer from '../../components/KeyboardSafeContainer'
 import { useQueryClient } from '@tanstack/react-query'
+import { accountRestrictionSendBlockedCopy } from '@easner/shared'
 import { useAuth } from '../../contexts/AuthContext'
+import { useAccountRestrictionData } from '../../hooks/queries/use-account-restriction'
+import { AccountRestrictionBanner } from '../../components/AccountRestrictionBanner'
 import { useCurrenciesCatalog, useRecipientsList, useTransactionsList, mapLedgerRowToTransaction, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
 import { prefetchSendRatesForRecipient } from '../../lib/warmSendRateCaches'
 import { useScope } from '../../query/scope'
@@ -137,6 +140,14 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   const footerPadding = useFixedFooterPadding(spacing[4])
   const { user, userProfile } = useAuth()
   const { showError } = useToast()
+  const accountRestriction = useAccountRestrictionData(Boolean(user?.id))
+  const accountRestricted = accountRestriction.active
+
+  const assertSendAllowed = () => {
+    if (!accountRestricted) return true
+    showError(accountRestrictionSendBlockedCopy())
+    return false
+  }
   const preferredBalanceCurrency = String((route.params as any)?.preferredBalanceCurrency || '').toUpperCase()
   const routePaymentMethod = (route.params as any)?.selectedPaymentMethod as
     | 'balance'
@@ -464,6 +475,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
 
   const handleSelectRecipient = async (recipient: Recipient) => {
     haptics.tap()
+    if (!assertSendAllowed()) return
     let selected = recipient
     if (userProfile?.id && isDraftRecipientId(recipient.id)) {
       try {
@@ -618,6 +630,7 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
   }
 
   const handleAddRecipient = async () => {
+    if (!assertSendAllowed()) return
     if (!userProfile?.id) {
       showError('User not authenticated')
       return
@@ -894,6 +907,13 @@ export default function SelectRecentRecipientScreen({ navigation, route }: Navig
             <Text style={styles.title}>Send Money</Text>
           </View>
         </Animated.View>
+
+        <View style={styles.restrictionBannerSlot}>
+          <AccountRestrictionBanner restriction={accountRestriction} />
+          {accountRestricted ? (
+            <Text style={styles.restrictionBlockedText}>{accountRestrictionSendBlockedCopy()}</Text>
+          ) : null}
+        </View>
 
         <Animated.View
           style={[
@@ -1970,6 +1990,15 @@ const styles = StyleSheet.create({
   title: {
     ...textStyles.headlineMedium,
     color: colors.text.primary,
+  },
+  restrictionBannerSlot: {
+    paddingHorizontal: spacing[5],
+    marginBottom: spacing[2],
+    gap: spacing[2],
+  },
+  restrictionBlockedText: {
+    ...textStyles.caption,
+    color: colors.error.main,
   },
   searchContainer: {
     paddingHorizontal: spacing[5],

@@ -513,6 +513,9 @@ export default function AppNavigator() {
   const [pinGate, setPinGate] = useState<'loading' | 'setup' | 'pin' | 'main'>('loading')
   const restrictionQuery = useAccountRestriction(Boolean(user?.id))
   const accountRestriction = restrictionQuery.data ?? emptyAccountRestriction()
+  /** Hold MainStack until first restriction fetch settles so locked accounts never flash the app. */
+  const restrictionGatePending =
+    Boolean(user?.id) && restrictionQuery.data === undefined && restrictionQuery.isPending
   const [lockTick, setLockTick] = useState(0)
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(Platform.OS === 'web' ? true : null)
   /** Web: keep MainStack mounted after the first unlock so idle PIN does not reset navigation. */
@@ -890,6 +893,10 @@ export default function AppNavigator() {
 
   if (user && mfaPending) {
     return <MfaStack key="mfa-stack" />
+  }
+
+  if (user && restrictionGatePending) {
+    return <AuthFlowLoadingShell palette={palette} testId="Checking account status" />
   }
 
   if (user && accountRestriction.active && accountRestriction.phase === "locked") {

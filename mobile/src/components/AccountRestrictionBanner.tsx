@@ -1,8 +1,8 @@
 import React from 'react'
 import { Pressable, View, Text, StyleSheet } from 'react-native'
 import {
-  ACCOUNT_RESTRICTION_WIND_DOWN_BANNER,
   ACCOUNT_RESTRICTION_WIND_DOWN_CONTACT_CTA,
+  accountRestrictionWindDownBannerCopy,
   type ResolvedAccountRestriction,
 } from '@easner/shared'
 import { presentIntercomMessenger } from '../lib/intercom'
@@ -28,7 +28,7 @@ export function AccountRestrictionBanner({
       ]}
     >
       <Text style={[styles.text, { color: palette.warning.dark }]}>
-        {ACCOUNT_RESTRICTION_WIND_DOWN_BANNER}
+        {accountRestrictionWindDownBannerCopy(restriction.windDownEndsAt)}
       </Text>
       <Pressable
         accessibilityRole="button"

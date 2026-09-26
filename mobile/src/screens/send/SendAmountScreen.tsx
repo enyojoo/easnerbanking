@@ -51,7 +51,11 @@ import { resolveMobilePayInProvider } from '../../lib/resolveMobilePayInProvider
 import { CountryFlag } from '../../components/flags/CountryFlag'
 import { useAuth } from '../../contexts/AuthContext'
 import { useScope } from '../../query/scope'
+import { accountRestrictionSendBlockedCopy } from '@easner/shared'
 import { isGlobalBankingVerified } from '../../lib/compliance'
+import { consumerBankKycStatus } from '../../lib/bridgeConsumerKyc'
+import { useAccountRestrictionData } from '../../hooks/queries/use-account-restriction'
+import { accountRestrictionMessageFromError } from '../../lib/accountRestrictionErrors'
 import { generateTransactionId } from '../../lib/transactionId'
 import { useBalance } from '../../contexts/BalanceContext'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
@@ -196,6 +200,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   const { showError, showInfo } = useToast()
   const qc = useQueryClient()
   const { scope } = useScope()
+  const accountRestriction = useAccountRestrictionData(Boolean(userProfile?.id))
+  const accountRestricted = accountRestriction.active
   const noahKycStatus =
     userProfile?.noah_kyc_status ??
     (userProfile as { noah_kyc_status?: string; profile?: { noah_kyc_status?: string } })?.profile?.noah_kyc_status
@@ -1284,6 +1290,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   }
 
   const globalBankingOk = isGlobalBankingVerified(userProfile)
+  const kycRejected = consumerBankKycStatus(userProfile).trim().toLowerCase() === 'rejected'
   const showVerificationNotice = !globalBankingOk
   const ctaTopPadding = showVerificationNotice ? spacing[2] : spacing[2]
   const verificationBlocksSend =
@@ -1291,6 +1298,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     (selectedPaymentMethod === 'balance' || selectedPaymentMethod === 'otherCurrency'
       ? !globalBankingOk
       : false)
+  const restrictionBlocksSend = accountRestricted
 
   const needsBackgroundPayoutQuote =
     selectedPaymentMethod === 'balance' &&
@@ -1522,6 +1530,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     !selectedPaymentMethod ||
     (selectedPaymentMethod === 'otherCurrency' && (!selectedOtherCurrency || !selectedOtherPaymentMethod)) ||
     verificationBlocksSend ||
+    restrictionBlocksSend ||
     hasInsufficientBalance ||
     (isWalletRecipient &&
       selectedPaymentMethod === 'balance' &&
@@ -1542,8 +1551,9 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       ? currentBalance - (balanceDebitEstimate > 0 ? balanceDebitEstimate : 0)
       : 0
 
-  const insufficientBalanceMessage =
-    hasInsufficientBalance && selectedPaymentMethod === 'balance'
+  const insufficientBalanceMessage = restrictionBlocksSend
+    ? accountRestrictionSendBlockedCopy()
+    : hasInsufficientBalance && selectedPaymentMethod === 'balance'
       ? insufficientSourceBalanceDetail()
       : amountFieldError
         ? customerFacingSendAmountError(amountFieldError, selectedBalanceCurrency) ?? amountFieldError
@@ -1599,6 +1609,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       }
 
       if (verificationBlocksSend) return
+      if (restrictionBlocksSend) {
+        showError(accountRestrictionSendBlockedCopy())
+        return
+      }
 
       const fieldCheck = validateSendAmountFields({
         hints: payoutHints,
@@ -1957,7 +1971,10 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
       }
     } catch (e) {
       console.error('[SendAmount] continue failed:', e)
-      showError(e instanceof Error ? e.message : 'Something went wrong. Try again.')
+      showError(
+        accountRestrictionMessageFromError(e, 'send') ||
+          (e instanceof Error ? e.message : 'Something went wrong. Try again.'),
+      )
     } finally {
       if (continueSpinnerTimerRef.current) {
         clearTimeout(continueSpinnerTimerRef.current)
@@ -2478,10 +2495,18 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                 haptics.tap()
                 navigation.navigate('AccountVerification' as never)
               }} accessibilityRole="button"
-              accessibilityLabel="Verify identity to unlock banking. Begin."
+              accessibilityLabel={
+                kycRejected
+                  ? 'Verification could not be completed. Status.'
+                  : 'Verify identity to unlock banking. Begin.'
+              }
             >
-              <Text style={styles.verifyInlineText}>Verify identity to unlock banking</Text>
-              <Text style={styles.verifyInlineLink}>Begin</Text>
+              <Text style={styles.verifyInlineText}>
+                {kycRejected
+                  ? 'Verification could not be completed'
+                  : 'Verify identity to unlock banking'}
+              </Text>
+              <Text style={styles.verifyInlineLink}>{kycRejected ? 'Status' : 'Begin'}</Text>
             </Pressable>
           ) : null}
           <Pressable

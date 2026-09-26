@@ -58,7 +58,7 @@ import { SectionCard } from '../../components/ui'
 import { formatSignedCurrency, getTransactionStatusDisplay } from '../../utils/formatters'
 import { initialsFromFullName } from '../../lib/userProfileHelpers'
 import { isGlobalBankingVerified } from '../../lib/compliance'
-import { isBridgeConsumerCutoverPending } from '../../lib/bridgeConsumerKyc'
+import { consumerBankKycStatus, isBridgeConsumerCutoverPending } from '../../lib/bridgeConsumerKyc'
 import { noahService } from '../../lib/noahService'
 import { useTransactionsList, prefetchRecentTransactionDetailsInBackground, warmTransactionDetailForNavigation, TRANSACTIONS_LEDGER_PAGE_SIZE } from '../../hooks/queries'
 import { prefetchReceiveDepositQueries } from '../../hooks/queries/use-receive-deposit-queries'
@@ -358,6 +358,8 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
 
   /** Only after `userProfile` is loaded: `isGlobalBankingVerified(undefined)` is false and would flash the banner. */
   const cutoverPending = isBridgeConsumerCutoverPending(userProfile)
+  const bankKycStatusLower = consumerBankKycStatus(userProfile).trim().toLowerCase()
+  const kycRejected = bankKycStatusLower === 'rejected'
   const showVerifyIdentityBanner =
     !authLoading && userProfile != null && (!isGlobalBankingVerified(userProfile) || cutoverPending)
 
@@ -646,17 +648,23 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                   accessibilityLabel={
                     cutoverPending
                       ? 'Update verification to keep receiving bank deposits. Continue.'
-                      : 'Verify identity to unlock banking. Begin.'
+                      : kycRejected
+                        ? 'Verification could not be completed. Status.'
+                        : 'Verify identity to unlock banking. Begin.'
                   }
                 >
                   <View style={styles.verifyAccountBannerTextWrap}>
                     <Text style={styles.verifyAccountBannerTitle} numberOfLines={2}>
                       {cutoverPending
                         ? 'Update verification to keep receiving bank deposits'
-                        : 'Verify identity to unlock banking'}
+                        : kycRejected
+                          ? 'Verification could not be completed'
+                          : 'Verify identity to unlock banking'}
                     </Text>
                   </View>
-                  <Text style={styles.verifyAccountBannerCta}>{cutoverPending ? 'Continue' : 'Begin'}</Text>
+                  <Text style={styles.verifyAccountBannerCta}>
+                    {cutoverPending ? 'Continue' : kycRejected ? 'Status' : 'Begin'}
+                  </Text>
                 </Pressable>
               </View>
             ) : null}
