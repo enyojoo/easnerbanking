@@ -13,6 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { CurrencyFlag } from '../../components/flags/CurrencyFlag'
 import { WebAwareModal } from '../../components/WebAwareModal'
 import ShimmerLoader from '../../components/premium/ShimmerLoader'
+import { BalanceAmount } from '../../components/money/BalanceAmount'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   MessageCircle,
@@ -87,7 +88,6 @@ const DASHBOARD_SELECTED_CURRENCY_KEY_PREFIX = 'easner_dashboard_selected_curren
 /** Recent activity rows shown on Home (UI only). Ledger fetch uses {@link TRANSACTIONS_LEDGER_PAGE_SIZE}. */
 const DASHBOARD_RECENT_TX_LIMIT = 4
 /** Hidden-balance + currency picker label (text). */
-const DASHBOARD_BALANCE_PLACEHOLDER = '••••••'
 
 // Transaction interface for dashboard
 interface DashboardTransaction {
@@ -257,7 +257,7 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
   }, [txQuery.data])
   const loadingTransactions = txQuery.isPending && recentTransactions.length === 0
   const hasAttemptedLoad = txQuery.isFetched
-  const lastStableBalanceTextRef = useRef<Record<string, string>>({})
+  const lastStableBalanceRef = useRef<Record<string, number>>({})
   /** Recent list + "All" row: reduce scroll end padding so the card sits closer to the tab bar. */
   const dashboardRecentListWithAllRow =
     !loadingTransactions && recentTransactions.length > 0
@@ -342,17 +342,13 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     hasResolvedBalance &&
     (hasBalanceForSelectedCurrency ||
       (hasDefinitiveEmptyBalance && isWalletBalanceCurrency))
-  const resolvedBalanceText = canRenderNumericBalance
-    ? formatBalanceDisplay(balance, selectedCurrency)
-    : null
-  if (resolvedBalanceText) {
-    lastStableBalanceTextRef.current[selectedCurrency] = resolvedBalanceText
+  if (canRenderNumericBalance) {
+    lastStableBalanceRef.current[selectedCurrency] = balance
   }
-  const visibleBalanceText = !balanceVisible
-    ? DASHBOARD_BALANCE_PLACEHOLDER
-    : resolvedBalanceText ??
-      lastStableBalanceTextRef.current[selectedCurrency] ??
-      null
+  /** Last good value per currency, so a refetch never blanks the hero. */
+  const heroBalanceAmount: number | null = canRenderNumericBalance
+    ? balance
+    : lastStableBalanceRef.current[selectedCurrency] ?? null
 
   const shouldShowBalanceSkeleton = balanceVisible && !hasResolvedBalance
 
@@ -487,26 +483,6 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
     return out
   }, [recentTransactions])
 
-  function formatBalanceDisplay(amount: number, currency: 'USD' | 'EUR' | 'GBP'): string {
-    const currencySymbol =
-      currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : currency
-    
-    // Format as "X Million" or "X Billion" if >= 100 million
-    if (amount >= 100000000) {
-      // Billions
-      const billions = amount / 1000000000
-      if (billions >= 1) {
-        return `${currencySymbol}${billions.toFixed(1)} Billion`
-      }
-      // Millions (100M - 999M)
-      const millions = amount / 1000000
-      return `${currencySymbol}${millions.toFixed(1)} Million`
-    }
-    
-    // Show full number for amounts below 100 million
-    return `${currencySymbol}${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-  }
-
   const renderCurrencyPicker = () => {
     // Calculate approximate height: header (80) + item height (80) * number of items + padding
     const itemHeight = 80
@@ -557,10 +533,6 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
             <View style={styles.currencyListContainer}>
               {availableCurrencies.map((item) => {
                 const balance = parseFloat((balances as any)[item.code] || '0')
-                // Use the same formatting as the main balance display for consistency
-                const balanceDisplay = balanceVisible 
-                  ? formatBalanceDisplay(balance, item.code as 'USD' | 'EUR')
-                  : DASHBOARD_BALANCE_PLACEHOLDER
                 const isSelected = selectedCurrency === item.code
                 return (
                   <Pressable
@@ -581,9 +553,15 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                     </View>
                     <View style={styles.currencyItemInfo}>
                       <Text style={styles.currencyItemCode}>{item.code} Balance</Text>
-                      <Text style={styles.currencyItemBalance}>
-                        {balanceDisplay}
-                      </Text>
+                      <BalanceAmount
+                        size="row"
+                        amount={balance}
+                        currency={item.code}
+                        hidden={!balanceVisible}
+                        maxFontSize={16}
+                        textStyle={styles.currencyItemBalanceText}
+                        color={palette.text.primary}
+                      />
                     </View>
                     <View style={[
                       styles.checkbox,
@@ -792,19 +770,16 @@ export default function DashboardScreen({ navigation }: NavigationProps) {
                 />
               </View>
             ) : (
-              <Text
-                style={[
-                  textStyles.balanceDisplay,
-                  styles.balanceAmount,
-                  {
-                    color: '#FFFFFF',
-                    fontSize: heroBalanceFontSize,
-                    lineHeight: heroBalanceLineHeight,
-                  },
-                ]}
-              >
-                {visibleBalanceText}
-              </Text>
+              <BalanceAmount
+                size="hero"
+                amount={heroBalanceAmount}
+                currency={selectedCurrency}
+                hidden={!balanceVisible}
+                maxFontSize={heroBalanceFontSize}
+                color="#FFFFFF"
+                textStyle={[textStyles.balanceDisplay, styles.balanceAmountText]}
+                style={styles.balanceAmount}
+              />
             )}
           </View>
 
@@ -1244,10 +1219,8 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
     fontFamily: fontFamily.semibold,
     marginBottom: 2,
   },
-  currencyItemBalance: {
-    fontSize: 16,
+  currencyItemBalanceText: {
     fontWeight: '600',
-    color: c.text.primary,
     fontFamily: fontFamily.semibold,
     marginTop: 2,
   },
@@ -1292,6 +1265,8 @@ function createDashboardStyles(c: Colors, scrollBottomPadding: number) {
   },
   balanceAmount: {
     flex: 1,
+  },
+  balanceAmountText: {
     fontWeight: '700',
     letterSpacing: -1,
   },

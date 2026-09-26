@@ -1403,10 +1403,12 @@ export {
   isValidNgLocalIdNumber,
   mapNoahKycIdTypeToNgLocal,
   ngLocalVerificationComplete,
+  ngLocalVerificationCta,
   ngSupplementInlinePrompt,
   normalizeNgLocalIdType,
   parseNgLocalIdPair,
   resolveNgLocalVerification,
+  showNgLocalVerificationHubCard,
   showNgSupplementPrompt,
   ycLocalRailsOfferedForNg,
 } from "./ng-local-verification"

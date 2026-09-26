@@ -32,7 +32,11 @@ function formatAmountDigits(value: number, min: number, max: number): string {
   })
 }
 
-/** Symbol + formatted amount (no trailing ISO code). */
+/**
+ * Symbol + formatted amount, the same for every currency and locale:
+ * symbol first, no space, comma thousands, dot decimals ("$24,190.32", "€12,480.00",
+ * "₦3,678.96", "KSh1,500.90"). Negatives use a true minus before the symbol ("−$5").
+ */
 export function formatMoneyDisplay(
   amount: number,
   currency: string,
@@ -41,7 +45,9 @@ export function formatMoneyDisplay(
   const code = String(currency || "USD").trim().toUpperCase()
   const { min, max } = resolveFractionDigits(options)
   const sym = getSendAmountFieldSymbol(code)
-  const value = Number.isFinite(amount) ? amount : 0
+  const raw = Number.isFinite(amount) ? amount : 0
+  const sign = raw < 0 ? "\u2212" : ""
+  const value = Math.abs(raw)
   const useExplicitDigits =
     options?.minimumFractionDigits != null || options?.maximumFractionDigits != null
   const formatted = useExplicitDigits
@@ -50,5 +56,5 @@ export function formatMoneyDisplay(
         maximumFractionDigits: max,
       })
     : formatAmountDigits(value, min, max)
-  return `${sym}${formatted}`
+  return `${sign}${sym}${formatted}`
 }

@@ -51,6 +51,7 @@ export type ScreenRouteName =
   | 'ExpressDepositPaymentSetup'
   | 'ExpressDepositReview'
   | 'ExpressDepositsSetup'
+  | 'NgLocalVerificationSetup'
   | 'ReceiveLocalMomoSetup'
   | 'ReceiveLocalReview'
   | 'OpenCurrencyAccount'
@@ -117,6 +118,7 @@ export const SCREEN_TRANSITION_MAP: Record<ScreenRouteName, ScreenTransitionEntr
   ExpressDepositPaymentSetup: { intent: 'flowStep' },
   ExpressDepositReview: { intent: 'flowStep', flowStepTerminal: true },
   ExpressDepositsSetup: { intent: 'flowStep' },
+  NgLocalVerificationSetup: { intent: 'flowStep' },
   ReceiveLocalMomoSetup: { intent: 'flowStep' },
   ReceiveLocalReview: { intent: 'flowStep', flowStepTerminal: true },
 

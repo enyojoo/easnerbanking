@@ -21,6 +21,8 @@ import ScreenWrapper from '../../components/ScreenWrapper'
 import { useFixedFooterPadding } from '../../hooks/useScrollBottomPadding'
 import { WebAwareModal } from '../../components/WebAwareModal'
 import SkeletonLoader from '../../components/SkeletonLoader'
+import { BalanceAmount } from '../../components/money/BalanceAmount'
+import { useAmountEntryMotion } from '../../components/money/useAmountEntryMotion'
 import { CachedImage } from '../../components/CachedImage'
 import { NavigationProps } from '../../types'
 import {
@@ -628,6 +630,8 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
   // Run entrance animations
   useCalmParallelEnterWhen(true, headerAnim, contentAnim)
 
+  const amountMotion = useAmountEntryMotion()
+
   // Format amount with commas, optional decimal, max 2 decimals.
   const formatAmount = (rawValue: string): string => {
     const input = String(rawValue || '').replace(/,/g, '').replace(/[^0-9.]/g, '')
@@ -652,14 +656,23 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     let raw = sendAmount.replace(/,/g, '')
 
     if (value === 'backspace') {
+      if (raw === '0' || raw === '') {
+        amountMotion.shake()
+        return
+      }
       const next = raw.slice(0, -1)
       setSendAmount(formatAmount(next))
+      amountMotion.pulse('remove')
       return
     }
 
     if (value === '.') {
-      if (raw.includes('.')) return
+      if (raw.includes('.')) {
+        amountMotion.shake()
+        return
+      }
       setSendAmount(formatAmount(`${raw}.`))
+      amountMotion.pulse('add')
       return
     }
 
@@ -667,12 +680,16 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
     if (!/^\d$/.test(value)) return
     if (raw.includes('.')) {
       const decimals = raw.split('.')[1] ?? ''
-      if (decimals.length >= 2) return
+      if (decimals.length >= 2) {
+        amountMotion.shake()
+        return
+      }
     }
 
     if (raw === '0') raw = value
     else raw += value
     setSendAmount(formatAmount(raw))
+    amountMotion.pulse('add')
   }
 
   const handleWebAmountChange = (text: string) => {
@@ -2231,7 +2248,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
               <View style={styles.amountSection}>
                 <View style={[styles.amountInputWrapper, { height: amountRowHeight }]}>
                   <View style={styles.amountInputContainer}>
-                    <View style={styles.amountInputRow}>
+                    <Animated.View style={[styles.amountInputRow, amountMotion.style]}>
                       <Text
                         style={[
                           styles.amountInput,
@@ -2259,7 +2276,7 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       >
                         {recipient ? sendAmount : '0'}
                       </Text>
-                    </View>
+                    </Animated.View>
                   </View>
           </View>
 
@@ -2580,10 +2597,6 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                       balanceDebitEstimate > 0 &&
                       item.code === selectedBalanceCurrency
                     const displayBalance = showLiveRemaining ? balance - balanceDebitEstimate : balance
-                    const balanceFormatted = displayBalance.toLocaleString('en-US', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })
                     const isSelected = selectedBalanceCurrency === item.code && selectedPaymentMethod === 'balance'
                     return (
                       <Pressable
@@ -2605,14 +2618,15 @@ export default function SendAmountScreen({ navigation, route }: NavigationProps)
                         </View>
                         <View style={styles.currencyItemInfo}>
                           <Text style={styles.currencyItemCode}>{item.code} Balance</Text>
-                          <Text
-                            style={[
-                              styles.currencyItemBalance,
-                              showLiveRemaining && displayBalance < 0 && { color: colors.semantic.destructive },
-                            ]}
-                          >
-                            {item.symbol}{balanceFormatted}
-                          </Text>
+                          <BalanceAmount
+                            size="row"
+                            amount={displayBalance}
+                            currency={item.code}
+                            maxFontSize={16}
+                            textStyle={styles.currencyItemBalanceText}
+                            color={showLiveRemaining && displayBalance < 0 ? colors.semantic.destructive : colors.text.primary}
+                            style={styles.currencyItemBalance}
+                          />
                         </View>
                         <View style={[
                           styles.checkbox,
@@ -3183,11 +3197,11 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   currencyItemBalance: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text.primary,
-    fontFamily: fontFamily.semibold,
     marginTop: 2,
+  },
+  currencyItemBalanceText: {
+    fontWeight: '600',
+    fontFamily: fontFamily.semibold,
   },
   checkbox: {
     width: 24,

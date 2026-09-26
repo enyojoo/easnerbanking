@@ -477,7 +477,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
   }, [profileResidenceCountry])
 
   useEffect(() => {
-    if (account.currency !== "USD" || !canUseGeoPersonalRails) return
+    if (!dialogOpen || account.currency !== "USD" || !canUseGeoPersonalRails) return
     let cancelled = false
     void (async () => {
       try {
@@ -507,7 +507,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
     return () => {
       cancelled = true
     }
-  }, [account.currency, canUseGeoPersonalRails])
+  }, [dialogOpen, account.currency, canUseGeoPersonalRails])
 
   useEffect(() => {
     if (account.currency !== "USD") return
@@ -884,10 +884,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                 {cashView === "list" ? (
                   <div className="space-y-4">
                     {localPayInCurrency === "NGN" && ngMissingTypes.length > 0 ? (
-                      <NgLocalVerificationNotice
-                        missingTypes={ngMissingTypes}
-                        onSaved={() => setNgMissingTypes([])}
-                      />
+                      <NgLocalVerificationNotice missingTypes={ngMissingTypes} />
                     ) : null}
 
                     <div className="flex flex-col gap-3">
@@ -998,7 +995,7 @@ export function CurrencyDepositDialog({ account, copiedField, onCopy }: Currency
                   <LocalDepositWizard
                     residenceCountry={localCountry || effectiveResidence!}
                     ngMissingTypes={localPayInCurrency === "NGN" ? ngMissingTypes : []}
-                    onNgSaved={() => setNgMissingType(null)}
+                    onNgSaved={() => setNgMissingTypes([])}
                     copiedField={copiedField}
                     onCopy={onCopy}
                     initialRail={localRail}

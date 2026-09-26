@@ -18,13 +18,14 @@ import {
   BUSINESS_DEPOSIT_KYB_COPY,
   US_PAY_IN_MODE_OPTIONS,
   findUsUsdBankCorridor,
+  formatMoneyDisplay,
   resolveBusinessDepositKyb,
   resolveBusinessLedgerPayInProvider,
   resolveUsPayInModeFromCorridor,
 } from "@easner/shared"
 
 function formatBalance(amount: number, currency: string): string {
-  return `${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`
+  return formatMoneyDisplay(amount, currency, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function vaFieldRows(va: OfficeVirtualAccount): Array<[string, string]> {

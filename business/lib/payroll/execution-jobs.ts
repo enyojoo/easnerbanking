@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { formatMoneyDisplay } from "@easner/shared"
 import { resolveBusinessOrgOwnerUserId } from "@/lib/business/org-owner"
 import {
   executePayrollRun,
@@ -155,11 +156,7 @@ export async function processPayrollExecutionJobs(
             Number(priorData.shortfall ?? -1) !== shortfall ||
             String(priorData.currency || "") !== currency
           const money = (amount: number) =>
-            new Intl.NumberFormat("en", {
-              style: "currency",
-              currency,
-              currencyDisplay: "code",
-            }).format(amount)
+            formatMoneyDisplay(amount, currency, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
           if (fundingRequirementChanged) {
             const executionSchedule = (
               (run.approval_snapshot as Record<string, unknown> | null)?.executionSchedule as

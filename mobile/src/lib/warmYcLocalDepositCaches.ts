@@ -61,12 +61,18 @@ const OPTIMISTIC_MOMO_COUNTRIES = new Set([
 const receiveRailsCache = new Map<string, { data: YcReceiveRailsResponse; at: number }>()
 const gridReceiveRailsCache = new Map<string, { data: YcReceiveRailsResponse; at: number }>()
 let payInRatesCache: { rates: YcRateClientRow[]; at: number } | null = null
-const ngVerifyCache = new Map<string, { missingType: NgLocalIdType | null; at: number }>()
+const ngVerifyCache = new Map<
+  string,
+  { missingType: NgLocalIdType | null; missingTypes: NgLocalIdType[]; complete: boolean; at: number }
+>()
 
 const receiveRailsInflight = new Map<string, Promise<YcReceiveRailsResponse | null>>()
 const gridReceiveRailsInflight = new Map<string, Promise<YcReceiveRailsResponse | null>>()
 let payInRatesInflight: Promise<YcRateClientRow[] | null> | null = null
-const ngVerifyInflight = new Map<string, Promise<NgLocalIdType | null>>()
+const ngVerifyInflight = new Map<
+  string,
+  Promise<{ missingType: NgLocalIdType | null; missingTypes: NgLocalIdType[]; complete: boolean } | null>
+>()
 let diskHydratePromise: Promise<void> | null = null
 
 export function receiveRailsCacheKey(country: string, currency: string): string {
@@ -180,6 +186,14 @@ function writeYcPayInRatesCache(rates: YcRateClientRow[]): void {
 }
 
 export function readCachedNgLocalMissingType(residenceCountry: string): NgLocalIdType | null | undefined {
+  const hit = readCachedNgLocalVerification(residenceCountry)
+  if (hit === undefined) return undefined
+  return hit.missingType
+}
+
+export function readCachedNgLocalVerification(
+  residenceCountry: string,
+): { missingType: NgLocalIdType | null; missingTypes: NgLocalIdType[]; complete: boolean } | undefined {
   const key = residenceCountry.trim().toUpperCase()
   if (!key) return undefined
   const hit = ngVerifyCache.get(key)
@@ -188,7 +202,28 @@ export function readCachedNgLocalMissingType(residenceCountry: string): NgLocalI
     ngVerifyCache.delete(key)
     return undefined
   }
-  return hit.missingType
+  return {
+    missingType: hit.missingType,
+    missingTypes: hit.missingTypes,
+    complete: hit.complete,
+  }
+}
+
+export function clearNgLocalVerificationCache(residenceCountry?: string): void {
+  if (!residenceCountry) {
+    ngVerifyCache.clear()
+    return
+  }
+  ngVerifyCache.delete(residenceCountry.trim().toUpperCase())
+}
+
+export function writeNgLocalVerificationCache(
+  residenceCountry: string,
+  state: { missingType: NgLocalIdType | null; missingTypes: NgLocalIdType[]; complete: boolean },
+): void {
+  const key = residenceCountry.trim().toUpperCase()
+  if (!key) return
+  ngVerifyCache.set(key, { ...state, at: Date.now() })
 }
 
 export function readCachedGridReceiveRails(
@@ -331,10 +366,17 @@ async function prefetchGridPayInRates(currency: string): Promise<YcRateClientRow
 export async function prefetchNgLocalVerification(
   residenceCountry: string,
 ): Promise<NgLocalIdType | null> {
+  const state = await prefetchNgLocalVerificationState(residenceCountry)
+  return state?.missingType ?? null
+}
+
+export async function prefetchNgLocalVerificationState(
+  residenceCountry: string,
+): Promise<{ missingType: NgLocalIdType | null; missingTypes: NgLocalIdType[]; complete: boolean } | null> {
   const cc = residenceCountry.trim().toUpperCase()
   if (!cc) return null
 
-  const cached = readCachedNgLocalMissingType(cc)
+  const cached = readCachedNgLocalVerification(cc)
   if (cached !== undefined) return cached
 
   const inflight = ngVerifyInflight.get(cc)
@@ -356,8 +398,13 @@ export async function prefetchNgLocalVerification(
         ngLocalIdType: data.ngLocalIdType,
         ngLocalIdNumber: data.ngLocalIdNumber,
       })
-      ngVerifyCache.set(cc, { missingType: state.missingType, at: Date.now() })
-      return state.missingType
+      const snapshot = {
+        missingType: state.missingType,
+        missingTypes: state.missingTypes,
+        complete: state.complete,
+      }
+      writeNgLocalVerificationCache(cc, snapshot)
+      return snapshot
     } catch {
       return null
     } finally {

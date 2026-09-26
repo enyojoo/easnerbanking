@@ -1,5 +1,6 @@
 "use client"
 
+import { formatMoneyDisplay } from "@easner/shared"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -26,7 +27,7 @@ function fmtFiat(amount: number | string | null, currency: string | null) {
   const n = typeof amount === "string" ? Number.parseFloat(amount) : amount
   if (amount == null || !Number.isFinite(n)) return "–"
   const c = (currency || "USD").toUpperCase()
-  return `${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${c}`
+  return formatMoneyDisplay(n as number, c, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 export default function TerminalPage() {

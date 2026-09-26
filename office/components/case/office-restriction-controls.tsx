@@ -25,7 +25,7 @@ import {
 import { officeFetch } from "@/lib/api-client"
 import { officeKeys } from "@/lib/query/keys"
 import { useOfficeSubjectBanking } from "@/hooks/queries"
-import { accountRestrictionOfficeLiftBlockedCopy, type AccountRestrictionSource } from "@easner/shared"
+import { accountRestrictionOfficeLiftBlockedCopy, formatMoneyDisplay, type AccountRestrictionSource } from "@easner/shared"
 
 type Phase = "wind_down" | "locked" | null
 type Confirm = "restrict" | "close" | "lift" | "return"
@@ -347,5 +347,5 @@ function availableForDisplay(
   currency: "USD" | "EUR",
 ): string {
   const available = Number(balances.find((b) => b.currency === currency)?.available ?? 0)
-  return available.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return formatMoneyDisplay(available, currency, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }

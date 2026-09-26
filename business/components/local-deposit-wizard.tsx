@@ -596,9 +596,7 @@ export function LocalDepositWizard({
   }, [step, isMomo, residenceCountry])
 
   if (ngMissingTypes.length > 0) {
-    return (
-      <NgLocalVerificationNotice missingTypes={ngMissingTypes} onSaved={onNgSaved} />
-    )
+    return <NgLocalVerificationNotice missingTypes={ngMissingTypes} />
   }
 
   if (railsLoading) {

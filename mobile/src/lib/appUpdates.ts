@@ -15,6 +15,7 @@ const SENSITIVE_UPDATE_ROUTES = new Set([
   'ExpressDepositPaymentSetup',
   'ExpressDepositReview',
   'ExpressDepositsSetup',
+  'NgLocalVerificationSetup',
   'ReceiveLocalReview',
   'ReceiveLocalAmount',
 ])

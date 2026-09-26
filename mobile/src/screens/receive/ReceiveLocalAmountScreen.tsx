@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useFocusEffect } from '@react-navigation/native'
 import {
   View,
   Text,
@@ -75,7 +76,7 @@ import {
   peekLastFundBalanceQuoteError,
   type YcFundBalanceQuote,
 } from '../../lib/sendFlowFundBalanceQuote'
-import { warmYcLocalDepositCaches, ensureYcLocalDepositCachesReady } from '../../lib/warmYcLocalDepositCaches'
+import { warmYcLocalDepositCaches, ensureYcLocalDepositCachesReady, prefetchNgLocalVerificationState } from '../../lib/warmYcLocalDepositCaches'
 import { getPayoutCorridorCache } from '../../lib/sendDestinations'
 import { useResponsiveLayout } from '../../contexts/ResponsiveLayoutContext'
 import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
@@ -90,7 +91,9 @@ type RouteParams = {
   payInRail: YcPayInRail
   bankAvailable?: boolean
   momoAvailable?: boolean
+  /** @deprecated prefer ngMissingTypes */
   ngMissingType?: NgLocalIdType | null
+  ngMissingTypes?: NgLocalIdType[] | null
 }
 
 export default function ReceiveLocalAmountScreen({ navigation, route }: NavigationProps) {
@@ -114,10 +117,24 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
   const payInRail = params.payInRail ?? 'bank_transfer'
   const bankAvailable = params.bankAvailable ?? false
   const momoAvailable = params.momoAvailable ?? false
-  const ngMissingType = params.ngMissingType ?? null
+  const initialMissing =
+    params.ngMissingTypes ??
+    (params.ngMissingType ? [params.ngMissingType] : null)
+  const [ngMissingTypes, setNgMissingTypes] = useState<NgLocalIdType[] | null>(initialMissing)
+  const ngLocalIncomplete = Boolean(ngMissingTypes && ngMissingTypes.length > 0)
 
   const handleBack = useCallback(() => navigateStackBack(navigation), [navigation])
   useStackHardwareBack(handleBack)
+
+  useFocusEffect(
+    useCallback(() => {
+      if (localPayInCurrency !== 'NGN' || !residenceCountry) return
+      void prefetchNgLocalVerificationState(residenceCountry).then((state) => {
+        if (!state) return
+        setNgMissingTypes(state.complete ? [] : state.missingTypes)
+      })
+    }, [localPayInCurrency, residenceCountry]),
+  )
 
   useEffect(() => {
     if (!residenceCountry || !localPayInCurrency) return
@@ -510,12 +527,12 @@ export default function ReceiveLocalAmountScreen({ navigation, route }: Navigati
     )
   }
 
-  if (ngMissingType) {
+  if (ngLocalIncomplete) {
     return (
       <ScreenWrapper>
         <View style={styles.blocked}>
           <ReceiveFlowHeader title="Add money" onBack={handleBack} />
-          <NgLocalVerificationNotice missingType={ngMissingType} onSaved={() => navigation.goBack()} />
+          <NgLocalVerificationNotice missingTypes={ngMissingTypes} />
         </View>
       </ScreenWrapper>
     )

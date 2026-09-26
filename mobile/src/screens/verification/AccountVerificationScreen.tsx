@@ -17,13 +17,14 @@ import {
   CircleAlert,
   CreditCard,
   Globe,
+  IdCard,
   Info,
   Zap,
 } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from '@react-navigation/native'
 import { useQueryClient } from '@tanstack/react-query'
-import { qk, NOAH_FINAL_REJECTION_USER_MESSAGE, NOAH_VERIFICATION_IN_REVIEW_COPY, VERIFICATION_STATUS_COPY, verificationStatusLabel, EXPRESS_DEPOSITS_COPY, expressDepositsPayerCountry, expressDepositsVerificationCta, isStripeOnrampPayerEligible, ACCOUNT_RESTRICTION_STATUS_LABEL, accountRestrictionVerificationBlockedCopy } from '@easner/shared'
+import { qk, NOAH_FINAL_REJECTION_USER_MESSAGE, NOAH_VERIFICATION_IN_REVIEW_COPY, VERIFICATION_STATUS_COPY, verificationStatusLabel, EXPRESS_DEPOSITS_COPY, expressDepositsPayerCountry, expressDepositsVerificationCta, isStripeOnrampPayerEligible, ACCOUNT_RESTRICTION_STATUS_LABEL, accountRestrictionVerificationBlockedCopy, NG_LOCAL_VERIFICATION_COPY, ngLocalVerificationCta, showNgLocalVerificationHubCard, type NgLocalIdType } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { CenteredWebFlowPage } from '../../components/layout/CenteredWebFlowPage'
 import ExternalLinkModal from '../../components/ExternalLinkModal'
@@ -75,6 +76,10 @@ import {
   saveResidenceCountryToUser,
 } from '../../lib/residenceCountryPersist'
 import { loadMobileExpressOnramp } from '../../lib/express-onramp'
+import {
+  prefetchNgLocalVerificationState,
+  readCachedNgLocalVerification,
+} from '../../lib/warmYcLocalDepositCaches'
 import { needsNoahVirtualAccountProvision } from '../../lib/noahAccountSync'
 import {
   readFiatProvisionResolved,
@@ -119,12 +124,14 @@ function expressVerificationStatus(data: { ready?: boolean; status?: string } | 
   return 'not_started'
 }
 
-function AccountVerificationContent({ navigation }: NavigationProps) {
+function AccountVerificationContent({ navigation, route }: NavigationProps) {
   const { user, userProfile, refreshUserProfile } = useAuth()
   const queryClient = useQueryClient()
   const { scope } = useScope()
   const insets = useSafeAreaInsets()
   const { showInfo, showError, showSuccess, showWarning } = useToast()
+  const scrollRef = useRef<ScrollView>(null)
+  const ngLocalCardY = useRef(0)
 
   const [fiatProvisionResolved, setFiatProvisionResolved] = useState(false)
   // Ref to prevent multiple simultaneous Noah / verification status fetches
@@ -498,6 +505,56 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
     !noahKycApproved && !noahKycRejected && !noahKycInReview && !accountRestricted
   const residenceCountry = residenceCountryFromProfile(userProfile)
 
+  const [ngLocalState, setNgLocalState] = useState<{
+    missingTypes: NgLocalIdType[]
+    complete: boolean
+  } | null>(() => {
+    const cc = residenceCountryFromProfile(userProfile)
+    if (!cc) return null
+    const cached = readCachedNgLocalVerification(cc)
+    if (!cached) return null
+    return { missingTypes: cached.missingTypes, complete: cached.complete }
+  })
+
+  const showNgLocalCard = showNgLocalVerificationHubCard(residenceCountry)
+  const ngLocalCta = ngLocalVerificationCta(ngLocalState)
+  const showNgLocalCta =
+    Boolean(ngLocalCta) && noahKycApproved && !accountRestricted && !(ngLocalState?.complete)
+  const ngLocalStatus = ngLocalState?.complete
+    ? 'approved'
+    : ngLocalState && ngLocalState.missingTypes.length === 1
+      ? 'in_progress'
+      : 'not_started'
+
+  const refreshNgLocalState = useCallback(async () => {
+    const cc = residenceCountryFromProfile(userProfile)
+    if (!cc || !showNgLocalVerificationHubCard(cc)) {
+      setNgLocalState(null)
+      return
+    }
+    const state = await prefetchNgLocalVerificationState(cc)
+    if (!state) return
+    setNgLocalState({ missingTypes: state.missingTypes, complete: state.complete })
+  }, [userProfile])
+
+  useEffect(() => {
+    void refreshNgLocalState()
+  }, [refreshNgLocalState, noahKycApproved])
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshNgLocalState()
+      const focusProduct = (route.params as { focusProduct?: string } | undefined)?.focusProduct
+      if (focusProduct === 'ng_local') {
+        const t = setTimeout(() => {
+          scrollRef.current?.scrollTo({ y: Math.max(0, ngLocalCardY.current - 24), animated: true })
+        }, 350)
+        return () => clearTimeout(t)
+      }
+      return undefined
+    }, [refreshNgLocalState, route.params]),
+  )
+
   const proceedOpenKyc = async (residenceOverride?: string) => {
     const email =
       (typeof userProfile?.email === 'string' && userProfile.email.trim()) ||
@@ -829,6 +886,7 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
         keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
       >
         <ScrollView
+          ref={scrollRef}
           style={styles.scrollContainer}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPad }]}
@@ -1063,6 +1121,67 @@ function AccountVerificationContent({ navigation }: NavigationProps) {
                       <View style={styles.cardRight}>
                         {expressStatus === 'approved' ? (
                           getStatusBadge(expressStatus)
+                        ) : (
+                          <View style={styles.comingLaterPill}>
+                            <Text style={styles.comingLaterPillText}>Coming later</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  )}
+                </View>
+              ) : null}
+
+              {showNgLocalCard ? (
+                <View
+                  style={styles.card}
+                  onLayout={(e) => {
+                    ngLocalCardY.current = e.nativeEvent.layout.y
+                  }}
+                >
+                  {showNgLocalCta ? (
+                    <View style={styles.cardInner}>
+                      <View style={[styles.cardContent, styles.cardContentWithCta]}>
+                        <View style={styles.cardLeft}>
+                          <View style={styles.iconContainer}>
+                            <IdCard size={24} color={colors.primary.main} strokeWidth={2} />
+                          </View>
+                          <Text style={styles.cardTitle}>{NG_LOCAL_VERIFICATION_COPY.title}</Text>
+                          <Text style={styles.cardDescription}>
+                            {NG_LOCAL_VERIFICATION_COPY.description}
+                          </Text>
+                        </View>
+                        <View style={styles.cardRight}>{getStatusBadge(ngLocalStatus)}</View>
+                      </View>
+                      <Pressable
+                        onPress={() => {
+                          haptics.tap()
+                          navigation.navigate('NgLocalVerificationSetup' as never)
+                        }}
+                        style={({ pressed }) => [
+                          styles.startBadge,
+                          pressed && Platform.OS === 'ios' && styles.cardPressed,
+                        ]}
+                        android_ripple={{ color: 'rgba(0, 122, 204, 0.12)', borderless: false }}
+                      >
+                        <Text style={styles.startBadgeText}>{ngLocalCta}</Text>
+                        <ChevronRight size={12} color={colors.neutral.white} strokeWidth={2} />
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View style={styles.cardContent}>
+                      <View style={styles.cardLeft}>
+                        <View style={styles.iconContainer}>
+                          <IdCard size={24} color={colors.primary.main} strokeWidth={2} />
+                        </View>
+                        <Text style={styles.cardTitle}>{NG_LOCAL_VERIFICATION_COPY.title}</Text>
+                        <Text style={styles.cardDescription}>
+                          {NG_LOCAL_VERIFICATION_COPY.description}
+                        </Text>
+                      </View>
+                      <View style={styles.cardRight}>
+                        {ngLocalStatus === 'approved' ? (
+                          getStatusBadge(ngLocalStatus)
                         ) : (
                           <View style={styles.comingLaterPill}>
                             <Text style={styles.comingLaterPillText}>Coming later</Text>

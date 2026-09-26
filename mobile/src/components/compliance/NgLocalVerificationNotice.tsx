@@ -1,110 +1,49 @@
-import React, { useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import React from 'react'
+import { StyleSheet, Text } from 'react-native'
+import { useNavigation } from '@react-navigation/native'
 import {
   NG_LOCAL_VERIFICATION_COPY,
-  isValidNgLocalIdNumber,
   ngSupplementInlinePrompt,
   type NgLocalIdType,
 } from '@easner/shared'
-import { WebAwareModal } from '../WebAwareModal'
-import { colors, spacing, textStyles, fontSize, lineHeight as lineHeightScale } from '../../theme'
+import { colors, spacing, textStyles } from '../../theme'
 import { haptics } from '../../lib/haptics'
-import { apiPatch } from '../../lib/apiClient'
 
 type Props = {
-  missingType: NgLocalIdType
+  /** First missing ID (legacy) or full list — both drive the same hub deep-link. */
+  missingType?: NgLocalIdType | null
+  missingTypes?: NgLocalIdType[] | null
   style?: object
-  onSaved?: () => void
 }
 
-export function NgLocalVerificationNotice({ missingType, style, onSaved }: Props) {
-  const [open, setOpen] = useState(false)
-  const [value, setValue] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+export function NgLocalVerificationNotice({ missingType, missingTypes, style }: Props) {
+  const navigation = useNavigation()
   const copy = NG_LOCAL_VERIFICATION_COPY
-  const fieldLabel = useMemo(
-    () => (missingType === 'NIN' ? copy.fieldLabelNin : copy.fieldLabelBvn),
-    [missingType, copy],
-  )
+  const missing =
+    missingTypes && missingTypes.length > 0
+      ? missingTypes
+      : missingType
+        ? [missingType]
+        : null
 
-  async function save() {
-    setError(null)
-    if (!isValidNgLocalIdNumber(value)) {
-      setError('Enter an 11-digit number')
-      return
-    }
-    setSaving(true)
-    try {
-      const res = await apiPatch('/api/compliance/ng-local-verification', {
-        ngLocalIdType: missingType,
-        ngLocalIdNumber: value.trim(),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        setError(typeof data.error === 'string' ? data.error : 'Save failed')
-        return
-      }
-      haptics.success()
-      setOpen(false)
-      setValue('')
-      onSaved?.()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Save failed')
-    } finally {
-      setSaving(false)
-    }
-  }
+  if (!missing || missing.length === 0) return null
 
   return (
-    <>
-      <Text style={[styles.inline, style]}>
-        {ngSupplementInlinePrompt(missingType)}
-        <Text
-          style={styles.link}
-          onPress={() => {
-            haptics.tap()
-            setOpen(true)
-          }}
-        >
-          {copy.inlineLink}
-        </Text>
+    <Text style={[styles.inline, style]}>
+      {ngSupplementInlinePrompt(missing)}
+      <Text
+        style={styles.link}
+        onPress={() => {
+          haptics.tap()
+          navigation.navigate(
+            'AccountVerification' as never,
+            { focusProduct: 'ng_local' } as never,
+          )
+        }}
+      >
+        {copy.inlineLink}
       </Text>
-      <WebAwareModal visible={open} onRequestClose={() => setOpen(false)} keyboardAvoiding compact>
-        <View style={styles.modalPanel}>
-          <Text style={styles.title}>{copy.title}</Text>
-          <Text style={styles.intro}>{copy.introBoth}</Text>
-          <Text style={styles.label}>{fieldLabel}</Text>
-          <TextInput
-            style={styles.input}
-            keyboardType="number-pad"
-            maxLength={11}
-            value={value}
-            onChangeText={(t) => setValue(t.replace(/\D/g, '').slice(0, 11))}
-            placeholder="00000000000"
-            placeholderTextColor={colors.text.tertiary}
-            autoFocus
-            returnKeyType="done"
-            textContentType="none"
-          />
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Pressable
-            style={styles.saveBtn}
-            disabled={saving}
-            onPress={() => {
-              haptics.tap()
-              void save()
-            }}
-          >
-            {saving ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.saveBtnText}>{copy.save}</Text>
-            )}
-          </Pressable>
-        </View>
-      </WebAwareModal>
-    </>
+    </Text>
   )
 }
 
@@ -118,50 +57,5 @@ const styles = StyleSheet.create({
     color: colors.primary.main,
     fontWeight: '600',
     textDecorationLine: 'underline',
-  },
-  modalPanel: {
-    padding: spacing[5],
-  },
-  title: {
-    ...textStyles.headlineSmall,
-    color: colors.text.primary,
-    marginBottom: spacing[3],
-  },
-  intro: {
-    ...textStyles.bodySmall,
-    color: colors.text.primary,
-    marginBottom: spacing[4],
-    lineHeight: Math.round(fontSize.sm * lineHeightScale.relaxed),
-  },
-  label: {
-    ...textStyles.bodyMedium,
-    fontWeight: '600',
-    color: colors.text.primary,
-    marginBottom: spacing[2],
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border.default,
-    borderRadius: 10,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[3],
-    color: colors.text.primary,
-    marginBottom: spacing[3],
-  },
-  error: {
-    ...textStyles.bodySmall,
-    color: colors.status.error,
-    marginBottom: spacing[2],
-  },
-  saveBtn: {
-    backgroundColor: colors.primary.main,
-    borderRadius: 10,
-    paddingVertical: spacing[3],
-    alignItems: 'center',
-  },
-  saveBtnText: {
-    ...textStyles.bodyMedium,
-    color: '#fff',
-    fontWeight: '600',
   },
 })

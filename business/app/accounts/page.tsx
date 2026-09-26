@@ -16,6 +16,7 @@ import { CurrencyDepositDialog } from "@/components/currency-deposit-dialog"
 import { MoveBetweenAccountsDialog } from "@/components/accounts/move-between-accounts-dialog"
 import { StatementDownloadDialog } from "@/components/statement-download-dialog"
 import { CurrencyFlagCircle } from "@/components/currency-flag-circle"
+import { BalanceAmount } from "@/components/balance-amount"
 import { MoreVertical, FileText, Ban, Trash2 } from "lucide-react"
 import { VERIFICATION_SECTION_COPY, PAGE_COPY } from "@/lib/copy/business-ui-copy"
 import { PageIntro } from "@/components/copy/page-intro"
@@ -145,12 +146,8 @@ function BankingAccountsPage() {
                           </p>
                         ) : null}
                       </div>
-                      <p className="text-[2rem] font-semibold leading-tight tracking-tight">
-                        {getCurrencySymbol(account.currency)}
-                        {account.balance.toLocaleString("en-US", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
+                      <p className="font-semibold leading-tight tracking-tight">
+                        <BalanceAmount amount={account.balance} currency={account.currency} size="display" />
                       </p>
                     </div>
                   </div>

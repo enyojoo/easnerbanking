@@ -17,11 +17,15 @@ export const SETTINGS_EXPRESS_FLOW_PARAM = "express" as const
 export const SETTINGS_BRIDGE_FLOW_HREF = "/settings?tab=verification&flow=bridge"
 export const SETTINGS_BRIDGE_FLOW_PARAM = "bridge" as const
 
+export const SETTINGS_NG_LOCAL_FLOW_HREF = "/settings?tab=verification&flow=ng_local"
+export const SETTINGS_NG_LOCAL_FLOW_PARAM = "ng_local" as const
+
 export type SettingsVerificationEmbeddedFlow =
   | typeof SETTINGS_VERIFICATION_FLOW_PARAM
   | typeof SETTINGS_CONNECT_FLOW_PARAM
   | typeof SETTINGS_EXPRESS_FLOW_PARAM
   | typeof SETTINGS_BRIDGE_FLOW_PARAM
+  | typeof SETTINGS_NG_LOCAL_FLOW_PARAM
 
 export function parseSettingsVerificationFlow(
   flow: string | null | undefined,
@@ -30,7 +34,8 @@ export function parseSettingsVerificationFlow(
     flow === SETTINGS_VERIFICATION_FLOW_PARAM ||
     flow === SETTINGS_CONNECT_FLOW_PARAM ||
     flow === SETTINGS_EXPRESS_FLOW_PARAM ||
-    flow === SETTINGS_BRIDGE_FLOW_PARAM
+    flow === SETTINGS_BRIDGE_FLOW_PARAM ||
+    flow === SETTINGS_NG_LOCAL_FLOW_PARAM
   ) {
     return flow
   }

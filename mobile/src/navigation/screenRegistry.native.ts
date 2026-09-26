@@ -17,6 +17,7 @@ import ExpressDepositAmountScreenNative from '../screens/receive/ExpressDepositA
 import ExpressDepositPaymentSetupScreenNative from '../screens/receive/ExpressDepositPaymentSetupScreen'
 import ExpressDepositReviewScreenNative from '../screens/receive/ExpressDepositReviewScreen'
 import ExpressDepositsSetupScreenNative from '../screens/verification/ExpressDepositsSetupScreen'
+import NgLocalVerificationSetupScreenNative from '../screens/verification/NgLocalVerificationSetupScreen'
 import ReceiveLocalReviewScreenNative from '../screens/receive/ReceiveLocalReviewScreen'
 import ReceiveLocalMomoSetupScreenNative from '../screens/receive/ReceiveLocalMomoSetupScreen'
 import ReceiveTransactionDetailsScreenNative from '../screens/receive/ReceiveTransactionDetailsScreen'
@@ -90,6 +91,10 @@ export const ExpressDepositReviewScreen = createWebLazyScreen(
 export const ExpressDepositsSetupScreen = createWebLazyScreen(
   () => import('../screens/verification/ExpressDepositsSetupScreen'),
   ExpressDepositsSetupScreenNative,
+)
+export const NgLocalVerificationSetupScreen = createWebLazyScreen(
+  () => import('../screens/verification/NgLocalVerificationSetupScreen'),
+  NgLocalVerificationSetupScreenNative,
 )
 export const ReceiveLocalReviewScreen = createWebLazyScreen(
   () => import('../screens/receive/ReceiveLocalReviewScreen'),

@@ -5,10 +5,13 @@ import {
   isValidNgLocalIdNumber,
   mapNoahKycIdTypeToNgLocal,
   NG_LOCAL_ID_PAIR,
+  NG_LOCAL_VERIFICATION_COPY,
   ngLocalVerificationComplete,
+  ngLocalVerificationCta,
   ngSupplementInlinePrompt,
   parseNgLocalIdPair,
   resolveNgLocalVerification,
+  showNgLocalVerificationHubCard,
   showNgSupplementPrompt,
   ycLocalRailsOfferedForNg,
 } from "./ng-local-verification"
@@ -44,6 +47,38 @@ describe("resolveNgLocalVerification", () => {
     expect(s.missingTypes).toEqual(["NIN", "BVN"])
     expect(s.missingType).toBe("NIN")
     expect(s.complete).toBe(false)
+  })
+
+  it("needs BVN when Noah has NIN", () => {
+    const s = resolveNgLocalVerification({
+      kycIdType: "NationalID",
+      kycIdNumber: "12345678901",
+    })
+    expect(s.hasNin).toBe(true)
+    expect(s.hasBvn).toBe(false)
+    expect(s.missingTypes).toEqual(["BVN"])
+    expect(s.complete).toBe(false)
+  })
+
+  it("treats empty Bridge kyc_id_* as both missing", () => {
+    const s = resolveNgLocalVerification({
+      residenceCountry: "NG",
+      kycIdType: null,
+      kycIdNumber: null,
+    })
+    expect(s.missingTypes).toEqual(["NIN", "BVN"])
+    expect(s.complete).toBe(false)
+  })
+
+  it("completes when Noah has BVN and supplement has NIN", () => {
+    const s = resolveNgLocalVerification({
+      kycIdType: "TaxID",
+      kycIdNumber: "12345678901",
+      ngLocalIdType: "NIN",
+      ngLocalIdNumber: "10987654321",
+    })
+    expect(s.complete).toBe(true)
+    expect(s.missingTypes).toEqual([])
   })
 
   it("completes when supplement fills the other ID", () => {
@@ -157,5 +192,28 @@ describe("showNgSupplementPrompt", () => {
         { ycReceiveEnabledForNg: false },
       ),
     ).toBe(false)
+  })
+})
+
+describe("ngLocalVerificationCta", () => {
+  it("returns null when complete", () => {
+    expect(ngLocalVerificationCta({ complete: true, missingTypes: [] })).toBeNull()
+  })
+
+  it("returns Start when both missing and Continue when one remains", () => {
+    expect(ngLocalVerificationCta({ complete: false, missingTypes: ["NIN", "BVN"] })).toBe(
+      NG_LOCAL_VERIFICATION_COPY.setupCta,
+    )
+    expect(ngLocalVerificationCta({ complete: false, missingTypes: ["BVN"] })).toBe(
+      NG_LOCAL_VERIFICATION_COPY.continueCta,
+    )
+  })
+})
+
+describe("showNgLocalVerificationHubCard", () => {
+  it("only for NG residence", () => {
+    expect(showNgLocalVerificationHubCard("NG")).toBe(true)
+    expect(showNgLocalVerificationHubCard("US")).toBe(false)
+    expect(showNgLocalVerificationHubCard(null)).toBe(false)
   })
 })

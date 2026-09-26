@@ -49,8 +49,8 @@ import { fetchExpressDepositQuote } from '../../lib/expressDepositCheckout'
 import {
   resolveWarmYcLocalDepositCorridor,
   ensureYcLocalDepositCachesReady,
-  prefetchNgLocalVerification,
-  readCachedNgLocalMissingType,
+  prefetchNgLocalVerificationState,
+  readCachedNgLocalVerification,
   resolveReceiveRailsForDisplay,
 } from '../../lib/warmYcLocalDepositCaches'
 import { useStackHardwareBack } from '../../hooks/useStackHardwareBack'
@@ -76,7 +76,8 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
   const relayDepositQuery = useConsumerRelayDepositAddresses(currency === 'USD')
 
   const [activeTab, setActiveTab] = useState<TabType>('cash')
-  const [ngMissingType, setNgMissingType] = useState<NgLocalIdType | null>(null)
+  const [ngMissingTypes, setNgMissingTypes] = useState<NgLocalIdType[] | null>(null)
+  const ngLocalIncomplete = Boolean(ngMissingTypes && ngMissingTypes.length > 0)
   const expressDeviceWallets = useMemo(
     () => ({
       applePay: Platform.OS === 'ios' || Platform.OS === 'web',
@@ -231,7 +232,7 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
 
   const bankAvailable = displayRails?.rails.bank_transfer.available ?? false
   const momoAvailable = displayRails?.rails.mobile_money.available ?? false
-  const localDepositBlocked = Boolean(localPayInCurrency === 'NGN' && ngMissingType)
+  const localDepositBlocked = Boolean(localPayInCurrency === 'NGN' && ngLocalIncomplete)
 
   const navigateToBankDetails = () => {
     if (depositsRestricted) return
@@ -253,29 +254,39 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
       payInRail,
       bankAvailable,
       momoAvailable,
-      ngMissingType,
+      ngMissingTypes,
     } as never)
   }
 
   useEffect(() => {
     if (localPayInCurrency !== 'NGN' || !verificationComplete || currency !== 'USD' || !residenceCountry) {
-      setNgMissingType(null)
+      setNgMissingTypes(null)
       return
     }
-    const cachedMissing = readCachedNgLocalMissingType(residenceCountry)
-    if (cachedMissing !== undefined) {
-      setNgMissingType(cachedMissing)
+    const cached = readCachedNgLocalVerification(residenceCountry)
+    if (cached) {
+      setNgMissingTypes(cached.complete ? [] : cached.missingTypes)
     }
     let cancelled = false
     void (async () => {
-      const missingType = await prefetchNgLocalVerification(residenceCountry)
-      if (!cancelled) setNgMissingType(missingType)
+      const state = await prefetchNgLocalVerificationState(residenceCountry)
+      if (!cancelled && state) {
+        setNgMissingTypes(state.complete ? [] : state.missingTypes)
+      }
     })()
     return () => {
       cancelled = true
     }
   }, [localPayInCurrency, verificationComplete, currency, residenceCountry])
 
+  useFocusEffect(
+    React.useCallback(() => {
+      if (localPayInCurrency !== 'NGN' || !verificationComplete || !residenceCountry) return
+      void prefetchNgLocalVerificationState(residenceCountry).then((state) => {
+        if (state) setNgMissingTypes(state.complete ? [] : state.missingTypes)
+      })
+    }, [localPayInCurrency, verificationComplete, residenceCountry]),
+  )
   useEffect(() => {
     void hydrateExpressOnrampStatus().then((hit) => {
       if (expressDepositsStatusIsReady(hit)) setExpressReady(true)
@@ -653,14 +664,8 @@ export default function ReceiveMoneyScreen({ navigation, route }: NavigationProp
                 renderDepositVerificationNotice('cash')
               ) : (
               <View style={{ gap: spacing[4] }}>
-                {localPayInCurrency === 'NGN' && ngMissingType ? (
-                  <NgLocalVerificationNotice
-                    missingType={ngMissingType}
-                    onSaved={() => {
-                      setNgMissingType(null)
-                      void refreshUserProfile?.()
-                    }}
-                  />
+                {localPayInCurrency === 'NGN' && ngLocalIncomplete ? (
+                  <NgLocalVerificationNotice missingTypes={ngMissingTypes} />
                 ) : null}
 
                 <ReceiveCashMethodList

@@ -11,6 +11,7 @@ import {
   Pressable,
 } from 'react-native'
 import { ArrowLeft, CreditCard, Search } from 'lucide-react-native'
+import { formatMoneyDisplay } from '@easner/shared'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import { PlainTwoColumnRowSkeleton } from '../../components/skeletons'
 import EmptyState from '../../components/EmptyState'
@@ -96,12 +97,8 @@ export default function TransactionCardScreen({ navigation }: NavigationProps) {
     }
   }
 
-  const formatAmount = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency.length === 3 ? currency : 'USD',
-    }).format(amount)
-  }
+  const formatAmount = (amount: number, currency: string) =>
+    formatMoneyDisplay(amount, currency.length === 3 ? currency : 'USD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
   const q = searchTerm.trim().toLowerCase()
   const visible = q

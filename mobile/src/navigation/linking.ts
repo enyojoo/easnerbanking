@@ -72,6 +72,7 @@ export const webLinking: LinkingOptions<Record<string, unknown>> = {
       ExpressDepositPaymentSetup: 'user/receive/express/setup',
       ExpressDepositReview: 'user/receive/express/review',
       ExpressDepositsSetup: 'user/verification/express',
+      NgLocalVerificationSetup: 'user/verification/nigeria-local',
       ReceiveLocalMomoSetup: 'user/receive/local/momo',
       ReceiveLocalReview: 'user/receive/local/review',
       ReceiveTransactionDetails: 'user/receive/transactions/:transactionId',

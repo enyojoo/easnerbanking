@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { BalanceAmount, BALANCE_MASK } from "@/components/balance-amount"
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -66,9 +67,9 @@ export function DashboardPageClient() {
     to: undefined,
   })
   const [balancesVisible, setBalancesVisible] = useState(true)
-  const [lastStableBalanceText, setLastStableBalanceText] = useState<string | null>(null)
+  const [lastStableBalance, setLastStableBalance] = useState<number | null>(null)
 
-  const MASK = "******"
+  const MASK = BALANCE_MASK
 
   const dateRangeOptions = { timePeriod, customDateRange }
   const { start, end } = getDateRange(dateRangeOptions)
@@ -128,16 +129,15 @@ export function DashboardPageClient() {
   const eurInBase = toBaseAmount(eurBal, "EUR", code)
   const computedPrimaryBalance = usdInBase + eurInBase
   const summaryCurrency = code
-  const computedPrimaryBalanceText = formatCurrency(computedPrimaryBalance, code)
   useEffect(() => {
     if (!hasDisplayableBalances) return
     if (!Number.isFinite(computedPrimaryBalance)) return
-    setLastStableBalanceText(computedPrimaryBalanceText)
-  }, [computedPrimaryBalance, computedPrimaryBalanceText, hasDisplayableBalances])
-  const visiblePrimaryBalanceText = balancesVisible
-    ? (lastStableBalanceText ?? (hasDisplayableBalances ? computedPrimaryBalanceText : null))
-    : MASK
-  const showBalancePending = balancesVisible && visiblePrimaryBalanceText == null
+    setLastStableBalance(computedPrimaryBalance)
+  }, [computedPrimaryBalance, hasDisplayableBalances])
+  /** Last good total, so a refetch never blanks the hero. */
+  const heroBalance: number | null =
+    lastStableBalance ?? (hasDisplayableBalances && Number.isFinite(computedPrimaryBalance) ? computedPrimaryBalance : null)
+  const showBalancePending = balancesVisible && heroBalance == null
 
   // Soft refresh failures keep cached balances/activity. Full-page error only when
   // there is nothing usable to render. Account restriction blocks deposits, not the dashboard.
@@ -146,7 +146,7 @@ export function DashboardPageClient() {
     rows.length > 0 ||
     hasAuthoritativeBalances ||
     hasDisplayableBalances ||
-    Boolean(lastStableBalanceText) ||
+    lastStableBalance != null ||
     listLoading
 
   if (blockingLoadError && !hasUsableCachedDashboard) {
@@ -189,20 +189,13 @@ export function DashboardPageClient() {
                 </Button>
               </div>
               <div className="flex items-baseline gap-3">
-                <h2 className="text-6xl font-bold tracking-tight text-foreground">
-                  <span className="inline-flex items-center gap-1 leading-none tabular-nums">
-                    <span
-                      className={cn(
-                        "inline-flex min-w-[12rem] items-center justify-start leading-none",
-                        !balancesVisible && "tracking-[0.2em]",
-                      )}
-                    >
-                      {showBalancePending ? (
-                        <Skeleton className="h-14 w-64 max-w-full" />
-                      ) : (
-                        visiblePrimaryBalanceText
-                      )}
-                    </span>
+                <h2 className="font-bold tracking-tight text-foreground">
+                  <span className="inline-flex min-w-[12rem] items-center justify-start leading-none">
+                    {showBalancePending ? (
+                      <Skeleton className="h-14 w-64 max-w-full" />
+                    ) : (
+                      <BalanceAmount amount={heroBalance ?? 0} currency={code} hidden={!balancesVisible} size="hero" />
+                    )}
                   </span>
                 </h2>
               </div>

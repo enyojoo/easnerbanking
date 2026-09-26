@@ -35,12 +35,22 @@ import {
   SETTINGS_BRIDGE_FLOW_PARAM,
   SETTINGS_CONNECT_FLOW_PARAM,
   SETTINGS_EXPRESS_FLOW_PARAM,
+  SETTINGS_NG_LOCAL_FLOW_PARAM,
   SETTINGS_VERIFICATION_FLOW_PARAM,
   type SettingsVerificationEmbeddedFlow,
 } from "@/lib/compliance/cutover-comms"
 import { ExpressDepositsSetup } from "@/components/compliance/express-deposits-setup"
 import { BridgeHostedSetup } from "@/components/compliance/bridge-hosted-setup"
-import { EXPRESS_DEPOSITS_COPY, expressDepositsVerificationCta } from "@easner/shared"
+import { NgLocalVerificationSetup } from "@/components/compliance/ng-local-verification-setup"
+import {
+  EXPRESS_DEPOSITS_COPY,
+  expressDepositsVerificationCta,
+  NG_LOCAL_VERIFICATION_COPY,
+  ngLocalVerificationCta,
+  resolveNgLocalVerification,
+  showNgLocalVerificationHubCard,
+  type NgLocalIdType,
+} from "@easner/shared"
 import { peekBusinessExpressOnrampStatus } from "@/lib/express-onramp-status-cache"
 import { loadExpressOnramp, prefetchExpressOnramp } from "@/lib/stripe/load-crypto-onramp"
 import { useBusinessExpressOnrampStatus } from "@/hooks/queries/use-express-onramp-status-query"
@@ -49,6 +59,7 @@ import { GridKybWizard } from "@/components/compliance/grid-kyb-wizard"
 import { analytics } from "@/lib/analytics"
 import { useKybPacket } from "@/lib/grid/kyb-packet-query"
 import { useAccountRestriction } from "@/hooks/use-account-restriction"
+import { fetchWithSession } from "@/lib/fetch-with-session"
 
 /** Title/subtext stay top; notice + CTA sit on the bottom of a slightly taller hub card. */
 const HUB_PRODUCT_CARD_CLASS = "flex h-full min-h-44 flex-col justify-between gap-4 py-5"
@@ -76,6 +87,7 @@ export function BusinessVerificationSection({
   const connectFromUrl = searchParams.get("flow") === SETTINGS_CONNECT_FLOW_PARAM
   const expressFromUrl = searchParams.get("flow") === SETTINGS_EXPRESS_FLOW_PARAM
   const bridgeFromUrl = searchParams.get("flow") === SETTINGS_BRIDGE_FLOW_PARAM
+  const ngLocalFromUrl = searchParams.get("flow") === SETTINGS_NG_LOCAL_FLOW_PARAM
   const {
     tier1Complete,
     tier1VerificationStatus,
@@ -105,6 +117,7 @@ export function BusinessVerificationSection({
     registeredAddressCity,
     registeredAddressState,
     registeredAddressPostalCode,
+    residenceCountry,
   } = useBusinessProfile()
   const gridKybComplete = String(tier1VerificationStatus ?? "").toLowerCase() === "approved"
 
@@ -142,6 +155,87 @@ export function BusinessVerificationSection({
     window.history.replaceState(null, "", `/settings?${next.toString()}`)
   }, [accountRestricted, onFlowOpenChange, searchParams, tier1Complete])
 
+  const [ngLocalState, setNgLocalState] = useState<{
+    missingTypes: NgLocalIdType[]
+    complete: boolean
+  } | null>(null)
+  const [ngLocalLoading, setNgLocalLoading] = useState(false)
+
+  const refreshNgLocalState = useCallback(async () => {
+    if (!canUseGeoPersonalRails) {
+      setNgLocalState(null)
+      return
+    }
+    setNgLocalLoading(true)
+    try {
+      const res = await fetchWithSession("/api/compliance/ng-local-verification")
+      const data = (await res.json().catch(() => ({}))) as {
+        residenceCountry?: string | null
+        kycIdType?: string | null
+        kycIdNumber?: string | null
+        ngLocalIdType?: string | null
+        ngLocalIdNumber?: string | null
+      }
+      if (!res.ok) return
+      const residence =
+        String(data.residenceCountry ?? residenceCountry ?? "").trim().toUpperCase() || null
+      if (!showNgLocalVerificationHubCard(residence)) {
+        setNgLocalState(null)
+        return
+      }
+      const state = resolveNgLocalVerification({
+        residenceCountry: residence,
+        kycIdType: data.kycIdType,
+        kycIdNumber: data.kycIdNumber,
+        ngLocalIdType: data.ngLocalIdType,
+        ngLocalIdNumber: data.ngLocalIdNumber,
+      })
+      setNgLocalState({ missingTypes: state.missingTypes, complete: state.complete })
+    } catch {
+      // keep prior
+    } finally {
+      setNgLocalLoading(false)
+    }
+  }, [canUseGeoPersonalRails, residenceCountry])
+
+  useEffect(() => {
+    void refreshNgLocalState()
+  }, [refreshNgLocalState, tier1Complete])
+
+  const showNgLocalCard =
+    canUseGeoPersonalRails &&
+    (showNgLocalVerificationHubCard(residenceCountry) || Boolean(ngLocalState))
+  const ngLocalCta = ngLocalVerificationCta(ngLocalState)
+  const showNgLocalCta =
+    Boolean(ngLocalCta) &&
+    !accountRestricted &&
+    tier1Complete &&
+    canManageBusinessVerification &&
+    !(ngLocalState?.complete)
+  const ngLocalStatus = ngLocalState?.complete
+    ? "approved"
+    : ngLocalState && ngLocalState.missingTypes.length === 1
+      ? "in_progress"
+      : "not_started"
+
+  const openNgLocalSetup = useCallback(() => {
+    if (accountRestricted || !tier1Complete) return
+    onFlowOpenChange?.(true, SETTINGS_NG_LOCAL_FLOW_PARAM)
+    const next = new URLSearchParams(searchParams.toString())
+    next.set("tab", "verification")
+    next.set("flow", SETTINGS_NG_LOCAL_FLOW_PARAM)
+    window.history.replaceState(null, "", `/settings?${next.toString()}`)
+  }, [accountRestricted, onFlowOpenChange, searchParams, tier1Complete])
+
+  const closeNgLocalSetup = useCallback(() => {
+    onFlowOpenChange?.(false)
+    const next = new URLSearchParams(searchParams.toString())
+    next.set("tab", "verification")
+    next.delete("flow")
+    window.history.replaceState(null, "", `/settings?${next.toString()}`)
+    void refreshNgLocalState()
+  }, [onFlowOpenChange, refreshNgLocalState, searchParams])
+
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [hostedOpen, setHostedOpen] = useState(false)
@@ -154,9 +248,17 @@ export function BusinessVerificationSection({
   const connectFlowActive = embeddedFlow === "connect" || connectFromUrl
   const expressFlowActive = embeddedFlow === "express" || expressFromUrl
   const bridgeFlowActive = embeddedFlow === "bridge" || bridgeFromUrl
+  const ngLocalFlowActive =
+    embeddedFlow === SETTINGS_NG_LOCAL_FLOW_PARAM || ngLocalFromUrl
 
   // SumSub runs in a cross-origin iframe; parent window does not receive pointer/keyboard events.
-  useSuspendIdleLock(hostedFlowActive || connectFlowActive || expressFlowActive || bridgeFlowActive)
+  useSuspendIdleLock(
+    hostedFlowActive ||
+      connectFlowActive ||
+      expressFlowActive ||
+      bridgeFlowActive ||
+      ngLocalFlowActive,
+  )
 
   const pushVerificationFlowUrl = useCallback(() => {
     onFlowOpenChange?.(true, "hosted")
@@ -175,7 +277,7 @@ export function BusinessVerificationSection({
   }, [onFlowOpenChange, searchParams])
 
   useEffect(() => {
-    if (hostedFlowActive || connectFlowActive || expressFlowActive || bridgeFlowActive) {
+    if (hostedFlowActive || connectFlowActive || expressFlowActive || bridgeFlowActive || ngLocalFlowActive) {
       document.documentElement.dataset.verificationFlowOpen = "true"
       document.querySelector("main")?.scrollTo({ top: 0 })
     } else {
@@ -184,7 +286,7 @@ export function BusinessVerificationSection({
     return () => {
       delete document.documentElement.dataset.verificationFlowOpen
     }
-  }, [hostedFlowActive, connectFlowActive, expressFlowActive, bridgeFlowActive])
+  }, [hostedFlowActive, connectFlowActive, expressFlowActive, bridgeFlowActive, ngLocalFlowActive])
 
   const syncBusinessTier1FromGrid = useCallback(async (): Promise<boolean> => {
     const result = await syncBusinessGridStatusUntilAccountsReady()
@@ -246,7 +348,7 @@ export function BusinessVerificationSection({
 
   useEffect(() => {
     if (!accountRestricted) return
-    if (!flowFromUrl && !connectFromUrl && !expressFromUrl && !bridgeFromUrl) return
+    if (!flowFromUrl && !connectFromUrl && !expressFromUrl && !bridgeFromUrl && !ngLocalFromUrl) return
     clearVerificationFlowUrl()
     setHostedOpen(false)
     onFlowOpenChange?.(false)
@@ -257,6 +359,7 @@ export function BusinessVerificationSection({
     connectFromUrl,
     expressFromUrl,
     flowFromUrl,
+    ngLocalFromUrl,
     onFlowOpenChange,
   ])
 
@@ -363,7 +466,7 @@ export function BusinessVerificationSection({
 
   /** Full-page flow fills remaining main; in-tab fallback keeps title/tabs chrome. */
   const verificationFlowPanelClass =
-    hostedFlowActive || expressFlowActive || bridgeFlowActive
+    hostedFlowActive || expressFlowActive || bridgeFlowActive || ngLocalFlowActive
       ? "flex min-h-0 flex-1 flex-col"
       : "h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))] max-h-[calc(100dvh-var(--dashboard-sticky-top,4rem)-var(--verification-settings-chrome,14rem))]"
 
@@ -408,6 +511,18 @@ export function BusinessVerificationSection({
             window.history.replaceState(null, "", `/settings?${next.toString()}`)
           }}
         />
+      </div>
+    )
+  }
+
+  if (ngLocalFlowActive) {
+    return (
+      <div
+        id="business-verification"
+        className={verificationFlowPanelClass}
+        data-verification-flow="open"
+      >
+        <NgLocalVerificationSetup onClose={closeNgLocalSetup} />
       </div>
     )
   }
@@ -648,6 +763,44 @@ export function BusinessVerificationSection({
                         <div className="flex flex-wrap gap-2">
                           <Button type="button" size="sm" onClick={openExpressSetup}>
                             {expressSetupCta}
+                          </Button>
+                        </div>
+                      </CardContent>
+                    ) : null}
+                  </Card>
+                ) : null}
+                {showNgLocalCard ? (
+                  <Card className={HUB_PRODUCT_CARD_CLASS}>
+                    <CardHeader className="shrink-0 items-start gap-1.5 px-4 pb-0 md:px-4">
+                      <div className="flex flex-nowrap items-center gap-1.5">
+                        <CardTitle className="min-w-0 text-base leading-tight">
+                          {NG_LOCAL_VERIFICATION_COPY.title}
+                        </CardTitle>
+                        {ngLocalState?.complete || tier1Complete ? (
+                          <Tier1VerificationBadge
+                            compact
+                            isLoading={ngLocalLoading && !ngLocalState}
+                            tier1Complete={Boolean(ngLocalState?.complete)}
+                            tier1VerificationStatus={ngLocalStatus}
+                          />
+                        ) : (
+                          <Badge
+                            variant="secondary"
+                            className="h-5 shrink-0 px-1.5 py-0 text-[10px] leading-none font-medium"
+                          >
+                            {VERIFICATION_COMING_LATER_LABEL}
+                          </Badge>
+                        )}
+                      </div>
+                      <CardDescription className="text-sm">
+                        {NG_LOCAL_VERIFICATION_COPY.description}
+                      </CardDescription>
+                    </CardHeader>
+                    {showNgLocalCta ? (
+                      <CardContent className="mt-auto shrink-0 space-y-3 px-4 pt-0 md:px-4">
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="button" size="sm" onClick={openNgLocalSetup}>
+                            {ngLocalCta}
                           </Button>
                         </div>
                       </CardContent>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { FileText } from 'lucide-react-native'
+import { formatMoneyDisplay } from '@easner/shared'
 import { useQueryClient } from '@tanstack/react-query'
 import ScreenWrapper from '../../components/ScreenWrapper'
 import InternalHeader from '../../components/InternalHeader'
@@ -35,10 +36,8 @@ import { borderRadius, colors, fontFamily, spacing, textStyles } from '../../the
 
 function money(amount: number, currency: string): string {
   try {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency,
-    }).format(amount)
+    // Symbol first, same for every currency and device locale ("€12,480.00").
+    return formatMoneyDisplay(amount, currency, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   } catch {
     return `${currency} ${amount.toFixed(2)}`
   }

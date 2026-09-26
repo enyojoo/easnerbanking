@@ -1,10 +1,13 @@
 /**
  * Nigeria local verification supplement for Yellowcard rails.
- * Noah stores one ID (NIN or BVN); YC requires both.
  *
- * Supplement storage on `users.ng_local_id_*`:
- * - Single missing ID → `ng_local_id_type` = NIN|BVN, number = 11 digits
- * - Both missing → `ng_local_id_type` = PAIR, number = `nin|bvn`
+ * DB columns on `users`:
+ * - `kyc_id_type` / `kyc_id_number` — legacy Noah (one of NIN|BVN). Bridge leaves these empty.
+ * - `ng_local_id_type` / `ng_local_id_number` — Easner supplement only (never writes kyc_id_*):
+ *   - Single missing ID → type = NIN|BVN, number = 11 digits
+ *   - Both missing (Bridge) → type = PAIR, number = `nin|bvn`
+ *
+ * YC request metadata uses four fields via `buildNgYcIdPair` (Noah + supplement).
  */
 
 export type NgLocalIdType = "NIN" | "BVN"
@@ -182,6 +185,7 @@ export function showNgSupplementPrompt(
 
 export const NG_LOCAL_VERIFICATION_COPY = {
   title: "Nigeria local verification",
+  description: "Add your NIN and BVN for NGN deposits and local payments.",
   introBoth:
     "Our local payment partner requires both NIN and BVN for NGN deposits and local payments.",
   introOne: "Our local payment partner needs one more ID for NGN deposits and local payments.",
@@ -193,6 +197,8 @@ export const NG_LOCAL_VERIFICATION_COPY = {
   fieldLabelNin: "NIN (11 digits)",
   fieldLabelBvn: "BVN (11 digits)",
   save: "Save",
+  setupCta: "Start",
+  continueCta: "Continue",
   verified: "You’re verified for local NGN payments.",
 } as const
 
@@ -208,6 +214,28 @@ export function ngSupplementInlinePrompt(
   if (types[0] === "NIN") return NG_LOCAL_VERIFICATION_COPY.inlinePromptNin
   if (types[0] === "BVN") return NG_LOCAL_VERIFICATION_COPY.inlinePromptBvn
   return NG_LOCAL_VERIFICATION_COPY.inlinePromptBoth
+}
+
+/**
+ * Verification hub CTA. Complete → badge only (null). Partial progress → Continue.
+ * Not started (both missing) → Start.
+ */
+export function ngLocalVerificationCta(
+  state: Pick<NgLocalVerificationState, "complete" | "missingTypes"> | null | undefined,
+):
+  | (typeof NG_LOCAL_VERIFICATION_COPY)["setupCta"]
+  | (typeof NG_LOCAL_VERIFICATION_COPY)["continueCta"]
+  | null {
+  if (!state || state.complete) return null
+  if (state.missingTypes.length === 1) return NG_LOCAL_VERIFICATION_COPY.continueCta
+  return NG_LOCAL_VERIFICATION_COPY.setupCta
+}
+
+/** Hub card visibility: NG residence (local rails callers also gate on office/receive). */
+export function showNgLocalVerificationHubCard(
+  residenceCountry: string | null | undefined,
+): boolean {
+  return String(residenceCountry ?? "").trim().toUpperCase() === "NG"
 }
 
 /**

@@ -25,6 +25,12 @@ describe("formatMoneyDisplay", () => {
     expect(formatMoneyDisplay(1.5, "EURC")).toBe("€1.50")
   })
 
+  it("puts the symbol first for every currency and a true minus before it", () => {
+    expect(formatMoneyDisplay(12480, "EUR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })).toBe("€12,480.00")
+    expect(formatMoneyDisplay(-5, "USD")).toBe("\u2212$5")
+    expect(formatMoneyDisplay(-3678.96, "NGN")).toBe("\u2212₦3,678.96")
+  })
+
   it("respects explicit fraction digit overrides", () => {
     expect(
       formatMoneyDisplay(6000, "RWF", {

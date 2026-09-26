@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { formatMoneyDisplay } from "@easner/shared"
 import { apiUrl } from "@/lib/api-base-url"
 
 type Review = {
@@ -14,10 +15,7 @@ type Review = {
 }
 
 function money(amount: number, currency: string) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-  }).format(amount / 100)
+  return formatMoneyDisplay(amount / 100, currency, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 export function PlatformSendAuthorizePage({

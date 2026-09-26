@@ -52,6 +52,7 @@ import {
   ExpressDepositPaymentSetupScreen,
   ExpressDepositReviewScreen,
   ExpressDepositsSetupScreen,
+  NgLocalVerificationSetupScreen,
   ReceiveLocalMomoSetupScreen,
   ReceiveLocalRailScreen,
   ReceiveLocalReviewScreen,
@@ -365,6 +366,11 @@ function MainStack() {
           name="ExpressDepositsSetup"
           component={ExpressDepositsSetupScreen}
           options={transitionOptions('ExpressDepositsSetup')}
+        />
+        <Stack.Screen
+          name="NgLocalVerificationSetup"
+          component={NgLocalVerificationSetupScreen}
+          options={transitionOptions('NgLocalVerificationSetup')}
         />
         <Stack.Screen
           name="ReceiveLocalMomoSetup"
