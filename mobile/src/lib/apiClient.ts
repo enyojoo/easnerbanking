@@ -15,36 +15,41 @@ export type BootstrapResult =
     }
 
 /**
- * Last-resort API origin for release builds when `extra.apiUrl` / `EXPO_PUBLIC_API_URL`
- * were not set at build time. Prefer setting `EXPO_PUBLIC_API_URL` on EAS explicitly.
+ * Default production Banking API origin. Used when `extra.apiUrl` /
+ * `EXPO_PUBLIC_API_URL` are unset in a release bundle.
  */
 export const EASNER_PUBLIC_APP_ORIGIN = 'https://api.easner.com'
+
+function isLocalApiUrl(value: string): boolean {
+  return /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(\/|$)/i.test(value)
+}
 
 /**
  * First-party Banking API on the api app. Resolution order:
  * 1. `expo.extra.apiUrl` from app.config.js (EAS env / local .env at prebuild)
- * 2. `process.env.EXPO_PUBLIC_API_URL` (Metro inline)
+ * 2. `process.env.EXPO_PUBLIC_API_URL` (Metro inline at bundle / `eas update` time)
  * 3. Dev: `LOCAL_URLS.api` (`http://localhost:3002`)
- * 4. Release: {@link EASNER_PUBLIC_APP_ORIGIN} (warn once)
+ * 4. Release: {@link EASNER_PUBLIC_APP_ORIGIN}
+ *
+ * Release bundles (`!__DEV__`) never use localhost — `eas update` can otherwise
+ * bake `mobile/.env` into the OTA and break devices while Expo web on the
+ * same machine still works.
+ *
+ * Override with a non-local `EXPO_PUBLIC_API_URL` only for preview/staging.
  */
 export const getApiBaseUrl = (): string => {
-  const fromExtra = Constants.expoConfig?.extra?.apiUrl
-  if (typeof fromExtra === 'string' && fromExtra.trim()) {
-    return fromExtra.replace(/\/$/, '')
-  }
-
-  const fromEnv = process.env.EXPO_PUBLIC_API_URL
-  if (fromEnv) {
-    return fromEnv.replace(/\/$/, '')
+  const candidates = [Constants.expoConfig?.extra?.apiUrl, process.env.EXPO_PUBLIC_API_URL]
+  for (const raw of candidates) {
+    if (typeof raw !== 'string' || !raw.trim()) continue
+    const url = raw.replace(/\/$/, '')
+    if (!__DEV__ && isLocalApiUrl(url)) continue
+    return url
   }
 
   if (__DEV__) {
     return LOCAL_URLS.api
   }
 
-  console.warn(
-    `[Easner] API base URL not in app config; using ${EASNER_PUBLIC_APP_ORIGIN}. Set EXPO_PUBLIC_API_URL on EAS for non-production backends.`
-  )
   return EASNER_PUBLIC_APP_ORIGIN
 }
 

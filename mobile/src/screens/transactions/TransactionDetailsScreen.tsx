@@ -314,32 +314,55 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
       detailData) as LedgerTransaction
   }, [qc, scope, transactionId, detailQuery.data, detailQuery.dataUpdatedAt])
 
-  const transaction = useMemo(
-    () =>
-      mergeTransactionSnapshots(
-        mergeTransactionSnapshots(cachedDetailSnapshot, cachedListSnapshot),
-        initialTransaction ?? null,
-      ),
-    [initialTransaction, cachedDetailSnapshot, cachedListSnapshot],
-  )
+  const transaction = useMemo(() => {
+    const merged = mergeTransactionSnapshots(
+      mergeTransactionSnapshots(cachedDetailSnapshot, cachedListSnapshot),
+      initialTransaction ?? null,
+    )
+    if (!merged) return null
+    if (
+      merged.transaction_type !== 'send' &&
+      merged.transaction_type !== 'receive'
+    ) {
+      const typeRaw = String((merged as { type?: string }).type ?? '')
+        .trim()
+        .toLowerCase()
+      if (typeRaw === 'send' || typeRaw === 'receive') {
+        return { ...merged, transaction_type: typeRaw }
+      }
+    }
+    return merged
+  }, [initialTransaction, cachedDetailSnapshot, cachedListSnapshot])
 
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({})
+  const quietDetailRetryForId = useRef<string | null>(null)
 
   const hasCoreDetailFields = useMemo(() => {
     if (!transaction) return false
     // "Atomic render" gate: require the minimum set of fields that the UI depends on
     // (status header card + timestamp formatting + direction label).
-    const hasAmount = typeof transaction.amount === 'number' && Number.isFinite(transaction.amount)
+    const amountRaw = transaction.amount as unknown
+    const hasAmount =
+      (typeof amountRaw === 'number' && Number.isFinite(amountRaw)) ||
+      (typeof amountRaw === 'string' &&
+        amountRaw.trim().length > 0 &&
+        Number.isFinite(Number(amountRaw)))
     const hasCurrency = typeof transaction.currency === 'string' && transaction.currency.trim().length > 0
     const hasStatus = typeof transaction.status === 'string' && transaction.status.trim().length > 0
-    const hasType =
-      transaction.transaction_type === 'send' || transaction.transaction_type === 'receive'
+    const typeRaw = String(
+      transaction.transaction_type ?? (transaction as { type?: string }).type ?? '',
+    )
+      .trim()
+      .toLowerCase()
+    const hasType = typeRaw === 'send' || typeRaw === 'receive'
     const hasCreated =
       typeof transaction.created_at === 'string' && transaction.created_at.trim().length > 0
     const hasTransactionId =
-      typeof transaction.transaction_id === 'string' && transaction.transaction_id.trim().length > 0
+      (typeof transaction.transaction_id === 'string' &&
+        transaction.transaction_id.trim().length > 0) ||
+      (typeof transaction.id === 'string' && transaction.id.trim().length > 0)
     return hasAmount && hasCurrency && hasStatus && hasType && hasCreated && hasTransactionId
   }, [transaction])
 
@@ -387,6 +410,14 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
 
   useEffect(() => {
     if (!transactionId) return
+    // List / push / nav snapshots are enough to render. A background detail
+    // refetch failure (auth blip, timeout, press-in race) must not replace
+    // that UI with the full-page error — that made every open feel broken
+    // until "Try Again".
+    if (hasCoreDetailFields) {
+      setError(null)
+      return
+    }
     if (detailQuery.isError) {
       const err = detailQuery.error
       const msg =
@@ -401,23 +432,41 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     if (detailQuery.data) {
       setError(null)
     }
-  }, [transactionId, detailQuery.data, detailQuery.isError, detailQuery.error])
+  }, [
+    transactionId,
+    hasCoreDetailFields,
+    detailQuery.data,
+    detailQuery.isError,
+    detailQuery.error,
+  ])
+
+  // If the screen already has a list/nav snapshot but the enrichment fetch
+  // failed, quietly retry once so receipt fields can still fill in.
+  useEffect(() => {
+    if (!transactionId || !hasCoreDetailFields || !detailQuery.isError) return
+    if (quietDetailRetryForId.current === transactionId) return
+    quietDetailRetryForId.current = transactionId
+    const timer = setTimeout(() => {
+      void detailQuery.refetch()
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [transactionId, hasCoreDetailFields, detailQuery.isError, detailQuery.refetch])
 
   const fetchTransactionDetails = useCallback(async () => {
     setError(null)
     try {
       const result = await detailQuery.refetch()
       const transactionData = unwrapTransactionDetailPayload(result.data ?? undefined)
-      if (!transactionData && !transaction) {
+      if (!transactionData && !hasCoreDetailFields) {
         setError('Transaction not found')
       }
     } catch (err: unknown) {
       console.error('Error fetching transaction details:', err)
-      if (!transaction) {
+      if (!hasCoreDetailFields) {
         setError('Failed to load transaction details')
       }
     }
-  }, [detailQuery, transaction])
+  }, [detailQuery, hasCoreDetailFields])
 
   const refetchExpiredYcPayIn = useCallback(() => {
     void detailQuery.refetch()
@@ -791,9 +840,10 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
   // Prevent a partially-populated cached snapshot from rendering a mostly-empty UI.
   // If we don't have core fields yet, treat the view as loading until the detail query resolves.
   const shouldShowSkeleton =
-    !error &&
     !hasCoreDetailFields &&
-    ((isRestoring && !transaction) || detailQuery.isPending || !transaction)
+    !detailQuery.isError &&
+    !error &&
+    ((isRestoring && !transaction) || detailQuery.isPending || detailQuery.isFetching || !transaction)
 
   if (shouldShowSkeleton) {
     return (
@@ -803,7 +853,8 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
     )
   }
 
-  if (error || !transaction) {
+  // Only block the screen when we have nothing usable to show.
+  if (!hasCoreDetailFields && (error || detailQuery.isError || !transaction)) {
     return (
       <ScreenWrapper>
         <View style={styles.container}>
@@ -843,6 +894,14 @@ export default function TransactionDetailsScreen({ navigation, route }: Navigati
             </Pressable>
           </View>
         </View>
+      </ScreenWrapper>
+    )
+  }
+
+  if (!transaction) {
+    return (
+      <ScreenWrapper>
+        <TransactionDetailsSkeleton />
       </ScreenWrapper>
     )
   }

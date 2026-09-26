@@ -128,8 +128,13 @@ module.exports = ({ config }) => {
     process.env.NEXT_PUBLIC_API_URL ||
     ''
   ).replace(/\/$/, '')
+  // `eas update` does not set EAS_BUILD (only binary builds do). Without this,
+  // mobile/.env's localhost API URL gets baked into production OTAs and devices
+  // show empty feeds while Expo web on the same machine still works.
+  const isReleaseBundle =
+    process.env.EAS_BUILD === 'true' || process.env.NODE_ENV === 'production'
   const apiUrl =
-    process.env.EAS_BUILD && isLocalUrl(configuredApiUrl)
+    isReleaseBundle && (isLocalUrl(configuredApiUrl) || !configuredApiUrl)
       ? 'https://api.easner.com'
       : configuredApiUrl
 
@@ -139,15 +144,9 @@ module.exports = ({ config }) => {
     )
   }
 
-  if (process.env.EAS_BUILD && !configuredApiUrl) {
+  if (isReleaseBundle && configuredApiUrl && configuredApiUrl !== apiUrl) {
     console.warn(
-      '[easner-mobile] EAS build has no EXPO_PUBLIC_API_URL / NEXT_PUBLIC_API_URL – profile & Easetag saves require the API origin. Set it in EAS Environment variables and rebuild.'
-    )
-  }
-
-  if (process.env.EAS_BUILD && configuredApiUrl && configuredApiUrl !== apiUrl) {
-    console.warn(
-      `[easner-mobile] EAS build ignored local API URL ${configuredApiUrl}; using ${apiUrl}. Set EXPO_PUBLIC_API_URL for the target backend.`
+      `[easner-mobile] Release bundle ignored local API URL ${configuredApiUrl}; using ${apiUrl}.`
     )
   }
 
